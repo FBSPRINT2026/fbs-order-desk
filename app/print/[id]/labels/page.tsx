@@ -54,6 +54,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   return (
     <div className={`labels-page ${size === "letter" ? "sz-letter" : "sz-4x6"}`}>
       <style>{`
+        @import url("https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=block");
         @page { size: ${size === "letter" ? "8.5in 11in" : "4in 6in"}; margin: 0; }
         .labels-page { background: #e9edf2; min-height: 100%; padding-block: 16px 40px; padding-inline: 16px; color: #000; font-family: Helvetica, Arial, sans-serif; }
         .label { background: #fff; margin: 0 auto 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
@@ -126,7 +127,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb-foot { margin-top: auto; display: grid; grid-template-columns: 1.1fr 0.9fr 1.3fr; font-size: .95em; border: 1.5px solid #000; border-radius: 3px; }
         .lb-foot > div { padding: 3px 6px; min-height: 0.42in; font-weight: 700; }
         .lb-foot > div + div { border-left: 1.5px solid #000; }
-        .lb-foot .ty { display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 800; font-size: 1.05em; }
+        .lb-foot .ty { display: flex; align-items: center; justify-content: center; text-align: center; font-family: "Dancing Script", "Brush Script MT", cursive; font-weight: 700; font-size: 1.55em; line-height: 1.05; }
         .lb-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 1.05em; }
         @media print {
           .labels-page { background: #fff; padding: 0; }
