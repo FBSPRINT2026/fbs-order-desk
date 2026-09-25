@@ -150,7 +150,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             </div>
           </div>
           <div className="lb-info">
-            <div className="lb-infotext"><div className="lb-job">{o.nickname || "Untitled job"}</div></div>
+            <div className="lb-infotext"><div className="lb-job">{o.nickname || "Untitled job"}</div>{o.po_number && <div className="lb-meta">PO {o.po_number}</div>}</div>
             <div className="lb-bc"><div className="bars" style={{ width: `${bcWidthIn}in` }} dangerouslySetInnerHTML={{ __html: bc }} /><div className="hr">{shipKey}</div></div>
           </div>
           <div className="lb-shiprow">
@@ -175,7 +175,6 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             )}
             <div className="lb-side">
               <div><span className="k">IN HANDS</span><b>{o.due_date ? fmtDateLong(o.due_date) : "—"}</b></div>
-              {o.po_number && <div><span className="k">PO</span><b>{o.po_number}</b></div>}
               <div><span className="k">{o.delivery_method === "ship" ? "SHIP VIA" : "DELIVERY"}</span><b>{o.delivery_method === "ship" ? o.ship_method || "—" : o.delivery_method === "deliver" ? "We deliver" : "Pickup"}</b></div>
               {o.tracking && <div><span className="k">TRACKING</span><b className="trk">{o.tracking}</b></div>}
             </div>
