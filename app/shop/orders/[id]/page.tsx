@@ -345,14 +345,32 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                       <option value="">Choose a customer…</option>
                       {customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}{c.company && c.name ? " · " + c.name : ""}</option>)}
                     </select>
-                    {cust ? (
-                      <div className="cust-card">
-                        {cust.company && <div className="cc-co">{cust.company}</div>}
-                        {cust.name && <div>{cust.name}</div>}
-                        {cust.address && <div style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
-                        <Link href={`/shop/customers/${cust.id}`} style={{ fontSize: 12 }}>Edit customer</Link>
+                    <div className="cust-row">
+                      {cust ? (
+                        <div className="cust-card">
+                          {cust.company && <div className="cc-co">{cust.company}</div>}
+                          {cust.name && <div>{cust.name}</div>}
+                          {cust.address && <div style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
+                          {cust.email && <div className="sub">{cust.email}</div>}
+                          {cust.phone && <div className="sub">{cust.phone}</div>}
+                          <Link href={`/shop/customers/${cust.id}`} style={{ fontSize: 12 }}>Edit customer</Link>
+                        </div>
+                      ) : <div className="faint" style={{ fontSize: 13, flex: 1 }}>Pick a customer, or add a new one without leaving this order.</div>}
+                      <div className="pt-box">
+                        <div className="chips">
+                          <button type="button" className={"chip" + (o.price_type !== "wholesale" ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; }); }}>Retail</button>
+                          <button type="button" className={"chip" + (o.price_type === "wholesale" ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; }); }}>Wholesale</button>
+                        </div>
+                        {cust && o.price_type !== (cust.price_type || "retail") && <div className="faint" style={{ fontSize: 11.5 }}>Changed for this order</div>}
                       </div>
-                    ) : <div className="faint" style={{ fontSize: 13 }}>Pick a customer, or add a new one without leaving this order.</div>}
+                    </div>
+                    {confirmRetail && cust && (
+                      <div className="confirm-bar">
+                        <span><b>{custLabel(cust)}</b> is a wholesale customer. Are you sure you want to price this order as retail?</span>
+                        <button type="button" className="btn sm primary" onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "retail"; }); }}>Yes, switch to retail</button>
+                        <button type="button" className="btn sm ghost" onClick={() => setConfirmRetail(false)}>Cancel</button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -363,21 +381,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <label className="check" style={{ fontSize: 13, color: o.rush ? "var(--danger)" : undefined, fontWeight: o.rush ? 700 : 400 }}><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} /> Rush</label>
               </div>
               <div className="panel-b stack">
-                <div className="row">
-                  <span className="lbl">PRICING</span>
-                  <div className="chips">
-                    <button type="button" className={"chip" + (o.price_type !== "wholesale" ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; }); }}>Retail</button>
-                    <button type="button" className={"chip" + (o.price_type === "wholesale" ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; }); }}>Wholesale</button>
-                  </div>
-                  <span className="faint" style={{ fontSize: 12 }}>{cust ? (o.price_type === (cust.price_type || "retail") ? `Set from the customer's account (${cust.price_type === "wholesale" ? "wholesale" : "retail"})` : `Changed for this order. The customer's account is ${cust.price_type === "wholesale" ? "wholesale" : "retail"}.`) : o.price_type === "wholesale" ? "Customer supplies garments." : "We supply garments."}</span>
-                </div>
-                {confirmRetail && (
-                  <div className="confirm-bar">
-                    <span><b>{custLabel(cust!)}</b> is a wholesale customer. Are you sure you want to price this order as retail?</span>
-                    <button type="button" className="btn sm primary" onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "retail"; }); }}>Yes, switch to retail</button>
-                    <button type="button" className="btn sm ghost" onClick={() => setConfirmRetail(false)}>Cancel</button>
-                  </div>
-                )}
                 <div className="grid g2">
                   <div className="field"><label htmlFor="o-nick">Job name</label><input id="o-nick" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
                   <div className="field"><label htmlFor="o-po">Customer PO #</label><input id="o-po" type="text" value={o.po_number || ""} onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
