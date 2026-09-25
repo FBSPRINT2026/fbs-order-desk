@@ -384,9 +384,9 @@ table.pv-grid{border-collapse:separate;border-spacing:0;width:100%}
 /* Garment rows: info on top, a wrapping size strip beneath, so the editor never scrolls sideways */
 .line{container-type:inline-size}
 .gl-list{display:flex;flex-direction:column}
-.gl-row{display:grid;gap:6px;align-items:start;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr) 72px 58px 88px 92px 30px;grid-template-areas:"st co de cs qt ea to x"}
-.gl-list.ws .gl-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr) 58px 88px 92px 30px;grid-template-areas:"st co de qt ea to x"}
-.a-st{grid-area:st;min-width:0}.a-co{grid-area:co;min-width:0}.a-de{grid-area:de;min-width:0}.a-cs{grid-area:cs;min-width:0}.a-qt{grid-area:qt}.a-ea{grid-area:ea;min-width:0}.a-to{grid-area:to}.a-x{grid-area:x}
+.gl-row{display:grid;gap:6px;align-items:start;grid-template-columns:minmax(0,.75fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) 72px 58px 88px 92px 30px;grid-template-areas:"st br co de cs qt ea to x"}
+.gl-list.ws .gl-row{grid-template-columns:minmax(0,.75fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) 58px 88px 92px 30px;grid-template-areas:"st br co de qt ea to x"}
+.a-st{grid-area:st;min-width:0}.a-br{grid-area:br;min-width:0}.a-co{grid-area:co;min-width:0}.a-de{grid-area:de;min-width:0}.a-cs{grid-area:cs;min-width:0}.a-qt{grid-area:qt}.a-ea{grid-area:ea;min-width:0}.a-to{grid-area:to}.a-x{grid-area:x}
 .gl-head{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding-bottom:2px}
 .gl-head .c,.gl-row .c{text-align:center}
 .gl-head .r,.gl-row .r{text-align:right}
@@ -398,9 +398,9 @@ table.pv-grid{border-collapse:separate;border-spacing:0;width:100%}
 .gl{padding:8px 0 10px;display:flex;flex-direction:column;gap:6px}
 .gl + .gl{border-top:1px solid var(--line-2)}
 @container (max-width: 700px){
-  .gl-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 64px 40px 78px 84px 28px;grid-template-areas:"st co cs qt ea to x" "de de . . . . ."}
-  .gl-list.ws .gl-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px 78px 84px 28px;grid-template-areas:"st co qt ea to x" "de de . . . ."}
-  .gl-head .a-de{display:none}
+  .gl-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 64px 44px 78px 84px 28px;grid-template-areas:"st co cs qt ea to x" "br de . . . . ."}
+  .gl-list.ws .gl-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px 78px 84px 28px;grid-template-areas:"st co qt ea to x" "br de . . . ."}
+  .gl-head .a-de,.gl-head .a-br{display:none}
 }
 .szrow{display:flex;flex-wrap:wrap;align-items:flex-end;gap:5px}
 .szc{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1 1 40px;min-width:38px;max-width:60px}
@@ -433,7 +433,7 @@ table.imp-table{table-layout:fixed}
 /* line the headers up with the text inside the prefilled boxes */
 .gl-row input.pre{-moz-appearance:textfield;appearance:textfield}
 .gl-row input.pre::-webkit-inner-spin-button,.gl-row input.pre::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
-.gl-head .a-cs{padding-left:10px}
+.gl-head .a-cs,.gl-head .a-br{padding-left:10px}
 .gl-head .a-ea{padding-right:10px}
 .gl-head .a-to{padding-right:0}
 .gl-row .a-to{text-align:right}

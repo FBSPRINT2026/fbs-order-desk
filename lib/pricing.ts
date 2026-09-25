@@ -86,13 +86,15 @@ export type PriceList = {
   screenLight?: number[][];   // screen print per location on light garments (screen = dark garments)
   dtg?: number[];             // full-color digital print per location, dark garments
   dtgLight?: number[];        // full-color digital print per location, light garments
-  lightColors?: string[];     // garment colors priced as light
+  lightColors?: string[];     // garment colors that get light-garment screen prices
+  dtgLightColors?: string[];  // garment colors that get light-garment full-color prices (no white underbase)
 };
 export const FULL_COLOR = 11;
 /** True when a garment color is on the light-garment list. */
-export function isLightColor(color: string, pl: Pick<PriceList, "lightColors">) {
-  const c = (color || "").trim().toLowerCase().replace(/^sports /, "sport ");
-  return !!c && (pl.lightColors || []).some((x) => x.trim().toLowerCase().replace(/^sports /, "sport ") === c);
+const normColor = (c: string) => (c || "").trim().toLowerCase().replace(/^sports /, "sport ");
+export function isLightColor(color: string, pl: Pick<PriceList, "lightColors">, list = pl.lightColors) {
+  const c = normColor(color);
+  return !!c && (list || []).some((x) => normColor(x) === c);
 }
 export type Finishing = { id: string; name: string; price: number };
 export type Settings = PriceList & {
@@ -189,18 +191,18 @@ export function orderGroups(o: Pick<Order, "groups" | "lines">): Group[] {
   }));
 }
 
-function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false) {
+function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light) {
   const inkFee = num(d.inkChanges) * num(s.inkChangeFee);
   if (d.method === "screen") {
     const k = Math.max(1, num(d.colors) || 1);
     const full = k >= FULL_COLOR;
     if (s.dtg && full) {
-      const each = num((light && s.dtgLight ? s.dtgLight : s.dtg)[ti]);
+      const each = num((dtgLight && s.dtgLight ? s.dtgLight : s.dtg)[ti]);
       return { each, setup: 0, inkFee, dtg: each, full: true };
     }
     const row = (light && s.screenLight ? s.screenLight : s.screen)[ti] || [];
     const n = Math.min(row.length || 6, k);
-    const dtg = s.dtg ? num((light && s.dtgLight ? s.dtgLight : s.dtg)[ti]) : 0;
+    const dtg = s.dtg ? num((dtgLight && s.dtgLight ? s.dtgLight : s.dtg)[ti]) : 0;
     return { each: num(row[n - 1]), setup: Math.min(n, 10) * num(s.screenFee), inkFee, dtg, full: false };
   }
   if (d.method === "embroidery") return { each: num(s.embroidery[ti]), setup: num(s.digitizing), inkFee };
@@ -217,8 +219,8 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const imprints = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl) }));
   // Print price per piece. With a digital (full color) price list, screen prints switch to digital
   // for the whole garment when that is cheaper, or when any location is full color.
-  const printFor = (light: boolean) => {
-    const imps = light ? (g.imprints || []).map((d) => imprintPrice(d, ti, pl, true)) : imprints;
+  const printFor = (light: boolean, dtgLight: boolean) => {
+    const imps = light || dtgLight ? (g.imprints || []).map((d) => imprintPrice(d, ti, pl, light, dtgLight)) : imprints;
     const other = imps.filter((_, i) => (g.imprints || [])[i]?.method !== "screen").reduce((a, d) => a + d.each, 0);
     const scr = imps.filter((_, i) => (g.imprints || [])[i]?.method === "screen");
     let screenPart = scr.reduce((a, d) => a + d.each, 0);
@@ -228,15 +230,20 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     }
     return r2(other + screenPart);
   };
-  const printEach = printFor(false);
-  const printLight = pl.screenLight || pl.dtgLight ? printFor(true) : printEach;
+  const printEach = printFor(false, false);
+  const printCache = new Map<string, number>();
+  const printLine = (color: string) => {
+    const light = isLightColor(color, pl), dl = isLightColor(color, pl, pl.dtgLightColors);
+    const key = `${light}${dl}`;
+    if (!printCache.has(key)) printCache.set(key, light || dl ? printFor(light, dl) : printEach);
+    return { light, print: printCache.get(key) as number };
+  };
   const finishing = (g.finishing || []).map((fid) => s.finishing.find((f) => f.id === fid)).filter(Boolean) as Finishing[];
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
   const lines: LineCalc[] = (g.lines || []).map((l) => {
     const lq = lineQty(l);
     const garmentEach = pl.useGarment ? r2(num(l.cost) * (1 + num(pl.markup) / 100) + num(pl.blankAdd?.[ti])) : 0;
-    const light = isLightColor(l.color, pl);
-    const linePrint = light ? printLight : printEach;
+    const { light, print: linePrint } = printLine(l.color);
     const calcEach = r2(garmentEach + linePrint + finishEach);
     const hasOv = l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride);
     const each = hasOv ? r2(+(l.priceOverride as number)) : calcEach;

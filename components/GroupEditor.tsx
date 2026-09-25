@@ -74,7 +74,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         <datalist id={listId}>{catalog.map((c) => <option key={c.id} value={c.style}>{[c.brand, c.description].filter(Boolean).join(" ")}</option>)}</datalist>
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head">
-            <span className="a-st">Style #</span><span className="a-co">Color</span><span className="a-de">Description</span>
+            <span className="a-st">Style #</span><span className="a-br">Brand</span><span className="a-co">Color</span><span className="a-de">Description</span>
             {!gc.wholesale && <span className="a-cs">Cost</span>}
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
@@ -91,6 +91,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                     <input type="text" list={listId} aria-label="Style number" placeholder="Style # (G5000)" value={l.style} onChange={(e) => onStyle(li, e.target.value)} />
                     {!hit && l.style && l.garment && (gc.wholesale || l.cost !== "") && <button className="linkbtn" type="button" tabIndex={-1} onClick={() => onSaveToCatalog(l)}>Save to catalog</button>}
                   </div>
+                  <div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
                   <div className="a-co">
                     <input type="text" list={colorsId} aria-label="Color" placeholder="Color" value={l.color} onChange={(e) => update((x) => { x.lines[li].color = e.target.value; })} />
                     {hit && <datalist id={colorsId}>{hit.colors.map((c) => <option key={c} value={c} />)}</datalist>}
