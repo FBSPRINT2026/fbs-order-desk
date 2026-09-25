@@ -126,14 +126,14 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
             );
           })}
         </div>
+        <div className="row">
+          <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push(newGLine()); })}>+ Add garment</button>
+          <button className="btn sm ghost" type="button" onClick={() => update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, id: uid(), color: "", sizes: {}, priceOverride: null }); })}>+ Same style, new color</button>
+        </div>
         <div className={"gl-row grp-total" + (gc.wholesale ? " ws" : "")}>
           <span className="a-de r"><span className="lbl2">Total pieces</span>{gc.qty ? <span className="faint"> · {gc.tierMin}+ price break</span> : null}</span>
           <b className="a-qt c num">{gc.qty}</b>
           <b className="a-to r num">{money(gc.sub)}</b>
-        </div>
-        <div className="row">
-          <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push(newGLine()); })}>+ Add garment</button>
-          <button className="btn sm ghost" type="button" onClick={() => update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, id: uid(), color: "", sizes: {}, priceOverride: null }); })}>+ Same style, new color</button>
         </div>
 
         <div className="imprints">
