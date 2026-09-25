@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { calcOrder, mergeSettings, orderGroups, SIZES, type Customer, type Order } from "@/lib/pricing";
 import { fmtDateLong } from "@/lib/format";
 import LabelControls from "./LabelControls";
+import { code128Svg } from "@/lib/barcode";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,9 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   const rows = orderGroups(o).flatMap((g) => g.lines.filter((l) => SIZES.some((z) => l.sizes?.[z])));
   const used = SIZES.filter((z) => rows.some((l) => l.sizes?.[z]));
   const totalPcs = c.qty;
+  // Shipping barcode: the order number, used as the lookup key for WorldShip Keyed Import / FedEx Ship Manager.
+  const shipKey = String(o.number);
+  const bc = code128Svg(shipKey, 40).svg;
   // give the write-in rows as much height as the label allows
   const inboxIn = size === "letter" ? (rows.length <= 3 ? 0.75 : rows.length <= 5 ? 0.55 : 0.4) : (rows.length <= 2 ? 0.7 : rows.length <= 3 ? 0.55 : rows.length <= 4 ? 0.45 : 0.34);
 
@@ -64,6 +68,13 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb tr.ord td.item { color: #111; background: #f2f2f2; }
                 .lb tr.inbox td:not(.item):not(.k) { border-width: 1.5px; font-size: 1.3em; }
         .lb td.k { font-size: .7em; letter-spacing: .02em; text-transform: uppercase; color: #555; line-height: 1.1; }
+        .lb-bcrow { display: flex; align-items: center; gap: 8px; }
+        .lb-bc { flex: none; display: flex; flex-direction: column; align-items: center; }
+        .sz-4x6 .lb-bc .bars { width: 2.3in; height: 0.45in; }
+        .sz-letter .lb-bc .bars { width: 3in; height: 0.6in; }
+        .lb-bc .bars svg { width: 100%; height: 100%; display: block; }
+        .lb-bc .hr { font-family: "Courier New", monospace; font-weight: 700; letter-spacing: .2em; font-size: 1.05em; }
+        .lb-bcnote { font-size: .8em; color: #555; line-height: 1.25; }
         .lb-notes { flex: 1; min-height: 0.25in; border: 1px dashed #999; padding: 3px 5px; color: #777; font-size: .9em; }
         .lb-foot { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; font-size: .95em; border-top: 1px solid #111; padding-top: 4px; }
         .lb-foot div { border-bottom: 1px solid #111; padding-bottom: 10px; }
@@ -99,6 +110,10 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             <div><b>In hands:</b> {o.due_date ? fmtDateLong(o.due_date) : "—"}</div>
             {o.ship_method && <div><b>Via:</b> {o.ship_method}</div>}
             {o.tracking && <div><b>Tracking:</b> {o.tracking}</div>}
+          </div>
+          <div className="lb-bcrow">
+            <div className="lb-bc"><div className="bars" dangerouslySetInnerHTML={{ __html: bc }} /><div className="hr">{shipKey}</div></div>
+            <div className="lb-bcnote">Scan into UPS WorldShip or FedEx Ship Manager to pull up this order.</div>
           </div>
           {o.delivery_method !== "pickup" && o.ship_to && <div className="lb-ship"><b>{o.delivery_method === "ship" ? "SHIP TO" : "DELIVER TO"}:</b> {o.ship_to}</div>}
 
