@@ -182,11 +182,21 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
             )}
           </div>
           <div className="price-box">
-            <div className="pb-r"><span>Print</span><b>{money(gc.printEach)}/pc</b></div>
-            {gc.finishEach ? <div className="pb-r"><span>Finishing</span><b>{money(gc.finishEach)}/pc</b></div> : null}
-            <div className="pb-r"><span>Pieces</span><b>{gc.qty}</b></div>
-            {gc.setup ? <div className="pb-r"><span>Setup{gc.inkFees ? " (incl. ink changes)" : ""}</span><b>{money(gc.setup)}</b></div> : null}
-            {gc.materials ? <div className="pb-r"><span>2XL+ Materials</span><b>{money(gc.materials)}</b></div> : null}
+            {(() => {
+              // Split the group's line items into garments / imprints / finishing (overrides land in garments)
+              const imp = gc.lines.reduce((a, lc) => a + lc.qty * lc.printEach, 0);
+              const fin = gc.qty * gc.finishEach;
+              const gar = gc.sub - imp - fin;
+              return (
+                <>
+                  <div className="pb-r"><span>Garments</span><b>{money(gar)}</b></div>
+                  <div className="pb-r"><span>Imprints</span><b>{money(imp)}</b></div>
+                  {fin ? <div className="pb-r"><span>Finishing</span><b>{money(fin)}</b></div> : null}
+                  {gc.setup ? <div className="pb-r"><span>Setup{gc.inkFees ? " (incl. ink changes)" : ""}</span><b>{money(gc.setup)}</b></div> : null}
+                  {gc.materials ? <div className="pb-r"><span>2XL+ Materials Charge</span><b>{money(gc.materials)}</b></div> : null}
+                </>
+              );
+            })()}
             <div className="pb-r pb-t"><span>Group total</span><b>{money(gc.sub + gc.setup + gc.materials)}</b></div>
           </div>
         </div>
