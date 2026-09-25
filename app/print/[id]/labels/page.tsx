@@ -100,8 +100,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb-grid > div { border-right: 1.5px solid #000; border-bottom: 1.5px solid #000; min-width: 0; }
         .lb-grid .h { background: #000; color: #fff; font-weight: 800; padding: 2px 0; text-align: center; border-color: #fff; border-right-width: 1px; }
         .lb-grid .h.l { text-align: left; padding-left: 4px; }
-        .lb-grid .it { font-size: .92em; padding: 1px 4px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; line-height: 1.1; }
-        .lb-grid .it > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .lb-grid .it { font-size: .88em; padding: 1px 3px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; line-height: 1.1; }
+        .lb-grid .it > * { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
         .lb-grid .it .clr { font-weight: 600; }
         .lb-grid .c { position: relative; }
         .lb-grid .c .o { position: absolute; top: 1px; left: 2px; font-size: .85em; font-weight: 700; line-height: 1; }
@@ -185,7 +185,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           {bands.map((band) => { const os = band.name === "ONE SIZE"; return (
             <div key={band.name} className={"lb-band" + (bands.length > 1 ? " tabbed" : "")} style={{ flexGrow: band.rows.length }}>
               {bands.length > 1 && <div className="lb-bandtab">{band.name}</div>}
-              <div className="lb-grid" style={{ gridTemplateColumns: os ? "minmax(0, 2.5fr) minmax(0, 1.4fr)" : `minmax(0, 2.5fr) repeat(${Math.max(band.sizes.length, 1)}, minmax(0, 1fr)) minmax(0, 1.1fr)`, gridTemplateRows: `auto repeat(${Math.max(band.rows.length, 1)}, minmax(${rowMin}in, 1fr))` }}>
+              <div className="lb-grid" style={{ gridTemplateColumns: os ? "minmax(0, 1.6fr) minmax(0, 2.4fr)" : `minmax(0, 1.6fr) repeat(${Math.max(band.sizes.length, 1)}, minmax(0, 1fr)) minmax(0, 1.1fr)`, gridTemplateRows: `auto repeat(${Math.max(band.rows.length, 1)}, minmax(${rowMin}in, 1fr))` }}>
                 <div className="h l">Item</div>{band.sizes.map((z) => <div key={z} className="h">{sizeLabel(z)}</div>)}{!os && <div className="h">Total</div>}
                 {band.rows.map((l) => {
                   const tot = band.sizes.reduce((a, z) => a + (+(l.sizes?.[z as keyof GLine["sizes"]] || 0)), 0);
