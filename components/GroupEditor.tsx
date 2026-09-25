@@ -19,6 +19,7 @@ type Props = {
 };
 
 const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)), 0);
+const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
 export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog }: Props) {
@@ -32,7 +33,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
       if (hit) {
         if (!l.garment) l.garment = hit.description;
         if (!l.brand) l.brand = hit.brand;
-        if (!gc.wholesale) l.cost = +hit.cost || ""; // blank cost comes from the garment catalog
+        if (!gc.wholesale && (l.cost === "" || l.cost === 0)) l.cost = +hit.cost || "";
       }
     });
   }
@@ -57,9 +58,10 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
       </div>
       <div className="line-b">
         <datalist id={listId}>{catalog.map((c) => <option key={c.id} value={c.style}>{[c.brand, c.description].filter(Boolean).join(" ")}</option>)}</datalist>
-        <div className="gl-list">
+        <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head">
             <span className="a-st">Style #</span><span className="a-co">Color</span><span className="a-de">Description</span>
+            {!gc.wholesale && <span className="a-cs">Cost</span>}
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
           {g.lines.map((l, li) => {
@@ -72,13 +74,14 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                 <div className="gl-row">
                   <div className="a-st">
                     <input type="text" list={listId} aria-label="Style number" placeholder="Style # (G5000)" value={l.style} onChange={(e) => onStyle(li, e.target.value)} />
-                    {!hit && l.style && l.garment && <button className="linkbtn" type="button" onClick={() => onSaveToCatalog(l)}>Save to catalog</button>}
+                    {!hit && l.style && l.garment && (gc.wholesale || l.cost !== "") && <button className="linkbtn" type="button" onClick={() => onSaveToCatalog(l)}>Save to catalog</button>}
                   </div>
                   <div className="a-co">
                     <input type="text" list={colorsId} aria-label="Color" placeholder="Color" value={l.color} onChange={(e) => update((x) => { x.lines[li].color = e.target.value; })} />
                     {hit && <datalist id={colorsId}>{hit.colors.map((c) => <option key={c} value={c} />)}</datalist>}
                   </div>
                   <div className="a-de"><input type="text" aria-label="Description" placeholder={l.oneSize ? "Description (hat, koozie…)" : "Description (unisex tee)"} value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
+                  {!gc.wholesale && <div className="a-cs"><input type="number" step="0.01" min="0" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
                   <div className="a-qt c tot">{lc?.qty ?? 0}</div>
                   <div className="a-ea r"><input type="number" step="0.01" min="0" aria-label="Price each" className={lc?.hasOv ? "ov" : ""} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })} /></div>
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
