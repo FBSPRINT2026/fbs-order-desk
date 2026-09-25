@@ -87,7 +87,6 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                 <div className="gl-row">
                   <div className="a-st">
                     <input type="text" list={listId} aria-label="Style number" placeholder="Style # (G5000)" value={l.style} onChange={(e) => onStyle(li, e.target.value)} />
-                    {!hit && l.style && l.garment && (gc.wholesale || l.cost !== "") && <button className="linkbtn" type="button" tabIndex={-1} onClick={() => onSaveToCatalog(l)}>Save to catalog</button>}
                   </div>
                   <div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
                   <div className="a-co">
