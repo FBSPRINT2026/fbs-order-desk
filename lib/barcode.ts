@@ -46,15 +46,16 @@ export function code128Modules(text: string): number[] {
 }
 
 /** An SVG string for the barcode, stretched to the given size. */
-export function code128Svg(text: string, heightUnits = 50): { svg: string; width: number } {
+export function code128Svg(text: string, heightUnits = 50, opts: { quietLeft?: number; quietRight?: number } = {}): { svg: string; width: number } {
   const mods = code128Modules(text);
-  const quiet = 10;
-  let x = quiet;
+  const quietLeft = opts.quietLeft ?? 10;
+  const quietRight = opts.quietRight ?? 10;
+  let x = quietLeft;
   let rects = "";
   mods.forEach((w, i) => {
     if (i % 2 === 0) rects += `<rect x="${x}" y="0" width="${w}" height="${heightUnits}"/>`;
     x += w;
   });
-  const width = x + quiet;
+  const width = x + quietRight;
   return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${heightUnits}" preserveAspectRatio="none" shape-rendering="crispEdges"><rect width="${width}" height="${heightUnits}" fill="#fff"/><g fill="#000">${rects}</g></svg>`, width };
 }

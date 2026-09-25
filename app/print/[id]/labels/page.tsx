@@ -42,7 +42,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   const totalPcs = c.qty;
   // Shipping barcode: the order number, used as the lookup key for WorldShip Keyed Import / FedEx Ship Manager.
   const shipKey = String(o.number);
-  const bcOut = code128Svg(shipKey, 30);
+  const bcOut = code128Svg(shipKey, 30, { quietRight: 0 }); // the label margin is the quiet zone on the right, so the bars line up with the edge
   const bc = bcOut.svg;
   // 4 printer dots per bar module at 203 dpi (Zebra) so bars print crisp; wider on letter printers
   const bcWidthIn = (bcOut.width * (size === "letter" ? 5 : 4)) / 203;
