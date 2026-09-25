@@ -48,7 +48,7 @@ export default function SettingsPage() {
   const pl: PriceList = tab === "wholesale" ? s.wholesale : s;
   const updPl = (fn: (p: PriceList) => void) => upd((d) => fn(tab === "wholesale" ? d.wholesale : d));
   // Live check: 100 black tees at a $2.00 blank, 1-color front + 1-color back.
-  const chk = calcGroup({ id: "chk", lines: [{ ...newGLine(), color: "Black", cost: 2, sizes: { M: 100 } }], imprints: [newImprint("Front"), newImprint("Back")] }, { waive_setup: false, price_type: tab }, s);
+  const chk = calcGroup({ id: "chk", lines: [{ ...newGLine(), color: "Black", cost: 2, sizes: { M: 100 } }], imprints: [newImprint("Full Front"), newImprint("Full Back")] }, { waive_setup: false, price_type: tab }, s);
 
   return (
     <>

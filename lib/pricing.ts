@@ -28,7 +28,8 @@ export const STATUSES: { k: StatusKey; label: string; portal: string; type: "quo
 export const ST: Record<string, (typeof STATUSES)[number]> = Object.fromEntries(STATUSES.map((s) => [s.k, s]));
 
 export const METHODS: Record<string, string> = { screen: "Screen print", embroidery: "Embroidery", dtf: "DTF transfer" };
-export const LOCATIONS = ["Front", "Back", "Left chest", "Right chest", "Left sleeve", "Right sleeve", "Nape", "Hat front"];
+/** Print locations (match the fbsprint.com order form). */
+export const LOCATIONS = ["Left Chest", "Right Chest", "Full Front", "Full Back", "Upper Back (Yoke)", "Left Sleeve", "Right Sleeve", "Pocket"];
 export const SHIP_METHODS = [
   "UPS Ground", "UPS 3 Day Select", "UPS 2nd Day Air", "UPS Next Day Air",
   "FedEx Ground", "FedEx Home Delivery", "FedEx Express Saver", "FedEx 2Day", "FedEx Standard Overnight",
@@ -293,7 +294,7 @@ export const uid = () =>
 export function newGLine(): GLine {
   return { id: uid(), style: "", brand: "", garment: "", color: "", cost: "", sizes: {}, priceOverride: null };
 }
-export function newImprint(location = "Front"): Imprint {
+export function newImprint(location = "Full Front"): Imprint {
   return { id: uid(), method: "screen", location, colors: 1, inks: "", size: "", notes: "", inkChanges: 0 };
 }
 export function newGroup(): Group {

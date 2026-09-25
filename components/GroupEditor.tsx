@@ -147,7 +147,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                 {g.imprints.map((d, di) => (
                   <tr key={d.id}>
                     <td><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>
-                    <td><input type="text" list="locs" aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value; })} /></td>
+                    <td><select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value; })}>{!LOCATIONS.includes(d.location) && <option value={d.location}>{d.location || "Choose…"}</option>}{LOCATIONS.map((z) => <option key={z} value={z}>{z}</option>)}</select></td>
                     <td>{d.method === "screen"
                       ? <select aria-label="Number of colors" value={d.colors} onChange={(e) => update((x) => { x.imprints[di].colors = +e.target.value; })}>{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n}</option>)}<option value={FULL_COLOR}>Full color</option></select>
                       : <span className="faint" style={{ fontSize: 12 }}>{d.method === "embroidery" ? "Thread" : "Full color"}</span>}</td>
@@ -162,7 +162,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
               </tbody>
             </table>
           </div>
-          <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(LOCATIONS.find((z) => !used.includes(z)) || "")); })}>+ Add imprint</button>
+          <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>
         </div>
 
         <div className="grp-foot">
