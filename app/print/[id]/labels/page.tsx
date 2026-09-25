@@ -34,6 +34,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   const rows = orderGroups(o).flatMap((g) => g.lines.filter((l) => SIZES.some((z) => l.sizes?.[z])));
   const used = SIZES.filter((z) => rows.some((l) => l.sizes?.[z]));
   const totalPcs = c.qty;
+  // give the write-in rows as much height as the label allows
+  const inboxIn = size === "letter" ? (rows.length <= 3 ? 0.75 : rows.length <= 5 ? 0.55 : 0.4) : (rows.length <= 2 ? 0.7 : rows.length <= 3 ? 0.55 : rows.length <= 4 ? 0.45 : 0.34);
 
   return (
     <div className={`labels-page ${size === "letter" ? "sz-letter" : "sz-4x6"}`}>
@@ -60,9 +62,9 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb td.item { text-align: left; font-weight: 600; font-size: .92em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .lb tr.ord td { color: #555; font-size: .9em; background: #f2f2f2; }
         .lb tr.ord td.item { color: #111; background: #f2f2f2; }
-        .lb tr.inbox td { height: 1.9em; }
-        .lb td.k { font-size: .75em; letter-spacing: .04em; text-transform: uppercase; color: #555; width: 3.4em; }
-        .lb-notes { flex: 1; min-height: 0.4in; border: 1px dashed #999; padding: 3px 5px; color: #777; font-size: .9em; }
+                .lb tr.inbox td:not(.item):not(.k) { border-width: 1.5px; font-size: 1.3em; }
+        .lb td.k { font-size: .7em; letter-spacing: .02em; text-transform: uppercase; color: #555; line-height: 1.1; }
+        .lb-notes { flex: 1; min-height: 0.25in; border: 1px dashed #999; padding: 3px 5px; color: #777; font-size: .9em; }
         .lb-foot { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; font-size: .95em; border-top: 1px solid #111; padding-top: 4px; }
         .lb-foot div { border-bottom: 1px solid #111; padding-bottom: 10px; }
         .lb-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 1.05em; }
@@ -101,7 +103,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           {o.delivery_method !== "pickup" && o.ship_to && <div className="lb-ship"><b>{o.delivery_method === "ship" ? "SHIP TO" : "DELIVER TO"}:</b> {o.ship_to}</div>}
 
           <table className="lb">
-            <colgroup><col style={{ width: size === "letter" ? "34%" : "30%" }} /><col style={{ width: "3.4em" }} />{used.map((z) => <col key={z} />)}<col style={{ width: "2.6em" }} /></colgroup>
+            <colgroup><col style={{ width: size === "letter" ? "28%" : "25%" }} /><col style={{ width: "2.6em" }} />{used.map((z) => <col key={z} />)}<col style={{ width: "2.6em" }} /></colgroup>
             <thead><tr><th style={{ textAlign: "left" }}>Item</th><th /> {used.map((z) => <th key={z}>{z}</th>)}<th>Tot</th></tr></thead>
             <tbody>
               {rows.map((l) => {
@@ -109,7 +111,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
                 const name = [l.style, l.color].filter(Boolean).join(" · ") || l.garment || "Garment";
                 return [
                   <tr key={l.id + "o"} className="ord"><td className="item" rowSpan={1} title={name}>{name}</td><td className="k">Ord</td>{used.map((z) => <td key={z}>{l.sizes?.[z] || ""}</td>)}<td><b>{tot}</b></td></tr>,
-                  <tr key={l.id + "b"} className="inbox"><td className="item" style={{ fontWeight: 400, fontSize: ".85em", color: "#555" }}>{l.garment}</td><td className="k">In box</td>{used.map((z) => <td key={z}>{l.sizes?.[z] ? "" : "–"}</td>)}<td /></tr>,
+                  <tr key={l.id + "b"} className="inbox" style={{ height: `${inboxIn}in` }}><td className="item" style={{ fontWeight: 400, fontSize: ".85em", color: "#555" }}>{l.garment}</td><td className="k">In<br />box</td>{used.map((z) => <td key={z}>{l.sizes?.[z] ? "" : "–"}</td>)}<td /></tr>,
                 ];
               })}
               {!rows.length && <tr><td colSpan={used.length + 3}>No sizes entered on this order yet.</td></tr>}
