@@ -49,7 +49,7 @@ export default function CustomersPage() {
               const s = stats[c.id] || { n: 0, spent: 0, owed: 0 };
               return (
                 <tr key={c.id} tabIndex={0} onClick={() => router.push(`/shop/customers/${c.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/customers/${c.id}`)}>
-                  <td><div><b>{c.company || c.name || "Unnamed"}</b></div><div className="sub">{c.company ? c.name : ""}</div></td>
+                  <td><div><b>{c.company || c.name || "Unnamed"}</b>{c.price_type === "wholesale" && <span className="tag i" style={{ marginLeft: 6 }}>Wholesale</span>}</div><div className="sub">{c.company ? c.name : ""}</div></td>
                   <td><div>{c.email}</div><div className="sub">{c.phone}</div></td>
                   <td className="r">{s.n}</td>
                   <td className="r">{money(s.spent)}</td>

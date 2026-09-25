@@ -41,7 +41,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); save(); } }, []); // flush on leave
 
   async function newQuote() {
-    const { data, error } = await createClient().from("orders").insert({ customer_id: id, tax_exempt: !!c?.tax_exempt }).select("id").single();
+    const { data, error } = await createClient().from("orders").insert({ customer_id: id, tax_exempt: !!c?.tax_exempt, price_type: c?.price_type || "retail" }).select("id").single();
     if (data) router.push(`/shop/orders/${data.id}?new=1`);
     else if (error) alert(error.message);
   }
@@ -91,6 +91,12 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               <div className="field"><label htmlFor="cu-c2n">Name</label><input id="cu-c2n" type="text" value={c.contact2_name || ""} onChange={(e) => set("contact2_name", e.target.value)} /></div>
               <div className="field"><label htmlFor="cu-c2e">Email</label><input id="cu-c2e" type="email" value={c.contact2_email || ""} onChange={(e) => set("contact2_email", e.target.value)} /></div>
               <div className="field"><label htmlFor="cu-c2p">Phone</label><input id="cu-c2p" type="tel" value={c.contact2_phone || ""} onChange={(e) => set("contact2_phone", e.target.value)} /></div>
+            </div>
+            <div className="field"><label htmlFor="cu-type">Customer type</label>
+              <select id="cu-type" value={c.price_type || "retail"} onChange={(e) => set("price_type", e.target.value as Customer["price_type"])}>
+                <option value="retail">Retail: we supply the garments</option>
+                <option value="wholesale">Wholesale: they supply the garments (imprint pricing only)</option>
+              </select>
             </div>
             <label className="check"><input type="checkbox" checked={c.tax_exempt} onChange={(e) => set("tax_exempt", e.target.checked)} /> Tax exempt (new quotes start exempt)</label>
             <div className="field"><label htmlFor="cu-notes">Notes (only your shop sees these)</label><textarea id="cu-notes" rows={3} placeholder="Preferred inks, art files, pickup details…" value={c.notes} onChange={(e) => set("notes", e.target.value)} /></div>

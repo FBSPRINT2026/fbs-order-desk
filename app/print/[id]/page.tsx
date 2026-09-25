@@ -58,7 +58,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
           {o.delivery_method !== "pickup" && o.ship_to && <div className="box"><b>{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}:</b><div style={{ whiteSpace: "pre-line" }}>{o.ship_to}</div></div>}
           {groups.map((g, gi) => (
             <div key={g.id} className="box">
-              <b>Group {gi + 1} · {c.groups[gi]?.qty || 0} pcs</b>
+              <b>Group {gi + 1} · {c.groups[gi]?.qty || 0} pcs{c.groups[gi]?.wholesale ? " · CUSTOMER-SUPPLIED GOODS" : ""}{c.groups[gi]?.finishing.length ? ` · Finishing: ${c.groups[gi].finishing.map((f) => f.name).join(", ")}` : ""}</b>
               <table>
                 <thead><tr><th>Style</th><th>Color</th><th>Description</th>{SIZES.map((z) => <th key={z} className="c">{z}</th>)}<th className="c">Total</th></tr></thead>
                 <tbody>
@@ -68,10 +68,10 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
                 </tbody>
               </table>
               <table>
-                <thead><tr><th>Imprint</th><th>Location</th><th className="c">Colors</th><th>Inks / PMS</th><th>Size</th><th>Notes</th></tr></thead>
+                <thead><tr><th>Imprint</th><th>Location</th><th className="c">Colors</th><th>Inks / PMS</th><th>Size</th><th className="c">Ink chg</th><th>Notes</th></tr></thead>
                 <tbody>
                   {g.imprints.map((d) => (
-                    <tr key={d.id}><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? d.colors : ""}</td><td>{d.inks}</td><td>{d.size}</td><td>{d.notes}</td></tr>
+                    <tr key={d.id}><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? d.colors : ""}</td><td>{d.inks}</td><td>{d.size}</td><td className="c">{d.inkChanges || ""}</td><td>{d.notes}</td></tr>
                   ))}
                 </tbody>
               </table>
@@ -150,9 +150,10 @@ function GroupRows({ g, gc }: { g: Group; gc: GroupCalc }) {
       {g.lines.map((l, li) => (
         <tr key={l.id}>
           <td>
-            <b>{[l.style, l.garment].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}
+            <b>{[l.style, l.garment].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{gc?.wholesale ? " (customer supplied)" : ""}
             <div className="sub">{SIZES.filter((z) => l.sizes?.[z]).map((z) => `${z}: ${l.sizes[z]}`).join(", ")}</div>
             {li === g.lines.length - 1 && g.imprints.length > 0 && <div className="sub">Imprints: {g.imprints.map(imprintLabel).join("; ")}</div>}
+            {li === g.lines.length - 1 && gc?.finishing.length > 0 && <div className="sub">Finishing: {gc.finishing.map((f) => f.name).join(", ")}</div>}
           </td>
           <td className="r">{gc?.lines[li]?.qty}</td><td className="r">{money(gc?.lines[li]?.each)}</td><td className="r">{money(gc?.lines[li]?.sub)}</td>
         </tr>

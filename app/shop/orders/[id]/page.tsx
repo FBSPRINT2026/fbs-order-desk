@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, ST, STATUSES, uid,
-  type ArtFile, type Customer, type Delivery, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type Proof, type Settings, type StatusKey,
+  calcOrder, LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, ST, STATUSES, uid,
+  type ArtFile, type Customer, type Delivery, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor from "@/components/GroupEditor";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
@@ -34,7 +34,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [prodNotes, setProdNotes] = useState("");
   const [catalog, setCatalog] = useState<Garment[]>([]);
   const [art, setArt] = useState<(ArtFile & { url?: string })[]>([]);
-  const [newCust, setNewCust] = useState<null | { company: string; name: string; email: string; phone: string }>(null);
+  const [newCust, setNewCust] = useState<null | { company: string; name: string; email: string; phone: string; price_type: PriceType }>(null);
   const [saveState, setSaveState] = useState("");
   const [flash, setFlash] = useState("");
   const [armed, setArmed] = useState("");
@@ -82,6 +82,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       d.groups = orderGroups(d);
       if (!d.groups.length) d.groups = [newGroup()];
       d.delivery_method = d.delivery_method || "pickup";
+      d.price_type = d.price_type || "retail";
       d.fees = d.fees || [];
       d.discount_pct = +d.discount_pct || 0;
       d.tax_rate = d.tax_rate === null ? null : +d.tax_rate;
@@ -108,7 +109,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setSaveState("Saving…");
     const { error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
-      po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, delivery_method: d.delivery_method || "pickup",
+      price_type: d.price_type || "retail", po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, delivery_method: d.delivery_method || "pickup",
       ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "",
       discount_pct: +d.discount_pct || 0, tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, total: c.total, qty: c.qty,
@@ -131,7 +132,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     timer.current = setTimeout(save, 700);
   }
   const setGroup = (i: number, fn: (g: Group) => void) => patch((d) => fn(d.groups[i]));
-  const cloneGroup = (g: Group): Group => ({ id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid() })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })) });
+  const cloneGroup = (g: Group): Group => ({ id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid() })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })), finishing: [...(g.finishing || [])] });
 
   async function saveToCatalog(l: GLine) {
     const row = { style: l.style.trim(), brand: l.brand || "", description: l.garment, colors: l.color ? [l.color] : [], cost: +l.cost || 0 };
@@ -147,7 +148,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const { data, error } = await sb.from("customers").insert({ ...newCust, email: newCust.email.trim().toLowerCase() }).select("*").single();
     if (error || !data) return say("Couldn't add customer: " + error?.message);
     setCustomers((cs) => [...cs, data as Customer].sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
-    patch((d) => { d.customer_id = data.id; });
+    patch((d) => { d.customer_id = data.id; d.price_type = (data.price_type as PriceType) || "retail"; });
     setNewCust(null);
   }
 
@@ -200,7 +201,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     await save();
     const { data, error } = await sb.from("orders").insert({
       customer_id: o.customer_id, nickname: (o.nickname || "Job") + " (copy)", groups: o.groups.map(cloneGroup), fees: o.fees, po_number: "",
-      delivery_method: o.delivery_method, ship_to: o.ship_to, ship_method: o.ship_method,
+      delivery_method: o.delivery_method, ship_to: o.ship_to, ship_method: o.ship_method, price_type: o.price_type,
       discount_pct: o.discount_pct, tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: true, notes: o.notes, total: o.total, qty: o.qty,
     }).select("id").single();
     if (error || !data) return say("Couldn't duplicate: " + error?.message);
@@ -318,7 +319,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <div className="top2">
             <section className="panel">
               <div className="panel-h"><h2>Customer</h2>
-                {!newCust && <button className="btn sm" type="button" onClick={() => setNewCust({ company: "", name: "", email: "", phone: "" })}>+ New customer</button>}
+                {!newCust && <button className="btn sm" type="button" onClick={() => setNewCust({ company: "", name: "", email: "", phone: "", price_type: "retail" })}>+ New customer</button>}
               </div>
               <div className="panel-b stack">
                 {newCust ? (
@@ -328,6 +329,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                       <div className="field"><label htmlFor="nc-nm">Contact name</label><input id="nc-nm" type="text" value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} /></div>
                       <div className="field"><label htmlFor="nc-em">Email</label><input id="nc-em" type="email" value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} /></div>
                       <div className="field"><label htmlFor="nc-ph">Phone</label><input id="nc-ph" type="tel" value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} /></div>
+                      <div className="field"><label htmlFor="nc-pt">Customer type</label><select id="nc-pt" value={newCust.price_type} onChange={(e) => setNewCust({ ...newCust, price_type: e.target.value as PriceType })}><option value="retail">Retail (we supply garments)</option><option value="wholesale">Wholesale (they supply garments)</option></select></div>
                     </div>
                     <div className="row"><button className="btn primary sm" type="button" onClick={addCustomer}>Add and use</button><button className="btn ghost sm" type="button" onClick={() => setNewCust(null)}>Cancel</button></div>
                   </div>
@@ -336,14 +338,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     <select aria-label="Customer" value={o.customer_id || ""} onChange={(e) => {
                       const v = e.target.value;
                       const c = customers.find((x) => x.id === v);
-                      patch((d) => { d.customer_id = v || null; if (c?.tax_exempt) d.tax_exempt = true; });
+                      patch((d) => { d.customer_id = v || null; if (c?.tax_exempt) d.tax_exempt = true; if (c) d.price_type = c.price_type || "retail"; });
                     }}>
                       <option value="">Choose a customer…</option>
                       {customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}{c.company && c.name ? " · " + c.name : ""}</option>)}
                     </select>
                     {cust ? (
                       <div className="cust-card">
-                        <div><b>{cust.name || custLabel(cust)}</b>{cust.email && <> · {cust.email}</>}{cust.phone && <> · {cust.phone}</>}</div>
+                        <div><span className={"tag " + (cust.price_type === "wholesale" ? "i" : "q")} style={{ marginRight: 6 }}>{cust.price_type === "wholesale" ? "Wholesale" : "Retail"}</span><b>{cust.name || custLabel(cust)}</b>{cust.email && <> · {cust.email}</>}{cust.phone && <> · {cust.phone}</>}</div>
                         {cust.contact2_name && <div className="sub">Also: {[cust.contact2_name, cust.contact2_email, cust.contact2_phone].filter(Boolean).join(" · ")}</div>}
                         {cust.address && <div className="sub" style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
                         {cust.notes && <div className="sub">Note: {cust.notes}</div>}
@@ -360,6 +362,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <label className="check" style={{ fontSize: 13, color: o.rush ? "var(--danger)" : undefined, fontWeight: o.rush ? 700 : 400 }}><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} /> Rush</label>
               </div>
               <div className="panel-b stack">
+                <div className="row">
+                  <span className="lbl">PRICING</span>
+                  <div className="chips">
+                    <button type="button" className={"chip" + (o.price_type !== "wholesale" ? " on" : "")} onClick={() => patch((d) => { d.price_type = "retail"; })}>Retail</button>
+                    <button type="button" className={"chip" + (o.price_type === "wholesale" ? " on" : "")} onClick={() => patch((d) => { d.price_type = "wholesale"; })}>Wholesale</button>
+                  </div>
+                  <span className="faint" style={{ fontSize: 12 }}>{o.price_type === "wholesale" ? "Customer supplies garments. Imprints priced from the wholesale list." : "Garment cost plus markup, and retail imprint prices."}</span>
+                </div>
                 <div className="grid g2">
                   <div className="field"><label htmlFor="o-nick">Job name</label><input id="o-nick" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
                   <div className="field"><label htmlFor="o-po">Customer PO #</label><input id="o-po" type="text" value={o.po_number || ""} onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
@@ -384,7 +394,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
-            <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} catalog={catalog} canRemove={o.groups.length > 1}
+            <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />

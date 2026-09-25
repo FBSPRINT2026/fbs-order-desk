@@ -26,14 +26,15 @@ export const PAY_METHODS = ["Card", "Cash", "Check", "ACH", "Venmo", "Other"];
 
 export type Method = "screen" | "embroidery" | "dtf";
 /** One decoration on a group of garments (Printavo calls these imprints). */
-export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string };
+export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number };
 /** One garment + color row, with its size run. */
 export type GLine = {
   id: string; style: string; brand: string; garment: string; color: string; cost: number | "";
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
 };
 /** Garments that share the same imprints. Quantity breaks use the group total. */
-export type Group = { id: string; lines: GLine[]; imprints: Imprint[] };
+export type Group = { id: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[] };
+export type PriceType = "retail" | "wholesale";
 
 /** Older orders stored one garment per line with its own decorations. */
 export type Decoration = { id: string; method: Method; location: string; colors: number };
@@ -49,22 +50,28 @@ export type Order = {
   due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; tax_exempt: boolean; tax_rate: number | null;
   waive_setup: boolean; notes: string; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;
-  po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
+  price_type: PriceType; po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
 };
 export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string };
-export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string };
+export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType };
 export type Proof = { id: string; order_id: string; title: string; file_path: string; file_type: string; status: "pending" | "approved" | "changes"; customer_comment: string; decided_at: string | null; decided_name: string | null; created_at: string };
 export type Message = { id: string; order_id: string; author_type: "staff" | "customer"; author_email: string; author_name: string; body: string; read_at: string | null; created_at: string };
 export type OrderEvent = { id: number; order_id: string; kind: string; detail: string; actor: string; created_at: string };
 
-export type Settings = {
+/** One imprint price list (retail or wholesale). */
+export type PriceList = {
+  tiers: number[]; screen: number[][]; embroidery: number[]; dtf: number[];
+  screenFee: number; digitizing: number; inkChangeFee: number;
+  upcharges: Partial<Record<Size, number>>;
+};
+export type Finishing = { id: string; name: string; price: number };
+export type Settings = PriceList & {
   shop: { name: string; address: string; phone: string; email: string; terms: string; logoUrl: string };
   markup: number; taxRate: number; depositPct: number;
-  upcharges: Partial<Record<Size, number>>;
-  tiers: number[]; screen: number[][]; embroidery: number[]; dtf: number[];
-  screenFee: number; digitizing: number;
+  wholesale: PriceList;
+  finishing: Finishing[];
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -87,6 +94,30 @@ export const DEFAULT_SETTINGS: Settings = {
   dtf: [7, 6, 5, 4.5, 4, 3.5, 3],
   screenFee: 25,
   digitizing: 45,
+  inkChangeFee: 15,
+  wholesale: {
+    tiers: [12, 24, 48, 72, 144, 288, 500],
+    screen: [
+      [3.25, 4.0, 4.75, 5.5, 6.25, 7.0],
+      [2.4, 3.0, 3.6, 4.2, 4.8, 5.4],
+      [1.75, 2.2, 2.65, 3.1, 3.55, 4.0],
+      [1.4, 1.8, 2.2, 2.6, 3.0, 3.4],
+      [1.1, 1.4, 1.7, 2.0, 2.3, 2.6],
+      [0.9, 1.15, 1.4, 1.65, 1.9, 2.15],
+      [0.7, 0.9, 1.1, 1.3, 1.5, 1.7],
+    ],
+    embroidery: [7, 6.25, 5.5, 5, 4.5, 4.25, 4],
+    dtf: [5.5, 4.75, 4, 3.5, 3.25, 3, 2.75],
+    screenFee: 20,
+    digitizing: 40,
+    inkChangeFee: 15,
+    upcharges: { "2XL": 0.5, "3XL": 0.75, "4XL": 1, "5XL": 1 },
+  },
+  finishing: [
+    { id: "fold_bag", name: "Fold & bag", price: 0.5 },
+    { id: "hang_tag", name: "Hang tag", price: 0.35 },
+    { id: "relabel", name: "Remove tag & relabel", price: 1.0 },
+  ],
 };
 
 /** Fill any missing keys in stored settings with defaults. */
@@ -97,13 +128,21 @@ export function mergeSettings(data: unknown): Settings {
     ...d,
     shop: { ...DEFAULT_SETTINGS.shop, ...(d.shop || {}) },
     upcharges: { ...DEFAULT_SETTINGS.upcharges, ...(d.upcharges || {}) },
+    wholesale: { ...DEFAULT_SETTINGS.wholesale, ...(d.wholesale || {}), upcharges: { ...DEFAULT_SETTINGS.wholesale.upcharges, ...(d.wholesale?.upcharges || {}) } },
+    finishing: Array.isArray(d.finishing) ? d.finishing : DEFAULT_SETTINGS.finishing,
   };
+}
+
+/** The price list and garment rules for retail or wholesale work. */
+export function priceList(s: Settings, type: PriceType = "retail") {
+  const pl: PriceList = type === "wholesale" ? s.wholesale : s;
+  return { ...pl, markup: s.markup, useGarment: type !== "wholesale" };
 }
 
 export const r2 = (n: number) => Math.round((+n || 0) * 100) / 100;
 const num = (v: unknown) => (v === "" || v == null || isNaN(+(v as number)) ? 0 : +(v as number));
 
-export function tierIndex(q: number, s: Settings) {
+export function tierIndex(q: number, s: { tiers: number[] }) {
   let i = 0;
   s.tiers.forEach((m, ix) => { if (q >= m) i = ix; });
   return i;
@@ -122,45 +161,51 @@ export function orderGroups(o: Pick<Order, "groups" | "lines">): Group[] {
   }));
 }
 
-function imprintPrice(d: Imprint, ti: number, s: Settings) {
+function imprintPrice(d: Imprint, ti: number, s: PriceList) {
+  const inkFee = num(d.inkChanges) * num(s.inkChangeFee);
   if (d.method === "screen") {
     const n = Math.min(6, Math.max(1, num(d.colors) || 1));
-    return { each: num(s.screen[ti]?.[n - 1]), setup: n * num(s.screenFee) };
+    return { each: num(s.screen[ti]?.[n - 1]), setup: n * num(s.screenFee), inkFee };
   }
-  if (d.method === "embroidery") return { each: num(s.embroidery[ti]), setup: num(s.digitizing) };
-  if (d.method === "dtf") return { each: num(s.dtf[ti]), setup: 0 };
-  return { each: 0, setup: 0 };
+  if (d.method === "embroidery") return { each: num(s.embroidery[ti]), setup: num(s.digitizing), inkFee };
+  if (d.method === "dtf") return { each: num(s.dtf[ti]), setup: 0, inkFee };
+  return { each: 0, setup: 0, inkFee };
 }
 
 export type LineCalc = { id: string; qty: number; garmentEach: number; calcEach: number; each: number; hasOv: boolean; sub: number; upTotal: number };
 export type GroupCalc = ReturnType<typeof calcGroup>;
-export function calcGroup(g: Group, o: Pick<Order, "waive_setup">, s: Settings) {
+export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType }, s: Settings) {
+  const pl = priceList(s, o.price_type || "retail");
   const qty = (g.lines || []).reduce((a, l) => a + lineQty(l), 0);
-  const ti = tierIndex(qty, s);
-  const imprints = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, s) }));
+  const ti = tierIndex(qty, pl);
+  const imprints = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl) }));
   const printEach = r2(imprints.reduce((a, d) => a + d.each, 0));
+  const finishing = (g.finishing || []).map((fid) => s.finishing.find((f) => f.id === fid)).filter(Boolean) as Finishing[];
+  const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
   const lines: LineCalc[] = (g.lines || []).map((l) => {
     const lq = lineQty(l);
-    const garmentEach = r2(num(l.cost) * (1 + num(s.markup) / 100));
-    const calcEach = r2(garmentEach + printEach);
+    const garmentEach = pl.useGarment ? r2(num(l.cost) * (1 + num(pl.markup) / 100)) : 0;
+    const calcEach = r2(garmentEach + printEach + finishEach);
     const hasOv = l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride);
     const each = hasOv ? r2(+(l.priceOverride as number)) : calcEach;
     let sub = 0, upTotal = 0;
     SIZES.forEach((sz) => {
       const q = num(l.sizes?.[sz]);
-      const up = num(s.upcharges?.[sz]);
+      const up = num(pl.upcharges?.[sz]);
       sub += q * (each + up);
       upTotal += q * up;
     });
     return { id: l.id, qty: lq, garmentEach, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
   });
-  const setup = o.waive_setup ? 0 : r2(imprints.reduce((a, d) => a + d.setup, 0));
-  return { id: g.id, qty, ti, tierMin: s.tiers[ti], imprints, printEach, lines, sub: r2(lines.reduce((a, l) => a + l.sub, 0)), setup, belowMin: qty > 0 && qty < s.tiers[0] };
+  const screens = o.waive_setup ? 0 : imprints.reduce((a, d) => a + d.setup, 0);
+  const inkFees = imprints.reduce((a, d) => a + d.inkFee, 0);
+  const setup = r2(screens + inkFees);
+  return { id: g.id, qty, ti, tierMin: pl.tiers[ti], imprints, printEach, finishEach, finishing, lines, sub: r2(lines.reduce((a, l) => a + l.sub, 0)), setup, inkFees: r2(inkFees), belowMin: qty > 0 && qty < pl.tiers[0], wholesale: !pl.useGarment };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
 export function calcOrder(
-  o: Pick<Order, "lines" | "groups" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup">,
+  o: Pick<Order, "lines" | "groups" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup"> & { price_type?: PriceType },
   s: Settings,
   payments: Pick<Payment, "amount">[] = []
 ) {
@@ -186,7 +231,7 @@ export function newGLine(): GLine {
   return { id: uid(), style: "", brand: "", garment: "", color: "", cost: "", sizes: {}, priceOverride: null };
 }
 export function newImprint(location = "Front"): Imprint {
-  return { id: uid(), method: "screen", location, colors: 1, inks: "", size: "", notes: "" };
+  return { id: uid(), method: "screen", location, colors: 1, inks: "", size: "", notes: "", inkChanges: 0 };
 }
 export function newGroup(): Group {
   return { id: uid(), lines: [newGLine()], imprints: [newImprint()] };
@@ -197,5 +242,6 @@ export function imprintLabel(d: Imprint) {
   if (d.method === "screen") parts.push(`${d.colors} color${d.colors > 1 ? "s" : ""}`);
   if (d.inks) parts.push(d.inks);
   if (d.size) parts.push(d.size);
+  if (d.inkChanges) parts.push(`${d.inkChanges} ink change${d.inkChanges > 1 ? "s" : ""}`);
   return parts.join(" · ");
 }

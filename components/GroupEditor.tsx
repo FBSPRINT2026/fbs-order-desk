@@ -1,5 +1,5 @@
 "use client";
-import { LOCATIONS, METHODS, SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type Settings } from "@/lib/pricing";
+import { LOCATIONS, METHODS, SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 
 type Props = {
@@ -7,6 +7,7 @@ type Props = {
   g: Group;
   gc: GroupCalc;
   settings: Settings;
+  prices: PriceList;
   catalog: Garment[];
   canRemove: boolean;
   armed: string;
@@ -20,7 +21,7 @@ type Props = {
 const numOr = (v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ gi, g, gc, settings, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog }: Props) {
+export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog }: Props) {
   const findStyle = (style: string) => catalog.find((x) => x.style.toLowerCase() === style.trim().toLowerCase());
 
   function onStyle(li: number, style: string) {
@@ -31,7 +32,7 @@ export default function GroupEditor({ gi, g, gc, settings, catalog, canRemove, a
       if (hit) {
         if (!l.garment) l.garment = hit.description;
         if (!l.brand) l.brand = hit.brand;
-        if (l.cost === "" || l.cost === 0) l.cost = +hit.cost || "";
+        if (!gc.wholesale && (l.cost === "" || l.cost === 0)) l.cost = +hit.cost || "";
       }
     });
   }
@@ -43,6 +44,7 @@ export default function GroupEditor({ gi, g, gc, settings, catalog, canRemove, a
         <span className="idx">GROUP {gi + 1}</span>
         <b className="num">{gc.qty} pcs</b>
         <span className="faint" style={{ fontSize: 12 }}>{gc.qty ? `${gc.tierMin}+ price break` : ""}</span>
+        {gc.wholesale && <span className="tag i">Customer-supplied goods</span>}
         <span className="spacer" />
         <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
@@ -56,8 +58,8 @@ export default function GroupEditor({ gi, g, gc, settings, catalog, canRemove, a
                 <th style={{ minWidth: 110 }}>Style #</th>
                 <th style={{ minWidth: 120 }}>Color</th>
                 <th style={{ minWidth: 170 }}>Description</th>
-                <th style={{ minWidth: 70 }}>Cost</th>
-                {SIZES.map((s) => <th key={s} className="c">{s}{settings.upcharges[s] ? <small>+{settings.upcharges[s]}</small> : null}</th>)}
+                {!gc.wholesale && <th style={{ minWidth: 70 }}>Cost</th>}
+                {SIZES.map((s) => <th key={s} className="c">{s}{prices.upcharges[s] ? <small>+{prices.upcharges[s]}</small> : null}</th>)}
                 <th className="c">Qty</th>
                 <th className="r" style={{ minWidth: 84 }}>Each</th>
                 <th className="r" style={{ minWidth: 84 }}>Total</th>
@@ -73,14 +75,14 @@ export default function GroupEditor({ gi, g, gc, settings, catalog, canRemove, a
                   <tr key={l.id}>
                     <td>
                       <input type="text" list={listId} aria-label="Style number" placeholder="G5000" value={l.style} onChange={(e) => onStyle(li, e.target.value)} />
-                      {!hit && l.style && l.garment && l.cost !== "" && <button className="linkbtn" type="button" onClick={() => onSaveToCatalog(l)}>Save to catalog</button>}
+                      {!hit && l.style && l.garment && (gc.wholesale || l.cost !== "") && <button className="linkbtn" type="button" onClick={() => onSaveToCatalog(l)}>Save to catalog</button>}
                     </td>
                     <td>
                       <input type="text" list={colorsId} aria-label="Color" placeholder="Black" value={l.color} onChange={(e) => update((x) => { x.lines[li].color = e.target.value; })} />
                       {hit && <datalist id={colorsId}>{hit.colors.map((c) => <option key={c} value={c} />)}</datalist>}
                     </td>
                     <td><input type="text" aria-label="Description" placeholder="Unisex tee" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></td>
-                    <td><input type="number" step="0.01" min="0" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></td>
+                    {!gc.wholesale && <td><input type="number" step="0.01" min="0" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></td>}
                     {SIZES.map((s) => (
                       <td key={s} className="c">
                         <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.[s] ? " has" : "")} aria-label={`${s} quantity`} value={l.sizes?.[s] || ""}
@@ -106,7 +108,7 @@ export default function GroupEditor({ gi, g, gc, settings, catalog, canRemove, a
           <div className="lbl" style={{ marginBottom: 6 }}>IMPRINTS</div>
           <div className="sizes-wrap">
             <table className="pv-grid">
-              <thead><tr><th style={{ minWidth: 130 }}>Method</th><th style={{ minWidth: 120 }}>Location</th><th style={{ minWidth: 90 }}>Colors</th><th style={{ minWidth: 170 }}>Ink colors / PMS</th><th style={{ minWidth: 110 }}>Print size</th><th style={{ minWidth: 170 }}>Notes</th><th className="r">Each</th><th /></tr></thead>
+              <thead><tr><th style={{ minWidth: 130 }}>Method</th><th style={{ minWidth: 120 }}>Location</th><th style={{ minWidth: 90 }}>Colors</th><th style={{ minWidth: 170 }}>Ink colors / PMS</th><th style={{ minWidth: 110 }}>Print size</th><th style={{ minWidth: 170 }}>Notes</th><th className="c" title="Ink changes during the run">Ink chg</th><th className="r">Each</th><th /></tr></thead>
               <tbody>
                 {g.imprints.map((d, di) => (
                   <tr key={d.id}>
@@ -118,6 +120,7 @@ export default function GroupEditor({ gi, g, gc, settings, catalog, canRemove, a
                     <td><input type="text" aria-label="Ink colors" placeholder="White, PMS 186 C" value={d.inks} onChange={(e) => update((x) => { x.imprints[di].inks = e.target.value; })} /></td>
                     <td><input type="text" aria-label="Print size" placeholder='11" wide' value={d.size} onChange={(e) => update((x) => { x.imprints[di].size = e.target.value; })} /></td>
                     <td><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></td>
+                    <td className="c"><input type="number" min="0" step="1" className="sz" aria-label="Ink changes" value={d.inkChanges || ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].inkChanges = Math.max(0, Math.floor(+e.target.value || 0)); })} /></td>
                     <td className="r num">{money(gc.imprints[di]?.each)}</td>
                     <td><button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button></td>
                   </tr>
@@ -128,9 +131,20 @@ export default function GroupEditor({ gi, g, gc, settings, catalog, canRemove, a
           <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(LOCATIONS.find((z) => !used.includes(z)) || "")); })}>+ Add imprint</button>
         </div>
 
-        {gc.belowMin && <div className="warnline">{gc.qty} pcs is under your {settings.tiers[0]}-piece minimum. Priced at the {settings.tiers[0]}+ break.</div>}
+        {settings.finishing.length > 0 && (
+          <div className="row" style={{ gap: 14 }}>
+            <span className="lbl">FINISHING</span>
+            {settings.finishing.map((f) => (
+              <label key={f.id} className="check" style={{ fontSize: 13 }}>
+                <input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => update((x) => { const set = new Set(x.finishing || []); if (e.target.checked) set.add(f.id); else set.delete(f.id); x.finishing = [...set]; })} />
+                {f.name} <span className="faint">({money(f.price)}/pc)</span>
+              </label>
+            ))}
+          </div>
+        )}
+        {gc.belowMin && <div className="warnline">{gc.qty} pcs is under your {prices.tiers[0]}-piece minimum. Priced at the {prices.tiers[0]}+ break.</div>}
         <div className="price-strip">
-          <div className="calc">Print <b>{money(gc.printEach)}</b>/pc · {gc.qty} pcs at the {gc.tierMin}+ break{gc.setup ? ` · setup ${money(gc.setup)}` : ""}</div>
+          <div className="calc">Print <b>{money(gc.printEach)}</b>/pc{gc.finishEach ? <> + finishing <b>{money(gc.finishEach)}</b>/pc</> : null} · {gc.qty} pcs at the {gc.tierMin}+ break{gc.setup ? ` · setup ${money(gc.setup)}` : ""}{gc.inkFees ? ` (incl. ${money(gc.inkFees)} ink changes)` : ""}</div>
           <div className="lt"><div className="sub">Group total</div><b>{money(gc.sub + gc.setup)}</b></div>
         </div>
       </div>
