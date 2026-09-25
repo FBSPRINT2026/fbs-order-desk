@@ -15,15 +15,29 @@ const PATTERNS = [
   "114131","311141","411131","211412","211214","211232","2331112",
 ];
 const START_B = 104;
+const START_C = 105;
+const CODE_B = 100; // switch from set C to set B
 const STOP = 106;
 
-/** Module widths (bar, space, bar, …) for a Code 128B barcode of `text` (printable ASCII only). */
+/**
+ * Module widths (bar, space, bar, …) for a Code 128 barcode of `text`.
+ * Digit runs use set C (two digits per symbol, a shorter barcode); anything else uses set B.
+ */
 export function code128Modules(text: string): number[] {
-  const values = [START_B];
-  for (const ch of text) {
-    const v = ch.charCodeAt(0) - 32;
-    if (v < 0 || v > 94) continue; // skip characters Code 128B can't hold
-    values.push(v);
+  const clean = [...text].filter((ch) => ch.charCodeAt(0) >= 32 && ch.charCodeAt(0) <= 126).join("");
+  const values: number[] = [];
+  const lead = (clean.match(/^\d+/) || [""])[0];
+  const cLen = lead.length - (lead.length % 2); // even number of leading digits
+  if (cLen >= 4 || (cLen >= 2 && cLen === clean.length)) {
+    values.push(START_C);
+    for (let i = 0; i < cLen; i += 2) values.push(+clean.slice(i, i + 2));
+    if (cLen < clean.length) {
+      values.push(CODE_B);
+      for (const ch of clean.slice(cLen)) values.push(ch.charCodeAt(0) - 32);
+    }
+  } else {
+    values.push(START_B);
+    for (const ch of clean) values.push(ch.charCodeAt(0) - 32);
   }
   let sum = values[0];
   for (let i = 1; i < values.length; i++) sum += values[i] * i;
