@@ -38,9 +38,10 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   // Shipping barcode: the order number, used as the lookup key for WorldShip Keyed Import / FedEx Ship Manager.
   const shipKey = String(o.number);
   const bc = code128Svg(shipKey, 40).svg;
-  // give the write-in rows as much height as the label allows
   const shipBlock = o.delivery_method !== "pickup" && !!o.ship_to;
-  const inboxIn = (shipBlock ? 0.9 : 1.1) * (size === "letter" ? (rows.length <= 3 ? 0.75 : rows.length <= 5 ? 0.55 : 0.4) : (rows.length <= 2 ? 0.7 : rows.length <= 3 ? 0.55 : rows.length <= 4 ? 0.45 : 0.34));
+  const inboxIn = size === "letter" ? 1.0 : 0.7; // minimum write-in height; the grid grows to fill the label
+  const sizeTotals: Partial<Record<string, number>> = {};
+  rows.forEach((l) => used.forEach((z) => { sizeTotals[z] = (sizeTotals[z] || 0) + (+(l.sizes?.[z] || 0)); }));
 
   return (
     <div className={`labels-page ${size === "letter" ? "sz-letter" : "sz-4x6"}`}>
@@ -71,11 +72,25 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         table.lb { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .lb th, .lb td { border: 1px solid #111; padding: 2px 2px; text-align: center; font-size: 1em; }
         .lb th { background: #111; color: #fff; font-weight: 700; }
+        .lb-grid { flex: 1 1 auto !important; min-height: ${inboxIn}in; display: grid; grid-template-rows: auto auto 1fr; border: 1.5px solid #111; }
+        .lb-grid > div { border-right: 1px solid #111; border-bottom: 1px solid #111; display: flex; align-items: center; justify-content: center; text-align: center; }
+        .lb-grid .h { background: #111; color: #fff; font-weight: 700; padding: 3px 0; border-color: #444; }
+        .lb-grid .ord { background: #f2f2f2; color: #444; padding: 3px 0; }
+        .lb-grid .box { border-bottom: 0; border-right-width: 1.5px; }
+        .lb-grid .k { font-size: .72em; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #333; }
+        .lb-sect { font-size: .75em; font-weight: 800; letter-spacing: .08em; color: #333; margin-top: 2px; }
+        .lb-items { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; }
+        .sz-letter .lb-items { grid-template-columns: 1fr 1fr 1fr; }
+        .lb-item { display: flex; align-items: center; gap: 5px; font-size: .95em; min-width: 0; }
+        .lb-item .cb { flex: none; width: 1.15em; height: 1.15em; border: 1.5px solid #111; border-radius: 2px; }
+        .lb-item .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .lb-item .ds { color: #555; font-size: .9em; }
+        .lb-item .q { flex: none; font-weight: 700; color: #555; font-size: .9em; }
         .lb td.item { text-align: left; font-weight: 600; font-size: .92em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .lb tr.ord td { color: #555; font-size: .9em; background: #f2f2f2; }
         .lb tr.ord td.item { color: #111; background: #f2f2f2; }
-                .lb tr.inbox td:not(.item):not(.k) { border-width: 1.5px; font-size: 1.3em; }
-        .lb td.k { font-size: .7em; letter-spacing: .02em; text-transform: uppercase; color: #555; line-height: 1.1; }
+                .lb tr.inbox td:not(.k) { border-width: 1.5px; }
+        .lb td.k { font-size: .72em; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: #555; line-height: 1.1; }
         .lb-bcrow { display: flex; align-items: center; gap: 8px; }
         .lb-bc { flex: none; display: flex; flex-direction: column; align-items: center; }
         .sz-4x6 .lb-bc .bars { width: 2.3in; height: 0.45in; }
@@ -93,7 +108,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           .label.brk { page-break-after: always; break-after: page; }
         }
       `}</style>
-      <LabelControls boxes={boxes} size={size} tight={size === "4x6" && rows.length > 6} />
+      <LabelControls boxes={boxes} size={size} tight={size === "4x6" && rows.length > 10} />
       {Array.from({ length: boxes }, (_, bi) => (
         <div className={"label" + (size === "4x6" || bi % 2 === 1 ? " brk" : "")} key={bi}>
           <div className="lb-top">
@@ -134,22 +149,26 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             </div>
           )}
 
-          <table className="lb">
-            <colgroup><col style={{ width: size === "letter" ? "28%" : "25%" }} /><col style={{ width: "2.6em" }} />{used.map((z) => <col key={z} />)}<col style={{ width: "2.6em" }} /></colgroup>
-            <thead><tr><th style={{ textAlign: "left" }}>Item</th><th /> {used.map((z) => <th key={z}>{z}</th>)}<th>Tot</th></tr></thead>
-            <tbody>
-              {rows.map((l) => {
-                const tot = used.reduce((a, z) => a + (+(l.sizes?.[z] || 0)), 0);
-                const name = [l.style, l.color].filter(Boolean).join(" · ") || l.garment || "Garment";
-                return [
-                  <tr key={l.id + "o"} className="ord"><td className="item" rowSpan={1} title={name}>{name}</td><td className="k">Ord</td>{used.map((z) => <td key={z}>{l.sizes?.[z] || ""}</td>)}<td><b>{tot}</b></td></tr>,
-                  <tr key={l.id + "b"} className="inbox" style={{ height: `${inboxIn}in` }}><td className="item" style={{ fontWeight: 400, fontSize: ".85em", color: "#555" }}>{l.garment}</td><td className="k">In<br />box</td>{used.map((z) => <td key={z}>{l.sizes?.[z] ? "" : "–"}</td>)}<td /></tr>,
-                ];
-              })}
-              {!rows.length && <tr><td colSpan={used.length + 3}>No sizes entered on this order yet.</td></tr>}
-            </tbody>
-          </table>
-          <div className="lb-total"><span>Order total: {totalPcs} pcs</span><span>This box: ______ pcs</span></div>
+          <div className="lb-sect">IN THIS BOX (check all that apply)</div>
+          <div className="lb-items">
+            {rows.map((l) => {
+              const tot = used.reduce((a, z) => a + (+(l.sizes?.[z] || 0)), 0);
+              return (
+                <div key={l.id} className="lb-item">
+                  <span className="cb" />
+                  <span className="nm"><b>{[l.style, l.color].filter(Boolean).join(" · ") || "Garment"}</b>{l.garment ? <span className="ds"> {l.garment}</span> : null}</span>
+                  <span className="q">{tot}</span>
+                </div>
+              );
+            })}
+            {!rows.length && <div className="lb-item">No garments entered on this order yet.</div>}
+          </div>
+          <div className="lb-grid" style={{ gridTemplateColumns: `4.6em repeat(${Math.max(used.length, 1)}, 1fr) 3.2em` }}>
+            <div className="h" />{used.map((z) => <div key={z} className="h">{z}</div>)}<div className="h">Total</div>
+            <div className="k ord">Ordered</div>{used.map((z) => <div key={z} className="ord">{sizeTotals[z] || ""}</div>)}<div className="ord"><b>{totalPcs}</b></div>
+            <div className="k box">In box</div>{used.map((z) => <div key={z} className="box" />)}<div className="box" />
+          </div>
+          
           <div className="lb-foot"><div>Packed by</div><div>Date</div><div>Checked</div></div>
         </div>
       ))}
