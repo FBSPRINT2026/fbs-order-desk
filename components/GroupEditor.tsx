@@ -63,11 +63,11 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
     <section className="line">
       <div className="line-h">
         <input type="text" className="grp-name" aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
-        {gc.wholesale && <span className="tag i">Customer-supplied goods</span>}
         <span className="spacer" />
         <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
       </div>
+      {gc.wholesale && <div className="cs-banner">Customer-supplied goods</div>}
       <div className="line-b">
         <datalist id={listId}>{catalog.map((c) => <option key={c.id} value={c.style}>{[c.brand, c.description].filter(Boolean).join(" ")}</option>)}</datalist>
         <div className="lbl" style={{ marginBottom: -4 }}>GARMENTS</div>
