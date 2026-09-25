@@ -56,7 +56,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
       <style>{`
         @page { size: ${size === "letter" ? "8.5in 11in" : "4in 6in"}; margin: 0; }
         .labels-page { background: #e9edf2; min-height: 100%; padding-block: 16px 40px; padding-inline: 16px; color: #000; font-family: Helvetica, Arial, sans-serif; }
-        .label { background: #fff; margin: 0 auto 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+        .label { background: #fff; margin: 0 auto 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
         .sz-4x6 .label { width: 4in; height: 6in; padding: 0.16in; font-size: 11px; }
         .sz-letter .label { width: 8.5in; height: 5.5in; padding: 0.35in; font-size: 12px; }
         .lb-top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 2px solid #000; padding-bottom: 3px; gap: 6px; }
@@ -118,8 +118,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb tr.ord td.item { color: #000;  }
                 .lb tr.inbox td:not(.k) { border-width: 1.5px; }
         .lb td.k { font-size: .72em; font-weight: 700; letter-spacing: .02em; text-transform: uppercase;  line-height: 1.1; }
-        .lb-bc { flex: none; display: flex; flex-direction: column; align-items: center; }
-        .sz-4x6 .lb-bc .bars { height: 0.34in; }
+        .lb-bc { flex: none; margin-left: auto; display: flex; justify-content: flex-end; }
+        .sz-4x6 .lb-bc .bars { height: 0.3in; }
         .sz-letter .lb-bc .bars { height: 0.45in; }
         .lb-bc .bars svg { width: 100%; height: 100%; display: block; }
         .lb-bc .hr { font-family: "Courier New", monospace; font-weight: 700; letter-spacing: .15em; font-size: 1em; line-height: 1.1; }
@@ -150,7 +150,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           </div>
           <div className="lb-info">
             <div className="lb-infotext"><div className="lb-job">{o.nickname || "Untitled job"}</div>{o.po_number && <div className="lb-meta">PO {o.po_number}</div>}</div>
-            <div className="lb-bc"><div className="bars" style={{ width: `${bcWidthIn}in` }} dangerouslySetInnerHTML={{ __html: bc }} /><div className="hr">{shipKey}</div></div>
+            <div className="lb-bc"><div className="bars" style={{ width: `${bcWidthIn}in` }} dangerouslySetInnerHTML={{ __html: bc }} /></div>
           </div>
           <div className="lb-shiprow">
             {shipBlock ? (
