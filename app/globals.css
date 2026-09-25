@@ -464,3 +464,4 @@ table.imp-table{table-layout:fixed}
 .cs-banner{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface));color:var(--accent);border-bottom:1px solid var(--line);font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.08em;text-transform:uppercase;text-align:center;padding:9px 14px}
 .confirm-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid var(--accent);background:var(--accent-soft);border-radius:6px;padding:8px 10px;font-size:13px}
 .confirm-bar > span{flex:1 1 240px}
+.cust-card .cc-co{font-weight:700;font-size:15px}

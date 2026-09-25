@@ -347,10 +347,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     </select>
                     {cust ? (
                       <div className="cust-card">
-                        <div><span className={"tag " + (cust.price_type === "wholesale" ? "i" : "q")} style={{ marginRight: 6 }}>{cust.price_type === "wholesale" ? "Wholesale" : "Retail"}</span><b>{cust.name || custLabel(cust)}</b>{cust.email && <> · {cust.email}</>}{cust.phone && <> · {cust.phone}</>}</div>
-                        {cust.contact2_name && <div className="sub">Also: {[cust.contact2_name, cust.contact2_email, cust.contact2_phone].filter(Boolean).join(" · ")}</div>}
-                        {cust.address && <div className="sub" style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
-                        {cust.notes && <div className="sub">Note: {cust.notes}</div>}
+                        {cust.company && <div className="cc-co">{cust.company}</div>}
+                        {cust.name && <div>{cust.name}</div>}
+                        {cust.address && <div style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
                         <Link href={`/shop/customers/${cust.id}`} style={{ fontSize: 12 }}>Edit customer</Link>
                       </div>
                     ) : <div className="faint" style={{ fontSize: 13 }}>Pick a customer, or add a new one without leaving this order.</div>}
