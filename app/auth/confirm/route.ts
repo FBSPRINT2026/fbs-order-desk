@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const token_hash = url.searchParams.get("token_hash");
-  const type = (url.searchParams.get("type") || "email") as "email" | "magiclink";
+  const rawType = url.searchParams.get("type") || "email";
+  const type = (["signup", "magiclink", "recovery", "invite", "email_change"].includes(rawType) ? rawType : "email") as "email";
   const code = url.searchParams.get("code");
   let next = url.searchParams.get("next") || "/";
   if (!next.startsWith("/")) next = "/";
