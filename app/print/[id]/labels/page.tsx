@@ -39,7 +39,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   const shipKey = String(o.number);
   const bc = code128Svg(shipKey, 30).svg;
   const shipBlock = o.delivery_method !== "pickup" && !!o.ship_to;
-  const inboxIn = size === "letter" ? 1.0 : 0.7; // minimum write-in height; the grid grows to fill the label
+  const rowMin = size === "letter" ? 0.3 : 0.22; // minimum row height; rows grow to fill the label
   const sizeTotals: Partial<Record<string, number>> = {};
   rows.forEach((l) => used.forEach((z) => { sizeTotals[z] = (sizeTotals[z] || 0) + (+(l.sizes?.[z] || 0)); }));
 
@@ -75,12 +75,16 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         table.lb { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .lb th, .lb td { border: 1px solid #111; padding: 2px 2px; text-align: center; font-size: 1em; }
         .lb th { background: #111; color: #fff; font-weight: 700; }
-        .lb-grid { flex: 1 1 auto !important; min-height: ${inboxIn}in; display: grid; grid-template-rows: auto auto 1fr; border: 1.5px solid #111; }
-        .lb-grid > div { border-right: 1px solid #111; border-bottom: 1px solid #111; display: flex; align-items: center; justify-content: center; text-align: center; }
-        .lb-grid .h { background: #111; color: #fff; font-weight: 700; padding: 3px 0; border-color: #444; }
-        .lb-grid .ord { background: #f2f2f2; color: #444; padding: 3px 0; }
-        .lb-grid .box { border-bottom: 0; border-right-width: 1.5px; }
-        .lb-grid .k { font-size: .72em; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #333; }
+        .lb-grid { flex: 1 1 auto !important; display: grid; border: 1.5px solid #111; min-height: 0; }
+        .lb-grid > div { border-right: 1px solid #111; border-bottom: 1px solid #111; min-width: 0; }
+        .lb-grid .h { background: #111; color: #fff; font-weight: 700; padding: 2px 0; text-align: center; border-color: #444; }
+        .lb-grid .h.l { text-align: left; padding-left: 4px; }
+        .lb-grid .it { font-size: .88em; padding: 2px 4px; display: flex; align-items: center; overflow: hidden; line-height: 1.1; overflow-wrap: anywhere; }
+        .lb-grid .it .clr { font-weight: 500; }
+        .lb-grid .c { position: relative; }
+        .lb-grid .c .o { position: absolute; top: 1px; left: 2px; font-size: .72em; color: #666; line-height: 1; }
+        .lb-grid .c.na { background: repeating-linear-gradient(135deg, #fff 0 3px, #d6d6d6 3px 4px); }
+        .lb-key { display: flex; justify-content: space-between; gap: 8px; font-size: .78em; color: #444; }
         .lb-sect { font-size: .75em; font-weight: 800; letter-spacing: .08em; color: #333; margin-top: 2px; }
         .lb-items { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; }
         .sz-letter .lb-items { grid-template-columns: 1fr 1fr 1fr; }
@@ -145,26 +149,21 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             </div>
           )}
 
-          <div className="lb-sect">IN THIS BOX (check all that apply)</div>
-          <div className="lb-items">
+          <div className="lb-grid" style={{ gridTemplateColumns: `minmax(0, 1.9fr) repeat(${Math.max(used.length, 1)}, minmax(0, 1fr)) minmax(0, 1.1fr)`, gridTemplateRows: `auto repeat(${Math.max(rows.length, 1)}, minmax(${rowMin}in, 1fr))` }}>
+            <div className="h l">Item</div>{used.map((z) => <div key={z} className="h">{z}</div>)}<div className="h">Total</div>
             {rows.map((l) => {
               const tot = used.reduce((a, z) => a + (+(l.sizes?.[z] || 0)), 0);
-              return (
-                <div key={l.id} className="lb-item">
-                  <span className="cb" />
-                  <span className="nm"><b>{[l.style, l.color].filter(Boolean).join(" · ") || l.garment || "Garment"}</b></span>
-                  <span className="q">{tot}</span>
-                </div>
-              );
+              return [
+                <div key={l.id + "n"} className="it"><span><b>{l.style || l.garment || "Garment"}</b>{l.color ? <><br /><span className="clr">{l.color}</span></> : null}</span></div>,
+                ...used.map((z) => (l.sizes?.[z]
+                  ? <div key={l.id + z} className="c"><span className="o">{l.sizes[z]}</span></div>
+                  : <div key={l.id + z} className="c na" />)),
+                <div key={l.id + "t"} className="c"><span className="o"><b>{tot}</b></span></div>,
+              ];
             })}
-            {!rows.length && <div className="lb-item">No garments entered on this order yet.</div>}
+            {!rows.length && <div className="it" style={{ gridColumn: "1 / -1" }}>No garments entered on this order yet.</div>}
           </div>
-          <div className="lb-grid" style={{ gridTemplateColumns: `4.6em repeat(${Math.max(used.length, 1)}, 1fr) 3.2em` }}>
-            <div className="h" />{used.map((z) => <div key={z} className="h">{z}</div>)}<div className="h">Total</div>
-            <div className="k ord">Ordered</div>{used.map((z) => <div key={z} className="ord">{sizeTotals[z] || ""}</div>)}<div className="ord"><b>{totalPcs}</b></div>
-            <div className="k box">In box</div>{used.map((z) => <div key={z} className="box" />)}<div className="box" />
-          </div>
-          
+          <div className="lb-key"><span>Small number = ordered. Write the count in this box in the space.</span><span>Order total: <b>{totalPcs}</b> pcs</span></div>
           <div className="lb-foot"><div>Packed by</div><div>Date</div><div>Checked</div></div>
         </div>
       ))}
