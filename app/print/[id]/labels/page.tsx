@@ -64,7 +64,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .sz-letter .label { width: 8.5in; height: 5.5in; padding: 0.35in; font-size: 12px; }
         .lb-top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 2px solid #000; padding-bottom: 3px; gap: 6px; }
         .lb-mid { text-align: center; }
-        .lb-rushtag { margin-left: 5px; border: 1.5px solid #000; padding: 0 3px; font-weight: 800; }
+        .lb-rushtag { margin-left: 6px; border: 1.5px solid #000; padding: 1px 4px; font-weight: 800; font-size: .5em; letter-spacing: .06em; vertical-align: middle; }
+        .lb-shop { white-space: nowrap; }
         .lb-top .lb-rush { font-size: 1.3em; padding: 2px 8px; }
         .lb-shiprow { display: flex; gap: 6px; align-items: stretch; }
         .lb-shiprow .lb-ship { flex: 1 1 auto; min-width: 0; }
@@ -147,8 +148,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         <div className={"label" + (size === "4x6" || bi % 2 === 1 ? " brk" : "")} key={bi}>
           <div className="lb-top">
             <div className="lb-idrow">
-              <span className="lb-no">#{o.number}</span>
-              <span className="lb-shop">{brand}{o.rush ? <span className="lb-rushtag">RUSH</span> : null}</span>
+              <span className="lb-no">#{o.number}{o.rush ? <span className="lb-rushtag">RUSH</span> : null}</span>
+              <span className="lb-shop" style={brand.length > 14 ? { fontSize: brand.length > 22 ? ".7em" : ".8em" } : undefined}>{brand}</span>
             </div>
             <div className="lb-mid"><span className="lb-rush">{o.delivery_method === "ship" ? "SHIP" : o.delivery_method === "deliver" ? "DELIVERY" : "PICKUP"}</span></div>
             <div style={{ textAlign: "right" }}>
