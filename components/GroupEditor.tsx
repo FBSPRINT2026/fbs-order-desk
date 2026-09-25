@@ -62,7 +62,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
   return (
     <section className="line">
       <div className="line-h">
-        <input type="text" className="grp-name" aria-label="Group name" placeholder={`Group ${gi + 1} (e.g. AMS Helper Tee)`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
+        <input type="text" className="grp-name" aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
         {gc.wholesale && <span className="tag i">Customer-supplied goods</span>}
         <span className="spacer" />
         <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>

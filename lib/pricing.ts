@@ -88,6 +88,7 @@ export type PriceList = {
   dtgLight?: number[];        // full-color digital print per location, light garments
   lightColors?: string[];     // garment colors that get light-garment screen prices
   dtgLightColors?: string[];  // garment colors that get light-garment full-color prices (no white underbase)
+  colorAdjust?: Record<string, number>; // per-piece price change by garment color (e.g. White -0.065)
 };
 export const FULL_COLOR = 11;
 /** True when a garment color is on the light-garment list. */
@@ -228,7 +229,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
       const digital = scr.reduce((a, d) => a + num(d.dtg), 0);
       screenPart = scr.some((d) => d.full) ? digital : Math.min(screenPart, digital);
     }
-    return r2(other + screenPart);
+    return other + screenPart;
   };
   const printEach = printFor(false, false);
   const printCache = new Map<string, number>();
@@ -242,9 +243,11 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
   const lines: LineCalc[] = (g.lines || []).map((l) => {
     const lq = lineQty(l);
-    const garmentEach = pl.useGarment ? r2(num(l.cost) * (1 + num(pl.markup) / 100) + num(pl.blankAdd?.[ti])) : 0;
+    const adj = Object.entries(pl.colorAdjust || {}).find(([c]) => normColor(c) === normColor(l.color))?.[1] || 0;
+    const garmentRaw = pl.useGarment ? num(l.cost) * (1 + num(pl.markup) / 100) + num(pl.blankAdd?.[ti]) + num(adj) : 0;
+    const garmentEach = r2(garmentRaw);
     const { light, print: linePrint } = printLine(l.color);
-    const calcEach = r2(garmentEach + linePrint + finishEach);
+    const calcEach = r2(garmentRaw + linePrint + finishEach);
     const hasOv = l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride);
     const each = hasOv ? r2(+(l.priceOverride as number)) : calcEach;
     let sub = 0, upTotal = 0;
@@ -254,12 +257,12 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
       sub += q * (each + up);
       upTotal += q * up;
     });
-    return { id: l.id, qty: lq, garmentEach, printEach: linePrint, light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
+    return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
   });
   const screens = o.waive_setup ? 0 : imprints.reduce((a, d) => a + d.setup, 0);
   const inkFees = imprints.reduce((a, d) => a + d.inkFee, 0);
   const setup = r2(screens + inkFees);
-  return { id: g.id, qty, ti, tierMin: pl.tiers[ti], imprints, printEach, finishEach, finishing, lines, sub: r2(lines.reduce((a, l) => a + l.sub, 0)), setup, inkFees: r2(inkFees), belowMin: qty > 0 && qty < pl.tiers[0], wholesale: !pl.useGarment };
+  return { id: g.id, qty, ti, tierMin: pl.tiers[ti], imprints, printEach: r2(printEach), finishEach, finishing, lines, sub: r2(lines.reduce((a, l) => a + l.sub, 0)), setup, inkFees: r2(inkFees), belowMin: qty > 0 && qty < pl.tiers[0], wholesale: !pl.useGarment };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
