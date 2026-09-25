@@ -116,8 +116,9 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                       const up = prices.upcharges[s as keyof typeof prices.upcharges];
                       return (
                         <label key={s} className={"szc" + (s === "YXL" && si < arr.length - 1 ? " ysep" : "")}>
-                          <span>{s}{up ? <small>+{up}</small> : null}</span>
+                          <span>{s}</span>
                           <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.[s] ? " has" : "")} value={l.sizes?.[s] || ""} onChange={(e) => setQty(s, e.target.value)} />
+                          <small className="upc">{up ? `+${up}` : "\u00a0"}</small>
                         </label>
                       );
                     })}
