@@ -458,3 +458,6 @@ table.imp-table{table-layout:fixed}
 .pb-r.pb-t{border-top:1px solid var(--line);margin-top:4px;padding-top:6px;align-items:baseline;color:var(--ink)}
 .pb-r.pb-t b{font-family:var(--display);font-stretch:85%;font-size:19px;font-weight:700}
 @container (max-width: 560px){ .grp-foot{flex-direction:column} .price-box{flex-basis:auto;align-self:stretch} }
+.loc-custom{display:flex;gap:2px;align-items:center}
+.loc-custom input{flex:1 1 auto;min-width:0}
+.loc-custom .btn.icon{flex:none;width:22px;padding:0}
