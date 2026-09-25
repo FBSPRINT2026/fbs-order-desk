@@ -62,9 +62,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
   return (
     <section className="line">
       <div className="line-h">
-        <span className="idx">GROUP {gi + 1}</span>
-        <b className="num">{gc.qty} pcs</b>
-        <span className="faint" style={{ fontSize: 12 }}>{gc.qty ? `${gc.tierMin}+ price break` : ""}</span>
+        <input type="text" className="grp-name" aria-label="Group name" placeholder={`Group ${gi + 1} (e.g. AMS Helper Tee)`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
         {gc.wholesale && <span className="tag i">Customer-supplied goods</span>}
         <span className="spacer" />
         <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>
@@ -128,6 +126,11 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
               </div>
             );
           })}
+        </div>
+        <div className={"gl-row grp-total" + (gc.wholesale ? " ws" : "")}>
+          <span className="a-de r"><span className="lbl2">Total pieces</span>{gc.qty ? <span className="faint"> · {gc.tierMin}+ price break</span> : null}</span>
+          <b className="a-qt c num">{gc.qty}</b>
+          <b className="a-to r num">{money(gc.sub)}</b>
         </div>
         <div className="row">
           <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push(newGLine()); })}>+ Add garment</button>

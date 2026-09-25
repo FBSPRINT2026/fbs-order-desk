@@ -49,7 +49,7 @@ export type GLine = {
   sizeRun?: string[];
 };
 /** Garments that share the same imprints. Quantity breaks use the group total. */
-export type Group = { id: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[]; youth?: boolean };
+export type Group = { id: string; name?: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[]; youth?: boolean };
 export type PriceType = "retail" | "wholesale";
 
 /** Older orders stored one garment per line with its own decorations. */
