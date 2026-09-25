@@ -123,8 +123,10 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .sz-letter .lb-bc .bars { height: 0.45in; }
         .lb-bc .bars svg { width: 100%; height: 100%; display: block; }
         .lb-bc .hr { font-family: "Courier New", monospace; font-weight: 700; letter-spacing: .15em; font-size: 1em; line-height: 1.1; }
-        .lb-foot { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; font-size: .95em; border-top: 1px solid #000; padding-top: 4px; }
-        .lb-foot div { border-bottom: 1px solid #000; padding-bottom: 10px; }
+        .lb-foot { margin-top: auto; display: grid; grid-template-columns: 1.1fr 0.9fr 1.3fr; font-size: .95em; border: 1.5px solid #000; border-radius: 3px; }
+        .lb-foot > div { padding: 3px 6px; min-height: 0.42in; font-weight: 700; }
+        .lb-foot > div + div { border-left: 1.5px solid #000; }
+        .lb-foot .ty { display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 800; font-size: 1.05em; }
         .lb-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 1.05em; }
         @media print {
           .labels-page { background: #fff; padding: 0; }
@@ -156,7 +158,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
                 <div className="tab">{o.delivery_method === "ship" ? "SHIP TO" : "DELIVER TO"}</div>
                 <div className="addr">
                   <div className="co">{cust.company || cust.name}</div>
-                  {(cust.company && cust.name) || cust.phone ? <div className="attn">{[cust.company && cust.name ? `ATTN: ${cust.name}` : "", cust.phone || ""].filter(Boolean).join(" · ")}</div> : null}
+                  {cust.company && cust.name ? <div className="attn">ATTN: {cust.name}</div> : null}
                   <div className="lines">{o.ship_to.trim()}</div>
                 </div>
               </div>
@@ -198,7 +200,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           ))}
           {!rows.length && <div className="lb-key">No garments entered on this order yet.</div>}
           <div className="lb-key"><span>Small # = qty ordered</span><span>Order total: {totalPcs} pcs</span></div>
-          <div className="lb-foot"><div>Packed by</div><div>Date</div><div>Checked</div></div>
+          <div className="lb-foot"><div>Packed by</div><div>Date</div><div className="ty">Thank you for your order!</div></div>
         </div>
       ))}
     </div>
