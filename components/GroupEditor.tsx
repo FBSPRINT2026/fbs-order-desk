@@ -75,18 +75,18 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                 <div className="gl-row">
                   <div className="a-st">
                     <input type="text" list={listId} aria-label="Style number" placeholder="Style # (G5000)" value={l.style} onChange={(e) => onStyle(li, e.target.value)} />
-                    {!hit && l.style && l.garment && (gc.wholesale || l.cost !== "") && <button className="linkbtn" type="button" onClick={() => onSaveToCatalog(l)}>Save to catalog</button>}
+                    {!hit && l.style && l.garment && (gc.wholesale || l.cost !== "") && <button className="linkbtn" type="button" tabIndex={-1} onClick={() => onSaveToCatalog(l)}>Save to catalog</button>}
                   </div>
                   <div className="a-co">
                     <input type="text" list={colorsId} aria-label="Color" placeholder="Color" value={l.color} onChange={(e) => update((x) => { x.lines[li].color = e.target.value; })} />
                     {hit && <datalist id={colorsId}>{hit.colors.map((c) => <option key={c} value={c} />)}</datalist>}
                   </div>
                   <div className="a-de"><input type="text" aria-label="Description" placeholder={l.oneSize ? "Description (hat, koozie…)" : "Description (unisex tee)"} value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
-                  {!gc.wholesale && <div className="a-cs"><input type="number" step="0.01" min="0" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
+                  {!gc.wholesale && <div className="a-cs"><input type="number" step="0.01" min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
                   <div className="a-qt c tot">{lc?.qty ?? 0}</div>
-                  <div className="a-ea r"><input type="number" step="0.01" min="0" aria-label="Price each" className={lc?.hasOv ? "ov" : ""} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })} /></div>
+                  <div className="a-ea r"><input type="number" step="0.01" min="0" tabIndex={-1} title="Click to override" aria-label="Price each" className={"pre" + (lc?.hasOv ? " ov" : "")} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })} /></div>
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
-                  <div className="a-x">{g.lines.length > 1 && <button className="btn icon ghost" type="button" aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}</div>
+                  <div className="a-x">{g.lines.length > 1 && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}</div>
                 </div>
                 <div className="szrow">
                   {l.oneSize ? (
@@ -104,7 +104,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                       </label>
                     );
                   })}
-                  <button className="linkbtn szmode" type="button" title={l.oneSize ? "Switch back to a size run" : "Hats, koozies, bags: one quantity, no sizes"} onClick={() => update((x) => { const r = x.lines[li]; const q = lineTotal(r); r.oneSize = !r.oneSize; r.sizes = r.oneSize && q ? { [ONE_SIZE]: q } : {}; })}>{l.oneSize ? "Use sizes" : "One size item"}</button>
+                  <button className="linkbtn szmode" type="button" tabIndex={-1} title={l.oneSize ? "Switch back to a size run" : "Hats, koozies, bags: one quantity, no sizes"} onClick={() => update((x) => { const r = x.lines[li]; const q = lineTotal(r); r.oneSize = !r.oneSize; r.sizes = r.oneSize && q ? { [ONE_SIZE]: q } : {}; })}>{l.oneSize ? "Use sizes" : "One size item"}</button>
                 </div>
               </div>
             );

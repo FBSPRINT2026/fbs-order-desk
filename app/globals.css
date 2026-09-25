@@ -417,3 +417,9 @@ table.imp-table{table-layout:fixed}
 .imp-table th{white-space:normal;vertical-align:bottom}
 .imp-table input,.imp-table select{width:100%;min-width:0;box-sizing:border-box}
 .imp-table input.sz{min-width:0}
+
+/* Prefilled cost / each: skipped by Tab, look like plain values, editable on click */
+.gl-row input.pre{background:transparent;border-color:transparent;cursor:pointer}
+.gl-row input.pre:hover{border-color:var(--line);background:var(--surface)}
+.gl-row input.pre:focus{border-color:var(--accent);background:var(--surface);cursor:text}
+.gl-row input.pre.ov{border-color:var(--warn);background:var(--warn-soft)}
