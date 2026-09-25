@@ -34,7 +34,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     if (o.status === "quote_sent") actions.push({ o, title: `Approve quote #${o.number}`, detail: `${o.nickname || "Your order"} · ${money(o.total)}`, cta: "Review quote", color: ST.quote_sent.c, href });
     if (pendingProofs[o.id]) actions.push({ o, title: `Review artwork for #${o.number}`, detail: `${pendingProofs[o.id]} proof${pendingProofs[o.id] > 1 ? "s" : ""} waiting for your OK`, cta: "Review artwork", color: ST.art.c, href: href + "#proofs" });
     if (o.type === "invoice" && bal(o) > 0.004 && o.status !== "completed")
-      actions.push({ o, title: `Balance due on #${o.number}`, detail: `${money(bal(o))} remaining${o.due_date ? ` · due ${fmtDateLong(o.due_date)}` : ""}`, cta: "Pay now", color: ST.ready.c, href: href + "#pay" });
+      actions.push({ o, title: `Balance due on #${o.number}`, detail: `${money(bal(o))} remaining${o.due_date ? ` · due ${fmtDateLong(o.due_date)}` : ""}`, cta: process.env.STRIPE_SECRET_KEY ? "Pay now" : "View balance", color: ST.ready.c, href: href + "#pay" });
   });
   const name = ctx.customers[0]?.name?.split(" ")[0];
 
