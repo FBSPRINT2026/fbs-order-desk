@@ -1,4 +1,5 @@
 "use client";
+import { SITE_URL } from "@/lib/config";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -229,7 +230,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
   const st = ST[o.status] || ST.quote;
   const cust = customers.find((c) => c.id === o.customer_id);
-  const portalLink = typeof window !== "undefined" ? `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/portal/orders/${o.id}` : "";
+  const portalLink = typeof window !== "undefined" ? `${SITE_URL || window.location.origin}/portal/orders/${o.id}` : "";
   const pendingProofs = proofs.filter((p) => p.status === "pending").length;
 
   return (

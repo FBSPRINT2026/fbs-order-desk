@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { SITE_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,10 @@ export async function GET() {
     EMAIL_FROM: has("EMAIL_FROM"),
     SHOP_NOTIFY_EMAIL: has("SHOP_NOTIFY_EMAIL"),
   };
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const url = SUPABASE_URL;
   const checks: Record<string, string> = {
     supabase_url_format: /^https:\/\/[a-z0-9]+\.supabase\.co\/?$/.test(url.trim()) ? "ok" : url ? "looks wrong (should be https://xxxx.supabase.co)" : "missing",
-    site_url: process.env.NEXT_PUBLIC_SITE_URL || "missing",
+    site_url: SITE_URL,
   };
   try {
     if (env.SUPABASE_SERVICE_ROLE_KEY && url) {
@@ -28,8 +29,8 @@ export async function GET() {
       const { error, count } = await admin.from("staff").select("email", { count: "exact", head: true });
       checks.database_with_secret_key = error ? "error: " + error.message : `ok (${count} staff)`;
     }
-    if (env.NEXT_PUBLIC_SUPABASE_ANON_KEY && url) {
-      const anon = createClient(url.trim(), process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!.trim(), { auth: { persistSession: false } });
+    if (url) {
+      const anon = createClient(url.trim(), SUPABASE_ANON_KEY.trim(), { auth: { persistSession: false } });
       const { error } = await anon.from("settings").select("id").limit(1);
       checks.database_with_public_key = error ? "error: " + error.message : "ok";
     }

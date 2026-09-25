@@ -1,3 +1,4 @@
+import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -35,8 +36,8 @@ export async function POST(req: Request) {
       if (inserted && inserted.length) {
         await admin.from("order_events").insert({ order_id: orderId, kind: "payment", detail: `${money(amount)} online`, actor: s.customer_details?.email || "customer" });
         const { data: o } = await admin.from("orders").select("number,nickname").eq("id", orderId).maybeSingle();
-        if (process.env.SHOP_NOTIFY_EMAIL && o)
-          await sendEmail({ to: process.env.SHOP_NOTIFY_EMAIL, subject: `Payment received: ${money(amount)} on #${o.number}`, html: emailLayout("FBS Order Desk", `${money(amount)} paid on #${o.number}`, o.nickname || "", "Open order", `${siteUrl()}/shop/orders/${orderId}`) });
+        if (SHOP_NOTIFY_EMAIL && o)
+          await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `Payment received: ${money(amount)} on #${o.number}`, html: emailLayout("FBS Order Desk", `${money(amount)} paid on #${o.number}`, o.nickname || "", "Open order", `${siteUrl()}/shop/orders/${orderId}`) });
       }
     }
   }

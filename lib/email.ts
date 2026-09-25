@@ -1,3 +1,4 @@
+import { EMAIL_FROM, SITE_URL } from "@/lib/config";
 import "server-only";
 
 /**
@@ -5,7 +6,7 @@ import "server-only";
  * Returns false when email is off or the send fails.
  */
 export async function sendEmail(opts: { to: string; subject: string; html: string; replyTo?: string }) {
-  const from = process.env.EMAIL_FROM || "";
+  const from = EMAIL_FROM || "";
   if (!opts.to || !from) return false;
   try {
     if (process.env.BREVO_API_KEY) {
@@ -34,7 +35,7 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
 }
 
 export function siteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
+  return (SITE_URL || "http://localhost:3000").replace(/\/$/, "");
 }
 
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);

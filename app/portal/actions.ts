@@ -1,4 +1,5 @@
 "use server";
+import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import Stripe from "stripe";
 import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/supabase/server";
@@ -29,7 +30,7 @@ async function customerOrder(orderId: string) {
 }
 
 async function notifyShop(subject: string, heading: string, body: string, orderId: string, shopName: string) {
-  const to = process.env.SHOP_NOTIFY_EMAIL;
+  const to = SHOP_NOTIFY_EMAIL;
   if (!to) return;
   await sendEmail({ to, subject, html: emailLayout(shopName, heading, body, "Open order", `${siteUrl()}/shop/orders/${orderId}`) });
 }

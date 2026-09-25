@@ -1,4 +1,5 @@
 "use client";
+import { SITE_URL } from "@/lib/config";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -17,7 +18,7 @@ export default function LoginForm({ shopName, logoUrl, next, linkError }: { shop
     e.preventDefault();
     setBusy(true);
     setErr("");
-    const site = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    const site = SITE_URL || window.location.origin;
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
       options: { emailRedirectTo: `${site}/auth/confirm?next=${encodeURIComponent(safeNext)}` },

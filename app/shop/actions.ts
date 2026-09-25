@@ -1,4 +1,5 @@
 "use server";
+import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
@@ -36,7 +37,7 @@ export async function sendToCustomer(orderId: string, note: string) {
   const isQuote = ST[(patch.status as string) || order.status]?.type === "quote";
   const emailed = await sendEmail({
     to: customer.email,
-    replyTo: process.env.SHOP_NOTIFY_EMAIL,
+    replyTo: SHOP_NOTIFY_EMAIL,
     subject: `${isQuote ? "Your quote" : "Your order"} #${order.number} from ${settings.shop.name}`,
     html: emailLayout(
       settings.shop.name,
@@ -59,7 +60,7 @@ export async function requestProofApproval(orderId: string) {
   const link = `${siteUrl()}/portal/orders/${orderId}#proofs`;
   const emailed = await sendEmail({
     to: customer.email,
-    replyTo: process.env.SHOP_NOTIFY_EMAIL,
+    replyTo: SHOP_NOTIFY_EMAIL,
     subject: `Artwork proof ready for order #${order.number}`,
     html: emailLayout(settings.shop.name, "Your artwork proof is ready", `Please look over the proof for "${order.nickname || "your order"}" and approve it or tell us what to change. We start printing once it's approved.`, "Review artwork", link),
   });
@@ -78,7 +79,7 @@ export async function staffMessage(orderId: string, body: string) {
   if (customer?.email && order.status !== "quote") {
     emailed = await sendEmail({
       to: customer.email,
-      replyTo: process.env.SHOP_NOTIFY_EMAIL,
+      replyTo: SHOP_NOTIFY_EMAIL,
       subject: `New message about order #${order.number}`,
       html: emailLayout(settings.shop.name, `Message about #${order.number}`, text, "Reply in your portal", `${siteUrl()}/portal/orders/${orderId}#messages`),
     });
