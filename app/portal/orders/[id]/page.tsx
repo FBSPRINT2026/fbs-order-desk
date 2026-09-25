@@ -109,12 +109,13 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                             <div className="sizechips">{SIZES.filter((s) => l.sizes?.[s]).map((s) => <span key={s}>{sizeLabel(s)} {l.sizes[s]}</span>)}</div>
                           </td>
                           <td className="r">{lc?.qty}</td>
-                          <td className="r">{money(lc?.each)}{lc?.upTotal ? <div className="sub">+ big sizes</div> : null}</td>
+                          <td className="r">{money(lc?.each)}</td>
                           <td className="r">{money(lc?.sub)}</td>
                         </tr>
                       );
                     }))}
                     {c.setup > 0 && <tr><td>Setup (screens / digitizing)</td><td /><td /><td className="r">{money(c.setup)}</td></tr>}
+            {c.materials > 0 && <tr><td>2XL+ material fees</td><td /><td /><td className="r">{money(c.materials)}</td></tr>}
                     {o.fees.filter((f) => +f.amount).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td /><td /><td className="r">{money(+f.amount)}</td></tr>)}
                   </tbody>
                 </table>
@@ -142,7 +143,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-h"><h2>Summary</h2></div>
               <div className="panel-b">
                 <div className="totals">
-                  <div className="tr"><span>Subtotal</span><span>{money(c.items + c.setup + c.fees)}</span></div>
+                  <div className="tr"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
                   {c.discount ? <div className="tr"><span>Discount</span><span>−{money(c.discount)}</span></div> : null}
                   <div className="tr"><span>Tax{o.tax_exempt ? " (exempt)" : ""}</span><span>{money(c.tax)}</span></div>
                   <div className="tr big"><span>Total</span><span>{money(c.total)}</span></div>

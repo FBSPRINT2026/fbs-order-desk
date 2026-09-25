@@ -177,8 +177,8 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         )}
         {gc.belowMin && <div className="warnline">{gc.qty} pcs is under your {prices.tiers[0]}-piece minimum. Priced at the {prices.tiers[0]}+ break.</div>}
         <div className="price-strip">
-          <div className="calc">Print <b>{money(gc.printEach)}</b>/pc{gc.finishEach ? <> + finishing <b>{money(gc.finishEach)}</b>/pc</> : null} · {gc.qty} pcs at the {gc.tierMin}+ break{gc.setup ? ` · setup ${money(gc.setup)}` : ""}{gc.inkFees ? ` (incl. ${money(gc.inkFees)} ink changes)` : ""}</div>
-          <div className="lt"><div className="sub">Group total</div><b>{money(gc.sub + gc.setup)}</b></div>
+          <div className="calc">Print <b>{money(gc.printEach)}</b>/pc{gc.finishEach ? <> + finishing <b>{money(gc.finishEach)}</b>/pc</> : null} · {gc.qty} pcs at the {gc.tierMin}+ break{gc.setup ? ` · setup ${money(gc.setup)}` : ""}{gc.inkFees ? ` (incl. ${money(gc.inkFees)} ink changes)` : ""}{gc.materials ? ` · 2XL+ material fees ${money(gc.materials)}` : ""}</div>
+          <div className="lt"><div className="sub">Group total</div><b>{money(gc.sub + gc.setup + gc.materials)}</b></div>
         </div>
       </div>
     </section>

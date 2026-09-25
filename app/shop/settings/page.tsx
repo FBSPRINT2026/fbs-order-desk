@@ -80,8 +80,8 @@ export default function SettingsPage() {
               <div className="field"><label htmlFor="s-screen">Screen setup, per color</label><input id="s-screen" type="number" step="0.5" value={pl.screenFee} onChange={(e) => updPl((d) => { d.screenFee = n(e.target.value); })} /></div>
               <div className="field"><label htmlFor="s-dig">Digitizing, per location</label><input id="s-dig" type="number" step="0.5" value={pl.digitizing} onChange={(e) => updPl((d) => { d.digitizing = n(e.target.value); })} /></div>
               <div className="field"><label htmlFor="s-ink">Ink change fee, each</label><input id="s-ink" type="number" step="0.5" value={pl.inkChangeFee} onChange={(e) => updPl((d) => { d.inkChangeFee = n(e.target.value); })} /></div>
-              {(["L", "2XL", "3XL", "4XL", "5XL"] as const).map((z) => (
-                <div key={z} className="field"><label htmlFor={`s-up-${z}`}>{z} upcharge per piece</label><input id={`s-up-${z}`} type="number" step="0.25" value={pl.upcharges[z] ?? 0} onChange={(e) => updPl((d) => { d.upcharges[z] = n(e.target.value); })} /></div>
+              {(["2XL", "3XL", "4XL", "5XL"] as const).map((z) => (
+                <div key={z} className="field"><label htmlFor={`s-up-${z}`}>{z} material fee per piece</label><input id={`s-up-${z}`} type="number" step="0.25" value={pl.upcharges[z] ?? 0} onChange={(e) => updPl((d) => { d.upcharges[z] = n(e.target.value); })} /></div>
               ))}
             </div>
             <div className="row" style={{ justifyContent: "space-between" }}>

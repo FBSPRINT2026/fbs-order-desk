@@ -539,6 +539,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <div className="totals">
                 <div className="tr"><span>Line items</span><span>{money(calc.items)}</span></div>
                 <div className="tr"><span>Setup (screens, digitizing)</span><span>{money(calc.setup)}</span></div>
+                {calc.materials ? <div className="tr"><span>2XL+ material fees</span><span>{money(calc.materials)}</span></div> : null}
                 {calc.fees ? <div className="tr"><span>Fees</span><span>{money(calc.fees)}</span></div> : null}
                 {calc.discount ? <div className="tr"><span>Discount ({o.discount_pct}%)</span><span>−{money(calc.discount)}</span></div> : null}
                 <div className="tr"><span className="row" style={{ gap: 6 }}>Tax <input type="number" step="0.01" aria-label="Tax rate percent" style={{ width: 66, padding: "3px 6px" }} placeholder={String(settings.taxRate)} value={o.tax_rate ?? ""} onChange={(e) => patch((d) => { d.tax_rate = e.target.value === "" ? null : +e.target.value; })} />%</span><span>{o.tax_exempt ? "Exempt" : money(calc.tax)}</span></div>
