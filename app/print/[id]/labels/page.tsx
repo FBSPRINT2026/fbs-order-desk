@@ -46,6 +46,9 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   const bc = bcOut.svg;
   // 4 printer dots per bar module at 203 dpi (Zebra) so bars print crisp; wider on letter printers
   const bcWidthIn = (bcOut.width * (size === "letter" ? 5 : 4)) / 203;
+  // Wholesale jobs ship blind: the customer's name replaces ours so their end customer never sees FBS Print.
+  const blind = o.price_type === "wholesale";
+  const brand = blind ? (cust.company || cust.name || "") : settings.shop.name;
   const shipBlock = o.delivery_method !== "pickup" && !!o.ship_to;
   const rowMin = size === "letter" ? 0.3 : 0.22; // minimum row height; rows grow to fill the label
   const sizeTotals: Partial<Record<string, number>> = {};
@@ -145,7 +148,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           <div className="lb-top">
             <div className="lb-idrow">
               <span className="lb-no">#{o.number}</span>
-              <span className="lb-shop">{settings.shop.name}{o.rush ? <span className="lb-rushtag">RUSH</span> : null}</span>
+              <span className="lb-shop">{brand}{o.rush ? <span className="lb-rushtag">RUSH</span> : null}</span>
             </div>
             <div className="lb-mid"><span className="lb-rush">{o.delivery_method === "ship" ? "SHIP" : o.delivery_method === "deliver" ? "DELIVERY" : "PICKUP"}</span></div>
             <div style={{ textAlign: "right" }}>
@@ -161,8 +164,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
               <div className="lb-ship">
                 <div className="tab">{o.delivery_method === "ship" ? "SHIP TO" : "DELIVER TO"}</div>
                 <div className="addr">
-                  <div className="co">{cust.company || cust.name}</div>
-                  {cust.company && cust.name ? <div className="attn">ATTN: {cust.name}</div> : null}
+                  {!blind && <div className="co">{cust.company || cust.name}</div>}
+                  {!blind && cust.company && cust.name ? <div className="attn">ATTN: {cust.name}</div> : null}
                   <div className="lines">{o.ship_to.trim()}</div>
                 </div>
               </div>
