@@ -165,22 +165,30 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(LOCATIONS.find((z) => !used.includes(z)) || "")); })}>+ Add imprint</button>
         </div>
 
-        {settings.finishing.length > 0 && (
-          <div className="imprints">
-            <div className="lbl" style={{ marginBottom: 6 }}>FINISHING</div>
-            <div className="row" style={{ gap: 14 }}>
-            {settings.finishing.map((f) => (
-              <label key={f.id} className="check" style={{ fontSize: 13 }}>
-                <input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => update((x) => { const set = new Set(x.finishing || []); if (e.target.checked) set.add(f.id); else set.delete(f.id); x.finishing = [...set]; })} />
-                {f.name} <span className="faint">({money(f.price)}/pc)</span>
-              </label>
-            ))}
-            </div>
+        <div className="grp-foot">
+          <div className="grp-foot-l">
+            {settings.finishing.length > 0 && (
+              <div className="imprints">
+                <div className="lbl" style={{ marginBottom: 6 }}>FINISHING</div>
+                <div className="row" style={{ gap: 14 }}>
+                  {settings.finishing.map((f) => (
+                    <label key={f.id} className="check" style={{ fontSize: 13 }}>
+                      <input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => update((x) => { const set = new Set(x.finishing || []); if (e.target.checked) set.add(f.id); else set.delete(f.id); x.finishing = [...set]; })} />
+                      {f.name} <span className="faint">({money(f.price)}/pc)</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
-        <div className="price-strip">
-          <div className="calc">Print <b>{money(gc.printEach)}</b>/pc{gc.finishEach ? <> + finishing <b>{money(gc.finishEach)}</b>/pc</> : null} · {gc.qty} pcs{gc.setup ? ` · setup ${money(gc.setup)}` : ""}{gc.inkFees ? ` (incl. ${money(gc.inkFees)} ink changes)` : ""}{gc.materials ? ` · 2XL+ Materials Charge ${money(gc.materials)}` : ""}</div>
-          <div className="lt"><div className="sub">Group total</div><b>{money(gc.sub + gc.setup + gc.materials)}</b></div>
+          <div className="price-box">
+            <div className="pb-r"><span>Print</span><b>{money(gc.printEach)}/pc</b></div>
+            {gc.finishEach ? <div className="pb-r"><span>Finishing</span><b>{money(gc.finishEach)}/pc</b></div> : null}
+            <div className="pb-r"><span>Pieces</span><b>{gc.qty}</b></div>
+            {gc.setup ? <div className="pb-r"><span>Setup{gc.inkFees ? " (incl. ink changes)" : ""}</span><b>{money(gc.setup)}</b></div> : null}
+            {gc.materials ? <div className="pb-r"><span>2XL+ Materials</span><b>{money(gc.materials)}</b></div> : null}
+            <div className="pb-r pb-t"><span>Group total</span><b>{money(gc.sub + gc.setup + gc.materials)}</b></div>
+          </div>
         </div>
       </div>
     </section>

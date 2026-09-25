@@ -449,3 +449,12 @@ table.imp-table{table-layout:fixed}
 .grp-total b{font-size:15px}
 .gl-row.grp-total > .a-de{grid-area:1 / 1 / 2 / 5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .imp-table td{overflow:hidden}
+.grp-foot{display:flex;gap:16px;align-items:flex-start;border-top:1px dashed var(--line);padding-top:12px}
+.grp-foot-l{flex:1 1 auto;min-width:0}
+.grp-foot-l .imprints{border-top:0;padding-top:0}
+.price-box{flex:0 0 250px;background:var(--surface-2);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+.pb-r{display:flex;justify-content:space-between;gap:10px;color:var(--ink-2)}
+.pb-r b{color:var(--ink);font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+.pb-r.pb-t{border-top:1px solid var(--line);margin-top:4px;padding-top:6px;align-items:baseline;color:var(--ink)}
+.pb-r.pb-t b{font-family:var(--display);font-stretch:85%;font-size:19px;font-weight:700}
+@container (max-width: 560px){ .grp-foot{flex-direction:column} .price-box{flex-basis:auto;align-self:stretch} }
