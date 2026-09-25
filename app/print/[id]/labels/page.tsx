@@ -159,8 +159,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
                 <div className="tab">{o.delivery_method === "ship" ? "SHIP TO" : "DELIVER TO"}</div>
                 <div className="addr">
                   <div className="co">{cust.company || cust.name}</div>
-                  <div className="lines">{o.ship_to.trim()}</div>
                   {(cust.company && cust.name) || cust.phone ? <div className="attn">{[cust.company && cust.name ? `ATTN: ${cust.name}` : "", cust.phone || ""].filter(Boolean).join(" · ")}</div> : null}
+                  <div className="lines">{o.ship_to.trim()}</div>
                 </div>
               </div>
             ) : (
