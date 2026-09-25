@@ -100,6 +100,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb-grid > div { border-right: 1.5px solid #000; border-bottom: 1.5px solid #000; min-width: 0; }
         .lb-grid .h { background: #000; color: #fff; font-weight: 800; padding: 2px 0; text-align: center; border-color: #fff; border-right-width: 1px; }
         .lb-grid .h.l { text-align: left; padding-left: 4px; }
+        .lb-grid .h.end { border-right-color: #000; }
         .lb-grid .it { font-size: .88em; padding: 1px 3px; display: flex; flex-direction: column; justify-content: center; line-height: 1.1; }
         .lb-grid .it > * { overflow-wrap: anywhere; line-height: 1.05; }
         .lb-grid .it .clr { font-weight: 600; }
@@ -186,7 +187,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             <div key={band.name} className={"lb-band" + (bands.length > 1 ? " tabbed" : "")} style={{ flexGrow: band.rows.length }}>
               {bands.length > 1 && <div className="lb-bandtab">{band.name}</div>}
               <div className="lb-grid" style={{ gridTemplateColumns: os ? "minmax(0, 1.6fr) minmax(0, 2.4fr)" : `minmax(0, 1.6fr) repeat(${Math.max(band.sizes.length, 1)}, minmax(0, 1fr)) minmax(0, 1.1fr)`, gridTemplateRows: `auto repeat(${Math.max(band.rows.length, 1)}, minmax(${rowMin}in, 1fr))` }}>
-                <div className="h l">Item</div>{band.sizes.map((z) => <div key={z} className="h">{sizeLabel(z)}</div>)}{!os && <div className="h">Total</div>}
+                <div className="h l">Item</div>{band.sizes.map((z) => <div key={z} className={"h" + (os ? " end" : "")}>{sizeLabel(z)}</div>)}{!os && <div className="h end">Total</div>}
                 {band.rows.map((l) => {
                   const tot = band.sizes.reduce((a, z) => a + (+(l.sizes?.[z as keyof GLine["sizes"]] || 0)), 0);
                   return [
