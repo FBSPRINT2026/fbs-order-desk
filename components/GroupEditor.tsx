@@ -58,62 +58,56 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
       </div>
       <div className="line-b">
         <datalist id={listId}>{catalog.map((c) => <option key={c.id} value={c.style}>{[c.brand, c.description].filter(Boolean).join(" ")}</option>)}</datalist>
-        <div className="sizes-wrap">
-          <table className="pv-grid">
-            <thead>
-              <tr>
-                <th style={{ minWidth: 110 }}>Style #</th>
-                <th style={{ minWidth: 120 }}>Color</th>
-                <th style={{ minWidth: 170 }}>Description</th>
-                {!gc.wholesale && <th style={{ minWidth: 70 }}>Cost</th>}
-                {cols.map((s) => <th key={s} className={"c" + (s === "YXL" ? " ysep" : "")}>{s}{prices.upcharges[s as keyof typeof prices.upcharges] ? <small>+{prices.upcharges[s as keyof typeof prices.upcharges]}</small> : null}</th>)}
-                <th className="c">Qty</th>
-                <th className="r" style={{ minWidth: 84 }}>Each</th>
-                <th className="r" style={{ minWidth: 84 }}>Total</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {g.lines.map((l, li) => {
-                const lc = gc.lines[li];
-                const hit = findStyle(l.style);
-                const colorsId = `colors-${l.id}`;
-                return (
-                  <tr key={l.id}>
-                    <td>
-                      <input type="text" list={listId} aria-label="Style number" placeholder="G5000" value={l.style} onChange={(e) => onStyle(li, e.target.value)} />
-                      {!hit && l.style && l.garment && (gc.wholesale || l.cost !== "") && <button className="linkbtn" type="button" onClick={() => onSaveToCatalog(l)}>Save to catalog</button>}
-                    </td>
-                    <td>
-                      <input type="text" list={colorsId} aria-label="Color" placeholder="Black" value={l.color} onChange={(e) => update((x) => { x.lines[li].color = e.target.value; })} />
-                      {hit && <datalist id={colorsId}>{hit.colors.map((c) => <option key={c} value={c} />)}</datalist>}
-                    </td>
-                    <td>
-                      <input type="text" aria-label="Description" placeholder={l.oneSize ? "Hat, koozie, tote…" : "Unisex tee"} value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} />
-                      <button className="linkbtn" type="button" title={l.oneSize ? "Switch back to a size run" : "Hats, koozies, bags: one quantity, no sizes"} onClick={() => update((x) => { const r = x.lines[li]; const q = lineTotal(r); r.oneSize = !r.oneSize; r.sizes = r.oneSize && q ? { [ONE_SIZE]: q } : {}; })}>{l.oneSize ? "Use sizes" : "One size item"}</button>
-                    </td>
-                    {!gc.wholesale && <td><input type="number" step="0.01" min="0" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></td>}
-                    {l.oneSize ? (
-                      <td colSpan={cols.length} className="os-cell">
-                        <span className="os-lbl">ONE SIZE · QTY</span>
-                        <input type="number" min="0" step="1" inputMode="numeric" className={"sz os" + (l.sizes?.OS ? " has" : "")} aria-label="Quantity" value={l.sizes?.OS || ""}
-                          onChange={(e) => update((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); x.lines[li].sizes = v ? { OS: v } : {}; })} />
-                      </td>
-                    ) : (cols as (keyof GLine["sizes"])[]).map((s) => (
-                      <td key={s} className={"c" + (s === "YXL" ? " ysep" : "")}>
-                        <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.[s] ? " has" : "")} aria-label={`${s} quantity`} value={l.sizes?.[s] || ""}
-                          onChange={(e) => update((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; })} />
-                      </td>
-                    ))}
-                    <td className="c tot">{lc?.qty ?? 0}</td>
-                    <td className="r"><input type="number" step="0.01" min="0" aria-label="Price each" className={lc?.hasOv ? "ov" : ""} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })} /></td>
-                    <td className="r num"><b>{money(lc?.sub)}</b></td>
-                    <td>{g.lines.length > 1 && <button className="btn icon ghost" type="button" aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
+          <div className="gl-row gl-head">
+            <span className="a-st">Style #</span><span className="a-co">Color</span><span className="a-de">Description</span>
+            {!gc.wholesale && <span className="a-cs">Cost</span>}
+            <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
+          </div>
+          {g.lines.map((l, li) => {
+            const lc = gc.lines[li];
+            const hit = findStyle(l.style);
+            const colorsId = `colors-${l.id}`;
+            const setQty = (s: keyof GLine["sizes"], raw: string) => update((x) => { const v = Math.max(0, Math.floor(+raw || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; });
+            return (
+              <div key={l.id} className="gl">
+                <div className="gl-row">
+                  <div className="a-st">
+                    <input type="text" list={listId} aria-label="Style number" placeholder="Style # (G5000)" value={l.style} onChange={(e) => onStyle(li, e.target.value)} />
+                    {!hit && l.style && l.garment && (gc.wholesale || l.cost !== "") && <button className="linkbtn" type="button" onClick={() => onSaveToCatalog(l)}>Save to catalog</button>}
+                  </div>
+                  <div className="a-co">
+                    <input type="text" list={colorsId} aria-label="Color" placeholder="Color" value={l.color} onChange={(e) => update((x) => { x.lines[li].color = e.target.value; })} />
+                    {hit && <datalist id={colorsId}>{hit.colors.map((c) => <option key={c} value={c} />)}</datalist>}
+                  </div>
+                  <div className="a-de"><input type="text" aria-label="Description" placeholder={l.oneSize ? "Description (hat, koozie…)" : "Description (unisex tee)"} value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
+                  {!gc.wholesale && <div className="a-cs"><input type="number" step="0.01" min="0" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
+                  <div className="a-qt c tot">{lc?.qty ?? 0}</div>
+                  <div className="a-ea r"><input type="number" step="0.01" min="0" aria-label="Price each" className={lc?.hasOv ? "ov" : ""} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })} /></div>
+                  <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
+                  <div className="a-x">{g.lines.length > 1 && <button className="btn icon ghost" type="button" aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}</div>
+                </div>
+                <div className="szrow">
+                  {l.oneSize ? (
+                    <label className="szc os">
+                      <span>One size qty</span>
+                      <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.OS ? " has" : "")} value={l.sizes?.OS || ""}
+                        onChange={(e) => update((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); x.lines[li].sizes = v ? { OS: v } : {}; })} />
+                    </label>
+                  ) : (cols as (keyof GLine["sizes"])[]).map((s) => {
+                    const up = prices.upcharges[s as keyof typeof prices.upcharges];
+                    return (
+                      <label key={s} className={"szc" + (s === "YXL" ? " ysep" : "")}>
+                        <span>{s}{up ? <small>+{up}</small> : null}</span>
+                        <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.[s] ? " has" : "")} value={l.sizes?.[s] || ""} onChange={(e) => setQty(s, e.target.value)} />
+                      </label>
+                    );
+                  })}
+                  <button className="linkbtn szmode" type="button" title={l.oneSize ? "Switch back to a size run" : "Hats, koozies, bags: one quantity, no sizes"} onClick={() => update((x) => { const r = x.lines[li]; const q = lineTotal(r); r.oneSize = !r.oneSize; r.sizes = r.oneSize && q ? { [ONE_SIZE]: q } : {}; })}>{l.oneSize ? "Use sizes" : "One size item"}</button>
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div className="row">
           <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push(newGLine()); })}>+ Add garment</button>
@@ -123,9 +117,10 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
 
         <div className="imprints">
           <div className="lbl" style={{ marginBottom: 6 }}>IMPRINTS</div>
-          <div className="sizes-wrap">
-            <table className="pv-grid">
-              <thead><tr><th style={{ minWidth: 130 }}>Method</th><th style={{ minWidth: 120 }}>Location</th><th style={{ minWidth: 90 }}>Colors</th><th style={{ minWidth: 170 }}>Ink colors / PMS</th><th style={{ minWidth: 110 }}>Print size</th><th style={{ minWidth: 170 }}>Notes</th><th className="c" title="Ink changes during the run">Ink chg</th><th className="r">Each</th><th /></tr></thead>
+          <div>
+            <table className="pv-grid imp-table">
+              <colgroup><col style={{ width: "15%" }} /><col style={{ width: "13%" }} /><col style={{ width: 64 }} /><col /><col style={{ width: "11%" }} /><col /><col style={{ width: 56 }} /><col style={{ width: 64 }} /><col style={{ width: 34 }} /></colgroup>
+              <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink colors / PMS</th><th>Print size</th><th>Notes</th><th className="c" title="Ink changes during the run">Ink chg</th><th className="r">Each</th><th /></tr></thead>
               <tbody>
                 {g.imprints.map((d, di) => (
                   <tr key={d.id}>
