@@ -59,7 +59,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .label { background: #fff; margin: 0 auto 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
         .sz-4x6 .label { width: 4in; height: 6in; padding: 0.16in; font-size: 11px; }
         .sz-letter .label { width: 8.5in; height: 5.5in; padding: 0.35in; font-size: 12px; }
-        .lb-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; border-bottom: 2px solid #000; padding-bottom: 3px; gap: 6px; }
+        .lb-top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 2px solid #000; padding-bottom: 3px; gap: 6px; }
         .lb-mid { text-align: center; }
         .lb-top .lb-rush { font-size: 1.3em; padding: 2px 8px; }
         .lb-shiprow { display: flex; gap: 6px; align-items: stretch; }
@@ -86,8 +86,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb-ship .addr { padding: 3px 6px; line-height: 1.2; font-size: 1.05em; font-weight: 700; text-transform: uppercase; }
         .lb-ship .co, .lb-ship .attn, .lb-ship .lines { font-size: 1em; font-weight: 700; }
         .lb-ship .lines { white-space: pre-line; }
-        .lb-box { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; font-size: 1.05em; white-space: nowrap; }
-        .lb-box span.blank { display: inline-block; min-width: 2.2em; height: 1.1em; border-bottom: 2px solid #000; text-align: center; }
+        .lb-box { display: inline-flex; align-items: flex-end; gap: 5px; font-weight: 800; font-size: 1.6em; line-height: 1; white-space: nowrap; }
+        .lb-box span.blank { display: inline-block; min-width: 1.9em; height: 1em; border-bottom: 2px solid #000; text-align: center; }
         table.lb { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .lb th, .lb td { border: 1px solid #000; padding: 2px 2px; text-align: center; font-size: 1em; }
         .lb th { background: #000; color: #fff; font-weight: 700; }
