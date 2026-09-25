@@ -75,7 +75,7 @@ function Card({ o, cust, onOpen, onMove, setDragId, dragging }: { o: OrderRow; c
       onClick={(e) => { if (!(e.target as HTMLElement).closest("button")) onOpen(); }}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}>
       <div className="row"><span className="ordno">#{o.number}</span>{o.unread > 0 && <span className="unread" title="Unread message" />}<span className="spacer" /><Due date={o.due_date} status={o.status} /></div>
-      <div className="t">{o.nickname || "Untitled job"}</div>
+      <div className="t">{o.rush && <span className="tag" style={{ marginRight: 6, background: "var(--danger)", color: "#fff" }}>Rush</span>}{o.nickname || "Untitled job"}</div>
       <div className="meta"><span>{cust}</span><span>·</span><span>{o.qty} pcs</span></div>
       <div className="foot">
         {o.type === "invoice" ? (paid ? <span className="tag" style={{ color: "var(--ok)" }}>Paid</span> : <span className="tag">Owes {money(o.balance)}</span>) : <span className="tag">{money(o.total)}</span>}

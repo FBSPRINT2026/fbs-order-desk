@@ -1,9 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { mergeSettings, type Customer, type Order, type Settings } from "@/lib/pricing";
+import { mergeSettings, orderGroups, type Customer, type Order, type Settings } from "@/lib/pricing";
 
-export type OrderRow = Pick<Order, "id" | "number" | "nickname" | "status" | "type" | "due_date" | "total" | "qty" | "customer_id" | "lines" | "created_at"> & {
+export type OrderRow = Pick<Order, "id" | "number" | "nickname" | "status" | "type" | "due_date" | "total" | "qty" | "customer_id" | "lines" | "groups" | "created_at" | "rush" | "po_number"> & {
   paid: number;
   balance: number;
   unread: number;
@@ -20,7 +20,7 @@ export function useShopData() {
   const load = useCallback(async () => {
     const sb = createClient();
     const [o, c, p, m, s] = await Promise.all([
-      sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,created_at").order("number", { ascending: false }),
+      sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number").order("number", { ascending: false }),
       sb.from("customers").select("*"),
       sb.from("payments").select("order_id,amount"),
       sb.from("messages").select("order_id").eq("author_type", "customer").is("read_at", null),
@@ -42,7 +42,7 @@ export function useShopData() {
   return { orders, setOrders, customers, settings, loading, error, reload: load };
 }
 
-export function summaryLine(o: Pick<Order, "lines">) {
-  const ls = (o.lines || []).filter((l) => l.garment || l.style);
+export function summaryLine(o: Pick<Order, "lines" | "groups">) {
+  const ls = orderGroups(o).flatMap((g) => g.lines).filter((l) => l.garment || l.style);
   return ls.slice(0, 2).map((l) => [l.style || l.garment, l.color].filter(Boolean).join(" ")).join(", ") + (ls.length > 2 ? " +more" : "");
 }

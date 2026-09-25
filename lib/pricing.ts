@@ -24,21 +24,37 @@ export const METHODS: Record<string, string> = { screen: "Screen print", embroid
 export const LOCATIONS = ["Front", "Back", "Left chest", "Right chest", "Left sleeve", "Right sleeve", "Nape", "Hat front"];
 export const PAY_METHODS = ["Card", "Cash", "Check", "ACH", "Venmo", "Other"];
 
-export type Decoration = { id: string; method: "screen" | "embroidery" | "dtf"; location: string; colors: number };
+export type Method = "screen" | "embroidery" | "dtf";
+/** One decoration on a group of garments (Printavo calls these imprints). */
+export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string };
+/** One garment + color row, with its size run. */
+export type GLine = {
+  id: string; style: string; brand: string; garment: string; color: string; cost: number | "";
+  sizes: Partial<Record<Size, number>>; priceOverride: number | null;
+};
+/** Garments that share the same imprints. Quantity breaks use the group total. */
+export type Group = { id: string; lines: GLine[]; imprints: Imprint[] };
+
+/** Older orders stored one garment per line with its own decorations. */
+export type Decoration = { id: string; method: Method; location: string; colors: number };
 export type Line = {
   id: string; garment: string; style: string; color: string; cost: number | "";
   sizes: Partial<Record<Size, number>>; decorations: Decoration[]; priceOverride: number | null;
 };
 export type Fee = { label: string; amount: number | "" };
+export type Delivery = "pickup" | "ship" | "deliver";
 
 export type Order = {
   id: string; number: number; customer_id: string | null; nickname: string; status: StatusKey; type: "quote" | "invoice";
-  due_date: string | null; lines: Line[]; fees: Fee[]; discount_pct: number; tax_exempt: boolean; tax_rate: number | null;
+  due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; tax_exempt: boolean; tax_rate: number | null;
   waive_setup: boolean; notes: string; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;
+  po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
 };
+export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number };
+export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string };
-export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string };
+export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string };
 export type Proof = { id: string; order_id: string; title: string; file_path: string; file_type: string; status: "pending" | "approved" | "changes"; customer_comment: string; decided_at: string | null; decided_name: string | null; created_at: string };
 export type Message = { id: string; order_id: string; author_type: "staff" | "customer"; author_email: string; author_name: string; body: string; read_at: string | null; created_at: string };
 export type OrderEvent = { id: number; order_id: string; kind: string; detail: string; actor: string; created_at: string };
@@ -92,10 +108,21 @@ export function tierIndex(q: number, s: Settings) {
   s.tiers.forEach((m, ix) => { if (q >= m) i = ix; });
   return i;
 }
-export function lineQty(l: Line) {
-  return SIZES.reduce((a, s) => a + num(l.sizes?.[s]), 0);
+export function lineQty(l: { sizes?: Partial<Record<Size, number>> }) {
+  return SIZES.reduce((a, sz) => a + num(l.sizes?.[sz]), 0);
 }
-function decoPrice(d: Decoration, ti: number, s: Settings) {
+
+/** The order's garment groups; converts older one-garment lines on the fly. */
+export function orderGroups(o: Pick<Order, "groups" | "lines">): Group[] {
+  if (o.groups && o.groups.length) return o.groups;
+  return (o.lines || []).map((l) => ({
+    id: l.id,
+    lines: [{ id: l.id + "-g", style: l.style || "", brand: "", garment: l.garment || "", color: l.color || "", cost: l.cost, sizes: l.sizes || {}, priceOverride: l.priceOverride ?? null }],
+    imprints: (l.decorations || []).map((d) => ({ id: d.id, method: d.method, location: d.location, colors: d.colors, inks: "", size: "", notes: "" })),
+  }));
+}
+
+function imprintPrice(d: Imprint, ti: number, s: Settings) {
   if (d.method === "screen") {
     const n = Math.min(6, Math.max(1, num(d.colors) || 1));
     return { each: num(s.screen[ti]?.[n - 1]), setup: n * num(s.screenFee) };
@@ -105,36 +132,42 @@ function decoPrice(d: Decoration, ti: number, s: Settings) {
   return { each: 0, setup: 0 };
 }
 
-export type LineCalc = ReturnType<typeof calcLine>;
-export function calcLine(l: Line, o: Pick<Order, "waive_setup">, s: Settings) {
-  const qty = lineQty(l);
+export type LineCalc = { id: string; qty: number; garmentEach: number; calcEach: number; each: number; hasOv: boolean; sub: number; upTotal: number };
+export type GroupCalc = ReturnType<typeof calcGroup>;
+export function calcGroup(g: Group, o: Pick<Order, "waive_setup">, s: Settings) {
+  const qty = (g.lines || []).reduce((a, l) => a + lineQty(l), 0);
   const ti = tierIndex(qty, s);
-  const garmentEach = r2(num(l.cost) * (1 + num(s.markup) / 100));
-  const decos = (l.decorations || []).map((d) => ({ id: d.id, ...decoPrice(d, ti, s) }));
-  const decoEach = r2(decos.reduce((a, d) => a + d.each, 0));
-  const calcEach = r2(garmentEach + decoEach);
-  const hasOv = l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride);
-  const each = hasOv ? r2(+(l.priceOverride as number)) : calcEach;
-  let sub = 0, upTotal = 0;
-  SIZES.forEach((sz) => {
-    const q = num(l.sizes?.[sz]);
-    const up = num(s.upcharges?.[sz]);
-    sub += q * (each + up);
-    upTotal += q * up;
+  const imprints = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, s) }));
+  const printEach = r2(imprints.reduce((a, d) => a + d.each, 0));
+  const lines: LineCalc[] = (g.lines || []).map((l) => {
+    const lq = lineQty(l);
+    const garmentEach = r2(num(l.cost) * (1 + num(s.markup) / 100));
+    const calcEach = r2(garmentEach + printEach);
+    const hasOv = l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride);
+    const each = hasOv ? r2(+(l.priceOverride as number)) : calcEach;
+    let sub = 0, upTotal = 0;
+    SIZES.forEach((sz) => {
+      const q = num(l.sizes?.[sz]);
+      const up = num(s.upcharges?.[sz]);
+      sub += q * (each + up);
+      upTotal += q * up;
+    });
+    return { id: l.id, qty: lq, garmentEach, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
   });
-  const setup = o.waive_setup ? 0 : r2(decos.reduce((a, d) => a + d.setup, 0));
-  return { qty, ti, tierMin: s.tiers[ti], garmentEach, decos, decoEach, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal), setup, belowMin: qty > 0 && qty < s.tiers[0] };
+  const setup = o.waive_setup ? 0 : r2(imprints.reduce((a, d) => a + d.setup, 0));
+  return { id: g.id, qty, ti, tierMin: s.tiers[ti], imprints, printEach, lines, sub: r2(lines.reduce((a, l) => a + l.sub, 0)), setup, belowMin: qty > 0 && qty < s.tiers[0] };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
 export function calcOrder(
-  o: Pick<Order, "lines" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup">,
+  o: Pick<Order, "lines" | "groups" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup">,
   s: Settings,
   payments: Pick<Payment, "amount">[] = []
 ) {
-  const lines = (o.lines || []).map((l) => calcLine(l, o, s));
-  const items = r2(lines.reduce((a, l) => a + l.sub, 0));
-  const setup = r2(lines.reduce((a, l) => a + l.setup, 0));
+  const groups = orderGroups(o).map((g) => calcGroup(g, o, s));
+  const lines = groups.flatMap((g) => g.lines);
+  const items = r2(groups.reduce((a, g) => a + g.sub, 0));
+  const setup = r2(groups.reduce((a, g) => a + g.setup, 0));
   const fees = r2((o.fees || []).reduce((a, f) => a + num(f.amount), 0));
   const pre = items + setup + fees;
   const discount = r2((pre * num(o.discount_pct)) / 100);
@@ -142,13 +175,27 @@ export function calcOrder(
   const tax = o.tax_exempt ? 0 : r2(((pre - discount) * rate) / 100);
   const total = r2(pre - discount + tax);
   const paid = r2(payments.reduce((a, p) => a + num(p.amount), 0));
-  const qty = lines.reduce((a, l) => a + l.qty, 0);
-  return { lines, items, setup, fees, discount, rate, tax, total, paid, balance: r2(total - paid), qty };
+  const qty = groups.reduce((a, g) => a + g.qty, 0);
+  return { groups, lines, items, setup, fees, discount, rate, tax, total, paid, balance: r2(total - paid), qty };
 }
 
 export const uid = () =>
   (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
 
-export function newLine(): Line {
-  return { id: uid(), garment: "", style: "", color: "", cost: "", sizes: {}, decorations: [{ id: uid(), method: "screen", location: "Front", colors: 1 }], priceOverride: null };
+export function newGLine(): GLine {
+  return { id: uid(), style: "", brand: "", garment: "", color: "", cost: "", sizes: {}, priceOverride: null };
+}
+export function newImprint(location = "Front"): Imprint {
+  return { id: uid(), method: "screen", location, colors: 1, inks: "", size: "", notes: "" };
+}
+export function newGroup(): Group {
+  return { id: uid(), lines: [newGLine()], imprints: [newImprint()] };
+}
+/** Short description of an imprint for invoices and the portal. */
+export function imprintLabel(d: Imprint) {
+  const parts = [`${METHODS[d.method] || d.method} ${d.location}`.trim()];
+  if (d.method === "screen") parts.push(`${d.colors} color${d.colors > 1 ? "s" : ""}`);
+  if (d.inks) parts.push(d.inks);
+  if (d.size) parts.push(d.size);
+  return parts.join(" · ");
 }

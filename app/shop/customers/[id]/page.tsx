@@ -25,7 +25,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     if (!latest.current) return;
     const { id: _id, created_at, ...rest } = latest.current;
     setState("Saving…");
-    const { error } = await createClient().from("customers").update({ ...rest, email: rest.email.trim().toLowerCase() }).eq("id", id);
+    const { error } = await createClient().from("customers").update({ ...rest, email: rest.email.trim().toLowerCase(), contact2_email: (rest.contact2_email || "").trim().toLowerCase() }).eq("id", id);
     setState(error ? "Save failed: " + error.message : "Saved");
   }
   function set<K extends keyof Customer>(k: K, v: Customer[K]) {
@@ -82,7 +82,16 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               <div className="field"><label htmlFor="cu-email">Email (their portal login)</label><input type="email" id="cu-email" value={c.email} onChange={(e) => set("email", e.target.value)} /></div>
               <div className="field"><label htmlFor="cu-phone">Phone</label><input type="tel" id="cu-phone" value={c.phone} onChange={(e) => set("phone", e.target.value)} /></div>
             </div>
-            <div className="field"><label htmlFor="cu-address">Address</label><textarea id="cu-address" rows={2} value={c.address} onChange={(e) => set("address", e.target.value)} /></div>
+            <div className="grid g2">
+              <div className="field"><label htmlFor="cu-address">Billing address</label><textarea id="cu-address" rows={3} value={c.address} onChange={(e) => set("address", e.target.value)} /></div>
+              <div className="field"><label htmlFor="cu-ship">Ship-to address (if different)</label><textarea id="cu-ship" rows={3} value={c.ship_address || ""} onChange={(e) => set("ship_address", e.target.value)} /></div>
+            </div>
+            <div className="lbl" style={{ marginTop: 4 }}>Second contact (optional)</div>
+            <div className="grid g3">
+              <div className="field"><label htmlFor="cu-c2n">Name</label><input id="cu-c2n" type="text" value={c.contact2_name || ""} onChange={(e) => set("contact2_name", e.target.value)} /></div>
+              <div className="field"><label htmlFor="cu-c2e">Email</label><input id="cu-c2e" type="email" value={c.contact2_email || ""} onChange={(e) => set("contact2_email", e.target.value)} /></div>
+              <div className="field"><label htmlFor="cu-c2p">Phone</label><input id="cu-c2p" type="tel" value={c.contact2_phone || ""} onChange={(e) => set("contact2_phone", e.target.value)} /></div>
+            </div>
             <label className="check"><input type="checkbox" checked={c.tax_exempt} onChange={(e) => set("tax_exempt", e.target.checked)} /> Tax exempt (new quotes start exempt)</label>
             <div className="field"><label htmlFor="cu-notes">Notes (only your shop sees these)</label><textarea id="cu-notes" rows={3} placeholder="Preferred inks, art files, pickup details…" value={c.notes} onChange={(e) => set("notes", e.target.value)} /></div>
           </div>

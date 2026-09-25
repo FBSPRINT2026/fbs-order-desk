@@ -36,7 +36,7 @@ export default function OrdersPage() {
       if (status && o.status !== status) return false;
       if (qq) {
         const c = customers[o.customer_id || ""];
-        const hay = [o.number, o.nickname, c?.company, c?.name, c?.email, summaryLine(o)].join(" ").toLowerCase();
+        const hay = [o.number, o.nickname, o.po_number, c?.company, c?.name, c?.email, summaryLine(o)].join(" ").toLowerCase();
         if (!hay.includes(qq)) return false;
       }
       return true;
@@ -82,7 +82,7 @@ export default function OrdersPage() {
               return (
                 <tr key={o.id} tabIndex={0} onClick={() => router.push(`/shop/orders/${o.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/orders/${o.id}`)}>
                   <td><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{o.unread > 0 && <span className="unread" title="Unread customer message" />}</td>
-                  <td><div>{o.nickname || "Untitled job"}</div><div className="sub">{summaryLine(o)}</div></td>
+                  <td><div>{o.nickname || "Untitled job"}{o.rush && <span className="tag" style={{ marginLeft: 6, background: "var(--danger)", color: "#fff" }}>Rush</span>}</div><div className="sub">{summaryLine(o)}{o.po_number ? ` · PO ${o.po_number}` : ""}</div></td>
                   <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
                   <td><Pill status={o.status} /></td>
                   <td><Due date={o.due_date} status={o.status} /></td>

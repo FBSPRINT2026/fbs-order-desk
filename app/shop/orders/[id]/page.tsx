@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, LOCATIONS, mergeSettings, METHODS, newLine, PAY_METHODS, SIZES, ST, STATUSES, uid,
-  type Customer, type Decoration, type Line, type Message, type Order, type OrderEvent, type Payment, type Proof, type Settings, type StatusKey,
+  calcOrder, LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, ST, STATUSES, uid,
+  type ArtFile, type Customer, type Delivery, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
+import GroupEditor from "@/components/GroupEditor";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
 import { Pill } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
@@ -31,6 +32,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [messages, setMessages] = useState<Message[]>([]);
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [prodNotes, setProdNotes] = useState("");
+  const [catalog, setCatalog] = useState<Garment[]>([]);
+  const [art, setArt] = useState<(ArtFile & { url?: string })[]>([]);
+  const [newCust, setNewCust] = useState<null | { company: string; name: string; email: string; phone: string }>(null);
   const [saveState, setSaveState] = useState("");
   const [flash, setFlash] = useState("");
   const [armed, setArmed] = useState("");
@@ -51,6 +55,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setPayments((p.data || []) as Payment[]);
     setMessages((m.data || []) as Message[]);
     setEvents((e.data || []) as OrderEvent[]);
+    const { data: af } = await sb.from("art_files").select("*").eq("order_id", id).order("created_at");
+    const arts = (af || []) as ArtFile[];
+    if (arts.length) {
+      const { data: urls } = await sb.storage.from("proofs").createSignedUrls(arts.map((x) => x.file_path), 3600);
+      setArt(arts.map((x, i) => ({ ...x, url: urls?.[i]?.signedUrl || undefined })));
+    } else setArt([]);
     const list = (pr.data || []) as Proof[];
     if (list.length) {
       const { data: urls } = await sb.storage.from("proofs").createSignedUrls(list.map((x) => x.file_path), 3600);
@@ -60,15 +70,18 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => {
     (async () => {
-      const [ord, cu, st, inn] = await Promise.all([
+      const [ord, cu, st, inn, cat] = await Promise.all([
         sb.from("orders").select("*").eq("id", id).maybeSingle(),
         sb.from("customers").select("*"),
         sb.from("settings").select("data").eq("id", 1).maybeSingle(),
         sb.from("order_internal").select("production_notes").eq("order_id", id).maybeSingle(),
+        sb.from("garments").select("*").order("style"),
       ]);
       if (!ord.data) { setMissing(true); return; }
       const d = ord.data as Order;
-      d.lines = d.lines?.length ? d.lines : [newLine()];
+      d.groups = orderGroups(d);
+      if (!d.groups.length) d.groups = [newGroup()];
+      d.delivery_method = d.delivery_method || "pickup";
       d.fees = d.fees || [];
       d.discount_pct = +d.discount_pct || 0;
       d.tax_rate = d.tax_rate === null ? null : +d.tax_rate;
@@ -76,6 +89,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       latest.current = d;
       setCustomers(((cu.data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
       setSettings(mergeSettings(st.data?.data));
+      setCatalog((cat.data || []) as Garment[]);
       setProdNotes(inn.data?.production_notes || "");
       setSaveState("Saved");
       await loadSide();
@@ -93,7 +107,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const c = calcOrder(d, settings);
     setSaveState("Saving…");
     const { error } = await sb.from("orders").update({
-      customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, lines: d.lines, fees: d.fees,
+      customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
+      po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, delivery_method: d.delivery_method || "pickup",
+      ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "",
       discount_pct: +d.discount_pct || 0, tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, total: c.total, qty: c.qty,
     }).eq("id", d.id);
@@ -114,7 +130,47 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(save, 700);
   }
-  const setLine = (i: number, fn: (l: Line) => void) => patch((d) => fn(d.lines[i]));
+  const setGroup = (i: number, fn: (g: Group) => void) => patch((d) => fn(d.groups[i]));
+  const cloneGroup = (g: Group): Group => ({ id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid() })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })) });
+
+  async function saveToCatalog(l: GLine) {
+    const row = { style: l.style.trim(), brand: l.brand || "", description: l.garment, colors: l.color ? [l.color] : [], cost: +l.cost || 0 };
+    const { data, error } = await sb.from("garments").insert(row).select("*").single();
+    if (error) return say("Couldn't save to catalog: " + error.message);
+    setCatalog((c) => [...c, data as Garment].sort((a, b) => a.style.localeCompare(b.style)));
+    say(`${row.style} saved to your garment catalog.`);
+  }
+
+  async function addCustomer() {
+    if (!newCust) return;
+    if (!newCust.company.trim() && !newCust.name.trim()) return say("Enter a company or contact name.");
+    const { data, error } = await sb.from("customers").insert({ ...newCust, email: newCust.email.trim().toLowerCase() }).select("*").single();
+    if (error || !data) return say("Couldn't add customer: " + error?.message);
+    setCustomers((cs) => [...cs, data as Customer].sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
+    patch((d) => { d.customer_id = data.id; });
+    setNewCust(null);
+  }
+
+  // art files (shop only)
+  const [artUploading, setArtUploading] = useState(false);
+  async function uploadArt(files: FileList | null) {
+    if (!o || !files?.length) return;
+    setArtUploading(true);
+    for (const f of Array.from(files)) {
+      const path = `art/${o.id}/${uid()}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
+      const up = await sb.storage.from("proofs").upload(path, f, { contentType: f.type || undefined, upsert: false });
+      if (up.error) { say("Upload failed: " + up.error.message); continue; }
+      await sb.from("art_files").insert({ order_id: o.id, name: f.name, file_path: path, file_type: f.type });
+    }
+    setArtUploading(false);
+    loadSide();
+  }
+  async function delArt(a: ArtFile) {
+    if (armed !== "art" + a.id) return arm("art" + a.id);
+    await sb.storage.from("proofs").remove([a.file_path]);
+    await sb.from("art_files").delete().eq("id", a.id);
+    loadSide();
+  }
   const numOr = (v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
   async function setStatus(k: StatusKey) {
@@ -143,7 +199,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!o) return;
     await save();
     const { data, error } = await sb.from("orders").insert({
-      customer_id: o.customer_id, nickname: (o.nickname || "Job") + " (copy)", lines: o.lines.map((l) => ({ ...l, id: uid() })), fees: o.fees,
+      customer_id: o.customer_id, nickname: (o.nickname || "Job") + " (copy)", groups: o.groups.map(cloneGroup), fees: o.fees, po_number: "",
+      delivery_method: o.delivery_method, ship_to: o.ship_to, ship_method: o.ship_method,
       discount_pct: o.discount_pct, tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: true, notes: o.notes, total: o.total, qty: o.qty,
     }).select("id").single();
     if (error || !data) return say("Couldn't duplicate: " + error?.message);
@@ -155,7 +212,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (armed !== "del") return arm("del");
     if (timer.current) clearTimeout(timer.current);
     latest.current = null;
-    const paths = proofs.map((p) => p.file_path);
+    const paths = [...proofs.map((p) => p.file_path), ...art.map((a) => a.file_path)];
     if (paths.length) await sb.storage.from("proofs").remove(paths);
     const { error } = await sb.from("orders").delete().eq("id", o.id);
     if (error) return say("Couldn't delete: " + error.message);
@@ -239,7 +296,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
           <div className="eyebrow">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
-          <h1><span className="mono">#{o.number}</span> {o.nickname || "Untitled job"}</h1>
+          <h1><span className="mono">#{o.number}</span> {o.nickname || "Untitled job"}{o.rush && <span className="rush">RUSH</span>}</h1>
         </div>
         <div className="ed-actions">
           <span className="save-state">{saveState}</span>
@@ -248,7 +305,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>
           {o.type === "quote" && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
-          <a className="btn" href={`/print/${o.id}`} target="_blank" rel="noreferrer">Print / PDF</a>
+          <a className="btn" href={`/print/${o.id}`} target="_blank" rel="noreferrer">{o.type === "quote" ? "Quote PDF" : "Invoice PDF"}</a>
+          <a className="btn" href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
           <button className="btn" type="button" onClick={duplicate}>Duplicate</button>
           <button className={"btn danger" + (armed === "del" ? " armed" : "")} type="button" onClick={del}>{armed === "del" ? "Confirm delete" : "Delete"}</button>
         </div>
@@ -257,38 +315,83 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
       <div className="ed-grid">
         <div className="stack">
-          <section className="panel">
-            <div className="panel-h"><h2>Job details</h2></div>
-            <div className="panel-b stack">
-              <div className="grid g3">
-                <div className="field"><label htmlFor="o-cust">Customer</label>
-                  <select id="o-cust" value={o.customer_id || ""} onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === "__new") { router.push("/shop/customers"); return; }
-                    const c = customers.find((x) => x.id === v);
-                    patch((d) => { d.customer_id = v || null; if (c?.tax_exempt) d.tax_exempt = true; });
-                  }}>
-                    <option value="">Choose a customer…</option>
-                    {customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}{c.company && c.name ? " · " + c.name : ""}</option>)}
-                    <option value="__new">+ Add a new customer…</option>
-                  </select>
-                </div>
-                <div className="field"><label htmlFor="o-nick">Job name</label><input id="o-nick" type="text" value={o.nickname} placeholder="e.g. Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
-                <div className="field"><label htmlFor="o-due">Due date</label><input id="o-due" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} /></div>
+          <div className="top2">
+            <section className="panel">
+              <div className="panel-h"><h2>Customer</h2>
+                {!newCust && <button className="btn sm" type="button" onClick={() => setNewCust({ company: "", name: "", email: "", phone: "" })}>+ New customer</button>}
               </div>
-              {cust && <div className="sub">{[cust.name, cust.email, cust.phone].filter(Boolean).join(" · ")} · <Link href={`/shop/customers/${cust.id}`}>View customer</Link></div>}
-            </div>
-          </section>
+              <div className="panel-b stack">
+                {newCust ? (
+                  <div className="stack" style={{ gap: 8 }}>
+                    <div className="grid g2">
+                      <div className="field"><label htmlFor="nc-co">Company</label><input id="nc-co" type="text" autoFocus value={newCust.company} onChange={(e) => setNewCust({ ...newCust, company: e.target.value })} /></div>
+                      <div className="field"><label htmlFor="nc-nm">Contact name</label><input id="nc-nm" type="text" value={newCust.name} onChange={(e) => setNewCust({ ...newCust, name: e.target.value })} /></div>
+                      <div className="field"><label htmlFor="nc-em">Email</label><input id="nc-em" type="email" value={newCust.email} onChange={(e) => setNewCust({ ...newCust, email: e.target.value })} /></div>
+                      <div className="field"><label htmlFor="nc-ph">Phone</label><input id="nc-ph" type="tel" value={newCust.phone} onChange={(e) => setNewCust({ ...newCust, phone: e.target.value })} /></div>
+                    </div>
+                    <div className="row"><button className="btn primary sm" type="button" onClick={addCustomer}>Add and use</button><button className="btn ghost sm" type="button" onClick={() => setNewCust(null)}>Cancel</button></div>
+                  </div>
+                ) : (
+                  <>
+                    <select aria-label="Customer" value={o.customer_id || ""} onChange={(e) => {
+                      const v = e.target.value;
+                      const c = customers.find((x) => x.id === v);
+                      patch((d) => { d.customer_id = v || null; if (c?.tax_exempt) d.tax_exempt = true; });
+                    }}>
+                      <option value="">Choose a customer…</option>
+                      {customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}{c.company && c.name ? " · " + c.name : ""}</option>)}
+                    </select>
+                    {cust ? (
+                      <div className="cust-card">
+                        <div><b>{cust.name || custLabel(cust)}</b>{cust.email && <> · {cust.email}</>}{cust.phone && <> · {cust.phone}</>}</div>
+                        {cust.contact2_name && <div className="sub">Also: {[cust.contact2_name, cust.contact2_email, cust.contact2_phone].filter(Boolean).join(" · ")}</div>}
+                        {cust.address && <div className="sub" style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
+                        {cust.notes && <div className="sub">Note: {cust.notes}</div>}
+                        <Link href={`/shop/customers/${cust.id}`} style={{ fontSize: 12 }}>Edit customer</Link>
+                      </div>
+                    ) : <div className="faint" style={{ fontSize: 13 }}>Pick a customer, or add a new one without leaving this order.</div>}
+                  </>
+                )}
+              </div>
+            </section>
 
-          {o.lines.map((l, i) => (
-            <LineEditor key={l.id} i={i} l={l} lc={calc.lines[i]} settings={settings} canRemove={o.lines.length > 1}
-              setLine={(fn) => setLine(i, fn)} numOr={numOr} armed={armed === "line" + i}
-              onDup={() => patch((d) => { const c: Line = JSON.parse(JSON.stringify(d.lines[i])); c.id = uid(); c.color = ""; c.sizes = {}; c.decorations.forEach((x) => (x.id = uid())); d.lines.splice(i + 1, 0, c); })}
-              onRemove={() => { if (armed !== "line" + i) return arm("line" + i); patch((d) => { d.lines.splice(i, 1); }); }} />
+            <section className="panel">
+              <div className="panel-h"><h2>Job details</h2>
+                <label className="check" style={{ fontSize: 13, color: o.rush ? "var(--danger)" : undefined, fontWeight: o.rush ? 700 : 400 }}><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} /> Rush</label>
+              </div>
+              <div className="panel-b stack">
+                <div className="grid g2">
+                  <div className="field"><label htmlFor="o-nick">Job name</label><input id="o-nick" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
+                  <div className="field"><label htmlFor="o-po">Customer PO #</label><input id="o-po" type="text" value={o.po_number || ""} onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
+                  <div className="field"><label htmlFor="o-prod">Production date</label><input id="o-prod" type="date" value={o.production_date || ""} onChange={(e) => patch((d) => { d.production_date = e.target.value || null; })} /></div>
+                  <div className="field"><label htmlFor="o-due">In-hands date</label><input id="o-due" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} /></div>
+                  <div className="field"><label htmlFor="o-del">Delivery</label>
+                    <select id="o-del" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Delivery; if (d.delivery_method !== "pickup" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; })}>
+                      <option value="pickup">Customer pickup</option><option value="ship">Ship</option><option value="deliver">We deliver</option>
+                    </select>
+                  </div>
+                  {o.delivery_method === "ship" && <div className="field"><label htmlFor="o-sm">Ship method</label><input id="o-sm" type="text" placeholder="UPS Ground" value={o.ship_method || ""} onChange={(e) => patch((d) => { d.ship_method = e.target.value; })} /></div>}
+                </div>
+                {o.delivery_method !== "pickup" && (
+                  <div className="grid g2">
+                    <div className="field"><label htmlFor="o-st">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="o-st" rows={3} value={o.ship_to || ""} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>
+                    {o.delivery_method === "ship" && <div className="field"><label htmlFor="o-tr">Tracking #</label><input id="o-tr" type="text" value={o.tracking || ""} onChange={(e) => patch((d) => { d.tracking = e.target.value; })} /></div>}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
+          {o.groups.map((g, gi) => (
+            <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} catalog={catalog} canRemove={o.groups.length > 1}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog}
+              onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
+              onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
           ))}
           <div className="row">
-            <button className="btn" type="button" onClick={() => patch((d) => { d.lines.push(newLine()); })}>+ Add line item</button>
-            <span className="faint" style={{ fontSize: 12 }}>Each garment and color gets its own line. Quantity breaks are figured per line.</span>
+            <button className="btn" type="button" onClick={() => patch((d) => { d.groups.push(newGroup()); })}>+ Add line item group</button>
+            <span className="faint" style={{ fontSize: 12 }}>Garments in the same group share imprints, and their quantities add up for the price break.</span>
           </div>
 
           <section className="panel">
@@ -333,6 +436,24 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <label className="btn" style={{ cursor: "pointer" }}>{uploading ? "Uploading…" : "Upload mockup"}<input type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => { upload(e.target.files); e.target.value = ""; }} /></label>
                 <span className="faint" style={{ fontSize: 12 }}>PNG, JPG or PDF. Customers approve or reject each one.</span>
               </div>
+            </div>
+          </section>
+
+          <section className="panel" id="art">
+            <div className="panel-h"><h2>Art files</h2><span className="faint" style={{ fontSize: 12 }}>Shop only. Customers never see these.</span></div>
+            <div className="panel-b stack">
+              {art.length > 0 && (
+                <div className="artlist">
+                  {art.map((a) => (
+                    <div key={a.id} className="artrow">
+                      <a href={a.url} target="_blank" rel="noreferrer" className="artthumb">{a.file_type.startsWith("image/") && a.url ? <img src={a.url} alt="" /> : <span>{(a.name.split(".").pop() || "file").toUpperCase()}</span>}</a>
+                      <a href={a.url} target="_blank" rel="noreferrer" className="artname">{a.name}</a>
+                      <button className={"btn sm ghost danger" + (armed === "art" + a.id ? " armed" : "")} type="button" onClick={() => delArt(a)}>{armed === "art" + a.id ? "Confirm" : "Remove"}</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="btn" style={{ cursor: "pointer", alignSelf: "flex-start" }}>{artUploading ? "Uploading…" : "Upload art files"}<input type="file" multiple hidden onChange={(e) => { uploadArt(e.target.files); e.target.value = ""; }} /></label>
             </div>
           </section>
 
@@ -440,69 +561,5 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </aside>
       </div>
     </>
-  );
-}
-
-function LineEditor({ i, l, lc, settings, canRemove, setLine, numOr, onDup, onRemove, armed }: {
-  i: number; l: Line; lc: ReturnType<typeof calcOrder>["lines"][number]; settings: Settings; canRemove: boolean; armed: boolean;
-  setLine: (fn: (l: Line) => void) => void; numOr: (v: string) => number | ""; onDup: () => void; onRemove: () => void;
-}) {
-  const calcText = lc.hasOv
-    ? <><b>{money(lc.each)}</b> each (override; calculated {money(lc.calcEach)}) · {lc.tierMin}+ tier</>
-    : <>Blank {money(lc.garmentEach)} + print {money(lc.decoEach)} = <b>{money(lc.each)}</b> each · {lc.tierMin}+ tier</>;
-  return (
-    <section className="line">
-      <div className="line-h">
-        <span className="idx">LINE {i + 1}</span><b>{[l.style, l.garment].filter(Boolean).join(" · ") || "New garment"}</b><span className="spacer" />
-        <button className="btn sm ghost" type="button" onClick={onDup}>Duplicate</button>
-        {canRemove && <button className={"btn sm ghost danger" + (armed ? " armed" : "")} type="button" onClick={onRemove}>{armed ? "Remove line?" : "Remove"}</button>}
-      </div>
-      <div className="line-b">
-        <div className="garment">
-          <div className="field"><label>Garment</label><input type="text" placeholder="Unisex heavy cotton tee" value={l.garment} onChange={(e) => setLine((x) => { x.garment = e.target.value; })} /></div>
-          <div className="field"><label>Style #</label><input type="text" placeholder="Gildan 5000" value={l.style} onChange={(e) => setLine((x) => { x.style = e.target.value; })} /></div>
-          <div className="field"><label>Color</label><input type="text" placeholder="Sport Grey" value={l.color} onChange={(e) => setLine((x) => { x.color = e.target.value; })} /></div>
-          <div className="field"><label>Blank cost</label><input type="number" step="0.01" min="0" placeholder="0.00" value={l.cost} onChange={(e) => setLine((x) => { x.cost = numOr(e.target.value); })} /></div>
-        </div>
-        <div className="sizes-wrap">
-          <table className="sizes">
-            <thead><tr>{SIZES.map((s) => <th key={s}>{s}{settings.upcharges[s] ? <small>+{money(settings.upcharges[s])}</small> : null}</th>)}<th>Qty</th></tr></thead>
-            <tbody><tr>
-              {SIZES.map((s) => (
-                <td key={s}><input type="number" min="0" step="1" inputMode="numeric" aria-label={`${s} quantity`} className={l.sizes?.[s] ? "has" : ""} value={l.sizes?.[s] || ""}
-                  onChange={(e) => setLine((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); if (v) x.sizes[s] = v; else delete x.sizes[s]; })} /></td>
-              ))}
-              <td className="tot">{lc.qty}</td>
-            </tr></tbody>
-          </table>
-        </div>
-        <div className="decos">
-          <div className="deco-h"><span>DECORATION</span><span>LOCATION</span><span>INK COLORS</span><span>EACH</span><span /></div>
-          {(l.decorations || []).map((d, j) => (
-            <div key={d.id} className="deco">
-              <select aria-label="Decoration method" value={d.method} onChange={(e) => setLine((x) => { x.decorations[j].method = e.target.value as Decoration["method"]; })}>
-                {Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-              <input type="text" list="locs" aria-label="Print location" value={d.location} onChange={(e) => setLine((x) => { x.decorations[j].location = e.target.value; })} />
-              {d.method === "screen" ? (
-                <select aria-label="Ink colors" value={d.colors} onChange={(e) => setLine((x) => { x.decorations[j].colors = +e.target.value; })}>
-                  {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} color{n > 1 ? "s" : ""}</option>)}
-                </select>
-              ) : <span className="faint" style={{ fontSize: 12 }}>{d.method === "embroidery" ? "Stitch count flat" : "Full color"}</span>}
-              <span className="each">{money(lc.decos[j]?.each)}</span>
-              <button className="btn icon ghost" type="button" aria-label="Remove decoration" onClick={() => setLine((x) => { x.decorations.splice(j, 1); })}>✕</button>
-            </div>
-          ))}
-          <div><button className="btn sm" type="button" onClick={() => setLine((x) => { const used = x.decorations.map((d) => d.location); x.decorations.push({ id: uid(), method: "screen", location: LOCATIONS.find((z) => !used.includes(z)) || "", colors: 1 }); })}>+ Add location</button></div>
-          <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
-        </div>
-        {lc.belowMin && <div className="warnline">{lc.qty} pcs is under your {settings.tiers[0]}-piece minimum. Priced at the {settings.tiers[0]}+ tier.</div>}
-        <div className="price-strip">
-          <div className="calc">{calcText}{lc.upTotal ? ` · ${money(lc.upTotal)} size upcharges` : ""}</div>
-          <label className="ov">Override each<input type="number" step="0.01" min="0" placeholder={lc.calcEach.toFixed(2)} value={l.priceOverride ?? ""} onChange={(e) => setLine((x) => { x.priceOverride = e.target.value === "" ? null : +e.target.value; })} /></label>
-          <div className="lt"><div className="sub">{lc.setup ? `+ ${money(lc.setup)} setup` : " "}</div><b>{money(lc.sub)}</b></div>
-        </div>
-      </div>
-    </section>
   );
 }

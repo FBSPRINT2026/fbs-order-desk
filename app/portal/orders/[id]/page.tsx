@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPortalCtx, signProofs } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calcOrder, METHODS, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
+import { calcOrder, imprintLabel, orderGroups, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill } from "@/components/bits";
 import { MessageThread, PayBox, ProofCard, QuoteApproval } from "./client";
@@ -59,7 +59,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           <div>
             <div className="eyebrow">{o.type === "quote" ? "Quote" : "Order"} #{o.number}</div>
             <h1>{o.nickname || "Your order"}</h1>
-            <div className="muted" style={{ marginTop: 6 }}>{c.qty} pieces{o.due_date ? ` · ${o.type === "quote" ? "needed by" : "due"} ${fmtDateLong(o.due_date)}` : ""}</div>
+            <div className="muted" style={{ marginTop: 6 }}>{c.qty} pieces{o.due_date ? ` · in hands ${fmtDateLong(o.due_date)}` : ""}{o.po_number ? ` · PO ${o.po_number}` : ""}{o.delivery_method === "ship" ? " · shipping" : o.delivery_method === "deliver" ? " · delivery" : ""}{o.tracking ? ` · tracking ${o.tracking}` : ""}</div>
           </div>
           <div className="row">
             <Pill status={o.status} portal />
@@ -98,21 +98,21 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 <table className="items">
                   <thead><tr><th>Item</th><th className="r">Qty</th><th className="r">Each</th><th className="r">Amount</th></tr></thead>
                   <tbody>
-                    {o.lines.map((l, i) => {
-                      const lc = c.lines[i];
+                    {orderGroups(o).map((g, gi) => g.lines.map((l, li) => {
+                      const lc = c.groups[gi]?.lines[li];
                       return (
                         <tr key={l.id}>
                           <td>
                             <b>{[l.style, l.garment].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}
-                            <div className="sub">{l.decorations.map((d) => `${METHODS[d.method]} ${d.location}${d.method === "screen" ? ` (${d.colors} color${d.colors > 1 ? "s" : ""})` : ""}`).join(" · ")}</div>
+                            {li === 0 && g.imprints.length > 0 && <div className="sub">{g.imprints.map(imprintLabel).join(" · ")}</div>}
                             <div className="sizechips">{SIZES.filter((s) => l.sizes?.[s]).map((s) => <span key={s}>{s} {l.sizes[s]}</span>)}</div>
                           </td>
-                          <td className="r">{lc.qty}</td>
-                          <td className="r">{money(lc.each)}{lc.upTotal ? <div className="sub">+ big sizes</div> : null}</td>
-                          <td className="r">{money(lc.sub)}</td>
+                          <td className="r">{lc?.qty}</td>
+                          <td className="r">{money(lc?.each)}{lc?.upTotal ? <div className="sub">+ big sizes</div> : null}</td>
+                          <td className="r">{money(lc?.sub)}</td>
                         </tr>
                       );
-                    })}
+                    }))}
                     {c.setup > 0 && <tr><td>Setup (screens / digitizing)</td><td /><td /><td className="r">{money(c.setup)}</td></tr>}
                     {o.fees.filter((f) => +f.amount).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td /><td /><td className="r">{money(+f.amount)}</td></tr>)}
                   </tbody>
