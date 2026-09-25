@@ -4,8 +4,12 @@
 
 export const YOUTH_SIZES = ["YXS", "YS", "YM", "YL", "YXL"] as const;
 export const ADULT_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"] as const;
-/** Every size, youth first. Orders store quantities keyed by these names. */
-export const SIZES = [...YOUTH_SIZES, ...ADULT_SIZES] as const;
+/** Quantity for one-size items (hats, koozies, bags). */
+export const ONE_SIZE = "OS" as const;
+/** Every size, youth first, then one-size. Orders store quantities keyed by these names. */
+export const SIZES = [...YOUTH_SIZES, ...ADULT_SIZES, ONE_SIZE] as const;
+/** How a size is shown to people. */
+export const sizeLabel = (z: string) => (z === ONE_SIZE ? "Qty" : z);
 export type Size = (typeof SIZES)[number];
 
 export type StatusKey =
@@ -39,6 +43,8 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
 export type GLine = {
   id: string; style: string; brand: string; garment: string; color: string; cost: number | "";
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
+  /** One-size item (hat, koozie, bag): a single quantity instead of a size run. */
+  oneSize?: boolean;
 };
 /** Garments that share the same imprints. Quantity breaks use the group total. */
 export type Group = { id: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[]; youth?: boolean };

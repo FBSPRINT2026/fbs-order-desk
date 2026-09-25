@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPortalCtx, signProofs } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calcOrder, imprintLabel, orderGroups, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
+import { calcOrder, imprintLabel, orderGroups, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill } from "@/components/bits";
 import { MessageThread, PayBox, ProofCard, QuoteApproval } from "./client";
@@ -106,7 +106,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                             <b>{[l.style, l.garment].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{c.groups[gi]?.wholesale ? " (your garments)" : ""}
                             {li === 0 && g.imprints.length > 0 && <div className="sub">{g.imprints.map(imprintLabel).join(" · ")}</div>}
                             {li === 0 && (c.groups[gi]?.finishing.length || 0) > 0 && <div className="sub">Finishing: {c.groups[gi].finishing.map((f) => f.name).join(", ")}</div>}
-                            <div className="sizechips">{SIZES.filter((s) => l.sizes?.[s]).map((s) => <span key={s}>{s} {l.sizes[s]}</span>)}</div>
+                            <div className="sizechips">{SIZES.filter((s) => l.sizes?.[s]).map((s) => <span key={s}>{sizeLabel(s)} {l.sizes[s]}</span>)}</div>
                           </td>
                           <td className="r">{lc?.qty}</td>
                           <td className="r">{money(lc?.each)}{lc?.upTotal ? <div className="sub">+ big sizes</div> : null}</td>

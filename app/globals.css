@@ -377,3 +377,6 @@ table.pv-grid{border-collapse:separate;border-spacing:0;width:100%}
 .wo .artgrid{display:flex;flex-wrap:wrap;gap:10px}
 .wo .artgrid img{max-width:220px;max-height:220px;border:1px solid #C9D0DA}
 .pv-grid th.ysep,.pv-grid td.ysep{border-right:2px solid var(--line);padding-right:6px}
+.pv-grid td.os-cell{background:var(--surface-2);white-space:nowrap}
+.pv-grid td.os-cell .os-lbl{font-size:10px;letter-spacing:.08em;color:var(--ink-3);font-weight:700;margin-right:8px}
+.pv-grid td.os-cell input.os{width:84px;display:inline-block}

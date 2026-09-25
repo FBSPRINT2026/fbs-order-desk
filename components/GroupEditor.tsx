@@ -1,5 +1,5 @@
 "use client";
-import { ADULT_SIZES, LOCATIONS, METHODS, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { ADULT_SIZES, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 
 type Props = {
@@ -18,7 +18,8 @@ type Props = {
   onSaveToCatalog: (l: GLine) => void;
 };
 
-const numOr = (v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
+const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)), 0);
+const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
 export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog }: Props) {
@@ -87,9 +88,18 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                       <input type="text" list={colorsId} aria-label="Color" placeholder="Black" value={l.color} onChange={(e) => update((x) => { x.lines[li].color = e.target.value; })} />
                       {hit && <datalist id={colorsId}>{hit.colors.map((c) => <option key={c} value={c} />)}</datalist>}
                     </td>
-                    <td><input type="text" aria-label="Description" placeholder="Unisex tee" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></td>
+                    <td>
+                      <input type="text" aria-label="Description" placeholder={l.oneSize ? "Hat, koozie, tote…" : "Unisex tee"} value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} />
+                      <button className="linkbtn" type="button" title={l.oneSize ? "Switch back to a size run" : "Hats, koozies, bags: one quantity, no sizes"} onClick={() => update((x) => { const r = x.lines[li]; const q = lineTotal(r); r.oneSize = !r.oneSize; r.sizes = r.oneSize && q ? { [ONE_SIZE]: q } : {}; })}>{l.oneSize ? "Use sizes" : "One size item"}</button>
+                    </td>
                     {!gc.wholesale && <td><input type="number" step="0.01" min="0" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></td>}
-                    {(cols as (keyof GLine["sizes"])[]).map((s) => (
+                    {l.oneSize ? (
+                      <td colSpan={cols.length} className="os-cell">
+                        <span className="os-lbl">ONE SIZE · QTY</span>
+                        <input type="number" min="0" step="1" inputMode="numeric" className={"sz os" + (l.sizes?.OS ? " has" : "")} aria-label="Quantity" value={l.sizes?.OS || ""}
+                          onChange={(e) => update((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); x.lines[li].sizes = v ? { OS: v } : {}; })} />
+                      </td>
+                    ) : (cols as (keyof GLine["sizes"])[]).map((s) => (
                       <td key={s} className={"c" + (s === "YXL" ? " ysep" : "")}>
                         <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.[s] ? " has" : "")} aria-label={`${s} quantity`} value={l.sizes?.[s] || ""}
                           onChange={(e) => update((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; })} />
@@ -107,6 +117,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         </div>
         <div className="row">
           <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push(newGLine()); })}>+ Add garment</button>
+          <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push({ ...newGLine(), oneSize: true }); })}>+ One-size item</button>
           <button className="btn sm ghost" type="button" onClick={() => update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, id: uid(), color: "", sizes: {}, priceOverride: null }); })}>+ Same style, new color</button>
         </div>
 

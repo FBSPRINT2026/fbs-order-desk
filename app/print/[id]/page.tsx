@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calcOrder, imprintLabel, mergeSettings, orderGroups, SIZES, type ArtFile, type Customer, type Group, type GroupCalc, type Order, type Payment } from "@/lib/pricing";
+import { calcOrder, imprintLabel, mergeSettings, orderGroups, sizeLabel, SIZES, type ArtFile, type Customer, type Group, type GroupCalc, type Order, type Payment } from "@/lib/pricing";
 import { fmtDateLong, money, todayISO } from "@/lib/format";
 import PrintButton from "./PrintButton";
 
@@ -60,7 +60,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
             <div key={g.id} className="box">
               <b>Group {gi + 1} · {c.groups[gi]?.qty || 0} pcs{c.groups[gi]?.wholesale ? " · CUSTOMER-SUPPLIED GOODS" : ""}{c.groups[gi]?.finishing.length ? ` · Finishing: ${c.groups[gi].finishing.map((f) => f.name).join(", ")}` : ""}</b>
               <table>
-                <thead><tr><th>Style</th><th>Color</th><th>Description</th>{SIZES.filter((z) => g.lines.some((l) => l.sizes?.[z])).map((z) => <th key={z} className="c">{z}</th>)}<th className="c">Total</th></tr></thead>
+                <thead><tr><th>Style</th><th>Color</th><th>Description</th>{SIZES.filter((z) => g.lines.some((l) => l.sizes?.[z])).map((z) => <th key={z} className="c">{sizeLabel(z)}</th>)}<th className="c">Total</th></tr></thead>
                 <tbody>
                   {g.lines.map((l, li) => (
                     <tr key={l.id}><td>{l.style}</td><td>{l.color}</td><td>{l.garment}</td>{SIZES.filter((z) => g.lines.some((x) => x.sizes?.[z])).map((z) => <td key={z} className="c">{l.sizes?.[z] || ""}</td>)}<td className="c"><b>{c.groups[gi]?.lines[li]?.qty || 0}</b></td></tr>
@@ -151,7 +151,7 @@ function GroupRows({ g, gc }: { g: Group; gc: GroupCalc }) {
         <tr key={l.id}>
           <td>
             <b>{[l.style, l.garment].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{gc?.wholesale ? " (customer supplied)" : ""}
-            <div className="sub">{SIZES.filter((z) => l.sizes?.[z]).map((z) => `${z}: ${l.sizes[z]}`).join(", ")}</div>
+            <div className="sub">{SIZES.filter((z) => l.sizes?.[z]).map((z) => `${sizeLabel(z)}: ${l.sizes[z]}`).join(", ")}</div>
             {li === g.lines.length - 1 && g.imprints.length > 0 && <div className="sub">Imprints: {g.imprints.map(imprintLabel).join("; ")}</div>}
             {li === g.lines.length - 1 && gc?.finishing.length > 0 && <div className="sub">Finishing: {gc.finishing.map((f) => f.name).join(", ")}</div>}
           </td>

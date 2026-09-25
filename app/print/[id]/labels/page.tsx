@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ADULT_SIZES, calcOrder, mergeSettings, orderGroups, SIZES, YOUTH_SIZES, type Customer, type GLine, type Order } from "@/lib/pricing";
+import { ADULT_SIZES, calcOrder, mergeSettings, ONE_SIZE, orderGroups, sizeLabel, SIZES, YOUTH_SIZES, type Customer, type GLine, type Order } from "@/lib/pricing";
 import { fmtDateLong } from "@/lib/format";
 import LabelControls from "./LabelControls";
 import { code128Svg } from "@/lib/barcode";
@@ -38,7 +38,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
     const bandRows = rows.filter((l) => list.some((z) => l.sizes?.[z as keyof GLine["sizes"]]));
     return { name, rows: bandRows, sizes: list.filter((z) => bandRows.some((l) => l.sizes?.[z as keyof GLine["sizes"]])) };
   };
-  const bands = [bandOf("YOUTH", YOUTH_SIZES), bandOf("ADULT", ADULT_SIZES)].filter((b) => b.rows.length);
+  const bands = [bandOf("YOUTH", YOUTH_SIZES), bandOf("ADULT", ADULT_SIZES), bandOf("ONE SIZE", [ONE_SIZE])].filter((b) => b.rows.length);
   const totalPcs = c.qty;
   // Shipping barcode: the order number, used as the lookup key for WorldShip Keyed Import / FedEx Ship Manager.
   const shipKey = String(o.number);
@@ -182,11 +182,11 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             </div>
           </div>
 
-          {bands.map((band) => (
+          {bands.map((band) => { const os = band.name === "ONE SIZE"; return (
             <div key={band.name} className={"lb-band" + (bands.length > 1 ? " tabbed" : "")} style={{ flexGrow: band.rows.length }}>
               {bands.length > 1 && <div className="lb-bandtab">{band.name}</div>}
-              <div className="lb-grid" style={{ gridTemplateColumns: `minmax(0, 2.5fr) repeat(${Math.max(band.sizes.length, 1)}, minmax(0, 1fr)) minmax(0, 1.1fr)`, gridTemplateRows: `auto repeat(${Math.max(band.rows.length, 1)}, minmax(${rowMin}in, 1fr))` }}>
-                <div className="h l">Item</div>{band.sizes.map((z) => <div key={z} className="h">{z}</div>)}<div className="h">Total</div>
+              <div className="lb-grid" style={{ gridTemplateColumns: os ? "minmax(0, 2.5fr) minmax(0, 1.4fr)" : `minmax(0, 2.5fr) repeat(${Math.max(band.sizes.length, 1)}, minmax(0, 1fr)) minmax(0, 1.1fr)`, gridTemplateRows: `auto repeat(${Math.max(band.rows.length, 1)}, minmax(${rowMin}in, 1fr))` }}>
+                <div className="h l">Item</div>{band.sizes.map((z) => <div key={z} className="h">{sizeLabel(z)}</div>)}{!os && <div className="h">Total</div>}
                 {band.rows.map((l) => {
                   const tot = band.sizes.reduce((a, z) => a + (+(l.sizes?.[z as keyof GLine["sizes"]] || 0)), 0);
                   return [
@@ -195,12 +195,12 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
                       const q = l.sizes?.[z as keyof GLine["sizes"]];
                       return q ? <div key={l.id + z} className="c"><span className="o">{q}</span></div> : <div key={l.id + z} className="c na" />;
                     }),
-                    <div key={l.id + "t"} className="c"><span className="o">{tot}</span></div>,
+                    ...(os ? [] : [<div key={l.id + "t"} className="c"><span className="o">{tot}</span></div>]),
                   ];
                 })}
               </div>
             </div>
-          ))}
+          ); })}
           {!rows.length && <div className="lb-key">No garments entered on this order yet.</div>}
           <div className="lb-key"><span>Small # = qty ordered</span><span>Order total: {totalPcs} pcs</span></div>
           <div className="lb-foot"><div>Packed by</div><div className="ty">THANK YOU!</div></div>
