@@ -8,7 +8,6 @@ import { code128Svg } from "@/lib/barcode";
 
 export const dynamic = "force-dynamic";
 
-const DELIVERY: Record<string, string> = { pickup: "PICKUP", ship: "SHIP", deliver: "DELIVER" };
 
 // Box labels for packing: every garment and size ordered, with blank "in this box" cells to fill in by hand.
 export default async function LabelsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ boxes?: string; size?: string }> }) {
@@ -88,7 +87,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb-ship .co, .lb-ship .attn, .lb-ship .lines { font-size: 1em; font-weight: 700; }
         .lb-ship .lines { white-space: pre-line; }
         .lb-box { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; font-size: 1.05em; white-space: nowrap; }
-        .lb-box span.blank { display: inline-block; min-width: 1.6em; border-bottom: 2px solid #000; text-align: center; }
+        .lb-box span.blank { display: inline-block; min-width: 2.2em; height: 1.1em; border-bottom: 2px solid #000; text-align: center; }
         table.lb { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .lb th, .lb td { border: 1px solid #000; padding: 2px 2px; text-align: center; font-size: 1em; }
         .lb th { background: #000; color: #fff; font-weight: 700; }
@@ -144,8 +143,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             </div>
             <div className="lb-mid">{o.rush && <span className="lb-rush">RUSH</span>}</div>
             <div style={{ textAlign: "right" }}>
-              <div className="lb-box">BOX <span className="blank">{boxes > 1 ? bi + 1 : ""}</span> OF <span className="blank">{boxes > 1 ? boxes : ""}</span></div>
-              <div className="lb-dm">{DELIVERY[o.delivery_method] || "PICKUP"}</div>
+              <div className="lb-box">BOX <span className="blank" /> OF <span className="blank" /></div>
             </div>
           </div>
           <div className="lb-info">
@@ -174,7 +172,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             )}
             <div className="lb-side">
               <div><span className="k">IN HANDS</span><b>{o.due_date ? fmtDateLong(o.due_date) : "—"}</b></div>
-              <div><span className="k">{o.delivery_method === "ship" ? "SHIP VIA" : "DELIVERY"}</span><b>{o.delivery_method === "ship" ? o.ship_method || "—" : o.delivery_method === "deliver" ? "We deliver" : "Pickup"}</b></div>
+              <div><span className="k">SHIP VIA</span><b>{o.delivery_method === "pickup" ? "CUSTOMER PICKUP" : o.delivery_method === "deliver" ? "WE DELIVER" : o.ship_method || "—"}</b></div>
               {o.tracking && <div><span className="k">TRACKING</span><b className="trk">{o.tracking}</b></div>}
             </div>
           </div>

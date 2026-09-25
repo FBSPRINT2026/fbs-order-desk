@@ -9,7 +9,7 @@ export default function LabelControls({ boxes, size, tight }: { boxes: number; s
   const go = (b: string, s: string) => router.replace(`${path}?boxes=${Math.max(1, parseInt(b, 10) || 1)}&size=${s}`);
   return (
     <div className="no-print" style={{ maxWidth: 820, margin: "0 auto 16px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
-      <label style={{ display: "flex", gap: 6, alignItems: "center" }}>Number of boxes
+      <label style={{ display: "flex", gap: 6, alignItems: "center" }}>Number of labels
         <input type="number" min={1} max={50} value={n} onChange={(e) => setN(e.target.value)} onBlur={() => go(n, size)} onKeyDown={(e) => e.key === "Enter" && go(n, size)} style={{ width: 64, padding: "5px 7px" }} />
       </label>
       <label style={{ display: "flex", gap: 6, alignItems: "center" }}>Label size
