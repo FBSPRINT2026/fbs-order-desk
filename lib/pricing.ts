@@ -2,7 +2,10 @@
 // Used by the shop editor (live totals), the customer portal (display)
 // and the server (Stripe amounts), so every total comes from one place.
 
-export const SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"] as const;
+export const YOUTH_SIZES = ["YXS", "YS", "YM", "YL", "YXL"] as const;
+export const ADULT_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"] as const;
+/** Every size, youth first. Orders store quantities keyed by these names. */
+export const SIZES = [...YOUTH_SIZES, ...ADULT_SIZES] as const;
 export type Size = (typeof SIZES)[number];
 
 export type StatusKey =
@@ -33,7 +36,7 @@ export type GLine = {
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
 };
 /** Garments that share the same imprints. Quantity breaks use the group total. */
-export type Group = { id: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[] };
+export type Group = { id: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[]; youth?: boolean };
 export type PriceType = "retail" | "wholesale";
 
 /** Older orders stored one garment per line with its own decorations. */
@@ -236,6 +239,9 @@ export function newImprint(location = "Front"): Imprint {
 export function newGroup(): Group {
   return { id: uid(), lines: [newGLine()], imprints: [newImprint()] };
 }
+/** True when a size is a youth size. */
+export const isYouth = (z: string) => (YOUTH_SIZES as readonly string[]).includes(z);
+
 /** Short description of an imprint for invoices and the portal. */
 export function imprintLabel(d: Imprint) {
   const parts = [`${METHODS[d.method] || d.method} ${d.location}`.trim()];

@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calcOrder, mergeSettings, orderGroups, SIZES, type Customer, type Order } from "@/lib/pricing";
+import { ADULT_SIZES, calcOrder, mergeSettings, orderGroups, SIZES, YOUTH_SIZES, type Customer, type GLine, type Order } from "@/lib/pricing";
 import { fmtDateLong } from "@/lib/format";
 import LabelControls from "./LabelControls";
 import { code128Svg } from "@/lib/barcode";
@@ -34,6 +34,12 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   // every garment row in the order, with only the sizes actually used
   const rows = orderGroups(o).flatMap((g) => g.lines.filter((l) => SIZES.some((z) => l.sizes?.[z])));
   const used = SIZES.filter((z) => rows.some((l) => l.sizes?.[z]));
+  // Youth and adult garments get their own stacked sections so columns stay wide enough to write in.
+  const bandOf = (name: string, list: readonly string[]) => {
+    const bandRows = rows.filter((l) => list.some((z) => l.sizes?.[z as keyof GLine["sizes"]]));
+    return { name, rows: bandRows, sizes: list.filter((z) => bandRows.some((l) => l.sizes?.[z as keyof GLine["sizes"]])) };
+  };
+  const bands = [bandOf("YOUTH", YOUTH_SIZES), bandOf("ADULT", ADULT_SIZES)].filter((b) => b.rows.length);
   const totalPcs = c.qty;
   // Shipping barcode: the order number, used as the lookup key for WorldShip Keyed Import / FedEx Ship Manager.
   const shipKey = String(o.number);
@@ -78,6 +84,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         table.lb { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .lb th, .lb td { border: 1px solid #000; padding: 2px 2px; text-align: center; font-size: 1em; }
         .lb th { background: #000; color: #fff; font-weight: 700; }
+        .lb-band { flex: 1 1 0 !important; display: flex; flex-direction: column; min-height: 0; }
+        .lb-bandname { font-weight: 800; font-size: .9em; letter-spacing: .1em; }
         .lb-grid { flex: 1 1 auto !important; display: grid; border: 2px solid #000; min-height: 0; }
         .lb-grid > div { border-right: 1.5px solid #000; border-bottom: 1.5px solid #000; min-width: 0; }
         .lb-grid .h { background: #000; color: #fff; font-weight: 800; padding: 2px 0; text-align: center; border-color: #fff; border-right-width: 1px; }
@@ -118,7 +126,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           .label.brk { page-break-after: always; break-after: page; }
         }
       `}</style>
-      <LabelControls boxes={boxes} size={size} tight={size === "4x6" && rows.length > 10} />
+      <LabelControls boxes={boxes} size={size} tight={size === "4x6" && (rows.length > 10 || (bands.length > 1 && rows.length > 8))} />
       {Array.from({ length: boxes }, (_, bi) => (
         <div className={"label" + (size === "4x6" || bi % 2 === 1 ? " brk" : "")} key={bi}>
           <div className="lb-top">
@@ -154,20 +162,26 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             </div>
           )}
 
-          <div className="lb-grid" style={{ gridTemplateColumns: `minmax(0, 2.5fr) repeat(${Math.max(used.length, 1)}, minmax(0, 1fr)) minmax(0, 1.1fr)`, gridTemplateRows: `auto repeat(${Math.max(rows.length, 1)}, minmax(${rowMin}in, 1fr))` }}>
-            <div className="h l">Item</div>{used.map((z) => <div key={z} className="h">{z}</div>)}<div className="h">Total</div>
-            {rows.map((l) => {
-              const tot = used.reduce((a, z) => a + (+(l.sizes?.[z] || 0)), 0);
-              return [
-                <div key={l.id + "n"} className="it"><b>{l.style || l.garment || "Garment"}</b>{l.color ? <span className="clr">{l.color}</span> : null}</div>,
-                ...used.map((z) => (l.sizes?.[z]
-                  ? <div key={l.id + z} className="c"><span className="o">{l.sizes[z]}</span></div>
-                  : <div key={l.id + z} className="c na" />)),
-                <div key={l.id + "t"} className="c"><span className="o"><b>{tot}</b></span></div>,
-              ];
-            })}
-            {!rows.length && <div className="it" style={{ gridColumn: "1 / -1" }}>No garments entered on this order yet.</div>}
-          </div>
+          {bands.map((band) => (
+            <div key={band.name} className="lb-band" style={{ flexGrow: band.rows.length }}>
+              {bands.length > 1 && <div className="lb-bandname">{band.name}</div>}
+              <div className="lb-grid" style={{ gridTemplateColumns: `minmax(0, 2.5fr) repeat(${Math.max(band.sizes.length, 1)}, minmax(0, 1fr)) minmax(0, 1.1fr)`, gridTemplateRows: `auto repeat(${Math.max(band.rows.length, 1)}, minmax(${rowMin}in, 1fr))` }}>
+                <div className="h l">Item</div>{band.sizes.map((z) => <div key={z} className="h">{z}</div>)}<div className="h">Total</div>
+                {band.rows.map((l) => {
+                  const tot = band.sizes.reduce((a, z) => a + (+(l.sizes?.[z as keyof GLine["sizes"]] || 0)), 0);
+                  return [
+                    <div key={l.id + "n"} className="it"><b>{l.style || l.garment || "Garment"}</b>{l.color ? <span className="clr">{l.color}</span> : null}</div>,
+                    ...band.sizes.map((z) => {
+                      const q = l.sizes?.[z as keyof GLine["sizes"]];
+                      return q ? <div key={l.id + z} className="c"><span className="o">{q}</span></div> : <div key={l.id + z} className="c na" />;
+                    }),
+                    <div key={l.id + "t"} className="c"><span className="o">{tot}</span></div>,
+                  ];
+                })}
+              </div>
+            </div>
+          ))}
+          {!rows.length && <div className="lb-key">No garments entered on this order yet.</div>}
           <div className="lb-key"><span>Small # = qty ordered</span><span>Order total: {totalPcs} pcs</span></div>
           <div className="lb-foot"><div>Packed by</div><div>Date</div><div>Checked</div></div>
         </div>

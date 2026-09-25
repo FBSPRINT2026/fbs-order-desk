@@ -376,3 +376,4 @@ table.pv-grid{border-collapse:separate;border-spacing:0;width:100%}
 .wo .box{border:2px solid #141D2B;border-radius:6px;padding:10px 12px;margin-bottom:12px}
 .wo .artgrid{display:flex;flex-wrap:wrap;gap:10px}
 .wo .artgrid img{max-width:220px;max-height:220px;border:1px solid #C9D0DA}
+.pv-grid th.ysep,.pv-grid td.ysep{border-right:2px solid var(--line);padding-right:6px}

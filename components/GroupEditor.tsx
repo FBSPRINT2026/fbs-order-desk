@@ -1,5 +1,5 @@
 "use client";
-import { LOCATIONS, METHODS, SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { ADULT_SIZES, LOCATIONS, METHODS, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 
 type Props = {
@@ -38,6 +38,9 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
   }
 
   const listId = `styles-${g.id}`;
+  const hasYouthQty = g.lines.some((l) => YOUTH_SIZES.some((z) => l.sizes?.[z]));
+  const showYouth = !!g.youth || hasYouthQty;
+  const cols: string[] = [...(showYouth ? YOUTH_SIZES : []), ...ADULT_SIZES];
   return (
     <section className="line">
       <div className="line-h">
@@ -45,6 +48,9 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         <b className="num">{gc.qty} pcs</b>
         <span className="faint" style={{ fontSize: 12 }}>{gc.qty ? `${gc.tierMin}+ price break` : ""}</span>
         {gc.wholesale && <span className="tag i">Customer-supplied goods</span>}
+        <label className="check" style={{ fontSize: 12, marginLeft: 8 }} title={hasYouthQty ? "Clear youth quantities to hide these columns" : ""}>
+          <input type="checkbox" checked={showYouth} disabled={hasYouthQty} onChange={(e) => update((x) => { x.youth = e.target.checked; })} /> Youth sizes
+        </label>
         <span className="spacer" />
         <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
@@ -59,7 +65,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                 <th style={{ minWidth: 120 }}>Color</th>
                 <th style={{ minWidth: 170 }}>Description</th>
                 {!gc.wholesale && <th style={{ minWidth: 70 }}>Cost</th>}
-                {SIZES.map((s) => <th key={s} className="c">{s}{prices.upcharges[s] ? <small>+{prices.upcharges[s]}</small> : null}</th>)}
+                {cols.map((s) => <th key={s} className={"c" + (s === "YXL" ? " ysep" : "")}>{s}{prices.upcharges[s as keyof typeof prices.upcharges] ? <small>+{prices.upcharges[s as keyof typeof prices.upcharges]}</small> : null}</th>)}
                 <th className="c">Qty</th>
                 <th className="r" style={{ minWidth: 84 }}>Each</th>
                 <th className="r" style={{ minWidth: 84 }}>Total</th>
@@ -83,8 +89,8 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                     </td>
                     <td><input type="text" aria-label="Description" placeholder="Unisex tee" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></td>
                     {!gc.wholesale && <td><input type="number" step="0.01" min="0" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></td>}
-                    {SIZES.map((s) => (
-                      <td key={s} className="c">
+                    {(cols as (keyof GLine["sizes"])[]).map((s) => (
+                      <td key={s} className={"c" + (s === "YXL" ? " ysep" : "")}>
                         <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.[s] ? " has" : "")} aria-label={`${s} quantity`} value={l.sizes?.[s] || ""}
                           onChange={(e) => update((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; })} />
                       </td>
