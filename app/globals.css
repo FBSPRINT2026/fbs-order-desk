@@ -461,4 +461,4 @@ table.imp-table{table-layout:fixed}
 .loc-custom{display:flex;gap:2px;align-items:center}
 .loc-custom input{flex:1 1 auto;min-width:0}
 .loc-custom .btn.icon{flex:none;width:22px;padding:0}
-.cs-banner{background:var(--accent-soft);color:var(--accent);border-bottom:1px solid var(--line);font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.08em;text-transform:uppercase;text-align:center;padding:9px 14px}
+.cs-banner{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface));color:var(--accent);border-bottom:1px solid var(--line);font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.08em;text-transform:uppercase;text-align:center;padding:9px 14px}
