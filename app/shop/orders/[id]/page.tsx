@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, ST, STATUSES, uid,
+  calcOrder, LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, SHIP_METHODS, ST, STATUSES, uid,
   type ArtFile, type Customer, type Delivery, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor from "@/components/GroupEditor";
@@ -376,12 +376,23 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   <div className="field"><label htmlFor="o-po">Customer PO #</label><input id="o-po" type="text" value={o.po_number || ""} onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
                   <div className="field"><label htmlFor="o-prod">Production date</label><input id="o-prod" type="date" value={o.production_date || ""} onChange={(e) => patch((d) => { d.production_date = e.target.value || null; })} /></div>
                   <div className="field"><label htmlFor="o-due">In-hands date</label><input id="o-due" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} /></div>
-                  <div className="field"><label htmlFor="o-del">Delivery</label>
-                    <select id="o-del" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Delivery; if (d.delivery_method !== "pickup" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; })}>
-                      <option value="pickup">Customer pickup</option><option value="ship">Ship</option><option value="deliver">We deliver</option>
+                  <div className="field"><label htmlFor="o-del">Pickup, ship or delivery</label>
+                    <select id="o-del" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Delivery; if (d.delivery_method !== "pickup" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (d.delivery_method === "ship" && !d.ship_method) d.ship_method = "UPS Ground"; })}>
+                      <option value="pickup">Pickup</option><option value="ship">Ship</option><option value="deliver">Delivery</option>
                     </select>
                   </div>
-                  {o.delivery_method === "ship" && <div className="field"><label htmlFor="o-sm">Ship method</label><input id="o-sm" type="text" placeholder="UPS Ground" value={o.ship_method || ""} onChange={(e) => patch((d) => { d.ship_method = e.target.value; })} /></div>}
+                  {o.delivery_method === "ship" && (
+                    <div className="field"><label htmlFor="o-sm">Ship method</label>
+                      <select id="o-sm" value={SHIP_METHODS.includes(o.ship_method) ? o.ship_method : o.ship_method ? "__other" : ""} onChange={(e) => patch((d) => { d.ship_method = e.target.value === "__other" ? " " : e.target.value; })}>
+                        <option value="">Choose…</option>
+                        <optgroup label="UPS">{SHIP_METHODS.filter((m) => m.startsWith("UPS")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
+                        <optgroup label="FedEx">{SHIP_METHODS.filter((m) => m.startsWith("FedEx")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
+                        <optgroup label="USPS">{SHIP_METHODS.filter((m) => m.startsWith("USPS")).map((m) => <option key={m} value={m}>{m}</option>)}</optgroup>
+                        <option value="__other">Other…</option>
+                      </select>
+                      {o.ship_method && !SHIP_METHODS.includes(o.ship_method) && <input type="text" aria-label="Other ship method" placeholder="Freight, customer's account #…" value={o.ship_method.trim()} onChange={(e) => patch((d) => { d.ship_method = e.target.value || " "; })} style={{ marginTop: 4 }} />}
+                    </div>
+                  )}
                 </div>
                 {o.delivery_method !== "pickup" && (
                   <div className="grid g2">

@@ -61,6 +61,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .sz-letter .label { width: 8.5in; height: 5.5in; padding: 0.35in; font-size: 12px; }
         .lb-top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; border-bottom: 2px solid #000; padding-bottom: 3px; gap: 6px; }
         .lb-mid { text-align: center; }
+        .lb-rushtag { margin-left: 5px; border: 1.5px solid #000; padding: 0 3px; font-weight: 800; }
         .lb-top .lb-rush { font-size: 1.3em; padding: 2px 8px; }
         .lb-shiprow { display: flex; gap: 6px; align-items: stretch; }
         .lb-shiprow .lb-ship { flex: 1 1 auto; min-width: 0; }
@@ -141,9 +142,9 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           <div className="lb-top">
             <div className="lb-idrow">
               <span className="lb-no">#{o.number}</span>
-              <span className="lb-shop">{settings.shop.name}</span>
+              <span className="lb-shop">{settings.shop.name}{o.rush ? <span className="lb-rushtag">RUSH</span> : null}</span>
             </div>
-            <div className="lb-mid">{o.rush && <span className="lb-rush">RUSH</span>}</div>
+            <div className="lb-mid"><span className="lb-rush">{o.delivery_method === "ship" ? "SHIP" : o.delivery_method === "deliver" ? "DELIVERY" : "PICKUP"}</span></div>
             <div style={{ textAlign: "right" }}>
               <div className="lb-box">BOX <span className="blank" /> OF <span className="blank" /></div>
             </div>
@@ -174,7 +175,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             )}
             <div className="lb-side">
               <div><span className="k">IN HANDS</span><b>{o.due_date ? fmtDateLong(o.due_date) : "—"}</b></div>
-              <div><span className="k">SHIP VIA</span><b>{o.delivery_method === "pickup" ? "CUSTOMER PICKUP" : o.delivery_method === "deliver" ? "WE DELIVER" : o.ship_method || "—"}</b></div>
+              {o.delivery_method === "ship" && <div><span className="k">SHIP VIA</span><b>{o.ship_method?.trim() || "—"}</b></div>}
               {o.tracking && <div><span className="k">TRACKING</span><b className="trk">{o.tracking}</b></div>}
             </div>
           </div>

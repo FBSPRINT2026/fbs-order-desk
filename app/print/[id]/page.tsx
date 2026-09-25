@@ -7,7 +7,7 @@ import PrintButton from "./PrintButton";
 
 export const dynamic = "force-dynamic";
 
-const DELIVERY: Record<string, string> = { pickup: "Customer pickup", ship: "Ship", deliver: "We deliver" };
+const DELIVERY: Record<string, string> = { pickup: "Pickup", ship: "Ship", deliver: "Delivery" };
 
 // Quote/invoice for customers, or (?work=1, shop only) a work order for the press with no prices.
 export default async function PrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ work?: string }> }) {
@@ -52,7 +52,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
               {o.rush && <div className="wo-rush">RUSH</div>}
               <div><b>Production:</b> {o.production_date ? fmtDateLong(o.production_date) : "not set"}</div>
               <div><b>In hands:</b> {o.due_date ? fmtDateLong(o.due_date) : "not set"}</div>
-              <div><b>Delivery:</b> {DELIVERY[o.delivery_method] || "Customer pickup"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>
+              <div><b>Delivery:</b> {DELIVERY[o.delivery_method] || "Pickup"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>
             </div>
           </div>
           {o.delivery_method !== "pickup" && o.ship_to && <div className="box"><b>{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}:</b><div style={{ whiteSpace: "pre-line" }}>{o.ship_to}</div></div>}

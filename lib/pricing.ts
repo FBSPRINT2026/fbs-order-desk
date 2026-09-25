@@ -25,6 +25,11 @@ export const ST: Record<string, (typeof STATUSES)[number]> = Object.fromEntries(
 
 export const METHODS: Record<string, string> = { screen: "Screen print", embroidery: "Embroidery", dtf: "DTF transfer" };
 export const LOCATIONS = ["Front", "Back", "Left chest", "Right chest", "Left sleeve", "Right sleeve", "Nape", "Hat front"];
+export const SHIP_METHODS = [
+  "UPS Ground", "UPS 3 Day Select", "UPS 2nd Day Air", "UPS Next Day Air",
+  "FedEx Ground", "FedEx Home Delivery", "FedEx Express Saver", "FedEx 2Day", "FedEx Standard Overnight",
+  "USPS Priority Mail", "USPS Ground Advantage",
+];
 export const PAY_METHODS = ["Card", "Cash", "Check", "ACH", "Venmo", "Other"];
 
 export type Method = "screen" | "embroidery" | "dtf";
