@@ -40,7 +40,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   const bc = code128Svg(shipKey, 40).svg;
   // give the write-in rows as much height as the label allows
   const shipBlock = o.delivery_method !== "pickup" && !!o.ship_to;
-  const inboxIn = (shipBlock ? 0.8 : 1) * (size === "letter" ? (rows.length <= 3 ? 0.75 : rows.length <= 5 ? 0.55 : 0.4) : (rows.length <= 2 ? 0.7 : rows.length <= 3 ? 0.55 : rows.length <= 4 ? 0.45 : 0.34));
+  const inboxIn = (shipBlock ? 0.9 : 1.1) * (size === "letter" ? (rows.length <= 3 ? 0.75 : rows.length <= 5 ? 0.55 : 0.4) : (rows.length <= 2 ? 0.7 : rows.length <= 3 ? 0.55 : rows.length <= 4 ? 0.45 : 0.34));
 
   return (
     <div className={`labels-page ${size === "letter" ? "sz-letter" : "sz-4x6"}`}>
@@ -59,7 +59,6 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 10px; font-size: 1em; }
         .lb-meta b { font-weight: 700; }
         .label > * { flex-shrink: 0; }
-        .label > .lb-notes { flex-shrink: 1; }
         .lb-ship { display: flex; border: 2px solid #111; border-radius: 3px; overflow: hidden; }
         .lb-ship .tab { background: #111; color: #fff; font-weight: 800; font-size: .8em; letter-spacing: .12em; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; padding: 4px 3px; white-space: nowrap; }
         .lb-ship .addr { padding: 4px 8px; line-height: 1.25; }
@@ -84,8 +83,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb-bc .bars svg { width: 100%; height: 100%; display: block; }
         .lb-bc .hr { font-family: "Courier New", monospace; font-weight: 700; letter-spacing: .2em; font-size: 1.05em; }
         .lb-bcnote { font-size: .8em; color: #555; line-height: 1.25; }
-        .lb-notes { flex: 1; min-height: 0.25in; border: 1px dashed #999; padding: 3px 5px; color: #777; font-size: .9em; }
-        .lb-foot { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; font-size: .95em; border-top: 1px solid #111; padding-top: 4px; }
+        .lb-foot { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; font-size: .95em; border-top: 1px solid #111; padding-top: 4px; }
         .lb-foot div { border-bottom: 1px solid #111; padding-bottom: 10px; }
         .lb-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 1.05em; }
         @media print {
@@ -152,7 +150,6 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             </tbody>
           </table>
           <div className="lb-total"><span>Order total: {totalPcs} pcs</span><span>This box: ______ pcs</span></div>
-          <div className="lb-notes">Notes</div>
           <div className="lb-foot"><div>Packed by</div><div>Date</div><div>Checked</div></div>
         </div>
       ))}
