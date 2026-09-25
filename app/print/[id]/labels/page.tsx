@@ -83,7 +83,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .label > * { flex-shrink: 0; }
         .lb-ship { display: flex; border: 1.5px solid #000; border-radius: 3px; overflow: hidden; }
         .lb-ship .tab { background: #000; color: #fff; font-weight: 800; font-size: .8em; letter-spacing: .12em; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; padding: 2px 1px; white-space: nowrap; font-size: .8em; }
-        .lb-ship .addr { padding: 3px 6px; line-height: 1.2; font-size: 1.05em; font-weight: 700; text-transform: uppercase; }
+        .lb-ship .addr { padding: 3px 6px; line-height: 1.2; font-size: .9em; font-weight: 700; text-transform: uppercase; }
         .lb-ship .co, .lb-ship .attn, .lb-ship .lines { font-size: 1em; font-weight: 700; }
         .lb-ship .lines { white-space: pre-line; }
         .lb-box { display: inline-flex; align-items: flex-end; gap: 5px; font-weight: 800; font-size: 1.6em; line-height: 1; white-space: nowrap; }
