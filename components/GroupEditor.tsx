@@ -31,9 +31,10 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
       l.style = style;
       const hit = findStyle(style);
       if (hit) {
-        if (!l.garment) l.garment = hit.description;
-        if (!l.brand) l.brand = hit.brand;
-        if (!gc.wholesale && (l.cost === "" || l.cost === 0)) l.cost = +hit.cost || "";
+        // picking a catalog style always refreshes its details and blank cost
+        l.garment = hit.description;
+        l.brand = hit.brand;
+        if (!gc.wholesale) l.cost = +hit.cost || "";
       }
     });
   }
