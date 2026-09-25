@@ -70,6 +70,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
       </div>
       <div className="line-b">
         <datalist id={listId}>{catalog.map((c) => <option key={c.id} value={c.style}>{[c.brand, c.description].filter(Boolean).join(" ")}</option>)}</datalist>
+        <div className="lbl" style={{ marginBottom: -4 }}>GARMENTS</div>
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head">
             <span className="a-st">Style #</span><span className="a-br">Brand</span><span className="a-co">Color</span><span className="a-de">Description</span>
@@ -131,7 +132,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           <button className="btn sm ghost" type="button" onClick={() => update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, id: uid(), color: "", sizes: {}, priceOverride: null }); })}>+ Same style, new color</button>
         </div>
         <div className={"gl-row grp-total" + (gc.wholesale ? " ws" : "")}>
-          <span className="a-de r"><span className="lbl2">Total pieces</span>{gc.qty ? <span className="faint"> · {gc.tierMin}+ price break</span> : null}</span>
+          <span className="a-de r"><span className="lbl2">Total pieces</span></span>
           <b className="a-qt c num">{gc.qty}</b>
           <b className="a-to r num">{money(gc.sub)}</b>
         </div>
@@ -165,19 +166,20 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         </div>
 
         {settings.finishing.length > 0 && (
-          <div className="row" style={{ gap: 14 }}>
-            <span className="lbl">FINISHING</span>
+          <div className="imprints">
+            <div className="lbl" style={{ marginBottom: 6 }}>FINISHING</div>
+            <div className="row" style={{ gap: 14 }}>
             {settings.finishing.map((f) => (
               <label key={f.id} className="check" style={{ fontSize: 13 }}>
                 <input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => update((x) => { const set = new Set(x.finishing || []); if (e.target.checked) set.add(f.id); else set.delete(f.id); x.finishing = [...set]; })} />
                 {f.name} <span className="faint">({money(f.price)}/pc)</span>
               </label>
             ))}
+            </div>
           </div>
         )}
-        {gc.belowMin && <div className="warnline">{gc.qty} pcs is under your {prices.tiers[0]}-piece minimum. Priced at the {prices.tiers[0]}+ break.</div>}
         <div className="price-strip">
-          <div className="calc">Print <b>{money(gc.printEach)}</b>/pc{gc.finishEach ? <> + finishing <b>{money(gc.finishEach)}</b>/pc</> : null} · {gc.qty} pcs at the {gc.tierMin}+ break{gc.setup ? ` · setup ${money(gc.setup)}` : ""}{gc.inkFees ? ` (incl. ${money(gc.inkFees)} ink changes)` : ""}{gc.materials ? ` · 2XL+ Materials Charge ${money(gc.materials)}` : ""}</div>
+          <div className="calc">Print <b>{money(gc.printEach)}</b>/pc{gc.finishEach ? <> + finishing <b>{money(gc.finishEach)}</b>/pc</> : null} · {gc.qty} pcs{gc.setup ? ` · setup ${money(gc.setup)}` : ""}{gc.inkFees ? ` (incl. ${money(gc.inkFees)} ink changes)` : ""}{gc.materials ? ` · 2XL+ Materials Charge ${money(gc.materials)}` : ""}</div>
           <div className="lt"><div className="sub">Group total</div><b>{money(gc.sub + gc.setup + gc.materials)}</b></div>
         </div>
       </div>
