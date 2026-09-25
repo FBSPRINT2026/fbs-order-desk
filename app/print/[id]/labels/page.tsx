@@ -152,7 +152,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
               return (
                 <div key={l.id} className="lb-item">
                   <span className="cb" />
-                  <span className="nm"><b>{[l.style, l.color].filter(Boolean).join(" · ") || "Garment"}</b>{l.garment ? <span className="ds"> {l.garment}</span> : null}</span>
+                  <span className="nm"><b>{[l.style, l.color].filter(Boolean).join(" · ") || l.garment || "Garment"}</b></span>
                   <span className="q">{tot}</span>
                 </div>
               );
