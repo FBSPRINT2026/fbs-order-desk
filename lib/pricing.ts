@@ -110,7 +110,7 @@ export const DEFAULT_SETTINGS: Settings = {
   markup: 50,
   taxRate: 8.25,
   depositPct: 50,
-  upcharges: { "2XL": 2, "3XL": 3, "4XL": 4, "5XL": 5 }, // 2XL+ material fees (per piece, billed as their own line)
+  upcharges: { "2XL": 2, "3XL": 3, "4XL": 4, "5XL": 5 }, // 2XL+ Materials Charge (per piece, billed as their own line)
   tiers: [12, 24, 48, 72, 144, 288, 500],
   screen: [
     [4.5, 5.5, 6.5, 7.5, 8.5, 9.5],
@@ -254,7 +254,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     SIZES.forEach((sz) => {
       const q = num(l.sizes?.[sz]);
       const up = num(pl.upcharges?.[sz]);
-      sub += q * each; // 2XL+ material fees are billed as their own line
+      sub += q * each; // 2XL+ Materials Charge are billed as their own line
       upTotal += q * up;
     });
     return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
@@ -275,7 +275,7 @@ export function calcOrder(
   const lines = groups.flatMap((g) => g.lines);
   const items = r2(groups.reduce((a, g) => a + g.sub, 0));
   const setup = r2(groups.reduce((a, g) => a + g.setup, 0));
-  const materials = r2(groups.reduce((a, g) => a + g.materials, 0)); // 2XL+ material fees
+  const materials = r2(groups.reduce((a, g) => a + g.materials, 0)); // 2XL+ Materials Charge
   const fees = r2((o.fees || []).reduce((a, f) => a + num(f.amount), 0));
   const pre = items + setup + materials + fees;
   const discount = r2((pre * num(o.discount_pct)) / 100);

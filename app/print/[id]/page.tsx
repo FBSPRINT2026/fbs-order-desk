@@ -127,7 +127,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
           <tbody>
             {groups.map((g, gi) => <GroupRows key={g.id} g={g} gc={c.groups[gi]} />)}
             {c.setup > 0 && <tr><td>Setup (screens / digitizing)</td><td /><td /><td className="r">{money(c.setup)}</td></tr>}
-            {c.materials > 0 && <tr><td>2XL+ material fees</td><td /><td /><td className="r">{money(c.materials)}</td></tr>}
+            {c.materials > 0 && <tr><td>2XL+ Materials Charge</td><td /><td /><td className="r">{money(c.materials)}</td></tr>}
             {o.fees.filter((f) => +f.amount).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td /><td /><td className="r">{money(+f.amount)}</td></tr>)}
           </tbody>
         </table>
