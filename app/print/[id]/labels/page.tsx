@@ -94,8 +94,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb th { background: #000; color: #fff; font-weight: 700; }
         .lb-band { flex-shrink: 1 !important; flex-basis: auto !important; display: flex; flex-direction: row; min-height: 0; }
         .lb-band .lb-grid { flex: 1 1 auto !important; min-width: 0; }
-        .lb-band.tabbed .lb-grid { border-right-width: 0; border-radius: 0; }
-        .lb-bandtab { flex: none; background: #000; color: #fff; font-weight: 800; font-size: .8em; letter-spacing: .12em; writing-mode: vertical-rl; text-align: center; padding: 2px 1px; white-space: nowrap; border-radius: 0 3px 3px 0; }
+        .lb-band.tabbed .lb-grid { border-left-width: 0; border-radius: 0; }
+        .lb-bandtab { flex: none; background: #000; color: #fff; font-weight: 800; font-size: .8em; letter-spacing: .12em; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; padding: 2px 1px; white-space: nowrap; border-radius: 0 3px 3px 0; }
         .lb-grid { flex: 1 1 auto !important; display: grid; border: 2px solid #000; min-height: 0; }
         .lb-grid > div { border-right: 1.5px solid #000; border-bottom: 1.5px solid #000; min-width: 0; }
         .lb-grid .h { background: #000; color: #fff; font-weight: 800; padding: 2px 0; text-align: center; border-color: #fff; border-right-width: 1px; }
@@ -184,6 +184,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
 
           {bands.map((band) => (
             <div key={band.name} className={"lb-band" + (bands.length > 1 ? " tabbed" : "")} style={{ flexGrow: band.rows.length }}>
+              {bands.length > 1 && <div className="lb-bandtab">{band.name}</div>}
               <div className="lb-grid" style={{ gridTemplateColumns: `minmax(0, 2.5fr) repeat(${Math.max(band.sizes.length, 1)}, minmax(0, 1fr)) minmax(0, 1.1fr)`, gridTemplateRows: `auto repeat(${Math.max(band.rows.length, 1)}, minmax(${rowMin}in, 1fr))` }}>
                 <div className="h l">Item</div>{band.sizes.map((z) => <div key={z} className="h">{z}</div>)}<div className="h">Total</div>
                 {band.rows.map((l) => {
@@ -198,7 +199,6 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
                   ];
                 })}
               </div>
-              {bands.length > 1 && <div className="lb-bandtab">{band.name}</div>}
             </div>
           ))}
           {!rows.length && <div className="lb-key">No garments entered on this order yet.</div>}
