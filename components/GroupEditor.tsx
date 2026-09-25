@@ -69,6 +69,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
             const lc = gc.lines[li];
             const hit = findStyle(l.style);
             const colorsId = `colors-${l.id}`;
+            const sized = !l.oneSize && lineTotal(l) > 0; // sizes entered below, so Qty is their total
             const setQty = (s: keyof GLine["sizes"], raw: string) => update((x) => { const v = Math.max(0, Math.floor(+raw || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; });
             return (
               <div key={l.id} className="gl">
@@ -83,36 +84,38 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                   </div>
                   <div className="a-de"><input type="text" aria-label="Description" placeholder={l.oneSize ? "Description (hat, koozie…)" : "Description (unisex tee)"} value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
                   {!gc.wholesale && <div className="a-cs"><input type="number" step="0.01" min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
-                  <div className="a-qt c tot">{lc?.qty ?? 0}</div>
+                  <div className="a-qt c">
+                    {/* Qty is the sum of the sizes. With no sizes entered, typing here makes it a one-size item (hats, koozies). */}
+                    <input type="number" min="0" step="1" inputMode="numeric" tabIndex={-1} className={"pre qty" + (sized ? " locked" : "")} readOnly={sized}
+                      title={sized ? "Total of the sizes below. Clear the sizes to type a single qty." : "Click to enter a qty for a one-size item (hats, koozies, bags)"}
+                      value={sized ? lc?.qty ?? 0 : l.sizes?.OS || ""} placeholder="0"
+                      onChange={(e) => { if (sized) return; update((x) => { const r = x.lines[li]; const v = Math.max(0, Math.floor(+e.target.value || 0)); r.oneSize = v > 0; r.sizes = v ? { [ONE_SIZE]: v } : {}; }); }} />
+                  </div>
                   <div className="a-ea r"><input type="number" step="0.01" min="0" tabIndex={-1} title="Click to override" aria-label="Price each" className={"pre" + (lc?.hasOv ? " ov" : "")} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })} /></div>
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
                   <div className="a-x">{g.lines.length > 1 && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}</div>
                 </div>
-                <div className="szrow">
-                  {l.oneSize ? (
-                    <label className="szc os">
-                      <span>One size qty</span>
-                      <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.OS ? " has" : "")} value={l.sizes?.OS || ""}
-                        onChange={(e) => update((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); x.lines[li].sizes = v ? { OS: v } : {}; })} />
-                    </label>
-                  ) : (cols as (keyof GLine["sizes"])[]).map((s) => {
-                    const up = prices.upcharges[s as keyof typeof prices.upcharges];
-                    return (
-                      <label key={s} className={"szc" + (s === "YXL" ? " ysep" : "")}>
-                        <span>{s}{up ? <small>+{up}</small> : null}</span>
-                        <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.[s] ? " has" : "")} value={l.sizes?.[s] || ""} onChange={(e) => setQty(s, e.target.value)} />
-                      </label>
-                    );
-                  })}
-                  <button className="linkbtn szmode" type="button" tabIndex={-1} title={l.oneSize ? "Switch back to a size run" : "Hats, koozies, bags: one quantity, no sizes"} onClick={() => update((x) => { const r = x.lines[li]; const q = lineTotal(r); r.oneSize = !r.oneSize; r.sizes = r.oneSize && q ? { [ONE_SIZE]: q } : {}; })}>{l.oneSize ? "Use sizes" : "One size item"}</button>
-                </div>
+                {l.oneSize ? (
+                  <div className="os-note">One-size item. Clear the Qty to switch back to sizes.</div>
+                ) : (
+                  <div className="szrow">
+                    {(cols as (keyof GLine["sizes"])[]).map((s) => {
+                      const up = prices.upcharges[s as keyof typeof prices.upcharges];
+                      return (
+                        <label key={s} className={"szc" + (s === "YXL" ? " ysep" : "")}>
+                          <span>{s}{up ? <small>+{up}</small> : null}</span>
+                          <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.[s] ? " has" : "")} value={l.sizes?.[s] || ""} onChange={(e) => setQty(s, e.target.value)} />
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
         <div className="row">
           <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push(newGLine()); })}>+ Add garment</button>
-          <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push({ ...newGLine(), oneSize: true }); })}>+ One-size item</button>
           <button className="btn sm ghost" type="button" onClick={() => update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, id: uid(), color: "", sizes: {}, priceOverride: null }); })}>+ Same style, new color</button>
         </div>
 

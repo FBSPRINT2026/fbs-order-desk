@@ -384,8 +384,8 @@ table.pv-grid{border-collapse:separate;border-spacing:0;width:100%}
 /* Garment rows: info on top, a wrapping size strip beneath, so the editor never scrolls sideways */
 .line{container-type:inline-size}
 .gl-list{display:flex;flex-direction:column}
-.gl-row{display:grid;gap:6px;align-items:start;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr) 72px 48px 88px 92px 30px;grid-template-areas:"st co de cs qt ea to x"}
-.gl-list.ws .gl-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr) 48px 88px 92px 30px;grid-template-areas:"st co de qt ea to x"}
+.gl-row{display:grid;gap:6px;align-items:start;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr) 72px 58px 88px 92px 30px;grid-template-areas:"st co de cs qt ea to x"}
+.gl-list.ws .gl-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr) 58px 88px 92px 30px;grid-template-areas:"st co de qt ea to x"}
 .a-st{grid-area:st;min-width:0}.a-co{grid-area:co;min-width:0}.a-de{grid-area:de;min-width:0}.a-cs{grid-area:cs;min-width:0}.a-qt{grid-area:qt}.a-ea{grid-area:ea;min-width:0}.a-to{grid-area:to}.a-x{grid-area:x}
 .gl-head{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding-bottom:2px}
 .gl-head .c,.gl-row .c{text-align:center}
@@ -423,3 +423,8 @@ table.imp-table{table-layout:fixed}
 .gl-row input.pre:hover{border-color:var(--line);background:var(--surface)}
 .gl-row input.pre:focus{border-color:var(--accent);background:var(--surface);cursor:text}
 .gl-row input.pre.ov{border-color:var(--warn);background:var(--warn-soft)}
+.gl-row input.qty{text-align:center;font-family:var(--mono);font-weight:600;padding:6px 2px}
+.gl-row input.pre.locked{cursor:default}
+.gl-row input.pre.locked:hover,.gl-row input.pre.locked:focus{border-color:transparent;background:transparent}
+.gl-row input.qty::-webkit-inner-spin-button,.gl-row input.qty::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.os-note{font-size:12px;color:var(--ink-3)}
