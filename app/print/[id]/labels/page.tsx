@@ -60,13 +60,22 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .label { background: #fff; margin: 0 auto 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
         .sz-4x6 .label { width: 4in; height: 6in; padding: 0.16in; font-size: 11px; }
         .sz-letter .label { width: 8.5in; height: 5.5in; padding: 0.35in; font-size: 12px; }
-        .lb-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 3px; gap: 6px; }
-        .lb-idrow { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+        .lb-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; border-bottom: 2px solid #000; padding-bottom: 3px; gap: 6px; }
+        .lb-mid { text-align: center; }
+        .lb-top .lb-rush { font-size: 1.3em; padding: 2px 8px; }
+        .lb-shiprow { display: flex; gap: 6px; align-items: stretch; }
+        .lb-shiprow .lb-ship { flex: 1 1 auto; min-width: 0; }
+        .lb-side { flex: 0 0 31%; border: 1.5px solid #000; border-radius: 3px; padding: 3px 5px; display: flex; flex-direction: column; justify-content: center; gap: 3px; line-height: 1.1; }
+        .lb-side > div { display: flex; flex-direction: column; }
+        .lb-side .k { font-size: .72em; font-weight: 800; letter-spacing: .08em; }
+        .lb-side b { font-size: .98em; overflow-wrap: anywhere; }
+        .lb-side b.trk { font-size: .85em; }
+        .lb-idrow { display: flex; flex-direction: column; line-height: 1; gap: 1px; }
         .lb-dm { font-weight: 700; font-size: .95em; }
         .lb-info { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
         .lb-infotext { min-width: 0; flex: 1; }
         .lb-shop { font-size: .95em; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-        .lb-no { font-size: 1.9em; font-weight: 800; line-height: 1; letter-spacing: -.01em; }
+        .lb-no { font-size: 1.8em; font-weight: 800; line-height: 1; letter-spacing: -.01em; }
         .lb-rush { background: #000; color: #fff; font-weight: 800; padding: 1px 5px; letter-spacing: .1em; font-size: .95em; }
         .lb-cust { font-size: 1.35em; font-weight: 800; line-height: 1.1; }
         .lb-job { font-size: 1.1em; font-weight: 700; line-height: 1.2; }
@@ -76,10 +85,10 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lb-ship { display: flex; border: 1.5px solid #000; border-radius: 3px; overflow: hidden; }
         .lb-ship .tab { background: #000; color: #fff; font-weight: 800; font-size: .8em; letter-spacing: .12em; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; padding: 2px 1px; white-space: nowrap; font-size: .8em; }
         .lb-ship .addr { padding: 2px 6px; line-height: 1.15; }
-        .lb-ship .co { font-size: 1.1em; font-weight: 800; text-transform: uppercase; }
+        .lb-ship .co { font-size: 1em; font-weight: 800; text-transform: uppercase; }
         .lb-ship .attn { font-size: .95em; font-weight: 600; }
         .lb-ship .lines { font-size: 1.05em; font-weight: 600; white-space: pre-line; text-transform: uppercase; }
-        .lb-box { display: flex; align-items: center; gap: 5px; font-weight: 800; font-size: 1.2em; }
+        .lb-box { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; font-size: 1.05em; white-space: nowrap; }
         .lb-box span.blank { display: inline-block; min-width: 1.6em; border-bottom: 2px solid #000; text-align: center; }
         table.lb { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .lb th, .lb td { border: 1px solid #000; padding: 2px 2px; text-align: center; font-size: 1em; }
@@ -132,35 +141,45 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           <div className="lb-top">
             <div className="lb-idrow">
               <span className="lb-no">#{o.number}</span>
-              {o.rush && <span className="lb-rush">RUSH</span>}
               <span className="lb-shop">{settings.shop.name}</span>
             </div>
+            <div className="lb-mid">{o.rush && <span className="lb-rush">RUSH</span>}</div>
             <div style={{ textAlign: "right" }}>
               <div className="lb-box">BOX <span className="blank">{boxes > 1 ? bi + 1 : ""}</span> OF <span className="blank">{boxes > 1 ? boxes : ""}</span></div>
               <div className="lb-dm">{DELIVERY[o.delivery_method] || "PICKUP"}</div>
             </div>
           </div>
           <div className="lb-info">
-            <div className="lb-infotext">
-              {!shipBlock && <div className="lb-cust">{cust.company || cust.name || "No customer"}</div>}
-              {!shipBlock && cust.company && cust.name && <div>{cust.name}{cust.phone ? ` · ${cust.phone}` : ""}</div>}
-              <div className="lb-job">{o.nickname || "Untitled job"}</div>
-              <div className="lb-meta">
-                {[o.po_number ? `PO ${o.po_number}` : "", o.due_date ? `In hands ${fmtDateLong(o.due_date)}` : "", o.ship_method || "", o.tracking ? `Trk ${o.tracking}` : ""].filter(Boolean).join(" · ")}
-              </div>
-            </div>
+            <div className="lb-infotext"><div className="lb-job">{o.nickname || "Untitled job"}</div></div>
             <div className="lb-bc"><div className="bars" style={{ width: `${bcWidthIn}in` }} dangerouslySetInnerHTML={{ __html: bc }} /><div className="hr">{shipKey}</div></div>
           </div>
-          {o.delivery_method !== "pickup" && o.ship_to && (
-            <div className="lb-ship">
-              <div className="tab">{o.delivery_method === "ship" ? "SHIP TO" : "DELIVER TO"}</div>
-              <div className="addr">
-                <div className="co">{cust.company || cust.name}</div>
-                <div className="lines">{o.ship_to.trim()}</div>
-                {(cust.company && cust.name) || cust.phone ? <div className="attn">{[cust.company && cust.name ? `ATTN: ${cust.name}` : "", cust.phone || ""].filter(Boolean).join(" · ")}</div> : null}
+          <div className="lb-shiprow">
+            {shipBlock ? (
+              <div className="lb-ship">
+                <div className="tab">{o.delivery_method === "ship" ? "SHIP TO" : "DELIVER TO"}</div>
+                <div className="addr">
+                  <div className="co">{cust.company || cust.name}</div>
+                  <div className="lines">{o.ship_to.trim()}</div>
+                  {(cust.company && cust.name) || cust.phone ? <div className="attn">{[cust.company && cust.name ? `ATTN: ${cust.name}` : "", cust.phone || ""].filter(Boolean).join(" · ")}</div> : null}
+                </div>
               </div>
+            ) : (
+              <div className="lb-ship">
+                <div className="tab">CUSTOMER</div>
+                <div className="addr">
+                  <div className="co">{cust.company || cust.name || "No customer"}</div>
+                  {cust.company && cust.name && <div className="attn">{cust.name}</div>}
+                  {cust.phone && <div className="attn">{cust.phone}</div>}
+                </div>
+              </div>
+            )}
+            <div className="lb-side">
+              <div><span className="k">IN HANDS</span><b>{o.due_date ? fmtDateLong(o.due_date) : "—"}</b></div>
+              {o.po_number && <div><span className="k">PO</span><b>{o.po_number}</b></div>}
+              <div><span className="k">{o.delivery_method === "ship" ? "SHIP VIA" : "DELIVERY"}</span><b>{o.delivery_method === "ship" ? o.ship_method || "—" : o.delivery_method === "deliver" ? "We deliver" : "Pickup"}</b></div>
+              {o.tracking && <div><span className="k">TRACKING</span><b className="trk">{o.tracking}</b></div>}
             </div>
-          )}
+          </div>
 
           {bands.map((band) => (
             <div key={band.name} className="lb-band" style={{ flexGrow: band.rows.length }}>
