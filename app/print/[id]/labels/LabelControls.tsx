@@ -20,7 +20,7 @@ export default function LabelControls({ boxes, size, tight }: { boxes: number; s
       </label>
       <button type="button" onClick={() => window.print()} style={{ padding: "7px 14px", fontWeight: 600, background: "#0A7BA6", color: "#fff", border: 0, borderRadius: 6, cursor: "pointer" }}>Print labels</button>
       {tight && <span style={{ color: "#B8392A", fontWeight: 600 }}>This order has a lot of garments for a 4×6 label. Switch to half sheet if rows get cut off.</span>}
-      <span style={{ color: "#555" }}>Each label lists everything ordered. Your team writes what&apos;s in that box in the blank row.</span>
+      <span style={{ color: "#555" }}>Zebra tip: in the print window choose your Zebra printer, paper size 4×6, margins None, and scale 100% (Actual size).</span>
     </div>
   );
 }
