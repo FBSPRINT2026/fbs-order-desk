@@ -45,6 +45,8 @@ export type GLine = {
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
   /** One-size item (hat, koozie, bag): a single quantity instead of a size run. */
   oneSize?: boolean;
+  /** Sizes this garment comes in, copied from the catalog when the style is picked. */
+  sizeRun?: string[];
 };
 /** Garments that share the same imprints. Quantity breaks use the group total. */
 export type Group = { id: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[]; youth?: boolean };
@@ -66,7 +68,7 @@ export type Order = {
   approved_name: string | null; created_at: string; updated_at: string;
   price_type: PriceType; po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
 };
-export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number };
+export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[] };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string };
 export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType };
@@ -79,7 +81,19 @@ export type PriceList = {
   tiers: number[]; screen: number[][]; embroidery: number[]; dtf: number[];
   screenFee: number; digitizing: number; inkChangeFee: number;
   upcharges: Partial<Record<Size, number>>;
+  /** Optional all-inclusive retail model (ooshirts style). All arrays are per tier. */
+  blankAdd?: number[];        // added to each garment's price (handling / shipping built in)
+  screenLight?: number[][];   // screen print per location on light garments (screen = dark garments)
+  dtg?: number[];             // full-color digital print per location, dark garments
+  dtgLight?: number[];        // full-color digital print per location, light garments
+  lightColors?: string[];     // garment colors priced as light
 };
+export const FULL_COLOR = 11;
+/** True when a garment color is on the light-garment list. */
+export function isLightColor(color: string, pl: Pick<PriceList, "lightColors">) {
+  const c = (color || "").trim().toLowerCase().replace(/^sports /, "sport ");
+  return !!c && (pl.lightColors || []).some((x) => x.trim().toLowerCase().replace(/^sports /, "sport ") === c);
+}
 export type Finishing = { id: string; name: string; price: number };
 export type Settings = PriceList & {
   shop: { name: string; address: string; phone: string; email: string; terms: string; logoUrl: string };
@@ -175,31 +189,55 @@ export function orderGroups(o: Pick<Order, "groups" | "lines">): Group[] {
   }));
 }
 
-function imprintPrice(d: Imprint, ti: number, s: PriceList) {
+function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false) {
   const inkFee = num(d.inkChanges) * num(s.inkChangeFee);
   if (d.method === "screen") {
-    const n = Math.min(6, Math.max(1, num(d.colors) || 1));
-    return { each: num(s.screen[ti]?.[n - 1]), setup: n * num(s.screenFee), inkFee };
+    const k = Math.max(1, num(d.colors) || 1);
+    const full = k >= FULL_COLOR;
+    if (s.dtg && full) {
+      const each = num((light && s.dtgLight ? s.dtgLight : s.dtg)[ti]);
+      return { each, setup: 0, inkFee, dtg: each, full: true };
+    }
+    const row = (light && s.screenLight ? s.screenLight : s.screen)[ti] || [];
+    const n = Math.min(row.length || 6, k);
+    const dtg = s.dtg ? num((light && s.dtgLight ? s.dtgLight : s.dtg)[ti]) : 0;
+    return { each: num(row[n - 1]), setup: Math.min(n, 10) * num(s.screenFee), inkFee, dtg, full: false };
   }
   if (d.method === "embroidery") return { each: num(s.embroidery[ti]), setup: num(s.digitizing), inkFee };
   if (d.method === "dtf") return { each: num(s.dtf[ti]), setup: 0, inkFee };
   return { each: 0, setup: 0, inkFee };
 }
 
-export type LineCalc = { id: string; qty: number; garmentEach: number; calcEach: number; each: number; hasOv: boolean; sub: number; upTotal: number };
+export type LineCalc = { id: string; qty: number; garmentEach: number; printEach: number; light: boolean; calcEach: number; each: number; hasOv: boolean; sub: number; upTotal: number };
 export type GroupCalc = ReturnType<typeof calcGroup>;
 export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType }, s: Settings) {
   const pl = priceList(s, o.price_type || "retail");
   const qty = (g.lines || []).reduce((a, l) => a + lineQty(l), 0);
   const ti = tierIndex(qty, pl);
   const imprints = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl) }));
-  const printEach = r2(imprints.reduce((a, d) => a + d.each, 0));
+  // Print price per piece. With a digital (full color) price list, screen prints switch to digital
+  // for the whole garment when that is cheaper, or when any location is full color.
+  const printFor = (light: boolean) => {
+    const imps = light ? (g.imprints || []).map((d) => imprintPrice(d, ti, pl, true)) : imprints;
+    const other = imps.filter((_, i) => (g.imprints || [])[i]?.method !== "screen").reduce((a, d) => a + d.each, 0);
+    const scr = imps.filter((_, i) => (g.imprints || [])[i]?.method === "screen");
+    let screenPart = scr.reduce((a, d) => a + d.each, 0);
+    if (pl.dtg && scr.length) {
+      const digital = scr.reduce((a, d) => a + num(d.dtg), 0);
+      screenPart = scr.some((d) => d.full) ? digital : Math.min(screenPart, digital);
+    }
+    return r2(other + screenPart);
+  };
+  const printEach = printFor(false);
+  const printLight = pl.screenLight || pl.dtgLight ? printFor(true) : printEach;
   const finishing = (g.finishing || []).map((fid) => s.finishing.find((f) => f.id === fid)).filter(Boolean) as Finishing[];
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
   const lines: LineCalc[] = (g.lines || []).map((l) => {
     const lq = lineQty(l);
-    const garmentEach = pl.useGarment ? r2(num(l.cost) * (1 + num(pl.markup) / 100)) : 0;
-    const calcEach = r2(garmentEach + printEach + finishEach);
+    const garmentEach = pl.useGarment ? r2(num(l.cost) * (1 + num(pl.markup) / 100) + num(pl.blankAdd?.[ti])) : 0;
+    const light = isLightColor(l.color, pl);
+    const linePrint = light ? printLight : printEach;
+    const calcEach = r2(garmentEach + linePrint + finishEach);
     const hasOv = l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride);
     const each = hasOv ? r2(+(l.priceOverride as number)) : calcEach;
     let sub = 0, upTotal = 0;
@@ -209,7 +247,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
       sub += q * (each + up);
       upTotal += q * up;
     });
-    return { id: l.id, qty: lq, garmentEach, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
+    return { id: l.id, qty: lq, garmentEach, printEach: linePrint, light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
   });
   const screens = o.waive_setup ? 0 : imprints.reduce((a, d) => a + d.setup, 0);
   const inkFees = imprints.reduce((a, d) => a + d.inkFee, 0);
@@ -256,7 +294,7 @@ export const isYouth = (z: string) => (YOUTH_SIZES as readonly string[]).include
 /** Short description of an imprint for invoices and the portal. */
 export function imprintLabel(d: Imprint) {
   const parts = [`${METHODS[d.method] || d.method} ${d.location}`.trim()];
-  if (d.method === "screen") parts.push(`${d.colors} color${d.colors > 1 ? "s" : ""}`);
+  if (d.method === "screen") parts.push(d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`);
   if (d.inks) parts.push(d.inks);
   if (d.size) parts.push(d.size);
   if (d.inkChanges) parts.push(`${d.inkChanges} ink change${d.inkChanges > 1 ? "s" : ""}`);

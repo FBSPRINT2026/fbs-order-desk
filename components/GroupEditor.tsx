@@ -1,5 +1,5 @@
 "use client";
-import { ADULT_SIZES, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { ADULT_SIZES, FULL_COLOR, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 
 type Props = {
@@ -35,14 +35,30 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         l.garment = hit.description;
         l.brand = hit.brand;
         if (!gc.wholesale) l.cost = +hit.cost || "";
+        // the catalog decides which sizes this garment comes in
+        const run = (hit.sizes || []).filter((z) => (SIZES as readonly string[]).includes(z));
+        if (run.length) {
+          const os = run.length === 1 && run[0] === ONE_SIZE;
+          const keep: GLine["sizes"] = {};
+          if (os) { const q = lineTotal(l); if (q) keep[ONE_SIZE] = q; }
+          else for (const z of run) { const v = l.sizes?.[z as keyof GLine["sizes"]]; if (v) keep[z as keyof GLine["sizes"]] = v; }
+          l.sizes = keep;
+          l.sizeRun = run;
+          l.oneSize = os;
+        }
       }
     });
   }
 
   const listId = `styles-${g.id}`;
-  const hasYouthQty = g.lines.some((l) => YOUTH_SIZES.some((z) => l.sizes?.[z]));
-  const showYouth = !!g.youth || hasYouthQty;
-  const cols: string[] = [...(showYouth ? YOUTH_SIZES : []), ...ADULT_SIZES];
+  // Sizes shown for a row: the catalog's size run for that style, otherwise the adult run
+  // (plus youth if the row already has youth quantities from an older order).
+  const colsFor = (l: GLine): string[] => {
+    const run = (l.sizeRun || []).filter((z) => z !== ONE_SIZE);
+    if (run.length) return run;
+    const youth = !!g.youth || YOUTH_SIZES.some((z) => l.sizes?.[z]);
+    return [...(youth ? YOUTH_SIZES : []), ...ADULT_SIZES];
+  };
   return (
     <section className="line">
       <div className="line-h">
@@ -50,9 +66,6 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         <b className="num">{gc.qty} pcs</b>
         <span className="faint" style={{ fontSize: 12 }}>{gc.qty ? `${gc.tierMin}+ price break` : ""}</span>
         {gc.wholesale && <span className="tag i">Customer-supplied goods</span>}
-        <label className="check" style={{ fontSize: 12, marginLeft: 8 }} title={hasYouthQty ? "Clear youth quantities to hide these columns" : ""}>
-          <input type="checkbox" checked={showYouth} disabled={hasYouthQty} onChange={(e) => update((x) => { x.youth = e.target.checked; })} /> Youth sizes
-        </label>
         <span className="spacer" />
         <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
@@ -86,23 +99,23 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                   {!gc.wholesale && <div className="a-cs"><input type="number" step="0.01" min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
                   <div className="a-qt c">
                     {/* Qty is the sum of the sizes. With no sizes entered, typing here makes it a one-size item (hats, koozies). */}
-                    <input type="number" min="0" step="1" inputMode="numeric" tabIndex={-1} className={"pre qty" + (sized ? " locked" : "")} readOnly={sized}
+                    <input type="number" min="0" step="1" inputMode="numeric" tabIndex={l.oneSize ? 0 : -1} className={"pre qty" + (sized ? " locked" : "")} readOnly={sized}
                       title={sized ? "Total of the sizes below. Clear the sizes to type a single qty." : "Click to enter a qty for a one-size item (hats, koozies, bags)"}
                       value={sized ? lc?.qty ?? 0 : l.sizes?.OS || ""} placeholder="0"
-                      onChange={(e) => { if (sized) return; update((x) => { const r = x.lines[li]; const v = Math.max(0, Math.floor(+e.target.value || 0)); r.oneSize = v > 0; r.sizes = v ? { [ONE_SIZE]: v } : {}; }); }} />
+                      onChange={(e) => { if (sized) return; update((x) => { const r = x.lines[li]; const v = Math.max(0, Math.floor(+e.target.value || 0)); const osOnly = r.sizeRun?.length === 1 && r.sizeRun[0] === ONE_SIZE; r.oneSize = osOnly || v > 0; r.sizes = v ? { [ONE_SIZE]: v } : {}; }); }} />
                   </div>
                   <div className="a-ea r"><input type="number" step="0.01" min="0" tabIndex={-1} title="Click to override" aria-label="Price each" className={"pre" + (lc?.hasOv ? " ov" : "")} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })} /></div>
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
                   <div className="a-x">{g.lines.length > 1 && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}</div>
                 </div>
                 {l.oneSize ? (
-                  <div className="os-note">One-size item. Clear the Qty to switch back to sizes.</div>
+                  <div className="os-note">{l.sizeRun?.length === 1 ? "One size. Enter the quantity in Qty." : "One-size item. Clear the Qty to switch back to sizes."}</div>
                 ) : (
                   <div className="szrow">
-                    {(cols as (keyof GLine["sizes"])[]).map((s) => {
+                    {(colsFor(l) as (keyof GLine["sizes"])[]).map((s, si, arr) => {
                       const up = prices.upcharges[s as keyof typeof prices.upcharges];
                       return (
-                        <label key={s} className={"szc" + (s === "YXL" ? " ysep" : "")}>
+                        <label key={s} className={"szc" + (s === "YXL" && si < arr.length - 1 ? " ysep" : "")}>
                           <span>{s}{up ? <small>+{up}</small> : null}</span>
                           <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.[s] ? " has" : "")} value={l.sizes?.[s] || ""} onChange={(e) => setQty(s, e.target.value)} />
                         </label>
@@ -131,7 +144,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                     <td><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>
                     <td><input type="text" list="locs" aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value; })} /></td>
                     <td>{d.method === "screen"
-                      ? <select aria-label="Number of colors" value={d.colors} onChange={(e) => update((x) => { x.imprints[di].colors = +e.target.value; })}>{[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+                      ? <select aria-label="Number of colors" value={d.colors} onChange={(e) => update((x) => { x.imprints[di].colors = +e.target.value; })}>{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n}</option>)}<option value={FULL_COLOR}>Full color</option></select>
                       : <span className="faint" style={{ fontSize: 12 }}>{d.method === "embroidery" ? "Thread" : "Full color"}</span>}</td>
                     <td><input type="text" aria-label="Ink colors" placeholder="White, PMS 186 C" value={d.inks} onChange={(e) => update((x) => { x.imprints[di].inks = e.target.value; })} /></td>
                     <td><input type="text" aria-label="Print size" placeholder='11" wide' value={d.size} onChange={(e) => update((x) => { x.imprints[di].size = e.target.value; })} /></td>

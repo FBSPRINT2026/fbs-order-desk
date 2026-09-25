@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { mergeSettings, uid, type PriceList, type Settings } from "@/lib/pricing";
+import { calcGroup, mergeSettings, newGLine, newImprint, uid, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 
 export default function SettingsPage() {
@@ -10,6 +10,7 @@ export default function SettingsPage() {
   const [staff, setStaff] = useState<{ email: string; name: string }[]>([]);
   const [newStaff, setNewStaff] = useState("");
   const [tab, setTab] = useState<"retail" | "wholesale">("retail");
+  const [shade, setShade] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
     const sb = createClient();
@@ -46,10 +47,8 @@ export default function SettingsPage() {
   if (!s) return <div className="empty">Loading…</div>;
   const pl: PriceList = tab === "wholesale" ? s.wholesale : s;
   const updPl = (fn: (p: PriceList) => void) => upd((d) => fn(tab === "wholesale" ? d.wholesale : d));
-  const ti = (q: number) => { let i = 0; pl.tiers.forEach((m, ix) => { if (q >= m) i = ix; }); return i; };
-  const pi = ti(48);
-  const blank = tab === "retail" ? Math.round(3.5 * (1 + s.markup / 100) * 100) / 100 : 0;
-  const prints = +pl.screen[pi][1] + +pl.screen[pi][0], each = blank + prints;
+  // Live check: 100 black tees at a $2.00 blank, 1-color front + 1-color back.
+  const chk = calcGroup({ id: "chk", lines: [{ ...newGLine(), color: "Black", cost: 2, sizes: { M: 100 } }], imprints: [newImprint("Front"), newImprint("Back")] }, { waive_setup: false, price_type: tab }, s);
 
   return (
     <>
@@ -81,27 +80,49 @@ export default function SettingsPage() {
               <div className="field"><label htmlFor="s-screen">Screen setup, per color</label><input id="s-screen" type="number" step="0.5" value={pl.screenFee} onChange={(e) => updPl((d) => { d.screenFee = n(e.target.value); })} /></div>
               <div className="field"><label htmlFor="s-dig">Digitizing, per location</label><input id="s-dig" type="number" step="0.5" value={pl.digitizing} onChange={(e) => updPl((d) => { d.digitizing = n(e.target.value); })} /></div>
               <div className="field"><label htmlFor="s-ink">Ink change fee, each</label><input id="s-ink" type="number" step="0.5" value={pl.inkChangeFee} onChange={(e) => updPl((d) => { d.inkChangeFee = n(e.target.value); })} /></div>
-              {(["2XL", "3XL", "4XL", "5XL"] as const).map((z) => (
+              {(["L", "2XL", "3XL", "4XL", "5XL"] as const).map((z) => (
                 <div key={z} className="field"><label htmlFor={`s-up-${z}`}>{z} upcharge per piece</label><input id={`s-up-${z}`} type="number" step="0.25" value={pl.upcharges[z] ?? 0} onChange={(e) => updPl((d) => { d.upcharges[z] = n(e.target.value); })} /></div>
               ))}
             </div>
-            <div className="lbl">IMPRINT PRICE PER PIECE, PER LOCATION ({tab.toUpperCase()})</div>
-            <div className="matrix-wrap">
-              <table className="matrix">
-                <thead><tr><th>Min qty</th>{[1, 2, 3, 4, 5, 6].map((c) => <th key={c}>Screen {c}c</th>)}<th>Embroidery</th><th>DTF</th></tr></thead>
-                <tbody>
-                  {pl.tiers.map((t, i) => (
-                    <tr key={tab + i}>
-                      <td className="tier"><input type="number" min="1" aria-label={`Tier ${i + 1} minimum`} value={t} onChange={(e) => updPl((d) => { d.tiers[i] = n(e.target.value); })} /></td>
-                      {pl.screen[i].map((v, j) => <td key={j}><input type="number" step="0.05" aria-label={`${t}+ pieces, ${j + 1} colors`} value={v} onChange={(e) => updPl((d) => { d.screen[i][j] = n(e.target.value); })} /></td>)}
-                      <td><input type="number" step="0.05" aria-label={`${t}+ embroidery`} value={pl.embroidery[i]} onChange={(e) => updPl((d) => { d.embroidery[i] = n(e.target.value); })} /></td>
-                      <td><input type="number" step="0.05" aria-label={`${t}+ DTF`} value={pl.dtf[i]} onChange={(e) => updPl((d) => { d.dtf[i] = n(e.target.value); })} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <div className="lbl">PRICE PER PIECE ({tab.toUpperCase()}){pl.blankAdd ? " · all-inclusive" : ""}</div>
+              {(pl.screenLight || pl.dtgLight) && (
+                <div className="chips">
+                  <button type="button" className={"chip" + (shade === "dark" ? " on" : "")} onClick={() => setShade("dark")}>Dark garments</button>
+                  <button type="button" className={"chip" + (shade === "light" ? " on" : "")} onClick={() => setShade("light")}>Light garments</button>
+                </div>
+              )}
             </div>
-            <div className="preview">Check: <b>48 pieces</b>{tab === "retail" ? <> on a <b>$3.50</b> blank</> : <> supplied by the customer</>}, 2-color front + 1-color back → {tab === "retail" ? <>blank {money(blank)} + </> : null}prints {money(prints)} = <b>{money(each)} each</b>, {money(each * 48)} plus {money(3 * pl.screenFee)} in screens.</div>
+            {pl.blankAdd && <div className="muted" style={{ fontSize: 12.5 }}>Each shirt = garment cost + <b>Blank +</b> for the quantity, plus one print price per location. Screen prints switch to <b>Full color</b> (digital) pricing for the whole shirt when that is cheaper. No screen setup fees.</div>}
+            {(() => {
+              const light = shade === "light" && !!(pl.screenLight || pl.dtgLight);
+              const scr = light && pl.screenLight ? pl.screenLight : pl.screen;
+              const dtg = light && pl.dtgLight ? pl.dtgLight : pl.dtg;
+              const cols = Math.max(...scr.map((r) => r.length), 1);
+              const setScr = (i: number, j: number, v: number) => updPl((d) => { const t = light && d.screenLight ? d.screenLight : d.screen; t[i][j] = v; });
+              const setDtg = (i: number, v: number) => updPl((d) => { const t = light && d.dtgLight ? d.dtgLight : d.dtg; if (t) t[i] = v; });
+              return (
+                <div className="matrix-wrap">
+                  <table className="matrix">
+                    <thead><tr><th>Min qty</th>{pl.blankAdd && <th>Blank +</th>}{Array.from({ length: cols }, (_, c) => <th key={c}>{c + 1}c</th>)}{dtg && <th>Full color</th>}<th>Embroidery</th><th>DTF</th></tr></thead>
+                    <tbody>
+                      {pl.tiers.map((t, i) => (
+                        <tr key={tab + shade + i}>
+                          <td className="tier"><input type="number" min="1" aria-label={`Tier ${i + 1} minimum`} value={t} onChange={(e) => updPl((d) => { d.tiers[i] = n(e.target.value); })} /></td>
+                          {pl.blankAdd && <td><input type="number" step="0.01" aria-label={`${t}+ blank add`} value={pl.blankAdd[i] ?? 0} onChange={(e) => updPl((d) => { if (d.blankAdd) d.blankAdd[i] = n(e.target.value); })} /></td>}
+                          {Array.from({ length: cols }, (_, j) => <td key={j}><input type="number" step="0.01" aria-label={`${t}+ pieces, ${j + 1} colors`} value={scr[i]?.[j] ?? 0} onChange={(e) => setScr(i, j, n(e.target.value))} /></td>)}
+                          {dtg && <td><input type="number" step="0.01" aria-label={`${t}+ full color`} value={dtg[i] ?? 0} onChange={(e) => setDtg(i, n(e.target.value))} /></td>}
+                          <td><input type="number" step="0.05" aria-label={`${t}+ embroidery`} value={pl.embroidery[i] ?? 0} onChange={(e) => updPl((d) => { d.embroidery[i] = n(e.target.value); })} /></td>
+                          <td><input type="number" step="0.05" aria-label={`${t}+ DTF`} value={pl.dtf[i] ?? 0} onChange={(e) => updPl((d) => { d.dtf[i] = n(e.target.value); })} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+            {pl.lightColors && <div className="field"><label htmlFor="s-light">Light garment colors (comma separated)</label><input id="s-light" type="text" value={pl.lightColors.join(", ")} onChange={(e) => updPl((d) => { d.lightColors = e.target.value.split(",").map((x) => x.trim()).filter(Boolean); })} /></div>}
+            <div className="preview">Check: <b>100 black tees</b>{tab === "retail" ? <> on a <b>$2.00</b> blank</> : <> supplied by the customer</>}, 1-color front + 1-color back → <b>{money(chk.lines[0]?.calcEach)} each</b>, {money(chk.sub + chk.setup)} total{chk.setup ? ` (incl. ${money(chk.setup)} setup)` : ""}.</div>
           </div>
         </section>
 
