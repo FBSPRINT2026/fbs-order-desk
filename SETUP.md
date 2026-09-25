@@ -10,7 +10,7 @@ You'll create five accounts. Keep a notes file open, because you'll copy a few k
 | Supabase | Database, logins, proof file storage | Free plan |
 | Vercel | Runs the website | Free (Hobby) plan |
 | Stripe | Card payments | Per-payment fee only |
-| Resend | Sends emails (login codes, alerts) | Free up to 3,000/month |
+| Brevo | Sends emails (login codes, alerts) | Free up to 300/day |
 
 ---
 
@@ -36,17 +36,23 @@ You'll create five accounts. Keep a notes file open, because you'll copy a few k
 
 Come back to Supabase in step 6 to finish the login settings.
 
-## 3. Set up Resend (email)
+## 3. Set up Brevo (email)
 
-Supabase's built-in email only sends a few messages per hour, which isn't enough for customers signing in. Resend fixes that and also sends your order alerts.
+Supabase's built-in email only sends a few messages per hour, which isn't enough for customers signing in. Brevo fixes that and also sends your order alerts. The free plan covers 300 emails a day. Brevo works with Wix DNS, which doesn't allow the MX record Resend needs.
 
-1. Sign up at **resend.com** → **Domains** → **Add domain** → `fbsprint.com`.
-2. Resend shows a few DNS records. Add them wherever your domain's DNS is managed. If your domain is connected through Wix, that's Wix → **Domains** → **Manage DNS records**. Wait until Resend shows the domain as **Verified**. This can take anywhere from a few minutes to a few hours.
-3. Go to **API Keys** → **Create API key** (Full access). Copy it → this is `RESEND_API_KEY`.
-4. **Connect Resend to Supabase logins:** in Supabase, go to **Authentication → Emails → SMTP Settings** (on older dashboards: **Project Settings → Authentication**) and turn on **Enable custom SMTP**. Enter:
+1. Sign up at **brevo.com**. Go to **Settings → Senders, Domains & Dedicated IPs → Domains → Add a domain** and enter `fbsprint.com`.
+2. Choose to authenticate the domain yourself. Brevo shows three kinds of records: a **Brevo code** (TXT), **DKIM** (two CNAME records) and **DMARC** (TXT).
+3. In Wix, go to **Domains**, click **⋯** next to fbsprint.com, and choose **Manage DNS Records**. Add each record in the section for its type (TXT or CNAME):
+   - **Host name:** type only the part Brevo shows before `fbsprint.com`, for example `brevo1._domainkey`. For the Brevo code, leave the host name blank.
+   - **Value:** paste exactly what Brevo shows.
+   - Don't change or delete any records that are already there, especially **MX** records, because those run your current email.
+4. Back in Brevo, click **Authenticate**. It can take up to a few hours to show as authenticated.
+5. Add a sender: **Senders → Add sender** → `orders@fbsprint.com`, name `FBS Print`.
+6. **API key for the app:** go to **SMTP & API → API Keys → Generate**. This is `BREVO_API_KEY`.
+7. **Connect Brevo to Supabase logins:** in Brevo's **SMTP & API → SMTP** tab, note the **Login** and generate an **SMTP key**. In Supabase, go to **Authentication → Emails → SMTP Settings** and turn on **Enable custom SMTP**. Enter:
    - Sender email: `orders@fbsprint.com`, sender name: `FBS Print`
-   - Host: `smtp.resend.com`, Port: `465`
-   - Username: `resend`, Password: your Resend API key
+   - Host: `smtp-relay.brevo.com`, Port: `587`
+   - Username: the Brevo SMTP **Login**, Password: the **SMTP key**
    - Save.
 
 ## 4. Set up Stripe (card payments)
@@ -69,7 +75,7 @@ Supabase's built-in email only sends a few messages per hour, which isn't enough
 | `NEXT_PUBLIC_SITE_URL` | `https://portal.fbsprint.com` (or the `.vercel.app` address for now, no slash at the end) |
 | `STRIPE_SECRET_KEY` | from step 4 |
 | `STRIPE_WEBHOOK_SECRET` | leave out for now, you'll add it in step 6 |
-| `RESEND_API_KEY` | from step 3 |
+| `BREVO_API_KEY` | from step 3 |
 | `EMAIL_FROM` | `FBS Print <orders@fbsprint.com>` |
 | `SHOP_NOTIFY_EMAIL` | the inbox that should get alerts, e.g. `nicholas@fbsprint.com` |
 

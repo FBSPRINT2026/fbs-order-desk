@@ -19,7 +19,7 @@ Shop management and customer portal for FBS Print. It's a private replacement fo
 - Message the shop about an order, with email alerts both ways
 - Order progress tracker and printable invoice
 
-**Stack:** Next.js 15, Supabase (Postgres, Auth, Storage, row-level security), Stripe Checkout, Resend email, hosted on Vercel.
+**Stack:** Next.js 15, Supabase (Postgres, Auth, Storage, row-level security), Stripe Checkout, Brevo (or Resend) email, hosted on Vercel.
 
 See **SETUP.md** for step-by-step setup.
 

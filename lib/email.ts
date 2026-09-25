@@ -1,17 +1,33 @@
 import "server-only";
 
-/** Sends an email through Resend when RESEND_API_KEY is set. Returns false when email is off or fails. */
+/**
+ * Sends an email through Brevo (BREVO_API_KEY) or Resend (RESEND_API_KEY), whichever is set.
+ * Returns false when email is off or the send fails.
+ */
 export async function sendEmail(opts: { to: string; subject: string; html: string; replyTo?: string }) {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
-  if (!key || !from || !opts.to) return false;
+  const from = process.env.EMAIL_FROM || "";
+  if (!opts.to || !from) return false;
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [opts.to], subject: opts.subject, html: opts.html, reply_to: opts.replyTo }),
-    });
-    return res.ok;
+    if (process.env.BREVO_API_KEY) {
+      // EMAIL_FROM looks like: FBS Print <orders@fbsprint.com>
+      const m = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+      const sender = m ? { name: m[1] || undefined, email: m[2] } : { email: from.trim() };
+      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: { "api-key": process.env.BREVO_API_KEY, "Content-Type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ sender, to: [{ email: opts.to }], subject: opts.subject, htmlContent: opts.html, replyTo: opts.replyTo ? { email: opts.replyTo } : undefined }),
+      });
+      return res.ok;
+    }
+    if (process.env.RESEND_API_KEY) {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from, to: [opts.to], subject: opts.subject, html: opts.html, reply_to: opts.replyTo }),
+      });
+      return res.ok;
+    }
+    return false;
   } catch {
     return false;
   }
