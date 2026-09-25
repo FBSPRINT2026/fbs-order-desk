@@ -38,6 +38,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [saveState, setSaveState] = useState("");
   const [flash, setFlash] = useState("");
   const [armed, setArmed] = useState("");
+  const [confirmRetail, setConfirmRetail] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Order | null>(null);
@@ -366,11 +367,18 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div className="row">
                   <span className="lbl">PRICING</span>
                   <div className="chips">
-                    <button type="button" className={"chip" + (o.price_type !== "wholesale" ? " on" : "")} onClick={() => patch((d) => { d.price_type = "retail"; })}>Retail</button>
-                    <button type="button" className={"chip" + (o.price_type === "wholesale" ? " on" : "")} onClick={() => patch((d) => { d.price_type = "wholesale"; })}>Wholesale</button>
+                    <button type="button" className={"chip" + (o.price_type !== "wholesale" ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; }); }}>Retail</button>
+                    <button type="button" className={"chip" + (o.price_type === "wholesale" ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; }); }}>Wholesale</button>
                   </div>
-                  <span className="faint" style={{ fontSize: 12 }}>{o.price_type === "wholesale" ? "Customer supplies garments. Imprints priced from the wholesale list." : "Garment cost plus markup, and retail imprint prices."}</span>
+                  <span className="faint" style={{ fontSize: 12 }}>{cust ? (o.price_type === (cust.price_type || "retail") ? `Set from the customer's account (${cust.price_type === "wholesale" ? "wholesale" : "retail"})` : `Changed for this order. The customer's account is ${cust.price_type === "wholesale" ? "wholesale" : "retail"}.`) : o.price_type === "wholesale" ? "Customer supplies garments." : "We supply garments."}</span>
                 </div>
+                {confirmRetail && (
+                  <div className="confirm-bar">
+                    <span><b>{custLabel(cust!)}</b> is a wholesale customer. Are you sure you want to price this order as retail?</span>
+                    <button type="button" className="btn sm primary" onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "retail"; }); }}>Yes, switch to retail</button>
+                    <button type="button" className="btn sm ghost" onClick={() => setConfirmRetail(false)}>Cancel</button>
+                  </div>
+                )}
                 <div className="grid g2">
                   <div className="field"><label htmlFor="o-nick">Job name</label><input id="o-nick" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
                   <div className="field"><label htmlFor="o-po">Customer PO #</label><input id="o-po" type="text" value={o.po_number || ""} onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
