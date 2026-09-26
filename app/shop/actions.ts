@@ -88,3 +88,29 @@ export async function staffMessage(orderId: string, body: string) {
   }
   return { ok: true, emailed };
 }
+
+/** A general message to a customer (not about one order): shows in their portal's Messages area and emails them. */
+export async function staffCustomerMessage(customerId: string, body: string) {
+  const { email: staffEmail } = await requireStaff();
+  const text = body.trim().slice(0, 5000);
+  if (!text) return { ok: false, error: "Write a message first." };
+  const admin = createAdminClient();
+  const [{ data: customer }, { data: s }] = await Promise.all([
+    admin.from("customers").select("id,name,company,email").eq("id", customerId).maybeSingle(),
+    admin.from("settings").select("data").eq("id", 1).maybeSingle(),
+  ]);
+  if (!customer) return { ok: false, error: "Customer not found." };
+  const settings = mergeSettings(s?.data);
+  const { error } = await admin.from("messages").insert({ customer_id: customerId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text });
+  if (error) return { ok: false, error: error.message };
+  let emailed = false;
+  if (customer.email) {
+    emailed = await sendEmail({
+      to: customer.email,
+      replyTo: SHOP_NOTIFY_EMAIL,
+      subject: `New message from ${settings.shop.name}`,
+      html: emailLayout(settings.shop.name, `A message from ${settings.shop.name}`, text, "Reply in your portal", `${siteUrl()}/portal?area=messages`),
+    });
+  }
+  return { ok: true, emailed };
+}

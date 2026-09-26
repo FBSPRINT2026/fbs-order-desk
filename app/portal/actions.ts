@@ -134,3 +134,38 @@ export async function startCheckout(orderId: string, kind: "deposit" | "balance"
     return { ok: true, url: session.url || undefined };
   } catch (e) { return fail(e); }
 }
+
+/** A general message from the customer to the shop (not about one order). */
+export async function customerGeneralMessage(body: string): Promise<Result> {
+  try {
+    const text = body.trim().slice(0, 5000);
+    if (!text) return { ok: false, error: "Write a message first." };
+    const { supabase, user, email, isStaff } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    if (isStaff) return { ok: false, error: "This is a preview. Customers send messages from their own login." };
+    const { data: cs } = await supabase.from("customers").select("id,name,company");
+    const cust = (cs || [])[0];
+    if (!cust) return { ok: false, error: "We couldn't find your account." };
+    const admin = createAdminClient();
+    const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const settings = mergeSettings(s?.data);
+    const who = cust.name || email;
+    const { error } = await admin.from("messages").insert({ customer_id: cust.id, author_type: "customer", author_email: email, author_name: who, body: text });
+    if (error) return { ok: false, error: error.message };
+    if (SHOP_NOTIFY_EMAIL) await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `New message from ${cust.company || who}`, html: emailLayout(settings.shop.name, `${who} wrote`, text, "Open customer", `${siteUrl()}/shop/customers/${cust.id}?area=messages`) });
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/** Customer stars / unstars one of their designs. */
+export async function starMyDesign(designId: string, starred: boolean): Promise<Result> {
+  try {
+    const { supabase, user, isStaff } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    const db = isStaff ? createAdminClient() : supabase;
+    const { error } = await db.rpc("set_design_star", { p_design: designId, p_starred: starred });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}

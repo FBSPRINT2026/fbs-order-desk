@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mergeSettings, orderGroups, type Customer, type Order, type Settings } from "@/lib/pricing";
 
-export type OrderRow = Pick<Order, "id" | "number" | "nickname" | "status" | "type" | "due_date" | "total" | "qty" | "customer_id" | "lines" | "groups" | "created_at" | "rush" | "po_number"> & {
+export type OrderRow = Pick<Order, "id" | "number" | "nickname" | "status" | "type" | "due_date" | "total" | "qty" | "customer_id" | "lines" | "groups" | "created_at" | "rush" | "po_number" | "price_type"> & {
   paid: number;
   balance: number;
   unread: number;
@@ -20,7 +20,7 @@ export function useShopData() {
   const load = useCallback(async () => {
     const sb = createClient();
     const [o, c, p, m, s] = await Promise.all([
-      sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number").order("number", { ascending: false }),
+      sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number,price_type").order("number", { ascending: false }),
       sb.from("customers").select("*"),
       sb.from("payments").select("order_id,amount"),
       sb.from("messages").select("order_id").eq("author_type", "customer").is("read_at", null),
