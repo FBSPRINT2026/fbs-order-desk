@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { LOCATIONS, METHODS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
 import { previewUrls, uploadDesign } from "@/lib/designs";
-import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, detectColors, recolor } from "@/lib/inkColors";
+import { PMS_HEX, WILFLEX_HEX, closestInk, closestPms, colorHex, detectColors, recolor } from "@/lib/inkColors";
 import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, biggerSpot, guessHex, measureGarment, printWidth, smallerSpot, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
@@ -481,6 +481,7 @@ function Builder() {
                   <InkSelect key={pop.src + pop.id} value={cur} onChange={(v) => { setInk(im, pop.src, v); if (!v || v.name) setPop(null); }} />
                   <button className="btn icon ghost" type="button" aria-label="Close" onClick={() => setPop(null)}>✕</button>
                 </div>
+                <Match hex={pop.src} cur={cur} onPick={(v) => { setInk(im, pop.src, v); setPop(null); }} />
               </div>
             );
           })()}
@@ -542,12 +543,14 @@ function Builder() {
                         {paints[im.id].sources.map((src) => {
                           const cur = paints[im.id].map[src.hex];
                           return (
-                            <div key={src.hex} className="mk-color">
+                            <div key={src.hex} className="mk-color-wrap">
+                            <div className="mk-color">
                               <span className="sw" style={{ background: src.hex }} title={src.hex} />
                               <span className="arrow">→</span>
                               <span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : src.hex }} />
                               <InkSelect value={cur} onChange={(v) => setInk(im, src.hex, v)} />
-                              {!cur && (() => { const c = closestInk(src.hex); return <button type="button" className="btn sm ghost mk-near" title={`Closest standard ink: ${c.name}`} onClick={() => setInk(im, src.hex, c)}><span className="sw" style={{ background: c.hex }} />{c.name}?</button>; })()}
+                            </div>
+                            <Match hex={src.hex} cur={cur} onPick={(v) => setInk(im, src.hex, v)} />
                             </div>
                           );
                         })}
@@ -687,7 +690,9 @@ function Stage({ src, label, items, grid, mask, onMove, onResize, onPick }: {
 /** Pick the ink a logo color prints as: a Wilflex RFU color, a PMS color, a custom PMS, or drop it. */
 function InkSelect({ value, onChange }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void }) {
   const known = value && (value.name === "none" || WILFLEX_HEX[value.name] || PMS_HEX[value.name]);
-  const [custom, setCustom] = useState(!!value && !known);
+  const [customMode, setCustom] = useState(false);
+  // any PMS from the full chart (or a typed one) shows as its name + color instead of the short list
+  const custom = customMode || (!!value && !known);
   if (custom) {
     return (
       <span className="row" style={{ gap: 4, flex: 1 }}>
@@ -781,6 +786,24 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, offIn,
           )) : <span className="faint">Colors not read yet</span>}
         </div>
       )}
+    </div>
+  );
+}
+
+const matchWord = (dE: number) => (dE < 1 ? "exact" : dE < 3 ? "very close" : dE < 6 ? "close" : "not very close");
+/** The color read from the art, with the closest standard Wilflex ink and the closest Pantone coated color to pick from. */
+function Match({ hex, cur, onPick }: { hex: string; cur?: { name: string; hex: string }; onPick: (v: { name: string; hex: string }) => void }) {
+  const ink = closestInk(hex), pms = closestPms(hex);
+  const opt = (label: string, c: { name: string; hex: string; dE: number }) => (
+    <button type="button" className={"mk-near" + (cur?.name === c.name ? " on" : "")} title={`${c.name} — ${matchWord(c.dE)} (ΔE ${c.dE})`} onClick={() => onPick({ name: c.name, hex: c.hex })}>
+      <span className="faint">{label}</span><span className="sw" style={{ background: c.hex }} />{c.name}<span className="faint">· {matchWord(c.dE)}</span>
+    </button>
+  );
+  return (
+    <div className="mk-match">
+      <span className="faint mono">Read {hex.toUpperCase()}</span>
+      {opt("Standard", ink)}
+      {opt("PMS", pms)}
     </div>
   );
 }

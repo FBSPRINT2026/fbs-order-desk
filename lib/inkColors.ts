@@ -1,3 +1,5 @@
+import { PMS_COATED } from "./pms";
+
 /**
  * Screen colors for mockups. These are approximate on-screen colors for previews only;
  * the ink name / PMS number is what goes to production.
@@ -33,7 +35,13 @@ export const PMS_HEX: Record<string, string> = {
   "PMS 805 C (Neon Red)": "#FF7276", "PMS 806 C (Neon Pink)": "#FF3EB5", "PMS 807 C (Neon Magenta)": "#EA27C2",
 };
 
-export const colorHex = (name: string) => WILFLEX_HEX[name] || PMS_HEX[name] || (/^#[0-9a-f]{6}$/i.test(name) ? name : "");
+/** Screen color for an ink name: Wilflex RFU, a PMS coated number ("PMS 186 C", "186 C", "PMS 186"), or a #hex. */
+export const colorHex = (name: string) => {
+  if (WILFLEX_HEX[name] || PMS_HEX[name]) return WILFLEX_HEX[name] || PMS_HEX[name];
+  if (/^#[0-9a-f]{6}$/i.test(name)) return name;
+  const m = name.trim().replace(/^pms\s*/i, "").replace(/\s*c$/i, "");
+  return m ? PMS_COATED[`PMS ${m.replace(/\b[a-z]/g, (c) => c.toUpperCase())} C`] || "" : "";
+};
 
 /** Main flat colors in a logo (transparent pixels ignored), largest first. */
 export function detectColors(img: HTMLImageElement, max = 8): { hex: string; share: number }[] {
@@ -100,13 +108,38 @@ const lab = (h: string) => {
   const X = f((r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047), Y = f(r * 0.2126 + g * 0.7152 + b * 0.0722), Z = f((r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883);
   return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)];
 };
-/** The standard Wilflex RFU ink that looks closest to a color (by how the eye sees it, not raw RGB). */
-export function closestInk(hex: string): { name: string; hex: string } {
-  const a = lab(hex);
-  let best = "Black", bd = Infinity;
-  for (const [name, h] of Object.entries(WILFLEX_HEX)) {
-    const b = lab(h), dd = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
-    if (dd < bd) { bd = dd; best = name; }
-  }
-  return { name: best, hex: WILFLEX_HEX[best] };
+
+/** CIEDE2000 color difference (how different two colors look; under ~2 is hard to tell apart). */
+export function deltaE(h1: string, h2: string) {
+  const [L1, a1, b1] = lab(h1), [L2, a2, b2] = lab(h2);
+  const rad = Math.PI / 180, deg = 180 / Math.PI;
+  const C1 = Math.hypot(a1, b1), C2 = Math.hypot(a2, b2), Cb = (C1 + C2) / 2;
+  const G = 0.5 * (1 - Math.sqrt(Cb ** 7 / (Cb ** 7 + 25 ** 7)));
+  const a1p = (1 + G) * a1, a2p = (1 + G) * a2;
+  const C1p = Math.hypot(a1p, b1), C2p = Math.hypot(a2p, b2);
+  const hp = (b: number, a: number) => { if (!b && !a) return 0; const h = Math.atan2(b, a) * deg; return h < 0 ? h + 360 : h; };
+  const h1p = hp(b1, a1p), h2p = hp(b2, a2p);
+  const dL = L2 - L1, dC = C2p - C1p;
+  let dh = 0;
+  if (C1p * C2p) { dh = h2p - h1p; if (dh > 180) dh -= 360; else if (dh < -180) dh += 360; }
+  const dH = 2 * Math.sqrt(C1p * C2p) * Math.sin((dh / 2) * rad);
+  const Lb = (L1 + L2) / 2, Cbp = (C1p + C2p) / 2;
+  let hb = h1p + h2p;
+  if (C1p * C2p) { if (Math.abs(h1p - h2p) > 180) hb += h1p + h2p < 360 ? 360 : -360; hb /= 2; }
+  const T = 1 - 0.17 * Math.cos((hb - 30) * rad) + 0.24 * Math.cos(2 * hb * rad) + 0.32 * Math.cos((3 * hb + 6) * rad) - 0.2 * Math.cos((4 * hb - 63) * rad);
+  const dTh = 30 * Math.exp(-(((hb - 275) / 25) ** 2));
+  const Rc = 2 * Math.sqrt(Cbp ** 7 / (Cbp ** 7 + 25 ** 7));
+  const Sl = 1 + (0.015 * (Lb - 50) ** 2) / Math.sqrt(20 + (Lb - 50) ** 2), Sc = 1 + 0.045 * Cbp, Sh = 1 + 0.015 * Cbp * T;
+  const Rt = -Math.sin(2 * dTh * rad) * Rc;
+  return Math.sqrt((dL / Sl) ** 2 + (dC / Sc) ** 2 + (dH / Sh) ** 2 + Rt * (dC / Sc) * (dH / Sh));
 }
+
+const nearest = (hex: string, chart: Record<string, string>) => {
+  let best = "", bd = Infinity;
+  for (const [name, h] of Object.entries(chart)) { const d = deltaE(hex, h); if (d < bd) { bd = d; best = name; } }
+  return { name: best, hex: chart[best], dE: Math.round(bd * 10) / 10 };
+};
+/** The standard Wilflex RFU ink that looks closest to a color. */
+export const closestInk = (hex: string) => nearest(hex, WILFLEX_HEX);
+/** The Pantone coated color that looks closest (same idea as pantoneconverter.com's HEX to Pantone). */
+export const closestPms = (hex: string) => nearest(hex, PMS_COATED);

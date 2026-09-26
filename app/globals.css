@@ -592,5 +592,9 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-cu-colors{display:flex;flex-direction:column;gap:3px;font-size:12px}
 .mk-cu-color{display:flex;align-items:center;gap:6px}
 .mk-cu-color .sw{flex:none;width:14px;height:14px;border-radius:3px;border:1px solid var(--line)}
-.mk-near{display:inline-flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;padding:2px 6px}
 .mk-near .sw{width:12px;height:12px;border-radius:3px;border:1px solid var(--line)}
+.mk-match{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:11px;margin:2px 0 6px 26px}
+.mk-near{display:inline-flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;padding:2px 6px;border:1px solid var(--line);border-radius:5px;background:var(--surface,#fff);cursor:pointer;font-family:inherit}
+.mk-near:hover{border-color:var(--accent)}
+.mk-near.on{border-color:var(--accent);background:var(--accent-soft)}
+.mk-pop .mk-match{margin:6px 0 0}
