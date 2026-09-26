@@ -21,6 +21,16 @@ const inkNames = (pt: Paint, map = pt.map) => {
   const names = pt.sources.map((x) => map[x.hex]).filter((x) => x && x.name !== "none").map((x) => x!.name);
   return pt.unite === false ? names : [...new Set(names)];
 };
+/** Rows to show for a logo's colors: united colors that share an ink sit on one row. */
+const colorRows = (pt: Paint) => {
+  const rows: { hexes: string[]; cur?: { name: string; hex: string } }[] = [];
+  for (const x of pt.sources) {
+    const cur = pt.map[x.hex];
+    const row = pt.unite && cur && cur.name !== "none" ? rows.find((r) => r.cur?.name === cur.name) : undefined;
+    if (row) row.hexes.push(x.hex); else rows.push({ hexes: [x.hex], cur });
+  }
+  return rows;
+};
 /** Inks that more than one logo color is set to. */
 const sharedInks = (pt?: Paint) => { if (!pt) return []; const n = pt.sources.map((x) => pt.map[x.hex]?.name).filter((x) => x && x !== "none") as string[]; return [...new Set(n.filter((x, i) => n.indexOf(x) !== i))]; };
 
@@ -147,11 +157,12 @@ function Builder() {
   }, [paints, imprints]);
 
   /** Set several logo colors at once (e.g. every color to its closest standard ink). */
-  function setInks(id: string, picks: Record<string, { name: string; hex: string }>) {
+  function setInks(id: string, picks: Record<string, { name: string; hex: string } | null>) {
     setPaints((p) => {
       const pt = p[id];
       if (!pt) return p;
-      const map = { ...pt.map, ...picks };
+      const map = { ...pt.map };
+      for (const [k, v] of Object.entries(picks)) { if (v) map[k] = v; else delete map[k]; }
       const inks = inkNames(pt, map);
       setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors } : x)));
       return { ...p, [id]: { ...pt, map } };
@@ -233,8 +244,7 @@ function Builder() {
   const inkList = (im: Imprint): { hex: string; name: string }[] => {
     const pt = paints[im.id];
     if (pt && pt.design === im.design_id && pt.sources.length) {
-      return pt.sources.map((src) => pt.map[src.hex])
-        .map((t, i) => (t ? t : { name: "", hex: pt.sources[i].hex }))
+      return colorRows(pt).map((row) => row.cur || { name: "", hex: row.hexes[0] })
         .filter((t) => t.name !== "none")
         .map((t) => ({ hex: t.hex || "#888888", name: t.name || `As uploaded (${t.hex.toUpperCase()})` }));
     }
@@ -556,27 +566,30 @@ function Builder() {
             const im = imprints.find((x) => x.id === pop.id);
             const pt = paints[pop.id];
             if (!im || !pt) return null;
-            // the color that was double-clicked first, then the rest of the design's colors
-            const list = [pt.sources.find((x) => x.hex === pop.src), ...pt.sources.filter((x) => x.hex !== pop.src)].filter(Boolean) as Paint["sources"];
+            // the color that was double-clicked first, then the rest of the design's colors (united colors share a row)
+            const all = colorRows(pt), first = all.find((r) => r.hexes.includes(pop.src));
+            const list = [first, ...all.filter((r) => r !== first)].filter(Boolean) as ReturnType<typeof colorRows>;
+            const openKey = pop.open || pop.src;
             return (
               <div className="mk-pop" style={{ left: Math.min(pop.x + 8, (typeof window !== "undefined" ? window.innerWidth : 1200) - 320), top: Math.min(pop.y + 8, (typeof window !== "undefined" ? window.innerHeight : 900) - 80) }}>
                 <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
                   <span className="lbl">{list.length > 1 ? `${list.length} COLORS IN THIS DESIGN` : "DESIGN COLOR"}</span>
                   <button className="btn icon ghost" type="button" aria-label="Close" onClick={() => setPop(null)}>✕</button>
                 </div>
-                {list.map((src, i) => {
-                  const cur = pt.map[src.hex];
-                  const open = src.hex === (pop.open || pop.src);
+                {list.map((row, i) => {
+                  const cur = row.cur, open = row.hexes.includes(openKey);
+                  const pick = (v: { name: string; hex: string } | null) => setInks(im.id, Object.fromEntries(row.hexes.map((h) => [h, v])));
                   return (
-                    <div key={src.hex} className={"mk-pop-row" + (open ? " open" : "")}>
+                    <div key={row.hexes.join()} className={"mk-pop-row" + (open ? " open" : "")}>
                       <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-                        <button type="button" className="mk-pop-k" title="Show suggested colors" onClick={() => setPop({ ...pop, open: src.hex })}>
-                          <span className="faint" style={{ fontSize: 11, width: 46 }}>Color {pt.sources.indexOf(src) + 1}</span>
-                          <span className="sw" style={{ background: src.hex }} /><span>→</span><span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : src.hex }} />
+                        <button type="button" className="mk-pop-k" title="Show suggested colors" onClick={() => setPop({ ...pop, open: row.hexes[0] })}>
+                          <span className="mk-srcs">{row.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} />)}</span><span>→</span><span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : row.hexes[0] }} />
                         </button>
-                        <InkSelect key={src.hex + pop.id} value={cur} onChange={(v) => { setInk(im, src.hex, v); if (list.length === 1 && v && v.name) setPop(null); }} />
+                        <InkSelect key={row.hexes.join() + pop.id} value={cur} onChange={(v) => { pick(v); if (list.length === 1 && v && v.name) setPop(null); }} />
                       </div>
-                      {open && <Match hex={src.hex} cur={cur} onPick={(v) => { setInk(im, src.hex, v); if (list.length === 1) setPop(null); else { const nx = list[i + 1]; setPop({ ...pop, open: nx ? nx.hex : src.hex }); } }} />}
+                      {open && (row.hexes.length > 1
+                        ? <div className="mk-united"><span>{row.hexes.length} colors united · prints as one color</span></div>
+                        : <Match hex={row.hexes[0]} cur={cur} onPick={(v) => { pick(v); if (list.length === 1) setPop(null); else { const nx = list[i + 1]; setPop({ ...pop, open: nx ? nx.hexes[0] : row.hexes[0] }); } }} />)}
                     </div>
                   );
                 })}
@@ -622,17 +635,19 @@ function Builder() {
                     {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <div className="mk-colors">
                         <div className="lbl">COLORS IN THIS DESIGN</div>
-                        {paints[im.id].sources.map((src) => {
-                          const cur = paints[im.id].map[src.hex];
+                        {colorRows(paints[im.id]).map((row) => {
+                          const cur = row.cur, pick = (v: { name: string; hex: string } | null) => setInks(im.id, Object.fromEntries(row.hexes.map((h) => [h, v])));
                           return (
-                            <div key={src.hex} className="mk-color-wrap">
+                            <div key={row.hexes.join()} className="mk-color-wrap">
                             <div className="mk-color">
-                              <span className="sw" style={{ background: src.hex }} title={src.hex} />
+                              <span className="mk-srcs">{row.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} title={h} />)}</span>
                               <span className="arrow">→</span>
-                              <span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : src.hex }} />
-                              <InkSelect value={cur} onChange={(v) => setInk(im, src.hex, v)} />
+                              <span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : row.hexes[0] }} />
+                              <InkSelect value={cur} onChange={pick} />
                             </div>
-                            <Match hex={src.hex} cur={cur} onPick={(v) => setInk(im, src.hex, v)} />
+                            {row.hexes.length > 1
+                              ? <div className="mk-united"><span>{row.hexes.length} colors united · prints as one color</span><button type="button" className="btn sm ghost" onClick={() => setUnite(im.id, false)}>Split</button></div>
+                              : <Match hex={row.hexes[0]} cur={cur} onPick={pick} />}
                             </div>
                           );
                         })}

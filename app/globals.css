@@ -618,3 +618,5 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-pop-row:first-of-type{border-top:0}
 .mk-pop-k{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;padding:0;cursor:pointer;font:inherit;color:inherit;flex:none}
 .mk-pop-row .mk-match{margin:6px 0 2px}
+.mk-srcs{display:inline-flex;gap:2px}
+.mk-united{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--faint,#8a93a3);margin:2px 0 6px}
