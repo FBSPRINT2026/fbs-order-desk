@@ -52,6 +52,7 @@ export default function ArtworkPage() {
       <div className="page-head">
         <div><div className="eyebrow">{designs.length} designs</div><h1>Artwork</h1></div>
         <div className="row">
+          <Link className="btn" href="/shop/artwork/mockup">Mockup builder</Link>
           <button className="btn primary" type="button" onClick={() => setForm(form ? null : { customer_id: cust, name: "", colors: 1, inks: "", notes: "", file: null, preview: null })}>{form ? "Cancel" : "+ Upload design"}</button>
         </div>
       </div>

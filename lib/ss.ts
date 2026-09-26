@@ -18,7 +18,7 @@ async function ssGet<T>(path: string): Promise<T> {
 }
 
 type SSStyle = { styleID: number; partNumber: string; brandName: string; styleName: string; title: string; baseCategory: string; styleImage: string };
-type SSProduct = { colorName: string; sizeName: string; sizeOrder: string; customerPrice: number; piecePrice: number; qty: number };
+type SSProduct = { colorName: string; sizeName: string; sizeOrder: string; customerPrice: number; piecePrice: number; qty: number; colorFrontImage?: string; colorBackImage?: string; colorSideImage?: string; colorSwatchImage?: string; color1?: string };
 
 // S&S size names -> our size codes
 const SIZE_MAP: Record<string, string> = {
@@ -86,15 +86,22 @@ async function findStyle(q: string): Promise<SSStyle | null> {
   return null;
 }
 
-export type SSGarment = { style: string; brand: string; description: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; ss_style_id: number; image: string };
+export type SSGarment = { style: string; brand: string; description: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; ss_style_id: number; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }> };
 
 /** Look up a style on S&S and shape it like a catalog garment. Cost = your price (customerPrice). */
 export async function ssLookup(q: string, styleID?: number): Promise<SSGarment | null> {
   const st = styleID ? (await ssGet<SSStyle[]>(`/styles/?styleid=${styleID}`))[0] : await findStyle(q);
   if (!st) return null;
-  const prods = await ssGet<SSProduct[]>(`/products/?styleid=${st.styleID}&fields=colorName,sizeName,sizeOrder,customerPrice,piecePrice,qty`);
+  const prods = await ssGet<SSProduct[]>(`/products/?styleid=${st.styleID}&fields=colorName,sizeName,sizeOrder,customerPrice,piecePrice,qty,colorFrontImage,colorBackImage,colorSideImage,color1`);
   if (!Array.isArray(prods) || !prods.length) return null;
   const colors = [...new Set(prods.map((p) => p.colorName).filter(Boolean))];
+  // one set of photos per color (large versions), for mockups
+  const big = (p?: string) => (p ? p.replace(/_f[ms]\.jpg$/i, "_fl.jpg") : "");
+  const color_images: Record<string, { front: string; back: string; side: string; hex: string }> = {};
+  for (const p of prods) {
+    if (!p.colorName || color_images[p.colorName]) continue;
+    if (p.colorFrontImage || p.colorBackImage) color_images[p.colorName] = { front: big(p.colorFrontImage), back: big(p.colorBackImage), side: big(p.colorSideImage), hex: p.color1 || "" };
+  }
   const bySize = new Map<string, { order: string; prices: number[] }>();
   // youth styles label sizes XS-XL; ours are YXS-YXL
   const youth = /youth|toddler|kids|infant/i.test(`${st.title} ${st.baseCategory}`);
@@ -123,6 +130,7 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
     sizes,
     size_costs,
     ss_style_id: st.styleID,
+    color_images,
     image: st.styleImage ? `https://www.ssactivewear.com/${st.styleImage}` : "",
   };
 }

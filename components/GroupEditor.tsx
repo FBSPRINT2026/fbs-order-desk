@@ -19,6 +19,7 @@ type Props = {
   onSaveToCatalog: (l: GLine) => void;
   onLookup?: (style: string, styleID?: number) => Promise<Garment | null>;
   designs?: Design[];
+  onMockup?: () => void;
   designUrls?: Record<string, string>;
   onUploadDesign?: (file: File, name: string) => Promise<Design | null>;
   lookingUp?: string;
@@ -37,7 +38,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign }: Props) {
+export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup }: Props) {
   // exact style match; if the same number exists under several brands, only the brand given (or none) counts
   const findStyle = (style: string, brand?: string) => {
     const hits = catalog.filter((x) => x.style.toLowerCase() === style.trim().toLowerCase());
@@ -88,6 +89,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
       <div className="line-h">
         <input type="text" className="grp-name" aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
         <span className="spacer" />
+        {onMockup && <button className="btn sm" type="button" onClick={onMockup}>Create mockup</button>}
         <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
       </div>

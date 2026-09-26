@@ -1,0 +1,325 @@
+"use client";
+import Link from "next/link";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { LOCATIONS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Order } from "@/lib/pricing";
+import { custLabel } from "@/lib/format";
+import { previewUrls, uploadDesign } from "@/lib/designs";
+import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, guessHex, printWidth, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
+
+type Line = { id: string; style: string; brand: string; color: string; garment: string };
+type Offset = { dx: number; dy: number };
+
+export default function MockupPage() {
+  return <Suspense fallback={<div className="empty">Loading…</div>}><Builder /></Suspense>;
+}
+
+function loadImg(src: string): Promise<HTMLImageElement> {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.crossOrigin = "anonymous";
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error("Couldn't load " + src.slice(0, 60)));
+    im.src = src;
+  });
+}
+
+/** Mockup builder: garment photos from S&S for each color, the customer's designs placed by location and print size. */
+function Builder() {
+  const sp = useSearchParams();
+  const orderId = sp.get("order") || "";
+  const groupId = sp.get("group") || "";
+  const sb = useMemo(() => createClient(), []);
+
+  const [order, setOrder] = useState<Order | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerId, setCustomerId] = useState(sp.get("customer") || "");
+  const [catalog, setCatalog] = useState<Garment[]>([]);
+  const [designs, setDesigns] = useState<Design[]>([]);
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [lines, setLines] = useState<Line[]>([{ id: uid(), style: "", brand: "", color: "", garment: "" }]);
+  const [imprints, setImprints] = useState<Imprint[]>([newImprint("Full Front")]);
+  const [groupName, setGroupName] = useState("");
+  const [active, setActive] = useState(0);
+  const [offsets, setOffsets] = useState<Record<string, Offset>>({});
+  const [scale, setScale] = useState(1);
+  const [msg, setMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<{ title: string; url: string }[]>([]);
+  const refreshed = useRef(new Set<number>());
+
+  // load the order group (or start blank), catalog and customers
+  useEffect(() => {
+    (async () => {
+      const [cat, cu] = await Promise.all([sb.from("garments").select("*"), sb.from("customers").select("*")]);
+      setCatalog((cat.data || []) as Garment[]);
+      setCustomers(((cu.data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
+      if (orderId) {
+        const { data } = await sb.from("orders").select("*").eq("id", orderId).maybeSingle();
+        if (!data) return setMsg("Order not found.");
+        const o = data as Order;
+        setOrder(o);
+        setCustomerId(o.customer_id || "");
+        const groups = orderGroups(o);
+        const g = groups.find((x) => x.id === groupId) || groups[0];
+        if (g) {
+          setGroupName(g.name || `Group ${groups.indexOf(g) + 1}`);
+          setLines(g.lines.filter((l) => l.style || l.color).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })));
+          setImprints(g.imprints.map((d) => ({ ...d })));
+        }
+      }
+    })();
+  }, [sb, orderId, groupId]);
+
+  // the customer's designs
+  useEffect(() => {
+    (async () => {
+      if (!customerId) { setDesigns([]); setUrls({}); return; }
+      const { data } = await sb.from("designs").select("*").eq("customer_id", customerId).order("number", { ascending: false });
+      const list = (data || []) as Design[];
+      setDesigns(list);
+      setUrls(await previewUrls(sb, list));
+    })();
+  }, [sb, customerId]);
+
+  const garmentFor = (l: Line) => catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase() && (!l.brand || g.brand.toLowerCase() === l.brand.toLowerCase()))
+    || catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase());
+
+  // styles pulled from S&S before photos were saved: refresh them once to get the color photos
+  useEffect(() => {
+    lines.forEach((l) => {
+      const g = garmentFor(l);
+      if (!g?.ss_style_id || refreshed.current.has(g.ss_style_id)) return;
+      if (g.color_images && Object.keys(g.color_images).length) return;
+      refreshed.current.add(g.ss_style_id);
+      fetch(`/api/ss/lookup?styleid=${g.ss_style_id}`).then((r) => r.json()).then((j) => {
+        if (j.garment) setCatalog((c) => c.map((x) => (x.id === j.garment.id ? j.garment : x)));
+      }).catch(() => {});
+    });
+  }, [lines, catalog]);
+
+  const photo = (l: Line, view: View) => {
+    const g = garmentFor(l);
+    const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => k.toLowerCase() === l.color.toLowerCase())?.[1];
+    const p = ci ? (view === "front" ? ci.front : ci.back) : "";
+    return p ? ssImg(p) : teeSvg(guessHex(l.color), view);
+  };
+
+  const designOf = (im: Imprint) => designs.find((d) => d.id === im.design_id);
+  const ratioOf = (d?: Design) => (d?.width_px && d?.height_px ? d.height_px / d.width_px : 0);
+  const place = (im: Imprint) => {
+    const d = designOf(im);
+    const r = ratioOf(d) || 0.6;
+    const wIn = printWidth(im.size, im.location, ratioOf(d));
+    const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
+    const b = basePlacement(im.location, wIn, r, drop, scale);
+    const o = offsets[im.id] || { dx: 0, dy: 0 };
+    return { ...b, x: b.x + o.dx, y: b.y + o.dy, wIn, hIn: wIn * r, d };
+  };
+  const views: View[] = (["front", "back"] as View[]).filter((v) => imprints.some((im) => spotFor(im.location).view === v));
+  const line = lines[active] || lines[0];
+
+  async function uploadNew(im: Imprint, f: File) {
+    if (!customerId) return setMsg("Pick the customer first. New art is saved to their account.");
+    try {
+      const { data: u } = await sb.auth.getUser();
+      const d = await uploadDesign(sb, { file: f, customer_id: customerId, by: u.user?.email || "" });
+      setDesigns((x) => [d, ...x]);
+      setUrls({ ...urls, ...(await previewUrls(sb, [d])) });
+      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d.id } : x)));
+      setMsg(`Saved ${designLabel(d)} to the customer's account.`);
+    } catch (e) { setMsg("Upload failed: " + (e instanceof Error ? e.message : String(e))); }
+  }
+
+  /** Draw one garment color with every imprint, plus a spec strip, as a PNG. */
+  async function render(l: Line): Promise<Blob> {
+    const k = 0.6, pw = PHOTO_W * k, ph = PHOTO_H * k, pad = 24;
+    const specLines = imprints.map((im) => { const p = place(im); return `${im.location}: ${p.d ? designLabel(p.d) : "no design"} · ${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"${im.inks ? " · " + im.inks : ""}`; });
+    const W = pad * 2 + views.length * pw + (views.length - 1) * pad;
+    const H = 70 + ph + 30 + specLines.length * 26 + pad;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const x = c.getContext("2d")!;
+    x.fillStyle = "#ffffff"; x.fillRect(0, 0, W, H);
+    x.fillStyle = "#141D2B"; x.font = "700 24px Helvetica, Arial, sans-serif";
+    x.fillText(`${order ? `#${order.number} ` : ""}${groupName || "Mockup"}`, pad, 36);
+    x.font = "16px Helvetica, Arial, sans-serif"; x.fillStyle = "#4A566B";
+    x.fillText([l.brand, l.style, l.garment].filter(Boolean).join(" ") + (l.color ? ` — ${l.color}` : ""), pad, 60);
+    for (let i = 0; i < views.length; i++) {
+      const v = views[i], ox = pad + i * (pw + pad), oy = 70;
+      const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
+      x.drawImage(bg, ox, oy, pw, ph);
+      for (const im of imprints.filter((m) => spotFor(m.location).view === v)) {
+        const p = place(im);
+        if (!p.d || !urls[p.d.id]) continue;
+        const art = await loadImg(urls[p.d.id]).catch(() => null);
+        if (art) x.drawImage(art, ox + p.x * k, oy + p.y * k, p.w * k, p.h * k);
+      }
+      x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif";
+      x.fillText(v.toUpperCase(), ox, oy + ph + 18);
+    }
+    x.fillStyle = "#141D2B"; x.font = "15px Helvetica, Arial, sans-serif";
+    specLines.forEach((s, i) => x.fillText(s, pad, 70 + ph + 44 + i * 26));
+    return await new Promise((res) => c.toBlob((b) => res(b!), "image/png"));
+  }
+
+  async function saveAll() {
+    if (!customerId) return setMsg("Pick a customer so the mockups save to their account.");
+    if (!lines.some((l) => l.style || l.color)) return setMsg("Add a garment and color first.");
+    const missing = imprints.filter((im) => !designOf(im));
+    if (missing.length) return setMsg(`${missing.map((m) => m.location).join(", ")} ${missing.length > 1 ? "have" : "has"} no design yet. Pick one of the customer's designs or upload new art.`);
+    setSaving(true);
+    setMsg("");
+    const { data: u } = await sb.auth.getUser();
+    const out: { title: string; url: string }[] = [];
+    try {
+      for (const l of lines.filter((z) => z.style || z.color)) {
+        const blob = await render(l);
+        const title = `${groupName || "Mockup"} — ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`.trim();
+        const path = orderId ? `${orderId}/mockup-${Date.now()}-${uid().slice(0, 6)}.png` : `mockups/${customerId}/${Date.now()}-${uid().slice(0, 6)}.png`;
+        const up = await sb.storage.from("proofs").upload(path, blob, { contentType: "image/png" });
+        if (up.error) throw new Error(up.error.message);
+        let proofId: string | null = null;
+        if (orderId) {
+          const { data: pr } = await sb.from("proofs").insert({ order_id: orderId, title, file_path: path, file_type: "image/png" }).select("id").single();
+          proofId = pr?.id || null;
+        }
+        await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, proof_id: proofId, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "" });
+        out.push({ title, url: URL.createObjectURL(blob) });
+      }
+      // keep the design picks on the order too
+      if (order) {
+        const { data } = await sb.from("orders").select("groups").eq("id", order.id).maybeSingle();
+        const groups = (data?.groups || []) as Order["groups"];
+        let changed = false;
+        groups.forEach((g) => g.imprints.forEach((im) => { const mine = imprints.find((x) => x.id === im.id); if (mine && mine.design_id && mine.design_id !== im.design_id) { im.design_id = mine.design_id; changed = true; } }));
+        if (changed) await sb.from("orders").update({ groups }).eq("id", order.id);
+      }
+      setSaved(out);
+      setMsg(orderId ? `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the order as proofs and to the customer's account.` : `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the customer's account.`);
+    } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }
+    setSaving(false);
+  }
+
+  const garmentOptions = catalog.slice().sort((a, b) => `${a.brand} ${a.style}`.localeCompare(`${b.brand} ${b.style}`));
+  return (
+    <>
+      <Link className="back" href={orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
+      <div className="page-head">
+        <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || "Mockup builder"}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup builder"}</h1></div>
+        <div className="row"><span className="save-state">{msg}</span><button className="btn primary" type="button" disabled={saving} onClick={saveAll}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
+      </div>
+
+      <div className="mk">
+        <div className="mk-stage-wrap">
+          {lines.length > 1 && (
+            <div className="chips" style={{ marginBottom: 10 }}>
+              {lines.map((l, i) => <button key={l.id} type="button" className={"chip" + (i === active ? " on" : "")} onClick={() => setActive(i)}>{[l.style, l.color].filter(Boolean).join(" · ") || `Garment ${i + 1}`}</button>)}
+            </div>
+          )}
+          <div className="mk-views">
+            {(views.length ? views : (["front"] as View[])).map((v) => (
+              <Stage key={v} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
+                items={imprints.filter((im) => spotFor(im.location).view === v).map((im) => ({ id: im.id, p: place(im), url: designOf(im) ? urls[designOf(im)!.id] : "" }))}
+                onMove={(id, dx, dy) => setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + dx, dy: (o[id]?.dy || 0) + dy } }))} />
+            ))}
+          </div>
+          <div className="row" style={{ gap: 10, marginTop: 8 }}>
+            <label className="lbl" htmlFor="mk-scale">Garment scale</label>
+            <input id="mk-scale" type="range" min="0.7" max="1.4" step="0.01" value={scale} onChange={(e) => setScale(+e.target.value)} style={{ width: 180 }} />
+            <span className="faint" style={{ fontSize: 12 }}>{(PX_PER_IN * scale).toFixed(1)} px per inch · drag designs to fine-tune</span>
+            {Object.keys(offsets).length > 0 && <button className="btn sm ghost" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
+          </div>
+          {saved.length > 0 && (
+            <div className="mk-saved">{saved.map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer"><img src={s.url} alt={s.title} /><span>{s.title}</span></a>)}</div>
+          )}
+        </div>
+
+        <div className="mk-side stack">
+          {!orderId && (
+            <section className="panel">
+              <div className="panel-h"><h2>Customer & garment</h2></div>
+              <div className="panel-b stack">
+                <select aria-label="Customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Choose a customer…</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select>
+                <input type="text" aria-label="Mockup name" placeholder="Mockup name (e.g. Spring promo tee)" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
+                {lines.map((l, i) => {
+                  const g = garmentFor(l);
+                  return (
+                    <div key={l.id} className="row" style={{ gap: 6 }}>
+                      <select aria-label="Garment" value={g?.id || ""} onChange={(e) => { const gg = catalog.find((x) => x.id === e.target.value); setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: gg?.style || "", brand: gg?.brand || "", garment: gg?.description || "", color: gg?.colors?.[0] || "" } : x))); }}>
+                        <option value="">Garment from your catalog…</option>{garmentOptions.map((gg) => <option key={gg.id} value={gg.id}>{gg.brand} {gg.style} — {gg.description}</option>)}
+                      </select>
+                      <select aria-label="Color" value={l.color} onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))}>
+                        <option value="">Color…</option>{(g?.colors || []).map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  );
+                })}
+                <button className="btn sm" type="button" onClick={() => { const last = lines[lines.length - 1]; setLines([...lines, { ...last, id: uid(), color: "" }]); }}>+ Another color</button>
+              </div>
+            </section>
+          )}
+          <section className="panel">
+            <div className="panel-h"><h2>Imprints</h2>{!orderId && <button className="btn sm" type="button" onClick={() => setImprints([...imprints, newImprint(LOCATIONS.find((z) => !imprints.some((i) => i.location === z)) || "Full Back")])}>+ Add</button>}</div>
+            <div className="panel-b stack">
+              {imprints.map((im) => {
+                const p = place(im);
+                return (
+                  <div key={im.id} className="mk-imp">
+                    <div className="row" style={{ justifyContent: "space-between" }}>
+                      {orderId ? <b>{im.location}</b> : <select aria-label="Location" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{LOCATIONS.map((z) => <option key={z}>{z}</option>)}</select>}
+                      <span className="faint" style={{ fontSize: 12 }}>{p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot;</span>
+                    </div>
+                    <div className="row" style={{ gap: 6 }}>
+                      {p.d && urls[p.d.id] ? <img className="dp-th" src={urls[p.d.id]} alt="" /> : <span className="dp-th" />}
+                      <select aria-label={`Design for ${im.location}`} value={im.design_id || ""} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: e.target.value || undefined } : x)))} style={{ flex: 1 }}>
+                        <option value="">{designs.length ? "Pick a design…" : "No designs yet"}</option>
+                        {designs.map((d) => <option key={d.id} value={d.id}>{designLabel(d)}</option>)}
+                      </select>
+                    </div>
+                    {!p.d && <div className="ink-warn">Which design goes on the {im.location}? Pick one of the customer&apos;s designs, or upload new art.</div>}
+                    <div className="row" style={{ gap: 6 }}>
+                      <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
+                      <input type="text" aria-label="Width in inches" placeholder="Width" style={{ width: 80 }} value={(im.size.match(/^([\d.]+)/) || [])[1] || ""} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: e.target.value ? `${e.target.value.replace(/[^\d.]/g, "")}" wide` : "" } : x)))} />
+                      <span className="faint" style={{ fontSize: 12 }}>in. wide</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {orderId && <div className="faint" style={{ fontSize: 12 }}>Locations and print sizes come from the order. Change them there.</div>}
+            </div>
+          </section>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** One garment photo with draggable designs on it. */
+function Stage({ src, label, items, onMove }: { src: string; label: string; items: { id: string; p: { x: number; y: number; w: number; h: number }; url: string }[]; onMove: (id: string, dx: number, dy: number) => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ id: string; x: number; y: number } | null>(null);
+  const k = () => (box.current ? box.current.clientWidth / PHOTO_W : 0.42);
+  return (
+    <div className="mk-stage">
+      <div ref={box} className="mk-photo" style={{ aspectRatio: `${PHOTO_W} / ${PHOTO_H}` }}
+        onPointerMove={(e) => { const d = drag.current; if (!d) return; const s = k(); onMove(d.id, (e.clientX - d.x) / s, (e.clientY - d.y) / s); drag.current = { ...d, x: e.clientX, y: e.clientY }; }}
+        onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
+        <img src={src} alt="" draggable={false} className="mk-bg" />
+        {items.map((it) => {
+          const s = 100 / PHOTO_W, sy = 100 / PHOTO_H;
+          return it.url ? (
+            <img key={it.id} src={it.url} alt="" draggable={false} className="mk-art"
+              style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%` }}
+              onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: it.id, x: e.clientX, y: e.clientY }; }} />
+          ) : (
+            <div key={it.id} className="mk-art mk-missing" style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%` }}
+              onPointerDown={(e) => { drag.current = { id: it.id, x: e.clientX, y: e.clientY }; }}>?</div>
+          );
+        })}
+      </div>
+      <div className="mk-label">{label}</div>
+    </div>
+  );
+}
