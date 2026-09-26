@@ -18,6 +18,14 @@ type Props = {
   onSaveToCatalog: (l: GLine) => void;
 };
 
+/** Screen prints: the inks listed must match the number of colors chosen. */
+const inkCount = (s: string) => (s || "").split(/[,;/+]|\s&\s/).map((x) => x.trim()).filter(Boolean).length;
+const inkMismatch = (d: { method: string; colors: number; inks: string }) => {
+  if (d.method !== "screen" || d.colors >= FULL_COLOR) return "";
+  const n = inkCount(d.inks);
+  if (!n || n === d.colors) return "";
+  return `${n} ink${n > 1 ? "s" : ""} listed for ${d.colors} color${d.colors > 1 ? "s" : ""}`;
+};
 const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)), 0);
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
@@ -137,7 +145,6 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           <b className="a-to r num">{money(gc.sub)}</b>
         </div>
 
-        <datalist id="ink-colors">{INK_COLORS.map((c) => <option key={c} value={c} />)}</datalist>
         <div className="imprints">
           <div className="lbl" style={{ marginBottom: 6 }}>IMPRINTS</div>
           <div>
@@ -156,12 +163,13 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                       : <span className="faint" style={{ fontSize: 12 }}>{d.method === "embroidery" ? "Thread" : "Full color"}</span>}</td>
                     <td>
                       <div className="ink-combo">
-                        <input type="text" list="ink-colors" aria-label="Ink colors" placeholder="Pick ▸ or type PMS" value={d.inks} onChange={(e) => update((x) => { x.imprints[di].inks = e.target.value; })} />
+                        <input type="text" aria-label="Ink colors" className={inkMismatch(d) ? "bad" : ""} title={inkMismatch(d) || ""} placeholder="Pick ▸ or type PMS" value={d.inks} onChange={(e) => update((x) => { x.imprints[di].inks = e.target.value; })} />
                         <select aria-label="Add a Wilflex RFU ink" tabIndex={-1} value="" onChange={(e) => { const v = e.target.value; if (v) update((x) => { const cur = x.imprints[di].inks.trim(); x.imprints[di].inks = cur ? `${cur}, ${v}` : v; }); }}>
                           <option value="" hidden>▾</option>
                           {INK_COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
+                      {inkMismatch(d) && <div className="ink-warn">{inkMismatch(d)}</div>}
                     </td>
                     <td><input type="text" aria-label="Print size" placeholder='11" wide' value={d.size} onChange={(e) => update((x) => { x.imprints[di].size = e.target.value; })} /></td>
                     <td><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></td>

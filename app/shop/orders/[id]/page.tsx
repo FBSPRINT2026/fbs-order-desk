@@ -188,6 +188,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
   async function send() {
     if (!o) return;
+    const bad = (o.groups || []).flatMap((g) => g.imprints).find((d) => d.method === "screen" && d.colors < 11 && d.inks.trim() && d.inks.split(/[,;/+]|\s&\s/).map((x) => x.trim()).filter(Boolean).length !== d.colors);
+    if (bad) return say(`${bad.location || "An imprint"}: the inks listed don't match its number of colors. Fix that before sending.`);
     const note = (document.getElementById("send-note") as HTMLTextAreaElement | null)?.value || "";
     await save();
     const r = await sendToCustomer(o.id, note);
