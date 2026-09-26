@@ -39,6 +39,73 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
   "Upper Back (Yoke)": { view: "back", dx: 0, drop: 2, defW: 3.5, maxW: 4, maxH: 4 },
   "Across Shoulders": { view: "back", dx: 0, drop: 2.5, defW: 12, maxW: 14, maxH: 4 },
 };
+/**
+ * How one garment photo lines up with the reference (Gildan 5000 black). S&S scales every photo so the sleeve tips touch the edges,
+ * and each color is shot on a slightly different form, so the shirt's size, height and sleeve angle change from photo to photo.
+ * s = size vs the reference, cx = body center, top = top of the collar; sleeves = where each sleeve print sits on this photo.
+ */
+export type Fit = { s: number; cx: number; top: number; sleeve: { left: { x: number; y: number; rot: number }; right: { x: number; y: number; rot: number } } };
+const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
+/** Center of the sleeve print area: this far (reference px) up the fold from the sleeve tip, i.e. area bottom ~0.5" above the hem. */
+const SLEEVE_UP = 76.5;
+
+/** Measure the shirt outline on a photo (white background). Returns null when it can't find a clean outline (e.g. drawn tee). */
+export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
+  const W = PHOTO_W, H = PHOTO_H;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const x = c.getContext("2d", { willReadFrequently: true });
+  if (!x) return null;
+  x.drawImage(img, 0, 0, W, H);
+  let d: Uint8ClampedArray;
+  try { d = x.getImageData(0, 0, W, H).data; } catch { return null; }
+  const L = new Int16Array(H).fill(-1), R = new Int16Array(H).fill(-1);
+  let T = -1, B = -1;
+  for (let y = 0; y < H; y++) {
+    let n = 0;
+    for (let X = 0; X < W; X++) {
+      const i = (y * W + X) * 4;
+      if (Math.min(d[i], d[i + 1], d[i + 2]) < 250) { n++; if (L[y] < 0) L[y] = X; R[y] = X; }
+    }
+    if (n > 10) { if (T < 0) T = y; B = y; } else { L[y] = -1; R[y] = -1; }
+  }
+  if (T < 0 || B - T < 600) return null;
+  const yy = Math.round(T + 0.55 * (B - T));
+  const bodyW = R[yy] - L[yy];
+  if (bodyW < 300) return null;
+  const ref = REF[view];
+  const s = (bodyW / ref.bodyW + (B - T) / ref.h) / 2;
+  const cx = (L[yy] + R[yy]) / 2;
+  const sleeve = (side: "left" | "right") => {
+    const edge = side === "right" ? R : L;
+    const better = (a: number, b: number) => (side === "right" ? a > b : a < b);
+    // sleeve tip: the outermost point in the top half of the shirt
+    let best = side === "right" ? -1 : W + 1;
+    const lim = Math.round(T + 0.5 * (B - T));
+    for (let y = T; y < lim; y++) if (edge[y] >= 0 && better(edge[y], best)) best = edge[y];
+    let sy = 0, n = 0;
+    for (let y = T; y < lim; y++) if (edge[y] >= 0 && Math.abs(edge[y] - best) <= 1) { sy += y; n++; }
+    const tipY = sy / (n || 1), tip = { x: best, y: tipY };
+    // the fold: straight line fit of the outer edge above the tip
+    let n2 = 0, my = 0, mx = 0, syy = 0, sxy = 0;
+    for (let y = Math.round(tipY - 150 * s); y <= Math.round(tipY - 15 * s); y++) {
+      if (y < 0 || edge[y] < 0) continue;
+      n2++; my += y; mx += edge[y]; syy += y * y; sxy += y * edge[y];
+    }
+    const b = n2 > 5 ? (sxy - (mx * my) / n2) / (syy - (my * my) / n2) : side === "right" ? 0.7 : -0.7;
+    const len = Math.hypot(b, 1), u = { x: b / len, y: 1 / len };
+    const out = side === "right" ? { x: u.y, y: -u.x } : { x: -u.y, y: u.x };
+    return { x: tip.x - SLEEVE_UP * s * u.x + 2 * out.x, y: tip.y - SLEEVE_UP * s * u.y + 2 * out.y, rot: (-Math.atan(b) * 180) / Math.PI };
+  };
+  let left = sleeve("left"), right = sleeve("right");
+  // sanity: a sleeve fold runs ~25-45°; if one side reads wrong, mirror the other side's angle
+  const ok = (r: number) => Math.abs(r) >= 22 && Math.abs(r) <= 48;
+  if (!ok(left.rot) && ok(right.rot)) left = { ...left, rot: -right.rot };
+  if (!ok(right.rot) && ok(left.rot)) right = { ...right, rot: -left.rot };
+  if (!ok(left.rot) && !ok(right.rot)) { left = { ...left, rot: 35 }; right = { ...right, rot: -35 }; }
+  return { s, cx, top: T, sleeve: { left, right } };
+}
+
 /** Which garment photos a location shows on. */
 export const viewsFor = (location: string): View[] => { const s = spotFor(location); return s.wrap ? ["front", "back"] : [s.view]; };
 /** Largest width (inches) that fits the location's max print area for a design of this height/width ratio. */
@@ -75,26 +142,28 @@ export function printWidth(size: string, location: string, ratio: number): numbe
   return Math.min(w, maxWidthFor(location, ratio));
 }
 
-/** Top-left of a design on the photo, before any hand adjustment. */
-export function basePlacement(location: string, wIn: number, ratio: number, dropIn: number | null, scale: number, view?: View) {
+/** Top-left of a design on the photo, before any hand adjustment. With a Fit, it's placed on that photo's measured shirt. */
+export function basePlacement(location: string, wIn: number, ratio: number, dropIn: number | null, scale: number, view?: View, fit?: Fit | null) {
   const spot = spotFor(location);
+  const k = fit?.s || 1;
   if (spot.wrap) {
     // centered on the sleeve's outer fold; half of it shows on this photo
     const hf = spot.wrap[view || "front"];
-    const ppi0 = PX_PER_IN * scale, w0 = wIn * ppi0, h0 = ratio ? w0 * ratio : w0, a0 = spot.maxW * ppi0, b0 = spot.maxH * ppi0;
-    return { view: view || "front", x: hf.x - w0 / 2, y: hf.y - h0 / 2, w: w0, h: h0, rot: hf.rot, clip: hf.show, area: { x: hf.x - a0 / 2, y: hf.y - b0 / 2, w: a0, h: b0 } };
+    const pt = fit ? fit.sleeve[hf.x > PHOTO_W / 2 ? "right" : "left"] : hf;
+    const ppi0 = PX_PER_IN * scale * k, w0 = wIn * ppi0, h0 = ratio ? w0 * ratio : w0, a0 = spot.maxW * ppi0, b0 = spot.maxH * ppi0;
+    return { view: view || "front", x: pt.x - w0 / 2, y: pt.y - h0 / 2, w: w0, h: h0, rot: pt.rot, clip: hf.show, area: { x: pt.x - a0 / 2, y: pt.y - b0 / 2, w: a0, h: b0 }, k };
   }
   const ppi = PX_PER_IN * scale;
   const w = wIn * ppi;
   const h = ratio ? w * ratio : w;
   const aw = spot.maxW * ppi, ah = spot.maxH * ppi;
-  // sleeves sit on an angle to follow the sleeve hem
-  if (spot.abs) return { view: spot.view, x: spot.abs.x - w / 2, y: spot.abs.y - h / 2, w, h, rot: spot.rot || 0, clip: "" as "" | "left" | "right", area: { x: spot.abs.x - aw / 2, y: spot.abs.y - ah / 2, w: aw, h: ah } };
   const cx = CENTER_X + (spot.dx || 0) * ppi;
   const top = COLLAR_Y[spot.view] + (dropIn ?? spot.drop ?? 3) * ppi;
   // art sits in the middle of the print area; with a set drop, its top edge goes at the drop instead
   const artY = dropIn != null ? top : top + Math.max(0, (ah - h) / 2);
-  return { view: spot.view, x: cx - w / 2, y: artY, w, h, rot: 0, clip: "" as "" | "left" | "right", area: { x: cx - aw / 2, y: top, w: aw, h: ah } };
+  // move from the reference photo onto this photo's shirt
+  const mx = (v: number) => (fit ? fit.cx + (v - CENTER_X) * k : v), my = (v: number) => (fit ? fit.top + (v - REF[spot.view].top) * k : v);
+  return { view: spot.view, x: mx(cx - w / 2), y: my(artY), w: w * k, h: h * k, rot: 0, clip: "" as "" | "left" | "right", area: { x: mx(cx - aw / 2), y: my(top), w: aw * k, h: ah * k }, k };
 }
 
 const NAMED: Record<string, string> = {

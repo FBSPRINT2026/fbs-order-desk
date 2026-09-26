@@ -7,7 +7,7 @@ import { LOCATIONS, METHODS, designLabel, newImprint, orderGroups, uid, type Cus
 import { custLabel } from "@/lib/format";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { PMS_HEX, WILFLEX_HEX, colorHex, detectColors, recolor } from "@/lib/inkColors";
-import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, guessHex, printWidth, smallerSpot, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, guessHex, measureGarment, printWidth, smallerSpot, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -159,15 +159,29 @@ function Builder() {
     return p ? ssImg(p) : teeSvg(guessHex(l.color), view);
   };
 
+  // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
+  const [fits, setFits] = useState<Record<string, Fit | null>>({});
+  const fitFor = (l: Line | undefined, v: View) => { if (!l) return null; const u = photo(l, v); return u.startsWith("data:") ? null : fits[u] || null; };
+  useEffect(() => {
+    for (const l of lines) for (const v of ["front", "back"] as View[]) {
+      const u = photo(l, v);
+      if (u.startsWith("data:") || u in fits) continue;
+      setFits((f) => ({ ...f, [u]: null }));
+      loadImg(u).then((img) => { const fit = measureGarment(img, v); setFits((f) => ({ ...f, [u]: fit })); }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, catalog]);
+
   const designOf = (im: Imprint) => designs.find((d) => d.id === im.design_id);
   const ratioOf = (d?: Design) => (d?.width_px && d?.height_px ? d.height_px / d.width_px : 0);
-  const place = (im: Imprint, view?: View) => {
+  const place = (im: Imprint, view?: View, fit?: Fit | null) => {
     const d = designOf(im);
     const r = ratioOf(d) || 0.6;
     const wIn = printWidth(im.size, im.location, ratioOf(d));
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
-    const b = basePlacement(im.location, wIn, r, drop, scale, view);
-    const o = offsets[im.id] || { dx: 0, dy: 0 };
+    const b = basePlacement(im.location, wIn, r, drop, scale, view, fit === undefined ? fitFor(line, view || viewsFor(im.location)[0]) : fit);
+    // hand moves are stored in reference-photo pixels; scale them to this photo
+    const o0 = offsets[im.id] || { dx: 0, dy: 0 }, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
     if (b.clip) {
       // sleeves: moves are along the sleeve (dx = across the fold, dy = toward the hem), turned to the sleeve's angle on each photo
       const a = (b.rot * Math.PI) / 180;
@@ -212,8 +226,9 @@ function Builder() {
       const v = views[i], ox = pad + i * (pw + pad), oy = 70;
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
       x.drawImage(bg, ox, oy, pw, ph);
+      const u = photo(l, v), fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
       for (const im of imprints.filter((m) => viewsFor(m.location).includes(v))) {
-        const p = place(im, v);
+        const p = place(im, v, fit);
         if (!p.d || !artUrl(im)) continue;
         const art = await loadImg(artUrl(im)).catch(() => null);
         if (art) {
@@ -344,16 +359,17 @@ function Builder() {
                     const a = (-p.rot * Math.PI) / 180;
                     [dx, dy] = [dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a)];
                   }
+                  if (p) { dx /= p.k; dy /= p.k; }
                   setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + dx, dy: (o[id]?.dy || 0) + dy } }));
                 }}
                 onResize={(id, newW) => {
                   const im = imprints.find((x) => x.id === id); if (!im) return;
-                  const old = place(im);
+                  const old = place(im, v);
                   const cap = maxWidthFor(im.location, ratioOf(designOf(im)));
-                  const inches = Math.min(cap, Math.round((newW / (PX_PER_IN * scale)) * 100) / 100);
-                  newW = inches * PX_PER_IN * scale;
+                  const inches = Math.min(cap, Math.round((newW / (PX_PER_IN * scale * old.k)) * 100) / 100);
+                  newW = inches * PX_PER_IN * scale * old.k;
                   // keep the left edge where it is while the size changes (sleeves stay centered on the fold)
-                  if (!old.clip) setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + (newW - old.w) / 2, dy: o[id]?.dy || 0 } }));
+                  if (!old.clip) setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + (newW - old.w) / 2 / old.k, dy: o[id]?.dy || 0 } }));
                   setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, size: `${inches}" wide` } : x)));
                 }}
                 onPick={pickColor} />
