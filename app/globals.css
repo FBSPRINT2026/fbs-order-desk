@@ -507,3 +507,8 @@ td > .sz-dim.on input{padding-right:24px}
 .fee-head{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
 .fee-head > span{padding-left:2px}
 .fees-notes{align-items:start}
+.comm-sum{display:flex;flex-direction:column;gap:4px;background:var(--surface-2);border-radius:6px;padding:8px 10px;font-size:12.5px}
+.comm-sum > div{display:flex;justify-content:space-between;gap:10px}
+.comm-sum span{color:var(--ink-3)}
+.comm-sum b{font-weight:600;text-align:right}
+#messages .thread{max-height:280px;overflow:auto}
