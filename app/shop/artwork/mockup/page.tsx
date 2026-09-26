@@ -395,7 +395,12 @@ function Builder() {
             ))}
           </div>
             <div className="mk-closeups">
-              {imprints.map((im) => {
+              {/* front locations first, then back, sleeves always last (in order-form order within each) */}
+              {imprints.map((im, i) => ({ im, i })).sort((a, b) => {
+                const rank = (x: Imprint) => (viewsFor(x.location).length > 1 ? 2 : spotFor(x.location).view === "back" ? 1 : 0);
+                const pos = (x: Imprint) => { const k = LOCATIONS.indexOf(x.location); return k < 0 ? 999 : k; };
+                return rank(a.im) - rank(b.im) || pos(a.im) - pos(b.im) || a.i - b.i;
+              }).map(({ im }) => {
                 const d = designOf(im); const r = ratioOf(d) || 0.6;
                 const wIn = printWidth(im.size, im.location, ratioOf(d));
                 const o = offsets[im.id] || { dx: 0, dy: 0 };
