@@ -206,7 +206,13 @@ function Builder() {
         const p = place(im);
         if (!p.d || !artUrl(im)) continue;
         const art = await loadImg(artUrl(im)).catch(() => null);
-        if (art) x.drawImage(art, ox + p.x * k, oy + p.y * k, p.w * k, p.h * k);
+        if (art) {
+          x.save();
+          x.translate(ox + (p.x + p.w / 2) * k, oy + (p.y + p.h / 2) * k);
+          if (p.rot) x.rotate((p.rot * Math.PI) / 180);
+          x.drawImage(art, (-p.w / 2) * k, (-p.h / 2) * k, p.w * k, p.h * k);
+          x.restore();
+        }
       }
       x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif";
       x.fillText(v.toUpperCase(), ox, oy + ph + 18);
@@ -289,15 +295,20 @@ function Builder() {
                   setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + (newW - old.w) / 2, dy: o[id]?.dy || 0 } }));
                   setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, size: `${inches}" wide` } : x)));
                 }}
-                onPick={(id, rx, ry, cx, cy) => {
-                  const im = imprints.find((x) => x.id === id); const pt = paints[id];
-                  if (!im || !pt) return;
-                  const img = imgCache.current.get(pt.design); if (!img) return;
+                onPick={async (id, rx, ry, cx, cy) => {
+                  const im = imprints.find((x) => x.id === id);
+                  const d = im && designs.find((x) => x.id === im.design_id);
+                  if (!im || !d || !urls[d.id]) return setMsg("Pick a design for this location first.");
+                  let pt = paints[id];
+                  let img = imgCache.current.get(d.id);
+                  try { if (!img) { img = await loadImg(urls[d.id]); imgCache.current.set(d.id, img); } } catch { return setMsg("Couldn't read this design's colors. Try re-uploading it as a PNG."); }
+                  if (!pt || pt.design !== d.id) { pt = { design: d.id, sources: detectColors(img), map: {} }; const np = pt; setPaints((p) => ({ ...p, [id]: np })); }
+                  if (!pt.sources.length) return;
                   const c = document.createElement("canvas"); c.width = 1; c.height = 1;
                   const cx2 = c.getContext("2d", { willReadFrequently: true })!;
                   cx2.drawImage(img, Math.floor(rx * img.naturalWidth), Math.floor(ry * img.naturalHeight), 1, 1, 0, 0, 1, 1);
                   const [r, g, b2, a] = cx2.getImageData(0, 0, 1, 1).data;
-                  if (a < 100) return;
+                  if (a < 100) { setPop({ id, src: pt.sources[0].hex, x: cx, y: cy }); return; }
                   let best = pt.sources[0]?.hex, bd = Infinity;
                   for (const src of pt.sources) { const v = [1, 3, 5].map((o) => parseInt(src.hex.slice(o, o + 2), 16)); const dd = (v[0] - r) ** 2 + (v[1] - g) ** 2 + (v[2] - b2) ** 2; if (dd < bd) { bd = dd; best = src.hex; } }
                   if (best) setPop({ id, src: best, x: cx, y: cy });
@@ -420,7 +431,7 @@ function Builder() {
 /** One garment photo with designs you can drag, resize from the corner (proportions locked) and double-click to recolor. */
 function Stage({ src, label, items, onMove, onResize, onPick }: {
   src: string; label: string;
-  items: { id: string; p: { x: number; y: number; w: number; h: number; area: { x: number; y: number; w: number; h: number } }; url: string }[];
+  items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; area: { x: number; y: number; w: number; h: number } }; url: string }[];
   onMove: (id: string, dx: number, dy: number) => void;
   onResize: (id: string, newW: number) => void;
   onPick: (id: string, relX: number, relY: number, clientX: number, clientY: number) => void;
@@ -428,6 +439,7 @@ function Stage({ src, label, items, onMove, onResize, onPick }: {
   const box = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size"; w: number; el?: HTMLElement } | null>(null);
   const [sel, setSel] = useState("");
+  const lastDown = useRef<{ t: number; x: number; y: number; id: string } | null>(null);
   const k = () => (box.current ? box.current.clientWidth / PHOTO_W : 0.42);
   const s = 100 / PHOTO_W, sy = 100 / PHOTO_H;
   return (
@@ -446,17 +458,24 @@ function Stage({ src, label, items, onMove, onResize, onPick }: {
         onPointerLeave={() => { drag.current = null; }}
         onPointerDown={(e) => { if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg")) setSel(""); }}>
         <img src={src} alt="" draggable={false} className="mk-bg" />
-        {items.map((it) => <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%` }} />)}
+        {items.map((it) => <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }} />)}
         {items.map((it) => (
           <div key={it.id} className={"mk-art" + (sel === it.id ? " sel" : "") + (it.url ? "" : " mk-missing")}
-            style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%` }}
-            onDoubleClick={(e) => {
-              // double-click a color in the logo to change it
-              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              onPick(it.id, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, e.clientX, e.clientY);
-            }}
+            style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }}
             onPointerDown={(e) => {
               e.stopPropagation();
+              // double-click (two quick clicks in the same spot) opens the color menu for the color under the cursor
+              const now = Date.now(), last = lastDown.current;
+              lastDown.current = { t: now, x: e.clientX, y: e.clientY, id: it.id };
+              if (last && last.id === it.id && now - last.t < 450 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 8) {
+                const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect();
+                const cx = r.left + r.width / 2, cy = r.top + r.height / 2, a = (-(it.p.rot || 0) * Math.PI) / 180;
+                const vx = e.clientX - cx, vy = e.clientY - cy;
+                const ux = vx * Math.cos(a) - vy * Math.sin(a), uy = vx * Math.sin(a) + vy * Math.cos(a);
+                onPick(it.id, ux / el.offsetWidth + 0.5, uy / el.offsetHeight + 0.5, e.clientX, e.clientY);
+                lastDown.current = null;
+                return;
+              }
               setSel(it.id);
               (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
               drag.current = { id: it.id, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "move", w: it.p.w, el: e.currentTarget as HTMLElement };

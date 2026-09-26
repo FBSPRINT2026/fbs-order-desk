@@ -10,20 +10,20 @@ export const CENTER_X = 499;
 export const COLLAR_Y = { front: 128, back: 100 } as const;
 
 export type View = "front" | "back";
-type Loc = { view: View; dx?: number; drop?: number; abs?: { x: number; y: number }; defW: number; maxW: number; maxH: number };
+type Loc = { view: View; dx?: number; drop?: number; abs?: { x: number; y: number }; rot?: number; defW: number; maxW: number; maxH: number };
 
 /** Where each order-form location sits (dx = inches right of center as you look at the shirt; drop = inches below the collar). */
 export const LOCATION_SPOTS: Record<string, Loc> = {
   // max print areas from the FBS apparel placement guide (width x height)
-  "Full Front": { view: "front", dx: 0, drop: 3, defW: 11, maxW: 12, maxH: 14 },
+  "Full Front": { view: "front", dx: 0, drop: 4, defW: 11, maxW: 12, maxH: 14 },
   "Medium Front": { view: "front", dx: 0, drop: 3, defW: 8, maxW: 8, maxH: 8 },
   "Center Chest": { view: "front", dx: 0, drop: 3, defW: 4.5, maxW: 5, maxH: 5 },
   "Across Chest": { view: "front", dx: 0, drop: 3, defW: 11, maxW: 12, maxH: 4 },
   "Left Chest": { view: "front", dx: 4.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
   "Right Chest": { view: "front", dx: -4.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
   Pocket: { view: "front", dx: 4.5, drop: 5, defW: 3, maxW: 4, maxH: 4 },
-  "Left Sleeve": { view: "front", abs: { x: 825, y: 385 }, defW: 3, maxW: 3.5, maxH: 3.5 },
-  "Right Sleeve": { view: "front", abs: { x: 175, y: 385 }, defW: 3, maxW: 3.5, maxH: 3.5 },
+  "Left Sleeve": { view: "front", abs: { x: 855, y: 365 }, rot: -40, defW: 3, maxW: 3.5, maxH: 3.5 },
+  "Right Sleeve": { view: "front", abs: { x: 145, y: 365 }, rot: 40, defW: 3, maxW: 3.5, maxH: 3.5 },
   "Left Vertical": { view: "front", dx: 4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
   "Right Vertical": { view: "front", dx: -4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
   "Front Bottom Left": { view: "front", dx: 4.5, drop: 21.5, defW: 4.5, maxW: 5, maxH: 6 },
@@ -55,10 +55,11 @@ export function basePlacement(location: string, wIn: number, ratio: number, drop
   const w = wIn * ppi;
   const h = ratio ? w * ratio : w;
   const aw = spot.maxW * ppi, ah = spot.maxH * ppi;
-  if (spot.abs) return { view: spot.view, x: spot.abs.x - w / 2, y: spot.abs.y - h / 2, w, h, area: { x: spot.abs.x - aw / 2, y: spot.abs.y - ah / 2, w: aw, h: ah } };
+  // sleeves sit on an angle to follow the sleeve hem
+  if (spot.abs) return { view: spot.view, x: spot.abs.x - w / 2, y: spot.abs.y - h / 2, w, h, rot: spot.rot || 0, area: { x: spot.abs.x - aw / 2, y: spot.abs.y - ah / 2, w: aw, h: ah } };
   const cx = CENTER_X + (spot.dx || 0) * ppi;
   const top = COLLAR_Y[spot.view] + (dropIn ?? spot.drop ?? 3) * ppi;
-  return { view: spot.view, x: cx - w / 2, y: top, w, h, area: { x: cx - aw / 2, y: top, w: aw, h: ah } };
+  return { view: spot.view, x: cx - w / 2, y: top, w, h, rot: 0, area: { x: cx - aw / 2, y: top, w: aw, h: ah } };
 }
 
 const NAMED: Record<string, string> = {
