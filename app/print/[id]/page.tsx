@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calcOrder, imprintLabel, mergeSettings, orderGroups, sizeLabel, SIZES, type ArtFile, type Customer, type Group, type GroupCalc, type Order, type Payment } from "@/lib/pricing";
+import { calcOrder, imprintLabel, mergeSettings, orderGroups, sizeLabel, SIZES, type ArtFile, type Customer, type Design, type Group, type GroupCalc, type Order, type Payment } from "@/lib/pricing";
 import { fmtDateLong, money, todayISO } from "@/lib/format";
 import PrintButton from "./PrintButton";
 
@@ -37,6 +37,14 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
       admin.from("art_files").select("*").eq("order_id", id).order("created_at"),
     ]);
     const arts = (af || []) as ArtFile[];
+    // designs printed on this order, with previews for the press crew
+    const dIds = [...new Set(groups.flatMap((g) => g.imprints.map((d) => d.design_id).filter(Boolean) as string[]))];
+    const { data: dz } = dIds.length ? await admin.from("designs").select("*").in("id", dIds) : { data: [] };
+    const dmap = Object.fromEntries(((dz || []) as Design[]).map((d) => [d.id, d]));
+    const dPaths = ((dz || []) as Design[]).filter((d) => d.preview_path);
+    const dSigned = dPaths.length ? (await admin.storage.from("proofs").createSignedUrls(dPaths.map((d) => d.preview_path), 3600)).data || [] : [];
+    const dUrl: Record<string, string> = {};
+    dPaths.forEach((d, i) => { if (dSigned[i]?.signedUrl) dUrl[d.id] = dSigned[i].signedUrl!; });
     const signed = arts.length ? (await admin.storage.from("proofs").createSignedUrls(arts.map((a) => a.file_path), 3600)).data || [] : [];
     return (
       <div style={{ background: "#fff", minHeight: "100%", color: "#141D2B" }}>
@@ -68,10 +76,10 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
                 </tbody>
               </table>
               <table>
-                <thead><tr><th>Imprint</th><th>Location</th><th className="c">Colors</th><th>Inks / PMS</th><th>Size</th><th>Drop</th><th>Notes</th></tr></thead>
+                <thead><tr><th>Design</th><th>Imprint</th><th>Location</th><th className="c">Colors</th><th>Inks / PMS</th><th>Size</th><th>Drop</th><th>Notes</th></tr></thead>
                 <tbody>
                   {g.imprints.map((d) => (
-                    <tr key={d.id}><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? (d.colors >= 11 ? "Full" : d.colors) : d.method === "embroidery" ? d.colors : "Full"}</td><td>{d.inks}</td><td>{d.size}</td><td>{d.drop ? `${d.drop}"` : "Standard"}</td><td>{d.notes}</td></tr>
+                    <tr key={d.id}><td>{d.design_id && dmap[d.design_id] ? <span className="wo-design">{dUrl[d.design_id] && <img src={dUrl[d.design_id]} alt="" />}<b>D-{dmap[d.design_id].number}</b></span> : ""}</td><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? (d.colors >= 11 ? "Full" : d.colors) : d.method === "embroidery" ? d.colors : "Full"}</td><td>{d.inks}</td><td>{d.size}</td><td>{d.drop ? `${d.drop}"` : "Standard"}</td><td>{d.notes}</td></tr>
                   ))}
                 </tbody>
               </table>

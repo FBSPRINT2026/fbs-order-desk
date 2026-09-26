@@ -1,7 +1,7 @@
 "use client";
-import { ADULT_SIZES, FULL_COLOR, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { ADULT_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
   gi: number;
@@ -18,6 +18,9 @@ type Props = {
   onRemove: () => void;
   onSaveToCatalog: (l: GLine) => void;
   onLookup?: (style: string, styleID?: number) => Promise<Garment | null>;
+  designs?: Design[];
+  designUrls?: Record<string, string>;
+  onUploadDesign?: (file: File, name: string) => Promise<Design | null>;
   lookingUp?: string;
 };
 
@@ -34,7 +37,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp }: Props) {
+export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign }: Props) {
   // exact style match; if the same number exists under several brands, only the brand given (or none) counts
   const findStyle = (style: string, brand?: string) => {
     const hits = catalog.filter((x) => x.style.toLowerCase() === style.trim().toLowerCase());
@@ -167,7 +170,8 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
               <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink or thread / PMS</th><th>Print size</th><th>Drop</th><th>Notes</th><th className="r">Each</th><th /></tr></thead>
               <tbody>
                 {g.imprints.map((d, di) => (
-                  <tr key={d.id}>
+                  <Fragment key={d.id}>
+                  <tr className="imp-main">
                     <td><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>
                     <td>{LOCATIONS.includes(d.location)
                       ? <select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value === "__custom" ? "" : e.target.value; })}>{LOCATIONS.map((z) => <option key={z} value={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
@@ -195,6 +199,20 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                     <td className="r num">{money(gc.imprints[di]?.each)}</td>
                     <td><button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button></td>
                   </tr>
+                  <tr className="imp-design">
+                    <td colSpan={9}>
+                      <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign}
+                        onPick={(des) => update((x) => {
+                          const im = x.imprints[di];
+                          im.design_id = des?.id || undefined;
+                          // bring the design's ink info along when the imprint doesn't have any yet
+                          if (des && !im.inks.trim() && des.inks) im.inks = des.inks;
+                          if (des && (im.method === "screen" || im.method === "embroidery") && des.colors && !im.inks.trim()) im.colors = des.colors;
+                        })}
+                        onUpload={async (f, name) => { if (!onUploadDesign) return; const des = await onUploadDesign(f, name); if (des) update((x) => { x.imprints[di].design_id = des.id; }); }} />
+                    </td>
+                  </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -414,6 +432,37 @@ function ColorPicker({ value, colors, onChange }: { value: string; colors: strin
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Under each imprint: which customer design prints here, with its size worked out from the print size. */
+function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload }: {
+  imprint: { design_id?: string; size: string }; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
+  onPick: (d: Design | null) => void; onUpload: (f: File, name: string) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const cur = designs.find((x) => x.id === imprint.design_id);
+  const m = (imprint.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
+  const val = m ? +m[1] : 0;
+  const given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
+  const other = cur && val ? designOther(cur, val, given) : 0;
+  return (
+    <div className="dp">
+      <span className="dp-l">Design</span>
+      {cur && urls[cur.id] ? <img className="dp-th" src={urls[cur.id]} alt="" /> : <span className="dp-th empty" />}
+      <select aria-label="Design for this imprint" value={imprint.design_id || ""} onChange={(e) => onPick(designs.find((x) => x.id === e.target.value) || null)}>
+        <option value="">{designs.length ? "Choose the customer's design…" : "No designs on this customer yet"}</option>
+        {designs.map((d) => <option key={d.id} value={d.id}>{designLabel(d)}</option>)}
+        {imprint.design_id && !cur && <option value={imprint.design_id}>Design from another customer</option>}
+      </select>
+      {canUpload && (
+        <label className="btn sm ghost" style={{ cursor: "pointer" }}>{busy ? "Uploading…" : "Upload new art"}
+          <input type="file" hidden accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setBusy(true); try { await onUpload(f, f.name.replace(/\.[^.]+$/, "")); } finally { setBusy(false); } }} />
+        </label>
+      )}
+      {cur && val > 0 && other > 0 && <span className="dp-size">{val}&quot; {given === "W" ? "wide" : "tall"} → <b>{other}&quot; {given === "W" ? "tall" : "wide"}</b></span>}
+      {cur && !cur.width_px && <span className="faint" style={{ fontSize: 12 }}>Add a preview image to this design to get its size</span>}
     </div>
   );
 }

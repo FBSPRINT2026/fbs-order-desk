@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, SHIP_METHODS, ST, STATUSES, uid,
-  type ArtFile, type Customer, type Delivery, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
+  calcOrder, designLabel, LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, SHIP_METHODS, ST, STATUSES, uid,
+  type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor from "@/components/GroupEditor";
+import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
 import { Pill } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
@@ -34,6 +35,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [prodNotes, setProdNotes] = useState("");
   const [catalog, setCatalog] = useState<Garment[]>([]);
   const [lookingUp, setLookingUp] = useState("");
+  // this customer's designs (logos) for the imprint design pickers
+  const [designs, setDesigns] = useState<Design[]>([]);
+  const [designUrls, setDesignUrls] = useState<Record<string, string>>({});
   // Style not in the catalog yet: pull it from S&S (saves it to the catalog too)
   async function lookupStyle(style: string, styleID?: number): Promise<Garment | null> {
     const key = style.trim().toUpperCase();
@@ -118,6 +122,26 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }, [sb, id, loadSide]);
 
   const calc = useMemo(() => (o ? calcOrder(o, settings, payments) : null), [o, settings, payments]);
+
+  const custId = o?.customer_id || "";
+  const loadDesigns = useCallback(async () => {
+    if (!custId) { setDesigns([]); setDesignUrls({}); return; }
+    const { data } = await sb.from("designs").select("*").eq("customer_id", custId).order("number", { ascending: false });
+    const list = (data || []) as Design[];
+    setDesigns(list);
+    setDesignUrls(await previewUrls(sb, list));
+  }, [sb, custId]);
+  useEffect(() => { loadDesigns(); }, [loadDesigns]);
+  async function uploadOrderDesign(file: File, name: string): Promise<Design | null> {
+    if (!custId) { say("Pick a customer first. New art is saved to their account."); return null; }
+    try {
+      const { data: u } = await sb.auth.getUser();
+      const d = await uploadDesign(sb, { file, name, customer_id: custId, by: u.user?.email || "" });
+      await loadDesigns();
+      say(`Saved as ${designLabel(d)} on this customer's account.`);
+      return d;
+    } catch (e) { say("Upload failed: " + (e instanceof Error ? e.message : String(e))); return null; }
+  }
 
   const save = useCallback(async () => {
     const d = latest.current;
@@ -436,7 +460,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
             <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
           ))}

@@ -10,6 +10,7 @@ const ICONS: Record<string, React.ReactNode> = {
   calendar: <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>,
   customers: <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .8 3.1 2.6 3.5 5.2" /></svg>,
   catalog: <svg viewBox="0 0 24 24"><path d="M8 3l-5 3 2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.7-2 3-4 3S8.5 4.7 8 3z" /></svg>,
+  artwork: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-8 9" /></svg>,
   settings: <svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8z" /><circle cx="7.5" cy="8.5" r="1.5" /></svg>,
 };
 
@@ -30,6 +31,7 @@ export default function ShopNav({ email }: { email: string }) {
     ["/shop/board", "board", "Production"],
     ["/shop/calendar", "calendar", "Calendar"],
     ["/shop/customers", "customers", "Customers"],
+    ["/shop/artwork", "artwork", "Artwork"],
     ["/shop/catalog", "catalog", "Garments"],
     ["/shop/settings", "settings", "Pricing & shop"],
   ];

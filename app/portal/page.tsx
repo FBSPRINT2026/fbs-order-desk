@@ -45,6 +45,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         <div>
           <div className="eyebrow">{ctx.settings.shop.name} customer portal</div>
           <h1>{name ? `Hi ${name}` : "Your orders"}</h1>
+          {ctx.customerIds.length > 0 && <Link href={q("/portal/designs")} className="btn sm" style={{ marginTop: 6 }}>My designs</Link>}
         </div>
 
         {!ctx.customerIds.length ? (

@@ -46,7 +46,16 @@ export const PAY_METHODS = ["Card", "Cash", "Check", "ACH", "Venmo", "Other"];
 
 export type Method = "screen" | "embroidery" | "dtf";
 /** One decoration on a group of garments (Printavo calls these imprints). */
-export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number; /** inches down from the collar; blank = standard */ drop?: string };
+export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string };
+/** A piece of customer art, saved under their account and reused across orders. */
+export type Design = { id: string; number: number; customer_id: string | null; name: string; file_path: string; file_name: string; file_type: string; preview_path: string; width_px: number | null; height_px: number | null; method: string; colors: number; inks: string; notes: string; created_by: string; created_at: string };
+export const designLabel = (d: Pick<Design, "number" | "name">) => `D-${d.number}${d.name ? " · " + d.name : ""}`;
+/** Height for a given width (or width for a given height) from the design's proportions. */
+export function designOther(d: Pick<Design, "width_px" | "height_px"> | null | undefined, value: number, given: "W" | "H") {
+  if (!d?.width_px || !d?.height_px || !value) return 0;
+  const r = d.height_px / d.width_px;
+  return Math.round((given === "W" ? value * r : value / r) * 100) / 100;
+}
 /** One garment + color row, with its size run. */
 export type GLine = {
   id: string; style: string; brand: string; garment: string; color: string; cost: number | "";
