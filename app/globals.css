@@ -795,3 +795,10 @@ td > .sz-dim.on input{padding-right:24px}
 .aa-tbl tbody tr.sel{background:color-mix(in srgb,var(--accent) 8%,transparent)}
 @media (max-width: 600px){ .pp-methods{grid-template-columns:repeat(2,minmax(0,1fr))} }
 .pp-form[hidden],.pay-panel [hidden]{display:none !important}
+.aa-payside{position:sticky;top:16px;display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 32px);overflow:auto}
+.portal .aa-payside{top:84px;max-height:calc(100vh - 100px)}
+.aa-paybox{display:flex;flex-direction:column;gap:10px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);border-radius:14px;padding:14px 16px}
+.aa-paybox-h{font-size:16px;font-weight:800;color:var(--accent)}
+.aa-paybox-sum{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.aa-paybox-sum > b{font-size:18px}
+@media (max-width: 1000px){ .aa-payside{position:static;max-height:none} }

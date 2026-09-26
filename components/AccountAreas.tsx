@@ -215,7 +215,21 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
     const item = (o: AOrder): PayItem => ({ id: o.id, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
     const sel = open.filter((o) => paySel.includes(o.id));
     const selSum = sel.reduce((a, o) => a + o.balance, 0);
+    const side = mode === "portal" && payCfg ? (
+      <aside className="aa-payside">
+        <div className="aa-paybox">
+          <div className="aa-paybox-h">Pay orders</div>
+          {sel.length ? <>
+            <div className="aa-paybox-sum"><span><b>{sel.length}</b> order{sel.length > 1 ? "s" : ""} selected</span><b className="num">{money(selSum)}</b></div>
+            <button type="button" className="btn primary" style={{ width: "100%" }} onClick={() => setPayNow(sel.map(item))}>{sel.length > 1 ? `Pay these ${sel.length} together` : "Pay this one"}</button>
+            <button type="button" className="btn sm ghost" onClick={() => { setPaySel([]); setPayNow(null); }}>Clear selection</button>
+          </> : <div className="faint" style={{ fontSize: 13 }}>{open.length ? "Check the orders you want to pay, or press Pay on one." : "Nothing due right now."}</div>}
+        </div>
+        {payNow && <PayPanel key={payNow.map((x) => x.id).join()} items={payNow} pay={payCfg} staxToken={payCfg.staxToken} canAct={canAct} onClose={() => setPayNow(null)} />}
+      </aside>
+    ) : null;
     body = <>{tableHead(<><h2>Payments</h2><span className="aa-sum">Balance due <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b></span></>, "Search by order number, method or amount")}
+      <div className={side ? "aa-home" : ""}><div className="aa-home-main stack">
       <div className="aa-card aa-tblcard">
         <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Open orders</h3>{mode === "portal" && open.length > 1 && <span className="faint">Check the ones you want to pay together.</span>}</div>
         <table className="aa-tbl">
@@ -234,11 +248,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
             {!open.length && <tr><td colSpan={8}><div className="aa-empty">Nothing due right now. Thank you!</div></td></tr>}
           </tbody>
         </table>
-        {mode === "portal" && payCfg && sel.length > 0 && (
-          <div className="aa-paybar"><span><b>{sel.length}</b> selected · <b className="num">{money(selSum)}</b></span><span className="spacer" /><button type="button" className="btn ghost" onClick={() => setPaySel([])}>Clear</button><button type="button" className="btn primary" onClick={() => setPayNow(sel.map(item))}>Pay {sel.length > 1 ? `these ${sel.length} together` : "this one"}</button></div>
-        )}
       </div>
-      {payNow && payCfg && <PayPanel key={payNow.map((x) => x.id).join()} items={payNow} pay={payCfg} staxToken={payCfg.staxToken} canAct={canAct} onClose={() => setPayNow(null)} />}
       {waitingQuotes.length > 0 && (
         <div className="aa-card aa-tblcard">
           <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Quotes</h3><span className="faint">{mode === "portal" ? "Approve a quote first, then it can be paid here." : "Waiting on the customer's approval."}</span></div>
@@ -259,7 +269,8 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
             {!rows.length && <tr><td colSpan={4}><div className="aa-empty">{payments.length ? `No matches for “${q}”.` : "No payments yet."}</div></td></tr>}
           </tbody>
         </table>
-      </div></>;
+      </div>
+      </div>{side}</div></>;
   } else if (area === "artwork") {
     const live = ds.filter((d) => !gone[d.id] && !(d.id in arch ? arch[d.id] : d.archived_at));
     const archived = ds.filter((d) => !gone[d.id] && (d.id in arch ? arch[d.id] : d.archived_at));
