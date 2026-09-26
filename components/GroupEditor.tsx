@@ -150,8 +150,8 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           <div className="lbl" style={{ marginBottom: 6 }}>IMPRINTS</div>
           <div>
             <table className="pv-grid imp-table">
-              <colgroup><col style={{ width: "15%" }} /><col style={{ width: "15%" }} /><col style={{ width: 64 }} /><col style={{ width: "24%" }} /><col style={{ width: "11%" }} /><col /><col style={{ width: 64 }} /><col style={{ width: 34 }} /></colgroup>
-              <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink colors / PMS</th><th>Print size</th><th>Notes</th><th className="r">Each</th><th /></tr></thead>
+              <colgroup><col style={{ width: "13%" }} /><col style={{ width: "14%" }} /><col style={{ width: 56 }} /><col style={{ width: "19%" }} /><col style={{ width: "14%" }} /><col style={{ width: "10%" }} /><col /><col style={{ width: 58 }} /><col style={{ width: 30 }} /></colgroup>
+              <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink colors / PMS</th><th>Print size</th><th>Drop</th><th>Notes</th><th className="r">Each</th><th /></tr></thead>
               <tbody>
                 {g.imprints.map((d, di) => (
                   <tr key={d.id}>
@@ -173,6 +173,12 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                       {inkMismatch(d) && <div className="ink-warn">{inkMismatch(d)}</div>}
                     </td>
                     <td><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></td>
+                    <td>
+                      <label className={"sz-dim" + (d.drop ? " on" : "")}>
+                        <input type="text" inputMode="decimal" aria-label="Drop in inches (blank = standard)" placeholder="Standard" value={d.drop || ""} onChange={(e) => update((x) => { x.imprints[di].drop = e.target.value.replace(/["]/g, "").replace(/\s*in\.?$/i, "").trim(); })} />
+                        {d.drop ? <span>in.</span> : null}
+                      </label>
+                    </td>
                     <td><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></td>
                     <td className="r num">{money(gc.imprints[di]?.each)}</td>
                     <td><button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button></td>
@@ -271,7 +277,7 @@ export function SizeField({ value, onChange }: { value: string; onChange: (v: st
   const box = (d: "W" | "H") => (
     <label className={"sz-dim" + (dim === d ? " on" : "")} key={d}>
       <input type="text" inputMode="decimal" aria-label={d === "W" ? "Print width in inches" : "Print height in inches"} placeholder={d === "W" ? "Width" : "Height"} value={dim === d ? num : ""} onChange={(e) => set(d, e.target.value)} />
-      <span>{dim === d ? (d === "W" ? "wide" : "tall") : d}</span>
+      <span>{dim === d ? (d === "W" ? "in. wide" : "in. tall") : d}</span>
     </label>
   );
   return <div className="sz-field">{[dim !== "H" ? box("W") : null, dim !== "W" ? box("H") : null]}</div>;

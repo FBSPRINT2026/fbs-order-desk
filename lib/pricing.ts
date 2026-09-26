@@ -41,7 +41,7 @@ export const PAY_METHODS = ["Card", "Cash", "Check", "ACH", "Venmo", "Other"];
 
 export type Method = "screen" | "embroidery" | "dtf";
 /** One decoration on a group of garments (Printavo calls these imprints). */
-export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number };
+export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number; /** inches down from the collar; blank = standard */ drop?: string };
 /** One garment + color row, with its size run. */
 export type GLine = {
   id: string; style: string; brand: string; garment: string; color: string; cost: number | "";
@@ -311,6 +311,6 @@ export function imprintLabel(d: Imprint) {
   if (d.method === "screen") parts.push(d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`);
   if (d.inks) parts.push(d.inks);
   if (d.size) parts.push(d.size);
-  if (d.inkChanges) parts.push(`${d.inkChanges} ink change${d.inkChanges > 1 ? "s" : ""}`);
+  if (d.drop) parts.push(`${d.drop}" drop`);
   return parts.join(" · ");
 }
