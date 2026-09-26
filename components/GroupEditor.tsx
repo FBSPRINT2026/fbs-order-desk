@@ -280,7 +280,7 @@ export function SizeField({ value, onChange }: { value: string; onChange: (v: st
   };
   const box = (d: "W" | "H") => (
     <label className={"sz-dim" + (dim === d ? " on" : "")} key={d}>
-      <InchInput label={d === "W" ? "Print width in inches" : "Print height in inches"} placeholder={d === "W" ? "Width or MAX" : "Height or MAX"} num={dim === d ? num : ""} onNum={(v) => set(d, v)} />
+      <InchInput label={d === "W" ? "Print width in inches" : "Print height in inches"} placeholder={d === "W" ? "Width" : "Height"} num={dim === d ? num : ""} onNum={(v) => set(d, v)} />
       <span>{dim === d ? (d === "W" ? "wide" : "tall") : d}</span>
     </label>
   );
