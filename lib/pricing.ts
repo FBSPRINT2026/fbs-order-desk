@@ -72,7 +72,9 @@ export type GLine = {
 export type Group = { id: string; name?: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[]; youth?: boolean;
   /** when mockups were last saved for this group (unlocks the imprints section) */ mockupAt?: string;
   /** staff chose to fill in imprints without making a mockup */ mockupSkipped?: boolean;
-  /** photos-only pictures of the latest saved mockups (storage paths), shown as thumbnails on the order */ mockupThumbs?: string[] };
+  /** photos-only pictures of the latest saved mockups (storage paths), shown as thumbnails on the order */ mockupThumbs?: string[];
+  /** mockups the customer supplied themselves (their own software, or saved from the portal builder): storage paths */
+  customerMockups?: { path: string; name: string }[] };
 export type PriceType = "retail" | "wholesale";
 
 /** Older orders stored one garment per line with its own decorations. */
@@ -337,3 +339,29 @@ export function imprintLabel(d: Imprint) {
 
 /** Image types a browser can show as a logo preview. */
 export const PREVIEWABLE_TYPES = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/i;
+
+/**
+ * What's still missing before a customer can send an order in. A mockup is optional (ours or their own),
+ * but every print location needs its logo, where it goes, how big, and the ink colors.
+ */
+export function requestProblems(groups: Group[]): string[] {
+  const out: string[] = [];
+  groups.forEach((g, gi) => {
+    const name = g.name || `Group ${gi + 1}`;
+    const pcs = g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0);
+    if (!pcs) return;
+    if (!g.imprints.length) { out.push(`${name} needs at least one print location`); return; }
+    g.imprints.forEach((im) => {
+      const where = im.location || "a print location";
+      const need: string[] = [];
+      if (!im.location) need.push("location");
+      if (!im.design_id) need.push("logo");
+      if (!(im.size || "").trim()) need.push("print size");
+      const inks = im.method !== "dtf" && !(im.method === "screen" && im.colors >= FULL_COLOR);
+      if (inks && !(im.inks || "").trim()) need.push("ink colors");
+      if (need.length) out.push(`${name} ${where}: add the ${need.join(", ")}`);
+    });
+  });
+  return out;
+}
+

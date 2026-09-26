@@ -99,7 +99,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
     return [...(youth ? YOUTH_SIZES : []), ...ADULT_SIZES];
   };
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
-  const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped;
+  const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
   return (
     <section className={"line" + (hidePrices ? " np" : "")}>
       <div className="line-h">
@@ -185,6 +185,10 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
             {onMockup && <button className={"btn sm" + (locked ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
             {blockMsg && mockupBlock && <span className="ink-warn" style={{ margin: 0 }}>{blockMsg}</span>}
             {g.mockupAt && <span className="faint" style={{ fontSize: 12 }}>Mockup saved {new Date(g.mockupAt).toLocaleDateString()}</span>}
+            {(g.customerMockups || []).length > 0 && <span className="faint" style={{ fontSize: 12 }}>Customer&apos;s mockup:</span>}
+            {(g.customerMockups || []).map((m) => thumbUrls?.[m.path] ? (/\.pdf$/i.test(m.path)
+              ? <a key={m.path} href={thumbUrls[m.path]} target="_blank" rel="noreferrer" className="btn sm" title={m.name}>PDF: {m.name.slice(0, 24)}</a>
+              : <a key={m.path} href={thumbUrls[m.path]} target="_blank" rel="noreferrer" className="mk-thumb cust" title={`Customer's mockup: ${m.name}`}><img src={thumbUrls[m.path]} alt="Customer's mockup" /></a>) : null)}
             {(g.mockupThumbs || []).map((p) => thumbUrls?.[p] ? <a key={p} href={thumbUrls[p]} target="_blank" rel="noreferrer" className="mk-thumb" title="Open the mockup"><img src={thumbUrls[p]} alt="Mockup" /></a> : null)}
             {!g.mockupAt && g.mockupSkipped && <span className="faint" style={{ fontSize: 12 }}>No mockup</span>}
           </div>

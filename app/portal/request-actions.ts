@@ -4,7 +4,7 @@ import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
-import { mergeSettings, newGroup, orderGroups, type Group, type Order } from "@/lib/pricing";
+import { mergeSettings, newGroup, orderGroups, requestProblems, type Group, type Order } from "@/lib/pricing";
 
 type Result = { ok: boolean; error?: string; id?: string };
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
@@ -45,11 +45,16 @@ export async function startRequest(): Promise<Result> {
 /** Save the customer's edits (only what they're allowed to change). */
 export async function saveRequest(id: string, patch: { groups?: Group[]; nickname?: string; due_date?: string | null; notes?: string; delivery_method?: string; ship_to?: string }): Promise<Result> {
   try {
-    const { admin } = await myDraft(id);
+    const { admin, cust } = await myDraft(id);
     const row: Record<string, unknown> = {};
     if (patch.groups) {
       // customers never set prices: drop any overrides and costs that came along
-      const groups = patch.groups.map((g) => ({ ...g, lines: g.lines.map((l) => ({ ...l, priceOverride: null, cost: "" as const })) }));
+      const groups = patch.groups.map((g) => ({
+        ...g,
+        lines: g.lines.map((l) => ({ ...l, priceOverride: null, cost: "" as const })),
+        // only files from their own account
+        customerMockups: (g.customerMockups || []).filter((m) => typeof m.path === "string" && m.path.startsWith(`mockups/${cust.id}/`)).slice(0, 10),
+      }));
       row.groups = groups;
       row.qty = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
     }
@@ -71,6 +76,8 @@ export async function submitRequest(id: string): Promise<Result> {
     const groups = orderGroups(order);
     const pieces = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
     if (!pieces) return { ok: false, error: "Add at least one garment with quantities first." };
+    const missing = requestProblems(groups);
+    if (missing.length) return { ok: false, error: `Almost there: ${missing.join("; ")}.` };
     const { error } = await admin.from("orders").update({ submitted_at: new Date().toISOString() }).eq("id", id);
     if (error) return { ok: false, error: error.message };
     await admin.from("order_events").insert({ order_id: id, kind: "request_submitted", detail: `${pieces} pcs`, actor: email });
@@ -176,4 +183,26 @@ export async function saveMyMockup(meta: { path: string; title: string; design_i
     revalidatePath("/portal");
     return { ok: true as const };
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Saving failed." }; }
+}
+
+/** One-time upload link for a mockup the customer made in their own software. */
+export async function ownMockupUploadUrl(fileName: string) {
+  try {
+    const { admin, cust } = await me();
+    const path = `mockups/${cust.id}/own-${Date.now()}-${crypto.randomUUID().slice(0, 6)}-${fileName.replace(/[^\w.\-]+/g, "_").slice(-80)}`;
+    const { data, error } = await admin.storage.from("proofs").createSignedUploadUrl(path);
+    if (error || !data) return { ok: false as const, error: error?.message || "Upload isn't available right now." };
+    return { ok: true as const, path, token: data.token };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Upload failed." }; }
+}
+
+/** After uploading their own mockup: keep it in their Artwork (pictures only) and return a link to show it. */
+export async function saveOwnMockup(meta: { path: string; name: string; isImage: boolean }) {
+  try {
+    const { admin, cust, email } = await me();
+    if (!meta.path.startsWith(`mockups/${cust.id}/`)) return { ok: false as const, error: "Bad upload." };
+    if (meta.isImage) await admin.from("mockups").insert({ customer_id: cust.id, title: `${meta.name} (your mockup)`.slice(0, 200), file_path: meta.path, design_ids: [], created_by: email });
+    const { data } = await admin.storage.from("proofs").createSignedUrl(meta.path, 3600);
+    return { ok: true as const, url: data?.signedUrl || "" };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Upload failed." }; }
 }

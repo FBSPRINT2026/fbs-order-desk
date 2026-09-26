@@ -759,3 +759,12 @@ td > .sz-dim.on input{padding-right:24px}
 .sp-ic{display:inline-flex;width:48px;height:48px;align-items:center;justify-content:center;border-radius:12px;background:var(--accent-soft);color:var(--accent)}
 @media (max-width: 800px){ .start-panel{grid-template-columns:1fr} .sp-card{grid-template-columns:auto 1fr} .sp-card .btn{grid-column:1 / -1} }
 .p-main.mk-portal{max-width:1480px}
+.rq-mocks{display:flex;gap:10px;flex-wrap:wrap}
+.rq-mk{display:flex;flex-direction:column;gap:4px;width:150px;border:1px solid var(--line);border-radius:10px;padding:6px;position:relative;background:var(--surface)}
+.rq-mk img{width:100%;height:110px;object-fit:contain;background:#fff;border-radius:6px}
+.rq-mk .btn{position:absolute;top:4px;right:4px;background:rgba(255,255,255,.9)}
+.rq-mk-n{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rq-file{display:flex;align-items:center;justify-content:center;height:110px;border-radius:6px;background:var(--surface-2);font-weight:800;color:var(--ink-3)}
+.rq-check{border:1px solid #F6DDB0;background:#FFF4E0;border-radius:12px;padding:12px 16px;font-size:14px}
+.rq-check ul{margin:6px 0;padding-left:20px}
+.mk-thumb.cust{border-color:#0E9F9A}

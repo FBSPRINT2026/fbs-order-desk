@@ -139,7 +139,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
   }
   // signed links for the saved mockup thumbnails on each group
-  const thumbKey = (o?.groups || []).flatMap((g) => g.mockupThumbs || []).join("|");
+  const thumbKey = (o?.groups || []).flatMap((g) => [...(g.mockupThumbs || []), ...(g.customerMockups || []).map((m) => m.path)]).join("|");
   useEffect(() => {
     const paths = thumbKey ? thumbKey.split("|").filter((p) => !thumbUrls[p]) : [];
     if (!paths.length) return;

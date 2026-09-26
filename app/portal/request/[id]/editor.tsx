@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GroupEditor from "@/components/GroupEditor";
 import { createClient } from "@/lib/supabase/client";
-import { calcOrder, newGroup, priceList, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
-import { discardRequest, logoUploadUrl, saveMyLogo, saveRequest, submitRequest } from "@/app/portal/request-actions";
+import { calcOrder, newGroup, priceList, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
+import { discardRequest, logoUploadUrl, ownMockupUploadUrl, saveMyLogo, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
 import { customerMessage } from "@/app/portal/actions";
 
 function imageSize(f: File): Promise<{ w: number; h: number } | null> {
@@ -19,9 +19,12 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
 }
 
 /** The customer's order builder: garments, sizes, print locations and logos, no prices. */
-export default function RequestEditor({ initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, preview, backHref }: {
-  initial: Order; settings: Settings; catalog: Garment[]; designs: Design[]; designUrls: Record<string, string>; messages: Message[]; preview: boolean; backHref: string;
+export default function RequestEditor({ initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, mockupUrls: mu0, mockupHref, preview, backHref }: {
+  initial: Order; settings: Settings; catalog: Garment[]; designs: Design[]; designUrls: Record<string, string>; messages: Message[];
+  savedMockups: { path: string; name: string }[]; mockupUrls: Record<string, string>; mockupHref: string; preview: boolean; backHref: string;
 }) {
+  const [mUrls, setMUrls] = useState(mu0);
+  const [upBusy, setUpBusy] = useState("");
   const router = useRouter();
   const [o, setO] = useState<Order>(initial);
   const [catalog, setCatalog] = useState(cat0);
@@ -88,6 +91,24 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     return d;
   }
 
+  /** A mockup the customer made in their own software (picture or PDF). */
+  async function uploadOwnMockup(gi: number, f: File) {
+    if (preview) return;
+    setErr(""); setUpBusy(o.groups[gi].id);
+    try {
+      const t = await ownMockupUploadUrl(f.name);
+      if (!t.ok) throw new Error(t.error);
+      const up = await createClient().storage.from("proofs").uploadToSignedUrl(t.path, t.token, f, { contentType: f.type || undefined });
+      if (up.error) throw new Error(up.error.message);
+      const r = await saveOwnMockup({ path: t.path, name: f.name.replace(/\.[^.]+$/, ""), isImage: /^image\//.test(f.type) });
+      if (!r.ok) throw new Error(r.error);
+      if (r.url) setMUrls((u) => ({ ...u, [t.path]: r.url }));
+      patch((d) => { const g = d.groups[gi]; g.customerMockups = [...(g.customerMockups || []), { path: t.path, name: f.name }]; });
+    } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed."); }
+    setUpBusy("");
+  }
+  const problems = requestProblems(o.groups);
+
   async function send() {
     setBusy(true); setErr("");
     await flush();
@@ -134,7 +155,37 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
             designs={designs} designUrls={urls} onUploadDesign={uploadLogo}
             onDuplicate={() => patch((d) => { const s = d.groups[gi]; d.groups.splice(gi + 1, 0, { ...structuredClone(s), id: uid(), lines: s.lines.map((l) => ({ ...l, id: uid() })), imprints: s.imprints.map((x) => ({ ...x, id: uid() })) } as Group); })}
             onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
-        ))}
+        )).flatMap((ed, gi) => [ed, (
+          <section key={"mk" + o.groups[gi].id} className="panel rq-mock">
+            <div className="panel-h"><h2>Mockup for {o.groups[gi].name || `Group ${gi + 1}`}</h2><span className="faint" style={{ fontSize: 12 }}>Optional. Make one in our builder, or upload one from your own software. We still need each logo uploaded above.</span></div>
+            <div className="panel-b">
+              <div className="rq-mocks">
+                {(o.groups[gi].customerMockups || []).map((m, mi) => {
+                  const url = mUrls[m.path], isPdf = /\.pdf$/i.test(m.path);
+                  return (
+                    <div key={m.path} className="rq-mk">
+                      <a href={url} target="_blank" rel="noreferrer">{url && !isPdf ? <img src={url} alt={m.name} /> : <span className="rq-file">{isPdf ? "PDF" : "FILE"}</span>}</a>
+                      <span className="rq-mk-n" title={m.name}>{m.name}</span>
+                      <button type="button" className="btn icon ghost" aria-label="Remove this mockup" onClick={() => patch((d) => { d.groups[gi].customerMockups = (d.groups[gi].customerMockups || []).filter((_, j) => j !== mi); })}>✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                <label className="btn sm" style={{ cursor: "pointer" }}>{upBusy === o.groups[gi].id ? "Uploading…" : "Upload your own mockup"}
+                  <input type="file" hidden accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadOwnMockup(gi, f); }} />
+                </label>
+                {savedMockups.length > 0 && (
+                  <select aria-label="Attach one of your saved mockups" value="" style={{ width: "auto" }} onChange={(e) => { const m = savedMockups.find((x) => x.path === e.target.value); if (m) patch((d) => { const g = d.groups[gi]; if (!(g.customerMockups || []).some((x) => x.path === m.path)) g.customerMockups = [...(g.customerMockups || []), m]; }); }}>
+                    <option value="">Attach a saved mockup…</option>
+                    {savedMockups.map((m) => <option key={m.path} value={m.path}>{m.name}</option>)}
+                  </select>
+                )}
+                <a className="btn sm ghost" href={mockupHref} target="_blank" rel="noreferrer">Make one in our builder ↗</a>
+              </div>
+            </div>
+          </section>
+        )])}
         <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => patch((d) => { d.groups.push(newGroup()); })}>+ Add another group</button>
       </fieldset>
 
@@ -147,9 +198,16 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         </div>
       </section>
 
+      {calc.qty > 0 && problems.length > 0 && (
+        <div className="rq-check">
+          <b>Before you send it in:</b>
+          <ul>{problems.map((p) => <li key={p}>{p}</li>)}</ul>
+          <span className="faint">A mockup is optional, but every print location needs its logo, where it goes, its size and ink colors.</span>
+        </div>
+      )}
       <div className="rq-foot">
         <span><b>{calc.qty}</b> pieces</span><span className="spacer" />
-        <button type="button" className="btn primary" disabled={preview || busy || !calc.qty} onClick={send}>{busy ? "Sending…" : "Send to FBS for pricing"}</button>
+        <button type="button" className="btn primary" disabled={preview || busy || !calc.qty || problems.length > 0} onClick={send}>{busy ? "Sending…" : "Send to FBS for pricing"}</button>
       </div>
     </main>
   );
