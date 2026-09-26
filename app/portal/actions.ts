@@ -163,9 +163,12 @@ export async function starMyDesign(designId: string, starred: boolean): Promise<
   try {
     const { supabase, user, isStaff } = await getViewer();
     if (!user) return { ok: false, error: "Please sign in again." };
-    const db = isStaff ? createAdminClient() : supabase;
-    const { error } = await db.rpc("set_design_star", { p_design: designId, p_starred: starred });
+    // staff (including the portal preview) can star any design; customers only their own (checked in the database)
+    const { error } = isStaff
+      ? await createAdminClient().from("designs").update({ starred }).eq("id", designId)
+      : await supabase.rpc("set_design_star", { p_design: designId, p_starred: starred });
     if (error) return { ok: false, error: error.message };
+    revalidatePath("/portal");
     return { ok: true };
   } catch (e) { return fail(e); }
 }

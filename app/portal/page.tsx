@@ -1,16 +1,14 @@
-import Link from "next/link";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ST, type Design, type Order } from "@/lib/pricing";
+import type { Design, Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
-import AccountAreas, { type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
+import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
 import { customerGeneralMessage, starMyDesign } from "@/app/portal/actions";
 
 export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string }> }) {
   const { as } = await searchParams;
   const ctx = await getPortalCtx(as);
   const qs = ctx.preview ? `?as=${ctx.preview.id}` : "";
-  const q = (p: string) => `${p}${qs}`;
   const admin = createAdminClient();
 
   let orders: Order[] = [];
@@ -50,49 +48,16 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const bal = (o: Order) => Math.round(((+o.total || 0) - (paid[o.id] || 0)) * 100) / 100;
   const aOrders: AOrder[] = orders.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type }));
 
-  type Act = { title: string; detail: string; cta: string; color: string; href: string };
-  const actions: Act[] = [];
+  // what's waiting on the customer
+  const attention: AAttn[] = [];
+  const short = (d?: string | null) => (d ? fmtDateLong(d.slice(0, 10)) : "");
   orders.forEach((o) => {
-    const href = q(`/portal/orders/${o.id}`);
-    if (o.status === "quote_sent") actions.push({ title: `Approve quote #${o.number}`, detail: `${o.nickname || "Your order"} · ${money(o.total)}`, cta: "Review quote", color: ST.quote_sent.c, href });
-    if (pendingProofs[o.id]) actions.push({ title: `Review artwork for #${o.number}`, detail: `${pendingProofs[o.id]} proof${pendingProofs[o.id] > 1 ? "s" : ""} waiting for your OK`, cta: "Review artwork", color: ST.art.c, href: href + "#proofs" });
-    if (o.type === "invoice" && bal(o) > 0.004 && o.status !== "completed")
-      actions.push({ title: `Balance due on #${o.number}`, detail: `${money(bal(o))} remaining${o.due_date ? ` · due ${fmtDateLong(o.due_date)}` : ""}`, cta: process.env.STRIPE_SECRET_KEY ? "Pay now" : "View balance", color: ST.ready.c, href: href + "#pay" });
+    if (o.status === "quote_sent") attention.push({ kind: "quote", order_id: o.id, number: o.number, date: short(o.sent_at || o.updated_at) });
+    if (pendingProofs[o.id]) attention.push({ kind: "art", order_id: o.id, number: o.number, date: short(o.updated_at), hash: "proofs" });
+    if (o.type === "invoice" && bal(o) > 0.004 && o.status !== "quote") attention.push({ kind: "pay", order_id: o.id, number: o.number, date: money(bal(o)), hash: "pay" });
+    if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) attention.push({ kind: "receive", order_id: o.id, number: o.number, date: short(o.approved_at || o.updated_at) });
   });
   const name = ctx.customers[0]?.name?.split(" ")[0];
-  const active = orders.filter((o) => o.type === "invoice" && o.status !== "completed").slice(0, 6);
-
-  const overview = (
-    <>
-      <section className="stack">
-        <h2 style={{ margin: 0 }}>Needs your attention</h2>
-        {actions.length ? (
-          <div className="action-list">
-            {actions.map((a, i) => (
-              <Link key={i} href={a.href} className="action" style={{ ["--sc" as string]: a.color }}>
-                <div><div className="t">{a.title}</div><div className="d">{a.detail}</div></div>
-                <span className="btn primary go">{a.cta}</span>
-              </Link>
-            ))}
-          </div>
-        ) : <div className="muted">You&apos;re all caught up. Nothing needs your attention right now.</div>}
-      </section>
-      {active.length > 0 && (
-        <section className="stack">
-          <h2 style={{ margin: "8px 0 0" }}>Orders in progress</h2>
-          <div className="ocards">
-            {active.map((o) => (
-              <Link key={o.id} href={q(`/portal/orders/${o.id}`)} className="ocard">
-                <div className="row"><span className="n">#{o.number}</span><span className="spacer" /><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{ST[o.status]?.portal}</span></div>
-                <div className="t">{o.nickname || "Order"}</div>
-                <div className="f"><span>{o.qty} pcs{o.due_date ? ` · ${fmtDateLong(o.due_date)}` : ""}</span><b className="num">{money(o.total)}</b></div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-    </>
-  );
 
   return (
     <>
@@ -109,7 +74,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
           </div></div>
         ) : (
           <AccountAreas mode="portal" orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
-            overview={overview} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
+            attention={attention} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
             onSend={customerGeneralMessage} onStar={starMyDesign} />
         )}
       </main>

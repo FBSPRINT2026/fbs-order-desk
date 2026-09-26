@@ -7,7 +7,8 @@ import type { Customer } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { useShopData } from "@/lib/shopData";
 import { Due, Pill } from "@/components/bits";
-import AccountAreas, { type AMessage, type AMockup, type APayment } from "@/components/AccountAreas";
+import AccountAreas, { type AAttn, type AMessage, type AMockup, type APayment } from "@/components/AccountAreas";
+import { fmtDateLong } from "@/lib/format";
 import { previewUrls } from "@/lib/designs";
 import { staffCustomerMessage } from "@/app/shop/actions";
 import type { Design } from "@/lib/pricing";
@@ -31,6 +32,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [designUrls, setDesignUrls] = useState<Record<string, string>>({});
   const [mockups, setMockups] = useState<AMockup[]>([]);
   const [messages, setMessages] = useState<AMessage[]>([]);
+  const [pendingArt, setPendingArt] = useState<Record<string, string>>({});
+  const [reload, setReload] = useState(0);
   const orderIds = orders.filter((o) => o.customer_id === id).map((o) => o.id).join(",");
   useEffect(() => {
     if (loading) return;
@@ -38,12 +41,16 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     const ids = orderIds ? orderIds.split(",") : [];
     const num = (oid: string | null) => orders.find((o) => o.id === oid)?.number ?? null;
     (async () => {
-      const [p, d, m, msg] = await Promise.all([
+      const [p, d, m, msg, pr] = await Promise.all([
         ids.length ? sb.from("payments").select("*").in("order_id", ids).order("paid_on", { ascending: false }) : Promise.resolve({ data: [] }),
         sb.from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }),
         sb.from("mockups").select("*").eq("customer_id", id).order("created_at", { ascending: false }),
         sb.from("messages").select("*").or(ids.length ? `customer_id.eq.${id},order_id.in.(${ids.join(",")})` : `customer_id.eq.${id}`).order("created_at"),
+        ids.length ? sb.from("proofs").select("order_id,created_at").in("order_id", ids).eq("status", "pending") : Promise.resolve({ data: [] }),
       ]);
+      const pa: Record<string, string> = {};
+      ((pr.data || []) as { order_id: string; created_at: string }[]).forEach((x) => { pa[x.order_id] = x.created_at; });
+      setPendingArt(pa);
       setPayments(((p.data || []) as { id: string; order_id: string; amount: number; method: string; paid_on: string | null; created_at: string }[]).map((x) => ({ ...x, amount: +x.amount || 0, number: num(x.order_id) || 0 })));
       const dl = (d.data || []) as Design[];
       setDesigns(dl);
@@ -55,7 +62,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       setMessages(((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) })));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, orderIds, loading]);
+  }, [id, orderIds, loading, reload]);
 
   async function save() {
     if (!latest.current) return;
@@ -103,16 +110,25 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       <div className="page-head" style={{ marginTop: 8 }}>
         <div><div className="eyebrow">Customer</div><h1>{c.company || c.name || "New customer"}</h1></div>
         <div className="row">
+          <Link className="btn" href={`/shop/customers/${id}?area=details`} scroll={false}>Customer details</Link>
           <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">View their portal</a>
           <button className="btn primary" type="button" onClick={newQuote}>+ New quote</button>
           <button className={"btn danger" + (armed ? " armed" : "")} type="button" onClick={del} disabled={os.length > 0} title={os.length ? "Delete this customer's orders first" : ""}>{armed ? "Confirm delete" : "Delete"}</button>
         </div>
       </div>
-      <AccountAreas mode="shop" orders={os.map((o) => ({ ...o, nickname: o.nickname || "", price_type: o.price_type }))} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
+      <AccountAreas mode="shop" attention={os.flatMap((o): AAttn[] => {
+          const out: AAttn[] = [];
+          const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "");
+          if (o.status === "quote_sent") out.push({ kind: "quote", order_id: o.id, number: o.number, date: d(o.created_at) });
+          if (pendingArt[o.id]) out.push({ kind: "art", order_id: o.id, number: o.number, date: d(pendingArt[o.id]) });
+          if (o.type === "invoice" && o.balance > 0.004) out.push({ kind: "pay", order_id: o.id, number: o.number, date: money(o.balance) });
+          if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) out.push({ kind: "receive", order_id: o.id, number: o.number, date: d(o.due_date) || "—" });
+          return out;
+        })} orders={os.map((o) => ({ ...o, nickname: o.nickname || "", price_type: o.price_type }))} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
         hrefBase="/shop/orders/"
-        onSend={(body) => staffCustomerMessage(id, body)}
+        onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
         onStar={async (designId, starred) => { const { error } = await createClient().rpc("set_design_star", { p_design: designId, p_starred: starred }); return { ok: !error, error: error?.message }; }}
-        overview={
+        details={
       <div className="cust-grid">
           <form className="panel" autoComplete="off" onSubmit={(e) => e.preventDefault()}>
             <div className="panel-h"><h2>Details</h2><span className="faint" style={{ fontSize: 12 }}>{state || "Saves as you type"}</span></div>
