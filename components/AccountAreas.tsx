@@ -74,6 +74,22 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   const [arch, setArch] = useState<Record<string, string | null>>({});
   const [armedDel, setArmedDel] = useState("");
   const [showArch, setShowArch] = useState(false);
+  // artwork shows 6 at a time (two rows of three), with pages underneath
+  const [pg, setPg] = useState<Record<string, number>>({});
+  const PER = 6;
+  const pageOf = <T,>(key: string, list: T[]) => { const n = Math.max(1, Math.ceil(list.length / PER)), p = Math.min(pg[key] || 0, n - 1); return { items: list.slice(p * PER, p * PER + PER), p, n }; };
+  const pager = (key: string, total: number, p: number, n: number) => n <= 1 ? null : (
+    <div className="aa-pager">
+      <span className="faint">Showing {p * PER + 1}–{Math.min(total, p * PER + PER)} of {total}</span>
+      <span className="spacer" />
+      <button type="button" className="aa-pg" disabled={p === 0} aria-label="Previous page" onClick={() => setPg((x) => ({ ...x, [key]: p - 1 }))}>‹</button>
+      {Array.from({ length: n }, (_, i) => i).filter((i) => n <= 7 || i === 0 || i === n - 1 || Math.abs(i - p) <= 1).map((i, k, arr) => (
+        <span key={i} className="row" style={{ gap: 4 }}>{k > 0 && i - arr[k - 1] > 1 && <span className="faint">…</span>}
+          <button type="button" className={"aa-pg" + (i === p ? " on" : "")} aria-current={i === p ? "page" : undefined} onClick={() => setPg((x) => ({ ...x, [key]: i }))}>{i + 1}</button></span>
+      ))}
+      <button type="button" className="aa-pg" disabled={p >= n - 1} aria-label="Next page" onClick={() => setPg((x) => ({ ...x, [key]: p + 1 }))}>›</button>
+    </div>
+  );
   const ds = useMemo(() => designs.map((d) => (d.id in stars ? { ...d, starred: stars[d.id] } : d)), [designs, stars]);
 
   const quotes = orders.filter((o) => o.type === "quote" && (mode === "shop" || o.status !== "quote"));
@@ -97,7 +113,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   ];
 
   const search = (ph: string) => (
-    <label className="aa-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={ph} value={q} onChange={(e) => setQ(e.target.value)} /></label>
+    <label className="aa-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={ph} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
   );
   const orderTable = (list: AOrder[], cols: "quote" | "work" | "invoice") => {
     const rows = list.filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, ST[o.status]?.portal));
@@ -253,27 +269,27 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       {tableHead(<h2>Artwork</h2>, "Search by logo number (D-10004), name, ink or order")}
       <div className="aa-card">
         <div className="aa-sec-h"><h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
-        {dRows.length ? <div className="design-grid">{dRows.map((d) => card(d, false))}</div>
+        {dRows.length ? (() => { const P = pageOf("logos", dRows); return <><div className="design-grid aa-grid3">{P.items.map((d) => card(d, false))}</div>{pager("logos", dRows.length, P.p, P.n)}</>; })()
           : <div className="aa-empty">{live.length ? `No logos match “${q}”.` : "No logos on file yet."}</div>}
         {archived.length > 0 && (
           <div className="aa-arch">
             <button type="button" className="btn sm ghost" onClick={() => setShowArch(!showArch)}>{showArch ? "Hide archived logos" : `View archived logos (${archived.length})`}</button>
-            {showArch && (aRows.length ? <div className="design-grid" style={{ marginTop: 10 }}>{aRows.map((d) => card(d, true))}</div> : <div className="aa-empty">No archived logos match “{q}”.</div>)}
+            {showArch && (aRows.length ? (() => { const P = pageOf("arch", aRows); return <><div className="design-grid aa-grid3" style={{ marginTop: 10 }}>{P.items.map((d) => card(d, true))}</div>{pager("arch", aRows.length, P.p, P.n)}</>; })() : <div className="aa-empty">No archived logos match “{q}”.</div>)}
           </div>
         )}
       </div>
       <div className="aa-card">
         <div className="aa-sec-h"><h3>Mockups</h3></div>
-        {mRows.length ? (
-          <div className="design-grid">
-            {mRows.map((m) => (
+        {mRows.length ? (() => { const P = pageOf("mock", mRows); return <>
+          <div className="design-grid aa-grid3">
+            {P.items.map((m) => (
               <a key={m.id} className="design-card" href={m.url} target="_blank" rel="noreferrer">
                 <div className="dc-img mock">{m.thumb ? <img src={m.thumb} alt={m.title} /> : null}</div>
                 <div className="dc-b"><b>{m.title}</b><span className="faint">{m.number ? `Order #${m.number} · ` : ""}{when(m.created_at)}</span></div>
               </a>
             ))}
-          </div>
-        ) : <div className="aa-empty">{mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
+          </div>{pager("mock", mRows.length, P.p, P.n)}</>; })()
+        : <div className="aa-empty">{mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
       </div>
       </div>
       <aside className="aa-attn aa-favs">

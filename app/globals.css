@@ -734,3 +734,12 @@ td > .sz-dim.on input{padding-right:24px}
 .dc-del.armed{color:#fff;background:#dc2626;border-color:#dc2626}
 .design-card.archived{opacity:.75}
 .aa-arch{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px}
+.aa-favs{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}
+.portal .aa-favs{top:84px;max-height:calc(100vh - 100px)}
+.aa-grid3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.aa-pager{display:flex;align-items:center;gap:4px;margin-top:12px;flex-wrap:wrap}
+.aa-pg{min-width:32px;height:32px;border:1px solid var(--line);background:var(--surface);border-radius:8px;cursor:pointer;font:inherit;font-weight:700;color:var(--ink-2)}
+.aa-pg:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.aa-pg.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.aa-pg:disabled{opacity:.4;cursor:default}
+@media (max-width: 700px){ .aa-grid3{grid-template-columns:repeat(2,minmax(0,1fr))} .aa-favs{position:static;max-height:none} }
