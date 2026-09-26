@@ -75,7 +75,6 @@ export async function submitRequest(id: string): Promise<Result> {
     const { admin, order, cust, email } = await myDraft(id);
     const groups = orderGroups(order);
     const pieces = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
-    if (!pieces) return { ok: false, error: "Add at least one garment with quantities first." };
     const missing = requestProblems(groups);
     if (missing.length) return { ok: false, error: `Almost there: ${missing.join("; ")}.` };
     const { error } = await admin.from("orders").update({ submitted_at: new Date().toISOString() }).eq("id", id);

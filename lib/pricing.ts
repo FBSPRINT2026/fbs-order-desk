@@ -341,25 +341,30 @@ export function imprintLabel(d: Imprint) {
 export const PREVIEWABLE_TYPES = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/i;
 
 /**
- * What's still missing before a customer can send an order in. A mockup is optional (ours or their own),
- * but every print location needs its logo, where it goes, how big, and the ink colors.
+ * What stops a customer's order from being sent in. Kept loose on purpose: it just needs pieces and
+ * some artwork (a logo on any print location, or a mockup). Anything else is a gentle reminder (requestHints).
  */
 export function requestProblems(groups: Group[]): string[] {
+  const pcs = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
+  const art = groups.some((g) => g.imprints.some((im) => im.design_id) || (g.customerMockups || []).length > 0);
+  const out: string[] = [];
+  if (!pcs) out.push("Add at least one garment with quantities");
+  if (!art) out.push("Attach your artwork: upload a logo on a print location, or add a mockup");
+  return out;
+}
+
+/** Nice-to-haves we remind the customer about but don't require (we can sort them out with them). */
+export function requestHints(groups: Group[]): string[] {
   const out: string[] = [];
   groups.forEach((g, gi) => {
     const name = g.name || `Group ${gi + 1}`;
-    const pcs = g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0);
-    if (!pcs) return;
-    if (!g.imprints.length) { out.push(`${name} needs at least one print location`); return; }
     g.imprints.forEach((im) => {
-      const where = im.location || "a print location";
       const need: string[] = [];
-      if (!im.location) need.push("location");
       if (!im.design_id) need.push("logo");
       if (!(im.size || "").trim()) need.push("print size");
       const inks = im.method !== "dtf" && !(im.method === "screen" && im.colors >= FULL_COLOR);
       if (inks && !(im.inks || "").trim()) need.push("ink colors");
-      if (need.length) out.push(`${name} ${where}: add the ${need.join(", ")}`);
+      if (need.length) out.push(`${name} ${im.location || "print location"}: ${need.join(", ")}`);
     });
   });
   return out;

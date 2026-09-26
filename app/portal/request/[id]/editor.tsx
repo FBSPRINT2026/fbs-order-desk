@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import GroupEditor from "@/components/GroupEditor";
 import { createClient } from "@/lib/supabase/client";
-import { calcOrder, newGroup, priceList, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
+import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
 import { discardRequest, logoUploadUrl, ownMockupUploadUrl, saveMyLogo, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
 import { customerMessage } from "@/app/portal/actions";
 
@@ -108,6 +108,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     setUpBusy("");
   }
   const problems = requestProblems(o.groups);
+  const hints = problems.length ? [] : requestHints(o.groups);
 
   async function send() {
     setBusy(true); setErr("");
@@ -135,7 +136,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         </div>
         <div className="row"><span className="save-state">{state}</span>
           <button type="button" className={"btn ghost danger" + (armed === "discard" ? " armed" : "")} disabled={preview} onClick={async () => { if (armed !== "discard") return arm("discard"); const r = await discardRequest(o.id); if (r.ok) router.push(backHref); else setErr(r.error || ""); }}>{armed === "discard" ? "Delete this order?" : "Delete"}</button>
-          <button type="button" className="btn primary" disabled={preview || busy || !calc.qty} onClick={send}>{busy ? "Sending…" : "Send to FBS for pricing"}</button>
+          <button type="button" className="btn primary" disabled={preview || busy || problems.length > 0} onClick={send}>{busy ? "Sending…" : "Send to FBS for pricing"}</button>
         </div>
       </div>
       <div className="rq-note">Add your garments, sizes and where each logo goes. <b>You won&apos;t see prices yet:</b> we&apos;ll check everything, price it and send it back for your final OK.</div>
@@ -198,16 +199,21 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         </div>
       </section>
 
-      {calc.qty > 0 && problems.length > 0 && (
+      {problems.length > 0 && (
         <div className="rq-check">
           <b>Before you send it in:</b>
           <ul>{problems.map((p) => <li key={p}>{p}</li>)}</ul>
-          <span className="faint">A mockup is optional, but every print location needs its logo, where it goes, its size and ink colors.</span>
+        </div>
+      )}
+      {hints.length > 0 && (
+        <div className="rq-hint">
+          <b>Helpful if you know them</b> <span className="faint">(optional, we can figure these out with you):</span>
+          <ul>{hints.map((p) => <li key={p}>{p}</li>)}</ul>
         </div>
       )}
       <div className="rq-foot">
         <span><b>{calc.qty}</b> pieces</span><span className="spacer" />
-        <button type="button" className="btn primary" disabled={preview || busy || !calc.qty || problems.length > 0} onClick={send}>{busy ? "Sending…" : "Send to FBS for pricing"}</button>
+        <button type="button" className="btn primary" disabled={preview || busy || problems.length > 0} onClick={send}>{busy ? "Sending…" : "Send to FBS for pricing"}</button>
       </div>
     </main>
   );
