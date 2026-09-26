@@ -46,7 +46,6 @@ function Builder() {
   const [groupName, setGroupName] = useState("");
   const [active, setActive] = useState(0);
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
-  const scale = 1;
   const [paints, setPaints] = useState<Record<string, Paint>>({});
   const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
@@ -173,6 +172,11 @@ function Builder() {
   };
   const views: View[] = (["front", "back"] as View[]).filter((v) => imprints.some((im) => viewsFor(im.location).includes(v)));
   const line = lines[active] || lines[0];
+  // designs are sized on a Large: adult L (22" chest) or youth L (18" chest) for youth styles
+  const isYouthStyle = (l?: Line) => { const z = (l && garmentFor(l)?.sizes) || []; return z.includes("YL") && !z.includes("L"); };
+  const scale = isYouthStyle(line) ? 22 / 18 : 1;
+  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; const g = garmentFor(l); const ci = g?.color_images?.[l.color]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
+  const sleeveIms = imprints.filter((im) => viewsFor(im.location).length > 1);
 
   async function uploadNew(im: Imprint, f: File) {
     if (!customerId) return setMsg("Pick the customer first. New art is saved to their account.");
@@ -283,6 +287,26 @@ function Builder() {
           {lines.length > 1 && (
             <div className="chips" style={{ marginBottom: 10 }}>
               {lines.map((l, i) => <button key={l.id} type="button" className={"chip" + (i === active ? " on" : "")} onClick={() => setActive(i)}>{[l.style, l.color].filter(Boolean).join(" · ") || `Garment ${i + 1}`}</button>)}
+            </div>
+          )}
+          <div className="faint" style={{ fontSize: 12, marginBottom: 6 }}>Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}.</div>
+          {sleeveIms.length > 0 && (
+            <div className="mk-sleeves">
+              {sleeveIms.map((im) => {
+                const d = designOf(im); const r = ratioOf(d) || 0.6;
+                const wIn = printWidth(im.size, im.location, ratioOf(d));
+                const o = offsets[im.id] || { dx: 0, dy: 0 };
+                return (
+                  <SleeveBox key={im.id} title={`${im.location} (full art)`} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r}
+                    maxIn={3.5} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
+                    onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
+                    onResize={(newWIn) => {
+                      const cap = maxWidthFor(im.location, ratioOf(d));
+                      const inches = Math.max(0.5, Math.min(cap, Math.round(newWIn * 100) / 100));
+                      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${inches}" wide` } : x)));
+                    }} />
+                );
+              })}
             </div>
           )}
           <div className="mk-views">
@@ -536,5 +560,38 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
       <optgroup label="PMS">{Object.keys(PMS_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
       <option value="__custom">Other PMS / custom…</option>
     </select>
+  );
+}
+
+/** Sleeve close-up: a patch of shirt color with the whole sleeve logo to drag and size; the photos below show how it wraps. */
+function SleeveBox({ title, hex, url, wIn, hIn, maxIn, offIn, onMove, onResize }: {
+  title: string; hex: string; url: string; wIn: number; hIn: number; maxIn: number; offIn: { x: number; y: number };
+  onMove: (dxIn: number, dyIn: number) => void; onResize: (newWIn: number) => void;
+}) {
+  const PX = 40; // css px per inch in this close-up
+  const size = 6; // the patch shows 6" x 6" of sleeve
+  const drag = useRef<{ x: number; y: number; mode: "move" | "size"; w: number } | null>(null);
+  const cx = (size / 2 + offIn.x) * PX, cy = (size / 2 + offIn.y) * PX;
+  return (
+    <div className="mk-sleeve">
+      <div className="lbl">{title.toUpperCase()}</div>
+      <div className="mk-sleeve-box" style={{ width: size * PX, height: size * PX, background: hex }}
+        onPointerMove={(e) => {
+          const d = drag.current; if (!d) return;
+          if (d.mode === "move") onMove((e.clientX - d.x) / PX, (e.clientY - d.y) / PX);
+          else { d.w += (e.clientX - d.x) / PX; onResize(d.w); }
+          drag.current = { ...d, x: e.clientX, y: e.clientY };
+        }}
+        onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
+        <div className="mk-sleeve-max" style={{ width: maxIn * PX, height: maxIn * PX, left: (size / 2 - maxIn / 2) * PX, top: (size / 2 - maxIn / 2) * PX }} />
+        <div className="mk-sleeve-seam" />
+        <div className={"mk-art sel" + (url ? "" : " mk-missing")} style={{ left: cx - (wIn * PX) / 2, top: cy - (hIn * PX) / 2, width: wIn * PX, height: hIn * PX }}
+          onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "move", w: wIn }; }}>
+          {url ? <img src={url} alt="" draggable={false} /> : "?"}
+          <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />
+        </div>
+      </div>
+      <div className="faint" style={{ fontSize: 11 }}>{wIn.toFixed(2)}&quot; × {hIn.toFixed(2)}&quot; · max {maxIn}&quot; · dashed line = sleeve fold (front | back)</div>
+    </div>
   );
 }
