@@ -44,13 +44,25 @@ function Builder() {
   const [designs, setDesigns] = useState<Design[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [lines, setLines] = useState<Line[]>([{ id: uid(), style: "", brand: "", color: "", garment: "" }]);
-  const [imprints, setImprints] = useState<Imprint[]>([newImprint("Full Front")]);
+  const [imprints, setImprints] = useState<Imprint[]>([]);
   const [groupName, setGroupName] = useState("");
   const [active, setActive] = useState(0);
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
   const [paints, setPaints] = useState<Record<string, Paint>>({});
   const [grid, setGrid] = useState(false);
   const [tab, setTab] = useState<"" | Side>("");
+  // close-ups fill the column between the photos and the Imprints panel
+  const cuRef = useRef<HTMLDivElement>(null);
+  const [cuSize, setCuSize] = useState(230);
+  useEffect(() => {
+    const el = cuRef.current; if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const row = getComputedStyle(el).flexDirection === "row";
+      setCuSize(row ? 230 : Math.max(200, Math.min(440, Math.floor(el.clientWidth))));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
   const [want, setWant] = useState<Record<string, number>>({}); // width (in) someone tried to drag past the location's max
   const [askUploaded, setAskUploaded] = useState(false);
   const [keepLoc, setKeepLoc] = useState<string[]>([]); // imprints where staff said "keep this location"
@@ -338,6 +350,7 @@ function Builder() {
     if (!force && imprints.some((im) => unsetColors(im).length)) { setAskUploaded(true); return; }
     setAskUploaded(false);
     if (!lines.some((l) => l.style || l.color)) return setMsg("Add a garment and color first.");
+    if (!imprints.length) return setMsg("Add at least one print location first.");
     const missing = imprints.filter((im) => !designOf(im));
     if (missing.length) return setMsg(`${missing.map((m) => m.location).join(", ")} ${missing.length > 1 ? "have" : "has"} no design yet. Pick one of the customer's designs or upload new art.`);
     setSaving(true);
@@ -451,7 +464,7 @@ function Builder() {
                 onPick={pickColor} />
             ))}
           </div>
-            <div className="mk-closeups">
+            <div className="mk-closeups" ref={cuRef}>
               {/* front locations first, then back, sleeves always last (in order-form order within each) */}
               {imprints.map((im, i) => ({ im, i })).sort((a, b) => {
                 const rank = (x: Imprint) => (viewsFor(x.location).length > 1 ? 2 : spotFor(x.location).view === "back" ? 1 : 0);
@@ -463,7 +476,7 @@ function Builder() {
                 const o = offsets[im.id] || { dx: 0, dy: 0 };
                 const sp = spotFor(im.location);
                 return (
-                  <CloseUp key={im.id} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
+                  <CloseUp key={im.id} size={cuSize} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
@@ -729,8 +742,8 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
 }
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
-function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, offIn, colors, onMove, onResize, onPick }: {
-  topAlign?: boolean; title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
+function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, offIn, colors, onMove, onResize, onPick }: {
+  size: number; topAlign?: boolean; title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
   colors: { hex: string; name: string }[];
   onMove: (dxIn: number, dyIn: number) => void; onResize: (newWIn: number) => void;
   onPick: (relX: number, relY: number, clientX: number, clientY: number) => void;
@@ -744,17 +757,17 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, offIn,
     document.addEventListener("pointerdown", off);
     return () => document.removeEventListener("pointerdown", off);
   }, [sel]);
-  const BOX = 230;
+  const BOX = size;
   const spanW = maxW + 2, spanH = maxH + 2; // inches shown: the max print area plus a margin
-  const PX = Math.min(BOX / spanW, BOX / spanH); // css px per inch
+  const PX = Math.min(BOX / spanW, (BOX * 1.25) / spanH); // css px per inch (tall areas can run a bit taller than wide)
   const W = spanW * PX, H = spanH * PX;
   const drag = useRef<{ x: number; y: number; mode: "move" | "size"; w: number } | null>(null);
   const cx = W / 2 + offIn.x * PX, top0 = (H - maxH * PX) / 2;
   const cy = (topAlign ? top0 + (hIn * PX) / 2 : H / 2) + offIn.y * PX; // same spot as on the photos: top of the area for full front/back, else centered
   return (
-    <div className="mk-sleeve" style={{ width: W }}>
+    <div className="mk-sleeve" style={{ width: BOX }}>
       <div className="mk-cu-h"><span className="lbl">{title.toUpperCase()}</span><span className="mk-cu-max">max {maxW}&quot; × {maxH}&quot;</span></div>
-      <div className="mk-sleeve-box" style={{ width: W, height: H, background: hex }}
+      <div className="mk-sleeve-box" style={{ width: W, height: H, background: hex, alignSelf: "center" }}
         onPointerMove={(e) => {
           const d = drag.current; if (!d) return;
           if (d.mode === "move") onMove((e.clientX - d.x) / PX, (e.clientY - d.y) / PX);
