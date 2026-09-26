@@ -7,7 +7,7 @@ import { LOCATIONS, designLabel, newImprint, orderGroups, uid, type Customer, ty
 import { custLabel } from "@/lib/format";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { PMS_HEX, WILFLEX_HEX, colorHex, detectColors, recolor } from "@/lib/inkColors";
-import { PHOTO_H, PHOTO_W, basePlacement, guessHex, printWidth, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, guessHex, printWidth, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -48,6 +48,7 @@ function Builder() {
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
   const scale = 1;
   const [paints, setPaints] = useState<Record<string, Paint>>({});
+  const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
   const imgCache = useRef(new Map<string, HTMLImageElement>());
   const [msg, setMsg] = useState("");
@@ -279,13 +280,48 @@ function Builder() {
             {(views.length ? views : (["front"] as View[])).map((v) => (
               <Stage key={v} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => spotFor(im.location).view === v).map((im) => ({ id: im.id, p: place(im), url: artUrl(im) }))}
-                onMove={(id, dx, dy) => setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + dx, dy: (o[id]?.dy || 0) + dy } }))} />
+                onMove={(id, dx, dy) => setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + dx, dy: (o[id]?.dy || 0) + dy } }))}
+                onResize={(id, newW) => {
+                  const im = imprints.find((x) => x.id === id); if (!im) return;
+                  const old = place(im);
+                  const inches = Math.round((newW / (PX_PER_IN * scale)) * 100) / 100;
+                  // keep the left edge where it is while the size changes
+                  setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + (newW - old.w) / 2, dy: o[id]?.dy || 0 } }));
+                  setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, size: `${inches}" wide` } : x)));
+                }}
+                onPick={(id, rx, ry, cx, cy) => {
+                  const im = imprints.find((x) => x.id === id); const pt = paints[id];
+                  if (!im || !pt) return;
+                  const img = imgCache.current.get(pt.design); if (!img) return;
+                  const c = document.createElement("canvas"); c.width = 1; c.height = 1;
+                  const cx2 = c.getContext("2d", { willReadFrequently: true })!;
+                  cx2.drawImage(img, Math.floor(rx * img.naturalWidth), Math.floor(ry * img.naturalHeight), 1, 1, 0, 0, 1, 1);
+                  const [r, g, b2, a] = cx2.getImageData(0, 0, 1, 1).data;
+                  if (a < 100) return;
+                  let best = pt.sources[0]?.hex, bd = Infinity;
+                  for (const src of pt.sources) { const v = [1, 3, 5].map((o) => parseInt(src.hex.slice(o, o + 2), 16)); const dd = (v[0] - r) ** 2 + (v[1] - g) ** 2 + (v[2] - b2) ** 2; if (dd < bd) { bd = dd; best = src.hex; } }
+                  if (best) setPop({ id, src: best, x: cx, y: cy });
+                }} />
             ))}
           </div>
           <div className="row" style={{ gap: 10, marginTop: 8 }}>
             <span className="faint" style={{ fontSize: 12 }}>Dashed boxes show each location&apos;s max print area · drag designs to fine-tune</span>
             {Object.keys(offsets).length > 0 && <button className="btn sm ghost" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
           </div>
+          {pop && (() => {
+            const im = imprints.find((x) => x.id === pop.id);
+            const cur = paints[pop.id]?.map[pop.src];
+            if (!im) return null;
+            return (
+              <div className="mk-pop" style={{ left: Math.min(pop.x + 8, (typeof window !== "undefined" ? window.innerWidth : 1200) - 300), top: pop.y + 8 }}>
+                <div className="row" style={{ gap: 6 }}>
+                  <span className="sw" style={{ background: pop.src }} /><span>→</span><span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : pop.src }} />
+                  <InkSelect key={pop.src + pop.id} value={cur} onChange={(v) => setInk(im, pop.src, v)} />
+                  <button className="btn icon ghost" type="button" aria-label="Close" onClick={() => setPop(null)}>✕</button>
+                </div>
+              </div>
+            );
+          })()}
           {saved.length > 0 && (
             <div className="mk-saved">{saved.map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer"><img src={s.url} alt={s.title} /><span>{s.title}</span></a>)}</div>
           )}
@@ -368,32 +404,61 @@ function Builder() {
   );
 }
 
-/** One garment photo with draggable designs on it. */
-function Stage({ src, label, items, onMove }: { src: string; label: string; items: { id: string; p: { x: number; y: number; w: number; h: number; area: { x: number; y: number; w: number; h: number } }; url: string }[]; onMove: (id: string, dx: number, dy: number) => void }) {
+/** One garment photo with designs you can drag, resize from the corner (proportions locked) and click to recolor. */
+function Stage({ src, label, items, onMove, onResize, onPick }: {
+  src: string; label: string;
+  items: { id: string; p: { x: number; y: number; w: number; h: number; area: { x: number; y: number; w: number; h: number } }; url: string }[];
+  onMove: (id: string, dx: number, dy: number) => void;
+  onResize: (id: string, newW: number) => void;
+  onPick: (id: string, relX: number, relY: number, clientX: number, clientY: number) => void;
+}) {
   const box = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ id: string; x: number; y: number } | null>(null);
+  const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size"; w: number; el?: HTMLElement } | null>(null);
+  const [sel, setSel] = useState("");
   const k = () => (box.current ? box.current.clientWidth / PHOTO_W : 0.42);
+  const s = 100 / PHOTO_W, sy = 100 / PHOTO_H;
   return (
     <div className="mk-stage">
       <div ref={box} className="mk-photo" style={{ aspectRatio: `${PHOTO_W} / ${PHOTO_H}` }}
-        onPointerMove={(e) => { const d = drag.current; if (!d) return; const s = k(); onMove(d.id, (e.clientX - d.x) / s, (e.clientY - d.y) / s); drag.current = { ...d, x: e.clientX, y: e.clientY }; }}
-        onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
+        onPointerMove={(e) => {
+          const d = drag.current; if (!d) return;
+          const f = k();
+          if (d.mode === "move") onMove(d.id, (e.clientX - d.x) / f, (e.clientY - d.y) / f);
+          else { const dw = (e.clientX - d.x) / f; if (d.w + dw > 12) { onResize(d.id, d.w + dw); d.w += dw; } }
+          drag.current = { ...d, x: e.clientX, y: e.clientY };
+        }}
+        onPointerUp={(e) => {
+          const d = drag.current; drag.current = null;
+          // a click (no real movement) on a logo opens the color picker for the color under the cursor
+          if (d && d.mode === "move" && d.el && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 4) {
+            const r = d.el.getBoundingClientRect();
+            onPick(d.id, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, e.clientX, e.clientY);
+          }
+        }}
+        onPointerLeave={() => { drag.current = null; }}
+        onPointerDown={(e) => { if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg")) setSel(""); }}>
         <img src={src} alt="" draggable={false} className="mk-bg" />
-        {items.map((it) => {
-          const s = 100 / PHOTO_W, sy = 100 / PHOTO_H;
-          return <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%` }} />;
-        })}
-        {items.map((it) => {
-          const s = 100 / PHOTO_W, sy = 100 / PHOTO_H;
-          return it.url ? (
-            <img key={it.id} src={it.url} alt="" draggable={false} className="mk-art"
-              style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%` }}
-              onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: it.id, x: e.clientX, y: e.clientY }; }} />
-          ) : (
-            <div key={it.id} className="mk-art mk-missing" style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%` }}
-              onPointerDown={(e) => { drag.current = { id: it.id, x: e.clientX, y: e.clientY }; }}>?</div>
-          );
-        })}
+        {items.map((it) => <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%` }} />)}
+        {items.map((it) => (
+          <div key={it.id} className={"mk-art" + (sel === it.id ? " sel" : "") + (it.url ? "" : " mk-missing")}
+            style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%` }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              setSel(it.id);
+              (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+              drag.current = { id: it.id, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "move", w: it.p.w, el: e.currentTarget as HTMLElement };
+            }}>
+            {it.url ? <img src={it.url} alt="" draggable={false} /> : "?"}
+            {sel === it.id && (
+              <span className="mk-handle" title="Drag to resize (proportions stay locked)"
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+                  drag.current = { id: it.id, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "size", w: it.p.w };
+                }} />
+            )}
+          </div>
+        ))}
       </div>
       <div className="mk-label">{label}</div>
     </div>
