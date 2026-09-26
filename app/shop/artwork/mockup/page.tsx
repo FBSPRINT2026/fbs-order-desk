@@ -536,10 +536,7 @@ function Builder() {
                     </div>
                     {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <div className="mk-colors">
-                        <div className="row" style={{ justifyContent: "space-between" }}>
-                          <div className="lbl">COLORS IN THIS DESIGN</div>
-                          {unsetColors(im).length > 0 && <button type="button" className="btn sm" title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={() => matchStandard(im)}>Use closest standard inks</button>}
-                        </div>
+                        <div className="lbl">COLORS IN THIS DESIGN</div>
                         {paints[im.id].sources.map((src) => {
                           const cur = paints[im.id].map[src.hex];
                           return (
@@ -554,6 +551,7 @@ function Builder() {
                             </div>
                           );
                         })}
+                        {unsetColors(im).length > 0 && <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={() => matchStandard(im)}>Use closest standard inks</button>}
                       </div>
                     )}
                     {!p.d && <div className="ink-warn">Which design goes on the {im.location}? Pick one of the customer&apos;s designs, or upload new art.</div>}
