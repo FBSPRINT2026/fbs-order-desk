@@ -152,7 +152,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           <div>
             <table className="pv-grid imp-table">
               <colgroup><col style={{ width: "13%" }} /><col style={{ width: "14%" }} /><col style={{ width: 56 }} /><col style={{ width: "19%" }} /><col style={{ width: "14%" }} /><col style={{ width: "10%" }} /><col /><col style={{ width: 58 }} /><col style={{ width: 30 }} /></colgroup>
-              <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink colors / PMS</th><th>Print size</th><th>Drop</th><th>Notes</th><th className="r">Each</th><th /></tr></thead>
+              <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink or thread colors / PMS</th><th>Print size</th><th>Drop</th><th>Notes</th><th className="r">Each</th><th /></tr></thead>
               <tbody>
                 {g.imprints.map((d, di) => (
                   <tr key={d.id}>
