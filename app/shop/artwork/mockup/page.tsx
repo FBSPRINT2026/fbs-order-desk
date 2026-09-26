@@ -386,8 +386,29 @@ function Builder() {
   return (
     <>
       <Link className="back" href={orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
-      <div className="page-head">
+      <div className="page-head mk-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || "Mockup builder"}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup builder"}</h1></div>
+        {!orderId && (
+          <div className="mk-setup">
+            <select aria-label="Customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Choose a customer…</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select>
+            <input type="text" aria-label="Mockup name" placeholder="Mockup name" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
+            {lines.map((l, i) => {
+              const g = garmentFor(l);
+              return (
+                <span key={l.id} className="mk-setup-g">
+                  <select aria-label="Garment" value={g?.id || ""} onChange={(e) => { const gg = catalog.find((x) => x.id === e.target.value); setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: gg?.style || "", brand: gg?.brand || "", garment: gg?.description || "", color: gg?.colors?.[0] || "" } : x))); }}>
+                    <option value="">Garment…</option>{garmentOptions.map((gg) => <option key={gg.id} value={gg.id}>{gg.brand} {gg.style} — {gg.description}</option>)}
+                  </select>
+                  <select aria-label="Color" value={l.color} onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))}>
+                    <option value="">Color…</option>{(g?.colors || []).map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  {lines.length > 1 && <button type="button" className="btn icon ghost" aria-label="Remove this color" onClick={() => { setLines((ls) => ls.filter((_, j) => j !== i)); setActive(0); }}>✕</button>}
+                </span>
+              );
+            })}
+            <button className="btn sm" type="button" onClick={() => { const last = lines[lines.length - 1]; setLines([...lines, { ...last, id: uid(), color: "" }]); }}>+ Another color</button>
+          </div>
+        )}
         <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}<button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
       </div>
 
@@ -511,29 +532,6 @@ function Builder() {
         </div>
 
         <div className="mk-side stack">
-          {!orderId && (
-            <section className="panel">
-              <div className="panel-h"><h2>Customer & garment</h2></div>
-              <div className="panel-b stack">
-                <select aria-label="Customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Choose a customer…</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select>
-                <input type="text" aria-label="Mockup name" placeholder="Mockup name (e.g. Spring promo tee)" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
-                {lines.map((l, i) => {
-                  const g = garmentFor(l);
-                  return (
-                    <div key={l.id} className="row" style={{ gap: 6 }}>
-                      <select aria-label="Garment" value={g?.id || ""} onChange={(e) => { const gg = catalog.find((x) => x.id === e.target.value); setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: gg?.style || "", brand: gg?.brand || "", garment: gg?.description || "", color: gg?.colors?.[0] || "" } : x))); }}>
-                        <option value="">Garment from your catalog…</option>{garmentOptions.map((gg) => <option key={gg.id} value={gg.id}>{gg.brand} {gg.style} — {gg.description}</option>)}
-                      </select>
-                      <select aria-label="Color" value={l.color} onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))}>
-                        <option value="">Color…</option>{(g?.colors || []).map((c) => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                  );
-                })}
-                <button className="btn sm" type="button" onClick={() => { const last = lines[lines.length - 1]; setLines([...lines, { ...last, id: uid(), color: "" }]); }}>+ Another color</button>
-              </div>
-            </section>
-          )}
           <section className={"panel" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
             <div className="panel-h"><h2>Imprints</h2><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}>+ Add {curTab === "sleeve" ? "sleeve" : curTab} location</button></div>
             <div className="chips mk-tabs">

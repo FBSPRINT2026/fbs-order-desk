@@ -606,3 +606,8 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-pop .mk-match{margin:8px 0 0}
 .mk-tabs{margin:8px 12px 0}
 .mk-tabs .chip{flex:1}
+.mk-head{flex-wrap:wrap;align-items:flex-end;gap:12px 16px}
+.mk-setup{flex:1 1 560px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
+.mk-setup > select,.mk-setup > input{width:auto;max-width:230px;min-width:150px}
+.mk-setup-g{display:inline-flex;gap:4px;align-items:center}
+.mk-setup-g select{width:auto;max-width:240px}
