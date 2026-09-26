@@ -1,5 +1,5 @@
 "use client";
-import { ADULT_SIZES, FULL_COLOR, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { ADULT_SIZES, FULL_COLOR, INK_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 
 type Props = {
@@ -137,12 +137,13 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           <b className="a-to r num">{money(gc.sub)}</b>
         </div>
 
+        <datalist id="ink-colors">{INK_COLORS.map((c) => <option key={c} value={c} />)}</datalist>
         <div className="imprints">
           <div className="lbl" style={{ marginBottom: 6 }}>IMPRINTS</div>
           <div>
             <table className="pv-grid imp-table">
-              <colgroup><col style={{ width: "15%" }} /><col style={{ width: "13%" }} /><col style={{ width: 64 }} /><col /><col style={{ width: "11%" }} /><col /><col style={{ width: 56 }} /><col style={{ width: 64 }} /><col style={{ width: 34 }} /></colgroup>
-              <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink colors / PMS</th><th>Print size</th><th>Notes</th><th className="c" title="Ink changes during the run">Ink chg</th><th className="r">Each</th><th /></tr></thead>
+              <colgroup><col style={{ width: "15%" }} /><col style={{ width: "15%" }} /><col style={{ width: 64 }} /><col style={{ width: "24%" }} /><col style={{ width: "11%" }} /><col /><col style={{ width: 64 }} /><col style={{ width: 34 }} /></colgroup>
+              <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink colors / PMS</th><th>Print size</th><th>Notes</th><th className="r">Each</th><th /></tr></thead>
               <tbody>
                 {g.imprints.map((d, di) => (
                   <tr key={d.id}>
@@ -153,10 +154,17 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                     <td>{d.method === "screen"
                       ? <select aria-label="Number of colors" value={d.colors} onChange={(e) => update((x) => { x.imprints[di].colors = +e.target.value; })}>{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n}</option>)}<option value={FULL_COLOR}>Full color</option></select>
                       : <span className="faint" style={{ fontSize: 12 }}>{d.method === "embroidery" ? "Thread" : "Full color"}</span>}</td>
-                    <td><input type="text" aria-label="Ink colors" placeholder="White, PMS 186 C" value={d.inks} onChange={(e) => update((x) => { x.imprints[di].inks = e.target.value; })} /></td>
+                    <td>
+                      <div className="ink-combo">
+                        <input type="text" list="ink-colors" aria-label="Ink colors" placeholder="Pick ▸ or type PMS" value={d.inks} onChange={(e) => update((x) => { x.imprints[di].inks = e.target.value; })} />
+                        <select aria-label="Add a Wilflex RFU ink" tabIndex={-1} value="" onChange={(e) => { const v = e.target.value; if (v) update((x) => { const cur = x.imprints[di].inks.trim(); x.imprints[di].inks = cur ? `${cur}, ${v}` : v; }); }}>
+                          <option value="" hidden>▾</option>
+                          {INK_COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    </td>
                     <td><input type="text" aria-label="Print size" placeholder='11" wide' value={d.size} onChange={(e) => update((x) => { x.imprints[di].size = e.target.value; })} /></td>
                     <td><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></td>
-                    <td className="c"><input type="number" min="0" step="1" className="sz" aria-label="Ink changes" value={d.inkChanges || ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].inkChanges = Math.max(0, Math.floor(+e.target.value || 0)); })} /></td>
                     <td className="r num">{money(gc.imprints[di]?.each)}</td>
                     <td><button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button></td>
                   </tr>
@@ -170,7 +178,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         <div className="grp-foot">
           <div className="grp-foot-l">
             {settings.finishing.length > 0 && (
-              <div className="imprints">
+        <div className="imprints">
                 <div className="lbl" style={{ marginBottom: 6 }}>FINISHING</div>
                 <div className="row" style={{ gap: 14 }}>
                   {settings.finishing.map((f) => (
