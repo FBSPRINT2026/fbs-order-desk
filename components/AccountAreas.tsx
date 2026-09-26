@@ -34,6 +34,8 @@ const I = {
   due: "M12 7v5l3 3M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z",
   dollar: "M12 3v18M16 7c0-1.7-1.8-3-4-3s-4 1.3-4 3 1.8 2.6 4 3 4 1.3 4 3-1.8 3-4 3-4-1.3-4-3",
   arrow: "M5 12h14M13 6l6 6-6 6",
+  trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
+  archive: "M3 4h18v4H3zM5 8v12h14V8M10 12h4",
 };
 export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -43,7 +45,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, invoices, payments, artwork, messages…), each searchable.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, details, hrefBase, hrefQuery = "", onSend, onStar, canAct = true }: {
+export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, canAct = true }: {
   mode: "shop" | "portal";
   orders: AOrder[]; payments: APayment[]; designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
   attention: AAttn[];
@@ -53,6 +55,10 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   hrefBase: string; hrefQuery?: string;
   onSend?: (body: string) => Promise<{ ok: boolean; error?: string; emailed?: boolean }>;
   onStar?: (designId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
+  /** logos on a mockup or order: archive only, no delete */
+  usedIds?: string[];
+  onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
+  onArchive?: (designId: string, archived: boolean) => Promise<{ ok: boolean; error?: string }>;
   /** false in the staff preview of a portal: sending is turned off */
   canAct?: boolean;
 }) {
@@ -64,6 +70,10 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   const [homeTab, setHomeTab] = useState<"quotes" | "orders">("orders");
   const [stars, setStars] = useState<Record<string, boolean>>({});
   const [starErr, setStarErr] = useState("");
+  const [gone, setGone] = useState<Record<string, boolean>>({});
+  const [arch, setArch] = useState<Record<string, string | null>>({});
+  const [armedDel, setArmedDel] = useState("");
+  const [showArch, setShowArch] = useState(false);
   const ds = useMemo(() => designs.map((d) => (d.id in stars ? { ...d, starred: stars[d.id] } : d)), [designs, stars]);
 
   const quotes = orders.filter((o) => o.type === "quote" && (mode === "shop" || o.status !== "quote"));
@@ -181,7 +191,10 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
         </tbody>
       </table></div></>;
   } else if (area === "artwork") {
-    const dRows = ds.filter((d) => designMatches(d, q)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred) || b.number - a.number);
+    const live = ds.filter((d) => !gone[d.id] && !(d.id in arch ? arch[d.id] : d.archived_at));
+    const archived = ds.filter((d) => !gone[d.id] && (d.id in arch ? arch[d.id] : d.archived_at));
+    const dRows = live.filter((d) => designMatches(d, q)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred) || b.number - a.number);
+    const aRows = archived.filter((d) => designMatches(d, q)).sort((a, b) => b.number - a.number);
     const mRows = mockups.filter((m) => has(q, m.title, m.number));
     const star = async (d: Design) => {
       if (!onStar) return;
@@ -190,25 +203,64 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       const r = await onStar(d.id, !d.starred);
       if (!r.ok) { setStars((s) => ({ ...s, [d.id]: !!d.starred })); setStarErr(r.error || "Couldn't save the star."); }
     };
-    const favs = ds.filter((d) => d.starred).sort((a, b) => b.number - a.number);
+    const used = new Set(usedIds);
+    // unused logos can be deleted (two clicks); logos on a mockup or order can only be archived
+    const remove = async (d: Design) => {
+      setStarErr("");
+      if (!used.has(d.id)) {
+        if (armedDel !== d.id) { setArmedDel(d.id); setTimeout(() => setArmedDel((x) => (x === d.id ? "" : x)), 3500); return; }
+        setArmedDel("");
+        if (!onDelete) return;
+        setGone((g) => ({ ...g, [d.id]: true }));
+        const r = await onDelete(d.id);
+        if (!r.ok) { setGone((g) => ({ ...g, [d.id]: false })); setStarErr(r.error || "Couldn't delete the logo."); }
+        return;
+      }
+      if (!onArchive) return;
+      setArch((x) => ({ ...x, [d.id]: new Date().toISOString() }));
+      const r = await onArchive(d.id, true);
+      if (!r.ok) { setArch((x) => ({ ...x, [d.id]: null })); setStarErr(r.error || "Couldn't archive the logo."); }
+    };
+    const restore = async (d: Design) => {
+      if (!onArchive) return;
+      setArch((x) => ({ ...x, [d.id]: null }));
+      const r = await onArchive(d.id, false);
+      if (!r.ok) { setArch((x) => ({ ...x, [d.id]: d.archived_at || new Date().toISOString() })); setStarErr(r.error || "Couldn't restore the logo."); }
+    };
+    const card = (d: Design, isArchived: boolean) => (
+      <div key={d.id} className={"design-card" + (d.starred ? " starred" : "") + (isArchived ? " archived" : "")}>
+        <div className="dc-img">{designUrls[d.id] ? <img src={designUrls[d.id]} alt={d.name} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
+          <div className="dc-tools">
+            {!isArchived && onStar && <button type="button" className={"dc-star" + (d.starred ? " on" : "")} title={d.starred ? "Remove from favorites" : "Add to favorites"} aria-label={d.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!d.starred} onClick={() => star(d)}>{d.starred ? "★" : "☆"}</button>}
+            {!isArchived && (onDelete || onArchive) && (
+              <button type="button" className={"dc-del" + (armedDel === d.id ? " armed" : "")} onClick={() => remove(d)}
+                title={used.has(d.id) ? "Used on a mockup or order, so it can't be deleted. Archive it instead." : armedDel === d.id ? "Click again to delete for good" : "Delete this logo"}
+                aria-label={used.has(d.id) ? "Archive logo" : "Delete logo"}>
+                {used.has(d.id) ? <Ico d={I.archive} size={15} /> : armedDel === d.id ? "Delete?" : <Ico d={I.trash} size={15} />}
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="dc-b">{mode === "shop" ? <Link href={`/shop/artwork/${d.id}`}><b>D-{d.number}</b></Link> : <b>D-{d.number}</b>}<span>{d.name || "Logo"}</span>{d.inks && <span className="faint">{d.inks}</span>}
+          {isArchived && <button type="button" className="btn sm" style={{ marginTop: 6, alignSelf: "flex-start" }} onClick={() => restore(d)}>Restore</button>}
+        </div>
+      </div>
+    );
+    const favs = live.filter((d) => d.starred).sort((a, b) => b.number - a.number);
     body = <>
-      {tableHead(<h2>Artwork</h2>, "Search by design number (D-10004), name, ink or order")}
       <div className="aa-home">
       <div className="aa-home-main stack">
+      {tableHead(<h2>Artwork</h2>, "Search by logo number (D-10004), name, ink or order")}
       <div className="aa-card">
-        <div className="aa-sec-h"><h3>Designs</h3><span className="faint">{mode === "shop" ? "Starred designs come up first when picking art for this customer." : "Star your favorites so they come up first."}</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
-        {dRows.length ? (
-          <div className="design-grid">
-            {dRows.map((d) => (
-              <div key={d.id} className={"design-card" + (d.starred ? " starred" : "")}>
-                <div className="dc-img">{designUrls[d.id] ? <img src={designUrls[d.id]} alt={d.name} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
-                  {onStar && <button type="button" className={"dc-star" + (d.starred ? " on" : "")} title={d.starred ? "Remove from favorites" : "Add to favorites"} aria-label={d.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!d.starred} onClick={() => star(d)}>{d.starred ? "★" : "☆"}</button>}
-                </div>
-                <div className="dc-b">{mode === "shop" ? <Link href={`/shop/artwork/${d.id}`}><b>D-{d.number}</b></Link> : <b>D-{d.number}</b>}<span>{d.name || "Design"}</span>{d.inks && <span className="faint">{d.inks}</span>}</div>
-              </div>
-            ))}
+        <div className="aa-sec-h"><h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
+        {dRows.length ? <div className="design-grid">{dRows.map((d) => card(d, false))}</div>
+          : <div className="aa-empty">{live.length ? `No logos match “${q}”.` : "No logos on file yet."}</div>}
+        {archived.length > 0 && (
+          <div className="aa-arch">
+            <button type="button" className="btn sm ghost" onClick={() => setShowArch(!showArch)}>{showArch ? "Hide archived logos" : `View archived logos (${archived.length})`}</button>
+            {showArch && (aRows.length ? <div className="design-grid" style={{ marginTop: 10 }}>{aRows.map((d) => card(d, true))}</div> : <div className="aa-empty">No archived logos match “{q}”.</div>)}
           </div>
-        ) : <div className="aa-empty">{designs.length ? `No designs match “${q}”.` : "No designs on file yet."}</div>}
+        )}
       </div>
       <div className="aa-card">
         <div className="aa-sec-h"><h3>Mockups</h3></div>
@@ -229,11 +281,11 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
         {favs.map((d) => (
           <div key={d.id} className="aa-fav">
             {designUrls[d.id] ? <img src={designUrls[d.id]} alt="" /> : <span className="aa-fav-ph">{(d.file_name.split(".").pop() || "").toUpperCase()}</span>}
-            <span className="aa-fav-t">{mode === "shop" ? <Link href={`/shop/artwork/${d.id}`}><b>D-{d.number}</b></Link> : <b>D-{d.number}</b>}<span>{d.name || "Design"}</span></span>
+            <span className="aa-fav-t">{mode === "shop" ? <Link href={`/shop/artwork/${d.id}`}><b>D-{d.number}</b></Link> : <b>D-{d.number}</b>}<span>{d.name || "Logo"}</span></span>
             {onStar && <button type="button" className="dc-star on" title="Remove from favorites" aria-label="Remove from favorites" onClick={() => star(d)}>★</button>}
           </div>
         ))}
-        {!favs.length && <div className="aa-attn-none">No favorites yet. Tap the ☆ on a design to add it here{mode === "shop" ? "; favorites come up first when picking art for this customer." : "."}</div>}
+        {!favs.length && <div className="aa-attn-none">No favorites yet. Tap the ☆ on a logo to add it here{mode === "shop" ? "; favorites come up first when picking art for this customer." : "."}</div>}
       </aside>
       </div>
     </>;

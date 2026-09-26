@@ -4,6 +4,7 @@ import type { Design, Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
 import { customerGeneralMessage, starMyDesign } from "@/app/portal/actions";
+import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
 
 export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string }> }) {
   const { as } = await searchParams;
@@ -15,6 +16,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const paid: Record<string, number> = {};
   const pendingProofs: Record<string, number> = {};
   let payments: APayment[] = [], designs: Design[] = [], mockups: AMockup[] = [], messages: AMessage[] = [];
+  const usedIds: string[] = [];
   const designUrls: Record<string, string> = {};
   if (ctx.customerIds.length) {
     const { data } = await ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).neq("status", "quote").order("number", { ascending: false });
@@ -33,6 +35,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     payments = pays.map((x) => ({ ...x, amount: +x.amount || 0, number: num(x.order_id) || 0 }));
     ((pr.data || []) as { order_id: string }[]).forEach((x) => { pendingProofs[x.order_id] = (pendingProofs[x.order_id] || 0) + 1; });
     designs = (d.data || []) as Design[];
+    for (const cid of ctx.customerIds) { const { data: u } = await ctx.db.rpc("designs_in_use", { p_customer: cid }); usedIds.push(...((u || []) as string[])); }
     const withPv = designs.filter((x) => x.preview_path);
     if (withPv.length) {
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(withPv.map((x) => x.preview_path), 3600);
@@ -75,7 +78,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         ) : (
           <AccountAreas mode="portal" orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
-            onSend={customerGeneralMessage} onStar={starMyDesign} />
+            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} />
         )}
       </main>
     </>

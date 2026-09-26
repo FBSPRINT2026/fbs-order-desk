@@ -11,6 +11,7 @@ import AccountAreas, { type AAttn, type AMessage, type AMockup, type APayment } 
 import { fmtDateLong } from "@/lib/format";
 import { previewUrls } from "@/lib/designs";
 import { staffCustomerMessage } from "@/app/shop/actions";
+import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
 import type { Design } from "@/lib/pricing";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -34,6 +35,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [messages, setMessages] = useState<AMessage[]>([]);
   const [pendingArt, setPendingArt] = useState<Record<string, string>>({});
   const [reload, setReload] = useState(0);
+  const [usedIds, setUsedIds] = useState<string[]>([]);
   const orderIds = orders.filter((o) => o.customer_id === id).map((o) => o.id).join(",");
   useEffect(() => {
     if (loading) return;
@@ -53,6 +55,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       setPendingArt(pa);
       setPayments(((p.data || []) as { id: string; order_id: string; amount: number; method: string; paid_on: string | null; created_at: string }[]).map((x) => ({ ...x, amount: +x.amount || 0, number: num(x.order_id) || 0 })));
       const dl = (d.data || []) as Design[];
+      const { data: used } = await sb.rpc("designs_in_use", { p_customer: id });
+      setUsedIds((used || []) as string[]);
       setDesigns(dl);
       setDesignUrls(await previewUrls(sb, dl));
       const ml = (m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string }[];
@@ -127,6 +131,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         })} orders={os.map((o) => ({ ...o, nickname: o.nickname || "", price_type: o.price_type }))} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
         hrefBase="/shop/orders/"
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
+        usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign}
         onStar={async (designId, starred) => { const { error } = await createClient().rpc("set_design_star", { p_design: designId, p_starred: starred }); return { ok: !error, error: error?.message }; }}
         details={
       <div className="cust-grid">

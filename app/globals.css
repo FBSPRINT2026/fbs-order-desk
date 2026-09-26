@@ -706,7 +706,8 @@ td > .sz-dim.on input{padding-right:24px}
 .aa-sec-h h3{margin:0;font-size:16px}
 .aa-sec-h .faint{font-size:12px}
 .dc-img{position:relative}
-.dc-star{position:absolute;top:6px;right:6px;border:1px solid var(--line);background:rgba(255,255,255,.95);border-radius:8px;cursor:pointer;font-size:18px;line-height:1;padding:4px 7px;color:#9aa3b0}
+.dc-tools{position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.dc-star{border:1px solid var(--line);background:rgba(255,255,255,.95);border-radius:8px;cursor:pointer;font-size:18px;line-height:1;padding:4px 7px;color:#9aa3b0}
 .dc-star:hover{color:#E0A100;border-color:#E0A100}
 .dc-star.on{color:#E0A100;border-color:#F3D27A;background:#FFF8E1}
 .design-card.starred{border-color:#F3D27A}
@@ -728,3 +729,8 @@ td > .sz-dim.on input{padding-right:24px}
 .aa-fav-t{display:flex;flex-direction:column;min-width:0;font-size:13px}
 .aa-fav-t span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .aa-fav .dc-star{position:static}
+.dc-del{display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:28px;border:1px solid var(--line);background:rgba(255,255,255,.95);border-radius:8px;cursor:pointer;color:#8a93a3;font:inherit;font-size:11px;font-weight:700;padding:0 6px}
+.dc-del:hover{color:#dc2626;border-color:#f3b4b4}
+.dc-del.armed{color:#fff;background:#dc2626;border-color:#dc2626}
+.design-card.archived{opacity:.75}
+.aa-arch{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px}

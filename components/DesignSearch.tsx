@@ -32,10 +32,12 @@ export default function DesignSearch({ designs, urls, value, onPick, onStar, pla
     document.addEventListener("pointerdown", off);
     return () => document.removeEventListener("pointerdown", off);
   }, [open]);
-  const starred = useMemo(() => designs.filter((d) => d.starred), [designs]);
+  // archived logos stay off the list (but still show if an imprint already uses one)
+  const active = useMemo(() => designs.filter((d) => !d.archived_at), [designs]);
+  const starred = useMemo(() => active.filter((d) => d.starred), [active]);
   const list = q.trim()
-    ? designs.filter((d) => designMatches(d, q)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred) || b.number - a.number).slice(0, 40)
-    : starred.length ? starred : designs.slice(0, 8);
+    ? active.filter((d) => designMatches(d, q)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred) || b.number - a.number).slice(0, 40)
+    : starred.length ? starred : active.slice(0, 8);
 
   return (
     <div className="ds" ref={box}>
