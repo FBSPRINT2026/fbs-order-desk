@@ -504,3 +504,5 @@ td > .sz-dim.on input{padding-right:24px}
 .color-menu .sm-item{grid-template-columns:1fr}
 .color-menu .sm-item b{font-weight:500}
 .color-menu .sm-item.cur b{font-weight:700}
+.fee-head{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.fee-head > span{padding-left:2px}

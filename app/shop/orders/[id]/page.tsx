@@ -444,15 +444,21 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
 
           <section className="panel">
-            <div className="panel-h"><h2>Fees & adjustments</h2><button className="btn sm" type="button" onClick={() => patch((d) => { d.fees.push({ label: "", amount: "" }); })}>+ Add fee</button></div>
+            <div className="panel-h"><h2>Fees & adjustments</h2></div>
             <div className="panel-b stack">
-              {o.fees.length ? o.fees.map((f, i) => (
-                <div key={i} className="fee-row">
-                  <input type="text" aria-label="Fee description" placeholder="Rush fee, art time, shipping…" value={f.label} onChange={(e) => patch((d) => { d.fees[i].label = e.target.value; })} />
-                  <input type="number" step="0.01" aria-label="Fee amount" placeholder="0.00" value={f.amount} onChange={(e) => patch((d) => { d.fees[i].amount = numOr(e.target.value); })} />
-                  <button className="btn icon ghost" type="button" aria-label="Remove fee" onClick={() => patch((d) => { d.fees.splice(i, 1); })}>✕</button>
-                </div>
-              )) : <div className="faint" style={{ fontSize: 13 }}>No extra fees. Screens and digitizing are added automatically from each line&apos;s decorations.</div>}
+              <div className="fee-row fee-head"><span>Description</span><span>Amount</span><span /></div>
+              {(o.fees.length ? o.fees : [{ label: "", amount: "" as number | "" }]).map((f, i) => {
+                // an order with no fees still shows one blank row to type into
+                const edit = (fn: (x: { label: string; amount: number | "" }) => void) => patch((d) => { if (!d.fees[i]) d.fees[i] = { label: "", amount: "" }; fn(d.fees[i]); });
+                return (
+                  <div key={i} className="fee-row">
+                    <input type="text" aria-label="Fee description" placeholder="Rush fee, art time, shipping…" value={f.label} onChange={(e) => edit((x) => { x.label = e.target.value; })} />
+                    <input type="number" step="0.01" aria-label="Fee amount" placeholder="0.00" value={f.amount} onChange={(e) => edit((x) => { x.amount = numOr(e.target.value); })} />
+                    {o.fees.length ? <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove fee" onClick={() => patch((d) => { d.fees.splice(i, 1); })}>✕</button> : <span />}
+                  </div>
+                );
+              })}
+              <button className="btn sm add-wide" type="button" onClick={() => patch((d) => { if (!d.fees.length) d.fees.push({ label: "", amount: "" }); d.fees.push({ label: "", amount: "" }); })}>+ Add fee</button>
               <div className="row" style={{ gap: 18 }}>
                 <label className="check"><input type="checkbox" checked={o.waive_setup} onChange={(e) => patch((d) => { d.waive_setup = e.target.checked; })} /> Waive setup fees (reorder, screens on file)</label>
                 <div className="row"><label className="lbl" htmlFor="o-disc">Discount %</label><input id="o-disc" type="number" step="0.5" min="0" max="100" style={{ width: 80 }} value={o.discount_pct} onChange={(e) => patch((d) => { d.discount_pct = +e.target.value || 0; })} /></div>
