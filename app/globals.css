@@ -542,7 +542,7 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-handle{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;background:#fff;border:2px solid var(--accent);border-radius:3px;cursor:nwse-resize}
 .mk-pop{position:fixed;z-index:50;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:8px;width:290px}
 .mk-pop .sw{flex:none;width:20px;height:20px;border-radius:4px;border:1px solid var(--line)}
-.mk-art:hover{outline-color:var(--accent)}
+
 .mk-missing{display:flex;align-items:center;justify-content:center;border:2px dashed var(--danger);color:var(--danger);font-weight:800;font-size:20px;background:color-mix(in srgb,var(--danger-soft) 70%,transparent)}
 .mk-label{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-top:4px;text-align:center}
 .mk-imp{display:flex;flex-direction:column;gap:6px;padding-bottom:10px;border-bottom:1px solid var(--line-2)}

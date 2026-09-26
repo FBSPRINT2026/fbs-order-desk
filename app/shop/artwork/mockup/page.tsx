@@ -488,6 +488,13 @@ function Stage({ src, label, items, grid, onMove, onResize, onPick }: {
   const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size"; w: number; el?: HTMLElement } | null>(null);
   const [sel, setSel] = useState("");
   const lastDown = useRef<{ t: number; x: number; y: number; id: string } | null>(null);
+  // the outline and resize handle only show while a design is selected; clicking anywhere else clears it
+  useEffect(() => {
+    if (!sel) return;
+    const off = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest?.(".mk-art")) setSel(""); };
+    document.addEventListener("pointerdown", off);
+    return () => document.removeEventListener("pointerdown", off);
+  }, [sel]);
   const k = () => (box.current ? box.current.clientWidth / PHOTO_W : 0.42);
   const s = 100 / PHOTO_W, sy = 100 / PHOTO_H;
   return (
@@ -526,7 +533,13 @@ function Stage({ src, label, items, grid, onMove, onResize, onPick }: {
               }
               setSel(it.id);
               (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-              drag.current = { id: it.id, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "move", w: it.p.w, el: e.currentTarget as HTMLElement };
+              // grabbing the bottom-right corner resizes right away (no need to select first)
+              const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect();
+              const a = (-(it.p.rot || 0) * Math.PI) / 180, vx = e.clientX - (r.left + r.width / 2), vy = e.clientY - (r.top + r.height / 2);
+              const lx = vx * Math.cos(a) - vy * Math.sin(a) + el.offsetWidth / 2, ly = vx * Math.sin(a) + vy * Math.cos(a) + el.offsetHeight / 2;
+              const corner = Math.max(10, Math.min(el.offsetWidth, el.offsetHeight) * 0.18);
+              const mode = lx > el.offsetWidth - corner && ly > el.offsetHeight - corner ? "size" : "move";
+              drag.current = { id: it.id, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode, w: it.p.w, el };
             }}>
             {it.url ? <img src={it.url} alt="" draggable={false} /> : "?"}
             {sel === it.id && (
@@ -582,6 +595,14 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, o
   onPick: (relX: number, relY: number, clientX: number, clientY: number) => void;
 }) {
   const lastDown = useRef<{ t: number; x: number; y: number } | null>(null);
+  const [sel, setSel] = useState(false);
+  const artRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!sel) return;
+    const off = (e: PointerEvent) => { if (!artRef.current?.contains(e.target as Node)) setSel(false); };
+    document.addEventListener("pointerdown", off);
+    return () => document.removeEventListener("pointerdown", off);
+  }, [sel]);
   const BOX = 230;
   const spanW = maxW + 2, spanH = maxH + 2; // inches shown: the max print area plus a margin
   const PX = Math.min(BOX / spanW, BOX / spanH); // css px per inch
@@ -602,7 +623,7 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, o
         onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
         <div className="mk-sleeve-max" style={{ width: maxW * PX, height: maxH * PX, left: (W - maxW * PX) / 2, top: top0 }} />
         {fold && <div className="mk-sleeve-seam" />}
-        <div className={"mk-art sel" + (url ? "" : " mk-missing")} style={{ left: cx - (wIn * PX) / 2, top: cy - (hIn * PX) / 2, width: wIn * PX, height: hIn * PX }}
+        <div ref={artRef} className={"mk-art" + (sel ? " sel" : "") + (url ? "" : " mk-missing")} style={{ left: cx - (wIn * PX) / 2, top: cy - (hIn * PX) / 2, width: wIn * PX, height: hIn * PX }}
           onPointerDown={(e) => {
             // double-click opens the color menu, same as on the photos
             const now = Date.now(), last = lastDown.current;
@@ -613,10 +634,14 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, o
               onPick((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, e.clientX, e.clientY);
               return;
             }
-            (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "move", w: wIn };
+            setSel(true);
+            const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect();
+            const corner = Math.max(10, Math.min(r.width, r.height) * 0.18);
+            const mode = e.clientX > r.right - corner && e.clientY > r.bottom - corner ? "size" : "move";
+            el.setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode, w: wIn };
           }}>
           {url ? <img src={url} alt="" draggable={false} /> : "?"}
-          <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />
+          {sel && <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />}
         </div>
       </div>
       <div className="faint" style={{ fontSize: 11 }}>{wIn.toFixed(2)}&quot; × {hIn.toFixed(2)}&quot; · max {maxW}&quot; × {maxH}&quot;{fold ? " · dashed line = sleeve fold" : ""}</div>
