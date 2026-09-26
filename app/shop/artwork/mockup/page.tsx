@@ -176,7 +176,6 @@ function Builder() {
   const isYouthStyle = (l?: Line) => { const z = (l && garmentFor(l)?.sizes) || []; return z.includes("YL") && !z.includes("L"); };
   const scale = isYouthStyle(line) ? 22 / 18 : 1;
   const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; const g = garmentFor(l); const ci = g?.color_images?.[l.color]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
-  const sleeveIms = imprints.filter((im) => viewsFor(im.location).length > 1);
 
   async function uploadNew(im: Imprint, f: File) {
     if (!customerId) return setMsg("Pick the customer first. New art is saved to their account.");
@@ -290,25 +289,7 @@ function Builder() {
             </div>
           )}
           <div className="faint" style={{ fontSize: 12, marginBottom: 6 }}>Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}.</div>
-          {sleeveIms.length > 0 && (
-            <div className="mk-sleeves">
-              {sleeveIms.map((im) => {
-                const d = designOf(im); const r = ratioOf(d) || 0.6;
-                const wIn = printWidth(im.size, im.location, ratioOf(d));
-                const o = offsets[im.id] || { dx: 0, dy: 0 };
-                return (
-                  <SleeveBox key={im.id} title={`${im.location} (full art)`} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r}
-                    maxIn={3.5} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
-                    onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
-                    onResize={(newWIn) => {
-                      const cap = maxWidthFor(im.location, ratioOf(d));
-                      const inches = Math.max(0.5, Math.min(cap, Math.round(newWIn * 100) / 100));
-                      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${inches}" wide` } : x)));
-                    }} />
-                );
-              })}
-            </div>
-          )}
+          <div className="mk-canvas">
           <div className="mk-views">
             {(views.length ? views : (["front"] as View[])).map((v) => (
               <Stage key={v} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
@@ -343,6 +324,25 @@ function Builder() {
                   if (best) setPop({ id, src: best, x: cx, y: cy });
                 }} />
             ))}
+          </div>
+            <div className="mk-closeups">
+              {imprints.map((im) => {
+                const d = designOf(im); const r = ratioOf(d) || 0.6;
+                const wIn = printWidth(im.size, im.location, ratioOf(d));
+                const o = offsets[im.id] || { dx: 0, dy: 0 };
+                const sp = spotFor(im.location);
+                return (
+                  <CloseUp key={im.id} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r}
+                    maxW={sp.maxW} maxH={sp.maxH} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
+                    onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
+                    onResize={(newWIn) => {
+                      const cap = maxWidthFor(im.location, ratioOf(d));
+                      const inches = Math.max(0.5, Math.min(cap, Math.round(newWIn * 100) / 100));
+                      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${inches}" wide` } : x)));
+                    }} />
+                );
+              })}
+            </div>
           </div>
           <div className="row" style={{ gap: 10, marginTop: 8 }}>
             <span className="faint" style={{ fontSize: 12 }}>Drag to move · corner handle to resize · double-click a color to change it · dashed boxes are max print areas</span>
@@ -563,19 +563,22 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
   );
 }
 
-/** Sleeve close-up: a patch of shirt color with the whole sleeve logo to drag and size; the photos below show how it wraps. */
-function SleeveBox({ title, hex, url, wIn, hIn, maxIn, offIn, onMove, onResize }: {
-  title: string; hex: string; url: string; wIn: number; hIn: number; maxIn: number; offIn: { x: number; y: number };
+/** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
+function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, onResize }: {
+  title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
   onMove: (dxIn: number, dyIn: number) => void; onResize: (newWIn: number) => void;
 }) {
-  const PX = 40; // css px per inch in this close-up
-  const size = 6; // the patch shows 6" x 6" of sleeve
+  const BOX = 230;
+  const spanW = maxW + 2, spanH = maxH + 2; // inches shown: the max print area plus a margin
+  const PX = Math.min(BOX / spanW, BOX / spanH); // css px per inch
+  const W = spanW * PX, H = spanH * PX;
   const drag = useRef<{ x: number; y: number; mode: "move" | "size"; w: number } | null>(null);
-  const cx = (size / 2 + offIn.x) * PX, cy = (size / 2 + offIn.y) * PX;
+  const cx = W / 2 + offIn.x * PX, top0 = (H - maxH * PX) / 2;
+  const cy = fold ? H / 2 + offIn.y * PX : top0 + (hIn * PX) / 2 + offIn.y * PX;
   return (
     <div className="mk-sleeve">
       <div className="lbl">{title.toUpperCase()}</div>
-      <div className="mk-sleeve-box" style={{ width: size * PX, height: size * PX, background: hex }}
+      <div className="mk-sleeve-box" style={{ width: W, height: H, background: hex }}
         onPointerMove={(e) => {
           const d = drag.current; if (!d) return;
           if (d.mode === "move") onMove((e.clientX - d.x) / PX, (e.clientY - d.y) / PX);
@@ -583,15 +586,15 @@ function SleeveBox({ title, hex, url, wIn, hIn, maxIn, offIn, onMove, onResize }
           drag.current = { ...d, x: e.clientX, y: e.clientY };
         }}
         onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
-        <div className="mk-sleeve-max" style={{ width: maxIn * PX, height: maxIn * PX, left: (size / 2 - maxIn / 2) * PX, top: (size / 2 - maxIn / 2) * PX }} />
-        <div className="mk-sleeve-seam" />
+        <div className="mk-sleeve-max" style={{ width: maxW * PX, height: maxH * PX, left: (W - maxW * PX) / 2, top: top0 }} />
+        {fold && <div className="mk-sleeve-seam" />}
         <div className={"mk-art sel" + (url ? "" : " mk-missing")} style={{ left: cx - (wIn * PX) / 2, top: cy - (hIn * PX) / 2, width: wIn * PX, height: hIn * PX }}
           onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "move", w: wIn }; }}>
           {url ? <img src={url} alt="" draggable={false} /> : "?"}
           <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />
         </div>
       </div>
-      <div className="faint" style={{ fontSize: 11 }}>{wIn.toFixed(2)}&quot; × {hIn.toFixed(2)}&quot; · max {maxIn}&quot; · dashed line = sleeve fold (front | back)</div>
+      <div className="faint" style={{ fontSize: 11 }}>{wIn.toFixed(2)}&quot; × {hIn.toFixed(2)}&quot; · max {maxW}&quot; × {maxH}&quot;{fold ? " · dashed line = sleeve fold" : ""}</div>
     </div>
   );
 }
