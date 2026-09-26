@@ -216,7 +216,7 @@ function Builder() {
     const H = 70 + ph + 30 + specLines.length * 26 + pad;
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
-    const x = c.getContext("2d")!;
+    let x = c.getContext("2d")!;
     x.fillStyle = "#ffffff"; x.fillRect(0, 0, W, H);
     x.fillStyle = "#141D2B"; x.font = "700 24px Helvetica, Arial, sans-serif";
     x.fillText(`${order ? `#${order.number} ` : ""}${groupName || "Mockup"}`, pad, 36);
@@ -227,6 +227,9 @@ function Builder() {
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
       x.drawImage(bg, ox, oy, pw, ph);
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
+      // art goes on its own layer, then gets cut to the shirt outline before it's added to the picture
+      const layer = document.createElement("canvas"); layer.width = c.width; layer.height = c.height;
+      const main = x; x = layer.getContext("2d")!;
       for (const im of imprints.filter((m) => viewsFor(m.location).includes(v))) {
         const p = place(im, v, fit);
         if (!p.d || !artUrl(im)) continue;
@@ -240,6 +243,11 @@ function Builder() {
           x.restore();
         }
       }
+      if (fit?.mask) {
+        const m = await loadImg(fit.mask).catch(() => null);
+        if (m) { x.globalCompositeOperation = "destination-in"; x.drawImage(m, ox, oy, pw, ph); x.globalCompositeOperation = "source-over"; }
+      }
+      x = main; x.drawImage(layer, 0, 0);
       x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif";
       x.fillText(v.toUpperCase(), ox, oy + ph + 18);
     }
@@ -349,7 +357,7 @@ function Builder() {
           <div className={"mk-canvas" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
           <div className="mk-views">
             {(views.length ? views : (["front"] as View[])).map((v) => (
-              <Stage key={v} grid={grid} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
+              <Stage key={v} grid={grid} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => {
                   const im = imprints.find((x) => x.id === id);
@@ -518,8 +526,8 @@ function Builder() {
 }
 
 /** One garment photo with designs you can drag, resize from the corner (proportions locked) and double-click to recolor. */
-function Stage({ src, label, items, grid, onMove, onResize, onPick }: {
-  src: string; label: string; grid?: boolean;
+function Stage({ src, label, items, grid, mask, onMove, onResize, onPick }: {
+  src: string; label: string; grid?: boolean; /** shirt-shaped mask: art never shows past the edge of the shirt */ mask?: string;
   items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; clip?: "" | "left" | "right"; area: { x: number; y: number; w: number; h: number } }; url: string }[];
   onMove: (id: string, dx: number, dy: number) => void;
   onResize: (id: string, newW: number) => void;
@@ -555,8 +563,17 @@ function Stage({ src, label, items, grid, onMove, onResize, onPick }: {
         onPointerDown={(e) => { if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg")) setSel(""); }}>
         <img src={src} alt="" draggable={false} className="mk-bg" />
         {grid && items.map((it) => <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }} />)}
+        {/* the art itself, cut to the shirt outline */}
+        <div className="mk-artlayer" style={mask ? { maskImage: `url(${mask})`, WebkitMaskImage: `url(${mask})` } : undefined}>
+          {items.map((it) => it.url ? (
+            <div key={"v" + it.id} className="mk-artv" style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined, clipPath: it.p.clip === "left" ? "inset(0 50% 0 0)" : it.p.clip === "right" ? "inset(0 0 0 50%)" : undefined }}>
+              <img src={it.url} alt="" draggable={false} />
+            </div>
+          ) : null)}
+        </div>
+        {/* invisible handles on top for dragging, resizing and double-click */}
         {items.map((it) => (
-          <div key={it.id} className={"mk-art" + (sel === it.id ? " sel" : "") + (it.url ? "" : " mk-missing")}
+          <div key={it.id} className={"mk-art mk-hit" + (sel === it.id ? " sel" : "") + (it.url ? "" : " mk-missing")}
             style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined, clipPath: it.p.clip === "left" ? "inset(0 50% 0 0)" : it.p.clip === "right" ? "inset(0 0 0 50%)" : undefined }}
             onPointerDown={(e) => {
               e.stopPropagation();
@@ -582,7 +599,7 @@ function Stage({ src, label, items, grid, onMove, onResize, onPick }: {
               const mode = lx > el.offsetWidth - corner && ly > el.offsetHeight - corner ? "size" : "move";
               drag.current = { id: it.id, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode, w: it.p.w, el };
             }}>
-            {it.url ? <img src={it.url} alt="" draggable={false} /> : "?"}
+            {it.url ? null : "?"}
             {sel === it.id && (
               <span className="mk-handle" title="Drag to resize (proportions stay locked)"
                 onPointerDown={(e) => {

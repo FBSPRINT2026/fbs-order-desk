@@ -582,3 +582,7 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-hem span,.mk-side-l,.mk-side-r{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;color:#fff;background:rgba(0,0,0,.45);padding:1px 5px;border-radius:3px;margin-top:3px}
 .mk-side-l,.mk-side-r{position:absolute;top:6px;pointer-events:none}
 .mk-side-l{left:6px}.mk-side-r{right:6px}
+.mk-artlayer{position:absolute;inset:0;pointer-events:none;mask-size:100% 100%;-webkit-mask-size:100% 100%;mask-repeat:no-repeat;-webkit-mask-repeat:no-repeat}
+.mk-artv{position:absolute}
+.mk-artv > img{width:100%;height:100%;display:block}
+.mk-hit{background:transparent}

@@ -44,7 +44,7 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
  * and each color is shot on a slightly different form, so the shirt's size, height and sleeve angle change from photo to photo.
  * s = size vs the reference, cx = body center, top = top of the collar; sleeves = where each sleeve print sits on this photo.
  */
-export type Fit = { s: number; cx: number; top: number; sleeve: { left: { x: number; y: number; rot: number }; right: { x: number; y: number; rot: number } } };
+export type Fit = { s: number; cx: number; top: number; /** PNG data URL: opaque where the shirt is, clear on the background */ mask: string; sleeve: { left: { x: number; y: number; rot: number }; right: { x: number; y: number; rot: number } } };
 const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
 /** Center of the sleeve print area: this far (reference px) up the fold from the sleeve tip, i.e. area bottom ~0.5" above the hem. */
 const SLEEVE_UP = 76.5;
@@ -59,13 +59,34 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
   x.drawImage(img, 0, 0, W, H);
   let d: Uint8ClampedArray;
   try { d = x.getImageData(0, 0, W, H).data; } catch { return null; }
+  // background = near-white pixels connected to the photo's border (flood fill), so white shirts with bright spots still count as shirt
+  const bg = new Uint8Array(W * H);
+  const light = (p: number) => Math.min(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]) >= 250;
+  const stack = new Int32Array(W * H);
+  let sp = 0;
+  const push = (p: number) => { if (!bg[p] && light(p)) { bg[p] = 1; stack[sp++] = p; } };
+  for (let X = 0; X < W; X++) { push(X); push((H - 1) * W + X); }
+  for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+  while (sp) {
+    const p = stack[--sp], X = p % W;
+    if (X > 0) push(p - 1);
+    if (X < W - 1) push(p + 1);
+    if (p >= W) push(p - W);
+    if (p < W * (H - 1)) push(p + W);
+  }
+  const md = x.createImageData(W, H);
+  for (let p = 0; p < W * H; p++) { md.data[p * 4 + 3] = bg[p] ? 0 : 255; }
+  const mc = document.createElement("canvas");
+  mc.width = W; mc.height = H;
+  mc.getContext("2d")!.putImageData(md, 0, 0);
+  const mask = mc.toDataURL("image/png");
+
   const L = new Int16Array(H).fill(-1), R = new Int16Array(H).fill(-1);
   let T = -1, B = -1;
   for (let y = 0; y < H; y++) {
     let n = 0;
     for (let X = 0; X < W; X++) {
-      const i = (y * W + X) * 4;
-      if (Math.min(d[i], d[i + 1], d[i + 2]) < 250) { n++; if (L[y] < 0) L[y] = X; R[y] = X; }
+      if (!bg[y * W + X]) { n++; if (L[y] < 0) L[y] = X; R[y] = X; }
     }
     if (n > 10) { if (T < 0) T = y; B = y; } else { L[y] = -1; R[y] = -1; }
   }
@@ -103,7 +124,7 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
   if (!ok(left.rot) && ok(right.rot)) left = { ...left, rot: -right.rot };
   if (!ok(right.rot) && ok(left.rot)) right = { ...right, rot: -left.rot };
   if (!ok(left.rot) && !ok(right.rot)) { left = { ...left, rot: 35 }; right = { ...right, rot: -35 }; }
-  return { s, cx, top: T, sleeve: { left, right } };
+  return { s, cx, top: T, mask, sleeve: { left, right } };
 }
 
 /** Which garment photos a location shows on. */
