@@ -57,8 +57,9 @@ function Builder() {
   useEffect(() => {
     const el = cuRef.current; if (!el) return;
     const ro = new ResizeObserver(() => {
-      const row = getComputedStyle(el).flexDirection === "row";
-      setCuSize(row ? 230 : Math.max(200, Math.min(440, Math.floor(el.clientWidth))));
+      // boxes sit in rows under the photos: 3 across when there's room, 2 on narrow screens
+      const w = el.clientWidth, n = w > 760 ? 3 : w > 460 ? 2 : 1;
+      setCuSize(Math.max(200, Math.min(320, Math.floor((w - (n - 1) * 16) / n))));
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -388,14 +389,17 @@ function Builder() {
       <Link className="back" href={orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
       <div className="page-head mk-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || "Mockup builder"}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup builder"}</h1></div>
+        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}<button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
+      </div>
+
         {!orderId && (
-          <div className="mk-setup">
-            <select aria-label="Customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Choose a customer…</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select>
-            <input type="text" aria-label="Mockup name" placeholder="Mockup name" value={groupName} onChange={(e) => setGroupName(e.target.value)} />
+          <section className="panel mk-setup">
+            <label className="mk-f"><span>Customer</span><select aria-label="Customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Choose a customer…</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select></label>
+            <label className="mk-f"><span>Mockup name</span><input type="text" aria-label="Mockup name" placeholder="e.g. Spring promo tee" value={groupName} onChange={(e) => setGroupName(e.target.value)} /></label>
             {lines.map((l, i) => {
               const g = garmentFor(l);
               return (
-                <span key={l.id} className="mk-setup-g">
+                <div key={l.id} className="mk-f mk-setup-g"><span>{i === 0 ? "Garment & color" : `Color ${i + 1}`}</span><div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
                   <select aria-label="Garment" value={g?.id || ""} onChange={(e) => { const gg = catalog.find((x) => x.id === e.target.value); setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: gg?.style || "", brand: gg?.brand || "", garment: gg?.description || "", color: gg?.colors?.[0] || "" } : x))); }}>
                     <option value="">Garment…</option>{garmentOptions.map((gg) => <option key={gg.id} value={gg.id}>{gg.brand} {gg.style} — {gg.description}</option>)}
                   </select>
@@ -403,15 +407,12 @@ function Builder() {
                     <option value="">Color…</option>{(g?.colors || []).map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                   {lines.length > 1 && <button type="button" className="btn icon ghost" aria-label="Remove this color" onClick={() => { setLines((ls) => ls.filter((_, j) => j !== i)); setActive(0); }}>✕</button>}
-                </span>
+                </div></div>
               );
             })}
-            <button className="btn sm" type="button" onClick={() => { const last = lines[lines.length - 1]; setLines([...lines, { ...last, id: uid(), color: "" }]); }}>+ Another color</button>
-          </div>
+            <button className="btn sm mk-add" type="button" onClick={() => { const last = lines[lines.length - 1]; setLines([...lines, { ...last, id: uid(), color: "" }]); }}>+ Another color</button>
+          </section>
         )}
-        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}<button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
-      </div>
-
       {askUploaded && (
         <div className="confirm-bar" style={{ marginBottom: 10 }}>
           <span>Some design colors are still &quot;as uploaded&quot; instead of a standard ink ({imprints.filter((im) => unsetColors(im).length).map((im) => `${im.location}: ${unsetColors(im).length}`).join(", ")}). Set them to the closest Wilflex RFU inks?</span>
@@ -420,14 +421,11 @@ function Builder() {
           <button type="button" className="btn sm ghost" onClick={() => setAskUploaded(false)}>Cancel</button>
         </div>
       )}
-      <div className="mk">
-        <div className="mk-stage-wrap">
           {lines.length > 1 && (
-            <div className="chips" style={{ marginBottom: 10 }}>
+            <div className="chips" style={{ marginBottom: 10, width: "fit-content" }}>
               {lines.map((l, i) => <button key={l.id} type="button" className={"chip" + (i === active ? " on" : "")} onClick={() => setActive(i)}>{[l.style, l.color].filter(Boolean).join(" · ") || `Garment ${i + 1}`}</button>)}
             </div>
           )}
-          <div className="faint" style={{ fontSize: 12, marginBottom: 6 }}>Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}.</div>
           {!ready && <div className="confirm-bar" style={{ marginBottom: 8 }}><span>{notReady}</span></div>}
           {ready && imprints.map((im) => {
             const w = want[im.id]; if (!w) return null;
@@ -458,6 +456,8 @@ function Builder() {
               </div>
             );
           })}
+      <div className="mk">
+        <div className="mk-stage-wrap">
           <div className={"mk-canvas" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
           <div className="mk-views">
             {(["front", "back"] as View[]).map((v) => (
@@ -485,6 +485,12 @@ function Builder() {
                 onPick={pickColor} />
             ))}
           </div>
+          <div className="row mk-tools">
+            <label className="check" style={{ fontSize: 12 }}><input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} /> Show print areas</label>
+            <span className="faint" style={{ fontSize: 12 }}>Drag to move · corner handle to resize · double-click a color to change it</span>
+            {Object.keys(offsets).length > 0 && <button className="btn sm ghost" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
+            <span className="spacer" /><span className="faint" style={{ fontSize: 12 }}>Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}</span>
+          </div>
             <div className="mk-closeups" ref={cuRef}>
               {/* front locations first, then back, sleeves always last (in order-form order within each) */}
               {imprints.map((im, i) => ({ im, i })).sort((a, b) => {
@@ -505,11 +511,6 @@ function Builder() {
                 );
               })}
             </div>
-          </div>
-          <div className="row" style={{ gap: 10, marginTop: 8 }}>
-            <label className="check" style={{ fontSize: 12 }}><input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} /> Show print areas</label>
-            <span className="faint" style={{ fontSize: 12 }}>Drag to move · corner handle to resize · double-click a color to change it</span>
-            {Object.keys(offsets).length > 0 && <button className="btn sm ghost" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
           </div>
           {pop && (() => {
             const im = imprints.find((x) => x.id === pop.id);

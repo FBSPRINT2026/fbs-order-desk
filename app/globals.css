@@ -531,9 +531,8 @@ td > .sz-dim.on input{padding-right:24px}
 .wo-design{display:inline-flex;align-items:center;gap:6px}
 .wo-design img{width:44px;height:44px;object-fit:contain;border:1px solid #C9D0DA;border-radius:3px}
 .mk{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
-@media (max-width: 1100px){ .mk{grid-template-columns:1fr} }
-.mk-views{display:flex;gap:14px;flex-wrap:wrap}
-.mk-stage{flex:1 1 280px;max-width:460px;min-width:0}
+.mk-views{display:flex;gap:14px;flex-wrap:nowrap}
+.mk-stage{flex:1 1 0;max-width:460px;min-width:0}
 .mk-photo{position:relative;width:100%;background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;touch-action:none;user-select:none}
 .mk-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none}
 .mk-art{position:absolute;cursor:grab;outline:1px dashed transparent}
@@ -559,10 +558,9 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-color select{font-size:12.5px}
 .mk-wh label{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--ink-2)}
 .mk-wh input{width:64px}
-.mk-canvas{display:flex;gap:14px;align-items:flex-start}
-.mk-canvas .mk-views{flex:0 1 934px;min-width:0}
-.mk-closeups{flex:1 0 220px;max-width:440px;min-width:0;display:flex;flex-direction:column;gap:14px}
-@media (max-width: 1300px){ .mk-canvas{flex-wrap:wrap} .mk-closeups{flex-direction:row;flex-wrap:wrap;max-width:none} }
+.mk-canvas{display:flex;flex-direction:column;gap:12px}
+.mk-canvas .mk-views{min-width:0}
+.mk-closeups{display:flex;flex-wrap:wrap;gap:18px 16px;align-items:flex-start;min-width:0}
 .mk-sleeve{display:flex;flex-direction:column;gap:4px}
 .mk-sleeve-box{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;touch-action:none;user-select:none}
 .mk-sleeve-max{position:absolute;border:1.5px dashed rgba(255,255,255,.55);outline:1px dashed rgba(0,0,0,.25);pointer-events:none}
@@ -606,8 +604,10 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-pop .mk-match{margin:8px 0 0}
 .mk-tabs{margin:8px 12px 0}
 .mk-tabs .chip{flex:1}
-.mk-head{flex-wrap:wrap;align-items:flex-end;gap:12px 16px}
-.mk-setup{flex:1 1 560px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
-.mk-setup > select,.mk-setup > input{width:auto;max-width:230px;min-width:150px}
-.mk-setup-g{display:inline-flex;gap:4px;align-items:center}
-.mk-setup-g select{width:auto;max-width:240px}
+.mk-setup{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;padding:12px 14px;margin-bottom:14px}
+.mk-f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mk-f > span{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint,#8a93a3)}
+.mk-f select,.mk-f input{width:auto;min-width:190px;max-width:260px}
+.mk-setup-g select{min-width:0}
+.mk-add{align-self:flex-end;margin-bottom:2px}
+.mk-tools{gap:10px;flex-wrap:wrap}
