@@ -483,7 +483,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="panel-h"><h2>Customer communication</h2><Pill status={o.status} portal /></div>
             <div className="panel-b stack">
               {o.status !== "quote" && <div className="comm-sum">
-                <div><span>Quote</span><b>{o.status === "quote" ? "Draft (not sent)" : o.approved_at ? `Approved by ${o.approved_name || "customer"}` : o.sent_at ? `Sent ${fmtStamp(o.sent_at)}` : "In portal"}</b></div>
+                <div><span>Quote</span><b>{o.approved_at ? `Approved by ${o.approved_name || "customer"}` : o.sent_at ? `Sent ${fmtStamp(o.sent_at)}` : "In portal"}</b></div>
                 {o.approved_at && <div><span>Approved</span><b>{fmtStamp(o.approved_at)}</b></div>}
                 {proofs.length > 0 && <div><span>Proofs</span><b>{[proofs.filter((p) => p.status === "approved").length && `${proofs.filter((p) => p.status === "approved").length} approved`, pendingProofs && `${pendingProofs} waiting`, proofs.filter((p) => p.status === "changes").length && `${proofs.filter((p) => p.status === "changes").length} changes requested`].filter(Boolean).join(" · ")}</b></div>}
                 <div><span>Messages</span><b>{messages.length ? `${messages.length} · last ${messages[messages.length - 1].author_type === "staff" ? "from you" : "from customer"} ${fmtStamp(messages[messages.length - 1].created_at)}` : "None yet"}</b></div>
@@ -519,7 +519,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 </div>
               ) : <div className="faint" style={{ fontSize: 13 }}>No messages yet. Customers can write to you from their portal.</div>}
               <div className="composer">
-                <textarea aria-label="Message to customer" placeholder={o.status === "quote" ? "Customers see messages once the quote is sent" : "Write to the customer…"} value={draftMsg} onChange={(e) => setDraftMsg(e.target.value)} />
+                <textarea aria-label="Message to customer" placeholder="Write to the customer…" value={draftMsg} onChange={(e) => setDraftMsg(e.target.value)} />
                 <button className="btn primary" type="button" onClick={postMessage} disabled={!draftMsg.trim()}>Send</button>
               </div>
                 </>
