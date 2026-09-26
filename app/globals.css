@@ -576,3 +576,5 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-cover span{opacity:0;background:var(--panel,#fff);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--ink,#222);transition:opacity .12s}
 .mk-cover:hover,.mk-cover:focus-visible{border-color:var(--accent)}
 .mk-cover:hover span,.mk-cover:focus-visible span{opacity:1}
+
+.mk-off{opacity:.4;filter:grayscale(1);pointer-events:none;user-select:none}

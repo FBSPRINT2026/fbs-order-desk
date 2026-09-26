@@ -20,6 +20,8 @@ type Props = {
   onLookup?: (style: string, styleID?: number) => Promise<Garment | null>;
   designs?: Design[];
   onMockup?: () => void;
+  /** why a mockup can't be made yet (no customer / no garment) */
+  mockupBlock?: string;
   designUrls?: Record<string, string>;
   onUploadDesign?: (file: File, name: string) => Promise<Design | null>;
   lookingUp?: string;
@@ -38,8 +40,10 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup }: Props) {
+export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock }: Props) {
   const [askSkip, setAskSkip] = useState(false);
+  const [blockMsg, setBlockMsg] = useState("");
+  const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
   // exact style match; if the same number exists under several brands, only the brand given (or none) counts
   const findStyle = (style: string, brand?: string) => {
     const hits = catalog.filter((x) => x.style.toLowerCase() === style.trim().toLowerCase());
@@ -169,14 +173,15 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         <div className="imprints">
           <div className="imp-top">
             <div className="lbl">IMPRINTS</div>
-            {onMockup && <button className={"btn sm" + (locked ? " primary" : "")} type="button" onClick={onMockup}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
+            {onMockup && <button className={"btn sm" + (locked ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
+            {blockMsg && mockupBlock && <span className="ink-warn" style={{ margin: 0 }}>{blockMsg}</span>}
             {g.mockupAt && <span className="faint" style={{ fontSize: 12 }}>Mockup saved {new Date(g.mockupAt).toLocaleDateString()}</span>}
             {!g.mockupAt && g.mockupSkipped && <span className="faint" style={{ fontSize: 12 }}>No mockup</span>}
           </div>
           {locked && askSkip && (
             <div className="confirm-bar">
               <span>You haven&apos;t created a mockup for this group yet. Are you sure you want to fill in the imprints without one?</span>
-              <button className="btn sm primary" type="button" onClick={onMockup}>Create mockup</button>
+              <button className="btn sm primary" type="button" onClick={startMockup}>Create mockup</button>
               <button className="btn sm" type="button" onClick={() => { setAskSkip(false); update((x) => { x.mockupSkipped = true; }); }}>Continue without a mockup</button>
               <button className="btn sm ghost" type="button" onClick={() => setAskSkip(false)}>Cancel</button>
             </div>
