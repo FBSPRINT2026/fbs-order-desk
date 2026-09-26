@@ -6,10 +6,13 @@ import { createClient } from "@/lib/supabase/client";
 import { LOCATIONS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
 import { previewUrls, uploadDesign } from "@/lib/designs";
+import { PMS_HEX, WILFLEX_HEX, colorHex, detectColors, recolor } from "@/lib/inkColors";
 import { PHOTO_H, PHOTO_W, basePlacement, guessHex, printWidth, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
+/** Per imprint: colors found in the logo and the ink each one prints as. */
+type Paint = { design: string; sources: { hex: string; share: number }[]; map: Record<string, { name: string; hex: string }> };
 
 export default function MockupPage() {
   return <Suspense fallback={<div className="empty">Loading…</div>}><Builder /></Suspense>;
@@ -43,7 +46,10 @@ function Builder() {
   const [groupName, setGroupName] = useState("");
   const [active, setActive] = useState(0);
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
-  const [scale, setScale] = useState(1);
+  const scale = 1;
+  const [paints, setPaints] = useState<Record<string, Paint>>({});
+  const [painted, setPainted] = useState<Record<string, string>>({});
+  const imgCache = useRef(new Map<string, HTMLImageElement>());
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ title: string; url: string }[]>([]);
@@ -82,6 +88,51 @@ function Builder() {
       setUrls(await previewUrls(sb, list));
     })();
   }, [sb, customerId]);
+
+  // find the colors in each imprint's logo when its design changes
+  useEffect(() => {
+    imprints.forEach(async (im) => {
+      const d = designs.find((x) => x.id === im.design_id);
+      if (!d || !urls[d.id]) return;
+      if (paints[im.id]?.design === d.id) return;
+      try {
+        const img = imgCache.current.get(d.id) || (await loadImg(urls[d.id]));
+        imgCache.current.set(d.id, img);
+        const sources = detectColors(img);
+        setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map: {} } }));
+      } catch { /* preview not loadable */ }
+    });
+  }, [imprints, designs, urls]);
+
+  // repaint logos whenever an ink choice changes
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const im of imprints) {
+      const pt = paints[im.id];
+      if (!pt || !Object.keys(pt.map).length) continue;
+      const img = imgCache.current.get(pt.design);
+      if (!img) continue;
+      const targets: Record<string, string> = {};
+      Object.entries(pt.map).forEach(([src, v]) => { targets[src] = v.name === "none" ? "none" : v.hex; });
+      next[im.id] = recolor(img, pt.sources.map((x) => x.hex), targets);
+    }
+    setPainted(next);
+  }, [paints, imprints]);
+
+  function setInk(im: Imprint, src: string, v: { name: string; hex: string } | null) {
+    setPaints((p) => {
+      const pt = p[im.id];
+      if (!pt) return p;
+      const map = { ...pt.map };
+      if (v) map[src] = v; else delete map[src];
+      const np = { ...p, [im.id]: { ...pt, map } };
+      // keep the imprint's ink list and color count in step with the choices
+      const inks = pt.sources.map((x) => map[x.hex]).filter((x) => x && x.name !== "none").map((x) => x!.name);
+      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors } : x)));
+      return np;
+    });
+  }
+  const artUrl = (im: Imprint) => { const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? urls[d.id] : ""); };
 
   const garmentFor = (l: Line) => catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase() && (!l.brand || g.brand.toLowerCase() === l.brand.toLowerCase()))
     || catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase());
@@ -152,8 +203,8 @@ function Builder() {
       x.drawImage(bg, ox, oy, pw, ph);
       for (const im of imprints.filter((m) => spotFor(m.location).view === v)) {
         const p = place(im);
-        if (!p.d || !urls[p.d.id]) continue;
-        const art = await loadImg(urls[p.d.id]).catch(() => null);
+        if (!p.d || !artUrl(im)) continue;
+        const art = await loadImg(artUrl(im)).catch(() => null);
         if (art) x.drawImage(art, ox + p.x * k, oy + p.y * k, p.w * k, p.h * k);
       }
       x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif";
@@ -193,7 +244,7 @@ function Builder() {
         const { data } = await sb.from("orders").select("groups").eq("id", order.id).maybeSingle();
         const groups = (data?.groups || []) as Order["groups"];
         let changed = false;
-        groups.forEach((g) => g.imprints.forEach((im) => { const mine = imprints.find((x) => x.id === im.id); if (mine && mine.design_id && mine.design_id !== im.design_id) { im.design_id = mine.design_id; changed = true; } }));
+        groups.forEach((g) => g.imprints.forEach((im) => { const mine = imprints.find((x) => x.id === im.id); if (mine && mine.design_id && mine.design_id !== im.design_id) { im.design_id = mine.design_id; changed = true; } if (mine && mine.inks !== im.inks) { im.inks = mine.inks; im.colors = mine.colors; changed = true; } }));
         if (changed) await sb.from("orders").update({ groups }).eq("id", order.id);
       }
       setSaved(out);
@@ -221,13 +272,11 @@ function Builder() {
           <div className="mk-views">
             {(views.length ? views : (["front"] as View[])).map((v) => (
               <Stage key={v} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
-                items={imprints.filter((im) => spotFor(im.location).view === v).map((im) => ({ id: im.id, p: place(im), url: designOf(im) ? urls[designOf(im)!.id] : "" }))}
+                items={imprints.filter((im) => spotFor(im.location).view === v).map((im) => ({ id: im.id, p: place(im), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + dx, dy: (o[id]?.dy || 0) + dy } }))} />
             ))}
           </div>
           <div className="row" style={{ gap: 10, marginTop: 8 }}>
-            <label className="lbl" htmlFor="mk-scale">Garment scale</label>
-            <input id="mk-scale" type="range" min="0.7" max="1.4" step="0.01" value={scale} onChange={(e) => setScale(+e.target.value)} style={{ width: 180 }} />
             <span className="faint" style={{ fontSize: 12 }}>Dashed boxes show each location&apos;s max print area · drag designs to fine-tune</span>
             {Object.keys(offsets).length > 0 && <button className="btn sm ghost" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
           </div>
@@ -278,6 +327,22 @@ function Builder() {
                         {designs.map((d) => <option key={d.id} value={d.id}>{designLabel(d)}</option>)}
                       </select>
                     </div>
+                    {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
+                      <div className="mk-colors">
+                        <div className="lbl">COLORS IN THIS DESIGN</div>
+                        {paints[im.id].sources.map((src) => {
+                          const cur = paints[im.id].map[src.hex];
+                          return (
+                            <div key={src.hex} className="mk-color">
+                              <span className="sw" style={{ background: src.hex }} title={src.hex} />
+                              <span className="arrow">→</span>
+                              <span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : src.hex }} />
+                              <InkSelect value={cur} onChange={(v) => setInk(im, src.hex, v)} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     {!p.d && <div className="ink-warn">Which design goes on the {im.location}? Pick one of the customer&apos;s designs, or upload new art.</div>}
                     <div className="row" style={{ gap: 6 }}>
                       <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
@@ -325,5 +390,35 @@ function Stage({ src, label, items, onMove }: { src: string; label: string; item
       </div>
       <div className="mk-label">{label}</div>
     </div>
+  );
+}
+
+/** Pick the ink a logo color prints as: a Wilflex RFU color, a PMS color, a custom PMS, or drop it. */
+function InkSelect({ value, onChange }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void }) {
+  const known = value && (value.name === "none" || WILFLEX_HEX[value.name] || PMS_HEX[value.name]);
+  const [custom, setCustom] = useState(!!value && !known);
+  if (custom) {
+    return (
+      <span className="row" style={{ gap: 4, flex: 1 }}>
+        <input type="text" aria-label="PMS number or ink name" placeholder="PMS 7621 C" value={value?.name || ""} onChange={(e) => onChange({ name: e.target.value, hex: value?.hex || "#888888" })} style={{ flex: 1, minWidth: 0 }} />
+        <input type="color" aria-label="Screen color" value={value?.hex || "#888888"} onChange={(e) => onChange({ name: value?.name || "Custom", hex: e.target.value })} style={{ width: 34, padding: 0, height: 30 }} />
+        <button type="button" className="btn icon ghost" title="Back to the list" onClick={() => { setCustom(false); onChange(null); }}>▾</button>
+      </span>
+    );
+  }
+  return (
+    <select aria-label="Ink color" value={value?.name || ""} style={{ flex: 1, minWidth: 0 }}
+      onChange={(e) => {
+        const n = e.target.value;
+        if (n === "__custom") { setCustom(true); onChange({ name: "", hex: "#888888" }); return; }
+        if (!n) return onChange(null);
+        onChange({ name: n, hex: n === "none" ? "" : colorHex(n) });
+      }}>
+      <option value="">Keep as uploaded</option>
+      <option value="none">Remove (shirt shows through)</option>
+      <optgroup label="Wilflex RFU">{Object.keys(WILFLEX_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
+      <optgroup label="PMS">{Object.keys(PMS_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
+      <option value="__custom">Other PMS / custom…</option>
+    </select>
   );
 }
