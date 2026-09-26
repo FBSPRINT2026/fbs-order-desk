@@ -172,7 +172,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                       </div>
                       {inkMismatch(d) && <div className="ink-warn">{inkMismatch(d)}</div>}
                     </td>
-                    <td><input type="text" aria-label="Print size" placeholder='11" wide' value={d.size} onChange={(e) => update((x) => { x.imprints[di].size = e.target.value; })} /></td>
+                    <td><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></td>
                     <td><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></td>
                     <td className="r num">{money(gc.imprints[di]?.each)}</td>
                     <td><button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button></td>
@@ -258,4 +258,21 @@ export function InkField({ value, bad, title, onChange }: { value: string; bad: 
       {best && best.toLowerCase() !== part.toLowerCase() && <div className="ink-hint">{matches.length === 1 ? "Space or Enter" : "Enter"} → {best}</div>}
     </div>
   );
+}
+
+/** Print size: fill width OR height (inches). Once one has a number the other box hides.
+ *  Stored on the imprint as text, e.g. 11" W or 4" H. */
+export function SizeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const v = (value || "").trim();
+  const m = v.match(/^([\d.\/ -]*\d[\d.\/]*)\s*(?:"|in|inch|inches)?\s*(w|wide|width|h|high|tall|height)?$/i);
+  const num = m ? m[1].trim() : v;
+  const dim: "W" | "H" | "" = !v ? "" : m && m[2] && /^h/i.test(m[2]) ? "H" : "W";
+  const set = (d: "W" | "H", raw: string) => { const t = raw.replace(/["]/g, "").trim(); onChange(t ? `${t}" ${d}` : ""); };
+  const box = (d: "W" | "H") => (
+    <label className="sz-dim" key={d}>
+      <input type="text" inputMode="decimal" aria-label={d === "W" ? "Print width in inches" : "Print height in inches"} placeholder={d === "W" ? "Width" : "Height"} value={dim === d ? num : ""} onChange={(e) => set(d, e.target.value)} />
+      <span>{d === "W" ? "W" : "H"}</span>
+    </label>
+  );
+  return <div className="sz-field">{dim ? box(dim) : [box("W"), box("H")]}</div>;
 }
