@@ -1,6 +1,7 @@
 "use client";
 import { ADULT_SIZES, FULL_COLOR, INK_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
+import { useLayoutEffect, useRef } from "react";
 
 type Props = {
   gi: number;
@@ -163,8 +164,8 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                       : <span className="faint" style={{ fontSize: 12 }}>{d.method === "embroidery" ? "Thread" : "Full color"}</span>}</td>
                     <td>
                       <div className="ink-combo">
-                        <input type="text" aria-label="Ink colors" className={inkMismatch(d) ? "bad" : ""} title={inkMismatch(d) || ""} placeholder="Pick ▸ or type PMS" value={d.inks} onChange={(e) => update((x) => { x.imprints[di].inks = e.target.value; })} />
-                        <select aria-label="Add a Wilflex RFU ink" tabIndex={-1} value="" onChange={(e) => { const v = e.target.value; if (v) update((x) => { const cur = x.imprints[di].inks.trim(); x.imprints[di].inks = cur ? `${cur}, ${v}` : v; }); }}>
+                        <InkField value={d.inks} bad={!!inkMismatch(d)} title={inkMismatch(d) || ""} onChange={(v) => update((x) => { x.imprints[di].inks = v; })} />
+                        <select aria-label="Add a Wilflex RFU ink" tabIndex={-1} value="" onChange={(e) => { const v = e.target.value; if (v) update((x) => { const cur = x.imprints[di].inks.trim().replace(/,\s*$/, ""); x.imprints[di].inks = cur ? `${cur}, ${v}` : v; }); }}>
                           <option value="" hidden>▾</option>
                           {INK_COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
                         </select>
@@ -223,3 +224,38 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
   );
 }
 
+
+/** Ink colors box: grows downward as it fills, and completes Wilflex RFU names.
+ *  Type part of a color ("nav") then Space or Enter to fill it in ("Navy, "). */
+export function InkField({ value, bad, title, onChange }: { value: string; bad: boolean; title: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + 2 + "px";
+  }, [value]);
+  const cut = value.lastIndexOf(",");
+  const head = cut >= 0 ? value.slice(0, cut + 1) : "";
+  const part = (cut >= 0 ? value.slice(cut + 1) : value).trim();
+  const matches = part ? INK_COLORS.filter((c) => c.toLowerCase().startsWith(part.toLowerCase())).sort((x, y) => x.length - y.length) : [];
+  const exact = matches.find((c) => c.toLowerCase() === part.toLowerCase());
+  const best = exact || matches[0];
+  const fill = (c: string) => onChange(`${head}${head ? " " : ""}${c}, `.replace(/^\s+/, ""));
+  return (
+    <div className="ink-field">
+      <textarea ref={ref} rows={1} aria-label="Ink colors" className={bad ? "bad" : ""} title={title} placeholder="Type a color or PMS" value={value}
+        onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            if (best) fill(best);
+          } else if (e.key === " " && matches.length === 1 && !exact) {
+            e.preventDefault();
+            fill(matches[0]);
+          }
+        }} />
+      {best && best.toLowerCase() !== part.toLowerCase() && <div className="ink-hint">{matches.length === 1 ? "Space or Enter" : "Enter"} → {best}</div>}
+    </div>
+  );
+}
