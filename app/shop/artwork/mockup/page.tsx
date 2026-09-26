@@ -796,12 +796,12 @@ function Match({ hex, cur, onPick }: { hex: string; cur?: { name: string; hex: s
   const ink = closestInk(hex), pms = closestPms(hex);
   const opt = (label: string, c: { name: string; hex: string; dE: number }) => (
     <button type="button" className={"mk-near" + (cur?.name === c.name ? " on" : "")} title={`${c.name} — ${matchWord(c.dE)} (ΔE ${c.dE})`} onClick={() => onPick({ name: c.name, hex: c.hex })}>
-      <span className="faint">{label}</span><span className="sw" style={{ background: c.hex }} />{c.name}<span className="faint">· {matchWord(c.dE)}</span>
+      <span className="k">{label}</span><span className="sw" style={{ background: c.hex }} /><span className="n">{c.name}</span><span className="q">{matchWord(c.dE)}</span>
     </button>
   );
   return (
     <div className="mk-match">
-      <span className="faint mono">Read {hex.toUpperCase()}</span>
+      <div className="mk-match-h"><span>SUGGESTED COLORS</span><span className="mono">{hex.toUpperCase()}</span></div>
       {opt("Standard", ink)}
       {opt("PMS", pms)}
     </div>
