@@ -27,9 +27,9 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
   Pocket: { view: "front", dx: 4.5, drop: 5, defW: 3, maxW: 4, maxH: 4 },
   // wearer's left sleeve is on the right of the front photo and the left of the back photo
   // Measured on the S&S photos: the sleeve's outer edge (the fold between front and back) runs at ~35° and the hem is square to it.
-  // x/y is the center of the 3.5" x 3.5" max print area: right on the fold, with the bottom of the area on the hemline.
-  "Left Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 922, y: 357, rot: -35, show: "left" }, back: { x: 82, y: 357, rot: 35, show: "right" } } },
-  "Right Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 78, y: 357, rot: 35, show: "right" }, back: { x: 918, y: 357, rot: -35, show: "left" } } },
+  // x/y is the center of the 3.5" x 3.5" max print area: right on the fold, with the bottom of the area ~0.5" above the sleeve hem.
+  "Left Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 912, y: 343, rot: -35, show: "left" }, back: { x: 92, y: 343, rot: 35, show: "right" } } },
+  "Right Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 88, y: 343, rot: 35, show: "right" }, back: { x: 908, y: 343, rot: -35, show: "left" } } },
   "Left Vertical": { view: "front", dx: 4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
   "Right Vertical": { view: "front", dx: -4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
   "Front Bottom Left": { view: "front", dx: 4.5, drop: 21.5, defW: 4.5, maxW: 5, maxH: 6 },
