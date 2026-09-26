@@ -1,5 +1,5 @@
 "use client";
-import { ADULT_SIZES, FULL_COLOR, INK_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { ADULT_SIZES, FULL_COLOR, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { useLayoutEffect, useRef } from "react";
 
@@ -22,10 +22,11 @@ type Props = {
 /** Screen prints: the inks listed must match the number of colors chosen. */
 const inkCount = (s: string) => (s || "").split(/[,;/+]|\s&\s/).map((x) => x.trim()).filter(Boolean).length;
 const inkMismatch = (d: { method: string; colors: number; inks: string }) => {
-  if (d.method !== "screen" || d.colors >= FULL_COLOR) return "";
+  if (d.method === "dtf" || (d.method === "screen" && d.colors >= FULL_COLOR)) return "";
   const n = inkCount(d.inks);
   if (!n || n === d.colors) return "";
-  return `${n} ink${n > 1 ? "s" : ""} listed for ${d.colors} color${d.colors > 1 ? "s" : ""}`;
+  const what = d.method === "embroidery" ? "thread" : "ink";
+  return `${n} ${what}${n > 1 ? "s" : ""} listed for ${d.colors} color${d.colors > 1 ? "s" : ""}`;
 };
 const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)), 0);
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
@@ -159,15 +160,15 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                     <td>{LOCATIONS.includes(d.location)
                       ? <select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value === "__custom" ? "" : e.target.value; })}>{LOCATIONS.map((z) => <option key={z} value={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
                       : <div className="loc-custom"><input type="text" autoFocus={!d.location} aria-label="Custom location" placeholder="Custom location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value; })} /><button type="button" className="btn icon ghost" tabIndex={-1} title="Back to the location list" aria-label="Back to the location list" onClick={() => update((x) => { x.imprints[di].location = "Full Front"; })}>▾</button></div>}</td>
-                    <td>{d.method === "screen"
-                      ? <select aria-label="Number of colors" value={d.colors} onChange={(e) => update((x) => { x.imprints[di].colors = +e.target.value; })}>{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n}</option>)}<option value={FULL_COLOR}>Full color</option></select>
-                      : <span className="faint" style={{ fontSize: 12 }}>{d.method === "embroidery" ? "Thread" : "Full color"}</span>}</td>
+                    <td>{d.method === "screen" || d.method === "embroidery"
+                      ? <select aria-label="Number of colors" value={d.method === "embroidery" ? Math.min(d.colors, 15) : d.colors} onChange={(e) => update((x) => { x.imprints[di].colors = +e.target.value; })}>{(d.method === "embroidery" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((n) => <option key={n} value={n}>{n}</option>)}{d.method === "screen" && <option value={FULL_COLOR}>Full color</option>}</select>
+                      : <span className="faint" style={{ fontSize: 12 }}>Full color</span>}</td>
                     <td>
                       <div className="ink-combo">
-                        <InkField value={d.inks} bad={!!inkMismatch(d)} title={inkMismatch(d) || ""} onChange={(v) => update((x) => { x.imprints[di].inks = v; })} />
-                        <select aria-label="Add a Wilflex RFU ink" tabIndex={-1} value="" onChange={(e) => { const v = e.target.value; if (v) update((x) => { const cur = x.imprints[di].inks.trim().replace(/,\s*$/, ""); x.imprints[di].inks = cur ? `${cur}, ${v}` : v; }); }}>
+                        <InkField list={d.method === "embroidery" ? THREAD_COLORS : INK_COLORS} placeholder={d.method === "embroidery" ? "Type a thread color" : "Type a color or PMS"} value={d.inks} bad={!!inkMismatch(d)} title={inkMismatch(d) || ""} onChange={(v) => update((x) => { x.imprints[di].inks = v; })} />
+                        <select aria-label={d.method === "embroidery" ? "Add a thread color" : "Add a Wilflex RFU ink"} tabIndex={-1} value="" onChange={(e) => { const v = e.target.value; if (v) update((x) => { const cur = x.imprints[di].inks.trim().replace(/,\s*$/, ""); x.imprints[di].inks = cur ? `${cur}, ${v}` : v; }); }}>
                           <option value="" hidden>▾</option>
-                          {INK_COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
+                          {(d.method === "embroidery" ? THREAD_COLORS : INK_COLORS).map((c) => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       {inkMismatch(d) && <div className="ink-warn">{inkMismatch(d)}</div>}
@@ -232,7 +233,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
 
 /** Ink colors box: grows downward as it fills, and completes Wilflex RFU names.
  *  Type part of a color ("nav") then Space or Enter to fill it in ("Navy, "). */
-export function InkField({ value, bad, title, onChange }: { value: string; bad: boolean; title: string; onChange: (v: string) => void }) {
+export function InkField({ value, bad, title, onChange, list = INK_COLORS, placeholder = "Type a color or PMS" }: { value: string; bad: boolean; title: string; onChange: (v: string) => void; list?: readonly string[]; placeholder?: string }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -243,13 +244,13 @@ export function InkField({ value, bad, title, onChange }: { value: string; bad: 
   const cut = value.lastIndexOf(",");
   const head = cut >= 0 ? value.slice(0, cut + 1) : "";
   const part = (cut >= 0 ? value.slice(cut + 1) : value).trim();
-  const matches = part ? INK_COLORS.filter((c) => c.toLowerCase().startsWith(part.toLowerCase())).sort((x, y) => x.length - y.length) : [];
+  const matches = part ? list.filter((c) => c.toLowerCase().startsWith(part.toLowerCase())).sort((x, y) => x.length - y.length) : [];
   const exact = matches.find((c) => c.toLowerCase() === part.toLowerCase());
   const best = exact || matches[0];
   const fill = (c: string) => onChange(`${head}${head ? " " : ""}${c}, `.replace(/^\s+/, ""));
   return (
     <div className="ink-field">
-      <textarea ref={ref} rows={1} aria-label="Ink colors" className={bad ? "bad" : ""} title={title} placeholder="Type a color or PMS" value={value}
+      <textarea ref={ref} rows={1} aria-label="Ink colors" className={bad ? "bad" : ""} title={title} placeholder={placeholder} value={value}
         onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
         onKeyDown={(e) => {
           if (e.key === "Enter") {

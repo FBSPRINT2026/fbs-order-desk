@@ -30,6 +30,8 @@ export const ST: Record<string, (typeof STATUSES)[number]> = Object.fromEntries(
 export const METHODS: Record<string, string> = { screen: "Screen print", embroidery: "Embroidery", dtf: "DTF transfer" };
 /** House ink: Wilflex Epic Rio RFU standard colors. */
 export const INK_COLORS = ["White", "Lemon Yellow", "Yellow", "Light Gold", "Gold", "Dolphin Orange", "Bright Orange", "Electric Orange", "National Red", "Drake Red", "Dallas Scarlet", "Scarlet", "Electric Red", "Maroon", "Brandywine", "Russell Purple", "Electric Purple", "Russell Gray", "Dark Gray", "Tan", "Aqua", "Contact Blue", "Royal", "Light Royal", "Bears Navy", "Navy", "Electric Blue", "Kelly Green", "Light Green", "Dark Green", "Electric Green", "Electric Yellow", "Electric Pink", "Black Diamond", "Black"];
+/** Embroidery thread colors (standard list for now). */
+export const THREAD_COLORS = ["White", "Black", "Navy", "Royal", "Light Blue", "Carolina Blue", "Red", "Maroon", "Kelly Green", "Forest Green", "Lime Green", "Gold", "Athletic Gold", "Yellow", "Orange", "Purple", "Pink", "Hot Pink", "Silver", "Gray", "Charcoal", "Brown", "Tan", "Cream"];
 /** Print locations (match the fbsprint.com order form). */
 export const LOCATIONS = ["Left Chest", "Right Chest", "Full Front", "Full Back", "Upper Back (Yoke)", "Left Sleeve", "Right Sleeve", "Pocket"];
 export const SHIP_METHODS = [
@@ -308,7 +310,7 @@ export const isYouth = (z: string) => (YOUTH_SIZES as readonly string[]).include
 /** Short description of an imprint for invoices and the portal. */
 export function imprintLabel(d: Imprint) {
   const parts = [`${METHODS[d.method] || d.method} ${d.location}`.trim()];
-  if (d.method === "screen") parts.push(d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`);
+  if (d.method === "screen" || d.method === "embroidery") parts.push(d.method === "screen" && d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`);
   if (d.inks) parts.push(d.inks);
   if (d.size) parts.push(d.size);
   if (d.drop) parts.push(`${d.drop}" drop`);

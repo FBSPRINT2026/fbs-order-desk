@@ -71,7 +71,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
                 <thead><tr><th>Imprint</th><th>Location</th><th className="c">Colors</th><th>Inks / PMS</th><th>Size</th><th>Drop</th><th>Notes</th></tr></thead>
                 <tbody>
                   {g.imprints.map((d) => (
-                    <tr key={d.id}><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? (d.colors >= 11 ? "Full" : d.colors) : ""}</td><td>{d.inks}</td><td>{d.size}</td><td>{d.drop ? `${d.drop}"` : "Standard"}</td><td>{d.notes}</td></tr>
+                    <tr key={d.id}><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? (d.colors >= 11 ? "Full" : d.colors) : d.method === "embroidery" ? d.colors : "Full"}</td><td>{d.inks}</td><td>{d.size}</td><td>{d.drop ? `${d.drop}"` : "Standard"}</td><td>{d.notes}</td></tr>
                   ))}
                 </tbody>
               </table>
