@@ -105,7 +105,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   const openQuotes = quotes.filter((o) => o.status === "quote_sent").reduce((a, o) => a + o.total, 0);
 
   const AREAS: { id: Area; label: string; icon: string; n?: number; show?: boolean }[] = [
-    { id: "home", label: mode === "shop" ? "Dashboard" : "Home", icon: I.home },
+    { id: "home", label: "Dashboard", icon: I.home },
     { id: "quotes", label: "Quotes", icon: I.quotes, n: quotes.length },
     { id: "orders", label: "Orders", icon: I.orders, n: inWork.length },
     { id: "invoices", label: "Invoices", icon: I.invoices },
