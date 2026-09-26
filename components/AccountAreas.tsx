@@ -8,7 +8,7 @@ import { designMatches } from "@/components/DesignSearch";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string };
-export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string };
+export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
 export type AAttn = { kind: "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string };
@@ -45,7 +45,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, invoices, payments, artwork, messages…), each searchable.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, canAct = true }: {
+export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, canAct = true }: {
   mode: "shop" | "portal";
   orders: AOrder[]; payments: APayment[]; designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
   attention: AAttn[];
@@ -58,6 +58,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   /** logos on a mockup or order: archive only, no delete */
   usedIds?: string[];
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
+  onStarMockup?: (mockupId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
   onArchive?: (designId: string, archived: boolean) => Promise<{ ok: boolean; error?: string }>;
   /** false in the staff preview of a portal: sending is turned off */
   canAct?: boolean;
@@ -71,13 +72,16 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   const [stars, setStars] = useState<Record<string, boolean>>({});
   const [starErr, setStarErr] = useState("");
   const [gone, setGone] = useState<Record<string, boolean>>({});
+  const [mStars, setMStars] = useState<Record<string, boolean>>({});
   const [arch, setArch] = useState<Record<string, string | null>>({});
   const [armedDel, setArmedDel] = useState("");
   const [showArch, setShowArch] = useState(false);
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
   const PER = 6;
-  const pageOf = <T,>(key: string, list: T[]) => { const n = Math.max(1, Math.ceil(list.length / PER)), p = Math.min(pg[key] || 0, n - 1); return { items: list.slice(p * PER, p * PER + PER), p, n }; };
+  const pageOf = <T,>(key: string, list: T[]) => { const n = Math.max(1, Math.ceil(list.length / PER)), p = Math.min(pg[key] || 0, n - 1); const items = list.slice(p * PER, p * PER + PER); return { items, p, n, pad: n > 1 ? PER - items.length : 0 }; };
+  // empty places keep a short last page the same height, so the page buttons don't move
+  const slots = (k: number) => Array.from({ length: k }, (_, i) => <div key={"slot" + i} className="design-card aa-slot" aria-hidden="true" />);
   const pager = (key: string, total: number, p: number, n: number) => n <= 1 ? null : (
     <div className="aa-pager">
       <span className="faint">Showing {p * PER + 1}–{Math.min(total, p * PER + PER)} of {total}</span>
@@ -211,7 +215,16 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
     const archived = ds.filter((d) => !gone[d.id] && (d.id in arch ? arch[d.id] : d.archived_at));
     const dRows = live.filter((d) => designMatches(d, q)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred) || b.number - a.number);
     const aRows = archived.filter((d) => designMatches(d, q)).sort((a, b) => b.number - a.number);
-    const mRows = mockups.filter((m) => has(q, m.title, m.number));
+    const ms = mockups.map((m) => (m.id in mStars ? { ...m, starred: mStars[m.id] } : m));
+    const mRows = ms.filter((m) => has(q, m.title, m.number)).sort((a, b) => Number(!!b.starred) - Number(!!a.starred));
+    const starMock = async (m: AMockup) => {
+      if (!onStarMockup) return;
+      setStarErr("");
+      setMStars((x) => ({ ...x, [m.id]: !m.starred }));
+      const r = await onStarMockup(m.id, !m.starred);
+      if (!r.ok) { setMStars((x) => ({ ...x, [m.id]: !!m.starred })); setStarErr(r.error || "Couldn't save the star."); }
+    };
+    const favMocks = ms.filter((m) => m.starred);
     const star = async (d: Design) => {
       if (!onStar) return;
       setStarErr("");
@@ -269,12 +282,12 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       {tableHead(<h2>Artwork</h2>, "Search by logo number (D-10004), name, ink or order")}
       <div className="aa-card">
         <div className="aa-sec-h"><h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
-        {dRows.length ? (() => { const P = pageOf("logos", dRows); return <><div className="design-grid aa-grid3">{P.items.map((d) => card(d, false))}</div>{pager("logos", dRows.length, P.p, P.n)}</>; })()
+        {dRows.length ? (() => { const P = pageOf("logos", dRows); return <><div className="design-grid aa-grid3">{P.items.map((d) => card(d, false))}{slots(P.pad)}</div>{pager("logos", dRows.length, P.p, P.n)}</>; })()
           : <div className="aa-empty">{live.length ? `No logos match “${q}”.` : "No logos on file yet."}</div>}
         {archived.length > 0 && (
           <div className="aa-arch">
             <button type="button" className="btn sm ghost" onClick={() => setShowArch(!showArch)}>{showArch ? "Hide archived logos" : `View archived logos (${archived.length})`}</button>
-            {showArch && (aRows.length ? (() => { const P = pageOf("arch", aRows); return <><div className="design-grid aa-grid3" style={{ marginTop: 10 }}>{P.items.map((d) => card(d, true))}</div>{pager("arch", aRows.length, P.p, P.n)}</>; })() : <div className="aa-empty">No archived logos match “{q}”.</div>)}
+            {showArch && (aRows.length ? (() => { const P = pageOf("arch", aRows); return <><div className="design-grid aa-grid3" style={{ marginTop: 10 }}>{P.items.map((d) => card(d, true))}{slots(P.pad)}</div>{pager("arch", aRows.length, P.p, P.n)}</>; })() : <div className="aa-empty">No archived logos match “{q}”.</div>)}
           </div>
         )}
       </div>
@@ -283,17 +296,20 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
         {mRows.length ? (() => { const P = pageOf("mock", mRows); return <>
           <div className="design-grid aa-grid3">
             {P.items.map((m) => (
-              <a key={m.id} className="design-card" href={m.url} target="_blank" rel="noreferrer">
-                <div className="dc-img mock">{m.thumb ? <img src={m.thumb} alt={m.title} /> : null}</div>
-                <div className="dc-b"><b>{m.title}</b><span className="faint">{m.number ? `Order #${m.number} · ` : ""}{when(m.created_at)}</span></div>
-              </a>
-            ))}
+              <div key={m.id} className={"design-card" + (m.starred ? " starred" : "")}>
+                <div className="dc-img mock"><a href={m.url} target="_blank" rel="noreferrer" className="dc-open">{m.thumb ? <img src={m.thumb} alt={m.title} /> : null}</a>
+                  {onStarMockup && <div className="dc-tools"><button type="button" className={"dc-star" + (m.starred ? " on" : "")} title={m.starred ? "Remove from favorites" : "Add to favorites"} aria-label={m.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!m.starred} onClick={() => starMock(m)}>{m.starred ? "★" : "☆"}</button></div>}
+                </div>
+                <div className="dc-b"><a href={m.url} target="_blank" rel="noreferrer"><b>{m.title}</b></a><span className="faint">{m.number ? `Order #${m.number} · ` : ""}{when(m.created_at)}</span></div>
+              </div>
+            ))}{slots(P.pad)}
           </div>{pager("mock", mRows.length, P.p, P.n)}</>; })()
         : <div className="aa-empty">{mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
       </div>
       </div>
       <aside className="aa-attn aa-favs">
         <div className="aa-attn-h">★ Favorites</div>
+        <div className="aa-attn-t">Logos</div>
         {favs.map((d) => (
           <div key={d.id} className="aa-fav">
             {designUrls[d.id] ? <img src={designUrls[d.id]} alt="" /> : <span className="aa-fav-ph">{(d.file_name.split(".").pop() || "").toUpperCase()}</span>}
@@ -301,7 +317,16 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
             {onStar && <button type="button" className="dc-star on" title="Remove from favorites" aria-label="Remove from favorites" onClick={() => star(d)}>★</button>}
           </div>
         ))}
-        {!favs.length && <div className="aa-attn-none">No favorites yet. Tap the ☆ on a logo to add it here{mode === "shop" ? "; favorites come up first when picking art for this customer." : "."}</div>}
+        {!favs.length && <div className="aa-attn-none">No favorite logos yet. Tap the ☆ on a logo to add it here{mode === "shop" ? "; favorites come up first when picking art for this customer." : "."}</div>}
+        <div className="aa-attn-t" style={{ marginTop: 6 }}>Mockups</div>
+        {favMocks.map((m) => (
+          <div key={m.id} className="aa-fav">
+            <a href={m.url} target="_blank" rel="noreferrer">{m.thumb ? <img src={m.thumb} alt="" /> : <span className="aa-fav-ph" />}</a>
+            <span className="aa-fav-t"><a href={m.url} target="_blank" rel="noreferrer"><b>{m.title}</b></a><span className="faint">{m.number ? `Order #${m.number}` : when(m.created_at)}</span></span>
+            {onStarMockup && <button type="button" className="dc-star on" title="Remove from favorites" aria-label="Remove from favorites" onClick={() => starMock(m)}>★</button>}
+          </div>
+        ))}
+        {!favMocks.length && <div className="aa-attn-none">No favorite mockups yet. Tap the ☆ on a mockup to add it here.</div>}
       </aside>
       </div>
     </>;

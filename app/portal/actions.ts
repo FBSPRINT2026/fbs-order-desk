@@ -172,3 +172,17 @@ export async function starMyDesign(designId: string, starred: boolean): Promise<
     return { ok: true };
   } catch (e) { return fail(e); }
 }
+
+/** Customer stars / unstars one of their mockups. */
+export async function starMyMockup(mockupId: string, starred: boolean): Promise<Result> {
+  try {
+    const { supabase, user, isStaff } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    const { error } = isStaff
+      ? await createAdminClient().from("mockups").update({ starred }).eq("id", mockupId)
+      : await supabase.rpc("set_mockup_star", { p_mockup: mockupId, p_starred: starred });
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}

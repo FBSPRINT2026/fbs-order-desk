@@ -59,10 +59,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       setUsedIds((used || []) as string[]);
       setDesigns(dl);
       setDesignUrls(await previewUrls(sb, dl));
-      const ml = (m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string }[];
+      const ml = (m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean }[];
       const paths = ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]);
       const { data: signed } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
-      setMockups(ml.map((x, i) => ({ id: x.id, title: x.title, order_id: x.order_id, number: num(x.order_id), created_at: x.created_at, url: signed?.[i * 2]?.signedUrl || "", thumb: signed?.[i * 2 + 1]?.signedUrl || signed?.[i * 2]?.signedUrl || "" })));
+      setMockups(ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), created_at: x.created_at, url: signed?.[i * 2]?.signedUrl || "", thumb: signed?.[i * 2 + 1]?.signedUrl || signed?.[i * 2]?.signedUrl || "" })));
       setMessages(((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) })));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,6 +132,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         hrefBase="/shop/orders/"
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
         usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign}
+        onStarMockup={async (mid, starred) => { const { error } = await createClient().rpc("set_mockup_star", { p_mockup: mid, p_starred: starred }); return { ok: !error, error: error?.message }; }}
         onStar={async (designId, starred) => { const { error } = await createClient().rpc("set_design_star", { p_design: designId, p_starred: starred }); return { ok: !error, error: error?.message }; }}
         details={
       <div className="cust-grid">
