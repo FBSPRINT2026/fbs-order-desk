@@ -758,3 +758,4 @@ td > .sz-dim.on input{padding-right:24px}
 .sp-card span{font-size:13px;color:var(--ink-3)}
 .sp-ic{display:inline-flex;width:48px;height:48px;align-items:center;justify-content:center;border-radius:12px;background:var(--accent-soft);color:var(--accent)}
 @media (max-width: 800px){ .start-panel{grid-template-columns:1fr} .sp-card{grid-template-columns:auto 1fr} .sp-card .btn{grid-column:1 / -1} }
+.p-main.mk-portal{max-width:1480px}

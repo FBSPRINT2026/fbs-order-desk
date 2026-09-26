@@ -124,3 +124,56 @@ export async function saveMyLogo(meta: { path: string; fileName: string; fileTyp
     return { ok: true as const, design: data, url: sg?.signedUrl || "" };
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Upload failed." }; }
 }
+
+/** Garment catalog for the customer's mockup builder (no costs). */
+export async function portalCatalog() {
+  try {
+    const { admin } = await me();
+    const { data } = await admin.from("garments").select("*").order("style");
+    return ((data || []) as Record<string, unknown>[]).map((g) => ({ ...g, cost: 0, size_costs: {} }));
+  } catch { return []; }
+}
+
+/** The customer's logos (not archived) with preview links. */
+export async function myLogos() {
+  try {
+    const { admin, cust } = await me();
+    const { data } = await admin.from("designs").select("*").eq("customer_id", cust.id).is("archived_at", null).order("number", { ascending: false });
+    const list = (data || []) as { id: string; preview_path: string }[];
+    const withPv = list.filter((d) => d.preview_path);
+    const urls: Record<string, string> = {};
+    if (withPv.length) {
+      const { data: sg } = await admin.storage.from("proofs").createSignedUrls(withPv.map((d) => d.preview_path), 3600);
+      withPv.forEach((d, i) => { if (sg?.[i]?.signedUrl) urls[d.id] = sg[i].signedUrl!; });
+    }
+    return { ok: true as const, customerId: cust.id as string, designs: data || [], urls };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Couldn't load your logos." }; }
+}
+
+/** One-time upload links for a saved mockup picture and its thumbnail. */
+export async function mockupUploadUrls() {
+  try {
+    const { admin, cust } = await me();
+    const base = `mockups/${cust.id}/${Date.now()}-${crypto.randomUUID().slice(0, 6)}`;
+    const [a, b] = await Promise.all([
+      admin.storage.from("proofs").createSignedUploadUrl(`${base}.png`),
+      admin.storage.from("proofs").createSignedUploadUrl(`${base}-thumb.png`),
+    ]);
+    if (a.error || !a.data || b.error || !b.data) return { ok: false as const, error: "Saving isn't available right now." };
+    return { ok: true as const, path: `${base}.png`, token: a.data.token, thumbPath: `${base}-thumb.png`, thumbToken: b.data.token };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Saving failed." }; }
+}
+
+/** Record a mockup the customer made in their portal. */
+export async function saveMyMockup(meta: { path: string; title: string; design_ids: string[] }) {
+  try {
+    const { admin, cust, email } = await me();
+    if (!meta.path.startsWith(`mockups/${cust.id}/`)) return { ok: false as const, error: "Bad upload." };
+    const { data: own } = await admin.from("designs").select("id").eq("customer_id", cust.id).in("id", meta.design_ids.length ? meta.design_ids : ["00000000-0000-0000-0000-000000000000"]);
+    const ids = ((own || []) as { id: string }[]).map((d) => d.id);
+    const { error } = await admin.from("mockups").insert({ customer_id: cust.id, title: meta.title.slice(0, 200), file_path: meta.path, design_ids: ids, created_by: email });
+    if (error) return { ok: false as const, error: error.message };
+    revalidatePath("/portal");
+    return { ok: true as const };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Saving failed." }; }
+}
