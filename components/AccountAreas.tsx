@@ -190,8 +190,11 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       const r = await onStar(d.id, !d.starred);
       if (!r.ok) { setStars((s) => ({ ...s, [d.id]: !!d.starred })); setStarErr(r.error || "Couldn't save the star."); }
     };
+    const favs = ds.filter((d) => d.starred).sort((a, b) => b.number - a.number);
     body = <>
       {tableHead(<h2>Artwork</h2>, "Search by design number (D-10004), name, ink or order")}
+      <div className="aa-home">
+      <div className="aa-home-main stack">
       <div className="aa-card">
         <div className="aa-sec-h"><h3>Designs</h3><span className="faint">{mode === "shop" ? "Starred designs come up first when picking art for this customer." : "Star your favorites so they come up first."}</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
         {dRows.length ? (
@@ -219,6 +222,19 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
             ))}
           </div>
         ) : <div className="aa-empty">{mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
+      </div>
+      </div>
+      <aside className="aa-attn aa-favs">
+        <div className="aa-attn-h">★ Favorites</div>
+        {favs.map((d) => (
+          <div key={d.id} className="aa-fav">
+            {designUrls[d.id] ? <img src={designUrls[d.id]} alt="" /> : <span className="aa-fav-ph">{(d.file_name.split(".").pop() || "").toUpperCase()}</span>}
+            <span className="aa-fav-t">{mode === "shop" ? <Link href={`/shop/artwork/${d.id}`}><b>D-{d.number}</b></Link> : <b>D-{d.number}</b>}<span>{d.name || "Design"}</span></span>
+            {onStar && <button type="button" className="dc-star on" title="Remove from favorites" aria-label="Remove from favorites" onClick={() => star(d)}>★</button>}
+          </div>
+        ))}
+        {!favs.length && <div className="aa-attn-none">No favorites yet. Tap the ☆ on a design to add it here{mode === "shop" ? "; favorites come up first when picking art for this customer." : "."}</div>}
+      </aside>
       </div>
     </>;
   } else if (area === "messages") {
