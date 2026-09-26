@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { LOCATIONS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
 import { previewUrls, uploadDesign } from "@/lib/designs";
-import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, guessHex, printWidth, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { PHOTO_H, PHOTO_W, basePlacement, guessHex, printWidth, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -228,7 +228,7 @@ function Builder() {
           <div className="row" style={{ gap: 10, marginTop: 8 }}>
             <label className="lbl" htmlFor="mk-scale">Garment scale</label>
             <input id="mk-scale" type="range" min="0.7" max="1.4" step="0.01" value={scale} onChange={(e) => setScale(+e.target.value)} style={{ width: 180 }} />
-            <span className="faint" style={{ fontSize: 12 }}>{(PX_PER_IN * scale).toFixed(1)} px per inch · drag designs to fine-tune</span>
+            <span className="faint" style={{ fontSize: 12 }}>Dashed boxes show each location&apos;s max print area · drag designs to fine-tune</span>
             {Object.keys(offsets).length > 0 && <button className="btn sm ghost" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
           </div>
           {saved.length > 0 && (
@@ -297,7 +297,7 @@ function Builder() {
 }
 
 /** One garment photo with draggable designs on it. */
-function Stage({ src, label, items, onMove }: { src: string; label: string; items: { id: string; p: { x: number; y: number; w: number; h: number }; url: string }[]; onMove: (id: string, dx: number, dy: number) => void }) {
+function Stage({ src, label, items, onMove }: { src: string; label: string; items: { id: string; p: { x: number; y: number; w: number; h: number; area: { x: number; y: number; w: number; h: number } }; url: string }[]; onMove: (id: string, dx: number, dy: number) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; x: number; y: number } | null>(null);
   const k = () => (box.current ? box.current.clientWidth / PHOTO_W : 0.42);
@@ -307,6 +307,10 @@ function Stage({ src, label, items, onMove }: { src: string; label: string; item
         onPointerMove={(e) => { const d = drag.current; if (!d) return; const s = k(); onMove(d.id, (e.clientX - d.x) / s, (e.clientY - d.y) / s); drag.current = { ...d, x: e.clientX, y: e.clientY }; }}
         onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
         <img src={src} alt="" draggable={false} className="mk-bg" />
+        {items.map((it) => {
+          const s = 100 / PHOTO_W, sy = 100 / PHOTO_H;
+          return <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%` }} />;
+        })}
         {items.map((it) => {
           const s = 100 / PHOTO_W, sy = 100 / PHOTO_H;
           return it.url ? (

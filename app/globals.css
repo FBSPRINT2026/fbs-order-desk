@@ -545,3 +545,4 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-saved{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 .mk-saved a{display:flex;flex-direction:column;gap:4px;width:180px;font-size:12px;color:var(--ink-2);text-decoration:none}
 .mk-saved img{width:100%;border:1px solid var(--line);border-radius:6px}
+.mk-area{position:absolute;border:1.5px dashed rgba(10,123,166,.7);pointer-events:none}

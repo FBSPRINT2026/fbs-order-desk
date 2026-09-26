@@ -1,35 +1,37 @@
 /**
  * Mockup geometry. Garment photos from S&S are 1000 x 1250 (front and back, flat).
  * Everything here is in that 1000-wide coordinate space.
- * Calibrated on the Gildan 5000 photos: body is ~513 px wide for a ~21" chest => ~24.4 px per inch.
+ * Calibrated on the Gildan 5000 photos (shirt on a form): a full-front 11" x 16" print area and 13.5" x 18" max
+ * land where they do on a real shirt at ~34 px per inch.
  */
 export const PHOTO_W = 1000;
 export const PHOTO_H = 1250;
-export const PX_PER_IN = 24.4;
+export const PX_PER_IN = 34;
 export const CENTER_X = 499;
 export const COLLAR_Y = { front: 128, back: 100 } as const;
 
 export type View = "front" | "back";
-type Loc = { view: View; dx?: number; drop?: number; abs?: { x: number; y: number }; defW: number; maxW: number };
+type Loc = { view: View; dx?: number; drop?: number; abs?: { x: number; y: number }; defW: number; maxW: number; maxH: number };
 
 /** Where each order-form location sits (dx = inches right of center as you look at the shirt; drop = inches below the collar). */
 export const LOCATION_SPOTS: Record<string, Loc> = {
-  "Full Front": { view: "front", dx: 0, drop: 3, defW: 11, maxW: 12 },
-  "Left Chest": { view: "front", dx: 4, drop: 3, defW: 3.5, maxW: 4.5 },
-  "Right Chest": { view: "front", dx: -4, drop: 3, defW: 3.5, maxW: 4.5 },
-  Pocket: { view: "front", dx: 4, drop: 5, defW: 3, maxW: 4 },
-  "Left Sleeve": { view: "front", abs: { x: 825, y: 385 }, defW: 3, maxW: 3.5 },
-  "Right Sleeve": { view: "front", abs: { x: 175, y: 385 }, defW: 3, maxW: 3.5 },
-  "Full Back": { view: "back", dx: 0, drop: 4, defW: 12, maxW: 12 },
-  "Upper Back (Yoke)": { view: "back", dx: 0, drop: 1.5, defW: 10, maxW: 12 },
+  "Full Front": { view: "front", dx: 0, drop: 3, defW: 11, maxW: 13.5, maxH: 18 },
+  "Left Chest": { view: "front", dx: 4, drop: 3, defW: 3.5, maxW: 4.5, maxH: 4.5 },
+  "Right Chest": { view: "front", dx: -4, drop: 3, defW: 3.5, maxW: 4.5, maxH: 4.5 },
+  Pocket: { view: "front", dx: 4, drop: 5, defW: 3, maxW: 4, maxH: 4 },
+  "Left Sleeve": { view: "front", abs: { x: 825, y: 385 }, defW: 3, maxW: 3.5, maxH: 3.5 },
+  "Right Sleeve": { view: "front", abs: { x: 175, y: 385 }, defW: 3, maxW: 3.5, maxH: 3.5 },
+  "Full Back": { view: "back", dx: 0, drop: 4, defW: 12, maxW: 13.5, maxH: 18 },
+  "Upper Back (Yoke)": { view: "back", dx: 0, drop: 1.5, defW: 10, maxW: 13.5, maxH: 4 },
 };
-export const spotFor = (location: string): Loc => LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 12 };
+export const spotFor = (location: string): Loc => LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 13.5, maxH: 18 };
 
 /** Width in inches from the imprint's print size ("11\" wide", "4\" tall", "MAX wide") and the design's proportions. */
 export function printWidth(size: string, location: string, ratio: number): number {
   const spot = spotFor(location);
   const s = (size || "").trim();
-  if (/^max/i.test(s)) return /tall/i.test(s) && ratio ? Math.min(spot.maxW, 15 / ratio) : spot.maxW;
+  // MAX: as big as fits the location's max print area
+  if (/^max/i.test(s)) return ratio ? Math.min(spot.maxW, spot.maxH / ratio) : spot.maxW;
   const m = s.match(/^([\d.]+)/);
   if (!m) return spot.defW;
   const v = +m[1];
@@ -43,10 +45,11 @@ export function basePlacement(location: string, wIn: number, ratio: number, drop
   const ppi = PX_PER_IN * scale;
   const w = wIn * ppi;
   const h = ratio ? w * ratio : w;
-  if (spot.abs) return { view: spot.view, x: spot.abs.x - w / 2, y: spot.abs.y - h / 2, w, h };
+  const aw = spot.maxW * ppi, ah = spot.maxH * ppi;
+  if (spot.abs) return { view: spot.view, x: spot.abs.x - w / 2, y: spot.abs.y - h / 2, w, h, area: { x: spot.abs.x - aw / 2, y: spot.abs.y - ah / 2, w: aw, h: ah } };
   const cx = CENTER_X + (spot.dx || 0) * ppi;
   const top = COLLAR_Y[spot.view] + (dropIn ?? spot.drop ?? 3) * ppi;
-  return { view: spot.view, x: cx - w / 2, y: top, w, h };
+  return { view: spot.view, x: cx - w / 2, y: top, w, h, area: { x: cx - aw / 2, y: top, w: aw, h: ah } };
 }
 
 const NAMED: Record<string, string> = {
