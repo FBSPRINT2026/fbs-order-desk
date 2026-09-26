@@ -620,3 +620,6 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-pop-row .mk-match{margin:6px 0 2px}
 .mk-srcs{display:inline-flex;gap:2px}
 .mk-united{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--faint,#8a93a3);margin:2px 0 6px}
+.mk-thumb{display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;line-height:0}
+.mk-thumb img{height:64px;width:auto;display:block}
+.mk-thumb:hover{border-color:var(--accent)}

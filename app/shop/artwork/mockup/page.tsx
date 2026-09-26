@@ -305,21 +305,24 @@ function Builder() {
   }
 
   /** Draw one garment color with every imprint, plus a spec strip, as a PNG. */
-  async function render(l: Line): Promise<Blob> {
-    const k = 0.6, pw = PHOTO_W * k, ph = PHOTO_H * k, pad = 24;
+  /** bare = just the shirt photos with the art (the thumbnail on the order), no title or spec lines. */
+  async function render(l: Line, bare = false): Promise<Blob> {
+    const k = bare ? 0.4 : 0.6, pw = PHOTO_W * k, ph = PHOTO_H * k, pad = bare ? 10 : 24, top = bare ? pad : 70;
     const specLines = imprints.map((im) => { const p = place(im); return `${im.location}: ${p.d ? designLabel(p.d) : "no design"} · ${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"${im.inks ? " · " + im.inks : ""}`; });
     const W = pad * 2 + views.length * pw + (views.length - 1) * pad;
-    const H = 70 + ph + 30 + specLines.length * 26 + pad;
+    const H = bare ? ph + pad * 2 : 70 + ph + 30 + specLines.length * 26 + pad;
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
     let x = c.getContext("2d")!;
     x.fillStyle = "#ffffff"; x.fillRect(0, 0, W, H);
-    x.fillStyle = "#141D2B"; x.font = "700 24px Helvetica, Arial, sans-serif";
-    x.fillText(`${order ? `#${order.number} ` : ""}${groupName || "Mockup"}`, pad, 36);
-    x.font = "16px Helvetica, Arial, sans-serif"; x.fillStyle = "#4A566B";
-    x.fillText([l.brand, l.style, l.garment].filter(Boolean).join(" ") + (l.color ? ` — ${l.color}` : ""), pad, 60);
+    if (!bare) {
+      x.fillStyle = "#141D2B"; x.font = "700 24px Helvetica, Arial, sans-serif";
+      x.fillText(`${order ? `#${order.number} ` : ""}${groupName || "Mockup"}`, pad, 36);
+      x.font = "16px Helvetica, Arial, sans-serif"; x.fillStyle = "#4A566B";
+      x.fillText([l.brand, l.style, l.garment].filter(Boolean).join(" ") + (l.color ? ` — ${l.color}` : ""), pad, 60);
+    }
     for (let i = 0; i < views.length; i++) {
-      const v = views[i], ox = pad + i * (pw + pad), oy = 70;
+      const v = views[i], ox = pad + i * (pw + pad), oy = top;
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
       x.drawImage(bg, ox, oy, pw, ph);
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
@@ -344,11 +347,9 @@ function Builder() {
         if (m) { x.globalCompositeOperation = "destination-in"; x.drawImage(m, ox, oy, pw, ph); x.globalCompositeOperation = "source-over"; }
       }
       x = main; x.drawImage(layer, 0, 0);
-      x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif";
-      x.fillText(v.toUpperCase(), ox, oy + ph + 18);
+      if (!bare) { x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif"; x.fillText(v.toUpperCase(), ox, oy + ph + 18); }
     }
-    x.fillStyle = "#141D2B"; x.font = "15px Helvetica, Arial, sans-serif";
-    specLines.forEach((s, i) => x.fillText(s, pad, 70 + ph + 44 + i * 26));
+    if (!bare) { x.fillStyle = "#141D2B"; x.font = "15px Helvetica, Arial, sans-serif"; specLines.forEach((s, i) => x.fillText(s, pad, 70 + ph + 44 + i * 26)); }
     return await new Promise((res) => c.toBlob((b) => res(b!), "image/png"));
   }
 
@@ -381,7 +382,7 @@ function Builder() {
   }
 
   /** Write the imprints (locations, designs, sizes, inks) back to the order group, so both screens match. */
-  async function syncOrder(mockupSaved = false): Promise<boolean> {
+  async function syncOrder(mockupSaved = false, thumbs: string[] = []): Promise<boolean> {
     if (!order) return false;
     const { data } = await sb.from("orders").select("groups").eq("id", order.id).maybeSingle();
     const groups = (data?.groups || []) as Order["groups"];
@@ -391,6 +392,7 @@ function Builder() {
     const sized = imprints.map((im) => { if (im.size.trim()) return im; const p = place(im); return p.d ? { ...im, size: `${Math.round(p.wIn * 100) / 100}" wide` } : im; });
     g.imprints = sized.map((im) => ({ ...(g.imprints.find((x) => x.id === im.id) || {}), ...im }));
     if (mockupSaved) g.mockupAt = new Date().toISOString();
+    if (thumbs.length) g.mockupThumbs = thumbs;
     const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
     if (error) { setMsg("Couldn't update the order: " + error.message); return false; }
     return true;
@@ -408,6 +410,7 @@ function Builder() {
     setMsg("");
     const { data: u } = await sb.auth.getUser();
     const out: { title: string; url: string }[] = [];
+    const thumbs: string[] = [];
     try {
       for (const l of lines.filter((z) => z.style || z.color)) {
         const blob = await render(l);
@@ -420,10 +423,15 @@ function Builder() {
           const { data: pr } = await sb.from("proofs").insert({ order_id: orderId, title, file_path: path, file_type: "image/png" }).select("id").single();
           proofId = pr?.id || null;
         }
-        await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, proof_id: proofId, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "" });
+        await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, group_id: groupId || null, proof_id: proofId, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "" });
+        // a small photos-only picture for the order screen and the customer's artwork lists
+        const thumb = await render(l, true);
+        const tpath = path.replace(/\.png$/, "-thumb.png");
+        const tu = await sb.storage.from("proofs").upload(tpath, thumb, { contentType: "image/png" });
+        if (!tu.error) thumbs.push(tpath);
         out.push({ title, url: URL.createObjectURL(blob) });
       }
-      await syncOrder(true);
+      await syncOrder(true, thumbs);
       setSaved(out);
       setMsg(orderId ? `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the order as proofs and to the customer's account.` : `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the customer's account.`);
     } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }

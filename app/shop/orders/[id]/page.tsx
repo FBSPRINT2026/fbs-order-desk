@@ -38,6 +38,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // this customer's designs (logos) for the imprint design pickers
   const [designs, setDesigns] = useState<Design[]>([]);
   const [designUrls, setDesignUrls] = useState<Record<string, string>>({});
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   // Style not in the catalog yet: pull it from S&S (saves it to the catalog too)
   async function lookupStyle(style: string, styleID?: number): Promise<Garment | null> {
     const key = style.trim().toUpperCase();
@@ -132,6 +133,18 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setDesignUrls(await previewUrls(sb, list));
   }, [sb, custId]);
   useEffect(() => { loadDesigns(); }, [loadDesigns]);
+  // signed links for the saved mockup thumbnails on each group
+  const thumbKey = (o?.groups || []).flatMap((g) => g.mockupThumbs || []).join("|");
+  useEffect(() => {
+    const paths = thumbKey ? thumbKey.split("|").filter((p) => !thumbUrls[p]) : [];
+    if (!paths.length) return;
+    sb.storage.from("proofs").createSignedUrls(paths, 3600).then(({ data }) => {
+      const m: Record<string, string> = {};
+      paths.forEach((p, i) => { if (data?.[i]?.signedUrl) m[p] = data[i].signedUrl; });
+      setThumbUrls((u) => ({ ...u, ...m }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thumbKey, sb]);
   async function uploadOrderDesign(file: File, name: string): Promise<Design | null> {
     if (!custId) { say("Pick a customer first. New art is saved to their account."); return null; }
     try {
@@ -460,7 +473,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
             <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
