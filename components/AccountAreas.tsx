@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ST, type Design } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import { designMatches } from "@/components/DesignSearch";
+import PayPanel, { type PayItem } from "@/components/PayPanel";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string };
@@ -42,10 +43,10 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
 );
 
 /**
- * A customer's account split into areas (quotes, orders, invoices, payments, artwork, messages…), each searchable.
+ * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, canAct = true }: {
+export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, canAct = true }: {
   mode: "shop" | "portal";
   orders: AOrder[]; payments: APayment[]; designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
   attention: AAttn[];
@@ -62,6 +63,8 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
   onStarMockup?: (mockupId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
   onArchive?: (designId: string, archived: boolean) => Promise<{ ok: boolean; error?: string }>;
+  /** portal: online payments (card fee %, Zelle/Venmo details, Stax web payments token, deposit %) */
+  payCfg?: { cardFeePct: number; zelle: string; venmo: string; staxToken: string; depositPct: number };
   /** false in the staff preview of a portal: sending is turned off */
   canAct?: boolean;
 }) {
@@ -80,6 +83,8 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   const [showArch, setShowArch] = useState(false);
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
+  const [paySel, setPaySel] = useState<string[]>([]);
+  const [payNow, setPayNow] = useState<PayItem[] | null>(null);
   const PER = 6;
   const pageOf = <T,>(key: string, list: T[]) => { const n = Math.max(1, Math.ceil(list.length / PER)), p = Math.min(pg[key] || 0, n - 1); const items = list.slice(p * PER, p * PER + PER); return { items, p, n, pad: n > 1 ? PER - items.length : 0 }; };
   // empty places keep a short last page the same height, so the page buttons don't move
@@ -110,7 +115,6 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
     { id: "home", label: "Dashboard", icon: I.home },
     { id: "quotes", label: "Quotes", icon: I.quotes, n: quotes.length },
     { id: "orders", label: "Orders", icon: I.orders, n: inWork.length },
-    { id: "invoices", label: "Invoices", icon: I.invoices },
     { id: "payments", label: "Payments", icon: I.payments },
     { id: "artwork", label: "Artwork", icon: I.artwork },
     { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
@@ -154,7 +158,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       { kind: "draft", title: "Orders you haven't sent yet", label: "Order" },
       { kind: "quote", title: mode === "shop" ? "Quotes waiting on the customer" : "Quote approvals", label: "Quote" },
       { kind: "art", title: mode === "shop" ? "Artwork waiting on the customer" : "Artwork approvals", label: "Order" },
-      { kind: "pay", title: "Payments due", label: "Invoice" },
+      { kind: "pay", title: "Payments due", label: "Order" },
       { kind: "receive", title: mode === "shop" ? "Garments to receive" : "Garments to send us", label: "Order" },
     ];
     body = (
@@ -201,20 +205,61 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       </>
     );
   } else if (area === "quotes") body = <>{tableHead(<h2>Quotes</h2>, "Search quotes by number, name or status")}{orderTable(quotes, "quote")}</>;
-  else if (area === "orders") body = <>{tableHead(<h2>Orders in progress</h2>, "Search orders by number, name or status")}{orderTable(inWork, "work")}</>;
-  else if (area === "invoices") body = <>
-    {tableHead(<><h2>Invoices</h2><span className="aa-sum">Invoiced <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search invoices by number, name or status")}
+  else if (area === "orders" || area === "invoices") body = <>
+    {tableHead(<><h2>Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders by number, name or status")}
     {orderTable(invoices, "invoice")}</>;
   else if (area === "payments") {
     const rows = payments.filter((p) => has(q, p.number, p.method, money(p.amount), p.paid_on));
-    body = <>{tableHead(<><h2>Payments</h2><span className="aa-sum">Paid <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b></span></>, "Search by order number, method or amount")}
-      <div className="aa-card aa-tblcard"><table className="aa-tbl">
-        <thead><tr><th>Date</th><th>Order</th><th>Method</th><th className="r">Amount</th></tr></thead>
-        <tbody>
-          {rows.map((p) => <tr key={p.id} onClick={() => router.push(orderHref(p.order_id))}><td>{when(p.paid_on || p.created_at)}</td><td className="num"><Link href={orderHref(p.order_id)} onClick={(e) => e.stopPropagation()}>{p.number}</Link></td><td>{p.method || "—"}</td><td className="r num b">{money(p.amount)}</td></tr>)}
-          {!rows.length && <tr><td colSpan={4}><div className="aa-empty">{payments.length ? `No matches for “${q}”.` : "No payments yet."}</div></td></tr>}
-        </tbody>
-      </table></div></>;
+    const open = invoices.filter((o) => o.balance > 0.004 && has(q, o.number, o.nickname));
+    const waitingQuotes = quotes.filter((o) => o.status === "quote_sent" && has(q, o.number, o.nickname));
+    const item = (o: AOrder): PayItem => ({ id: o.id, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
+    const sel = open.filter((o) => paySel.includes(o.id));
+    const selSum = sel.reduce((a, o) => a + o.balance, 0);
+    body = <>{tableHead(<><h2>Payments</h2><span className="aa-sum">Balance due <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b></span></>, "Search by order number, method or amount")}
+      <div className="aa-card aa-tblcard">
+        <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Open orders</h3>{mode === "portal" && open.length > 1 && <span className="faint">Check the ones you want to pay together.</span>}</div>
+        <table className="aa-tbl">
+          <thead><tr>{mode === "portal" && payCfg && <th style={{ width: 36 }}><input type="checkbox" aria-label="Select all" checked={open.length > 0 && sel.length === open.length} onChange={(e) => setPaySel(e.target.checked ? open.map((o) => o.id) : [])} /></th>}<th>#</th><th>Order</th><th>Status</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th>{mode === "portal" && payCfg && <th />}</tr></thead>
+          <tbody>
+            {open.map((o) => (
+              <tr key={o.id} className={paySel.includes(o.id) ? "sel" : ""} onClick={() => mode === "portal" && payCfg ? setPaySel((x) => (x.includes(o.id) ? x.filter((y) => y !== o.id) : [...x, o.id])) : router.push(orderHref(o.id))}>
+                {mode === "portal" && payCfg && <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select order ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => setPaySel((x) => (e.target.checked ? [...x, o.id] : x.filter((y) => y !== o.id)))} /></td>}
+                <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
+                <td><div className="aa-t">{o.nickname || "Order"}</div><div className="aa-s">{o.due_date ? `In hands ${when(o.due_date)}` : ""}</div></td>
+                <td><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span></td>
+                <td className="r num">{money(o.total)}</td><td className="r num">{money(o.paid)}</td><td className="r num aa-due">{money(o.balance)}</td>
+                {mode === "portal" && payCfg && <td className="r" onClick={(e) => e.stopPropagation()}><button type="button" className="btn sm" onClick={() => setPayNow([item(o)])}>Pay</button></td>}
+              </tr>
+            ))}
+            {!open.length && <tr><td colSpan={8}><div className="aa-empty">Nothing due right now. Thank you!</div></td></tr>}
+          </tbody>
+        </table>
+        {mode === "portal" && payCfg && sel.length > 0 && (
+          <div className="aa-paybar"><span><b>{sel.length}</b> selected · <b className="num">{money(selSum)}</b></span><span className="spacer" /><button type="button" className="btn ghost" onClick={() => setPaySel([])}>Clear</button><button type="button" className="btn primary" onClick={() => setPayNow(sel.map(item))}>Pay {sel.length > 1 ? `these ${sel.length} together` : "this one"}</button></div>
+        )}
+      </div>
+      {payNow && payCfg && <PayPanel key={payNow.map((x) => x.id).join()} items={payNow} pay={payCfg} staxToken={payCfg.staxToken} canAct={canAct} onClose={() => setPayNow(null)} />}
+      {waitingQuotes.length > 0 && (
+        <div className="aa-card aa-tblcard">
+          <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Quotes</h3><span className="faint">{mode === "portal" ? "Approve a quote first, then it can be paid here." : "Waiting on the customer's approval."}</span></div>
+          <table className="aa-tbl">
+            <thead><tr><th>#</th><th>Quote</th><th>Status</th><th className="r">Total</th><th /></tr></thead>
+            <tbody>{waitingQuotes.map((o) => (
+              <tr key={o.id} onClick={() => router.push(orderHref(o.id))}><td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td><td>{o.nickname || "Quote"}</td><td><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span></td><td className="r num">{money(o.total)}</td><td className="r">{mode === "portal" && <Link className="btn sm" href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>Review &amp; approve</Link>}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+      <div className="aa-card aa-tblcard">
+        <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Payment history</h3></div>
+        <table className="aa-tbl">
+          <thead><tr><th>Date</th><th>Order</th><th>Method</th><th className="r">Amount</th></tr></thead>
+          <tbody>
+            {rows.map((p) => <tr key={p.id} onClick={() => router.push(orderHref(p.order_id))}><td>{when(p.paid_on || p.created_at)}</td><td className="num"><Link href={orderHref(p.order_id)} onClick={(e) => e.stopPropagation()}>{p.number}</Link></td><td>{p.method || "—"}</td><td className="r num b">{money(p.amount)}</td></tr>)}
+            {!rows.length && <tr><td colSpan={4}><div className="aa-empty">{payments.length ? `No matches for “${q}”.` : "No payments yet."}</div></td></tr>}
+          </tbody>
+        </table>
+      </div></>;
   } else if (area === "artwork") {
     const live = ds.filter((d) => !gone[d.id] && !(d.id in arch ? arch[d.id] : d.archived_at));
     const archived = ds.filter((d) => !gone[d.id] && (d.id in arch ? arch[d.id] : d.archived_at));

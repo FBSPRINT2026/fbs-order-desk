@@ -160,6 +160,16 @@ export default function SettingsPage() {
         </section>
 
         <section className="panel">
+          <div className="panel-h"><h2>Customer payments</h2><span className="faint" style={{ fontSize: 12 }}>What customers see when they pay in their portal</span></div>
+          <div className="panel-b grid g3">
+            <div className="field"><label htmlFor="s-cardfee">Credit card fee %</label><input id="s-cardfee" type="number" step="0.05" min="0" max="10" value={s.pay.cardFeePct} onChange={(e) => upd((d) => { d.pay.cardFeePct = n(e.target.value); })} />
+              <span className="faint" style={{ fontSize: 11.5 }}>Added only when they pay by credit card. Stax caps card surcharges at 3%, and debit cards can&apos;t be surcharged.</span></div>
+            <div className="field"><label htmlFor="s-zelle">Zelle (email or phone)</label><input id="s-zelle" type="text" placeholder="payments@fbsprint.com" value={s.pay.zelle} onChange={(e) => upd((d) => { d.pay.zelle = e.target.value; })} /></div>
+            <div className="field"><label htmlFor="s-venmo">Venmo handle</label><input id="s-venmo" type="text" placeholder="@FBS-Print" value={s.pay.venmo} onChange={(e) => upd((d) => { d.pay.venmo = e.target.value; })} /></div>
+          </div>
+        </section>
+
+        <section className="panel">
           <div className="panel-h"><h2>Shop staff</h2><span className="faint" style={{ fontSize: 12 }}>These emails sign in to the shop side. Roles will decide what each person sees.</span></div>
           <div className="panel-b stack">
             {staff.map((x) => (

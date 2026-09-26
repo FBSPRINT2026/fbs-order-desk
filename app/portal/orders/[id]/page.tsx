@@ -5,7 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { calcOrder, imprintLabel, orderGroups, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill } from "@/components/bits";
-import { MessageThread, PayBox, ProofCard, QuoteApproval } from "./client";
+import { MessageThread, ProofCard, QuoteApproval } from "./client";
+import PayPanel from "@/components/PayPanel";
 
 const STEPS: { label: string; keys: string[] }[] = [
   { label: "Requested", keys: ["request"] },
@@ -52,7 +53,6 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const pendingProofs = proofs.filter((x) => x.status === "pending");
   const deposit = Math.min(c.balance, Math.round(c.total * ctx.settings.depositPct) / 100);
   const canPay = o.type === "invoice" && c.balance > 0.004;
-  const onlinePay = !!process.env.STRIPE_SECRET_KEY; // online card payments turned on?
 
   return (
     <>
@@ -171,13 +171,9 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             <section className="panel" id="pay">
               <div className="panel-h"><h2>Payment</h2></div>
               <div className="panel-b stack">
-                {canPay && !onlinePay ? (
-                  <div className="stack" style={{ gap: 6, fontSize: 13 }}>
-                    <b className="num" style={{ fontSize: 15 }}>Balance due: {money(c.balance)}</b>
-                    <span className="muted">Pay by card, cash or check when you pick up, or call us to pay by phone{ctx.settings.shop.phone ? ` at ${ctx.settings.shop.phone}` : ""}.</span>
-                  </div>
-                ) : canPay ? (
-                  <PayBox orderId={o.id} disabled={preview} balance={money(c.balance)} deposit={c.paid < 0.005 && deposit < c.balance - 0.004 ? { pct: ctx.settings.depositPct, label: money(deposit) } : null} />
+                {canPay ? (
+                  <PayPanel items={[{ id: o.id, number: o.number, nickname: o.nickname || "", balance: c.balance, deposit: c.paid < 0.005 ? deposit : undefined }]}
+                    pay={ctx.settings.pay} staxToken={process.env.STAX_WEB_PAYMENTS_TOKEN || ""} canAct={!preview} />
                 ) : o.type === "quote" ? (
                   <div className="muted" style={{ fontSize: 13 }}>You can pay online after you approve the quote.</div>
                 ) : <div className="okmsg"><b>Paid in full.</b> Thank you!</div>}

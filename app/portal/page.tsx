@@ -80,7 +80,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         ) : (
           <AccountAreas mode="portal" orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
-            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} />
+            onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup}
+            payCfg={{ ...ctx.settings.pay, staxToken: process.env.STAX_WEB_PAYMENTS_TOKEN || "", depositPct: ctx.settings.depositPct }} />
         )}
       </main>
     </>

@@ -43,7 +43,7 @@ export const SHIP_METHODS = [
   "FedEx Ground", "FedEx Home Delivery", "FedEx Express Saver", "FedEx 2Day", "FedEx Standard Overnight",
   "USPS Priority Mail", "USPS Ground Advantage",
 ];
-export const PAY_METHODS = ["Card", "Cash", "Check", "ACH", "Venmo", "Other"];
+export const PAY_METHODS = ["Credit card", "ACH", "Zelle", "Venmo", "Cash", "Check", "Card", "Other"];
 
 export type Method = "screen" | "embroidery" | "dtf";
 /** One decoration on a group of garments (Printavo calls these imprints). */
@@ -95,7 +95,7 @@ export type Order = {
 };
 export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; size_costs?: Record<string, number>; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string }> };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
-export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string };
+export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string; fee?: number; processor_id?: string | null; note?: string | null };
 export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType };
 export type Proof = { id: string; order_id: string; title: string; file_path: string; file_type: string; status: "pending" | "approved" | "changes"; customer_comment: string; decided_at: string | null; decided_name: string | null; created_at: string };
 export type Message = { id: string; order_id: string; author_type: "staff" | "customer"; author_email: string; author_name: string; body: string; read_at: string | null; created_at: string };
@@ -126,6 +126,8 @@ export type Finishing = { id: string; name: string; price: number };
 export type Settings = PriceList & {
   shop: { name: string; address: string; phone: string; email: string; terms: string; logoUrl: string };
   markup: number; taxRate: number; depositPct: number;
+  /** online payments: card fee % (credit card only), and where to send Zelle / Venmo */
+  pay: { cardFeePct: number; zelle: string; venmo: string };
   wholesale: PriceList;
   finishing: Finishing[];
 };
@@ -135,6 +137,7 @@ export const DEFAULT_SETTINGS: Settings = {
   markup: 50,
   taxRate: 8.25,
   depositPct: 50,
+  pay: { cardFeePct: 3.25, zelle: "", venmo: "" },
   upcharges: { "2XL": 2, "3XL": 3, "4XL": 4, "5XL": 5 }, // 2XL+ Materials Charge (per piece, billed as their own line)
   tiers: [12, 24, 48, 72, 144, 288, 500],
   screen: [
@@ -183,6 +186,7 @@ export function mergeSettings(data: unknown): Settings {
     ...DEFAULT_SETTINGS,
     ...d,
     shop: { ...DEFAULT_SETTINGS.shop, ...(d.shop || {}) },
+    pay: { ...DEFAULT_SETTINGS.pay, ...(d.pay || {}) },
     upcharges: { ...DEFAULT_SETTINGS.upcharges, ...(d.upcharges || {}) },
     wholesale: { ...DEFAULT_SETTINGS.wholesale, ...(d.wholesale || {}), upcharges: { ...DEFAULT_SETTINGS.wholesale.upcharges, ...(d.wholesale?.upcharges || {}) } },
     finishing: Array.isArray(d.finishing) ? d.finishing : DEFAULT_SETTINGS.finishing,
