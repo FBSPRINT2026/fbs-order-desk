@@ -57,9 +57,8 @@ function Builder() {
   useEffect(() => {
     const el = cuRef.current; if (!el) return;
     const ro = new ResizeObserver(() => {
-      // boxes sit in rows under the photos: 3 across when there's room, 2 on narrow screens
-      const w = el.clientWidth, n = w > 760 ? 3 : w > 460 ? 2 : 1;
-      setCuSize(Math.max(200, Math.min(320, Math.floor((w - (n - 1) * 16) / n))));
+      // two across, each exactly as wide as the front / back photo above it
+      setCuSize(Math.max(120, Math.floor((el.clientWidth - 14) / 2)));
     });
     ro.observe(el);
     return () => ro.disconnect();
