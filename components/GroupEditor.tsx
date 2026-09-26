@@ -266,7 +266,7 @@ export function SizeField({ value, onChange }: { value: string; onChange: (v: st
   const v = (value || "").trim();
   const m = v.match(/^([\d.\/ -]*\d[\d.\/]*)\s*(?:"|in|inch|inches)?\s*(w|wide|width|h|high|tall|height)?$/i);
   const num = m ? m[1].trim() : v;
-  const dim: "W" | "H" | "" = !v ? "" : m && m[2] && /^h/i.test(m[2]) ? "H" : "W";
+  const dim: "W" | "H" | "" = !v ? "" : m && m[2] && /^(h|tall)/i.test(m[2]) ? "H" : "W";
   const set = (d: "W" | "H", raw: string) => { const t = raw.replace(/["]/g, "").trim(); onChange(t ? `${t}" ${d === "W" ? "wide" : "tall"}` : ""); };
   const box = (d: "W" | "H") => (
     <label className={"sz-dim" + (dim === d ? " on" : "")} key={d}>
@@ -274,5 +274,5 @@ export function SizeField({ value, onChange }: { value: string; onChange: (v: st
       <span>{dim === d ? (d === "W" ? "wide" : "tall") : d}</span>
     </label>
   );
-  return <div className="sz-field">{dim ? box(dim) : [box("W"), box("H")]}</div>;
+  return <div className="sz-field">{[dim !== "H" ? box("W") : null, dim !== "W" ? box("H") : null]}</div>;
 }
