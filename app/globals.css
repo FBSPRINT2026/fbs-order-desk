@@ -557,3 +557,5 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-color .sw[style*="background: #"],.mk-color .sw[style*="background:#"]{background-image:none}
 .mk-color .arrow{color:var(--ink-3)}
 .mk-color select{font-size:12.5px}
+.mk-wh label{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--ink-2)}
+.mk-wh input{width:64px}

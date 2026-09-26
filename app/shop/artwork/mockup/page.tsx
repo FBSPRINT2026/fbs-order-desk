@@ -305,7 +305,7 @@ function Builder() {
             ))}
           </div>
           <div className="row" style={{ gap: 10, marginTop: 8 }}>
-            <span className="faint" style={{ fontSize: 12 }}>Dashed boxes show each location&apos;s max print area · drag designs to fine-tune</span>
+            <span className="faint" style={{ fontSize: 12 }}>Drag to move · corner handle to resize · double-click a color to change it · dashed boxes are max print areas</span>
             {Object.keys(offsets).length > 0 && <button className="btn sm ghost" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
           </div>
           {pop && (() => {
@@ -389,8 +389,21 @@ function Builder() {
                     {!p.d && <div className="ink-warn">Which design goes on the {im.location}? Pick one of the customer&apos;s designs, or upload new art.</div>}
                     <div className="row" style={{ gap: 6 }}>
                       <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
-                      <input type="text" aria-label="Width in inches" placeholder="Width" style={{ width: 80 }} value={(im.size.match(/^([\d.]+)/) || [])[1] || ""} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: e.target.value ? `${e.target.value.replace(/[^\d.]/g, "")}" wide` : "" } : x)))} />
-                      <span className="faint" style={{ fontSize: 12 }}>in. wide</span>
+                    </div>
+                    <div className="row mk-wh" style={{ gap: 6 }}>
+                      {(() => {
+                        const tall = /tall/i.test(im.size);
+                        const typed = (im.size.match(/^([\d.]+)/) || [])[1] || "";
+                        const set = (v: string, dim: "wide" | "tall") => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: v ? `${v.replace(/[^\d.]/g, "")}" ${dim}` : "" } : x)));
+                        return (
+                          <>
+                            <label>W <input type="text" inputMode="decimal" aria-label="Width in inches" placeholder={p.wIn.toFixed(2)} value={!tall ? typed : p.wIn ? p.wIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "wide")} />&quot;</label>
+                            <span className="faint">×</span>
+                            <label>H <input type="text" inputMode="decimal" aria-label="Height in inches" placeholder={(p.hIn || 0).toFixed(2)} value={tall ? typed : p.hIn ? p.hIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "tall")} />&quot;</label>
+                            <span className="faint" style={{ fontSize: 11 }}>proportions locked</span>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -404,7 +417,7 @@ function Builder() {
   );
 }
 
-/** One garment photo with designs you can drag, resize from the corner (proportions locked) and click to recolor. */
+/** One garment photo with designs you can drag, resize from the corner (proportions locked) and double-click to recolor. */
 function Stage({ src, label, items, onMove, onResize, onPick }: {
   src: string; label: string;
   items: { id: string; p: { x: number; y: number; w: number; h: number; area: { x: number; y: number; w: number; h: number } }; url: string }[];
@@ -429,11 +442,6 @@ function Stage({ src, label, items, onMove, onResize, onPick }: {
         }}
         onPointerUp={(e) => {
           const d = drag.current; drag.current = null;
-          // a click (no real movement) on a logo opens the color picker for the color under the cursor
-          if (d && d.mode === "move" && d.el && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 4) {
-            const r = d.el.getBoundingClientRect();
-            onPick(d.id, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, e.clientX, e.clientY);
-          }
         }}
         onPointerLeave={() => { drag.current = null; }}
         onPointerDown={(e) => { if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg")) setSel(""); }}>
@@ -442,6 +450,11 @@ function Stage({ src, label, items, onMove, onResize, onPick }: {
         {items.map((it) => (
           <div key={it.id} className={"mk-art" + (sel === it.id ? " sel" : "") + (it.url ? "" : " mk-missing")}
             style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%` }}
+            onDoubleClick={(e) => {
+              // double-click a color in the logo to change it
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              onPick(it.id, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, e.clientX, e.clientY);
+            }}
             onPointerDown={(e) => {
               e.stopPropagation();
               setSel(it.id);
