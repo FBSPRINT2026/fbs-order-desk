@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getPortalCtx, signProofs } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calcOrder, imprintLabel, orderGroups, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
+import { calcOrder, imprintLabel, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill } from "@/components/bits";
 import { MessageThread, ProofCard, QuoteApproval } from "./client";
@@ -171,6 +171,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             <section className="panel" id="pay">
               <div className="panel-h"><h2>Payment</h2></div>
               <div className="panel-b stack">
+                {(() => { const t = ctx.customers.find((x) => x.id === o.customer_id)?.payment_terms || "receipt"; const d = o.type === "invoice" ? payDueDate(o, t) : null; return <div className="aa-terms"><span>Payment terms</span><b>{PAY_TERMS[t]}{d && c.balance > 0.004 ? ` · due ${fmtDateLong(d)}` : ""}</b></div>; })()}
                 {canPay ? (
                   <PayPanel items={[{ id: o.id, number: o.number, nickname: o.nickname || "", balance: c.balance, deposit: c.paid < 0.005 ? deposit : undefined }]}
                     pay={ctx.settings.pay} staxToken={process.env.STAX_WEB_PAYMENTS_TOKEN || ""} canAct={!preview} />

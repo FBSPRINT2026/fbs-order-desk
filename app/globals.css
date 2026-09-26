@@ -813,3 +813,6 @@ td > .sz-dim.on input{padding-right:24px}
 .aa-age.bad b{color:#B91C1C}
 .aa-payside .aa-search{width:100%}
 @media (max-width: 800px){ .aa-aging{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.aa-terms{display:flex;justify-content:space-between;align-items:baseline;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:13.5px}
+.aa-terms span{color:var(--ink-3);font-weight:600}
+.aa-terms b{font-size:15px}

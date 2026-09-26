@@ -1,6 +1,6 @@
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Design, Order } from "@/lib/pricing";
+import { PAY_TERMS, payDueDate, type Design, type Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import StartPanel from "@/components/StartPanel";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
@@ -50,7 +50,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     messages = ((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) }));
   }
   const bal = (o: Order) => Math.round(((+o.total || 0) - (paid[o.id] || 0)) * 100) / 100;
-  const aOrders: AOrder[] = orders.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type }));
+  const aOrders: AOrder[] = orders.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type,
+    pay_due: o.type === "invoice" ? payDueDate(o, ctx.customers.find((c) => c.id === o.customer_id)?.payment_terms) : null }));
 
   // what's waiting on the customer
   const attention: AAttn[] = [];
@@ -62,7 +63,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     if (o.type === "invoice" && bal(o) > 0.004 && o.status !== "quote") attention.push({ kind: "pay", order_id: o.id, number: o.number, date: money(bal(o)), hash: "pay" });
     if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) attention.push({ kind: "receive", order_id: o.id, number: o.number, date: short(o.approved_at || o.updated_at) });
   });
-  const name = ctx.customers[0]?.name?.split(" ")[0];
+  const acct = ctx.customers[0];
+  const company = acct?.company || acct?.name || "";
 
   return (
     <>
@@ -70,7 +72,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       <main className="p-main">
         <div>
           <div className="eyebrow">{ctx.settings.shop.name} customer portal</div>
-          <h1>{name ? `Hi ${name}` : "Your account"}</h1>
+          <h1>{company || "Your account"}</h1>
         </div>
         {!ctx.customerIds.length ? (
           <div className="panel"><div className="panel-b">
@@ -81,6 +83,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
           <AccountAreas mode="portal" orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
             onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup}
+            terms={PAY_TERMS[acct?.payment_terms || "receipt"]}
             payCfg={{ ...ctx.settings.pay, staxToken: process.env.STAX_WEB_PAYMENTS_TOKEN || "", depositPct: ctx.settings.depositPct }} />
         )}
       </main>

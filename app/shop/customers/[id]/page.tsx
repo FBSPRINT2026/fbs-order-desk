@@ -12,7 +12,7 @@ import { fmtDateLong } from "@/lib/format";
 import { previewUrls } from "@/lib/designs";
 import { staffCustomerMessage } from "@/app/shop/actions";
 import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
-import type { Design } from "@/lib/pricing";
+import { PAY_TERMS, payDueDate, type Design, type PayTerms } from "@/lib/pricing";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -129,7 +129,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           if (o.type === "invoice" && o.balance > 0.004) out.push({ kind: "pay", order_id: o.id, number: o.number, date: money(o.balance) });
           if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) out.push({ kind: "receive", order_id: o.id, number: o.number, date: d(o.due_date) || "—" });
           return out;
-        })} orders={os.map((o) => ({ ...o, nickname: o.nickname || "", price_type: o.price_type }))} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
+        })} orders={os.map((o) => ({ ...o, nickname: o.nickname || "", price_type: o.price_type, pay_due: o.type === "invoice" ? payDueDate(o, c.payment_terms) : null }))} terms={PAY_TERMS[c.payment_terms || "receipt"]} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
         hrefBase="/shop/orders/"
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
         usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign}
@@ -162,7 +162,12 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                   <option value="wholesale">Wholesale: they supply the garments (imprint pricing only)</option>
                 </select>
               </div>
-              <label className="check"><input type="checkbox" checked={c.tax_exempt} onChange={(e) => set("tax_exempt", e.target.checked)} /> Tax exempt (new quotes start exempt)</label>
+              <div className="field"><label htmlFor="cu-terms">Payment terms</label>
+              <select id="cu-terms" value={c.payment_terms || "receipt"} onChange={(e) => set("payment_terms", e.target.value as PayTerms)}>
+                {(Object.keys(PAY_TERMS) as PayTerms[]).map((k) => <option key={k} value={k}>{PAY_TERMS[k]}</option>)}
+              </select>
+            </div>
+            <label className="check"><input type="checkbox" checked={c.tax_exempt} onChange={(e) => set("tax_exempt", e.target.checked)} /> Tax exempt (new quotes start exempt)</label>
               <div className="field"><label htmlFor="cu-notes">Notes (only your shop sees these)</label><textarea id="cu-notes" rows={3} placeholder="Preferred inks, art files, pickup details…" value={c.notes} onChange={(e) => set("notes", e.target.value)} /></div>
             </div>
           </form>

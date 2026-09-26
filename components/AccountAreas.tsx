@@ -7,7 +7,7 @@ import { fmtDateLong, money } from "@/lib/format";
 import { designMatches } from "@/components/DesignSearch";
 import PayPanel, { type PayItem } from "@/components/PayPanel";
 
-export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string };
+export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
@@ -46,7 +46,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, canAct = true }: {
+export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   orders: AOrder[]; payments: APayment[]; designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
   attention: AAttn[];
@@ -63,6 +63,8 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
   onStarMockup?: (mockupId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
   onArchive?: (designId: string, archived: boolean) => Promise<{ ok: boolean; error?: string }>;
+  /** the customer's payment terms, e.g. "Net 30 days" */
+  terms?: string;
   /** portal: online payments (card fee %, Zelle/Venmo details, Stax web payments token, deposit %) */
   payCfg?: { cardFeePct: number; zelle: string; venmo: string; staxToken: string; depositPct: number };
   /** false in the staff preview of a portal: sending is turned off */
@@ -108,7 +110,8 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   const invoices = orders.filter((o) => o.type === "invoice");
   const receive = orders.filter((o) => o.price_type === "wholesale" && o.type === "invoice" && WAITING.includes(o.status));
   const due = invoices.reduce((a, o) => a + Math.max(0, o.balance), 0);
-  const overdue = invoices.filter((o) => o.due_date && o.due_date < today()).reduce((a, o) => a + Math.max(0, o.balance), 0);
+  const payDue = (o: AOrder) => o.pay_due || o.due_date;
+  const overdue = invoices.filter((o) => { const d = payDue(o); return d && d < today(); }).reduce((a, o) => a + Math.max(0, o.balance), 0);
   const openQuotes = quotes.filter((o) => o.status === "quote_sent").reduce((a, o) => a + o.total, 0);
 
   const AREAS: { id: Area; label: string; icon: string; n?: number; show?: boolean }[] = [
@@ -133,7 +136,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
           <thead><tr><th>#</th><th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th></tr></thead>
           <tbody>
             {rows.map((o) => (
-              <tr key={o.id} className={o.balance > 0.004 && o.due_date && o.due_date < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
+              <tr key={o.id} className={o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
                 <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
                 <td><div className="aa-t">{o.nickname || (cols === "quote" ? "Quote" : "Order")}</div><div className="aa-s">{o.qty} pcs</div></td>
                 <td><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span></td>
@@ -225,7 +228,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       { k: "61–90 days", test: (d: number) => d >= 61 && d <= 90 },
       { k: "Over 90 days", test: (d: number) => d > 90 },
     ].map((b) => {
-      const list = invoices.filter((o) => o.balance > 0.004 && b.test(o.due_date ? Math.floor((Date.parse(today()) - Date.parse(o.due_date)) / 86400000) : 0));
+      const list = invoices.filter((o) => { const d = payDue(o); return o.balance > 0.004 && b.test(d ? Math.floor((Date.parse(today()) - Date.parse(d)) / 86400000) : 0); });
       return { ...b, n: list.length, amt: list.reduce((a, o) => a + o.balance, 0) };
     });
     const payTable = (list: AOrder[], isQuote: boolean) => (
@@ -236,7 +239,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
             <tr key={o.id} className={paySel.includes(o.id) ? "sel" : ""} onClick={() => (canPay ? toggle(o.id) : router.push(orderHref(o.id)))}>
               {canPay && <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${isQuote ? "quote" : "order"} ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} /></td>}
               <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-              <td><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{o.due_date ? `In hands ${when(o.due_date)}` : ""}</div></td>
+              <td><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{!isQuote && payDue(o) ? `Payment due ${when(payDue(o))}` : o.due_date ? `In hands ${when(o.due_date)}` : ""}</div></td>
               <td><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span></td>
               <td className="r num">{money(o.total)}</td>
               {!isQuote && <td className="r num">{money(o.paid)}</td>}
@@ -250,7 +253,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
     );
     const searchBox = search("Search by order number, method or amount");
     body = <>
-      <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2><span className="aa-sum">Balance due <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b></span></div>{!canPay && searchBox}</div>
+      <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2><span className="aa-sum">Balance due <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b>{!canPay && terms ? <> · Terms <b>{terms}</b></> : null}</span></div>{!canPay && searchBox}</div>
       <div className="aa-aging" aria-label="Aging">
         {aging.map((b, i) => (
           <div key={b.k} className={"aa-age" + (i > 0 && b.amt > 0.004 ? " late" : "") + (i >= 3 && b.amt > 0.004 ? " bad" : "")}>
@@ -283,6 +286,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       {canPay && payCfg && (
         <aside className="aa-payside">
           {searchBox}
+          {terms && <div className="aa-terms"><span>Payment terms</span><b>{terms}</b></div>}
           <div className="aa-paybox">
             <div className="aa-paybox-h">Pay orders</div>
             {sel.length ? <>

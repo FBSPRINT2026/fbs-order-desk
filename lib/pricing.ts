@@ -96,7 +96,7 @@ export type Order = {
 export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; size_costs?: Record<string, number>; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string }> };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string; fee?: number; processor_id?: string | null; note?: string | null };
-export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType };
+export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType; payment_terms?: PayTerms };
 export type Proof = { id: string; order_id: string; title: string; file_path: string; file_type: string; status: "pending" | "approved" | "changes"; customer_comment: string; decided_at: string | null; decided_name: string | null; created_at: string };
 export type Message = { id: string; order_id: string; author_type: "staff" | "customer"; author_email: string; author_name: string; body: string; read_at: string | null; created_at: string };
 export type OrderEvent = { id: number; order_id: string; kind: string; detail: string; actor: string; created_at: string };
@@ -374,3 +374,19 @@ export function requestHints(groups: Group[]): string[] {
   return out;
 }
 
+
+/** Customer payment terms. */
+export type PayTerms = "prepay" | "receipt" | "net30";
+export const PAY_TERMS: Record<PayTerms, string> = { prepay: "Pre-pay", receipt: "Due on receipt", net30: "Net 30 days" };
+/**
+ * When an order's payment is due under the customer's terms: pre-pay and due on receipt are due when the order
+ * is approved (invoiced); net 30 is 30 days after that.
+ */
+export function payDueDate(o: { approved_at?: string | null; sent_at?: string | null; created_at: string }, terms?: PayTerms | null) {
+  const base = (o.approved_at || o.sent_at || o.created_at || "").slice(0, 10);
+  if (!base) return null;
+  if (terms !== "net30") return base;
+  const d = new Date(base + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 30);
+  return d.toISOString().slice(0, 10);
+}
