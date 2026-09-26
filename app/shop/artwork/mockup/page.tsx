@@ -173,6 +173,17 @@ function Builder() {
   }, [lines, catalog]);
 
   const designOf = (im: Imprint) => designs.find((d) => d.id === im.design_id);
+  /** The colors printed at a location: each logo color with the ink it's set to (or as uploaded), else the imprint's typed inks. */
+  const inkList = (im: Imprint): { hex: string; name: string }[] => {
+    const pt = paints[im.id];
+    if (pt && pt.design === im.design_id && pt.sources.length) {
+      return pt.sources.map((src) => pt.map[src.hex])
+        .map((t, i) => (t ? t : { name: "", hex: pt.sources[i].hex }))
+        .filter((t) => t.name !== "none")
+        .map((t) => ({ hex: t.hex || "#888888", name: t.name || `As uploaded (${t.hex.toUpperCase()})` }));
+    }
+    return im.inks.split(",").map((z) => z.trim()).filter(Boolean).map((n) => ({ name: n, hex: colorHex(n) || "" }));
+  };
   const ratioOf = (d?: Design) => (d?.width_px && d?.height_px ? d.height_px / d.width_px : 0);
   const place = (im: Imprint, view?: View, fit?: Fit | null) => {
     const d = designOf(im);
@@ -390,7 +401,7 @@ function Builder() {
                 const o = offsets[im.id] || { dx: 0, dy: 0 };
                 const sp = spotFor(im.location);
                 return (
-                  <CloseUp key={im.id} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r}
+                  <CloseUp key={im.id} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
@@ -647,8 +658,9 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
 }
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
-function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, onResize, onPick }: {
+function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, colors, onMove, onResize, onPick }: {
   title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
+  colors: { hex: string; name: string }[];
   onMove: (dxIn: number, dyIn: number) => void; onResize: (newWIn: number) => void;
   onPick: (relX: number, relY: number, clientX: number, clientY: number) => void;
 }) {
@@ -669,8 +681,8 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, o
   const cx = W / 2 + offIn.x * PX, top0 = (H - maxH * PX) / 2;
   const cy = H / 2 + offIn.y * PX; // centered in the print area, same as on the photos
   return (
-    <div className="mk-sleeve">
-      <div className="lbl">{title.toUpperCase()}</div>
+    <div className="mk-sleeve" style={{ width: W }}>
+      <div className="mk-cu-h"><span className="lbl">{title.toUpperCase()}</span><span className="mk-cu-max">max {maxW}&quot; × {maxH}&quot;</span></div>
       <div className="mk-sleeve-box" style={{ width: W, height: H, background: hex }}
         onPointerMove={(e) => {
           const d = drag.current; if (!d) return;
@@ -704,7 +716,14 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, o
           {sel && <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />}
         </div>
       </div>
-      <div className="faint" style={{ fontSize: 11 }}>{wIn.toFixed(2)}&quot; × {hIn.toFixed(2)}&quot; · max {maxW}&quot; × {maxH}&quot;{fold ? " · dashed line = sleeve fold" : ""}</div>
+      <div className="mk-cu-dim">{url ? <>{wIn.toFixed(2)}&quot; W × {hIn.toFixed(2)}&quot; H</> : "No design yet"}</div>
+      {url && (
+        <div className="mk-cu-colors">
+          {colors.length ? colors.map((c, i) => (
+            <div key={i} className="mk-cu-color"><span className="sw" style={{ background: c.hex || "transparent" }} /><span>{c.name}</span></div>
+          )) : <span className="faint">Colors not read yet</span>}
+        </div>
+      )}
     </div>
   );
 }
