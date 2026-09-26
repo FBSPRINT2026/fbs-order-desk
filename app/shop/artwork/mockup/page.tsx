@@ -634,7 +634,7 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, o
   const W = spanW * PX, H = spanH * PX;
   const drag = useRef<{ x: number; y: number; mode: "move" | "size"; w: number } | null>(null);
   const cx = W / 2 + offIn.x * PX, top0 = (H - maxH * PX) / 2;
-  const cy = fold ? H / 2 + offIn.y * PX : top0 + (hIn * PX) / 2 + offIn.y * PX;
+  const cy = H / 2 + offIn.y * PX; // centered in the print area, same as on the photos
   return (
     <div className="mk-sleeve">
       <div className="lbl">{title.toUpperCase()}</div>

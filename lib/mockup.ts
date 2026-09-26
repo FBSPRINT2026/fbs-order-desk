@@ -22,8 +22,8 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
   "Medium Front": { view: "front", dx: 0, drop: 3, defW: 8, maxW: 8, maxH: 8 },
   "Center Chest": { view: "front", dx: 0, drop: 3, defW: 4.5, maxW: 5, maxH: 5 },
   "Across Chest": { view: "front", dx: 0, drop: 3, defW: 11, maxW: 12, maxH: 4 },
-  "Left Chest": { view: "front", dx: 4.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
-  "Right Chest": { view: "front", dx: -4.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
+  "Left Chest": { view: "front", dx: 3.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
+  "Right Chest": { view: "front", dx: -3.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
   Pocket: { view: "front", dx: 4.5, drop: 5, defW: 3, maxW: 4, maxH: 4 },
   // wearer's left sleeve is on the right of the front photo and the left of the back photo
   // Measured on the S&S photos: the sleeve's outer edge (the fold between front and back) runs at ~35° and the hem is square to it.
@@ -92,7 +92,9 @@ export function basePlacement(location: string, wIn: number, ratio: number, drop
   if (spot.abs) return { view: spot.view, x: spot.abs.x - w / 2, y: spot.abs.y - h / 2, w, h, rot: spot.rot || 0, clip: "" as "" | "left" | "right", area: { x: spot.abs.x - aw / 2, y: spot.abs.y - ah / 2, w: aw, h: ah } };
   const cx = CENTER_X + (spot.dx || 0) * ppi;
   const top = COLLAR_Y[spot.view] + (dropIn ?? spot.drop ?? 3) * ppi;
-  return { view: spot.view, x: cx - w / 2, y: top, w, h, rot: 0, clip: "" as "" | "left" | "right", area: { x: cx - aw / 2, y: top, w: aw, h: ah } };
+  // art sits in the middle of the print area; with a set drop, its top edge goes at the drop instead
+  const artY = dropIn != null ? top : top + Math.max(0, (ah - h) / 2);
+  return { view: spot.view, x: cx - w / 2, y: artY, w, h, rot: 0, clip: "" as "" | "left" | "right", area: { x: cx - aw / 2, y: top, w: aw, h: ah } };
 }
 
 const NAMED: Record<string, string> = {
