@@ -32,6 +32,9 @@ export const METHODS: Record<string, string> = { screen: "Screen print", embroid
 export const INK_COLORS = ["White", "Lemon Yellow", "Yellow", "Light Gold", "Gold", "Dolphin Orange", "Bright Orange", "Electric Orange", "National Red", "Drake Red", "Dallas Scarlet", "Scarlet", "Electric Red", "Maroon", "Brandywine", "Russell Purple", "Electric Purple", "Russell Gray", "Dark Gray", "Tan", "Aqua", "Contact Blue", "Royal", "Light Royal", "Bears Navy", "Navy", "Electric Blue", "Kelly Green", "Light Green", "Dark Green", "Electric Green", "Electric Yellow", "Electric Pink", "Black Diamond", "Black"];
 /** Embroidery thread colors (standard list for now). */
 export const THREAD_COLORS = ["White", "Black", "Navy", "Royal", "Light Blue", "Carolina Blue", "Red", "Maroon", "Kelly Green", "Forest Green", "Lime Green", "Gold", "Athletic Gold", "Yellow", "Orange", "Purple", "Pink", "Hot Pink", "Silver", "Gray", "Charcoal", "Brown", "Tan", "Cream"];
+/** Staff roles. Owner sees everything; the others get their own views as those screens are built. */
+export const ROLES = { owner: "Owner", admin: "Admin (orders, customers, payments)", production: "Production manager", receiving: "Receiving", shipping: "Shipping" } as const;
+export type Role = keyof typeof ROLES;
 /** Print locations (match the fbsprint.com order form). */
 export const LOCATIONS = ["Left Chest", "Right Chest", "Full Front", "Full Back", "Upper Back (Yoke)", "Left Sleeve", "Right Sleeve", "Pocket"];
 export const SHIP_METHODS = [

@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { calcGroup, mergeSettings, newGLine, newImprint, uid, type PriceList, type Settings } from "@/lib/pricing";
+import { ROLES, calcGroup, mergeSettings, newGLine, newImprint, uid, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 
 export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
   const [state, setState] = useState("");
-  const [staff, setStaff] = useState<{ email: string; name: string }[]>([]);
+  const [staff, setStaff] = useState<{ email: string; name: string; role: string }[]>([]);
+  const [newRole, setNewRole] = useState("admin");
   const [newStaff, setNewStaff] = useState("");
   const [tab, setTab] = useState<"retail" | "wholesale">("retail");
   const [shade, setShade] = useState<"dark" | "light">("dark");
@@ -15,7 +16,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const sb = createClient();
     sb.from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setS(mergeSettings(data?.data)));
-    sb.from("staff").select("email,name").order("email").then(({ data }) => setStaff(data || []));
+    sb.from("staff").select("email,name,role").order("email").then(({ data }) => setStaff(data || []));
   }, []);
 
   function upd(fn: (d: Settings) => void) {
@@ -33,10 +34,16 @@ export default function SettingsPage() {
   async function addStaff() {
     const email = newStaff.trim().toLowerCase();
     if (!email.includes("@")) return;
-    const { error } = await createClient().from("staff").insert({ email });
-    if (error) return setState(error.message);
-    setStaff((p) => [...p, { email, name: "" }]);
+    const { error } = await createClient().from("staff").insert({ email, role: newRole });
+    if (error) return setState(error.message.includes("row-level") ? "Only the owner or an admin can add staff." : error.message);
+    setStaff((p) => [...p, { email, name: "", role: newRole }]);
     setNewStaff("");
+  }
+  async function setRole(email: string, role: string) {
+    const { error } = await createClient().from("staff").update({ role }).eq("email", email);
+    if (error) return setState(error.message.includes("row-level") ? "Only the owner can change that." : error.message);
+    setStaff((p) => p.map((x) => (x.email === email ? { ...x, role } : x)));
+    setState("Role updated");
   }
   async function removeStaff(email: string) {
     if (staff.length <= 1) return;
@@ -153,12 +160,18 @@ export default function SettingsPage() {
         </section>
 
         <section className="panel">
-          <div className="panel-h"><h2>Shop staff</h2><span className="faint" style={{ fontSize: 12 }}>These emails sign in to the shop side</span></div>
+          <div className="panel-h"><h2>Shop staff</h2><span className="faint" style={{ fontSize: 12 }}>These emails sign in to the shop side. Roles will decide what each person sees.</span></div>
           <div className="panel-b stack">
             {staff.map((x) => (
-              <div key={x.email} className="pay-row"><span>{x.email}</span>{staff.length > 1 && <button className="btn sm ghost danger" type="button" onClick={() => removeStaff(x.email)}>Remove</button>}</div>
+              <div key={x.email} className="pay-row">
+                <span style={{ flex: 1 }}>{x.email}</span>
+                <select aria-label={`Role for ${x.email}`} value={x.role || "admin"} disabled={x.role === "owner"} onChange={(e) => setRole(x.email, e.target.value)} style={{ width: 240 }}>
+                  {Object.entries(ROLES).filter(([k]) => k !== "owner" || x.role === "owner").map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+                {staff.length > 1 && x.role !== "owner" && <button className="btn sm ghost danger" type="button" onClick={() => removeStaff(x.email)}>Remove</button>}
+              </div>
             ))}
-            <div className="row"><input type="email" placeholder="name@fbsprint.com" value={newStaff} onChange={(e) => setNewStaff(e.target.value)} style={{ maxWidth: 280 }} aria-label="New staff email" /><button className="btn" type="button" onClick={addStaff}>Add staff</button></div>
+            <div className="row"><input type="email" placeholder="name@fbsprint.com" value={newStaff} onChange={(e) => setNewStaff(e.target.value)} style={{ maxWidth: 280 }} aria-label="New staff email" /><select aria-label="Role for new staff" value={newRole} onChange={(e) => setNewRole(e.target.value)} style={{ width: 240 }}>{Object.entries(ROLES).filter(([k]) => k !== "owner").map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button className="btn" type="button" onClick={addStaff}>Add staff</button></div>
           </div>
         </section>
       </div>
