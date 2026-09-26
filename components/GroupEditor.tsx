@@ -261,17 +261,17 @@ export function InkField({ value, bad, title, onChange }: { value: string; bad: 
 }
 
 /** Print size: fill width OR height (inches). Once one has a number the other box hides.
- *  Stored on the imprint as text, e.g. 11" W or 4" H. */
+ *  Stored on the imprint as text, e.g. 11" wide or 4" tall. */
 export function SizeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const v = (value || "").trim();
   const m = v.match(/^([\d.\/ -]*\d[\d.\/]*)\s*(?:"|in|inch|inches)?\s*(w|wide|width|h|high|tall|height)?$/i);
   const num = m ? m[1].trim() : v;
   const dim: "W" | "H" | "" = !v ? "" : m && m[2] && /^h/i.test(m[2]) ? "H" : "W";
-  const set = (d: "W" | "H", raw: string) => { const t = raw.replace(/["]/g, "").trim(); onChange(t ? `${t}" ${d}` : ""); };
+  const set = (d: "W" | "H", raw: string) => { const t = raw.replace(/["]/g, "").trim(); onChange(t ? `${t}" ${d === "W" ? "wide" : "tall"}` : ""); };
   const box = (d: "W" | "H") => (
-    <label className="sz-dim" key={d}>
+    <label className={"sz-dim" + (dim === d ? " on" : "")} key={d}>
       <input type="text" inputMode="decimal" aria-label={d === "W" ? "Print width in inches" : "Print height in inches"} placeholder={d === "W" ? "Width" : "Height"} value={dim === d ? num : ""} onChange={(e) => set(d, e.target.value)} />
-      <span>{d === "W" ? "W" : "H"}</span>
+      <span>{dim === d ? (d === "W" ? "wide" : "tall") : d}</span>
     </label>
   );
   return <div className="sz-field">{dim ? box(dim) : [box("W"), box("H")]}</div>;

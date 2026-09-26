@@ -482,3 +482,5 @@ table.imp-table{table-layout:fixed}
 .sz-dim{position:relative;flex:1 1 0;min-width:0}
 .sz-dim input{width:100%;min-width:0;box-sizing:border-box;padding-right:16px}
 .sz-dim span{position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:var(--ink-3);pointer-events:none}
+.sz-dim.on input{padding-right:34px}
+.sz-dim.on span{font-size:11px;font-weight:600;color:var(--ink-2)}
