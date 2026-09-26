@@ -2,6 +2,7 @@
 import { ADULT_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { smallerSpot } from "@/lib/mockup";
+import DesignSearch from "@/components/DesignSearch";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
@@ -25,6 +26,7 @@ type Props = {
   mockupBlock?: string;
   /** signed links for the group's saved mockup thumbnails */
   thumbUrls?: Record<string, string>;
+  onStarDesign?: (d: Design, starred: boolean) => void;
   designUrls?: Record<string, string>;
   onUploadDesign?: (file: File, name: string) => Promise<Design | null>;
   lookingUp?: string;
@@ -43,7 +45,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls }: Props) {
+export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign }: Props) {
   const [askSkip, setAskSkip] = useState(false);
   const [blockMsg, setBlockMsg] = useState("");
   const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
@@ -230,7 +232,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                   </tr>
                   <tr className="imp-design">
                     <td colSpan={9}>
-                      <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign}
+                      <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
                         onPick={(des) => update((x) => {
                           const im = x.imprints[di];
                           im.design_id = des?.id || undefined;
@@ -488,8 +490,9 @@ function ColorPicker({ value, colors, onChange }: { value: string; colors: strin
 }
 
 /** Under each imprint: which customer design prints here, with its size worked out from the print size. */
-function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload }: {
+function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onStar }: {
   imprint: { design_id?: string; size: string }; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
+  onStar?: (d: Design, starred: boolean) => void;
   onPick: (d: Design | null) => void; onUpload: (f: File, name: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
@@ -501,12 +504,7 @@ function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload }: {
   return (
     <div className="dp">
       <span className="dp-l">Design</span>
-      {cur && urls[cur.id] ? <img className="dp-th" src={urls[cur.id]} alt="" /> : <span className="dp-th empty" />}
-      <select aria-label="Design for this imprint" value={imprint.design_id || ""} onChange={(e) => onPick(designs.find((x) => x.id === e.target.value) || null)}>
-        <option value="">{designs.length ? "Choose the customer's design…" : "No designs on this customer yet"}</option>
-        {designs.map((d) => <option key={d.id} value={d.id}>{designLabel(d)}</option>)}
-        {imprint.design_id && !cur && <option value={imprint.design_id}>Design from another customer</option>}
-      </select>
+      <DesignSearch designs={designs} urls={urls} value={imprint.design_id} onPick={onPick} onStar={onStar} placeholder="Choose the customer's design…" />
       {canUpload && (
         <label className="btn sm ghost" style={{ cursor: "pointer" }}>{busy ? "Uploading…" : "Upload new art"}
           <input type="file" hidden accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setBusy(true); try { await onUpload(f, f.name.replace(/\.[^.]+$/, "")); } finally { setBusy(false); } }} />

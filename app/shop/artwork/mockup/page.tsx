@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { LOCATIONS, METHODS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
 import { previewUrls, uploadDesign } from "@/lib/designs";
+import DesignSearch from "@/components/DesignSearch";
 import { PMS_HEX, WILFLEX_HEX, closestInk, closestPms, colorHex, detectColors, recolor } from "@/lib/inkColors";
 import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, biggerSpot, guessHex, measureGarment, printWidth, smallerSpot, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 
@@ -634,11 +635,13 @@ function Builder() {
                       <span className="faint" style={{ fontSize: 12 }}>{p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot;</span>
                     </div>
                     <div className="row" style={{ gap: 6 }}>
-                      {p.d && urls[p.d.id] ? <img className="dp-th" src={urls[p.d.id]} alt="" /> : <span className="dp-th" />}
-                      <select aria-label={`Design for ${im.location}`} value={im.design_id || ""} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: e.target.value || undefined } : x)))} style={{ flex: 1 }}>
-                        <option value="">{designs.length ? "Pick a design…" : "No designs yet"}</option>
-                        {designs.map((d) => <option key={d.id} value={d.id}>{designLabel(d)}</option>)}
-                      </select>
+                      <DesignSearch designs={designs} urls={urls} value={im.design_id} placeholder="Pick a design…"
+                        onPick={(d) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d?.id || undefined } : x)))}
+                        onStar={async (d, starred) => {
+                          setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred } : x)));
+                          const { error } = await sb.rpc("set_design_star", { p_design: d.id, p_starred: starred });
+                          if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
+                        }} />
                     </div>
                     {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <div className="mk-colors">

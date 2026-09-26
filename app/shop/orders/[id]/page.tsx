@@ -133,6 +133,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setDesignUrls(await previewUrls(sb, list));
   }, [sb, custId]);
   useEffect(() => { loadDesigns(); }, [loadDesigns]);
+  async function starDesign(d: Design, starred: boolean) {
+    setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred } : x)));
+    const { error } = await sb.rpc("set_design_star", { p_design: d.id, p_starred: starred });
+    if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
+  }
   // signed links for the saved mockup thumbnails on each group
   const thumbKey = (o?.groups || []).flatMap((g) => g.mockupThumbs || []).join("|");
   useEffect(() => {
@@ -473,7 +478,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
             <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
