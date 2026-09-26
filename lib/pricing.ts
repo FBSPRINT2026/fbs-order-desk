@@ -70,7 +70,7 @@ export type Delivery = "pickup" | "ship" | "deliver";
 
 export type Order = {
   id: string; number: number; customer_id: string | null; nickname: string; status: StatusKey; type: "quote" | "invoice";
-  due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; tax_exempt: boolean; tax_rate: number | null;
+  due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; discount_amt?: number; discount_type?: "pct" | "amt"; tax_exempt: boolean; tax_rate: number | null;
   waive_setup: boolean; notes: string; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;
   price_type: PriceType; po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
@@ -274,7 +274,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
 export function calcOrder(
-  o: Pick<Order, "lines" | "groups" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup"> & { price_type?: PriceType },
+  o: Pick<Order, "lines" | "groups" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup"> & { price_type?: PriceType; discount_amt?: number; discount_type?: "pct" | "amt" },
   s: Settings,
   payments: Pick<Payment, "amount">[] = []
 ) {
@@ -285,7 +285,7 @@ export function calcOrder(
   const materials = r2(groups.reduce((a, g) => a + g.materials, 0)); // 2XL+ Materials Charge
   const fees = r2((o.fees || []).reduce((a, f) => a + num(f.amount), 0));
   const pre = items + setup + materials + fees;
-  const discount = r2((pre * num(o.discount_pct)) / 100);
+  const discount = o.discount_type === "amt" ? r2(Math.min(pre, Math.max(0, num(o.discount_amt)))) : r2((pre * num(o.discount_pct)) / 100);
   const rate = o.tax_rate === null || o.tax_rate === undefined || (o.tax_rate as unknown) === "" ? num(s.taxRate) : num(o.tax_rate);
   const tax = o.tax_exempt ? 0 : r2(((pre - discount) * rate) / 100);
   const total = r2(pre - discount + tax);

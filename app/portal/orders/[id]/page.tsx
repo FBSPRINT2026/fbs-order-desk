@@ -144,7 +144,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-b">
                 <div className="totals">
                   <div className="tr"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
-                  {c.discount ? <div className="tr"><span>Discount</span><span>−{money(c.discount)}</span></div> : null}
+                  {c.discount ? <div className="tr"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><span>−{money(c.discount)}</span></div> : null}
                   <div className="tr"><span>Tax{o.tax_exempt ? " (exempt)" : ""}</span><span>{money(c.tax)}</span></div>
                   <div className="tr big"><span>Total</span><span>{money(c.total)}</span></div>
                   <div className="tr"><span>Paid</span><span>{money(c.paid)}</span></div>

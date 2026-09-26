@@ -101,6 +101,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       d.price_type = d.price_type || "retail";
       d.fees = d.fees || [];
       d.discount_pct = +d.discount_pct || 0;
+      d.discount_amt = +(d.discount_amt || 0);
+      d.discount_type = d.discount_type === "amt" ? "amt" : "pct";
       d.tax_rate = d.tax_rate === null ? null : +d.tax_rate;
       setO(d);
       latest.current = d;
@@ -127,7 +129,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
       price_type: d.price_type || "retail", po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, delivery_method: d.delivery_method || "pickup",
       ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "",
-      discount_pct: +d.discount_pct || 0, tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
+      discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, total: c.total, qty: c.qty,
     }).eq("id", d.id);
     setSaveState(error ? "Save failed: " + error.message : "Saved");
@@ -220,7 +222,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const { data, error } = await sb.from("orders").insert({
       customer_id: o.customer_id, nickname: (o.nickname || "Job") + " (copy)", groups: o.groups.map(cloneGroup), fees: o.fees, po_number: "",
       delivery_method: o.delivery_method, ship_to: o.ship_to, ship_method: o.ship_method, price_type: o.price_type,
-      discount_pct: o.discount_pct, tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: true, notes: o.notes, total: o.total, qty: o.qty,
+      discount_pct: o.discount_pct, discount_amt: o.discount_amt || 0, discount_type: o.discount_type || "pct", tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: false, notes: o.notes, total: o.total, qty: o.qty,
     }).select("id").single();
     if (error || !data) return say("Couldn't duplicate: " + error?.message);
     router.push(`/shop/orders/${data.id}`);
@@ -459,10 +461,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 );
               })}
               <button className="btn sm add-wide" type="button" onClick={() => patch((d) => { if (!d.fees.length) d.fees.push({ label: "", amount: "" }); d.fees.push({ label: "", amount: "" }); })}>+ Add fee</button>
-              <div className="row" style={{ gap: 18 }}>
-                <label className="check"><input type="checkbox" checked={o.waive_setup} onChange={(e) => patch((d) => { d.waive_setup = e.target.checked; })} /> Waive setup fees (reorder, screens on file)</label>
-                <div className="row"><label className="lbl" htmlFor="o-disc">Discount %</label><input id="o-disc" type="number" step="0.5" min="0" max="100" style={{ width: 80 }} value={o.discount_pct} onChange={(e) => patch((d) => { d.discount_pct = +e.target.value || 0; })} /></div>
-              </div>
             </div>
           </section>
 
@@ -574,7 +572,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div className="tr"><span>Setup (screens, digitizing)</span><span>{money(calc.setup)}</span></div>
                 {calc.materials ? <div className="tr"><span>2XL+ Materials Charge</span><span>{money(calc.materials)}</span></div> : null}
                 {calc.fees ? <div className="tr"><span>Fees</span><span>{money(calc.fees)}</span></div> : null}
-                {calc.discount ? <div className="tr"><span>Discount ({o.discount_pct}%)</span><span>−{money(calc.discount)}</span></div> : null}
+                <div className="tr"><span className="row" style={{ gap: 6 }}>Discount
+                  <input type="number" step="0.01" min="0" aria-label="Discount" style={{ width: 66, padding: "3px 6px" }} placeholder="0"
+                    value={(o.discount_type === "amt" ? o.discount_amt : o.discount_pct) || ""}
+                    onChange={(e) => patch((d) => { const v = Math.max(0, +e.target.value || 0); if (d.discount_type === "amt") d.discount_amt = v; else d.discount_pct = Math.min(100, v); })} />
+                  <select aria-label="Discount type" style={{ width: 52, padding: "3px 4px" }} value={o.discount_type === "amt" ? "amt" : "pct"}
+                    onChange={(e) => patch((d) => { const v = d.discount_type === "amt" ? d.discount_amt || 0 : d.discount_pct || 0; d.discount_type = e.target.value === "amt" ? "amt" : "pct"; if (d.discount_type === "amt") { d.discount_amt = v; d.discount_pct = 0; } else { d.discount_pct = Math.min(100, v); d.discount_amt = 0; } })}>
+                    <option value="pct">%</option><option value="amt">$</option>
+                  </select></span><span>{calc.discount ? `−${money(calc.discount)}` : money(0)}</span></div>
                 <div className="tr"><span className="row" style={{ gap: 6 }}>Tax <input type="number" step="0.01" aria-label="Tax rate percent" style={{ width: 66, padding: "3px 6px" }} placeholder={String(settings.taxRate)} value={o.tax_rate ?? ""} onChange={(e) => patch((d) => { d.tax_rate = e.target.value === "" ? null : +e.target.value; })} />%</span><span>{o.tax_exempt ? "Exempt" : money(calc.tax)}</span></div>
                 <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={o.tax_exempt} onChange={(e) => patch((d) => { d.tax_exempt = e.target.checked; })} /> Tax exempt</label>
                 <div className="tr big"><span>Total</span><span>{money(calc.total)}</span></div>
