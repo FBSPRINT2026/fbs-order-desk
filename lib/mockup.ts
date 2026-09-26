@@ -45,6 +45,22 @@ export const viewsFor = (location: string): View[] => { const s = spotFor(locati
 export function maxWidthFor(location: string, ratio: number) { const s = spotFor(location); return ratio ? Math.min(s.maxW, s.maxH / ratio) : s.maxW; }
 export const spotFor = (location: string): Loc => LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 12, maxH: 14 };
 
+/**
+ * A small design on a big location usually belongs on a smaller one (a 3.5" logo marked Full Front is really a left chest).
+ * Returns the better locations, best first (by where it sits: dxIn = inches right of center as you look at the shirt), or [] if it fits.
+ */
+export function smallerSpot(location: string, wIn: number, hIn: number, dxIn = 0): string[] {
+  if (!wIn) return [];
+  const front = location === "Full Front" ? 5 : location === "Medium Front" ? 4 : 0;
+  if (front && wIn <= front && (!hIn || hIn <= 5)) {
+    const first = dxIn < -2 ? "Right Chest" : "Left Chest";
+    return [first, ...["Left Chest", "Center Chest"].filter((x) => x !== first)];
+  }
+  const back = location === "Full Back" ? 4 : location === "Medium Back" ? 3.5 : 0;
+  if (back && wIn <= back && (!hIn || hIn <= 4)) return ["Upper Back (Yoke)"];
+  return [];
+}
+
 /** Width in inches from the imprint's print size ("11\" wide", "4\" tall", "MAX wide") and the design's proportions. */
 export function printWidth(size: string, location: string, ratio: number): number {
   const spot = spotFor(location);

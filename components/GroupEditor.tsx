@@ -1,6 +1,7 @@
 "use client";
 import { ADULT_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
+import { smallerSpot } from "@/lib/mockup";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
@@ -235,6 +236,23 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                           if (des && (im.method === "screen" || im.method === "embroidery") && des.colors && !im.inks.trim()) im.colors = des.colors;
                         })}
                         onUpload={async (f, name) => { if (!onUploadDesign) return; const des = await onUploadDesign(f, name); if (des) update((x) => { x.imprints[di].design_id = des.id; }); }} />
+                      {(() => {
+                        // a small print on a big location (3.5" on the Full Front) is usually a left chest
+                        const m = (d.size || "").match(/^([\d.]+)/); if (!m) return null;
+                        const des = (designs || []).find((z) => z.id === d.design_id);
+                        const r = des?.width_px && des?.height_px ? des.height_px / des.width_px : 0;
+                        const tall = /tall/i.test(d.size), v = +m[1];
+                        const w = tall ? (r ? v / r : 0) : v, h = tall ? v : r ? v * r : 0;
+                        const sug = d.keepLocation ? [] : smallerSpot(d.location, w || h, h);
+                        if (!sug.length) return null;
+                        return (
+                          <div className="ink-warn row" style={{ gap: 6, marginTop: 4 }}>
+                            <span>{v}&quot; is small for the {d.location}. Should this be {sug.join(" or ")}?</span>
+                            {sug.map((z) => <button key={z} type="button" className="btn sm" onClick={() => update((x) => { x.imprints[di].location = z; })}>{z}</button>)}
+                            <button type="button" className="btn sm ghost" onClick={() => update((x) => { x.imprints[di].keepLocation = true; })}>Keep {d.location}</button>
+                          </div>
+                        );
+                      })()}
                     </td>
                   </tr>
                   </Fragment>

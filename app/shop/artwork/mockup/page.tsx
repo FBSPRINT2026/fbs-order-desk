@@ -7,7 +7,7 @@ import { LOCATIONS, METHODS, designLabel, newImprint, orderGroups, uid, type Cus
 import { custLabel } from "@/lib/format";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { PMS_HEX, WILFLEX_HEX, colorHex, detectColors, recolor } from "@/lib/inkColors";
-import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, guessHex, printWidth, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, guessHex, printWidth, smallerSpot, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -48,6 +48,7 @@ function Builder() {
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
   const [paints, setPaints] = useState<Record<string, Paint>>({});
   const [grid, setGrid] = useState(false);
+  const [keepLoc, setKeepLoc] = useState<string[]>([]); // imprints where staff said "keep this location"
   const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
   const imgCache = useRef(new Map<string, HTMLImageElement>());
@@ -318,6 +319,18 @@ function Builder() {
           )}
           <div className="faint" style={{ fontSize: 12, marginBottom: 6 }}>Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}.</div>
           {!ready && <div className="confirm-bar" style={{ marginBottom: 8 }}><span>{notReady}</span></div>}
+          {ready && imprints.map((im) => {
+            const p = place(im);
+            const sug = keepLoc.includes(im.id) || im.keepLocation || !p.d ? [] : smallerSpot(im.location, p.wIn, p.hIn, (offsets[im.id]?.dx || 0) / (PX_PER_IN * scale));
+            if (!sug.length) return null;
+            return (
+              <div key={"sug" + im.id} className="confirm-bar" style={{ marginBottom: 8 }}>
+                <span>This design is {p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot; — that&apos;s {sug[0].startsWith("Upper") ? "an upper back" : "a chest"}-size print on the {im.location}. Switch it to {sug[0]} so the close-up and print area fit it?</span>
+                {sug.map((z, i) => <button key={z} type="button" className={"btn sm" + (i === 0 ? " primary" : "")} onClick={() => { setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: z } : x))); setOffsets((o) => { const n = { ...o }; delete n[im.id]; return n; }); }}>{z}</button>)}
+                <button type="button" className="btn sm ghost" onClick={() => { setKeepLoc((k) => [...k, im.id]); setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, keepLocation: true } : x))); }}>Keep {im.location}</button>
+              </div>
+            );
+          })}
           <div className={"mk-canvas" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
           <div className="mk-views">
             {(views.length ? views : (["front"] as View[])).map((v) => (
