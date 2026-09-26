@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { LOCATIONS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Order } from "@/lib/pricing";
+import { LOCATIONS, METHODS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { PMS_HEX, WILFLEX_HEX, colorHex, detectColors, recolor } from "@/lib/inkColors";
@@ -229,13 +229,14 @@ function Builder() {
   }
 
   /** Write the imprints (locations, designs, sizes, inks) back to the order group, so both screens match. */
-  async function syncOrder(): Promise<boolean> {
+  async function syncOrder(mockupSaved = false): Promise<boolean> {
     if (!order) return false;
     const { data } = await sb.from("orders").select("groups").eq("id", order.id).maybeSingle();
     const groups = (data?.groups || []) as Order["groups"];
     const g = groups.find((x) => x.id === groupId) || groups[0];
     if (!g) return false;
     g.imprints = imprints.map((im) => ({ ...(g.imprints.find((x) => x.id === im.id) || {}), ...im }));
+    if (mockupSaved) g.mockupAt = new Date().toISOString();
     const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
     if (error) { setMsg("Couldn't update the order: " + error.message); return false; }
     return true;
@@ -265,7 +266,7 @@ function Builder() {
         await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, proof_id: proofId, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "" });
         out.push({ title, url: URL.createObjectURL(blob) });
       }
-      await syncOrder();
+      await syncOrder(true);
       setSaved(out);
       setMsg(orderId ? `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the order as proofs and to the customer's account.` : `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the customer's account.`);
     } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }
@@ -400,6 +401,7 @@ function Builder() {
                   <div key={im.id} className="mk-imp">
                     <div className="row" style={{ justifyContent: "space-between" }}>
                       <select aria-label="Location" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{LOCATIONS.map((z) => <option key={z}>{z}</option>)}</select>
+                      <select aria-label={`Method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x))); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                       <button className="btn icon ghost" type="button" aria-label={`Remove ${im.location}`} onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>✕</button>
                       <span className="faint" style={{ fontSize: 12 }}>{p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot;</span>
                     </div>

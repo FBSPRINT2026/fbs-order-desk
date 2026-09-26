@@ -39,6 +39,7 @@ const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
 export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup }: Props) {
+  const [askSkip, setAskSkip] = useState(false);
   // exact style match; if the same number exists under several brands, only the brand given (or none) counts
   const findStyle = (style: string, brand?: string) => {
     const hits = catalog.filter((x) => x.style.toLowerCase() === style.trim().toLowerCase());
@@ -84,12 +85,13 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
     const youth = !!g.youth || YOUTH_SIZES.some((z) => l.sizes?.[z]);
     return [...(youth ? YOUTH_SIZES : []), ...ADULT_SIZES];
   };
+  // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
+  const locked = !!onMockup && !g.mockupAt && !g.mockupSkipped;
   return (
     <section className="line">
       <div className="line-h">
         <input type="text" className="grp-name" aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
         <span className="spacer" />
-        {onMockup && <button className="btn sm" type="button" onClick={onMockup}>Create mockup</button>}
         <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
       </div>
@@ -165,7 +167,23 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         </div>
 
         <div className="imprints">
-          <div className="lbl" style={{ marginBottom: 6 }}>IMPRINTS</div>
+          <div className="imp-top">
+            <div className="lbl">IMPRINTS</div>
+            {onMockup && <button className={"btn sm" + (locked ? " primary" : "")} type="button" onClick={onMockup}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
+            {g.mockupAt && <span className="faint" style={{ fontSize: 12 }}>Mockup saved {new Date(g.mockupAt).toLocaleDateString()}</span>}
+            {!g.mockupAt && g.mockupSkipped && <span className="faint" style={{ fontSize: 12 }}>No mockup</span>}
+          </div>
+          {locked && askSkip && (
+            <div className="confirm-bar">
+              <span>You haven&apos;t created a mockup for this group yet. Are you sure you want to fill in the imprints without one?</span>
+              <button className="btn sm primary" type="button" onClick={onMockup}>Create mockup</button>
+              <button className="btn sm" type="button" onClick={() => { setAskSkip(false); update((x) => { x.mockupSkipped = true; }); }}>Continue without a mockup</button>
+              <button className="btn sm ghost" type="button" onClick={() => setAskSkip(false)}>Cancel</button>
+            </div>
+          )}
+          <div className={"mk-lock" + (locked ? " on" : "")}>
+          {locked && <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup first — or click here to fill this in without one</span></button>}
+          <div inert={locked || undefined} className="mk-body">
           <div>
             <table className="pv-grid imp-table">
               <colgroup><col style={{ width: "13%" }} /><col style={{ width: "14%" }} /><col style={{ width: 56 }} /><col style={{ width: "19%" }} /><col style={{ width: "14%" }} /><col style={{ width: "10%" }} /><col /><col style={{ width: 58 }} /><col style={{ width: 30 }} /></colgroup>
@@ -220,10 +238,14 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
             </table>
           </div>
           <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>
+          </div>
+          </div>
         </div>
 
         <div className="grp-foot">
-          <div className="grp-foot-l">
+          <div className={"grp-foot-l mk-lock" + (locked ? " on" : "")}>
+            {locked && <button type="button" className="mk-cover" tabIndex={-1} aria-label="Finishing is locked until a mockup is created" onClick={() => setAskSkip(true)} />}
+            <div inert={locked || undefined} className="mk-body">
             {settings.finishing.length > 0 && (
         <div className="imprints">
                 <div className="lbl" style={{ marginBottom: 6 }}>FINISHING</div>
@@ -237,6 +259,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                 </div>
               </div>
             )}
+            </div>
           </div>
           <div className="price-box">
             {(() => {

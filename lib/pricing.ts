@@ -68,7 +68,9 @@ export type GLine = {
   sizeUp?: Partial<Record<Size, number>>;
 };
 /** Garments that share the same imprints. Quantity breaks use the group total. */
-export type Group = { id: string; name?: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[]; youth?: boolean };
+export type Group = { id: string; name?: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[]; youth?: boolean;
+  /** when mockups were last saved for this group (unlocks the imprints section) */ mockupAt?: string;
+  /** staff chose to fill in imprints without making a mockup */ mockupSkipped?: boolean };
 export type PriceType = "retail" | "wholesale";
 
 /** Older orders stored one garment per line with its own decorations. */

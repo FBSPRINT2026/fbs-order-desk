@@ -567,3 +567,12 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-sleeve-box{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;touch-action:none;user-select:none}
 .mk-sleeve-max{position:absolute;border:1.5px dashed rgba(255,255,255,.55);outline:1px dashed rgba(0,0,0,.25);pointer-events:none}
 .mk-sleeve-seam{position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed rgba(255,255,255,.4);pointer-events:none}
+
+/* Imprints section waits for a mockup */
+.imp-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:2px}
+.mk-lock{position:relative}
+.mk-lock.on .mk-body{opacity:.4;filter:grayscale(1);user-select:none}
+.mk-cover{position:absolute;inset:0;z-index:2;background:transparent;border:1px dashed transparent;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;font:inherit}
+.mk-cover span{opacity:0;background:var(--panel,#fff);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--ink,#222);transition:opacity .12s}
+.mk-cover:hover,.mk-cover:focus-visible{border-color:var(--accent)}
+.mk-cover:hover span,.mk-cover:focus-visible span{opacity:1}
