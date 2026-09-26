@@ -166,9 +166,12 @@ function Builder() {
     const wIn = printWidth(im.size, im.location, ratioOf(d));
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
     const b = basePlacement(im.location, wIn, r, drop, scale, view);
-    const o0 = offsets[im.id] || { dx: 0, dy: 0 };
-    // sleeves: the back photo is mirrored, so sideways moves flip there
-    const o = view === "back" && viewsFor(im.location).length > 1 ? { dx: -o0.dx, dy: o0.dy } : o0;
+    const o = offsets[im.id] || { dx: 0, dy: 0 };
+    if (b.clip) {
+      // sleeves: moves are along the sleeve (dx = across the fold, dy = toward the hem), turned to the sleeve's angle on each photo
+      const a = (b.rot * Math.PI) / 180;
+      return { ...b, x: b.x + o.dx * Math.cos(a) - o.dy * Math.sin(a), y: b.y + o.dx * Math.sin(a) + o.dy * Math.cos(a), wIn, hIn: wIn * r, d };
+    }
     return { ...b, x: b.x + o.dx, y: b.y + o.dy, wIn, hIn: wIn * r, d };
   };
   const views: View[] = (["front", "back"] as View[]).filter((v) => imprints.some((im) => viewsFor(im.location).includes(v)));
@@ -320,15 +323,24 @@ function Builder() {
             {(views.length ? views : (["front"] as View[])).map((v) => (
               <Stage key={v} grid={grid} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
-                onMove={(id, dx, dy) => setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + dx, dy: (o[id]?.dy || 0) + dy } }))}
+                onMove={(id, dx, dy) => {
+                  const im = imprints.find((x) => x.id === id);
+                  const p = im && place(im, v);
+                  if (p && p.clip) {
+                    // sleeve: turn the drag into along-the-sleeve moves
+                    const a = (-p.rot * Math.PI) / 180;
+                    [dx, dy] = [dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a)];
+                  }
+                  setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + dx, dy: (o[id]?.dy || 0) + dy } }));
+                }}
                 onResize={(id, newW) => {
                   const im = imprints.find((x) => x.id === id); if (!im) return;
                   const old = place(im);
                   const cap = maxWidthFor(im.location, ratioOf(designOf(im)));
                   const inches = Math.min(cap, Math.round((newW / (PX_PER_IN * scale)) * 100) / 100);
                   newW = inches * PX_PER_IN * scale;
-                  // keep the left edge where it is while the size changes
-                  setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + (newW - old.w) / 2, dy: o[id]?.dy || 0 } }));
+                  // keep the left edge where it is while the size changes (sleeves stay centered on the fold)
+                  if (!old.clip) setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + (newW - old.w) / 2, dy: o[id]?.dy || 0 } }));
                   setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, size: `${inches}" wide` } : x)));
                 }}
                 onPick={pickColor} />
@@ -623,6 +635,8 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, o
         onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
         <div className="mk-sleeve-max" style={{ width: maxW * PX, height: maxH * PX, left: (W - maxW * PX) / 2, top: top0 }} />
         {fold && <div className="mk-sleeve-seam" />}
+        {fold && <><span className="mk-side-l">FRONT</span><span className="mk-side-r">BACK</span></>}
+        {fold && <div className="mk-hem" style={{ top: top0 + maxH * PX, left: 0, right: 0 }}><span>HEMLINE</span></div>}
         <div ref={artRef} className={"mk-art" + (sel ? " sel" : "") + (url ? "" : " mk-missing")} style={{ left: cx - (wIn * PX) / 2, top: cy - (hIn * PX) / 2, width: wIn * PX, height: hIn * PX }}
           onPointerDown={(e) => {
             // double-click opens the color menu, same as on the photos

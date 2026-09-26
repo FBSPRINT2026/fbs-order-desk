@@ -578,3 +578,7 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-cover:hover span,.mk-cover:focus-visible span{opacity:1}
 
 .mk-off{opacity:.4;filter:grayscale(1);pointer-events:none;user-select:none}
+.mk-hem{position:absolute;border-top:2px solid rgba(255,255,255,.75);box-shadow:0 -1px 0 rgba(0,0,0,.25);pointer-events:none;text-align:center}
+.mk-hem span,.mk-side-l,.mk-side-r{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;color:#fff;background:rgba(0,0,0,.45);padding:1px 5px;border-radius:3px;margin-top:3px}
+.mk-side-l,.mk-side-r{position:absolute;top:6px;pointer-events:none}
+.mk-side-l{left:6px}.mk-side-r{right:6px}
