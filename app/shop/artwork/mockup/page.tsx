@@ -408,7 +408,7 @@ function Builder() {
                 return (
                   <CloseUp key={im.id} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
-                    maxW={sp.maxW} maxH={sp.maxH} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
+                    maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
                     onResize={(newWIn) => {
                       const cap = maxWidthFor(im.location, ratioOf(d));
@@ -663,8 +663,8 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
 }
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
-function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, colors, onMove, onResize, onPick }: {
-  title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
+function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, offIn, colors, onMove, onResize, onPick }: {
+  topAlign?: boolean; title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
   colors: { hex: string; name: string }[];
   onMove: (dxIn: number, dyIn: number) => void; onResize: (newWIn: number) => void;
   onPick: (relX: number, relY: number, clientX: number, clientY: number) => void;
@@ -684,7 +684,7 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, colors, o
   const W = spanW * PX, H = spanH * PX;
   const drag = useRef<{ x: number; y: number; mode: "move" | "size"; w: number } | null>(null);
   const cx = W / 2 + offIn.x * PX, top0 = (H - maxH * PX) / 2;
-  const cy = H / 2 + offIn.y * PX; // centered in the print area, same as on the photos
+  const cy = (topAlign ? top0 + (hIn * PX) / 2 : H / 2) + offIn.y * PX; // same spot as on the photos: top of the area for full front/back, else centered
   return (
     <div className="mk-sleeve" style={{ width: W }}>
       <div className="mk-cu-h"><span className="lbl">{title.toUpperCase()}</span><span className="mk-cu-max">max {maxW}&quot; × {maxH}&quot;</span></div>
