@@ -341,7 +341,8 @@ function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: {
     return () => { live = false; clearTimeout(t); };
   }, [q, open]);
   const stripped = q.replace(/^[a-z]{1,2}(?=\d)/, "");
-  const local = q ? catalog.filter((c) => [c.style, `${c.brand} ${c.style}`].some((x) => { const v = x.toLowerCase(); return v.startsWith(q) || v.startsWith(stripped) || v.includes(" " + stripped); })).slice(0, 8) : [];
+  const rank = (b: string) => { const i = ["gildan", "next level", "bella", "hanes"].findIndex((x) => (b || "").toLowerCase().startsWith(x)); return i < 0 ? 4 : i; };
+  const local = q ? catalog.filter((c) => [c.style, `${c.brand} ${c.style}`].some((x) => { const v = x.toLowerCase(); return v.startsWith(q) || v.startsWith(stripped) || v.includes(" " + stripped); })).sort((a, b) => rank(a.brand) - rank(b.brand) || a.style.localeCompare(b.style)).slice(0, 8) : [];
   const items: ({ kind: "cat"; g: Garment } | { kind: "ss"; h: SSHit })[] = [
     ...local.map((g) => ({ kind: "cat" as const, g })),
     ...hits.filter((h) => !catalog.some((c) => c.ss_style_id === h.styleID)).map((h) => ({ kind: "ss" as const, h })),

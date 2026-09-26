@@ -34,6 +34,14 @@ function mode(nums: number[]) {
   return best;
 }
 
+/** House brands first: Gildan, Next Level, Bella+Canvas, Hanes, then everything else. */
+export const BRAND_ORDER = ["gildan", "next level", "bella", "hanes"];
+export function brandRank(brand: string) {
+  const b = (brand || "").toLowerCase();
+  const i = BRAND_ORDER.findIndex((x) => b.startsWith(x));
+  return i < 0 ? BRAND_ORDER.length : i;
+}
+
 export type SSHit = { styleID: number; brand: string; style: string; title: string; image: string };
 
 /** Every S&S style matching what someone typed ("5000", "G5000", "Gildan 5000"), best matches first. */
@@ -55,7 +63,7 @@ export async function ssSearch(q: string): Promise<SSHit[]> {
     return sc;
   };
   return [...seen.values()]
-    .sort((a, b) => score(a) - score(b) || a.brandName.localeCompare(b.brandName) || a.styleName.localeCompare(b.styleName))
+    .sort((a, b) => Math.floor(score(a)) - Math.floor(score(b)) || brandRank(a.brandName) - brandRank(b.brandName) || score(a) - score(b) || a.brandName.localeCompare(b.brandName) || a.styleName.localeCompare(b.styleName))
     .slice(0, 30)
     .map((st) => ({ styleID: st.styleID, brand: st.brandName, style: st.styleName, title: st.title, image: st.styleImage ? `https://www.ssactivewear.com/${st.styleImage}` : "" }));
 }
