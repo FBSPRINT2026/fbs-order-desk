@@ -215,6 +215,19 @@ function Builder() {
     return await new Promise((res) => c.toBlob((b) => res(b!), "image/png"));
   }
 
+  /** Write the imprints (locations, designs, sizes, inks) back to the order group, so both screens match. */
+  async function syncOrder(): Promise<boolean> {
+    if (!order) return false;
+    const { data } = await sb.from("orders").select("groups").eq("id", order.id).maybeSingle();
+    const groups = (data?.groups || []) as Order["groups"];
+    const g = groups.find((x) => x.id === groupId) || groups[0];
+    if (!g) return false;
+    g.imprints = imprints.map((im) => ({ ...(g.imprints.find((x) => x.id === im.id) || {}), ...im }));
+    const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
+    if (error) { setMsg("Couldn't update the order: " + error.message); return false; }
+    return true;
+  }
+
   async function saveAll() {
     if (!customerId) return setMsg("Pick a customer so the mockups save to their account.");
     if (!lines.some((l) => l.style || l.color)) return setMsg("Add a garment and color first.");
@@ -239,14 +252,7 @@ function Builder() {
         await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, proof_id: proofId, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "" });
         out.push({ title, url: URL.createObjectURL(blob) });
       }
-      // keep the design picks on the order too
-      if (order) {
-        const { data } = await sb.from("orders").select("groups").eq("id", order.id).maybeSingle();
-        const groups = (data?.groups || []) as Order["groups"];
-        let changed = false;
-        groups.forEach((g) => g.imprints.forEach((im) => { const mine = imprints.find((x) => x.id === im.id); if (mine && mine.design_id && mine.design_id !== im.design_id) { im.design_id = mine.design_id; changed = true; } if (mine && mine.inks !== im.inks) { im.inks = mine.inks; im.colors = mine.colors; changed = true; } }));
-        if (changed) await sb.from("orders").update({ groups }).eq("id", order.id);
-      }
+      await syncOrder();
       setSaved(out);
       setMsg(orderId ? `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the order as proofs and to the customer's account.` : `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the customer's account.`);
     } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }
@@ -259,7 +265,7 @@ function Builder() {
       <Link className="back" href={orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
       <div className="page-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || "Mockup builder"}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup builder"}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span><button className="btn primary" type="button" disabled={saving} onClick={saveAll}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
+        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}<button className="btn primary" type="button" disabled={saving} onClick={saveAll}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
       </div>
 
       <div className="mk">
@@ -310,14 +316,15 @@ function Builder() {
             </section>
           )}
           <section className="panel">
-            <div className="panel-h"><h2>Imprints</h2>{!orderId && <button className="btn sm" type="button" onClick={() => setImprints([...imprints, newImprint(LOCATIONS.find((z) => !imprints.some((i) => i.location === z)) || "Full Back")])}>+ Add</button>}</div>
+            <div className="panel-h"><h2>Imprints</h2><button className="btn sm" type="button" onClick={() => setImprints([...imprints, newImprint(LOCATIONS.find((z) => !imprints.some((i) => i.location === z)) || "Full Back")])}>+ Add location</button></div>
             <div className="panel-b stack">
               {imprints.map((im) => {
                 const p = place(im);
                 return (
                   <div key={im.id} className="mk-imp">
                     <div className="row" style={{ justifyContent: "space-between" }}>
-                      {orderId ? <b>{im.location}</b> : <select aria-label="Location" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{LOCATIONS.map((z) => <option key={z}>{z}</option>)}</select>}
+                      <select aria-label="Location" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{LOCATIONS.map((z) => <option key={z}>{z}</option>)}</select>
+                      <button className="btn icon ghost" type="button" aria-label={`Remove ${im.location}`} onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>✕</button>
                       <span className="faint" style={{ fontSize: 12 }}>{p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot;</span>
                     </div>
                     <div className="row" style={{ gap: 6 }}>
@@ -352,7 +359,7 @@ function Builder() {
                   </div>
                 );
               })}
-              {orderId && <div className="faint" style={{ fontSize: 12 }}>Locations and print sizes come from the order. Change them there.</div>}
+              {orderId && <div className="faint" style={{ fontSize: 12 }}>Changes here (locations, designs, sizes, inks) go back to the order when you save.</div>}
             </div>
           </section>
         </div>
