@@ -212,52 +212,61 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
     const rows = payments.filter((p) => has(q, p.number, p.method, money(p.amount), p.paid_on));
     const open = invoices.filter((o) => o.balance > 0.004 && has(q, o.number, o.nickname));
     const waitingQuotes = quotes.filter((o) => o.status === "quote_sent" && has(q, o.number, o.nickname));
-    const item = (o: AOrder): PayItem => ({ id: o.id, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
-    const sel = open.filter((o) => paySel.includes(o.id));
+    const canPay = mode === "portal" && !!payCfg;
+    const item = (o: AOrder): PayItem => ({ id: o.id, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, quote: o.type === "quote", deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
+    const sel = [...open, ...waitingQuotes].filter((o) => paySel.includes(o.id));
     const selSum = sel.reduce((a, o) => a + o.balance, 0);
-    const side = mode === "portal" && payCfg ? (
-      <aside className="aa-payside">
-        <div className="aa-paybox">
-          <div className="aa-paybox-h">Pay orders</div>
-          {sel.length ? <>
-            <div className="aa-paybox-sum"><span><b>{sel.length}</b> order{sel.length > 1 ? "s" : ""} selected</span><b className="num">{money(selSum)}</b></div>
-            <button type="button" className="btn primary" style={{ width: "100%" }} onClick={() => setPayNow(sel.map(item))}>{sel.length > 1 ? `Pay these ${sel.length} together` : "Pay this one"}</button>
-            <button type="button" className="btn sm ghost" onClick={() => { setPaySel([]); setPayNow(null); }}>Clear selection</button>
-          </> : <div className="faint" style={{ fontSize: 13 }}>{open.length ? "Check the orders you want to pay, or press Pay on one." : "Nothing due right now."}</div>}
-        </div>
-        {payNow && <PayPanel key={payNow.map((x) => x.id).join()} items={payNow} pay={payCfg} staxToken={payCfg.staxToken} canAct={canAct} onClose={() => setPayNow(null)} />}
-      </aside>
-    ) : null;
-    body = <>{tableHead(<><h2>Payments</h2><span className="aa-sum">Balance due <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b></span></>, "Search by order number, method or amount")}
-      <div className={side ? "aa-home" : ""}><div className="aa-home-main stack">
+    const toggle = (id: string, on?: boolean) => setPaySel((x) => ((on ?? !x.includes(id)) ? [...x.filter((y) => y !== id), id] : x.filter((y) => y !== id)));
+    // aging: what's owed on orders, by how far past the in-hands date it is
+    const aging = [
+      { k: "Due now", test: (d: number) => d <= 0 },
+      { k: "1–30 days past due", test: (d: number) => d >= 1 && d <= 30 },
+      { k: "31–60 days", test: (d: number) => d >= 31 && d <= 60 },
+      { k: "61–90 days", test: (d: number) => d >= 61 && d <= 90 },
+      { k: "Over 90 days", test: (d: number) => d > 90 },
+    ].map((b) => {
+      const list = invoices.filter((o) => o.balance > 0.004 && b.test(o.due_date ? Math.floor((Date.parse(today()) - Date.parse(o.due_date)) / 86400000) : 0));
+      return { ...b, n: list.length, amt: list.reduce((a, o) => a + o.balance, 0) };
+    });
+    const payTable = (list: AOrder[], isQuote: boolean) => (
+      <table className="aa-tbl">
+        <thead><tr>{canPay && <th style={{ width: 36 }}><input type="checkbox" aria-label="Select all" checked={list.length > 0 && list.every((o) => paySel.includes(o.id))} onChange={(e) => list.forEach((o) => toggle(o.id, e.target.checked))} /></th>}<th>#</th><th>{isQuote ? "Quote" : "Order"}</th><th>Status</th><th className="r">Total</th>{!isQuote && <th className="r">Paid</th>}<th className="r">{isQuote ? "Due" : "Balance"}</th>{canPay && <th />}</tr></thead>
+        <tbody>
+          {list.map((o) => (
+            <tr key={o.id} className={paySel.includes(o.id) ? "sel" : ""} onClick={() => (canPay ? toggle(o.id) : router.push(orderHref(o.id)))}>
+              {canPay && <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${isQuote ? "quote" : "order"} ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} /></td>}
+              <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
+              <td><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{o.due_date ? `In hands ${when(o.due_date)}` : ""}</div></td>
+              <td><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span></td>
+              <td className="r num">{money(o.total)}</td>
+              {!isQuote && <td className="r num">{money(o.paid)}</td>}
+              <td className="r num aa-due">{money(o.balance)}</td>
+              {canPay && <td className="r" onClick={(e) => e.stopPropagation()}><button type="button" className="btn sm" onClick={() => setPayNow([item(o)])}>Pay</button></td>}
+            </tr>
+          ))}
+          {!list.length && <tr><td colSpan={8}><div className="aa-empty">{isQuote ? "No quotes waiting." : "Nothing due right now. Thank you!"}</div></td></tr>}
+        </tbody>
+      </table>
+    );
+    const searchBox = search("Search by order number, method or amount");
+    body = <>
+      <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2><span className="aa-sum">Balance due <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b></span></div>{!canPay && searchBox}</div>
+      <div className="aa-aging" aria-label="Aging">
+        {aging.map((b, i) => (
+          <div key={b.k} className={"aa-age" + (i > 0 && b.amt > 0.004 ? " late" : "") + (i >= 3 && b.amt > 0.004 ? " bad" : "")}>
+            <span>{b.k}</span><b className="num">{money(b.amt)}</b><small>{b.n} order{b.n === 1 ? "" : "s"}</small>
+          </div>
+        ))}
+      </div>
+      <div className={canPay ? "aa-home" : ""}><div className="aa-home-main stack">
       <div className="aa-card aa-tblcard">
-        <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Open orders</h3>{mode === "portal" && open.length > 1 && <span className="faint">Check the ones you want to pay together.</span>}</div>
-        <table className="aa-tbl">
-          <thead><tr>{mode === "portal" && payCfg && <th style={{ width: 36 }}><input type="checkbox" aria-label="Select all" checked={open.length > 0 && sel.length === open.length} onChange={(e) => setPaySel(e.target.checked ? open.map((o) => o.id) : [])} /></th>}<th>#</th><th>Order</th><th>Status</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th>{mode === "portal" && payCfg && <th />}</tr></thead>
-          <tbody>
-            {open.map((o) => (
-              <tr key={o.id} className={paySel.includes(o.id) ? "sel" : ""} onClick={() => mode === "portal" && payCfg ? setPaySel((x) => (x.includes(o.id) ? x.filter((y) => y !== o.id) : [...x, o.id])) : router.push(orderHref(o.id))}>
-                {mode === "portal" && payCfg && <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select order ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => setPaySel((x) => (e.target.checked ? [...x, o.id] : x.filter((y) => y !== o.id)))} /></td>}
-                <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-                <td><div className="aa-t">{o.nickname || "Order"}</div><div className="aa-s">{o.due_date ? `In hands ${when(o.due_date)}` : ""}</div></td>
-                <td><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span></td>
-                <td className="r num">{money(o.total)}</td><td className="r num">{money(o.paid)}</td><td className="r num aa-due">{money(o.balance)}</td>
-                {mode === "portal" && payCfg && <td className="r" onClick={(e) => e.stopPropagation()}><button type="button" className="btn sm" onClick={() => setPayNow([item(o)])}>Pay</button></td>}
-              </tr>
-            ))}
-            {!open.length && <tr><td colSpan={8}><div className="aa-empty">Nothing due right now. Thank you!</div></td></tr>}
-          </tbody>
-        </table>
+        <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Open orders</h3>{canPay && open.length > 1 && <span className="faint">Check the ones you want to pay together.</span>}</div>
+        {payTable(open, false)}
       </div>
       {waitingQuotes.length > 0 && (
         <div className="aa-card aa-tblcard">
-          <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Quotes</h3><span className="faint">{mode === "portal" ? "Approve a quote first, then it can be paid here." : "Waiting on the customer's approval."}</span></div>
-          <table className="aa-tbl">
-            <thead><tr><th>#</th><th>Quote</th><th>Status</th><th className="r">Total</th><th /></tr></thead>
-            <tbody>{waitingQuotes.map((o) => (
-              <tr key={o.id} onClick={() => router.push(orderHref(o.id))}><td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td><td>{o.nickname || "Quote"}</td><td><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span></td><td className="r num">{money(o.total)}</td><td className="r">{mode === "portal" && <Link className="btn sm" href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>Review &amp; approve</Link>}</td></tr>
-            ))}</tbody>
-          </table>
+          <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Quotes</h3><span className="faint">{canPay ? "You can pay a quote here too. Paying it approves the quote." : "Waiting on the customer's approval."}</span></div>
+          {payTable(waitingQuotes, true)}
         </div>
       )}
       <div className="aa-card aa-tblcard">
@@ -270,7 +279,22 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
           </tbody>
         </table>
       </div>
-      </div>{side}</div></>;
+      </div>
+      {canPay && payCfg && (
+        <aside className="aa-payside">
+          {searchBox}
+          <div className="aa-paybox">
+            <div className="aa-paybox-h">Pay orders</div>
+            {sel.length ? <>
+              <div className="aa-paybox-sum"><span><b>{sel.length}</b> selected</span><b className="num">{money(selSum)}</b></div>
+              <button type="button" className="btn primary" style={{ width: "100%" }} onClick={() => setPayNow(sel.map(item))}>{sel.length > 1 ? `Pay these ${sel.length} together` : "Pay this one"}</button>
+              <button type="button" className="btn sm ghost" onClick={() => { setPaySel([]); setPayNow(null); }}>Clear selection</button>
+            </> : <div className="faint" style={{ fontSize: 13 }}>{open.length || waitingQuotes.length ? "Check the orders or quotes you want to pay, or press Pay on one." : "Nothing due right now."}</div>}
+          </div>
+          {payNow && <PayPanel key={payNow.map((x) => x.id).join()} items={payNow} pay={payCfg} staxToken={payCfg.staxToken} canAct={canAct} onClose={() => setPayNow(null)} />}
+        </aside>
+      )}
+      </div></>;
   } else if (area === "artwork") {
     const live = ds.filter((d) => !gone[d.id] && !(d.id in arch ? arch[d.id] : d.archived_at));
     const archived = ds.filter((d) => !gone[d.id] && (d.id in arch ? arch[d.id] : d.archived_at));

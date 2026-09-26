@@ -33,7 +33,8 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[]) {
   const settings = mergeSettings(s?.data);
   const lines = items.map((it) => {
     const o = orders.find((x) => x.id === it.orderId)!;
-    if (o.type !== "invoice") throw new Error(`#${o.number} is still a quote. Approve it first, then you can pay.`);
+    // quotes waiting on approval can be paid too; a successful card/ACH payment approves them
+    if (o.type !== "invoice" && o.status !== "quote_sent") throw new Error(`#${o.number} isn't ready to pay yet.`);
     const c = calcOrder(o, settings, ((pays || []) as Payment[]).filter((p) => p.order_id === o.id));
     const deposit = Math.min(c.balance, r2((c.total * settings.depositPct) / 100));
     const amount = r2(it.kind === "deposit" && c.paid < 0.005 ? deposit : c.balance);
@@ -92,6 +93,13 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
       return { order_id: l.o.id, amount: l.amount, method: methodName, paid_on: today, fee: f, processor_id: String(txn.id || ""), note: lines.length > 1 ? `Paid together: ${ref}` : null };
     });
     const { error } = await admin.from("payments").insert(rows);
+    // paying a quote approves it (the customer saw "Paying approves the quote and our terms")
+    const quotes = lines.filter((l) => l.o.type === "quote");
+    if (!error && quotes.length) {
+      const who = customer?.name || email;
+      await admin.from("orders").update({ type: "invoice", status: "approved", approved_at: new Date().toISOString(), approved_name: `${who} (paid online)` }).in("id", quotes.map((l) => l.o.id));
+      await admin.from("order_events").insert(quotes.map((l) => ({ order_id: l.o.id, kind: "status", detail: "approved (paid online)", actor: email })));
+    }
     if (error) return { ok: false, error: `Your payment went through, but we couldn't record it (${error.message}). Please contact us so we can mark it paid.` };
     await admin.from("order_events").insert(lines.map((l) => ({ order_id: l.o.id, kind: "payment", detail: `${money(l.amount)} ${methodName}${fee ? ` + ${money(rows.find((r) => r.order_id === l.o.id)?.fee)} card fee` : ""}`, actor: email })));
     if (SHOP_NOTIFY_EMAIL) await sendEmail({

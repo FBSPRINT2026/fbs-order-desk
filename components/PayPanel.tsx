@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
 import { payOrders, sentPaymentNotice } from "@/app/portal/pay-actions";
 
-export type PayItem = { id: string; number: number; nickname: string; balance: number; deposit?: number };
+export type PayItem = { id: string; number: number; nickname: string; balance: number; deposit?: number; quote?: boolean };
 type Method = "card" | "bank" | "Zelle" | "Venmo";
 type StaxJsT = { showCardForm: () => Promise<unknown>; tokenize: (d: Record<string, unknown>) => Promise<{ id: string }> };
 declare global { interface Window { StaxJs?: new (token: string, opts: Record<string, unknown>) => StaxJsT } }
@@ -111,6 +111,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
         <div className="pp-list">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}</span><b className="num">{money(it.balance)}</b></div>)}</div>
       ) : null}
 
+      {items.some((it) => it.quote) && (method === "card" || method === "bank") && <div className="pp-note">Paying {items.filter((it) => it.quote).map((it) => `quote #${it.number}`).join(", ")} approves {items.filter((it) => it.quote).length > 1 ? "them" : "it"} and our terms, so we can get started.</div>}
       <div className="pp-methods" role="tablist" aria-label="How do you want to pay?">
         {([["card", "Credit card"], ["bank", "ACH bank transfer"], ["Zelle", "Zelle"], ["Venmo", "Venmo"]] as [Method, string][]).map(([k, label]) => (
           <button key={k} type="button" role="tab" aria-selected={method === k} className={"pp-m" + (method === k ? " on" : "")} onClick={() => { setMethod(k); setMsg(null); }}>{label}</button>
