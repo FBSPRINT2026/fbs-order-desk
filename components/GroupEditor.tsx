@@ -270,13 +270,17 @@ export function InkField({ value, bad, title, onChange, list = INK_COLORS, place
  *  Stored on the imprint as text, e.g. 11" wide or 4" tall. */
 export function SizeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const v = (value || "").trim();
-  const m = v.match(/^([\d.\/ -]*\d[\d.\/]*)\s*(?:"|in|inch|inches)?\s*(w|wide|width|h|high|tall|height)?$/i);
-  const num = m ? m[1].trim() : v;
-  const dim: "W" | "H" | "" = !v ? "" : m && m[2] && /^(h|tall)/i.test(m[2]) ? "H" : "W";
-  const set = (d: "W" | "H", raw: string) => { const t = raw.replace(/["]/g, "").trim(); onChange(t ? `${t}" ${d === "W" ? "wide" : "tall"}` : ""); };
+  const m = v.match(/^(.*?)\s*\b(w|wide|width|h|high|tall|height)$/i);
+  const num = (m ? m[1] : v).replace(/["]/g, "").replace(/\s*(in\.?|inch(es)?)$/i, "").trim();
+  const dim: "W" | "H" | "" = !v ? "" : m && /^(h|tall)/i.test(m[2]) ? "H" : "W";
+  const set = (d: "W" | "H", raw: string) => {
+    const t = raw.replace(/["]/g, "").trim();
+    const isMax = /^m(a(x)?)?$/i.test(t);
+    onChange(t ? `${isMax ? t.toUpperCase() : `${t}"`} ${d === "W" ? "wide" : "tall"}` : "");
+  };
   const box = (d: "W" | "H") => (
     <label className={"sz-dim" + (dim === d ? " on" : "")} key={d}>
-      <InchInput label={d === "W" ? "Print width in inches" : "Print height in inches"} placeholder={d === "W" ? "Width" : "Height"} num={dim === d ? num : ""} onNum={(v) => set(d, v)} />
+      <InchInput label={d === "W" ? "Print width in inches" : "Print height in inches"} placeholder={d === "W" ? "Width or MAX" : "Height or MAX"} num={dim === d ? num : ""} onNum={(v) => set(d, v)} />
       <span>{dim === d ? (d === "W" ? "wide" : "tall") : d}</span>
     </label>
   );
@@ -285,13 +289,14 @@ export function SizeField({ value, onChange }: { value: string; onChange: (v: st
 
 /** Number box that shows inches as 11" (the quote follows the number). */
 function InchInput({ num, onNum, label, placeholder }: { num: string; onNum: (v: string) => void; label: string; placeholder: string }) {
-  const shown = num ? `${num}"` : "";
+  const numeric = /^[\d.\/ -]+$/.test(num);
+  const shown = num ? (numeric ? `${num}"` : num.toUpperCase()) : "";
   return (
     <input type="text" inputMode="decimal" aria-label={label} placeholder={placeholder} value={shown}
       onChange={(e) => {
         let raw = e.target.value;
         // backspacing over the " removes the last digit instead
-        if (shown && !raw.includes('"') && raw === num) raw = raw.slice(0, -1);
+        if (numeric && shown && !raw.includes('"') && raw === num) raw = raw.slice(0, -1);
         onNum(raw.replace(/["]/g, "").replace(/\s*(in\.?|inch(es)?)$/i, "").trim());
       }} />
   );
