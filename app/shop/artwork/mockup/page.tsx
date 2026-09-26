@@ -14,7 +14,15 @@ type Offset = { dx: number; dy: number };
 /** Per imprint: colors found in the logo and the ink each one prints as. */
 type Side = "front" | "back" | "sleeve";
 const SIDES: { id: Side; label: string }[] = [{ id: "front", label: "Front" }, { id: "back", label: "Back" }, { id: "sleeve", label: "Sleeves" }];
-type Paint = { design: string; sources: { hex: string; share: number }[]; map: Record<string, { name: string; hex: string }> };
+type Paint = { design: string; sources: { hex: string; share: number }[]; map: Record<string, { name: string; hex: string }>;
+  /** several logo colors set to the same ink: true = print them as one color (one screen), false = keep separate */ unite?: boolean };
+/** Ink names for the imprint from the logo's color choices (same ink twice counts once when the colors are united). */
+const inkNames = (pt: Paint, map = pt.map) => {
+  const names = pt.sources.map((x) => map[x.hex]).filter((x) => x && x.name !== "none").map((x) => x!.name);
+  return pt.unite === false ? names : [...new Set(names)];
+};
+/** Inks that more than one logo color is set to. */
+const sharedInks = (pt?: Paint) => { if (!pt) return []; const n = pt.sources.map((x) => pt.map[x.hex]?.name).filter((x) => x && x !== "none") as string[]; return [...new Set(n.filter((x, i) => n.indexOf(x) !== i))]; };
 
 export default function MockupPage() {
   return <Suspense fallback={<div className="empty">Loading…</div>}><Builder /></Suspense>;
@@ -66,7 +74,7 @@ function Builder() {
   const [want, setWant] = useState<Record<string, number>>({}); // width (in) someone tried to drag past the location's max
   const [askUploaded, setAskUploaded] = useState(false);
   const [keepLoc, setKeepLoc] = useState<string[]>([]); // imprints where staff said "keep this location"
-  const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number } | null>(null);
+  const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number; open?: string } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
   const imgCache = useRef(new Map<string, HTMLImageElement>());
   const [msg, setMsg] = useState("");
@@ -144,11 +152,19 @@ function Builder() {
       const pt = p[id];
       if (!pt) return p;
       const map = { ...pt.map, ...picks };
-      const inks = pt.sources.map((x) => map[x.hex]).filter((x) => x && x.name !== "none").map((x) => x!.name);
+      const inks = inkNames(pt, map);
       setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors } : x)));
       return { ...p, [id]: { ...pt, map } };
     });
   }
+  /** Answer "print these as one color?" for an imprint's logo. */
+  const setUnite = (id: string, unite: boolean) => setPaints((p) => {
+    const pt = p[id]; if (!pt) return p;
+    const np = { ...pt, unite };
+    const inks = inkNames(np);
+    setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors } : x)));
+    return { ...p, [id]: np };
+  });
   /** Logo colors still printing "as uploaded" (no standard ink picked), per imprint. */
   const unsetColors = (im: Imprint) => { const pt = paints[im.id]; return pt && pt.design === im.design_id ? pt.sources.filter((x) => !pt.map[x.hex]).map((x) => x.hex) : []; };
   const matchStandard = (im: Imprint) => setInks(im.id, Object.fromEntries(unsetColors(im).map((h) => [h, closestInk(h)])));
@@ -169,7 +185,7 @@ function Builder() {
       if (v) map[src] = v; else delete map[src];
       const np = { ...p, [im.id]: { ...pt, map } };
       // keep the imprint's ink list and color count in step with the choices
-      const inks = pt.sources.map((x) => map[x.hex]).filter((x) => x && x.name !== "none").map((x) => x!.name);
+      const inks = inkNames(pt, map);
       setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors } : x)));
       return np;
     });
@@ -336,11 +352,19 @@ function Builder() {
                   try { if (!img) { img = await loadImg(urls[d.id]); imgCache.current.set(d.id, img); } } catch { return setMsg("Couldn't read this design's colors. Try re-uploading it as a PNG."); }
                   if (!pt || pt.design !== d.id) { pt = { design: d.id, sources: detectColors(img), map: {} }; const np = pt; setPaints((p) => ({ ...p, [id]: np })); }
                   if (!pt.sources.length) return;
-                  const c = document.createElement("canvas"); c.width = 1; c.height = 1;
+                  // look around the click for the nearest solid pixel (thin lettering is easy to miss)
+                  const W0 = img.naturalWidth || 400, H0 = img.naturalHeight || 400, R = Math.max(3, Math.round(W0 * 0.03));
+                  const px = Math.floor(rx * W0), py = Math.floor(ry * H0);
+                  const c = document.createElement("canvas"); c.width = 2 * R + 1; c.height = 2 * R + 1;
                   const cx2 = c.getContext("2d", { willReadFrequently: true })!;
-                  cx2.drawImage(img, Math.floor(rx * img.naturalWidth), Math.floor(ry * img.naturalHeight), 1, 1, 0, 0, 1, 1);
-                  const [r, g, b2, a] = cx2.getImageData(0, 0, 1, 1).data;
-                  if (a < 100) { setPop({ id, src: pt.sources[0].hex, x: cx, y: cy }); return; }
+                  cx2.drawImage(img, px - R, py - R, 2 * R + 1, 2 * R + 1, 0, 0, 2 * R + 1, 2 * R + 1);
+                  const dd0 = cx2.getImageData(0, 0, 2 * R + 1, 2 * R + 1).data;
+                  let r = 0, g = 0, b2 = 0, near = Infinity;
+                  for (let yy = 0; yy <= 2 * R; yy++) for (let xx = 0; xx <= 2 * R; xx++) {
+                    const i = (yy * (2 * R + 1) + xx) * 4, dist = (xx - R) ** 2 + (yy - R) ** 2;
+                    if (dd0[i + 3] >= 150 && dist < near) { near = dist; r = dd0[i]; g = dd0[i + 1]; b2 = dd0[i + 2]; }
+                  }
+                  if (near === Infinity) { setPop({ id, src: pt.sources[0].hex, x: cx, y: cy }); return; }
                   let best = pt.sources[0]?.hex, bd = Infinity;
                   for (const src of pt.sources) { const v = [1, 3, 5].map((o) => parseInt(src.hex.slice(o, o + 2), 16)); const dd = (v[0] - r) ** 2 + (v[1] - g) ** 2 + (v[2] - b2) ** 2; if (dd < bd) { bd = dd; best = src.hex; } }
                   if (best) setPop({ id, src: best, x: cx, y: cy });
@@ -353,7 +377,9 @@ function Builder() {
     const groups = (data?.groups || []) as Order["groups"];
     const g = groups.find((x) => x.id === groupId) || groups[0];
     if (!g) return false;
-    g.imprints = imprints.map((im) => ({ ...(g.imprints.find((x) => x.id === im.id) || {}), ...im }));
+    // write the size the mockup actually shows, even if it was never typed (e.g. the 3.5" left chest default)
+    const sized = imprints.map((im) => { if (im.size.trim()) return im; const p = place(im); return p.d ? { ...im, size: `${Math.round(p.wIn * 100) / 100}" wide` } : im; });
+    g.imprints = sized.map((im) => ({ ...(g.imprints.find((x) => x.id === im.id) || {}), ...im }));
     if (mockupSaved) g.mockupAt = new Date().toISOString();
     const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
     if (error) { setMsg("Couldn't update the order: " + error.message); return false; }
@@ -442,6 +468,18 @@ function Builder() {
           )}
           {!ready && <div className="confirm-bar" style={{ marginBottom: 8 }}><span>{notReady}</span></div>}
           {ready && imprints.map((im) => {
+            const pt = paints[im.id], same = sharedInks(pt);
+            if (!pt || !same.length || pt.unite !== undefined) return null;
+            const which = pt.sources.map((x, i) => (same.includes(pt.map[x.hex]?.name) ? `color ${i + 1}` : "")).filter(Boolean);
+            return (
+              <div key={"unite" + im.id} className="confirm-bar" style={{ marginBottom: 8 }}>
+                <span>On the {im.location}, {which.join(" and ")} are all set to {same.join(" / ")}. Print {which.length > 2 ? "them" : "both"} as one color (one screen)?</span>
+                <button type="button" className="btn sm primary" onClick={() => setUnite(im.id, true)}>Unite colors</button>
+                <button type="button" className="btn sm ghost" onClick={() => setUnite(im.id, false)}>Keep separate</button>
+              </div>
+            );
+          })}
+          {ready && imprints.map((im) => {
             const w = want[im.id]; if (!w) return null;
             const r = ratioOf(designOf(im));
             const big = biggerSpot(im.location, w, r ? w * r : 0);
@@ -516,16 +554,33 @@ function Builder() {
           </div>
           {pop && (() => {
             const im = imprints.find((x) => x.id === pop.id);
-            const cur = paints[pop.id]?.map[pop.src];
-            if (!im) return null;
+            const pt = paints[pop.id];
+            if (!im || !pt) return null;
+            // the color that was double-clicked first, then the rest of the design's colors
+            const list = [pt.sources.find((x) => x.hex === pop.src), ...pt.sources.filter((x) => x.hex !== pop.src)].filter(Boolean) as Paint["sources"];
             return (
-              <div className="mk-pop" style={{ left: Math.min(pop.x + 8, (typeof window !== "undefined" ? window.innerWidth : 1200) - 300), top: pop.y + 8 }}>
-                <div className="row" style={{ gap: 6 }}>
-                  <span className="sw" style={{ background: pop.src }} /><span>→</span><span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : pop.src }} />
-                  <InkSelect key={pop.src + pop.id} value={cur} onChange={(v) => { setInk(im, pop.src, v); if (!v || v.name) setPop(null); }} />
+              <div className="mk-pop" style={{ left: Math.min(pop.x + 8, (typeof window !== "undefined" ? window.innerWidth : 1200) - 320), top: Math.min(pop.y + 8, (typeof window !== "undefined" ? window.innerHeight : 900) - 80) }}>
+                <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
+                  <span className="lbl">{list.length > 1 ? `${list.length} COLORS IN THIS DESIGN` : "DESIGN COLOR"}</span>
                   <button className="btn icon ghost" type="button" aria-label="Close" onClick={() => setPop(null)}>✕</button>
                 </div>
-                <Match hex={pop.src} cur={cur} onPick={(v) => { setInk(im, pop.src, v); setPop(null); }} />
+                {list.map((src, i) => {
+                  const cur = pt.map[src.hex];
+                  const open = src.hex === (pop.open || pop.src);
+                  return (
+                    <div key={src.hex} className={"mk-pop-row" + (open ? " open" : "")}>
+                      <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                        <button type="button" className="mk-pop-k" title="Show suggested colors" onClick={() => setPop({ ...pop, open: src.hex })}>
+                          <span className="faint" style={{ fontSize: 11, width: 46 }}>Color {pt.sources.indexOf(src) + 1}</span>
+                          <span className="sw" style={{ background: src.hex }} /><span>→</span><span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : src.hex }} />
+                        </button>
+                        <InkSelect key={src.hex + pop.id} value={cur} onChange={(v) => { setInk(im, src.hex, v); if (list.length === 1 && v && v.name) setPop(null); }} />
+                      </div>
+                      {open && <Match hex={src.hex} cur={cur} onPick={(v) => { setInk(im, src.hex, v); if (list.length === 1) setPop(null); else { const nx = list[i + 1]; setPop({ ...pop, open: nx ? nx.hex : src.hex }); } }} />}
+                    </div>
+                  );
+                })}
+                {list.length > 1 && <div className="row" style={{ justifyContent: "flex-end", marginTop: 6 }}><button type="button" className="btn sm primary" onClick={() => setPop(null)}>Done</button></div>}
               </div>
             );
           })()}

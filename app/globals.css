@@ -613,3 +613,8 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-setup-g select{min-width:0}
 .mk-add{align-self:flex-end;margin-bottom:2px}
 .mk-tools{gap:10px;flex-wrap:wrap}
+.mk-pop{width:320px}
+.mk-pop-row{padding:4px 0;border-top:1px solid var(--line-2,var(--line))}
+.mk-pop-row:first-of-type{border-top:0}
+.mk-pop-k{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;padding:0;cursor:pointer;font:inherit;color:inherit;flex:none}
+.mk-pop-row .mk-match{margin:6px 0 2px}
