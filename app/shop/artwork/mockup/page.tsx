@@ -228,6 +228,26 @@ function Builder() {
     return await new Promise((res) => c.toBlob((b) => res(b!), "image/png"));
   }
 
+  /** Double-click on a design (on the photo or in a close-up): open the ink menu for the logo color under the cursor. */
+  async function pickColor(id: string, rx: number, ry: number, cx: number, cy: number) {
+                  const im = imprints.find((x) => x.id === id);
+                  const d = im && designs.find((x) => x.id === im.design_id);
+                  if (!im || !d || !urls[d.id]) return setMsg("Pick a design for this location first.");
+                  let pt = paints[id];
+                  let img = imgCache.current.get(d.id);
+                  try { if (!img) { img = await loadImg(urls[d.id]); imgCache.current.set(d.id, img); } } catch { return setMsg("Couldn't read this design's colors. Try re-uploading it as a PNG."); }
+                  if (!pt || pt.design !== d.id) { pt = { design: d.id, sources: detectColors(img), map: {} }; const np = pt; setPaints((p) => ({ ...p, [id]: np })); }
+                  if (!pt.sources.length) return;
+                  const c = document.createElement("canvas"); c.width = 1; c.height = 1;
+                  const cx2 = c.getContext("2d", { willReadFrequently: true })!;
+                  cx2.drawImage(img, Math.floor(rx * img.naturalWidth), Math.floor(ry * img.naturalHeight), 1, 1, 0, 0, 1, 1);
+                  const [r, g, b2, a] = cx2.getImageData(0, 0, 1, 1).data;
+                  if (a < 100) { setPop({ id, src: pt.sources[0].hex, x: cx, y: cy }); return; }
+                  let best = pt.sources[0]?.hex, bd = Infinity;
+                  for (const src of pt.sources) { const v = [1, 3, 5].map((o) => parseInt(src.hex.slice(o, o + 2), 16)); const dd = (v[0] - r) ** 2 + (v[1] - g) ** 2 + (v[2] - b2) ** 2; if (dd < bd) { bd = dd; best = src.hex; } }
+                  if (best) setPop({ id, src: best, x: cx, y: cy });
+  }
+
   /** Write the imprints (locations, designs, sizes, inks) back to the order group, so both screens match. */
   async function syncOrder(mockupSaved = false): Promise<boolean> {
     if (!order) return false;
@@ -306,24 +326,7 @@ function Builder() {
                   setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + (newW - old.w) / 2, dy: o[id]?.dy || 0 } }));
                   setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, size: `${inches}" wide` } : x)));
                 }}
-                onPick={async (id, rx, ry, cx, cy) => {
-                  const im = imprints.find((x) => x.id === id);
-                  const d = im && designs.find((x) => x.id === im.design_id);
-                  if (!im || !d || !urls[d.id]) return setMsg("Pick a design for this location first.");
-                  let pt = paints[id];
-                  let img = imgCache.current.get(d.id);
-                  try { if (!img) { img = await loadImg(urls[d.id]); imgCache.current.set(d.id, img); } } catch { return setMsg("Couldn't read this design's colors. Try re-uploading it as a PNG."); }
-                  if (!pt || pt.design !== d.id) { pt = { design: d.id, sources: detectColors(img), map: {} }; const np = pt; setPaints((p) => ({ ...p, [id]: np })); }
-                  if (!pt.sources.length) return;
-                  const c = document.createElement("canvas"); c.width = 1; c.height = 1;
-                  const cx2 = c.getContext("2d", { willReadFrequently: true })!;
-                  cx2.drawImage(img, Math.floor(rx * img.naturalWidth), Math.floor(ry * img.naturalHeight), 1, 1, 0, 0, 1, 1);
-                  const [r, g, b2, a] = cx2.getImageData(0, 0, 1, 1).data;
-                  if (a < 100) { setPop({ id, src: pt.sources[0].hex, x: cx, y: cy }); return; }
-                  let best = pt.sources[0]?.hex, bd = Infinity;
-                  for (const src of pt.sources) { const v = [1, 3, 5].map((o) => parseInt(src.hex.slice(o, o + 2), 16)); const dd = (v[0] - r) ** 2 + (v[1] - g) ** 2 + (v[2] - b2) ** 2; if (dd < bd) { bd = dd; best = src.hex; } }
-                  if (best) setPop({ id, src: best, x: cx, y: cy });
-                }} />
+                onPick={pickColor} />
             ))}
           </div>
             <div className="mk-closeups">
@@ -334,6 +337,7 @@ function Builder() {
                 const sp = spotFor(im.location);
                 return (
                   <CloseUp key={im.id} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r}
+                    onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
                     onResize={(newWIn) => {
@@ -566,10 +570,12 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
 }
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
-function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, onResize }: {
+function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, onResize, onPick }: {
   title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
   onMove: (dxIn: number, dyIn: number) => void; onResize: (newWIn: number) => void;
+  onPick: (relX: number, relY: number, clientX: number, clientY: number) => void;
 }) {
+  const lastDown = useRef<{ t: number; x: number; y: number } | null>(null);
   const BOX = 230;
   const spanW = maxW + 2, spanH = maxH + 2; // inches shown: the max print area plus a margin
   const PX = Math.min(BOX / spanW, BOX / spanH); // css px per inch
@@ -591,7 +597,18 @@ function CloseUp({ title, hex, url, wIn, hIn, maxW, maxH, fold, offIn, onMove, o
         <div className="mk-sleeve-max" style={{ width: maxW * PX, height: maxH * PX, left: (W - maxW * PX) / 2, top: top0 }} />
         {fold && <div className="mk-sleeve-seam" />}
         <div className={"mk-art sel" + (url ? "" : " mk-missing")} style={{ left: cx - (wIn * PX) / 2, top: cy - (hIn * PX) / 2, width: wIn * PX, height: hIn * PX }}
-          onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "move", w: wIn }; }}>
+          onPointerDown={(e) => {
+            // double-click opens the color menu, same as on the photos
+            const now = Date.now(), last = lastDown.current;
+            lastDown.current = { t: now, x: e.clientX, y: e.clientY };
+            if (last && now - last.t < 450 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 8) {
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              lastDown.current = null; drag.current = null;
+              onPick((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, e.clientX, e.clientY);
+              return;
+            }
+            (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "move", w: wIn };
+          }}>
           {url ? <img src={url} alt="" draggable={false} /> : "?"}
           <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />
         </div>

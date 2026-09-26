@@ -26,8 +26,10 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
   "Right Chest": { view: "front", dx: -4.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
   Pocket: { view: "front", dx: 4.5, drop: 5, defW: 3, maxW: 4, maxH: 4 },
   // wearer's left sleeve is on the right of the front photo and the left of the back photo
-  "Left Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 905, y: 355, rot: -40, show: "left" }, back: { x: 95, y: 355, rot: 40, show: "right" } } },
-  "Right Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 95, y: 355, rot: 40, show: "right" }, back: { x: 905, y: 355, rot: -40, show: "left" } } },
+  // Measured on the S&S photos: the sleeve's outer edge (the fold) runs at ~35° and the hem is square to it.
+  // The print is centered right on that edge, 2.5" up from the sleeve tip, so the cut from front to back lands where the shirt meets the white background.
+  "Left Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 904, y: 335, rot: -35, show: "left" }, back: { x: 100, y: 335, rot: 35, show: "right" } } },
+  "Right Sleeve": { view: "front", defW: 3, maxW: 3.5, maxH: 3.5, wrap: { front: { x: 95, y: 335, rot: 35, show: "right" }, back: { x: 900, y: 335, rot: -35, show: "left" } } },
   "Left Vertical": { view: "front", dx: 4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
   "Right Vertical": { view: "front", dx: -4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
   "Front Bottom Left": { view: "front", dx: 4.5, drop: 21.5, defW: 4.5, maxW: 5, maxH: 6 },
