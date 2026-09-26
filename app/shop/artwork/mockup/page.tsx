@@ -7,7 +7,7 @@ import { LOCATIONS, designLabel, newImprint, orderGroups, uid, type Customer, ty
 import { custLabel } from "@/lib/format";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { PMS_HEX, WILFLEX_HEX, colorHex, detectColors, recolor } from "@/lib/inkColors";
-import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, guessHex, printWidth, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, guessHex, printWidth, spotFor, ssImg, teeSvg, type View } from "@/lib/mockup";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -160,16 +160,18 @@ function Builder() {
 
   const designOf = (im: Imprint) => designs.find((d) => d.id === im.design_id);
   const ratioOf = (d?: Design) => (d?.width_px && d?.height_px ? d.height_px / d.width_px : 0);
-  const place = (im: Imprint) => {
+  const place = (im: Imprint, view?: View) => {
     const d = designOf(im);
     const r = ratioOf(d) || 0.6;
     const wIn = printWidth(im.size, im.location, ratioOf(d));
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
-    const b = basePlacement(im.location, wIn, r, drop, scale);
-    const o = offsets[im.id] || { dx: 0, dy: 0 };
+    const b = basePlacement(im.location, wIn, r, drop, scale, view);
+    const o0 = offsets[im.id] || { dx: 0, dy: 0 };
+    // sleeves: the back photo is mirrored, so sideways moves flip there
+    const o = view === "back" && viewsFor(im.location).length > 1 ? { dx: -o0.dx, dy: o0.dy } : o0;
     return { ...b, x: b.x + o.dx, y: b.y + o.dy, wIn, hIn: wIn * r, d };
   };
-  const views: View[] = (["front", "back"] as View[]).filter((v) => imprints.some((im) => spotFor(im.location).view === v));
+  const views: View[] = (["front", "back"] as View[]).filter((v) => imprints.some((im) => viewsFor(im.location).includes(v)));
   const line = lines[active] || lines[0];
 
   async function uploadNew(im: Imprint, f: File) {
@@ -202,14 +204,15 @@ function Builder() {
       const v = views[i], ox = pad + i * (pw + pad), oy = 70;
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
       x.drawImage(bg, ox, oy, pw, ph);
-      for (const im of imprints.filter((m) => spotFor(m.location).view === v)) {
-        const p = place(im);
+      for (const im of imprints.filter((m) => viewsFor(m.location).includes(v))) {
+        const p = place(im, v);
         if (!p.d || !artUrl(im)) continue;
         const art = await loadImg(artUrl(im)).catch(() => null);
         if (art) {
           x.save();
           x.translate(ox + (p.x + p.w / 2) * k, oy + (p.y + p.h / 2) * k);
           if (p.rot) x.rotate((p.rot * Math.PI) / 180);
+          if (p.clip) { x.beginPath(); x.rect(p.clip === "left" ? (-p.w / 2) * k : 0, (-p.h / 2) * k, (p.w / 2) * k, p.h * k); x.clip(); }
           x.drawImage(art, (-p.w / 2) * k, (-p.h / 2) * k, p.w * k, p.h * k);
           x.restore();
         }
@@ -285,12 +288,14 @@ function Builder() {
           <div className="mk-views">
             {(views.length ? views : (["front"] as View[])).map((v) => (
               <Stage key={v} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
-                items={imprints.filter((im) => spotFor(im.location).view === v).map((im) => ({ id: im.id, p: place(im), url: artUrl(im) }))}
+                items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + dx, dy: (o[id]?.dy || 0) + dy } }))}
                 onResize={(id, newW) => {
                   const im = imprints.find((x) => x.id === id); if (!im) return;
                   const old = place(im);
-                  const inches = Math.round((newW / (PX_PER_IN * scale)) * 100) / 100;
+                  const cap = maxWidthFor(im.location, ratioOf(designOf(im)));
+                  const inches = Math.min(cap, Math.round((newW / (PX_PER_IN * scale)) * 100) / 100);
+                  newW = inches * PX_PER_IN * scale;
                   // keep the left edge where it is while the size changes
                   setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + (newW - old.w) / 2, dy: o[id]?.dy || 0 } }));
                   setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, size: `${inches}" wide` } : x)));
@@ -327,7 +332,7 @@ function Builder() {
               <div className="mk-pop" style={{ left: Math.min(pop.x + 8, (typeof window !== "undefined" ? window.innerWidth : 1200) - 300), top: pop.y + 8 }}>
                 <div className="row" style={{ gap: 6 }}>
                   <span className="sw" style={{ background: pop.src }} /><span>→</span><span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : pop.src }} />
-                  <InkSelect key={pop.src + pop.id} value={cur} onChange={(v) => setInk(im, pop.src, v)} />
+                  <InkSelect key={pop.src + pop.id} value={cur} onChange={(v) => { setInk(im, pop.src, v); if (!v || v.name) setPop(null); }} />
                   <button className="btn icon ghost" type="button" aria-label="Close" onClick={() => setPop(null)}>✕</button>
                 </div>
               </div>
@@ -405,7 +410,14 @@ function Builder() {
                       {(() => {
                         const tall = /tall/i.test(im.size);
                         const typed = (im.size.match(/^([\d.]+)/) || [])[1] || "";
-                        const set = (v: string, dim: "wide" | "tall") => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: v ? `${v.replace(/[^\d.]/g, "")}" ${dim}` : "" } : x)));
+                        const set = (v: string, dim: "wide" | "tall") => {
+                          let t = v.replace(/[^\d.]/g, "");
+                          // cap at the location's max print area (e.g. sleeves 3.5" x 3.5")
+                          const r = ratioOf(designOf(im)) || 0;
+                          const cap = dim === "wide" ? maxWidthFor(im.location, r) : maxWidthFor(im.location, r) * (r || 1);
+                          if (t && !t.endsWith(".") && +t > cap) t = String(Math.round(cap * 100) / 100);
+                          setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "" } : x)));
+                        };
                         return (
                           <>
                             <label>W <input type="text" inputMode="decimal" aria-label="Width in inches" placeholder={p.wIn.toFixed(2)} value={!tall ? typed : p.wIn ? p.wIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "wide")} />&quot;</label>
@@ -431,7 +443,7 @@ function Builder() {
 /** One garment photo with designs you can drag, resize from the corner (proportions locked) and double-click to recolor. */
 function Stage({ src, label, items, onMove, onResize, onPick }: {
   src: string; label: string;
-  items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; area: { x: number; y: number; w: number; h: number } }; url: string }[];
+  items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; clip?: "" | "left" | "right"; area: { x: number; y: number; w: number; h: number } }; url: string }[];
   onMove: (id: string, dx: number, dy: number) => void;
   onResize: (id: string, newW: number) => void;
   onPick: (id: string, relX: number, relY: number, clientX: number, clientY: number) => void;
@@ -461,7 +473,7 @@ function Stage({ src, label, items, onMove, onResize, onPick }: {
         {items.map((it) => <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }} />)}
         {items.map((it) => (
           <div key={it.id} className={"mk-art" + (sel === it.id ? " sel" : "") + (it.url ? "" : " mk-missing")}
-            style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }}
+            style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined, clipPath: it.p.clip === "left" ? "inset(0 50% 0 0)" : it.p.clip === "right" ? "inset(0 0 0 50%)" : undefined }}
             onPointerDown={(e) => {
               e.stopPropagation();
               // double-click (two quick clicks in the same spot) opens the color menu for the color under the cursor
