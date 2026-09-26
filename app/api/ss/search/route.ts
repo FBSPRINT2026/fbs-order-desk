@@ -4,10 +4,10 @@ import { ssConfigured, ssSearch } from "@/lib/ss";
 
 export const dynamic = "force-dynamic";
 
-// Staff only: list S&S styles matching a style number or name, so the right brand can be picked.
+// Signed-in staff and customers: list S&S styles matching a style number or name (no prices in the results).
 export async function GET(req: Request) {
-  const { isStaff } = await getViewer();
-  if (!isStaff) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  const { user } = await getViewer();
+  if (!user) return NextResponse.json({ error: "Please sign in" }, { status: 401 });
   if (!ssConfigured()) return NextResponse.json({ error: "S&S isn't connected yet." }, { status: 503 });
   const q = new URL(req.url).searchParams.get("q")?.trim() || "";
   if (q.length < 2) return NextResponse.json({ results: [] });

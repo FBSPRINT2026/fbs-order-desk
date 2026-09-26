@@ -29,7 +29,8 @@ export async function sendToCustomer(orderId: string, note: string) {
   if (!customer) return { ok: false, error: "Pick a customer for this order first." };
   if (!customer.email) return { ok: false, error: "This customer has no email address. Add one on their customer page." };
   const patch: Record<string, unknown> = { sent_at: new Date().toISOString() };
-  if (order.status === "quote") patch.status = "quote_sent";
+  // a customer's order request becomes a normal quote waiting on their final OK
+  if (order.status === "quote" || order.status === "request") patch.status = "quote_sent";
   await admin.from("orders").update(patch).eq("id", orderId);
   if (patch.status) await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: "quote_sent", actor: staffEmail });
   await admin.from("order_events").insert({ order_id: orderId, kind: "sent", detail: customer.email, actor: staffEmail });

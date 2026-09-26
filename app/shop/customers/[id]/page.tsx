@@ -123,6 +123,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       <AccountAreas mode="shop" attention={os.flatMap((o): AAttn[] => {
           const out: AAttn[] = [];
           const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "");
+          if (o.status === "request") out.push({ kind: "request", order_id: o.id, number: o.number, date: d(o.submitted_at || o.created_at) });
           if (o.status === "quote_sent") out.push({ kind: "quote", order_id: o.id, number: o.number, date: d(o.created_at) });
           if (pendingArt[o.id]) out.push({ kind: "art", order_id: o.id, number: o.number, date: d(pendingArt[o.id]) });
           if (o.type === "invoice" && o.balance > 0.004) out.push({ kind: "pay", order_id: o.id, number: o.number, date: money(o.balance) });

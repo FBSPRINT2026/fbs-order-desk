@@ -13,9 +13,10 @@ export const sizeLabel = (z: string) => (z === ONE_SIZE ? "Qty" : z);
 export type Size = (typeof SIZES)[number];
 
 export type StatusKey =
-  | "quote" | "quote_sent" | "approved" | "art" | "blanks" | "production" | "ready" | "completed";
+  | "request" | "quote" | "quote_sent" | "approved" | "art" | "blanks" | "production" | "ready" | "completed";
 
 export const STATUSES: { k: StatusKey; label: string; portal: string; type: "quote" | "invoice"; c: string }[] = [
+  { k: "request", label: "Order request", portal: "Order request", type: "quote", c: "#0E9F9A" },
   { k: "quote", label: "Quote", portal: "Draft", type: "quote", c: "#7C8799" },
   { k: "quote_sent", label: "Quote Sent", portal: "Awaiting your approval", type: "quote", c: "#6477D6" },
   { k: "approved", label: "Approved", portal: "Approved", type: "invoice", c: "#0A8FC0" },
@@ -88,7 +89,7 @@ export type Order = {
   due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; discount_amt?: number; discount_type?: "pct" | "amt"; tax_exempt: boolean; tax_rate: number | null;
   waive_setup: boolean; notes: string; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;
-  price_type: PriceType; po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
+  price_type: PriceType; submitted_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
 };
 export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; size_costs?: Record<string, number>; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string }> };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
@@ -333,3 +334,6 @@ export function imprintLabel(d: Imprint) {
   if (d.drop) parts.push(`${d.drop}" drop`);
   return parts.join(" · ");
 }
+
+/** Image types a browser can show as a logo preview. */
+export const PREVIEWABLE_TYPES = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/i;

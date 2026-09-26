@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 const ICONS: Record<string, React.ReactNode> = {
+  incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
   orders: <svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3z" /><path d="M8 9h8M8 13h8M8 17h5" /></svg>,
   board: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="11" rx="1" /><rect x="17" y="4" width="4" height="7" rx="1" /></svg>,
   calendar: <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>,
@@ -18,16 +19,20 @@ export default function ShopNav({ email }: { email: string }) {
   const path = usePathname();
   const router = useRouter();
   const [unread, setUnread] = useState(0);
+  const [incoming, setIncoming] = useState(0);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     const sb = createClient();
     sb.from("messages").select("id", { count: "exact", head: true }).eq("author_type", "customer").is("read_at", null)
       .then(({ count }) => setUnread(count || 0));
+    sb.from("orders").select("id", { count: "exact", head: true }).eq("status", "request").not("submitted_at", "is", null)
+      .then(({ count }) => setIncoming(count || 0));
   }, [path]);
 
   const items: [string, string, string][] = [
     ["/shop", "orders", "Orders"],
+    ["/shop/incoming", "incoming", "Incoming orders"],
     ["/shop/board", "board", "Production"],
     ["/shop/calendar", "calendar", "Calendar"],
     ["/shop/customers", "customers", "Customers"],
@@ -53,6 +58,7 @@ export default function ShopNav({ email }: { email: string }) {
         {items.map(([href, icon, label]) => (
           <Link key={href} href={href} className={active(href) ? "on" : ""} title={label}>
             {ICONS[icon]}<span className="lbl-t">{label}</span>
+            {href === "/shop/incoming" && incoming > 0 && <span className="badge" title={`${incoming} order request${incoming === 1 ? "" : "s"} to review`}>{incoming}</span>}
             {href === "/shop" && unread > 0 && <span className="badge" title={`${unread} unread customer message${unread === 1 ? "" : "s"}`}>{unread}</span>}
           </Link>
         ))}

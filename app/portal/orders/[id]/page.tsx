@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getPortalCtx, signProofs } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calcOrder, imprintLabel, orderGroups, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
@@ -8,6 +8,7 @@ import { Pill } from "@/components/bits";
 import { MessageThread, PayBox, ProofCard, QuoteApproval } from "./client";
 
 const STEPS: { label: string; keys: string[] }[] = [
+  { label: "Requested", keys: ["request"] },
   { label: "Quote", keys: ["quote_sent"] },
   { label: "Approved", keys: ["approved"] },
   { label: "Artwork", keys: ["art"] },
@@ -17,13 +18,16 @@ const STEPS: { label: string; keys: string[] }[] = [
   { label: "Done", keys: ["completed"] },
 ];
 
-export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string }> }) {
+export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string; sent?: string }> }) {
   const { id } = await params;
-  const { as, paid: justPaid } = await searchParams;
+  const { as, paid: justPaid, sent: justSent } = await searchParams;
   const ctx = await getPortalCtx(as, `/portal/orders/${id}`);
   const { data: od } = await ctx.db.from("orders").select("*").eq("id", id).in("customer_id", ctx.customerIds.length ? ctx.customerIds : ["00000000-0000-0000-0000-000000000000"]).neq("status", "quote").maybeSingle();
   if (!od) notFound();
   const o = od as Order;
+  // a request the customer hasn't sent in yet opens in the order builder
+  if (o.status === "request" && !o.submitted_at) redirect(`/portal/request/${id}${as ? `?as=${as}` : ""}`);
+  const isReq = o.status === "request";
   const [p, pr, m] = await Promise.all([
     ctx.db.from("payments").select("*").eq("order_id", id).order("paid_on"),
     ctx.db.from("proofs").select("*").eq("order_id", id).order("created_at", { ascending: false }),
@@ -79,6 +83,12 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
 
         {justPaid && <div className="callout good"><h2>Thank you, payment received</h2><div className="muted">It can take a minute to show below. You&apos;ll get a receipt by email from our payment processor.</div></div>}
 
+        {isReq && (
+          <div className="callout good">
+            <h2>{justSent ? "Thanks! Your order is in." : "We're reviewing your order"}</h2>
+            <div className="muted">We&apos;ll check your garments and artwork, price everything and send it back here for your final OK. Questions? Send us a message below.</div>
+          </div>
+        )}
         {o.status === "quote_sent" && <QuoteApproval orderId={o.id} total={money(c.total)} terms={ctx.settings.shop.terms} disabled={preview} defaultName={ctx.customers.find((x) => x.id === o.customer_id)?.name || ""} />}
         {o.approved_at && <div className="muted" style={{ fontSize: 13 }}>Quote approved by <b>{o.approved_name}</b> on {fmtStamp(o.approved_at)}.</div>}
 
@@ -96,7 +106,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-h"><h2>Items</h2></div>
               <div style={{ overflowX: "auto" }}>
                 <table className="items">
-                  <thead><tr><th>Item</th><th className="r">Qty</th><th className="r">Each</th><th className="r">Amount</th></tr></thead>
+                  <thead><tr><th>Item</th><th className="r">Qty</th>{!isReq && <th className="r">Each</th>}{!isReq && <th className="r">Amount</th>}</tr></thead>
                   <tbody>
                     {orderGroups(o).map((g, gi) => g.lines.map((l, li) => {
                       const lc = c.groups[gi]?.lines[li];
@@ -109,14 +119,14 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                             <div className="sizechips">{SIZES.filter((s) => l.sizes?.[s]).map((s) => <span key={s}>{sizeLabel(s)} {l.sizes[s]}</span>)}</div>
                           </td>
                           <td className="r">{lc?.qty}</td>
-                          <td className="r">{money(lc?.each)}</td>
-                          <td className="r">{money(lc?.sub)}</td>
+                          {!isReq && <td className="r">{money(lc?.each)}</td>}
+                          {!isReq && <td className="r">{money(lc?.sub)}</td>}
                         </tr>
                       );
                     }))}
-                    {c.setup > 0 && <tr><td>Setup (screens / digitizing)</td><td /><td /><td className="r">{money(c.setup)}</td></tr>}
-            {c.materials > 0 && <tr><td>2XL+ Materials Charge</td><td /><td /><td className="r">{money(c.materials)}</td></tr>}
-                    {o.fees.filter((f) => +f.amount).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td /><td /><td className="r">{money(+f.amount)}</td></tr>)}
+                    {!isReq && c.setup > 0 && <tr><td>Setup (screens / digitizing)</td><td /><td /><td className="r">{money(c.setup)}</td></tr>}
+            {!isReq && c.materials > 0 && <tr><td>2XL+ Materials Charge</td><td /><td /><td className="r">{money(c.materials)}</td></tr>}
+                    {!isReq && o.fees.filter((f) => +f.amount).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td /><td /><td className="r">{money(+f.amount)}</td></tr>)}
                   </tbody>
                 </table>
               </div>
@@ -139,6 +149,12 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
 
           <aside className="stack">
+            {isReq ? (
+              <section className="panel">
+                <div className="panel-h"><h2>Pricing</h2></div>
+                <div className="panel-b muted" style={{ fontSize: 13 }}>We&apos;re pricing your order now. You&apos;ll get an email when it&apos;s ready to approve.</div>
+              </section>
+            ) : <>
             <section className="panel">
               <div className="panel-h"><h2>Summary</h2></div>
               <div className="panel-b">
@@ -168,6 +184,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 {payments.length > 0 && <div>{payments.map((x) => <div key={x.id} className="pay-row"><span>{fmtDate(x.paid_on)} · {x.method}</span><b className="num">{money(x.amount)}</b></div>)}</div>}
               </div>
             </section>
+            </>}
             <section className="panel">
               <div className="panel-h"><h2>Questions?</h2></div>
               <div className="panel-b stack" style={{ fontSize: 13 }}>

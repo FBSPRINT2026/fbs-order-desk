@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mergeSettings, orderGroups, type Customer, type Order, type Settings } from "@/lib/pricing";
 
-export type OrderRow = Pick<Order, "id" | "number" | "nickname" | "status" | "type" | "due_date" | "total" | "qty" | "customer_id" | "lines" | "groups" | "created_at" | "rush" | "po_number" | "price_type"> & {
+export type OrderRow = Pick<Order, "id" | "number" | "nickname" | "status" | "type" | "due_date" | "total" | "qty" | "customer_id" | "lines" | "groups" | "created_at" | "rush" | "po_number" | "price_type" | "submitted_at"> & {
   paid: number;
   balance: number;
   unread: number;
@@ -20,7 +20,7 @@ export function useShopData() {
   const load = useCallback(async () => {
     const sb = createClient();
     const [o, c, p, m, s] = await Promise.all([
-      sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number,price_type").order("number", { ascending: false }),
+      sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number,price_type,submitted_at").order("number", { ascending: false }),
       sb.from("customers").select("*"),
       sb.from("payments").select("order_id,amount"),
       sb.from("messages").select("order_id").eq("author_type", "customer").is("read_at", null),
@@ -32,7 +32,8 @@ export function useShopData() {
     (p.data || []).forEach((x) => { paid[x.order_id] = (paid[x.order_id] || 0) + (+x.amount || 0); });
     const unread: Record<string, number> = {};
     (m.data || []).forEach((x) => { unread[x.order_id] = (unread[x.order_id] || 0) + 1; });
-    setOrders((o.data || []).map((x) => ({ ...(x as Order), total: +x.total || 0, paid: paid[x.id] || 0, balance: Math.round(((+x.total || 0) - (paid[x.id] || 0)) * 100) / 100, unread: unread[x.id] || 0 })));
+    // customers' order requests they're still building stay out of the shop's lists until sent in
+    setOrders((o.data || []).filter((x) => !(x.status === "request" && !x.submitted_at)).map((x) => ({ ...(x as Order), total: +x.total || 0, paid: paid[x.id] || 0, balance: Math.round(((+x.total || 0) - (paid[x.id] || 0)) * 100) / 100, unread: unread[x.id] || 0 })));
     setCustomers(Object.fromEntries((c.data || []).map((x) => [x.id, x as Customer])));
     setSettings(mergeSettings(s.data?.data));
     setLoading(false);

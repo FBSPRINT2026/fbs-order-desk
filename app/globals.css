@@ -745,3 +745,16 @@ td > .sz-dim.on input{padding-right:24px}
 .aa-pg.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .aa-pg:disabled{opacity:.4;cursor:default}
 @media (max-width: 700px){ .aa-grid3{grid-template-columns:repeat(2,minmax(0,1fr))} .aa-favs{position:static;max-height:none} }
+/* customer-built orders: no prices */
+.np .gl-row,.np .gl-list.ws .gl-row,.np .gl-row.grp-total,.np .gl-row.grp-total.ws{grid-template-columns:minmax(0,.75fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) 64px 30px;grid-template-areas:"st br co de qt x"}
+.np .a-ea,.np .a-to,.np .upc{display:none}
+.rq{max-width:1180px}
+.rq-note{background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:10px;padding:10px 14px;font-size:14px}
+.rq-foot{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:0 -4px 16px rgba(0,0,0,.05)}
+.req-callout{border-color:color-mix(in srgb,#0E9F9A 45%,var(--line));background:color-mix(in srgb,#0E9F9A 9%,var(--surface))}
+.start-panel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.sp-card{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.sp-card b{display:block;font-size:16px}
+.sp-card span{font-size:13px;color:var(--ink-3)}
+.sp-ic{display:inline-flex;width:48px;height:48px;align-items:center;justify-content:center;border-radius:12px;background:var(--accent-soft);color:var(--accent)}
+@media (max-width: 800px){ .start-panel{grid-template-columns:1fr} .sp-card{grid-template-columns:auto 1fr} .sp-card .btn{grid-column:1 / -1} }

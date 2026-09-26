@@ -2,6 +2,7 @@ import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Design, Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
+import StartPanel from "@/components/StartPanel";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
 import { customerGeneralMessage, starMyDesign, starMyMockup } from "@/app/portal/actions";
 import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
@@ -55,6 +56,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const attention: AAttn[] = [];
   const short = (d?: string | null) => (d ? fmtDateLong(d.slice(0, 10)) : "");
   orders.forEach((o) => {
+    if (o.status === "request" && !o.submitted_at) attention.push({ kind: "draft", order_id: o.id, number: o.number, date: short(o.created_at) });
     if (o.status === "quote_sent") attention.push({ kind: "quote", order_id: o.id, number: o.number, date: short(o.sent_at || o.updated_at) });
     if (pendingProofs[o.id]) attention.push({ kind: "art", order_id: o.id, number: o.number, date: short(o.updated_at), hash: "proofs" });
     if (o.type === "invoice" && bal(o) > 0.004 && o.status !== "quote") attention.push({ kind: "pay", order_id: o.id, number: o.number, date: money(bal(o)), hash: "pay" });
@@ -77,7 +79,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
           </div></div>
         ) : (
           <AccountAreas mode="portal" orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
-            attention={attention} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
+            attention={attention} homeTop={<StartPanel preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
             onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} />
         )}
       </main>

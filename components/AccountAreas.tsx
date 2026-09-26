@@ -11,7 +11,7 @@ export type APayment = { id: string; order_id: string; number: number; amount: n
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
-export type AAttn = { kind: "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string };
+export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string };
 export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "receive" | "details";
 
 const IN_WORK = ["approved", "art", "blanks", "production", "ready"];
@@ -45,10 +45,12 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, invoices, payments, artwork, messages…), each searchable.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, canAct = true }: {
+export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, canAct = true }: {
   mode: "shop" | "portal";
   orders: AOrder[]; payments: APayment[]; designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
   attention: AAttn[];
+  /** shown at the top of the dashboard (portal: Start an order / Make a mockup) */
+  homeTop?: ReactNode;
   /** staff only: the customer details form */
   details?: ReactNode;
   /** order links: hrefBase + id + hrefQuery (e.g. "/portal/orders/" + id + "?as=…") */
@@ -148,6 +150,8 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   let body: ReactNode = null;
   if (area === "home") {
     const groups: { kind: AAttn["kind"]; title: string; label: string }[] = [
+      { kind: "request", title: "New order requests to price", label: "Request" },
+      { kind: "draft", title: "Orders you haven't sent yet", label: "Order" },
       { kind: "quote", title: mode === "shop" ? "Quotes waiting on the customer" : "Quote approvals", label: "Quote" },
       { kind: "art", title: mode === "shop" ? "Artwork waiting on the customer" : "Artwork approvals", label: "Order" },
       { kind: "pay", title: "Payments due", label: "Invoice" },
@@ -155,6 +159,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
     ];
     body = (
       <>
+        {homeTop}
         <div className="aa-stats">
           <div className="aa-stat"><span className="ic"><Ico d={I.quotes} size={22} /></span><b>{money(openQuotes)}</b><span>Open quotes</span></div>
           <div className="aa-stat"><span className="ic"><Ico d={I.orders} size={22} /></span><b>{inWork.length}</b><span>Orders in progress</span></div>
@@ -183,7 +188,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
                   {items.map((a, i) => (
                     <Link key={g.kind + a.order_id + i} href={orderHref(a.order_id, a.hash)} className="aa-attn-i">
                       <span><span className="k">{g.label}</span><span className="v">#{a.number}</span></span>
-                      <span><span className="k">{g.kind === "pay" ? "Balance" : "Since"}</span><span className="v">{a.date}</span></span>
+                      <span><span className="k">{g.kind === "pay" ? "Balance" : g.kind === "draft" ? "Started" : "Since"}</span><span className="v">{a.date}</span></span>
                       <span className="go"><Ico d={I.arrow} size={18} /></span>
                     </Link>
                   ))}

@@ -30,6 +30,10 @@ type Props = {
   designUrls?: Record<string, string>;
   onUploadDesign?: (file: File, name: string) => Promise<Design | null>;
   lookingUp?: string;
+  /** customer-built orders: no costs, prices or totals anywhere */
+  hidePrices?: boolean;
+  /** don't gray out imprints waiting on a mockup (customer requests come with their own details) */
+  noLock?: boolean;
 };
 
 /** Screen prints: the inks listed must match the number of colors chosen. */
@@ -45,7 +49,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign }: Props) {
+export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock }: Props) {
   const [askSkip, setAskSkip] = useState(false);
   const [blockMsg, setBlockMsg] = useState("");
   const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
@@ -95,9 +99,9 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
     return [...(youth ? YOUTH_SIZES : []), ...ADULT_SIZES];
   };
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
-  const locked = !!onMockup && !g.mockupAt && !g.mockupSkipped;
+  const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped;
   return (
-    <section className="line">
+    <section className={"line" + (hidePrices ? " np" : "")}>
       <div className="line-h">
         <input type="text" className="grp-name" aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
         <span className="spacer" />
@@ -110,7 +114,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head">
             <span className="a-st">Style #</span><span className="a-br">Brand</span><span className="a-co">Color</span><span className="a-de">Description</span>
-            {!gc.wholesale && <span className="a-cs">Cost</span>}
+            {!gc.wholesale && !hidePrices && <span className="a-cs">Cost</span>}
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
           {g.lines.map((l, li) => {
@@ -133,7 +137,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                     <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => { x.lines[li].color = v; })} />
                   </div>
                   <div className="a-de"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Description" placeholder="Description" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
-                  {!gc.wholesale && <div className="a-cs"><input type="number" step="0.01" min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
+                  {!gc.wholesale && !hidePrices && <div className="a-cs"><input type="number" step="0.01" min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
                   <div className="a-qt c">
                     {/* Qty is the sum of the sizes. With no sizes entered, typing here makes it a one-size item (hats, koozies). */}
                     <input type="number" min="0" step="1" inputMode="numeric" tabIndex={l.oneSize ? 0 : -1} className={"pre qty" + (sized ? " locked" : "")} readOnly={sized}
@@ -197,8 +201,8 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           <div inert={locked || undefined} className="mk-body">
           <div>
             <table className="pv-grid imp-table">
-              <colgroup><col style={{ width: "13%" }} /><col style={{ width: "14%" }} /><col style={{ width: 56 }} /><col style={{ width: "19%" }} /><col style={{ width: "14%" }} /><col style={{ width: "10%" }} /><col /><col style={{ width: 58 }} /><col style={{ width: 30 }} /></colgroup>
-              <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink or thread / PMS</th><th>Print size</th><th>Drop</th><th>Notes</th><th className="r">Each</th><th /></tr></thead>
+              <colgroup><col style={{ width: "13%" }} /><col style={{ width: "14%" }} /><col style={{ width: 56 }} /><col style={{ width: "19%" }} /><col style={{ width: "14%" }} /><col style={{ width: "10%" }} /><col />{!hidePrices && <col style={{ width: 58 }} />}<col style={{ width: 30 }} /></colgroup>
+              <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink or thread / PMS</th><th>Print size</th><th>Drop</th><th>Notes</th>{!hidePrices && <th className="r">Each</th>}<th /></tr></thead>
               <tbody>
                 {g.imprints.map((d, di) => (
                   <Fragment key={d.id}>
@@ -227,11 +231,11 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                       </label>
                     </td>
                     <td><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></td>
-                    <td className="r num">{money(gc.imprints[di]?.each)}</td>
+                    {!hidePrices && <td className="r num">{money(gc.imprints[di]?.each)}</td>}
                     <td><button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button></td>
                   </tr>
                   <tr className="imp-design">
-                    <td colSpan={9}>
+                    <td colSpan={hidePrices ? 8 : 9}>
                       <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
                         onPick={(des) => update((x) => {
                           const im = x.imprints[di];
@@ -281,7 +285,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                   {settings.finishing.map((f) => (
                     <label key={f.id} className="check" style={{ fontSize: 13 }}>
                       <input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => update((x) => { const set = new Set(x.finishing || []); if (e.target.checked) set.add(f.id); else set.delete(f.id); x.finishing = [...set]; })} />
-                      {f.name} <span className="faint">({money(f.price)}/pc)</span>
+                      {f.name}{!hidePrices && <span className="faint"> ({money(f.price)}/pc)</span>}
                     </label>
                   ))}
                 </div>
@@ -289,7 +293,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
             )}
             </div>
           </div>
-          <div className="price-box">
+          {!hidePrices && <div className="price-box">
             {(() => {
               // Split the group's line items into garments / imprints / finishing (overrides land in garments)
               const imp = gc.lines.reduce((a, lc) => a + lc.qty * lc.printEach, 0);
@@ -306,7 +310,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
               );
             })()}
             <div className="pb-r pb-t"><span>Group total</span><b>{money(gc.sub + gc.setup + gc.materials)}</b></div>
-          </div>
+          </div>}
         </div>
       </div>
     </section>

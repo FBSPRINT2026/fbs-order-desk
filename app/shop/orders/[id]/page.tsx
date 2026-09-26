@@ -179,6 +179,23 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => () => { if (timer.current) save(); }, [save]);
 
+  // customer order requests come in without costs: suggest them from the garment catalog once
+  const costsFilled = useRef(false);
+  useEffect(() => {
+    if (!o || o.status !== "request" || costsFilled.current || !catalog.length) return;
+    costsFilled.current = true;
+    const find = (l: GLine) => catalog.find((g) => g.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || g.brand.toLowerCase() === l.brand.toLowerCase()));
+    const missing = (o.groups || []).some((g) => g.lines.some((l) => (l.cost === "" || l.cost === null || l.cost === undefined) && find(l)));
+    if (missing) patch((d) => { d.groups.forEach((g) => g.lines.forEach((l) => { const gm = find(l); if ((l.cost === "" || l.cost == null) && gm) {
+      l.cost = gm.cost;
+      // 2XL+ material charge from the supplier's size prices, same as picking the style here
+      const sc = gm.size_costs || {}, up: GLine["sizeUp"] = {};
+      for (const z of ["2XL", "3XL", "4XL", "5XL"] as const) if (sc[z] && gm.cost) up[z] = Math.max(0, Math.round((sc[z] - +gm.cost) * 100) / 100);
+      l.sizeUp = Object.keys(up).length ? up : undefined;
+    } })); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [o, catalog]);
+
   function patch(fn: (d: Order) => void) {
     setO((prev) => {
       if (!prev) return prev;
@@ -253,7 +270,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     await save();
     const r = await sendToCustomer(o.id, note);
     if (!r.ok) return say(r.error || "Couldn't send");
-    if (o.status === "quote") setO((p) => (p ? { ...p, status: "quote_sent", sent_at: new Date().toISOString() } : p));
+    if (o.status === "quote" || o.status === "request") setO((p) => (p ? { ...p, status: "quote_sent", sent_at: new Date().toISOString() } : p));
     say(r.emailed ? "Emailed the customer a link to their portal." : "Published to their portal. Email is off, so copy the link below and send it.");
     loadSide();
   }
@@ -376,6 +393,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
+      {o.status === "request" && (
+        <div className="callout req-callout">
+          <h2>Order request from the customer{o.submitted_at ? ` · sent ${new Date(o.submitted_at).toLocaleDateString()}` : " · still being built by the customer"}</h2>
+          <div className="muted">They built this in their portal without prices. Prices below are <b>suggested from your pricing matrix</b>, with blank costs filled in from the garment catalog. Adjust anything, answer their questions in Messages, then finalize. They&apos;ll get it back as a quote for their final approval.</div>
+          <div className="row"><button type="button" className="btn primary" onClick={send} disabled={!o.submitted_at}>Finalize &amp; send for approval</button><a className="btn ghost" href="#messages">Their questions</a></div>
+        </div>
+      )}
 
       <div className="ed-grid">
         <div className="stack">
@@ -478,7 +502,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
             <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
