@@ -530,7 +530,9 @@ td > .sz-dim.on input{padding-right:24px}
 .dp-size b{color:var(--ink)}
 .wo-design{display:inline-flex;align-items:center;gap:6px}
 .wo-design img{width:44px;height:44px;object-fit:contain;border:1px solid #C9D0DA;border-radius:3px}
-.mk{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.mk{display:grid;grid-template-columns:minmax(0,1fr) 200px 340px;gap:18px;align-items:start}
+.mk-mini{display:flex;flex-direction:column;gap:14px;min-width:0}
+.mk-mini > .lbl{margin-bottom:-6px}
 .mk-views{display:flex;gap:14px;flex-wrap:nowrap}
 .mk-stage{flex:1 1 0;min-width:0}
 .mk-photo{position:relative;width:100%;background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;touch-action:none;user-select:none}

@@ -251,6 +251,21 @@ function Builder() {
   const scale = isYouthStyle(line) ? 22 / 18 : 1;
   const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; const g = garmentFor(l); const ci = g?.color_images?.[l.color]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
 
+  /** One close-up box for an imprint (used under the photos and, smaller, beside them for the selected tab). */
+  const closeUp = (im: Imprint, size: number) => {
+                const d = designOf(im); const r = ratioOf(d) || 0.6;
+                const wIn = printWidth(im.size, im.location, ratioOf(d));
+                const o = offsets[im.id] || { dx: 0, dy: 0 };
+                const sp = spotFor(im.location);
+                return (
+                  <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
+                    onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
+                    maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
+                    onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
+                    onResize={(newWIn) => { growTo(im, newWIn); }} />
+                );
+  };
+
   async function uploadNew(im: Imprint, f: File) {
     if (!customerId) return setMsg("Pick the customer first. New art is saved to their account.");
     try {
@@ -496,19 +511,7 @@ function Builder() {
                 const rank = (x: Imprint) => (viewsFor(x.location).length > 1 ? 2 : spotFor(x.location).view === "back" ? 1 : 0);
                 const pos = (x: Imprint) => { const k = LOCATIONS.indexOf(x.location); return k < 0 ? 999 : k; };
                 return rank(a.im) - rank(b.im) || pos(a.im) - pos(b.im) || a.i - b.i;
-              }).map(({ im }) => {
-                const d = designOf(im); const r = ratioOf(d) || 0.6;
-                const wIn = printWidth(im.size, im.location, ratioOf(d));
-                const o = offsets[im.id] || { dx: 0, dy: 0 };
-                const sp = spotFor(im.location);
-                return (
-                  <CloseUp key={im.id} size={cuSize} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
-                    onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
-                    maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
-                    onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
-                    onResize={(newWIn) => { growTo(im, newWIn); }} />
-                );
-              })}
+              }).map(({ im }) => closeUp(im, cuSize))}
             </div>
           </div>
           {pop && (() => {
@@ -531,6 +534,11 @@ function Builder() {
           )}
         </div>
 
+        <div className="mk-mini">
+          <div className="lbl">{curTab === "sleeve" ? "SLEEVE" : curTab.toUpperCase()} CLOSE-UP</div>
+          {imprints.filter((im) => sideOf(im.location) === curTab).map((im) => closeUp(im, 200))}
+          {!imprints.some((im) => sideOf(im.location) === curTab) && <div className="faint" style={{ fontSize: 12 }}>Add a {curTab === "sleeve" ? "sleeve" : curTab} location to see it up close here.</div>}
+        </div>
         <div className="mk-side stack">
           <section className={"panel" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
             <div className="panel-h"><h2>Imprints</h2><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}>+ Add {curTab === "sleeve" ? "sleeve" : curTab} location</button></div>
