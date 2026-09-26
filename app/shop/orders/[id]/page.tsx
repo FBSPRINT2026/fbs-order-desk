@@ -445,24 +445,33 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <span className="faint" style={{ fontSize: 12 }}>Garments in the same group share imprints, and their quantities add up for the price break.</span>
           </div>
 
-          <section className="panel">
-            <div className="panel-h"><h2>Fees & adjustments</h2></div>
-            <div className="panel-b stack">
-              <div className="fee-row fee-head"><span>Description</span><span>Amount</span><span /></div>
-              {(o.fees.length ? o.fees : [{ label: "", amount: "" as number | "" }]).map((f, i) => {
-                // an order with no fees still shows one blank row to type into
-                const edit = (fn: (x: { label: string; amount: number | "" }) => void) => patch((d) => { if (!d.fees[i]) d.fees[i] = { label: "", amount: "" }; fn(d.fees[i]); });
-                return (
-                  <div key={i} className="fee-row">
-                    <input type="text" aria-label="Fee description" placeholder="Rush fee, art time, shipping…" value={f.label} onChange={(e) => edit((x) => { x.label = e.target.value; })} />
-                    <input type="number" step="0.01" aria-label="Fee amount" placeholder="0.00" value={f.amount} onChange={(e) => edit((x) => { x.amount = numOr(e.target.value); })} />
-                    {o.fees.length ? <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove fee" onClick={() => patch((d) => { d.fees.splice(i, 1); })}>✕</button> : <span />}
-                  </div>
-                );
-              })}
-              <button className="btn sm add-wide" type="button" onClick={() => patch((d) => { if (!d.fees.length) d.fees.push({ label: "", amount: "" }); d.fees.push({ label: "", amount: "" }); })}>+ Add fee</button>
-            </div>
-          </section>
+          <div className="grid g2 fees-notes">
+            <section className="panel">
+              <div className="panel-h"><h2>Fees & adjustments</h2></div>
+              <div className="panel-b stack">
+                <div className="fee-row fee-head"><span>Description</span><span>Amount</span><span /></div>
+                {(o.fees.length ? o.fees : [{ label: "", amount: "" as number | "" }]).map((f, i) => {
+                  // an order with no fees still shows one blank row to type into
+                  const edit = (fn: (x: { label: string; amount: number | "" }) => void) => patch((d) => { if (!d.fees[i]) d.fees[i] = { label: "", amount: "" }; fn(d.fees[i]); });
+                  return (
+                    <div key={i} className="fee-row">
+                      <input type="text" aria-label="Fee description" placeholder="Rush fee, art time, shipping…" value={f.label} onChange={(e) => edit((x) => { x.label = e.target.value; })} />
+                      <input type="number" step="0.01" aria-label="Fee amount" placeholder="0.00" value={f.amount} onChange={(e) => edit((x) => { x.amount = numOr(e.target.value); })} />
+                      {o.fees.length ? <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove fee" onClick={() => patch((d) => { d.fees.splice(i, 1); })}>✕</button> : <span />}
+                    </div>
+                  );
+                })}
+                <button className="btn sm add-wide" type="button" onClick={() => patch((d) => { if (!d.fees.length) d.fees.push({ label: "", amount: "" }); d.fees.push({ label: "", amount: "" }); })}>+ Add fee</button>
+              </div>
+            </section>
+            <section className="panel">
+              <div className="panel-h"><h2>Notes</h2></div>
+              <div className="panel-b stack">
+                <div className="field"><label htmlFor="o-notes">Customer notes (shown on quote/invoice)</label><textarea id="o-notes" rows={4} value={o.notes} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
+                <div className="field"><label htmlFor="o-pnotes">Production notes (shop only)</label><textarea id="o-pnotes" rows={4} placeholder="Ink colors, PMS matches, mesh counts, placement…" value={prodNotes} onChange={(e) => onProdNotes(e.target.value)} /></div>
+              </div>
+            </section>
+          </div>
 
           <section className="panel" id="proofs">
             <div className="panel-h"><h2>Artwork proofs</h2>
@@ -529,13 +538,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             </div>
           </section>
 
-          <section className="panel">
-            <div className="panel-h"><h2>Notes</h2></div>
-            <div className="panel-b grid g2">
-              <div className="field"><label htmlFor="o-notes">Customer notes (shown on quote/invoice)</label><textarea id="o-notes" rows={4} value={o.notes} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
-              <div className="field"><label htmlFor="o-pnotes">Production notes (shop only)</label><textarea id="o-pnotes" rows={4} placeholder="Ink colors, PMS matches, mesh counts, placement…" value={prodNotes} onChange={(e) => onProdNotes(e.target.value)} /></div>
-            </div>
-          </section>
         </div>
 
         <aside className="ed-aside">
