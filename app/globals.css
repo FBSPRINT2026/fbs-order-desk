@@ -436,7 +436,7 @@ table.imp-table{table-layout:fixed}
 /* line the headers up with the text inside the prefilled boxes */
 .gl-row input.pre{-moz-appearance:textfield;appearance:textfield}
 .gl-row input.pre::-webkit-inner-spin-button,.gl-row input.pre::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
-.gl-head .a-cs,.gl-head .a-br{padding-left:10px}
+.gl-head .a-cs,.gl-head .a-br,.gl-head .a-de{padding-left:10px}
 .gl-head .a-ea{padding-right:10px}
 .gl-head .a-to{padding-right:0}
 .gl-row .a-to{text-align:right}

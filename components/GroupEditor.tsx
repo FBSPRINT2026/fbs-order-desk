@@ -116,7 +116,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                   <div className="a-co">
                     <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => { x.lines[li].color = v; })} />
                   </div>
-                  <div className="a-de"><input type="text" aria-label="Description" placeholder={l.oneSize ? "Description (hat, koozie…)" : "Description (unisex tee)"} value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
+                  <div className="a-de"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Description" placeholder="Description" value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
                   {!gc.wholesale && <div className="a-cs"><input type="number" step="0.01" min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
                   <div className="a-qt c">
                     {/* Qty is the sum of the sizes. With no sizes entered, typing here makes it a one-size item (hats, koozies). */}
