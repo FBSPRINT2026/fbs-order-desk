@@ -35,16 +35,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [catalog, setCatalog] = useState<Garment[]>([]);
   const [lookingUp, setLookingUp] = useState("");
   // Style not in the catalog yet: pull it from S&S (saves it to the catalog too)
-  async function lookupStyle(style: string): Promise<Garment | null> {
+  async function lookupStyle(style: string, styleID?: number): Promise<Garment | null> {
     const key = style.trim().toUpperCase();
     if (!key || lookingUp === key) return null;
     setLookingUp(key);
     try {
-      const r = await fetch(`/api/ss/lookup?style=${encodeURIComponent(key)}`);
+      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}`);
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.garment) { say(j.error || "Couldn't find that style on S&S."); return null; }
       const g = j.garment as Garment;
-      setCatalog((c) => [...c.filter((x) => x.style.toLowerCase() !== g.style.toLowerCase()), g].sort((a, b) => a.style.localeCompare(b.style)));
+      setCatalog((c) => [...c.filter((x) => x.id !== g.id), g].sort((a, b) => a.style.localeCompare(b.style)));
       return g;
     } finally { setLookingUp(""); }
   }

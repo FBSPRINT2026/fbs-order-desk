@@ -34,6 +34,33 @@ function mode(nums: number[]) {
   return best;
 }
 
+export type SSHit = { styleID: number; brand: string; style: string; title: string; image: string };
+
+/** Every S&S style matching what someone typed ("5000", "G5000", "Gildan 5000"), best matches first. */
+export async function ssSearch(q: string): Promise<SSHit[]> {
+  const t = q.trim();
+  const stripped = t.replace(/^[A-Za-z]{1,2}(?=\d)/, "");
+  const seen = new Map<number, SSStyle>();
+  for (const term of [t, stripped].filter((v, i, a) => v && a.indexOf(v) === i)) {
+    const list = await ssGet<SSStyle[]>(`/styles?search=${encodeURIComponent(term)}`);
+    if (Array.isArray(list)) list.forEach((st) => seen.set(st.styleID, st));
+  }
+  const lc = (x: string) => (x || "").toLowerCase();
+  const keys = [lc(t), lc(stripped)];
+  const prefix = t.match(/^([A-Za-z]{1,2})(?=\d)/)?.[1]?.toLowerCase();
+  const score = (st: SSStyle) => {
+    const n = lc(st.styleName);
+    let sc = keys.includes(n) || keys.includes(lc(`${st.brandName} ${st.styleName}`)) ? 0 : keys.some((k) => n.startsWith(k)) ? 1 : 2;
+    if (prefix && lc(st.brandName).startsWith(prefix)) sc -= 0.5;
+    return sc;
+  };
+  return [...seen.values()]
+    .sort((a, b) => score(a) - score(b) || a.brandName.localeCompare(b.brandName) || a.styleName.localeCompare(b.styleName))
+    .slice(0, 30)
+    .map((st) => ({ styleID: st.styleID, brand: st.brandName, style: st.styleName, title: st.title, image: st.styleImage ? `https://www.ssactivewear.com/${st.styleImage}` : "" }));
+}
+
+/** Find the S&S style for what someone typed ("G5000", "5000", "Gildan 5000", "18500B"). */
 /** Find the S&S style for what someone typed ("G5000", "5000", "Gildan 5000", "18500B"). */
 async function findStyle(q: string): Promise<SSStyle | null> {
   const t = q.trim();
@@ -54,15 +81,19 @@ async function findStyle(q: string): Promise<SSStyle | null> {
 export type SSGarment = { style: string; brand: string; description: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; ss_style_id: number; image: string };
 
 /** Look up a style on S&S and shape it like a catalog garment. Cost = your price (customerPrice). */
-export async function ssLookup(q: string): Promise<SSGarment | null> {
-  const st = await findStyle(q);
+export async function ssLookup(q: string, styleID?: number): Promise<SSGarment | null> {
+  const st = styleID ? (await ssGet<SSStyle[]>(`/styles/?styleid=${styleID}`))[0] : await findStyle(q);
   if (!st) return null;
   const prods = await ssGet<SSProduct[]>(`/products/?styleid=${st.styleID}&fields=colorName,sizeName,sizeOrder,customerPrice,piecePrice,qty`);
   if (!Array.isArray(prods) || !prods.length) return null;
   const colors = [...new Set(prods.map((p) => p.colorName).filter(Boolean))];
   const bySize = new Map<string, { order: string; prices: number[] }>();
+  // youth styles label sizes XS-XL; ours are YXS-YXL
+  const youth = /youth|toddler|kids|infant/i.test(`${st.title} ${st.baseCategory}`);
+  const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
   for (const p of prods) {
-    const z = SIZE_MAP[(p.sizeName || "").toUpperCase().trim()];
+    const raw = SIZE_MAP[(p.sizeName || "").toUpperCase().trim()];
+    const z = youth && raw && YOUTH[raw] ? YOUTH[raw] : raw;
     if (!z) continue;
     const price = +(p.customerPrice || p.piecePrice || 0);
     const e = bySize.get(z) || { order: p.sizeOrder, prices: [] };
@@ -76,7 +107,7 @@ export async function ssLookup(q: string): Promise<SSGarment | null> {
   const baseSizes = sizes.filter((z) => !/^[2-5]XL$/.test(z));
   const cost = Math.min(...(baseSizes.length ? baseSizes : sizes).map((z) => size_costs[z]).filter((v) => v > 0)) || 0;
   return {
-    style: q.trim().toUpperCase(),
+    style: st.styleName,
     brand: st.brandName,
     description: st.title || st.styleName,
     colors,

@@ -39,6 +39,26 @@ export default function CatalogPage() {
   const [armed, setArmed] = useState("");
   const [ssq, setSsq] = useState("");
   const [ssBusy, setSsBusy] = useState("");
+  const [ssHits, setSsHits] = useState<{ styleID: number; brand: string; style: string; title: string }[]>([]);
+  async function searchSS() {
+    const q = ssq.trim();
+    if (q.length < 2) return;
+    setSsBusy("search");
+    const r = await fetch(`/api/ss/search?q=${encodeURIComponent(q)}`);
+    const j = await r.json().catch(() => ({}));
+    setSsBusy("");
+    if (!r.ok) return setMsg(j.error || "S&S search failed");
+    setSsHits(j.results || []);
+    if (!(j.results || []).length) setMsg(`S&S has nothing matching "${q}".`);
+  }
+  async function addOne(id: number, label: string) {
+    setSsBusy(label);
+    const r = await fetch(`/api/ss/lookup?styleid=${id}`);
+    const j = await r.json().catch(() => ({}));
+    setSsBusy("");
+    setMsg(r.ok ? `Added ${label} from S&S.` : j.error || "Couldn't add it");
+    load();
+  }
 
   // Pull styles from S&S Activewear (colors, sizes, your price, 2XL+ prices) into the catalog
   async function addFromSS(list: string[]) {
@@ -48,7 +68,8 @@ export default function CatalogPage() {
     let ok = 0;
     for (const st of styles) {
       setSsBusy(st);
-      const r = await fetch(`/api/ss/lookup?style=${encodeURIComponent(st)}`);
+      const g = items.find((x) => x.style === st && x.ss_style_id);
+      const r = await fetch(g ? `/api/ss/lookup?styleid=${g.ss_style_id}` : `/api/ss/lookup?style=${encodeURIComponent(st)}`);
       const j = await r.json().catch(() => ({}));
       if (r.ok && j.garment) ok++; else bad.push(`${st}: ${j.error || r.status}`);
     }
@@ -116,10 +137,25 @@ export default function CatalogPage() {
       <section className="panel" style={{ marginBottom: 14 }}>
         <div className="panel-h"><h2>Add from S&amp;S Activewear</h2><span className="faint" style={{ fontSize: 12 }}>Styles typed on an order are pulled in automatically too</span></div>
         <div className="panel-b row">
-          <input type="text" placeholder="Style numbers, e.g. G5000, 18500, BC3001" value={ssq} onChange={(e) => setSsq(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addFromSS(ssq.split(/[,\s]+/)); }} style={{ maxWidth: 420 }} aria-label="S&S style numbers" />
-          <button className="btn primary" type="button" disabled={!!ssBusy} onClick={() => addFromSS(ssq.split(/[,\s]+/))}>{ssBusy ? `Pulling ${ssBusy}…` : "Add from S&S"}</button>
+          <input type="text" placeholder="Style number or name, e.g. 5000, 18500, BC3001" value={ssq} onChange={(e) => setSsq(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") searchSS(); }} style={{ maxWidth: 420 }} aria-label="S&S style search" />
+          <button className="btn primary" type="button" disabled={!!ssBusy} onClick={searchSS}>{ssBusy === "search" ? "Searching…" : ssBusy ? `Adding ${ssBusy}…` : "Search S&S"}</button>
           {items.some((g) => g.ss_style_id) && <button className="btn" type="button" disabled={!!ssBusy} onClick={() => addFromSS(items.filter((g) => g.ss_style_id).map((g) => g.style))}>Refresh all from S&amp;S</button>}
         </div>
+        {ssHits.length > 0 && (
+          <div className="panel-b" style={{ paddingTop: 0 }}>
+            <div className="ss-hits">
+              {ssHits.map((h) => {
+                const have = items.some((g) => g.ss_style_id === h.styleID);
+                return (
+                  <div key={h.styleID} className="ss-hit">
+                    <b>{h.brand} {h.style}</b><span>{h.title}</span>
+                    {have ? <span className="faint">In catalog</span> : <button className="btn sm" type="button" disabled={!!ssBusy} onClick={() => addOne(h.styleID, `${h.brand} ${h.style}`)}>Add</button>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
       <div className="toolbar"><input type="search" placeholder="Search style, brand, color…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
       <div className="tbl-wrap">

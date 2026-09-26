@@ -1,7 +1,7 @@
 "use client";
 import { ADULT_SIZES, FULL_COLOR, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
   gi: number;
@@ -17,7 +17,7 @@ type Props = {
   onDuplicate: () => void;
   onRemove: () => void;
   onSaveToCatalog: (l: GLine) => void;
-  onLookup?: (style: string) => Promise<Garment | null>;
+  onLookup?: (style: string, styleID?: number) => Promise<Garment | null>;
   lookingUp?: string;
 };
 
@@ -35,7 +35,12 @@ const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
 export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp }: Props) {
-  const findStyle = (style: string) => catalog.find((x) => x.style.toLowerCase() === style.trim().toLowerCase());
+  // exact style match; if the same number exists under several brands, only the brand given (or none) counts
+  const findStyle = (style: string, brand?: string) => {
+    const hits = catalog.filter((x) => x.style.toLowerCase() === style.trim().toLowerCase());
+    if (brand) return hits.find((x) => x.brand.toLowerCase() === brand.toLowerCase());
+    return hits.length === 1 ? hits[0] : undefined;
+  };
 
   function onStyle(li: number, style: string, found?: Garment) {
     update((x) => {
@@ -67,7 +72,6 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
     });
   }
 
-  const listId = `styles-${g.id}`;
   // Sizes shown for a row: the catalog's size run for that style, otherwise the adult run
   // (plus youth if the row already has youth quantities from an older order).
   const colsFor = (l: GLine): string[] => {
@@ -86,7 +90,6 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
       </div>
       {gc.wholesale && <div className="cs-banner">Customer supplied goods</div>}
       <div className="line-b">
-        <datalist id={listId}>{catalog.map((c) => <option key={c.id} value={c.style}>{[c.brand, c.description].filter(Boolean).join(" ")}</option>)}</datalist>
         <div className="lbl" style={{ marginBottom: -4 }}>GARMENTS</div>
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head">
@@ -96,7 +99,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           </div>
           {g.lines.map((l, li) => {
             const lc = gc.lines[li];
-            const hit = findStyle(l.style);
+            const hit = findStyle(l.style, l.brand);
             const colorsId = `colors-${l.id}`;
             const sized = !l.oneSize && lineTotal(l) > 0; // sizes entered below, so Qty is their total
             const setQty = (s: keyof GLine["sizes"], raw: string) => update((x) => { const v = Math.max(0, Math.floor(+raw || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; });
@@ -104,10 +107,11 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
               <div key={l.id} className="gl">
                 <div className="gl-row">
                   <div className="a-st">
-                    <input type="text" list={listId} aria-label="Style number" placeholder="Style # (G5000)" value={l.style} onChange={(e) => onStyle(li, e.target.value)}
-                      onBlur={() => { const st = l.style.trim(); if (st && !findStyle(st) && onLookup) onLookup(st).then((g) => { if (g) onStyle(li, g.style, g); }); }}
-                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
-                    {lookingUp === l.style.trim().toUpperCase() && <div className="ink-hint">Looking up S&amp;S…</div>}
+                    <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
+                      onType={(v) => onStyle(li, v)}
+                      onPick={(gm) => onStyle(li, gm.style, gm)}
+                      onPickSS={(h) => onLookup ? onLookup(h.style, h.styleID).then((gm) => { if (gm) onStyle(li, gm.style, gm); }) : Promise.resolve()} />
+                    {lookingUp && lookingUp === l.style.trim().toUpperCase() && <div className="ink-hint">Pulling from S&amp;S…</div>}
                   </div>
                   <div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
                   <div className="a-co">
@@ -309,5 +313,72 @@ function InchInput({ num, onNum, label, placeholder }: { num: string; onNum: (v:
         if (numeric && shown && !raw.includes('"') && raw === num) raw = raw.slice(0, -1);
         onNum(raw.replace(/["]/g, "").replace(/\s*(in\.?|inch(es)?)$/i, "").trim());
       }} />
+  );
+}
+
+type SSHit = { styleID: number; brand: string; style: string; title: string; image: string };
+/** Style # box: type a number and pick from your catalog or from every matching S&S style. */
+function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: {
+  value: string; catalog: Garment[]; busy: boolean;
+  onType: (v: string) => void; onPick: (g: Garment) => void; onPickSS: (h: SSHit) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hits, setHits] = useState<SSHit[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [active, setActive] = useState(0);
+  const q = value.trim().toLowerCase();
+  useEffect(() => {
+    if (!open || q.length < 2) { setHits([]); return; }
+    let live = true;
+    setLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/ss/search?q=${encodeURIComponent(q)}`);
+        const j = await r.json().catch(() => ({}));
+        if (live) setHits(Array.isArray(j.results) ? j.results : []);
+      } finally { if (live) setLoading(false); }
+    }, 350);
+    return () => { live = false; clearTimeout(t); };
+  }, [q, open]);
+  const stripped = q.replace(/^[a-z]{1,2}(?=\d)/, "");
+  const local = q ? catalog.filter((c) => [c.style, `${c.brand} ${c.style}`].some((x) => { const v = x.toLowerCase(); return v.startsWith(q) || v.startsWith(stripped) || v.includes(" " + stripped); })).slice(0, 8) : [];
+  const items: ({ kind: "cat"; g: Garment } | { kind: "ss"; h: SSHit })[] = [
+    ...local.map((g) => ({ kind: "cat" as const, g })),
+    ...hits.filter((h) => !catalog.some((c) => c.ss_style_id === h.styleID)).map((h) => ({ kind: "ss" as const, h })),
+  ];
+  const choose = (i: number) => {
+    const it = items[i];
+    if (!it) return;
+    setOpen(false);
+    if (it.kind === "cat") onPick(it.g); else onPickSS(it.h);
+  };
+  return (
+    <div className="style-pick">
+      <input type="text" aria-label="Style number" placeholder="Style #" value={value} autoComplete="off"
+        onChange={(e) => { onType(e.target.value); setOpen(true); setActive(0); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (!open || !items.length) return;
+          if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(items.length - 1, a + 1)); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
+          else if (e.key === "Enter") { e.preventDefault(); choose(active); }
+          else if (e.key === "Escape") setOpen(false);
+        }} />
+      {open && q.length >= 2 && (items.length || loading) ? (
+        <div className="style-menu" role="listbox">
+          {items.map((it, i) => (
+            <div key={it.kind === "cat" ? "c" + it.g.id : "s" + it.h.styleID} role="option" aria-selected={i === active}
+              className={"sm-item" + (i === active ? " on" : "")} onMouseDown={(e) => { e.preventDefault(); choose(i); }} onMouseEnter={() => setActive(i)}>
+              <b>{it.kind === "cat" ? `${it.g.brand} ${it.g.style}` : `${it.h.brand} ${it.h.style}`}</b>
+              <span>{it.kind === "cat" ? it.g.description : it.h.title}</span>
+              {it.kind === "ss" && <em>S&amp;S</em>}
+            </div>
+          ))}
+          {loading && <div className="sm-note">Searching S&amp;S…</div>}
+          {busy && <div className="sm-note">Pulling from S&amp;S…</div>}
+        </div>
+      ) : null}
+    </div>
   );
 }

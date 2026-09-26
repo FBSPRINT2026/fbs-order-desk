@@ -489,3 +489,14 @@ td > .sz-dim input{padding-right:7px}
 td > .sz-dim.on input{padding-right:24px}
 .imp-table td,.imp-table th{padding-left:2px;padding-right:2px}
 .sz-dim.on input{padding-right:40px}
+.style-pick{position:relative}
+.style-menu{position:absolute;z-index:30;top:calc(100% + 2px);left:0;width:min(420px,70vw);max-height:320px;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:4px}
+.sm-item{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:baseline;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px}
+.sm-item b{white-space:nowrap}
+.sm-item span{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sm-item em{font-style:normal;font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.05em}
+.sm-item.on{background:var(--accent-soft)}
+.sm-note{font-size:12px;color:var(--ink-3);padding:6px 8px}
+.ss-hits{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;max-height:360px;overflow:auto}
+.ss-hit{display:grid;grid-template-columns:180px 1fr auto;gap:10px;align-items:center;padding:6px 10px;font-size:13px;border-bottom:1px solid var(--line-2)}
+.ss-hit span{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
