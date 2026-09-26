@@ -12,6 +12,8 @@ import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, bigg
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
 /** Per imprint: colors found in the logo and the ink each one prints as. */
+type Side = "front" | "back" | "sleeve";
+const SIDES: { id: Side; label: string }[] = [{ id: "front", label: "Front" }, { id: "back", label: "Back" }, { id: "sleeve", label: "Sleeves" }];
 type Paint = { design: string; sources: { hex: string; share: number }[]; map: Record<string, { name: string; hex: string }> };
 
 export default function MockupPage() {
@@ -48,6 +50,7 @@ function Builder() {
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
   const [paints, setPaints] = useState<Record<string, Paint>>({});
   const [grid, setGrid] = useState(false);
+  const [tab, setTab] = useState<"" | Side>("");
   const [want, setWant] = useState<Record<string, number>>({}); // width (in) someone tried to drag past the location's max
   const [askUploaded, setAskUploaded] = useState(false);
   const [keepLoc, setKeepLoc] = useState<string[]>([]); // imprints where staff said "keep this location"
@@ -225,6 +228,10 @@ function Builder() {
     }
     return { ...b, x: b.x + o.dx, y: b.y + o.dy, wIn, hIn: wIn * r, d };
   };
+  // imprint tabs: front, back, sleeves
+  const sideOf = (loc: string): Side => (viewsFor(loc).length > 1 ? "sleeve" : spotFor(loc).view);
+  const curTab: Side = tab || (["front", "back", "sleeve"] as Side[]).find((t) => imprints.some((im) => sideOf(im.location) === t)) || "front";
+  const locsFor = (t: Side) => LOCATIONS.filter((z) => sideOf(z) === t);
   const views: View[] = (["front", "back"] as View[]).filter((v) => imprints.some((im) => viewsFor(im.location).includes(v)));
   const line = lines[active] || lines[0];
   // designs are sized on a Large: adult L (22" chest) or youth L (18" chest) for youth styles
@@ -419,7 +426,7 @@ function Builder() {
           })}
           <div className={"mk-canvas" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
           <div className="mk-views">
-            {(views.length ? views : (["front"] as View[])).map((v) => (
+            {(["front", "back"] as View[]).map((v) => (
               <Stage key={v} grid={grid} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => {
@@ -515,14 +522,18 @@ function Builder() {
             </section>
           )}
           <section className={"panel" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
-            <div className="panel-h"><h2>Imprints</h2><button className="btn sm" type="button" onClick={() => setImprints([...imprints, newImprint(LOCATIONS.find((z) => !imprints.some((i) => i.location === z)) || "Full Back")])}>+ Add location</button></div>
+            <div className="panel-h"><h2>Imprints</h2><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}>+ Add {curTab === "sleeve" ? "sleeve" : curTab} location</button></div>
+            <div className="chips mk-tabs">
+              {SIDES.map((t) => { const n = imprints.filter((im) => sideOf(im.location) === t.id).length; return <button key={t.id} type="button" className={"chip" + (curTab === t.id ? " on" : "")} onClick={() => setTab(t.id)}>{t.label}{n ? ` (${n})` : ""}</button>; })}
+            </div>
             <div className="panel-b stack">
-              {imprints.map((im) => {
+              {imprints.every((im) => sideOf(im.location) !== curTab) && <div className="faint" style={{ fontSize: 13 }}>No {curTab === "sleeve" ? "sleeve" : curTab} prints yet.</div>}
+              {imprints.filter((im) => sideOf(im.location) === curTab).map((im) => {
                 const p = place(im);
                 return (
                   <div key={im.id} className="mk-imp">
                     <div className="row" style={{ justifyContent: "space-between" }}>
-                      <select aria-label="Location" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{LOCATIONS.map((z) => <option key={z}>{z}</option>)}</select>
+                      <select aria-label="Location" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
                       <select aria-label={`Method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x))); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                       <button className="btn icon ghost" type="button" aria-label={`Remove ${im.location}`} onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>✕</button>
                       <span className="faint" style={{ fontSize: 12 }}>{p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot;</span>

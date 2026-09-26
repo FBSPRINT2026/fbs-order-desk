@@ -604,3 +604,5 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-near .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mk-near .q{font-size:11px;color:var(--faint,#8a93a3);white-space:nowrap}
 .mk-pop .mk-match{margin:8px 0 0}
+.mk-tabs{margin:8px 12px 0}
+.mk-tabs .chip{flex:1}
