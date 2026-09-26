@@ -17,6 +17,8 @@ export async function GET() {
     BREVO_API_KEY: has("BREVO_API_KEY"),
     EMAIL_FROM: has("EMAIL_FROM"),
     SHOP_NOTIFY_EMAIL: has("SHOP_NOTIFY_EMAIL"),
+    SS_ACCOUNT_NUMBER: has("SS_ACCOUNT_NUMBER"),
+    SS_API_KEY: has("SS_API_KEY"),
   };
   const url = SUPABASE_URL;
   const checks: Record<string, string> = {

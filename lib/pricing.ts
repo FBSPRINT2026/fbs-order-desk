@@ -52,6 +52,8 @@ export type GLine = {
   oneSize?: boolean;
   /** Sizes this garment comes in, copied from the catalog when the style is picked. */
   sizeRun?: string[];
+  /** 2XL+ material charge per piece from the supplier's size pricing (S&S). Overrides the settings upcharges on retail. */
+  sizeUp?: Partial<Record<Size, number>>;
 };
 /** Garments that share the same imprints. Quantity breaks use the group total. */
 export type Group = { id: string; name?: string; lines: GLine[]; imprints: Imprint[]; finishing?: string[]; youth?: boolean };
@@ -73,7 +75,7 @@ export type Order = {
   approved_name: string | null; created_at: string; updated_at: string;
   price_type: PriceType; po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
 };
-export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[] };
+export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; size_costs?: Record<string, number>; ss_style_id?: number | null; image?: string; synced_at?: string | null };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string };
 export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType };
@@ -258,7 +260,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     let sub = 0, upTotal = 0;
     SIZES.forEach((sz) => {
       const q = num(l.sizes?.[sz]);
-      const up = num(pl.upcharges?.[sz]);
+      const up = pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? num(l.sizeUp[sz]) : num(pl.upcharges?.[sz]);
       sub += q * each; // 2XL+ Materials Charge are billed as their own line
       upTotal += q * up;
     });

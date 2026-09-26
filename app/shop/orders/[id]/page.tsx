@@ -33,6 +33,21 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [prodNotes, setProdNotes] = useState("");
   const [catalog, setCatalog] = useState<Garment[]>([]);
+  const [lookingUp, setLookingUp] = useState("");
+  // Style not in the catalog yet: pull it from S&S (saves it to the catalog too)
+  async function lookupStyle(style: string): Promise<Garment | null> {
+    const key = style.trim().toUpperCase();
+    if (!key || lookingUp === key) return null;
+    setLookingUp(key);
+    try {
+      const r = await fetch(`/api/ss/lookup?style=${encodeURIComponent(key)}`);
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.garment) { say(j.error || "Couldn't find that style on S&S."); return null; }
+      const g = j.garment as Garment;
+      setCatalog((c) => [...c.filter((x) => x.style.toLowerCase() !== g.style.toLowerCase()), g].sort((a, b) => a.style.localeCompare(b.style)));
+      return g;
+    } finally { setLookingUp(""); }
+  }
   const [art, setArt] = useState<(ArtFile & { url?: string })[]>([]);
   const [newCust, setNewCust] = useState<null | { company: string; name: string; email: string; phone: string; price_type: PriceType }>(null);
   const [saveState, setSaveState] = useState("");
@@ -419,7 +434,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
             <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
           ))}

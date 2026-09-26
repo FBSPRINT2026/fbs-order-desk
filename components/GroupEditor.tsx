@@ -17,6 +17,8 @@ type Props = {
   onDuplicate: () => void;
   onRemove: () => void;
   onSaveToCatalog: (l: GLine) => void;
+  onLookup?: (style: string) => Promise<Garment | null>;
+  lookingUp?: string;
 };
 
 /** Screen prints: the inks listed must match the number of colors chosen. */
@@ -32,15 +34,20 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog }: Props) {
+export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp }: Props) {
   const findStyle = (style: string) => catalog.find((x) => x.style.toLowerCase() === style.trim().toLowerCase());
 
-  function onStyle(li: number, style: string) {
+  function onStyle(li: number, style: string, found?: Garment) {
     update((x) => {
       const l = x.lines[li];
       l.style = style;
-      const hit = findStyle(style);
+      const hit = found || findStyle(style);
       if (hit) {
+        // 2XL+ material charge = supplier's size price above the base price
+        const sc = hit.size_costs || {};
+        const up: GLine["sizeUp"] = {};
+        for (const z of ["2XL", "3XL", "4XL", "5XL"] as const) if (sc[z] && hit.cost) up[z] = Math.max(0, Math.round((sc[z] - +hit.cost) * 100) / 100);
+        l.sizeUp = Object.keys(up).length ? up : undefined;
         // picking a catalog style always refreshes its details and blank cost
         l.garment = hit.description;
         l.brand = hit.brand;
@@ -97,7 +104,10 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
               <div key={l.id} className="gl">
                 <div className="gl-row">
                   <div className="a-st">
-                    <input type="text" list={listId} aria-label="Style number" placeholder="Style # (G5000)" value={l.style} onChange={(e) => onStyle(li, e.target.value)} />
+                    <input type="text" list={listId} aria-label="Style number" placeholder="Style # (G5000)" value={l.style} onChange={(e) => onStyle(li, e.target.value)}
+                      onBlur={() => { const st = l.style.trim(); if (st && !findStyle(st) && onLookup) onLookup(st).then((g) => { if (g) onStyle(li, g.style, g); }); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                    {lookingUp === l.style.trim().toUpperCase() && <div className="ink-hint">Looking up S&amp;S…</div>}
                   </div>
                   <div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
                   <div className="a-co">
@@ -122,7 +132,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                 ) : (
                   <div className="szrow">
                     {(colsFor(l) as (keyof GLine["sizes"])[]).map((s, si, arr) => {
-                      const up = prices.upcharges[s as keyof typeof prices.upcharges];
+                      const up = !gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? l.sizeUp[s] : prices.upcharges[s as keyof typeof prices.upcharges];
                       return (
                         <label key={s} className={"szc" + (s === "YXL" && si < arr.length - 1 ? " ysep" : "")}>
                           <span>{s}</span>

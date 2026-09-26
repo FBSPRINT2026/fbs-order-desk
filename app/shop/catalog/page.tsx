@@ -37,6 +37,26 @@ export default function CatalogPage() {
   const [showBulk, setShowBulk] = useState(false);
   const [msg, setMsg] = useState("");
   const [armed, setArmed] = useState("");
+  const [ssq, setSsq] = useState("");
+  const [ssBusy, setSsBusy] = useState("");
+
+  // Pull styles from S&S Activewear (colors, sizes, your price, 2XL+ prices) into the catalog
+  async function addFromSS(list: string[]) {
+    const styles = list.map((x) => x.trim()).filter(Boolean);
+    if (!styles.length) return;
+    const bad: string[] = [];
+    let ok = 0;
+    for (const st of styles) {
+      setSsBusy(st);
+      const r = await fetch(`/api/ss/lookup?style=${encodeURIComponent(st)}`);
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.garment) ok++; else bad.push(`${st}: ${j.error || r.status}`);
+    }
+    setSsBusy("");
+    setMsg(`Pulled ${ok} of ${styles.length} from S&S.${bad.length ? " " + bad.join("; ") : ""}`);
+    setSsq("");
+    load();
+  }
 
   const load = async () => {
     const { data } = await sb.from("garments").select("*").order("style");
@@ -93,6 +113,14 @@ export default function CatalogPage() {
           </div>
         </section>
       )}
+      <section className="panel" style={{ marginBottom: 14 }}>
+        <div className="panel-h"><h2>Add from S&amp;S Activewear</h2><span className="faint" style={{ fontSize: 12 }}>Styles typed on an order are pulled in automatically too</span></div>
+        <div className="panel-b row">
+          <input type="text" placeholder="Style numbers, e.g. G5000, 18500, BC3001" value={ssq} onChange={(e) => setSsq(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addFromSS(ssq.split(/[,\s]+/)); }} style={{ maxWidth: 420 }} aria-label="S&S style numbers" />
+          <button className="btn primary" type="button" disabled={!!ssBusy} onClick={() => addFromSS(ssq.split(/[,\s]+/))}>{ssBusy ? `Pulling ${ssBusy}…` : "Add from S&S"}</button>
+          {items.some((g) => g.ss_style_id) && <button className="btn" type="button" disabled={!!ssBusy} onClick={() => addFromSS(items.filter((g) => g.ss_style_id).map((g) => g.style))}>Refresh all from S&amp;S</button>}
+        </div>
+      </section>
       <div className="toolbar"><input type="search" placeholder="Search style, brand, color…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
       <div className="tbl-wrap">
         <table className="tbl" style={{ minWidth: 860 }}>
