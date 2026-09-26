@@ -93,3 +93,20 @@ export function recolor(img: HTMLImageElement, sources: string[], targets: Recor
   x.putImageData(data, 0, 0);
   return c.toDataURL("image/png");
 }
+
+const lab = (h: string) => {
+  const [r, g, b] = rgb(h).map((v) => { v /= 255; return v > 0.04045 ? ((v + 0.055) / 1.055) ** 2.4 : v / 12.92; });
+  const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const X = f((r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047), Y = f(r * 0.2126 + g * 0.7152 + b * 0.0722), Z = f((r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883);
+  return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)];
+};
+/** The standard Wilflex RFU ink that looks closest to a color (by how the eye sees it, not raw RGB). */
+export function closestInk(hex: string): { name: string; hex: string } {
+  const a = lab(hex);
+  let best = "Black", bd = Infinity;
+  for (const [name, h] of Object.entries(WILFLEX_HEX)) {
+    const b = lab(h), dd = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+    if (dd < bd) { bd = dd; best = name; }
+  }
+  return { name: best, hex: WILFLEX_HEX[best] };
+}

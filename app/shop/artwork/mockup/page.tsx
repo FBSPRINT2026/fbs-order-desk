@@ -6,8 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { LOCATIONS, METHODS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
 import { previewUrls, uploadDesign } from "@/lib/designs";
-import { PMS_HEX, WILFLEX_HEX, colorHex, detectColors, recolor } from "@/lib/inkColors";
-import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, guessHex, measureGarment, printWidth, smallerSpot, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, detectColors, recolor } from "@/lib/inkColors";
+import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, biggerSpot, guessHex, measureGarment, printWidth, smallerSpot, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -48,6 +48,8 @@ function Builder() {
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
   const [paints, setPaints] = useState<Record<string, Paint>>({});
   const [grid, setGrid] = useState(false);
+  const [want, setWant] = useState<Record<string, number>>({}); // width (in) someone tried to drag past the location's max
+  const [askUploaded, setAskUploaded] = useState(false);
   const [keepLoc, setKeepLoc] = useState<string[]>([]); // imprints where staff said "keep this location"
   const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
@@ -120,6 +122,29 @@ function Builder() {
     }
     setPainted(next);
   }, [paints, imprints]);
+
+  /** Set several logo colors at once (e.g. every color to its closest standard ink). */
+  function setInks(id: string, picks: Record<string, { name: string; hex: string }>) {
+    setPaints((p) => {
+      const pt = p[id];
+      if (!pt) return p;
+      const map = { ...pt.map, ...picks };
+      const inks = pt.sources.map((x) => map[x.hex]).filter((x) => x && x.name !== "none").map((x) => x!.name);
+      setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors } : x)));
+      return { ...p, [id]: { ...pt, map } };
+    });
+  }
+  /** Logo colors still printing "as uploaded" (no standard ink picked), per imprint. */
+  const unsetColors = (im: Imprint) => { const pt = paints[im.id]; return pt && pt.design === im.design_id ? pt.sources.filter((x) => !pt.map[x.hex]).map((x) => x.hex) : []; };
+  const matchStandard = (im: Imprint) => setInks(im.id, Object.fromEntries(unsetColors(im).map((h) => [h, closestInk(h)])));
+  /** Grow a print; past the location's max it stops at the max and offers a bigger location. */
+  const growTo = (im: Imprint, inches: number) => {
+    const cap = maxWidthFor(im.location, ratioOf(designOf(im)));
+    setWant((w) => { const n = { ...w }; if (inches > cap + 0.05) n[im.id] = inches; else delete n[im.id]; return n; });
+    const v = Math.max(0.5, Math.min(cap, Math.round(inches * 100) / 100));
+    setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${v}" wide` } : x)));
+    return v;
+  };
 
   function setInk(im: Imprint, src: string, v: { name: string; hex: string } | null) {
     setPaints((p) => {
@@ -301,8 +326,10 @@ function Builder() {
     return true;
   }
 
-  async function saveAll() {
+  async function saveAll(force = false) {
     if (!customerId) return setMsg("Pick a customer so the mockups save to their account.");
+    if (!force && imprints.some((im) => unsetColors(im).length)) { setAskUploaded(true); return; }
+    setAskUploaded(false);
     if (!lines.some((l) => l.style || l.color)) return setMsg("Add a garment and color first.");
     const missing = imprints.filter((im) => !designOf(im));
     if (missing.length) return setMsg(`${missing.map((m) => m.location).join(", ")} ${missing.length > 1 ? "have" : "has"} no design yet. Pick one of the customer's designs or upload new art.`);
@@ -341,9 +368,17 @@ function Builder() {
       <Link className="back" href={orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
       <div className="page-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || "Mockup builder"}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup builder"}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}<button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={saveAll}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
+        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}<button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
       </div>
 
+      {askUploaded && (
+        <div className="confirm-bar" style={{ marginBottom: 10 }}>
+          <span>Some design colors are still &quot;as uploaded&quot; instead of a standard ink ({imprints.filter((im) => unsetColors(im).length).map((im) => `${im.location}: ${unsetColors(im).length}`).join(", ")}). Set them to the closest Wilflex RFU inks?</span>
+          <button type="button" className="btn sm primary" onClick={() => { imprints.forEach(matchStandard); setAskUploaded(false); setMsg("Matched to the closest standard inks. Check them, then save."); }}>Use closest standard inks</button>
+          <button type="button" className="btn sm" onClick={() => saveAll(true)}>Save as uploaded</button>
+          <button type="button" className="btn sm ghost" onClick={() => setAskUploaded(false)}>Cancel</button>
+        </div>
+      )}
       <div className="mk">
         <div className="mk-stage-wrap">
           {lines.length > 1 && (
@@ -353,6 +388,23 @@ function Builder() {
           )}
           <div className="faint" style={{ fontSize: 12, marginBottom: 6 }}>Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}.</div>
           {!ready && <div className="confirm-bar" style={{ marginBottom: 8 }}><span>{notReady}</span></div>}
+          {ready && imprints.map((im) => {
+            const w = want[im.id]; if (!w) return null;
+            const r = ratioOf(designOf(im));
+            const big = biggerSpot(im.location, w, r ? w * r : 0);
+            const sp = spotFor(im.location);
+            return (
+              <div key={"big" + im.id} className="confirm-bar" style={{ marginBottom: 8 }}>
+                <span>The {im.location} print area tops out at {sp.maxW}&quot; × {sp.maxH}&quot;. {big.length ? `Move it to ${big.join(" or ")} to make it ${w.toFixed(1)}" wide?` : "That's as big as a print gets here."}</span>
+                {big.map((z, i) => <button key={z} type="button" className={"btn sm" + (i === 0 ? " primary" : "")} onClick={() => {
+                  setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: z, size: `${Math.round(Math.min(w, maxWidthFor(z, r)) * 100) / 100}" wide`, keepLocation: false } : x)));
+                  setOffsets((o) => { const n = { ...o }; delete n[im.id]; return n; });
+                  setWant((q) => { const n = { ...q }; delete n[im.id]; return n; });
+                }}>{z}</button>)}
+                <button type="button" className="btn sm ghost" onClick={() => setWant((q) => { const n = { ...q }; delete n[im.id]; return n; })}>Keep {im.location}</button>
+              </div>
+            );
+          })}
           {ready && imprints.map((im) => {
             const p = place(im);
             const sug = keepLoc.includes(im.id) || im.keepLocation || !p.d ? [] : smallerSpot(im.location, p.wIn, p.hIn, (offsets[im.id]?.dx || 0) / (PX_PER_IN * scale));
@@ -384,12 +436,10 @@ function Builder() {
                 onResize={(id, newW) => {
                   const im = imprints.find((x) => x.id === id); if (!im) return;
                   const old = place(im, v);
-                  const cap = maxWidthFor(im.location, ratioOf(designOf(im)));
-                  const inches = Math.min(cap, Math.round((newW / (PX_PER_IN * scale * old.k)) * 100) / 100);
+                  const inches = growTo(im, newW / (PX_PER_IN * scale * old.k));
                   newW = inches * PX_PER_IN * scale * old.k;
                   // keep the left edge where it is while the size changes (sleeves stay centered on the fold)
                   if (!old.clip) setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + (newW - old.w) / 2 / old.k, dy: o[id]?.dy || 0 } }));
-                  setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, size: `${inches}" wide` } : x)));
                 }}
                 onPick={pickColor} />
             ))}
@@ -410,11 +460,7 @@ function Builder() {
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
-                    onResize={(newWIn) => {
-                      const cap = maxWidthFor(im.location, ratioOf(d));
-                      const inches = Math.max(0.5, Math.min(cap, Math.round(newWIn * 100) / 100));
-                      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${inches}" wide` } : x)));
-                    }} />
+                    onResize={(newWIn) => { growTo(im, newWIn); }} />
                 );
               })}
             </div>
@@ -489,7 +535,10 @@ function Builder() {
                     </div>
                     {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <div className="mk-colors">
-                        <div className="lbl">COLORS IN THIS DESIGN</div>
+                        <div className="row" style={{ justifyContent: "space-between" }}>
+                          <div className="lbl">COLORS IN THIS DESIGN</div>
+                          {unsetColors(im).length > 0 && <button type="button" className="btn sm" title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={() => matchStandard(im)}>Use closest standard inks</button>}
+                        </div>
                         {paints[im.id].sources.map((src) => {
                           const cur = paints[im.id].map[src.hex];
                           return (
@@ -498,6 +547,7 @@ function Builder() {
                               <span className="arrow">→</span>
                               <span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : src.hex }} />
                               <InkSelect value={cur} onChange={(v) => setInk(im, src.hex, v)} />
+                              {!cur && (() => { const c = closestInk(src.hex); return <button type="button" className="btn sm ghost mk-near" title={`Closest standard ink: ${c.name}`} onClick={() => setInk(im, src.hex, c)}><span className="sw" style={{ background: c.hex }} />{c.name}?</button>; })()}
                             </div>
                           );
                         })}
@@ -516,7 +566,9 @@ function Builder() {
                           // cap at the location's max print area (e.g. sleeves 3.5" x 3.5")
                           const r = ratioOf(designOf(im)) || 0;
                           const cap = dim === "wide" ? maxWidthFor(im.location, r) : maxWidthFor(im.location, r) * (r || 1);
-                          if (t && !t.endsWith(".") && +t > cap) t = String(Math.round(cap * 100) / 100);
+                          const over = t && !t.endsWith(".") && +t > cap ? +t : 0;
+                          setWant((w) => { const n = { ...w }; if (over) n[im.id] = dim === "wide" ? over : r ? over / r : over; else delete n[im.id]; return n; });
+                          if (over) t = String(Math.round(cap * 100) / 100);
                           setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "" } : x)));
                         };
                         return (

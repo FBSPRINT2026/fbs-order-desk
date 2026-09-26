@@ -149,6 +149,14 @@ export function smallerSpot(location: string, wIn: number, hIn: number, dxIn = 0
   return [];
 }
 
+/** Bigger locations a print could move to when it's grown past this location's max area (smallest that fits first). */
+export function biggerSpot(location: string, wIn: number, hIn: number): string[] {
+  const spot = spotFor(location);
+  if (spot.wrap) return [];
+  const opts = spot.view === "back" ? ["Medium Back", "Full Back"] : ["Medium Front", "Full Front"];
+  return opts.filter((z) => z !== location && LOCATION_SPOTS[z].maxW >= wIn && LOCATION_SPOTS[z].maxH >= (hIn || 0) && LOCATION_SPOTS[z].maxW > spot.maxW);
+}
+
 /** Width in inches from the imprint's print size ("11\" wide", "4\" tall", "MAX wide") and the design's proportions. */
 export function printWidth(size: string, location: string, ratio: number): number {
   const spot = spotFor(location);
