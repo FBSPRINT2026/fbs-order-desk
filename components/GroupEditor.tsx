@@ -174,9 +174,8 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                     </td>
                     <td><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></td>
                     <td>
-                      <label className={"sz-dim" + (d.drop ? " on" : "")}>
-                        <input type="text" inputMode="decimal" aria-label="Drop in inches (blank = standard)" placeholder="Standard" value={d.drop || ""} onChange={(e) => update((x) => { x.imprints[di].drop = e.target.value.replace(/["]/g, "").replace(/\s*in\.?$/i, "").trim(); })} />
-                        {d.drop ? <span>in.</span> : null}
+                      <label className="sz-dim">
+                        <InchInput label="Drop in inches (blank = standard)" placeholder="Standard" num={d.drop || ""} onNum={(v) => update((x) => { x.imprints[di].drop = v; })} />
                       </label>
                     </td>
                     <td><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></td>
@@ -276,9 +275,23 @@ export function SizeField({ value, onChange }: { value: string; onChange: (v: st
   const set = (d: "W" | "H", raw: string) => { const t = raw.replace(/["]/g, "").trim(); onChange(t ? `${t}" ${d === "W" ? "wide" : "tall"}` : ""); };
   const box = (d: "W" | "H") => (
     <label className={"sz-dim" + (dim === d ? " on" : "")} key={d}>
-      <input type="text" inputMode="decimal" aria-label={d === "W" ? "Print width in inches" : "Print height in inches"} placeholder={d === "W" ? "Width" : "Height"} value={dim === d ? num : ""} onChange={(e) => set(d, e.target.value)} />
-      <span>{dim === d ? (d === "W" ? "in. wide" : "in. tall") : d}</span>
+      <InchInput label={d === "W" ? "Print width in inches" : "Print height in inches"} placeholder={d === "W" ? "Width" : "Height"} num={dim === d ? num : ""} onNum={(v) => set(d, v)} />
+      <span>{dim === d ? (d === "W" ? "wide" : "tall") : d}</span>
     </label>
   );
   return <div className="sz-field">{[dim !== "H" ? box("W") : null, dim !== "W" ? box("H") : null]}</div>;
+}
+
+/** Number box that shows inches as 11" (the quote follows the number). */
+function InchInput({ num, onNum, label, placeholder }: { num: string; onNum: (v: string) => void; label: string; placeholder: string }) {
+  const shown = num ? `${num}"` : "";
+  return (
+    <input type="text" inputMode="decimal" aria-label={label} placeholder={placeholder} value={shown}
+      onChange={(e) => {
+        let raw = e.target.value;
+        // backspacing over the " removes the last digit instead
+        if (shown && !raw.includes('"') && raw === num) raw = raw.slice(0, -1);
+        onNum(raw.replace(/["]/g, "").replace(/\s*(in\.?|inch(es)?)$/i, "").trim());
+      }} />
+  );
 }
