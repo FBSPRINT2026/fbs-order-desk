@@ -36,7 +36,7 @@ export const THREAD_COLORS = ["White", "Black", "Navy", "Royal", "Light Blue", "
 export const ROLES = { owner: "Owner", admin: "Admin (orders, customers, payments)", production: "Production manager", receiving: "Receiving", shipping: "Shipping" } as const;
 export type Role = keyof typeof ROLES;
 /** Print locations (match the fbsprint.com order form). */
-export const LOCATIONS = ["Left Chest", "Right Chest", "Full Front", "Full Back", "Upper Back (Yoke)", "Left Sleeve", "Right Sleeve", "Pocket"];
+export const LOCATIONS = ["Left Chest", "Right Chest", "Full Front", "Medium Front", "Center Chest", "Across Chest", "Full Back", "Medium Back", "Upper Back (Yoke)", "Across Shoulders", "Left Sleeve", "Right Sleeve", "Left Vertical", "Right Vertical", "Front Bottom Left", "Front Bottom Right", "Pocket"];
 export const SHIP_METHODS = [
   "UPS Ground", "UPS 3 Day Select", "UPS 2nd Day Air", "UPS Next Day Air",
   "FedEx Ground", "FedEx Home Delivery", "FedEx Express Saver", "FedEx 2Day", "FedEx Standard Overnight",

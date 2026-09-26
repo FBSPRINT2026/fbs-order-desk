@@ -1,8 +1,7 @@
 /**
  * Mockup geometry. Garment photos from S&S are 1000 x 1250 (front and back, flat).
  * Everything here is in that 1000-wide coordinate space.
- * Calibrated on the Gildan 5000 photos (shirt on a form): a full-front 11" x 16" print area and 13.5" x 18" max
- * land where they do on a real shirt at ~34 px per inch.
+ * Calibrated on the Gildan 5000 photos (shirt on a form): print areas land where they do on a real shirt at ~34 px per inch.
  */
 export const PHOTO_W = 1000;
 export const PHOTO_H = 1250;
@@ -15,16 +14,26 @@ type Loc = { view: View; dx?: number; drop?: number; abs?: { x: number; y: numbe
 
 /** Where each order-form location sits (dx = inches right of center as you look at the shirt; drop = inches below the collar). */
 export const LOCATION_SPOTS: Record<string, Loc> = {
-  "Full Front": { view: "front", dx: 0, drop: 3, defW: 11, maxW: 13.5, maxH: 18 },
-  "Left Chest": { view: "front", dx: 4, drop: 3, defW: 3.5, maxW: 4.5, maxH: 4.5 },
-  "Right Chest": { view: "front", dx: -4, drop: 3, defW: 3.5, maxW: 4.5, maxH: 4.5 },
-  Pocket: { view: "front", dx: 4, drop: 5, defW: 3, maxW: 4, maxH: 4 },
+  // max print areas from the FBS apparel placement guide (width x height)
+  "Full Front": { view: "front", dx: 0, drop: 3, defW: 11, maxW: 12, maxH: 14 },
+  "Medium Front": { view: "front", dx: 0, drop: 3, defW: 8, maxW: 8, maxH: 8 },
+  "Center Chest": { view: "front", dx: 0, drop: 3, defW: 4.5, maxW: 5, maxH: 5 },
+  "Across Chest": { view: "front", dx: 0, drop: 3, defW: 11, maxW: 12, maxH: 4 },
+  "Left Chest": { view: "front", dx: 4.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
+  "Right Chest": { view: "front", dx: -4.5, drop: 3, defW: 3.5, maxW: 5, maxH: 5 },
+  Pocket: { view: "front", dx: 4.5, drop: 5, defW: 3, maxW: 4, maxH: 4 },
   "Left Sleeve": { view: "front", abs: { x: 825, y: 385 }, defW: 3, maxW: 3.5, maxH: 3.5 },
   "Right Sleeve": { view: "front", abs: { x: 175, y: 385 }, defW: 3, maxW: 3.5, maxH: 3.5 },
-  "Full Back": { view: "back", dx: 0, drop: 4, defW: 12, maxW: 13.5, maxH: 18 },
-  "Upper Back (Yoke)": { view: "back", dx: 0, drop: 1.5, defW: 10, maxW: 13.5, maxH: 4 },
+  "Left Vertical": { view: "front", dx: 4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
+  "Right Vertical": { view: "front", dx: -4.5, drop: 4, defW: 4, maxW: 5, maxH: 14 },
+  "Front Bottom Left": { view: "front", dx: 4.5, drop: 21.5, defW: 4.5, maxW: 5, maxH: 6 },
+  "Front Bottom Right": { view: "front", dx: -4.5, drop: 21.5, defW: 4.5, maxW: 5, maxH: 6 },
+  "Full Back": { view: "back", dx: 0, drop: 4, defW: 12, maxW: 12, maxH: 14 },
+  "Medium Back": { view: "back", dx: 0, drop: 4, defW: 8, maxW: 8, maxH: 8 },
+  "Upper Back (Yoke)": { view: "back", dx: 0, drop: 2, defW: 3.5, maxW: 4, maxH: 4 },
+  "Across Shoulders": { view: "back", dx: 0, drop: 2.5, defW: 12, maxW: 14, maxH: 4 },
 };
-export const spotFor = (location: string): Loc => LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 13.5, maxH: 18 };
+export const spotFor = (location: string): Loc => LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 12, maxH: 14 };
 
 /** Width in inches from the imprint's print size ("11\" wide", "4\" tall", "MAX wide") and the design's proportions. */
 export function printWidth(size: string, location: string, ratio: number): number {
