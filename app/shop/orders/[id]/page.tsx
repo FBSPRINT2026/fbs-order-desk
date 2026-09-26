@@ -482,16 +482,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <section className="panel" id="messages">
             <div className="panel-h"><h2>Customer communication</h2><Pill status={o.status} portal /></div>
             <div className="panel-b stack">
-              <div className="comm-sum">
+              {o.status !== "quote" && <div className="comm-sum">
                 <div><span>Quote</span><b>{o.status === "quote" ? "Draft (not sent)" : o.approved_at ? `Approved by ${o.approved_name || "customer"}` : o.sent_at ? `Sent ${fmtStamp(o.sent_at)}` : "In portal"}</b></div>
                 {o.approved_at && <div><span>Approved</span><b>{fmtStamp(o.approved_at)}</b></div>}
                 {proofs.length > 0 && <div><span>Proofs</span><b>{[proofs.filter((p) => p.status === "approved").length && `${proofs.filter((p) => p.status === "approved").length} approved`, pendingProofs && `${pendingProofs} waiting`, proofs.filter((p) => p.status === "changes").length && `${proofs.filter((p) => p.status === "changes").length} changes requested`].filter(Boolean).join(" · ")}</b></div>}
                 <div><span>Messages</span><b>{messages.length ? `${messages.length} · last ${messages[messages.length - 1].author_type === "staff" ? "from you" : "from customer"} ${fmtStamp(messages[messages.length - 1].created_at)}` : "None yet"}</b></div>
-              </div>
+              </div>}
               {o.status === "quote" ? (
                 <>
-                  <div className="muted" style={{ fontSize: 13 }}>This quote is a draft. The customer can&apos;t see it until you send it.</div>
-                  <textarea id="send-note" rows={2} placeholder="Optional note for the email" aria-label="Note for the email" />
+                  <textarea id="send-note" rows={4} placeholder="Message to the customer (goes with the quote)" aria-label="Message to the customer" />
                   <button className="btn primary" type="button" onClick={send}>Send quote to customer</button>
                 </>
               ) : (
@@ -507,6 +506,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   <button className="btn sm" type="button" onClick={() => navigator.clipboard?.writeText(portalLink).then(() => say("Link copied"))}>Copy</button>
                 </div>
               )}
+              {o.status !== "quote" && (
+                <>
               <div className="lbl" style={{ marginTop: 4 }}>MESSAGES</div>
               {messages.length ? (
                 <div className="thread">
@@ -521,6 +522,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <textarea aria-label="Message to customer" placeholder={o.status === "quote" ? "Customers see messages once the quote is sent" : "Write to the customer…"} value={draftMsg} onChange={(e) => setDraftMsg(e.target.value)} />
                 <button className="btn primary" type="button" onClick={postMessage} disabled={!draftMsg.trim()}>Send</button>
               </div>
+                </>
+              )}
             </div>
           </section>
 
