@@ -100,7 +100,6 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           {g.lines.map((l, li) => {
             const lc = gc.lines[li];
             const hit = findStyle(l.style, l.brand);
-            const colorsId = `colors-${l.id}`;
             const sized = !l.oneSize && lineTotal(l) > 0; // sizes entered below, so Qty is their total
             const setQty = (s: keyof GLine["sizes"], raw: string) => update((x) => { const v = Math.max(0, Math.floor(+raw || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; });
             return (
@@ -115,8 +114,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                   </div>
                   <div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
                   <div className="a-co">
-                    <input type="text" list={colorsId} aria-label="Color" placeholder="Color" value={l.color} onChange={(e) => update((x) => { x.lines[li].color = e.target.value; })} />
-                    {hit && <datalist id={colorsId}>{hit.colors.map((c) => <option key={c} value={c} />)}</datalist>}
+                    <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => { x.lines[li].color = v; })} />
                   </div>
                   <div className="a-de"><input type="text" aria-label="Description" placeholder={l.oneSize ? "Description (hat, koozie…)" : "Description (unisex tee)"} value={l.garment} onChange={(e) => update((x) => { x.lines[li].garment = e.target.value; })} /></div>
                   {!gc.wholesale && <div className="a-cs"><input type="number" step="0.01" min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
@@ -380,6 +378,42 @@ function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: {
           {busy && <div className="sm-note">Pulling from S&amp;S…</div>}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Color box: click shows the style's full color list (even when a color is already chosen); typing filters it. */
+function ColorPicker({ value, colors, onChange }: { value: string; colors: string[]; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState(false);
+  const [active, setActive] = useState(0);
+  const q = value.trim().toLowerCase();
+  const list = typed && q ? colors.filter((c) => c.toLowerCase().includes(q)).sort((a, b) => +!a.toLowerCase().startsWith(q) - +!b.toLowerCase().startsWith(q)) : colors;
+  const pick = (c: string) => { onChange(c); setOpen(false); setTyped(false); };
+  return (
+    <div className="style-pick">
+      <input type="text" aria-label="Color" placeholder="Color" value={value} autoComplete="off"
+        onChange={(e) => { onChange(e.target.value); setTyped(true); setOpen(true); setActive(0); }}
+        onFocus={() => { setTyped(false); setOpen(true); setActive(Math.max(0, colors.indexOf(value))); }}
+        onClick={() => { if (!open) { setTyped(false); setOpen(true); } }}
+        onBlur={() => setTimeout(() => { setOpen(false); setTyped(false); }, 150)}
+        onKeyDown={(e) => {
+          if (!open || !list.length) return;
+          if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(list.length - 1, a + 1)); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
+          else if (e.key === "Enter") { e.preventDefault(); pick(list[active]); }
+          else if (e.key === "Escape") setOpen(false);
+        }} />
+      {open && list.length > 0 && (
+        <div className="style-menu color-menu" role="listbox">
+          {list.map((c, i) => (
+            <div key={c} role="option" aria-selected={c === value} ref={i === active ? (el) => { el?.scrollIntoView({ block: "nearest" }); } : undefined} className={"sm-item" + (i === active ? " on" : "") + (c === value ? " cur" : "")}
+              onMouseDown={(e) => { e.preventDefault(); pick(c); }} onMouseEnter={() => setActive(i)}>
+              <b>{c}</b>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
