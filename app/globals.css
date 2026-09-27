@@ -530,7 +530,8 @@ td > .sz-dim.on input{padding-right:24px}
 .dp-size b{color:var(--ink)}
 .wo-design{display:inline-flex;align-items:center;gap:6px}
 .wo-design img{width:44px;height:44px;object-fit:contain;border:1px solid #C9D0DA;border-radius:3px}
-.mk{display:grid;grid-template-columns:minmax(0,934px) minmax(200px,1fr) 340px;gap:18px;align-items:start}
+/* below this the shirts get too small to work with: the page scrolls sideways instead */
+.mk{display:grid;grid-template-columns:minmax(540px,934px) minmax(200px,1fr) 340px;min-width:1116px;gap:18px;align-items:start}
 .mk-mini{display:flex;flex-direction:column;gap:14px;min-width:0}
 .mk-mini > .lbl{margin-bottom:-6px}
 .mk-views{display:flex;gap:14px;flex-wrap:nowrap}
@@ -859,12 +860,15 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-cname{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;font-weight:600}
 .mk-color.tight .lc-reset{border:1px solid var(--line);border-radius:6px}
 
-/* small controls sitting in the corners of the shirt photos */
-.mk-corner{position:absolute;bottom:8px;display:flex;gap:6px;align-items:center;z-index:5}
-.mk-corner.l{left:8px}.mk-corner.r{right:8px}
-.mk-pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--ink-2);background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:999px;padding:3px 9px;cursor:pointer;line-height:1.4;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+/* small controls sitting in the corners of the shirt photos: plain text, no boxes */
+.mk-corner{position:absolute;bottom:8px;display:flex;gap:12px;align-items:center;z-index:5}
+.mk-corner.l{left:10px}.mk-corner.r{right:10px}
+.mk-pill{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:11.5px;font-weight:500;color:var(--ink-3);background:none;border:0;padding:0;cursor:pointer;line-height:1.4}
 .mk-pill input{margin:0}
-.mk-pill.quiet{cursor:default;font-weight:500;color:var(--ink-3)}
-.mk-help{position:relative;width:22px;height:22px;padding:0;justify-content:center}
-.mk-tip{display:none;position:absolute;bottom:28px;left:0;width:230px;background:var(--ink,#1b1b1b);color:#fff;font-weight:500;font-size:12px;line-height:1.45;padding:8px 10px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:default}
-.mk-help:hover .mk-tip,.mk-help:focus .mk-tip{display:block}
+button.mk-pill:hover{color:var(--ink)}
+.mk-corner.r .mk-pill{cursor:default}
+/* first-hover tip over a logo */
+.mk-hint{position:absolute;z-index:6;transform:translate(-50%,calc(-100% - 8px));background:#1b1b1b;color:#fff;font-size:12px;font-weight:600;line-height:1.35;padding:7px 10px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.22);white-space:nowrap;pointer-events:none;display:flex;flex-direction:column;animation:mkHint .18s ease-out}
+.mk-hint span{font-weight:400;font-size:11px;opacity:.8}
+.mk-hint::after{content:"";position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:#1b1b1b}
+@keyframes mkHint{from{opacity:0;transform:translate(-50%,calc(-100% - 2px))}to{opacity:1}}

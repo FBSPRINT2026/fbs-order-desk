@@ -637,9 +637,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   <div className="mk-corner l">
                     <label className="mk-pill"><input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} /> Print areas</label>
                     {Object.keys(offsets).length > 0 && <button className="mk-pill" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
-                    <span className="mk-pill mk-help" tabIndex={0} aria-label="How to use">?<span className="mk-tip">Drag a logo to move it. Drag its corner to resize. Double-click a color to change it. The location updates on its own as you move and size it.</span></span>
                   </div>
-                ) : <div className="mk-corner r"><span className="mk-pill quiet">Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}</span></div>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
+                ) : <div className="mk-corner r"><span className="mk-pill">Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}</span></div>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => {
                   const im = imprints.find((x) => x.id === id);
@@ -800,6 +799,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 }
 
 /** One garment photo with designs you can drag, resize from the corner (proportions locked) and double-click to recolor. */
+/** The how-to tip shows the first time someone hovers a logo, then never again (remembered in this browser when it can be). */
+let tipSeen = false;
+const tipWasSeen = () => { if (tipSeen) return true; try { tipSeen = localStorage.getItem("mk-tip-seen") === "1"; } catch { /* private window */ } return tipSeen; };
+const markTipSeen = () => { tipSeen = true; try { localStorage.setItem("mk-tip-seen", "1"); } catch { /* private window */ } };
+
 function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, onEnd, onPick }: {
   src: string; label: string; /** the shirt's center on this photo, so the label sits under the shirt */ cx?: number; corner?: ReactNode; onEnd?: (id: string) => void; grid?: boolean; /** shirt-shaped mask: art never shows past the edge of the shirt */ mask?: string;
   items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; clip?: "" | "left" | "right"; area: { x: number; y: number; w: number; h: number } }; url: string }[];
@@ -810,6 +814,9 @@ function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, on
   const box = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size"; w: number; el?: HTMLElement } | null>(null);
   const [sel, setSel] = useState("");
+  const [tip, setTip] = useState("");
+  const tipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const endTip = () => { if (tipTimer.current) clearTimeout(tipTimer.current); tipTimer.current = null; setTip((t) => { if (t) markTipSeen(); return ""; }); };
   const lastDown = useRef<{ t: number; x: number; y: number; id: string } | null>(null);
   // the outline and resize handle only show while a design is selected; clicking anywhere else clears it
   useEffect(() => {
@@ -851,8 +858,14 @@ function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, on
         {items.map((it) => (
           <div key={it.id} className={"mk-art mk-hit" + (sel === it.id ? " sel" : "") + (it.url ? "" : " mk-missing")}
             style={{ left: `${it.p.x * s}%`, top: `${it.p.y * sy}%`, width: `${it.p.w * s}%`, height: `${it.p.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined, clipPath: it.p.clip === "left" ? "inset(0 50% 0 0)" : it.p.clip === "right" ? "inset(0 0 0 50%)" : undefined }}
+            onPointerEnter={() => {
+              if (!it.url || tipWasSeen() || tip) return;
+              setTip(it.id);
+              tipTimer.current = setTimeout(endTip, 4000);
+            }}
             onPointerDown={(e) => {
               e.stopPropagation();
+              endTip();
               // double-click (two quick clicks in the same spot) opens the color menu for the color under the cursor
               const now = Date.now(), last = lastDown.current;
               lastDown.current = { t: now, x: e.clientX, y: e.clientY, id: it.id };
@@ -886,6 +899,9 @@ function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, on
             )}
           </div>
         ))}
+        {tip && (() => { const it = items.find((x) => x.id === tip); return it ? (
+          <div className="mk-hint" style={{ left: `${(it.p.x + it.p.w / 2) * s}%`, top: `${it.p.y * sy}%` }}>Double-click to change a color<span>Drag to move · drag the corner to resize</span></div>
+        ) : null; })()}
         {corner}
       </div>
       <div className="mk-label" style={cx ? { transform: `translateX(${((cx / PHOTO_W) - 0.5) * 100}%)` } : undefined}>{label}</div>
