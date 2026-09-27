@@ -3,8 +3,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mergeSettings } from "@/lib/pricing";
+import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 
 const ICONS: Record<string, React.ReactNode> = {
+  assistant: <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
   orders: <svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3z" /><path d="M8 9h8M8 13h8M8 17h5" /></svg>,
   board: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="11" rx="1" /><rect x="17" y="4" width="4" height="7" rx="1" /></svg>,
@@ -21,6 +24,31 @@ export default function ShopNav({ email }: { email: string }) {
   const [unread, setUnread] = useState(0);
   const [incoming, setIncoming] = useState(0);
   const [creating, setCreating] = useState(false);
+  const [todo, setTodo] = useState({ all: 0, urgent: 0 });
+
+  // Assistant badge: follow-ups due now (refreshed every few minutes, not on every click)
+  useEffect(() => {
+    let live = true;
+    const run = async () => {
+      try {
+        const sb = createClient();
+        const [data, st, dec, sg] = await Promise.all([
+          loadAssistantData(sb),
+          sb.from("settings").select("data").eq("id", 1).maybeSingle(),
+          loadDecisions(sb),
+          sb.from("ai_suggestions").select("status,snoozed_until,priority").neq("source", "rules").in("status", ["open", "snoozed"]).limit(1000),
+        ]);
+        const rows = (sg.data || []) as { status: string; snoozed_until: string | null; priority: number }[];
+        const { open } = applyDecisions(computeFollowUps(data, mergeSettings(st.data?.data)), dec);
+        const now = Date.now();
+        const extra = rows.filter((r) => r.status === "open" || (r.snoozed_until && new Date(r.snoozed_until).getTime() <= now));
+        if (live) setTodo({ all: open.length + extra.length, urgent: open.filter((x) => x.priority === 1).length + extra.filter((x) => x.priority === 1).length });
+      } catch { /* the badge is a nice-to-have */ }
+    };
+    run();
+    const t = setInterval(run, 5 * 60 * 1000);
+    return () => { live = false; clearInterval(t); };
+  }, []);
 
   useEffect(() => {
     const sb = createClient();
@@ -32,6 +60,7 @@ export default function ShopNav({ email }: { email: string }) {
 
   const items: [string, string, string][] = [
     ["/shop", "orders", "Orders"],
+    ["/shop/assistant", "assistant", "Assistant"],
     ["/shop/incoming", "incoming", "Incoming orders"],
     ["/shop/board", "board", "Production"],
     ["/shop/calendar", "calendar", "Calendar"],
@@ -58,6 +87,7 @@ export default function ShopNav({ email }: { email: string }) {
         {items.map(([href, icon, label]) => (
           <Link key={href} href={href} className={active(href) ? "on" : ""} title={label}>
             {ICONS[icon]}<span className="lbl-t">{label}</span>
+            {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
             {href === "/shop/incoming" && incoming > 0 && <span className="badge" title={`${incoming} order request${incoming === 1 ? "" : "s"} to review`}>{incoming}</span>}
             {href === "/shop" && unread > 0 && <span className="badge" title={`${unread} unread customer message${unread === 1 ? "" : "s"}`}>{unread}</span>}
           </Link>

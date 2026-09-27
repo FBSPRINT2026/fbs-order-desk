@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mergeSettings, orderGroups, type Customer, type Order, type Settings } from "@/lib/pricing";
+import { withPrivate } from "@/lib/crm/private";
 
 export type OrderRow = Pick<Order, "id" | "number" | "nickname" | "status" | "type" | "due_date" | "total" | "qty" | "customer_id" | "lines" | "groups" | "created_at" | "rush" | "po_number" | "price_type" | "submitted_at" | "approved_at" | "sent_at" | "completed_at"> & {
   paid: number;
@@ -34,7 +35,8 @@ export function useShopData() {
     (m.data || []).forEach((x) => { unread[x.order_id] = (unread[x.order_id] || 0) + 1; });
     // customers' order requests they're still building stay out of the shop's lists until sent in
     setOrders((o.data || []).filter((x) => !(x.status === "request" && !x.submitted_at)).map((x) => ({ ...(x as Order), total: +x.total || 0, paid: paid[x.id] || 0, balance: Math.round(((+x.total || 0) - (paid[x.id] || 0)) * 100) / 100, unread: unread[x.id] || 0 })));
-    setCustomers(Object.fromEntries((c.data || []).map((x) => [x.id, x as Customer])));
+    const cs = await withPrivate(sb, (c.data || []) as Customer[]);
+    setCustomers(Object.fromEntries(cs.map((x) => [x.id, x])));
     setSettings(mergeSettings(s.data?.data));
     setLoading(false);
   }, []);

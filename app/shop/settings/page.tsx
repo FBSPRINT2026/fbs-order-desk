@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ROLES, calcGroup, mergeSettings, newGLine, newImprint, uid, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
+import { getAiStatus } from "@/app/shop/ai-actions";
 
 export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
@@ -12,11 +13,13 @@ export default function SettingsPage() {
   const [newStaff, setNewStaff] = useState("");
   const [tab, setTab] = useState<"retail" | "wholesale">("retail");
   const [shade, setShade] = useState<"dark" | "light">("dark");
+  const [aiKey, setAiKey] = useState<boolean | null>(null);
 
   useEffect(() => {
     const sb = createClient();
     sb.from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setS(mergeSettings(data?.data)));
     sb.from("staff").select("email,name,role").order("email").then(({ data }) => setStaff(data || []));
+    getAiStatus().then((r) => setAiKey(r.ok ? r.hasKey : false));
   }, []);
 
   function upd(fn: (d: Settings) => void) {
@@ -166,6 +169,50 @@ export default function SettingsPage() {
               <span className="faint" style={{ fontSize: 11.5 }}>Added only when they pay by credit card. Stax caps card surcharges at 3%, and debit cards can&apos;t be surcharged.</span></div>
             <div className="field"><label htmlFor="s-zelle">Zelle (email or phone)</label><input id="s-zelle" type="text" placeholder="payments@fbsprint.com" value={s.pay.zelle} onChange={(e) => upd((d) => { d.pay.zelle = e.target.value; })} /></div>
             <div className="field"><label htmlFor="s-venmo">Venmo handle</label><input id="s-venmo" type="text" placeholder="@FBS-Print" value={s.pay.venmo} onChange={(e) => upd((d) => { d.pay.venmo = e.target.value; })} /></div>
+          </div>
+        </section>
+
+        <section className="panel" id="assistant">
+          <div className="panel-h"><h2>Assistant &amp; AI</h2><span className="faint" style={{ fontSize: 12 }}>When the Assistant flags follow-ups, and what AI may do</span></div>
+          <div className="panel-b stack">
+            <div className="lbl">FOLLOW-UP RULES (work without AI)</div>
+            <div className="grid g4">
+              <div className="field"><label htmlFor="a-q">Quote follow-up after (days)</label><input id="a-q" type="number" min="1" value={s.assistant.quoteFollowUpDays} onChange={(e) => upd((d) => { d.assistant.quoteFollowUpDays = Math.max(1, n(e.target.value)); })} /></div>
+              <div className="field"><label htmlFor="a-p">Proof reminder after (days)</label><input id="a-p" type="number" min="1" value={s.assistant.proofFollowUpDays} onChange={(e) => upd((d) => { d.assistant.proofFollowUpDays = Math.max(1, n(e.target.value)); })} /></div>
+              <div className="field"><label htmlFor="a-r">Reply is urgent after (hours)</label><input id="a-r" type="number" min="1" value={s.assistant.replyWithinHours} onChange={(e) => upd((d) => { d.assistant.replyWithinHours = Math.max(1, n(e.target.value)); })} /></div>
+              <div className="field"><label htmlFor="a-pr">Price order requests within (days)</label><input id="a-pr" type="number" min="0" value={s.assistant.priceRequestDays} onChange={(e) => upd((d) => { d.assistant.priceRequestDays = Math.max(0, n(e.target.value)); })} /></div>
+              <div className="field"><label htmlFor="a-risk">Flag jobs due within (days)</label><input id="a-risk" type="number" min="1" value={s.assistant.atRiskDays} onChange={(e) => upd((d) => { d.assistant.atRiskDays = Math.max(1, n(e.target.value)); })} /></div>
+              <div className="field"><label htmlFor="a-pk">Pickup reminder after (days)</label><input id="a-pk" type="number" min="1" value={s.assistant.pickupRemindDays} onChange={(e) => upd((d) => { d.assistant.pickupRemindDays = Math.max(1, n(e.target.value)); })} /></div>
+              <div className="field"><label htmlFor="a-idle">Check in with customers idle (days)</label><input id="a-idle" type="number" min="30" value={s.assistant.reorderAfterDays} onChange={(e) => upd((d) => { d.assistant.reorderAfterDays = Math.max(30, n(e.target.value)); })} /></div>
+            </div>
+            <label className="check"><input type="checkbox" checked={s.assistant.digest} onChange={(e) => upd((d) => { d.assistant.digest = e.target.checked; })} /> Email me a daily follow-up list (7am, to the shop notification address; needs CRON_SECRET in Vercel)</label>
+
+            <div className="lbl" style={{ marginTop: 8 }}>AI (CLAUDE)</div>
+            <div className={"ai-box"}>
+              <div className="muted" style={{ fontSize: 13 }}>
+                {aiKey === null ? "Checking…" : aiKey ? "An Anthropic API key is set in Vercel." : <>No API key yet. Create one in the Claude Console, then add it in Vercel → Settings → Environment Variables as <b className="mono">ANTHROPIC_API_KEY</b> and redeploy.</>}
+                {" "}AI never changes an order, sends a message or charges anyone on its own: it drafts and suggests, and your staff decide.
+              </div>
+              <label className="check"><input type="checkbox" checked={s.assistant.ai.enabled} onChange={(e) => upd((d) => { d.assistant.ai.enabled = e.target.checked; })} /> <b>Use AI</b> (drafting follow-ups, reading order emails, checking orders)</label>
+              <label className="check"><input type="checkbox" disabled={!s.assistant.ai.enabled} checked={s.assistant.ai.readEmails} onChange={(e) => upd((d) => { d.assistant.ai.readEmails = e.target.checked; })} /> Read incoming customer emails and suggest replies and orders</label>
+              <label className="check"><input type="checkbox" disabled={!s.assistant.ai.enabled} checked={s.assistant.ai.customerAssist} onChange={(e) => upd((d) => { d.assistant.ai.customerAssist = e.target.checked; })} /> Let customers describe an order in their own words in the portal (AI fills in the order form for them to check)</label>
+              <div className="grid g2">
+                <div className="field"><label htmlFor="a-model">Model for drafting and reading orders</label>
+                  <select id="a-model" value={s.assistant.ai.model} onChange={(e) => upd((d) => { d.assistant.ai.model = e.target.value; })}>
+                    <option value="claude-sonnet-5">Claude Sonnet 5 (recommended)</option>
+                    <option value="claude-opus-5-5">Claude Opus 5.5 (most capable, costs more)</option>
+                    <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fastest, cheapest)</option>
+                    {!["claude-sonnet-5", "claude-opus-5-5", "claude-haiku-4-5-20251001"].includes(s.assistant.ai.model) && <option value={s.assistant.ai.model}>{s.assistant.ai.model}</option>}
+                  </select></div>
+                <div className="field"><label htmlFor="a-fast">Model for sorting emails</label>
+                  <select id="a-fast" value={s.assistant.ai.fastModel} onChange={(e) => upd((d) => { d.assistant.ai.fastModel = e.target.value; })}>
+                    <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (recommended)</option>
+                    <option value="claude-sonnet-5">Claude Sonnet 5</option>
+                    {!["claude-sonnet-5", "claude-haiku-4-5-20251001"].includes(s.assistant.ai.fastModel) && <option value={s.assistant.ai.fastModel}>{s.assistant.ai.fastModel}</option>}
+                  </select></div>
+              </div>
+              <div className="field"><label htmlFor="a-voice">How your messages should sound</label><textarea id="a-voice" rows={2} value={s.assistant.ai.voice} onChange={(e) => upd((d) => { d.assistant.ai.voice = e.target.value; })} /></div>
+            </div>
           </div>
         </section>
 

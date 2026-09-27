@@ -96,7 +96,12 @@ export type Order = {
 export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; size_costs?: Record<string, number>; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string }> };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string; fee?: number; processor_id?: string | null; note?: string | null };
-export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType; payment_terms?: PayTerms };
+export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType; payment_terms?: PayTerms;
+  /** CRM */ tags?: string[]; next_follow_up?: string | null; owner_email?: string; last_contact_at?: string | null };
+/** One entry on a customer's timeline: an email, call, note, meeting or task. */
+export type Activity = { id: string; customer_id: string | null; order_id: string | null; kind: "note" | "call" | "email" | "meeting" | "task" | "sms"; direction: "in" | "out" | "none"; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; ai_processed_at: string | null; meta: Record<string, unknown>; created_by: string; created_at: string };
+/** One item in the Assistant inbox. */
+export type Suggestion = { id: string; kind: string; source: "rules" | "ai" | "staff"; status: "open" | "snoozed" | "done" | "dismissed"; priority: 1 | 2 | 3; dedupe_key: string | null; customer_id: string | null; order_id: string | null; activity_id: string | null; title: string; body: string; draft: { channel?: "portal" | "email"; subject?: string; body?: string }; payload: Record<string, unknown>; due_at: string | null; snoozed_until: string | null; model: string | null; decided_at: string | null; decided_by: string | null; created_at: string; updated_at: string };
 export type Proof = { id: string; order_id: string; title: string; file_path: string; file_type: string; status: "pending" | "approved" | "changes"; customer_comment: string; decided_at: string | null; decided_name: string | null; created_at: string };
 export type Message = { id: string; order_id: string; author_type: "staff" | "customer"; author_email: string; author_name: string; body: string; read_at: string | null; created_at: string };
 export type OrderEvent = { id: number; order_id: string; kind: string; detail: string; actor: string; created_at: string };
@@ -130,6 +135,28 @@ export type Settings = PriceList & {
   pay: { cardFeePct: number; zelle: string; venmo: string };
   wholesale: PriceList;
   finishing: Finishing[];
+  /** Follow-up rules and the (optional) AI assistant. */
+  assistant: AssistantSettings;
+};
+
+/** When the Assistant flags things, and what the AI is allowed to do. AI stays off until an API key is set AND ai.enabled is on. */
+export type AssistantSettings = {
+  quoteFollowUpDays: number;   // quote sent, no answer after this many days
+  proofFollowUpDays: number;   // proof waiting on the customer this many days
+  replyWithinHours: number;    // customer message with no reply after this many hours = urgent
+  priceRequestDays: number;    // customer order request not priced after this many days
+  atRiskDays: number;          // job not printing yet and due within this many days
+  pickupRemindDays: number;    // ready for pickup this many days
+  reorderAfterDays: number;    // customers with no order in this many days get a check-in
+  digest: boolean;             // email the shop a daily list of follow-ups
+  ai: {
+    enabled: boolean;          // master switch
+    model: string;             // Claude model for drafting and reading orders
+    fastModel: string;         // cheaper model for sorting emails
+    readEmails: boolean;       // read forwarded emails and suggest orders / replies
+    customerAssist: boolean;   // "describe your order" box in the customer order form
+    voice: string;             // how the shop sounds in drafted messages
+  };
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -177,6 +204,24 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: "hang_tag", name: "Hang tag", price: 0.35 },
     { id: "relabel", name: "Remove tag & relabel", price: 1.0 },
   ],
+  assistant: {
+    quoteFollowUpDays: 3,
+    proofFollowUpDays: 2,
+    replyWithinHours: 24,
+    priceRequestDays: 1,
+    atRiskDays: 5,
+    pickupRemindDays: 5,
+    reorderAfterDays: 150,
+    digest: false,
+    ai: {
+      enabled: false,
+      model: "claude-sonnet-5",
+      fastModel: "claude-haiku-4-5-20251001",
+      readEmails: false,
+      customerAssist: false,
+      voice: "Friendly, short and plain-spoken, like a local print shop owner. Sign off as the FBS Print team.",
+    },
+  },
 };
 
 /** Fill any missing keys in stored settings with defaults. */
@@ -190,6 +235,7 @@ export function mergeSettings(data: unknown): Settings {
     upcharges: { ...DEFAULT_SETTINGS.upcharges, ...(d.upcharges || {}) },
     wholesale: { ...DEFAULT_SETTINGS.wholesale, ...(d.wholesale || {}), upcharges: { ...DEFAULT_SETTINGS.wholesale.upcharges, ...(d.wholesale?.upcharges || {}) } },
     finishing: Array.isArray(d.finishing) ? d.finishing : DEFAULT_SETTINGS.finishing,
+    assistant: { ...DEFAULT_SETTINGS.assistant, ...(d.assistant || {}), ai: { ...DEFAULT_SETTINGS.assistant.ai, ...(d.assistant?.ai || {}) } },
   };
 }
 

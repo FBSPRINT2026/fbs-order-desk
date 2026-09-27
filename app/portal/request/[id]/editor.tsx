@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import GroupEditor from "@/components/GroupEditor";
 import { createClient } from "@/lib/supabase/client";
 import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
-import { discardRequest, ownMockupUploadUrl, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
+import { describeMyOrder, discardRequest, ownMockupUploadUrl, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { customerMessage } from "@/app/portal/actions";
 
@@ -20,9 +20,9 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
 }
 
 /** The customer's order builder: garments, sizes, print locations and logos, no prices. */
-export default function RequestEditor({ initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, mockupUrls: mu0, mockupHref, preview, backHref }: {
+export default function RequestEditor({ initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, mockupUrls: mu0, mockupHref, preview, backHref, aiAssist }: {
   initial: Order; settings: Settings; catalog: Garment[]; designs: Design[]; designUrls: Record<string, string>; messages: Message[];
-  savedMockups: { path: string; name: string }[]; mockupUrls: Record<string, string>; mockupHref: string; preview: boolean; backHref: string;
+  savedMockups: { path: string; name: string }[]; mockupUrls: Record<string, string>; mockupHref: string; preview: boolean; backHref: string; aiAssist?: boolean;
 }) {
   const [mUrls, setMUrls] = useState(mu0);
   const [upBusy, setUpBusy] = useState("");
@@ -49,7 +49,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     const x = latest.current;
     setState("Saving…");
-    const r = await saveRequest(x.id, { groups: x.groups, nickname: x.nickname, due_date: x.due_date, notes: x.notes });
+    const r = await saveRequest(x.id, { groups: x.groups, nickname: x.nickname, due_date: x.due_date, notes: x.notes, po_number: x.po_number || "", delivery_method: x.delivery_method || "pickup", ship_to: x.ship_to || "" });
     setState(r.ok ? "Saved" : "");
     if (!r.ok) setErr(r.error || "Couldn't save.");
   }
@@ -103,7 +103,21 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
     } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed."); }
     setUpBusy("");
   }
-  const problems = requestProblems(o.groups);
+  // "describe your order" (AI, when the shop turned it on)
+  const [desc, setDesc] = useState("");
+  const [descBusy, setDescBusy] = useState(false);
+  const [descNote, setDescNote] = useState("");
+  async function describe() {
+    setDescBusy(true); setErr(""); setDescNote("");
+    await flush();
+    const r = await describeMyOrder(o.id, desc);
+    setDescBusy(false);
+    if (!r.ok || !r.groups) return setErr(r.error || "We couldn't read that.");
+    patch((d) => { d.groups = r.groups!; if (r.nickname && !d.nickname) d.nickname = r.nickname; if (r.due_date && !d.due_date) d.due_date = r.due_date; });
+    setDesc("");
+    setDescNote(`We filled in ${r.added} group${r.added === 1 ? "" : "s"} below. Please check the styles, colors and sizes, and upload your logo on each print location.${r.questions?.length ? ` We'll also need: ${r.questions.join("; ")}.` : ""}`);
+  }
+  const problems = [...requestProblems(o.groups), ...(o.delivery_method && o.delivery_method !== "pickup" && !(o.ship_to || "").trim() ? [`Add the address to ${o.delivery_method === "ship" ? "ship" : "deliver"} to`] : [])];
   const hints = problems.length ? [] : requestHints(o.groups);
 
   async function send() {
@@ -138,13 +152,35 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
       <div className="rq-note">Add your garments, sizes and where each logo goes. <b>You won&apos;t see prices yet:</b> we&apos;ll check everything, price it and send it back for your final OK.</div>
       {err && <div className="banner" role="alert">{err}</div>}
 
-      <section className="panel"><div className="panel-b grid g3">
-        <div className="field"><label htmlFor="rq-name">Order name</label><input id="rq-name" type="text" placeholder="e.g. Team shirts" value={o.nickname || ""} disabled={preview} onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
-        <div className="field"><label htmlFor="rq-date">Need it by (in-hands date)</label><input id="rq-date" type="date" value={o.due_date || ""} disabled={preview} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} /></div>
-        <div className="field"><label htmlFor="rq-notes">Notes for us</label><input id="rq-notes" type="text" placeholder="Anything we should know" value={o.notes || ""} disabled={preview} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
+      {aiAssist && (
+        <section className="ai-box">
+          <h3>✦ Describe your order and we&apos;ll fill in the form</h3>
+          <textarea rows={3} aria-label="Describe your order" placeholder={'e.g. "50 black Gildan 5000 tees, 10 S, 20 M, 15 L, 5 XL, white logo on the front and our website on the back, need them by Oct 20"'} value={desc} disabled={preview} onChange={(e) => setDesc(e.target.value)} />
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" className="btn sm primary" disabled={preview || descBusy || desc.trim().length < 10} onClick={describe}>{descBusy ? "Filling in…" : "Fill in the form"}</button>
+            <span className="faint" style={{ fontSize: 12 }}>You can check and change everything before you send it.</span>
+          </div>
+          {descNote && <div className="okmsg">{descNote}</div>}
+        </section>
+      )}
+
+      <section className="panel"><div className="panel-b stack" style={{ gap: 12 }}>
+        <div className="grid g3">
+          <div className="field"><label htmlFor="rq-name">Order name</label><input id="rq-name" type="text" placeholder="e.g. Team shirts" value={o.nickname || ""} disabled={preview} onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
+          <div className="field"><label htmlFor="rq-date">Need it by (in-hands date)</label><input id="rq-date" type="date" value={o.due_date || ""} disabled={preview} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} /></div>
+          <div className="field"><label htmlFor="rq-po">Your PO # (optional)</label><input id="rq-po" type="text" value={o.po_number || ""} disabled={preview} onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
+        </div>
+        <div className="grid g3">
+          <div className="field"><label htmlFor="rq-del">How you&apos;ll get it</label>
+            <select id="rq-del" value={o.delivery_method || "pickup"} disabled={preview} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Order["delivery_method"]; })}>
+              <option value="pickup">I&apos;ll pick it up</option><option value="ship">Ship it to me</option><option value="deliver">Local delivery</option>
+            </select></div>
+          {(o.delivery_method || "pickup") !== "pickup" && <div className="field" style={{ gridColumn: "span 2" }}><label htmlFor="rq-ship">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="rq-ship" rows={2} placeholder="Name, street, city, state, ZIP" value={o.ship_to || ""} disabled={preview} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>}
+        </div>
+        <div className="field"><label htmlFor="rq-notes">Notes for us</label><textarea id="rq-notes" rows={2} placeholder="Anything we should know: event date, who the shirts are for, colors to avoid…" value={o.notes || ""} disabled={preview} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
       </div></section>
 
-      <fieldset disabled={preview} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className="stack">
+      <fieldset disabled={preview || descBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className="stack">
         {o.groups.map((g, gi) => (
           <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
             armed={armed} arm={arm} hidePrices update={(fn) => patch((d) => fn(d.groups[gi]))}

@@ -13,6 +13,9 @@ import { previewUrls } from "@/lib/designs";
 import { staffCustomerMessage } from "@/app/shop/actions";
 import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
 import { PAY_TERMS, payDueDate, type Design, type PayTerms } from "@/lib/pricing";
+import Timeline from "@/components/Timeline";
+import { splitCustomer } from "@/lib/crm/private";
+import { fmtStamp } from "@/lib/format";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -70,9 +73,16 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
 
   async function save() {
     if (!latest.current) return;
-    const { id: _id, created_at, ...rest } = latest.current;
+    // staff-only fields (notes, tags, follow-up, owner) are saved to customer_private; last contact is kept by the database
+    const { id: _id, created_at, ...all } = latest.current;
+    const { pub: rest, priv } = splitCustomer(all);
     setState("Saving…");
-    const { error } = await createClient().from("customers").update({ ...rest, email: rest.email.trim().toLowerCase(), contact2_email: (rest.contact2_email || "").trim().toLowerCase() }).eq("id", id);
+    const sb = createClient();
+    const [a, b] = await Promise.all([
+      sb.from("customers").update({ ...rest, email: (rest.email || "").trim().toLowerCase(), contact2_email: (rest.contact2_email || "").trim().toLowerCase() }).eq("id", id),
+      sb.from("customer_private").upsert({ customer_id: id, ...priv }),
+    ]);
+    const error = a.error || b.error;
     setState(error ? "Save failed: " + error.message : "Saved");
   }
   function set<K extends keyof Customer>(k: K, v: Customer[K]) {
@@ -93,6 +103,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     else if (error) alert(error.message);
   }
 
+  const [tagDraft, setTagDraft] = useState("");
+  const addTag = (raw: string) => { const t = raw.trim().replace(/,$/, "").slice(0, 40); if (!t || !c) return; if (!(c.tags || []).some((x) => x.toLowerCase() === t.toLowerCase())) set("tags", [...(c.tags || []), t]); setTagDraft(""); };
   const os = orders.filter((o) => o.customer_id === id);
   const spent = os.filter((o) => o.type === "invoice").reduce((a, o) => a + o.total, 0);
   const owed = os.filter((o) => o.type === "invoice").reduce((a, o) => a + Math.max(0, o.balance), 0);
@@ -172,6 +184,31 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
             </div>
           </form>
           <div className="stack">
+            <section className="panel">
+              <div className="panel-h"><h2>Relationship</h2><span className="faint" style={{ fontSize: 12 }}>{c.last_contact_at ? `Last contact ${fmtStamp(c.last_contact_at)}` : "No contact logged yet"}</span></div>
+              <div className="panel-b stack" style={{ gap: 10 }}>
+                <div className="grid g2">
+                  <div className="field"><label htmlFor="cu-fu">Next follow-up</label>
+                    <div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
+                      <input id="cu-fu" type="date" value={c.next_follow_up || ""} onChange={(e) => set("next_follow_up", e.target.value || null)} />
+                      {c.next_follow_up && <button type="button" className="btn icon ghost" aria-label="Clear follow-up" onClick={() => set("next_follow_up", null)}>✕</button>}
+                    </div>
+                    <span className="faint" style={{ fontSize: 11.5 }}>Shows up in the Assistant on that day.</span>
+                  </div>
+                  <div className="field"><label htmlFor="cu-own">Account owner</label><input id="cu-own" type="email" placeholder="who handles this customer" value={c.owner_email || ""} onChange={(e) => set("owner_email", e.target.value.trim().toLowerCase())} /></div>
+                </div>
+                <div className="field"><label htmlFor="cu-tag">Tags</label>
+                  <div className="tag-edit">
+                    {(c.tags || []).map((t) => <span key={t} className="tg">{t}<button type="button" aria-label={`Remove ${t}`} onClick={() => set("tags", (c.tags || []).filter((x) => x !== t))}>✕</button></span>)}
+                    <input id="cu-tag" type="text" placeholder="school, league, annual event, VIP…" value={tagDraft} onChange={(e) => { if (e.target.value.endsWith(",")) addTag(e.target.value); else setTagDraft(e.target.value); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagDraft); } }} onBlur={() => tagDraft && addTag(tagDraft)} />
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section className="panel">
+              <div className="panel-h"><h2>Timeline</h2><span className="faint" style={{ fontSize: 12 }}>Calls, notes and emails · shop only</span></div>
+              <div className="panel-b"><Timeline customerId={id} orderNumbers={Object.fromEntries(os.map((o) => [o.id, o.number]))} /></div>
+            </section>
             <div className="stats" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))", margin: 0 }}>
               <div className="stat" style={{ cursor: "default" }}><span className="v">{os.length}</span><span className="k">Orders</span></div>
               <div className="stat" style={{ cursor: "default" }}><span className="v">{money(spent)}</span><span className="k">Invoiced</span></div>

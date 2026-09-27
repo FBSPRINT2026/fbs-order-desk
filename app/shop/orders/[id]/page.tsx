@@ -13,11 +13,17 @@ import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
 import { Pill } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
+import { checkOrder } from "@/lib/orderChecks";
+import { withPrivate } from "@/lib/crm/private";
+import { ChecksPanel, FillFromText } from "@/components/OrderAssist";
+import Timeline from "@/components/Timeline";
+import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
+import { PAY_TERMS, SIZES } from "@/lib/pricing";
 
 const EVENT_LABEL: Record<string, string> = {
   created: "Created", sent: "Sent to customer", approved: "Customer approved quote", changes: "Customer asked for changes",
   proof_approved: "Proof approved", proof_changes: "Proof changes requested", proofs_requested: "Proof approval requested",
-  payment: "Payment received", viewed: "Customer viewed",
+  payment: "Payment received", viewed: "Customer viewed", request_submitted: "Customer sent in the request", reorder: "Reordered by the customer",
 };
 
 export default function OrderEditorPage({ params }: { params: Promise<{ id: string }> }) {
@@ -59,6 +65,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [flash, setFlash] = useState("");
   const [armed, setArmed] = useState("");
   const [confirmRetail, setConfirmRetail] = useState(false);
+  const [custOwed, setCustOwed] = useState<{ n: number; owed: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Order | null>(null);
@@ -111,7 +118,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       d.tax_rate = d.tax_rate === null ? null : +d.tax_rate;
       setO(d);
       latest.current = d;
-      setCustomers(((cu.data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
+      setCustomers((await withPrivate(sb, (cu.data || []) as Customer[])).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
       setSettings(mergeSettings(st.data?.data));
       setCatalog((cat.data || []) as Garment[]);
       setProdNotes(inn.data?.production_notes || "");
@@ -125,6 +132,20 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const calc = useMemo(() => (o ? calcOrder(o, settings, payments) : null), [o, settings, payments]);
 
   const custId = o?.customer_id || "";
+  // what else this customer owes (other invoices), shown on the customer card
+  useEffect(() => {
+    if (!custId) { setCustOwed(null); return; }
+    (async () => {
+      const { data: os } = await sb.from("orders").select("id,total").eq("customer_id", custId).eq("type", "invoice").neq("id", id);
+      const ids = (os || []).map((x) => x.id);
+      if (!ids.length) return setCustOwed({ n: 0, owed: 0 });
+      const { data: ps } = await sb.from("payments").select("order_id,amount").in("order_id", ids);
+      const paid: Record<string, number> = {};
+      (ps || []).forEach((p) => { paid[p.order_id] = (paid[p.order_id] || 0) + (+p.amount || 0); });
+      const owing = (os || []).map((x) => (+x.total || 0) - (paid[x.id] || 0)).filter((b) => b > 0.004);
+      setCustOwed({ n: owing.length, owed: Math.round(owing.reduce((a, b) => a + b, 0) * 100) / 100 });
+    })();
+  }, [sb, custId, id]);
   const loadDesigns = useCallback(async () => {
     if (!custId) { setDesigns([]); setDesignUrls({}); return; }
     const { data } = await sb.from("designs").select("*").eq("customer_id", custId).order("number", { ascending: false });
@@ -178,6 +199,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }, [sb, settings]);
 
   useEffect(() => () => { if (timer.current) save(); }, [save]);
+  // closing the tab mid-edit: save now and ask the browser to wait
+  useEffect(() => {
+    const h = (e: BeforeUnloadEvent) => { if (timer.current) { save(); e.preventDefault(); e.returnValue = ""; } };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [save]);
 
   // customer order requests come in without costs: suggest them from the garment catalog once
   const costsFilled = useRef(false);
@@ -210,6 +237,32 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }
   const setGroup = (i: number, fn: (g: Group) => void) => patch((d) => fn(d.groups[i]));
   const cloneGroup = (g: Group): Group => ({ id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid() })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })), finishing: [...(g.finishing || [])] });
+
+  /** Groups the AI read from an email: fill blank costs and details from the catalog, then add or replace. */
+  function applyProposal(groups: Group[], p: { nickname?: string; due_date?: string | null; notes?: string; po_number?: string }, mode: "replace" | "add") {
+    const find = (l: GLine) => { const hits = catalog.filter((g) => g.style.toLowerCase() === (l.style || "").trim().toLowerCase()); return (l.brand ? hits.find((g) => g.brand.toLowerCase() === l.brand.toLowerCase()) : undefined) || (hits.length === 1 ? hits[0] : undefined); };
+    groups.forEach((g) => g.lines.forEach((l) => {
+      const gm = find(l);
+      if (!gm) return;
+      l.brand = gm.brand; l.garment = l.garment || gm.description;
+      if (o?.price_type !== "wholesale") l.cost = +gm.cost || "";
+      const sc = gm.size_costs || {}, up: GLine["sizeUp"] = {};
+      for (const z of ["2XL", "3XL", "4XL", "5XL"] as const) if (sc[z] && gm.cost) up[z] = Math.max(0, Math.round((sc[z] - +gm.cost) * 100) / 100);
+      l.sizeUp = Object.keys(up).length ? up : undefined;
+      const run = (gm.sizes || []).filter((z) => (SIZES as readonly string[]).includes(z));
+      if (run.length) { l.sizeRun = run; if (run.length === 1 && run[0] === "OS") l.oneSize = true; }
+    }));
+    patch((d) => {
+      const g0 = d.groups[0];
+      const blank = d.groups.length === 1 && !g0.lines.some((l) => l.style || l.color || Object.keys(l.sizes || {}).length) && !g0.imprints.some((x) => x.design_id) && !(g0.customerMockups || []).length && !g0.mockupAt;
+      d.groups = mode === "replace" || blank ? groups : [...d.groups, ...groups];
+      if (!d.nickname && p.nickname) d.nickname = p.nickname.slice(0, 120);
+      if (!d.due_date && p.due_date && /^\d{4}-\d{2}-\d{2}$/.test(p.due_date)) d.due_date = p.due_date;
+      if (!d.po_number && p.po_number) d.po_number = p.po_number.slice(0, 60);
+      if (p.notes && !d.notes.includes(p.notes)) d.notes = (d.notes ? d.notes + "\n" : "") + p.notes;
+    });
+    say(`Added ${groups.length} group${groups.length === 1 ? "" : "s"} from the email. Check styles, colors and sizes.`);
+  }
 
   async function saveToCatalog(l: GLine) {
     const row = { style: l.style.trim(), brand: l.brand || "", description: l.garment, colors: l.color ? [l.color] : [], cost: +l.cost || 0 };
@@ -369,6 +422,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const cust = customers.find((c) => c.id === o.customer_id);
   const portalLink = typeof window !== "undefined" ? `${SITE_URL || window.location.origin}/portal/orders/${o.id}` : "";
   const pendingProofs = proofs.filter((p) => p.status === "pending").length;
+  const checks = checkOrder(o, calc, cust, proofs);
+  const tv = { first: firstName(cust?.name), number: o.number, job: o.nickname ? `"${o.nickname}"` : "your order", total: money(calc.total), balance: money(calc.balance),
+    due: o.due_date ? fmtDateLong(o.due_date) : "", tracking: o.tracking || "", days: "", dueLine: "", dueText: "", balanceLine: calc.balance > 0.004 ? ` The balance is ${money(calc.balance)}.` : "" };
+  const QUICK: TemplateKey[] = ["proof_ready", "ready_pickup", "shipped", "payment_reminder", "deposit_request", "quote_followup", "request_received", "thanks"];
 
   return (
     <>
@@ -438,6 +495,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                           {cust.address && <div style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
                           {cust.email && <div className="sub">{cust.email}</div>}
                           {cust.phone && <div className="sub">{cust.phone}</div>}
+                          <div className="cc-extra">
+                            <div className="sub">{PAY_TERMS[cust.payment_terms || "receipt"]}{cust.tax_exempt ? " · tax exempt" : ""}{custOwed?.n ? <> · <b style={{ color: "var(--danger)" }}>owes {money(custOwed.owed)}</b> on {custOwed.n} other order{custOwed.n === 1 ? "" : "s"}</> : null}</div>
+                            {(cust.tags || []).length > 0 && <div className="row" style={{ gap: 4 }}>{(cust.tags || []).map((t) => <span key={t} className="tag">{t}</span>)}</div>}
+                            {cust.notes && <div className="cc-note" title="Customer notes (shop only)">{cust.notes}</div>}
+                          </div>
                           <Link href={`/shop/customers/${cust.id}`} style={{ fontSize: 12 }}>Edit customer</Link>
                         </div>
                       ) : <div className="faint" style={{ fontSize: 13, flex: 1 }}>Pick a customer, or add a new one without leaving this order.</div>}
@@ -510,6 +572,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <div className="row">
             <button className="btn" type="button" onClick={() => patch((d) => { d.groups.push(newGroup()); })}>+ Add line item group</button>
             <span className="faint" style={{ fontSize: 12 }}>Garments in the same group share imprints, and their quantities add up for the price break.</span>
+            <FillFromText orderId={o.id} hasContent={o.groups.some((g) => g.lines.some((l) => l.style || Object.keys(l.sizes || {}).length))} onApply={applyProposal} />
           </div>
 
           <div className="grid g2 fees-notes">
@@ -585,6 +648,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   ))}
                 </div>
               ) : <div className="faint" style={{ fontSize: 13 }}>No messages yet. Customers can write to you from their portal.</div>}
+              <div className="qr-row">
+                <select aria-label="Quick reply" value="" onChange={(e) => { const k = e.target.value as TemplateKey; if (k) setDraftMsg(renderTemplate(k, tv).body); }}>
+                  <option value="">Quick reply…</option>
+                  {QUICK.map((k) => <option key={k} value={k}>{TEMPLATES[k].label}</option>)}
+                </select>
+                <span className="faint" style={{ fontSize: 11.5 }}>Fills the box below. Edit before sending.</span>
+              </div>
               <div className="composer">
                 <textarea aria-label="Message to customer" placeholder="Write to the customer…" value={draftMsg} onChange={(e) => setDraftMsg(e.target.value)} />
                 <button className="btn primary" type="button" onClick={postMessage} disabled={!draftMsg.trim()}>Send</button>
@@ -593,6 +663,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               )}
             </div>
           </section>
+
+          <ChecksPanel checks={checks} orderId={o.id} save={save} />
 
           <section className="panel">
             <div className="panel-h"><h2>Totals</h2><span className="faint num">{calc.qty} pcs</span></div>
@@ -648,6 +720,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div key={e.id}>{e.kind === "status" ? <Pill status={e.detail} /> : <b>{EVENT_LABEL[e.kind] || e.kind}</b>}<span>{e.kind !== "status" && e.detail ? e.detail + " · " : ""}{fmtStamp(e.created_at)}</span></div>
               )) : <div>No activity yet.</div>}
             </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-h"><h2>Calls &amp; notes</h2><span className="faint" style={{ fontSize: 12 }}>Shop only</span></div>
+            <div className="panel-b"><Timeline customerId={o.customer_id} orderId={o.id} compact /></div>
           </section>
         </aside>
       </div>

@@ -19,6 +19,9 @@ export async function GET() {
     SHOP_NOTIFY_EMAIL: has("SHOP_NOTIFY_EMAIL"),
     SS_ACCOUNT_NUMBER: has("SS_ACCOUNT_NUMBER"),
     SS_API_KEY: has("SS_API_KEY"),
+    ANTHROPIC_API_KEY: has("ANTHROPIC_API_KEY"),
+    INBOUND_EMAIL_SECRET: has("INBOUND_EMAIL_SECRET"),
+    CRON_SECRET: has("CRON_SECRET"),
   };
   const url = SUPABASE_URL;
   const checks: Record<string, string> = {

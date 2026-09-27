@@ -3,6 +3,7 @@ import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, type Design, type Garment, type Message, type Order } from "@/lib/pricing";
 import RequestEditor from "./editor";
+import { hasAiKey } from "@/lib/ai/claude";
 
 /** A customer building their own order (no prices). Once sent in it becomes read-only. */
 export default async function RequestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string }> }) {
@@ -40,7 +41,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   return (
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s order request. Editing is turned off in preview.</div>}
-      <RequestEditor initial={order} settings={ctx.settings} catalog={catalog} designs={designs} designUrls={urls} messages={(m || []) as Message[]} savedMockups={savedList.map((m) => ({ path: m.file_path, name: m.title }))} mockupUrls={mockupUrls} mockupHref={`/portal/mockup${as ? `?as=${as}` : ""}`} preview={!!ctx.preview} backHref={`/portal${as ? `?as=${as}` : ""}`} />
+      <RequestEditor initial={order} settings={ctx.settings} catalog={catalog} designs={designs} designUrls={urls} messages={(m || []) as Message[]} savedMockups={savedList.map((m) => ({ path: m.file_path, name: m.title }))} mockupUrls={mockupUrls} mockupHref={`/portal/mockup${as ? `?as=${as}` : ""}`} preview={!!ctx.preview} aiAssist={hasAiKey() && ctx.settings.assistant.ai.enabled && ctx.settings.assistant.ai.customerAssist} backHref={`/portal${as ? `?as=${as}` : ""}`} />
     </>
   );
 }
