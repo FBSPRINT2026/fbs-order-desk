@@ -184,20 +184,34 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     });
   }, [imprints, designs, urls, keepBg, keepInside]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // repaint logos whenever an ink choice changes
+  // hovering a suggested color previews it on the mockup before it's picked
+  const [hover, setHover] = useState<{ id: string; hexes: string[]; v: { name: string; hex: string } } | null>(null);
+  // repaint logos whenever an ink choice changes (or a color is being previewed)
   useEffect(() => {
     const next: Record<string, string> = {};
     for (const im of imprints) {
       const pt = paints[im.id];
-      if (!pt || !Object.keys(pt.map).length) continue;
+      if (!pt) continue;
+      const map = hover && hover.id === im.id ? { ...pt.map, ...Object.fromEntries(hover.hexes.map((h) => [h, hover.v])) } : pt.map;
+      if (!Object.keys(map).length) continue;
       const img = imgCache.current.get(pt.design);
       if (!img) continue;
       const targets: Record<string, string> = {};
-      Object.entries(pt.map).forEach(([src, v]) => { targets[src] = v.name === "none" ? "none" : v.hex; });
+      Object.entries(map).forEach(([src, v]) => { targets[src] = v.name === "none" ? "none" : v.hex; });
       next[im.id] = recolor(img, pt.sources.map((x) => x.hex), targets);
     }
     setPainted(next);
-  }, [paints, imprints]);
+  }, [paints, imprints, hover]);
+
+  // picture files (JPG, PNG…): warn once per logo that they don't print as crisp as vector art
+  const [rasterOk, setRasterOk] = useState<Record<string, boolean>>({});
+  const [rasterAsk, setRasterAsk] = useState<{ imId: string; d: Design } | null>(null);
+  const [rasterBg, setRasterBg] = useState(true);
+  function askRaster(imId: string, d: Design) {
+    if (isVector(d.file_type, d.file_name) || rasterOk[d.id]) return;
+    setRasterBg(!keepBg[d.id]);
+    setRasterAsk({ imId, d });
+  }
 
   /** Set several logo colors at once (e.g. every color to its closest standard ink). */
   function setInks(id: string, picks: Record<string, { name: string; hex: string } | null>) {
@@ -346,6 +360,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         setDesigns((x) => [d, ...x]);
         if (r.url) setUrls((x) => ({ ...x, [d.id]: r.url }));
         setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d.id } : x)));
+        askRaster(im.id, d);
         setMsg(`Saved ${designLabel(d)} to your logos.`);
         return;
       }
@@ -354,6 +369,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setDesigns((x) => [d, ...x]);
       setUrls({ ...urls, ...(await previewUrls(sb, [d])) });
       setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d.id } : x)));
+      askRaster(im.id, d);
       setMsg(`Saved ${designLabel(d)} to the customer's account.`);
     } catch (e) { setMsg("Upload failed: " + (e instanceof Error ? e.message : String(e))); }
   }
@@ -645,6 +661,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               }).map(({ im }) => closeUp(im, cuSize))}
             </div>
           </div>
+          {rasterAsk && (
+            <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="rq-t">
+              <div className="mk-modal">
+                <h2 id="rq-t">This logo is a picture file (JPG / PNG)</h2>
+                <p>We highly recommend not printing from JPEGs or other picture files. They don&apos;t produce a sharp, crisp print. Vector art (AI, EPS, PDF or SVG) is best.</p>
+                <p className="muted">The only time this might be OK is when the logo prints small, for example on a sponsor-back shirt.</p>
+                <p>If you&apos;d like us to go ahead and use this logo, click <b>OK</b>.</p>
+                <label className="check"><input type="checkbox" checked={rasterBg} onChange={(e) => setRasterBg(e.target.checked)} /> Remove the background (the white box around the logo)</label>
+                <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+                  <button type="button" className="btn ghost" onClick={() => { const a = rasterAsk; setRasterAsk(null); setImprints((xs) => xs.map((x) => (x.id === a.imId && x.design_id === a.d.id ? { ...x, design_id: undefined } : x))); }}>Choose a different file</button>
+                  <button type="button" className="btn primary" autoFocus onClick={() => { const a = rasterAsk; setRasterAsk(null); setRasterOk((r) => ({ ...r, [a.d.id]: true })); if (rasterBg === !!keepBg[a.d.id]) toggleBg(a.d); }}>OK</button>
+                </div>
+              </div>
+            </div>
+          )}
           {pop && (() => {
             const im = imprints.find((x) => x.id === pop.id);
             const pt = paints[pop.id];
@@ -702,87 +733,62 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 const p = place(im);
                 return (
                   <div key={im.id} className="mk-imp">
-                    <div className="row" style={{ justifyContent: "space-between" }}>
-                      <select aria-label="Location" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
-                      <select aria-label={`Method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x))); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-                      <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
-                      <span className="faint" style={{ fontSize: 12 }}>{p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot;</span>
+                    <div className="mk-imp-top">
+                      <select aria-label="Location" className="mk-loc" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
+                      <select aria-label={`Decoration method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x))); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                     </div>
-                    <div className="row" style={{ gap: 6 }}>
-                      <DesignSearch designs={designs} urls={urls} value={im.design_id} placeholder="Pick a logo…"
-                        onPick={(d) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d?.id || undefined } : x)))}
-                        onStar={async (d, starred) => {
-                          setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred } : x)));
-                          const { error } = portal ? await starMyDesign(d.id, starred).then((r) => ({ error: r.ok ? null : r.error })) : await sb.rpc("set_design_star", { p_design: d.id, p_starred: starred });
-                          if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
-                        }} />
-                    </div>
+                    <DesignSearch designs={designs} urls={urls} value={im.design_id} placeholder="Pick a logo…"
+                      onPick={(d) => { setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d?.id || undefined } : x))); if (d) askRaster(im.id, d); }}
+                      onStar={async (d, starred) => {
+                        setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred } : x)));
+                        const { error } = portal ? await starMyDesign(d.id, starred).then((r) => ({ error: r.ok ? null : r.error })) : await sb.rpc("set_design_star", { p_design: d.id, p_starred: starred });
+                        if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
+                      }} />
+                    {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one{portal ? " of your logos" : " of the customer's logos"}, or upload new art.</div>}
                     {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
-                      <div className="mk-colors">
-                        <div className="lbl">COLORS IN THIS LOGO</div>
-                        {colorRows(paints[im.id]).map((row) => {
-                          const cur = row.cur, pick = (v: { name: string; hex: string } | null) => setInks(im.id, Object.fromEntries(row.hexes.map((h) => [h, v])));
-                          return (
-                            <div key={row.hexes.join()} className="mk-color-wrap">
-                            <div className="mk-color">
-                              <span className="mk-srcs">{row.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} title={h} />)}</span>
-                              <span className="arrow">→</span>
-                              <span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : row.hexes[0] }} />
-                              <InkSelect value={cur} onChange={pick} />
-                            </div>
-                            {row.hexes.length > 1
-                              ? <div className="mk-united"><span>{row.hexes.length} colors united · prints as one color</span><button type="button" className="btn sm ghost" onClick={() => setUnite(im.id, false)}>Split</button></div>
-                              : <Match hex={row.hexes[0]} cur={cur} onPick={pick} />}
-                            </div>
-                          );
-                        })}
-                        {unsetColors(im).length > 0 && <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={() => matchStandard(im)}>Use closest standard inks</button>}
-                      </div>
+                      <LogoColors rows={colorRows(paints[im.id])}
+                        onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
+                        onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
+                        onSplit={() => setUnite(im.id, false)}
+                        onMatchAll={unsetColors(im).length > 1 ? () => matchStandard(im) : undefined} />
                     )}
                     {p.d && !isVector(p.d.file_type, p.d.file_name) && (() => {
                       const d = p.d, dpi = effectiveDpi(d.width_px || 0, p.wIn);
                       return (
                         <div className="mk-raster">
-                          <div className="row" style={{ gap: 6, justifyContent: "space-between" }}>
-                            <span>{clean[d.id] ? "Picture file: background removed so it sits on the shirt." : keepBg[d.id] ? "Picture file: keeping its background." : "Picture file (JPG / PNG)."}</span>
-                            {(clean[d.id] || keepBg[d.id]) && <button type="button" className="btn sm ghost" onClick={() => toggleBg(d)}>{keepBg[d.id] ? "Remove background" : "Keep background"}</button>}
-                          </div>
-                          {clean[d.id] && !keepBg[d.id] && (
-                            <label className="check" style={{ fontSize: 12 }}><input type="checkbox" checked={!!keepInside[d.id]} onChange={() => toggleInside(d)} /> Keep white inside the logo (for white ink, e.g. white letters in a colored badge)</label>
-                          )}
-                          {dpi > 0 && (dpi < 150
-                            ? <div className="ink-warn" style={{ margin: 0 }}>Low resolution: about {dpi} dpi at {p.wIn.toFixed(1)}&quot; wide, so it may print blurry. 150+ dpi looks sharp. Ask for a bigger file or vector art (AI, EPS, PDF, SVG).</div>
-                            : <span className="faint">About {dpi} dpi at this size{dpi >= 300 ? ", sharp" : ", OK"}.</span>)}
+                          <span>Picture file{clean[d.id] ? " · background removed" : keepBg[d.id] ? " · background kept" : ""}{dpi > 0 && dpi >= 150 ? ` · about ${dpi} dpi` : ""}</span>
+                          {(clean[d.id] || keepBg[d.id]) && <button type="button" className="btn sm ghost" onClick={() => toggleBg(d)}>{keepBg[d.id] ? "Remove background" : "Keep background"}</button>}
+                          {clean[d.id] && !keepBg[d.id] && <label className="check"><input type="checkbox" checked={!!keepInside[d.id]} onChange={() => toggleInside(d)} /> Keep white inside the logo</label>}
+                          {dpi > 0 && dpi < 150 && <div className="ink-warn" style={{ margin: 0, width: "100%" }}>Low resolution: about {dpi} dpi at {p.wIn.toFixed(1)}&quot; wide, may print blurry. Vector art (AI, EPS, PDF, SVG) is best.</div>}
                         </div>
                       );
                     })()}
-                    {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one of the customer&apos;s logos, or upload new art.</div>}
-                    <div className="row" style={{ gap: 6 }}>
+                    <div className="mk-imp-foot">
                       <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
-                    </div>
-                    <div className="row mk-wh" style={{ gap: 6 }}>
-                      {(() => {
-                        const tall = /tall/i.test(im.size);
-                        const typed = (im.size.match(/^([\d.]+)/) || [])[1] || "";
-                        const set = (v: string, dim: "wide" | "tall") => {
-                          let t = v.replace(/[^\d.]/g, "");
-                          // cap at the location's max print area (e.g. sleeves 3.5" x 3.5")
-                          const r = ratioOf(designOf(im)) || 0;
-                          const cap = dim === "wide" ? maxWidthFor(im.location, r) : maxWidthFor(im.location, r) * (r || 1);
-                          const over = t && !t.endsWith(".") && +t > cap ? +t : 0;
-                          setWant((w) => { const n = { ...w }; if (over) n[im.id] = dim === "wide" ? over : r ? over / r : over; else delete n[im.id]; return n; });
-                          if (over) t = String(Math.round(cap * 100) / 100);
-                          setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "" } : x)));
-                        };
-                        return (
-                          <>
-                            <label>W <input type="text" inputMode="decimal" aria-label="Width in inches" placeholder={p.wIn.toFixed(2)} value={!tall ? typed : p.wIn ? p.wIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "wide")} />&quot;</label>
-                            <span className="faint">×</span>
-                            <label>H <input type="text" inputMode="decimal" aria-label="Height in inches" placeholder={(p.hIn || 0).toFixed(2)} value={tall ? typed : p.hIn ? p.hIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "tall")} />&quot;</label>
-                            <span className="faint" style={{ fontSize: 11 }}>proportions locked</span>
-                          </>
-                        );
-                      })()}
+                      <div className="row mk-wh" style={{ gap: 4 }}>
+                        {(() => {
+                          const tall = /tall/i.test(im.size);
+                          const typed = (im.size.match(/^([\d.]+)/) || [])[1] || "";
+                          const set = (v: string, dim: "wide" | "tall") => {
+                            let t = v.replace(/[^\d.]/g, "");
+                            // cap at the location's max print area (e.g. sleeves 3.5" x 3.5")
+                            const r = ratioOf(designOf(im)) || 0;
+                            const cap = dim === "wide" ? maxWidthFor(im.location, r) : maxWidthFor(im.location, r) * (r || 1);
+                            const over = t && !t.endsWith(".") && +t > cap ? +t : 0;
+                            setWant((w) => { const n = { ...w }; if (over) n[im.id] = dim === "wide" ? over : r ? over / r : over; else delete n[im.id]; return n; });
+                            if (over) t = String(Math.round(cap * 100) / 100);
+                            setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "" } : x)));
+                          };
+                          return (
+                            <>
+                              <label title="Width (proportions locked)">W <input type="text" inputMode="decimal" aria-label="Width in inches" placeholder={p.wIn.toFixed(2)} value={!tall ? typed : p.wIn ? p.wIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "wide")} />&quot;</label>
+                              <span className="faint">×</span>
+                              <label title="Height (proportions locked)">H <input type="text" inputMode="decimal" aria-label="Height in inches" placeholder={(p.hIn || 0).toFixed(2)} value={tall ? typed : p.hIn ? p.hIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "tall")} />&quot;</label>
+                            </>
+                          );
+                        })()}
+                      </div>
+                      <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
                     </div>
                   </div>
                 );
@@ -1004,6 +1010,66 @@ function Match({ hex, cur, onPick }: { hex: string; cur?: { name: string; hex: s
       <div className="mk-match-h"><span>SUGGESTED COLORS</span><span className="mono">{hex.toUpperCase()}</span></div>
       {opt("Standard", ink)}
       {opt("PMS", pms)}
+    </div>
+  );
+}
+
+/**
+ * The colors in a logo, kept tight: chosen colors sit in a row of small chips; a color still "as uploaded"
+ * shows its suggested standard ink and PMS. Hovering a suggestion previews it on the mockup, clicking picks it.
+ */
+function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll }: {
+  rows: { hexes: string[]; cur?: { name: string; hex: string } }[];
+  onPick: (hexes: string[], v: { name: string; hex: string } | null) => void;
+  onHover: (hexes: string[], v: { name: string; hex: string } | null) => void;
+  onSplit: () => void;
+  onMatchAll?: () => void;
+}) {
+  const [open, setOpen] = useState<string>("");   // a chosen color reopened to change it
+  const [more, setMore] = useState<string>("");   // a color showing the full ink list
+  const key = (r: { hexes: string[] }) => r.hexes.join();
+  const chosen = rows.filter((r) => r.cur && key(r) !== open);
+  const pending = rows.filter((r) => !r.cur || key(r) === open);
+  const pick = (r: { hexes: string[] }, v: { name: string; hex: string } | null) => { onPick(r.hexes, v); setOpen(""); setMore(""); };
+  return (
+    <div className="lc">
+      <div className="lc-h"><span className="lbl">COLORS IN THIS LOGO</span>{onMatchAll && <button type="button" className="lc-link" onClick={onMatchAll}>Use closest standard inks</button>}</div>
+      {chosen.length > 0 && (
+        <div className="lc-chips">
+          {chosen.map((r) => (
+            <span key={key(r)} className="lc-chip" title={`${r.cur!.name}${r.hexes.length > 1 ? ` (${r.hexes.length} colors united)` : ""}. Click to change.`}>
+              <button type="button" className="lc-chip-b" onClick={() => setOpen(key(r))}>
+                <span className="sw" style={{ background: r.cur!.name === "none" ? "transparent" : r.cur!.hex }} />
+                <span className="lc-n">{r.cur!.name === "none" ? "Removed" : r.cur!.name.replace(/^PMS /, "PMS ")}</span>
+                {r.hexes.length > 1 && <span className="lc-u">×{r.hexes.length}</span>}
+              </button>
+              <button type="button" className="lc-reset" title="Back to the color as uploaded" aria-label="Reset to as uploaded" onClick={() => pick(r, null)}>↺</button>
+            </span>
+          ))}
+        </div>
+      )}
+      {pending.map((r) => {
+        const src = r.hexes[0], ink = closestInk(src), pms = closestPms(src);
+        const opt = (label: string, c: { name: string; hex: string; dE: number }) => (
+          <button type="button" className={"lc-opt" + (r.cur?.name === c.name ? " on" : "")} title={`${c.name} (${label}, ΔE ${c.dE})`}
+            onMouseEnter={() => onHover(r.hexes, { name: c.name, hex: c.hex })} onMouseLeave={() => onHover(r.hexes, null)} onFocus={() => onHover(r.hexes, { name: c.name, hex: c.hex })} onBlur={() => onHover(r.hexes, null)}
+            onClick={() => pick(r, { name: c.name, hex: c.hex })}>
+            <span className="sw" style={{ background: c.hex }} /><span className="lc-n">{c.name}</span>
+          </button>
+        );
+        return (
+          <div key={key(r)} className="lc-row">
+            <span className="lc-src" title={`As uploaded: ${src.toUpperCase()}`}>{r.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} />)}</span>
+            <div className="lc-opts">
+              {more === key(r)
+                ? <InkSelect value={r.cur} onChange={(v) => pick(r, v)} />
+                : <>{opt("standard", ink)}{opt("PMS", pms)}<button type="button" className="lc-link" onClick={() => setMore(key(r))}>More…</button></>}
+            </div>
+            {r.hexes.length > 1 && <button type="button" className="lc-link" onClick={onSplit} title="Print these as separate colors">Split</button>}
+            {key(r) === open && <button type="button" className="lc-link" onClick={() => setOpen("")}>Cancel</button>}
+          </div>
+        );
+      })}
     </div>
   );
 }
