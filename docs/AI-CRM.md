@@ -59,16 +59,16 @@ Emails land on the customer timeline (`activities`), matched to a customer by th
 
 ## Daily run
 
-`vercel.json` schedules `/api/cron/assistant` every day at 12:00 UTC (7am Central in summer). Add `CRON_SECRET` in Vercel (any long random string) to enable it. It reads any emails the AI hasn't read yet (when AI and email reading are on) and, if **Email me a daily follow-up list** is ticked, emails the shop the day's list.
+`vercel.json` schedules `/api/cron/assistant` every day at 12:00 UTC (7am Central in summer, 6am in winter). Add `CRON_SECRET` in Vercel (any long random string) to enable it. It reads any emails the AI hasn't read yet (when AI and email reading are on) and, if **Email me a daily follow-up list** is ticked, emails the shop the day's list.
 
 ## Database
 
-Migration `supabase/migrations/020_ai_crm_foundation.sql` (already applied):
+Migrations `020_ai_crm_foundation.sql` and `021_customer_private.sql` (already applied):
 
 - `activities`: the customer timeline (email in/out, call, note, meeting, task, text). `external_id` stops the same email being stored twice.
 - `ai_suggestions`: the Assistant inbox. `source` is `rules`, `ai` or `staff`; `status` is open / snoozed / done / dismissed; `draft` holds a ready message; `payload` holds data such as proposed order groups.
 - `ai_runs`: the AI call log.
-- `customers`: `tags`, `next_follow_up`, `owner_email`, `last_contact_at` (kept fresh by a trigger on messages and activities).
+- `customer_private`: staff-only customer fields: internal `notes`, `tags`, `next_follow_up`, `owner_email`, `last_contact_at` (kept fresh by a trigger on messages and activities). These used to sit on `customers`, which customers can read for their own account; internal notes were moved here so customers can never see them.
 
 All staff-only through row-level security.
 
@@ -78,6 +78,7 @@ All staff-only through row-level security.
 |---|---|
 | `lib/crm/followups.ts` | The follow-up rules (pure functions, shared by the page, nav badge, digest) |
 | `lib/crm/templates.ts` | Message templates used by follow-ups and quick replies |
+| `lib/crm/private.ts` | Merges staff-only customer fields onto customers, and splits them back out on save |
 | `lib/crm/inbound.ts` | Stores an email on the timeline and matches customer and order |
 | `lib/orderChecks.ts` | Rule checks for the order form |
 | `lib/ai/claude.ts` | The one place that calls the Claude API (on/off switch, structured answers, logging) |

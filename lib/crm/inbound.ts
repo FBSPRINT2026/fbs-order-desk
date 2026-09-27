@@ -19,11 +19,10 @@ export async function storeInboundEmail(admin: SupabaseClient, e: InboundEmail):
   const customerId = (custs?.[0]?.id as string) || null;
   let orderId: string | null = null;
   const num = (e.subject || "").match(/(?:#|order\s*#?\s*|quote\s*#?\s*|invoice\s*#?\s*)(\d{3,7})\b/i)?.[1];
-  if (num) {
-    const q = admin.from("orders").select("id,customer_id").eq("number", +num).maybeSingle();
-    const { data: o } = await q;
-    // only link when the order belongs to the sender (or we don't know the sender yet)
-    if (o && (!customerId || o.customer_id === customerId)) orderId = o.id as string;
+  if (num && customerId) {
+    // only link when the order belongs to the sender (a supplier's "Order #1234" must not land on our #1234)
+    const { data: o } = await admin.from("orders").select("id,customer_id").eq("number", +num).maybeSingle();
+    if (o && o.customer_id === customerId) orderId = o.id as string;
   }
   const row = {
     customer_id: customerId, order_id: orderId, kind: "email", direction: "in",

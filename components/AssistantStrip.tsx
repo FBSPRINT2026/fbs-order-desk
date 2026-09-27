@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mergeSettings } from "@/lib/pricing";
-import { applyDecisions, computeFollowUps, loadAssistantData, type FollowUp } from "@/lib/crm/followups";
+import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions, type FollowUp } from "@/lib/crm/followups";
 
 /** A one-line "here's what needs you today" bar for the Orders page. */
 export default function AssistantStrip() {
@@ -15,9 +15,9 @@ export default function AssistantStrip() {
         const [data, st, sg] = await Promise.all([
           loadAssistantData(sb),
           sb.from("settings").select("data").eq("id", 1).maybeSingle(),
-          sb.from("ai_suggestions").select("dedupe_key,status,snoozed_until").eq("source", "rules").limit(3000),
+          loadDecisions(sb),
         ]);
-        setItems(applyDecisions(computeFollowUps(data, mergeSettings(st.data?.data)), (sg.data || []) as { dedupe_key: string | null; status: string; snoozed_until: string | null }[]).open);
+        setItems(applyDecisions(computeFollowUps(data, mergeSettings(st.data?.data)), sg).open);
       } catch { setItems([]); }
     })();
   }, []);

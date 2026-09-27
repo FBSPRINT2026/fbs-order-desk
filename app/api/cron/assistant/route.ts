@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { applyDecisions, computeFollowUps, loadAssistantData } from "@/lib/crm/followups";
+import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 import { mergeSettings } from "@/lib/pricing";
 import { aiState } from "@/lib/ai/claude";
 import { processEmailActivity } from "@/lib/ai/email";
@@ -13,27 +13,20 @@ export const maxDuration = 60;
 
 // The Assistant's daily run (Vercel Cron, see vercel.json). Needs CRON_SECRET in Vercel;
 // Vercel sends it as "Authorization: Bearer <CRON_SECRET>".
-//   1. With AI on and "read emails" on: reads any stored emails it hasn't read yet.
-//   2. With "daily digest" on: emails the shop today's follow-up list.
+//   1. With "daily digest" on: emails the shop today's follow-up list.
+//   2. With AI on and "read emails" on: reads stored emails it hasn't read yet (as many as fit in the time limit).
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   const admin = createAdminClient();
   const out: Record<string, unknown> = {};
-
-  const st = await aiState(admin);
-  if (st.ready && st.settings.assistant.ai.readEmails) {
-    const { data: todo } = await admin.from("activities").select("id").eq("kind", "email").eq("direction", "in").is("ai_processed_at", null).order("occurred_at").limit(15);
-    let n = 0;
-    for (const a of todo || []) { const r = await processEmailActivity(admin, a.id as string); if (r.ok) n++; }
-    out.emailsRead = n;
-  }
+  const t0 = Date.now();
 
   const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const settings = mergeSettings(s?.data);
   const data = await loadAssistantData(admin);
-  const { data: dec } = await admin.from("ai_suggestions").select("dedupe_key,status,snoozed_until").eq("source", "rules").limit(5000);
-  const { open } = applyDecisions(computeFollowUps(data, settings), (dec || []) as { dedupe_key: string | null; status: string; snoozed_until: string | null }[]);
+  const dec = await loadDecisions(admin);
+  const { open } = applyDecisions(computeFollowUps(data, settings), dec);
   const { data: extra } = await admin.from("ai_suggestions").select("title,priority,order_id,customer_id").neq("source", "rules").eq("status", "open").limit(50);
   out.followUps = open.length;
 
@@ -51,6 +44,18 @@ export async function GET(req: Request) {
       <p style="margin:24px 0"><a href="${siteUrl()}/shop/assistant" style="background:#0A7BA6;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;font-weight:600;display:inline-block">Open the Assistant</a></p>
     </div>`;
     out.digest = await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `${open.filter((x) => x.priority === 1).length ? `${open.filter((x) => x.priority === 1).length} urgent · ` : ""}${open.length + (extra?.length || 0)} follow-ups today`, html });
+  }
+  // then read emails the AI hasn't seen, stopping well before the time limit (the rest wait for tomorrow or a manual run)
+  const st = await aiState(admin);
+  if (st.ready && st.settings.assistant.ai.readEmails) {
+    const { data: todo } = await admin.from("activities").select("id").eq("kind", "email").eq("direction", "in").is("ai_processed_at", null).order("occurred_at").limit(15);
+    let n = 0;
+    for (const a of todo || []) {
+      if (Date.now() - t0 > 35_000) break;
+      const r = await processEmailActivity(admin, a.id as string);
+      if (r.ok) n++;
+    }
+    out.emailsRead = n;
   }
   return NextResponse.json({ ok: true, ...out });
 }

@@ -102,10 +102,11 @@ export async function submitRequest(id: string): Promise<Result> {
  */
 export async function reorderRequest(fromId: string): Promise<Result> {
   try {
-    const { supabase, cust, admin, email } = await me();
+    const { supabase, admin, email } = await me();
     // row security: they can only read their own sent orders
     const { data: src } = await supabase.from("orders").select("*").eq("id", fromId).maybeSingle();
     if (!src || src.status === "request" || src.status === "quote") return { ok: false, error: "We couldn't find that order." };
+    const { data: cust } = await admin.from("customers").select("price_type,tax_exempt").eq("id", src.customer_id).maybeSingle();
     const groups = orderGroups(src as Order).map((g) => ({
       id: uid(), name: g.name, youth: g.youth, finishing: g.finishing || [],
       lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })),
@@ -114,7 +115,7 @@ export async function reorderRequest(fromId: string): Promise<Result> {
     }));
     const { data, error } = await admin.from("orders").insert({
       customer_id: src.customer_id, status: "request", type: "quote", source: "portal",
-      price_type: cust.price_type || src.price_type || "retail", tax_exempt: !!cust.tax_exempt, groups, total: 0,
+      price_type: cust?.price_type || src.price_type || "retail", tax_exempt: !!cust?.tax_exempt, groups, total: 0,
       nickname: `${src.nickname || `Order #${src.number}`} (reorder)`.slice(0, 120), notes: `Reorder of #${src.number}.`,
       delivery_method: src.delivery_method || "pickup", ship_to: src.ship_to || "",
     }).select("id").single();
@@ -145,7 +146,7 @@ export async function describeMyOrder(id: string, text: string): Promise<Result 
     const groups = proposalToGroups(r.data).map((g) => ({ ...g, lines: g.lines.map((l) => ({ ...l, cost: "" as const, priceOverride: null })) }));
     if (!groups.length) return { ok: false, error: "We couldn't find garments or sizes in that. Try naming the shirts, colors and how many of each size." };
     const cur = orderGroups(order);
-    const blank = cur.length <= 1 && !cur.some((g) => g.lines.some((l) => l.style || Object.values(l.sizes || {}).some((v) => +v)));
+    const blank = cur.length <= 1 && !cur.some((g) => g.lines.some((l) => l.style || l.color || Object.values(l.sizes || {}).some((v) => +v)) || g.imprints.some((d) => d.design_id) || (g.customerMockups || []).length);
     const row: Record<string, unknown> = { groups: blank ? groups : [...cur, ...groups] };
     if (!order.nickname && r.data.nickname) row.nickname = r.data.nickname.slice(0, 120);
     if (!order.due_date && r.data.due_date && /^\d{4}-\d{2}-\d{2}$/.test(r.data.due_date)) row.due_date = r.data.due_date;

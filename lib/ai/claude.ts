@@ -49,7 +49,7 @@ export async function askClaude<T>(opts: {
     return (data?.id as string) || null;
   };
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 90_000);
+  const timer = setTimeout(() => ctrl.abort(), 50_000);
   try {
     const res = await fetch(API, {
       method: "POST",

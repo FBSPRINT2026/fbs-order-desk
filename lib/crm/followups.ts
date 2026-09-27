@@ -9,6 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { payDueDate, ST, type Customer, type Order, type Settings, type StatusKey } from "@/lib/pricing";
 import { custLabel, fmtDateLong, money } from "@/lib/format";
 import { firstName, renderTemplate, type TemplateKey } from "@/lib/crm/templates";
+import { withPrivate } from "@/lib/crm/private";
 
 export type FollowUpKind =
   | "reply_needed" | "price_request" | "quote_followup" | "quote_unsent" | "proof_changes" | "proof_waiting"
@@ -62,25 +63,42 @@ export type AssistantData = {
   readyEvents: { order_id: string; created_at: string }[];
 };
 
+/** Reads every row of a query, 1,000 at a time (the API returns at most 1,000 per request). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchAll<T>(make: () => any, cap = 20000): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; from < cap; from += 1000) {
+    const { data, error } = await make().range(from, from + 999);
+    if (error || !data) break;
+    out.push(...(data as T[]));
+    if (data.length < 1000) break;
+  }
+  return out;
+}
+
+/** Saved Assistant decisions (done / dismissed / snoozed) for the follow-up rules. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function loadDecisions(sb: SupabaseClient<any, any, any>) {
+  return fetchAll<{ dedupe_key: string | null; status: string; snoozed_until: string | null }>(() => sb.from("ai_suggestions").select("dedupe_key,status,snoozed_until").eq("source", "rules").order("created_at"));
+}
+
 /** Loads what the rules need. Works with the browser client (staff session) or the admin client (cron). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function loadAssistantData(sb: SupabaseClient<any, any, any>): Promise<AssistantData> {
   const since = new Date(Date.now() - 120 * 86400000).toISOString();
-  const [o, c, p, pr, m, ev] = await Promise.all([
-    sb.from("orders").select("id,number,nickname,status,type,due_date,total,customer_id,created_at,updated_at,sent_at,approved_at,submitted_at,completed_at,tracking,delivery_method").order("number", { ascending: false }).limit(2000),
-    sb.from("customers").select("*"),
-    sb.from("payments").select("order_id,amount"),
-    sb.from("proofs").select("order_id,status,created_at,decided_at"),
-    sb.from("messages").select("order_id,customer_id,author_type,created_at").gte("created_at", since).order("created_at"),
-    sb.from("order_events").select("order_id,created_at").eq("kind", "status").eq("detail", "ready").gte("created_at", since),
+  const [orders, customers, payments, proofs, messages, readyEvents] = await Promise.all([
+    fetchAll<O>(() => sb.from("orders").select("id,number,nickname,status,type,due_date,total,customer_id,created_at,updated_at,sent_at,approved_at,submitted_at,completed_at,tracking,delivery_method").order("number", { ascending: false })),
+    fetchAll<Customer>(() => sb.from("customers").select("*").order("created_at")),
+    fetchAll<{ order_id: string; amount: number }>(() => sb.from("payments").select("order_id,amount").order("created_at")),
+    fetchAll<AssistantData["proofs"][number]>(() => sb.from("proofs").select("order_id,status,created_at,decided_at").order("created_at")),
+    fetchAll<AssistantData["messages"][number]>(() => sb.from("messages").select("order_id,customer_id,author_type,created_at").gte("created_at", since).order("created_at")),
+    fetchAll<AssistantData["readyEvents"][number]>(() => sb.from("order_events").select("order_id,created_at").eq("kind", "status").eq("detail", "ready").gte("created_at", since).order("created_at")),
   ]);
   return {
-    orders: (o.data || []) as O[],
-    customers: (c.data || []) as Customer[],
-    payments: ((p.data || []) as { order_id: string; amount: number }[]).map((x) => ({ ...x, amount: +x.amount || 0 })),
-    proofs: (pr.data || []) as AssistantData["proofs"],
-    messages: (m.data || []) as AssistantData["messages"],
-    readyEvents: (ev.data || []) as AssistantData["readyEvents"],
+    orders,
+    customers: await withPrivate(sb, customers),
+    payments: payments.map((x) => ({ ...x, amount: +x.amount || 0 })),
+    proofs, messages, readyEvents,
   };
 }
 
@@ -220,10 +238,11 @@ export function computeFollowUps(data: AssistantData, s: Settings, now = Date.no
       const at = data.readyEvents.filter((e) => e.order_id === o.id).map((e) => e.created_at).sort().pop();
       const d = at ? Math.floor(ageDays(at, now)) : 0;
       if (at && d >= a.pickupRemindDays) {
-        const tk: TemplateKey = o.delivery_method === "ship" && o.tracking ? "shipped" : "ready_pickup";
+        const tk: TemplateKey | null = o.delivery_method === "pickup" ? "ready_pickup" : o.delivery_method === "ship" && o.tracking ? "shipped" : null;
         push(o, c, { key: `pickup:${o.id}:${at}`, kind: "pickup", priority: 3,
-          title: `#${o.number} has been ready for ${plural(d, "day")}`, body: o.delivery_method === "pickup" ? `Remind ${custLabel(c)} to pick it up.` : "Mark it completed once it's delivered.",
-          template: tk, draft: renderTemplate(tk, { ...v, balanceLine: bal > 0.004 ? ` The balance is ${money(bal)}, and you can pay online in your portal or when you pick up.` : "" }), channel: "order", since: at });
+          title: `#${o.number} has been ${o.delivery_method === "pickup" ? "waiting for pickup" : "ready"} for ${plural(d, "day")}`,
+          body: o.delivery_method === "pickup" ? `Remind ${custLabel(c)} to pick it up.` : o.delivery_method === "ship" ? "Ship it (and add the tracking number), or mark it completed if it's gone out." : "Deliver it, then mark it completed.",
+          template: tk || undefined, draft: tk ? renderTemplate(tk, { ...v, balanceLine: bal > 0.004 ? ` The balance is ${money(bal)}, and you can pay online in your portal or when you pick up.` : "" }) : undefined, channel: tk ? "order" : "none", since: at });
       }
     }
   }

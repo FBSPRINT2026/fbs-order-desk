@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { mergeSettings, type Settings, type Suggestion } from "@/lib/pricing";
-import { applyDecisions, computeFollowUps, KIND_INFO, loadAssistantData, type FollowUp } from "@/lib/crm/followups";
+import { applyDecisions, computeFollowUps, KIND_INFO, loadAssistantData, loadDecisions, type FollowUp } from "@/lib/crm/followups";
 import { custLabel, fmtStamp } from "@/lib/format";
 import { staffCustomerMessage, staffMessage } from "@/app/shop/actions";
 import { addEmailToTimeline, aiRewriteDraft, getAiStatus, quoteFromSuggestion } from "@/app/shop/ai-actions";
@@ -35,16 +35,18 @@ export default function AssistantPage() {
 
   const load = useCallback(async () => {
     try {
-      const [data, st, sg, u] = await Promise.all([
+      const [data, st, sg, dec, u] = await Promise.all([
         loadAssistantData(sb),
         sb.from("settings").select("data").eq("id", 1).maybeSingle(),
-        sb.from("ai_suggestions").select("*").order("created_at", { ascending: false }).limit(2000),
+        sb.from("ai_suggestions").select("*").neq("source", "rules").in("status", ["open", "snoozed"]).order("created_at", { ascending: false }).limit(1000),
+        loadDecisions(sb),
         sb.auth.getUser(),
       ]);
       const s = mergeSettings(st.data?.data);
       setSettings(s);
       setRules(computeFollowUps(data, s));
-      setSaved((sg.data || []) as Suggestion[]);
+      // rule decisions only need key + status; AI suggestions and to-dos come in full
+      setSaved([...((sg.data || []) as Suggestion[]), ...dec.map((d) => ({ ...d, source: "rules", id: "k:" + d.dedupe_key }) as unknown as Suggestion)]);
       setCustNames(Object.fromEntries(data.customers.map((c) => [c.id, custLabel(c)])));
       setMe(u.data.user?.email || "");
       if (sg.error) setErr(sg.error.message.includes("ai_suggestions") ? "The Assistant's table isn't in the database yet." : sg.error.message);
@@ -81,7 +83,8 @@ export default function AssistantPage() {
       ? await sb.from("ai_suggestions").update(patch).eq("id", it.saved.id).select("*").single()
       : await sb.from("ai_suggestions").upsert({ ...patch, dedupe_key: it.key, kind: it.kind, source: "rules", priority: it.priority, title: it.title, body: it.body, customer_id: it.customer_id, order_id: it.order_id, draft: it.draft || {} }, { onConflict: "dedupe_key" }).select("*").single();
     if (error) return say("Couldn't save that: " + error.message);
-    setSaved((s) => [data as Suggestion, ...s.filter((x) => x.id !== (data as Suggestion).id)]);
+    const row = data as Suggestion;
+    setSaved((s) => [row, ...s.filter((x) => x.id !== row.id && (!row.dedupe_key || x.dedupe_key !== row.dedupe_key))]);
     if (status === "snoozed") say(`Snoozed for ${days === 1 ? "a day" : `${days} days`}.`);
   }
 

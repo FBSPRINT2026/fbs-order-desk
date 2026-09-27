@@ -1,4 +1,5 @@
 import { NextResponse, after } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { storeInboundEmail, type InboundEmail } from "@/lib/crm/inbound";
 import { processEmailActivity } from "@/lib/ai/email";
@@ -38,7 +39,8 @@ export async function POST(req: Request) {
   if (!secret) return NextResponse.json({ error: "Inbound email is not set up" }, { status: 503 });
   const url = new URL(req.url);
   const given = url.searchParams.get("key") || req.headers.get("x-inbound-secret") || "";
-  if (given !== secret) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
+  const ok = given.length === secret.length && timingSafeEqual(Buffer.from(given), Buffer.from(secret));
+  if (!ok) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Expected JSON" }, { status: 400 });
   const admin = createAdminClient();

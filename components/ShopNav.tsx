@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mergeSettings } from "@/lib/pricing";
-import { applyDecisions, computeFollowUps, loadAssistantData } from "@/lib/crm/followups";
+import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 
 const ICONS: Record<string, React.ReactNode> = {
   assistant: <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg>,
@@ -32,15 +32,16 @@ export default function ShopNav({ email }: { email: string }) {
     const run = async () => {
       try {
         const sb = createClient();
-        const [data, st, sg] = await Promise.all([
+        const [data, st, dec, sg] = await Promise.all([
           loadAssistantData(sb),
           sb.from("settings").select("data").eq("id", 1).maybeSingle(),
-          sb.from("ai_suggestions").select("dedupe_key,status,snoozed_until,source,priority").in("status", ["open", "snoozed", "done", "dismissed"]).limit(3000),
+          loadDecisions(sb),
+          sb.from("ai_suggestions").select("status,snoozed_until,priority").neq("source", "rules").in("status", ["open", "snoozed"]).limit(1000),
         ]);
-        const rows = (sg.data || []) as { dedupe_key: string | null; status: string; snoozed_until: string | null; source: string; priority: number }[];
-        const { open } = applyDecisions(computeFollowUps(data, mergeSettings(st.data?.data)), rows.filter((r) => r.source === "rules"));
+        const rows = (sg.data || []) as { status: string; snoozed_until: string | null; priority: number }[];
+        const { open } = applyDecisions(computeFollowUps(data, mergeSettings(st.data?.data)), dec);
         const now = Date.now();
-        const extra = rows.filter((r) => r.source !== "rules" && (r.status === "open" || (r.status === "snoozed" && r.snoozed_until && new Date(r.snoozed_until).getTime() <= now)));
+        const extra = rows.filter((r) => r.status === "open" || (r.snoozed_until && new Date(r.snoozed_until).getTime() <= now));
         if (live) setTodo({ all: open.length + extra.length, urgent: open.filter((x) => x.priority === 1).length + extra.filter((x) => x.priority === 1).length });
       } catch { /* the badge is a nice-to-have */ }
     };

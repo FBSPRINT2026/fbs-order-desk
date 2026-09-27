@@ -14,6 +14,7 @@ import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/li
 import { Pill } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import { checkOrder } from "@/lib/orderChecks";
+import { withPrivate } from "@/lib/crm/private";
 import { ChecksPanel, FillFromText } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
@@ -117,7 +118,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       d.tax_rate = d.tax_rate === null ? null : +d.tax_rate;
       setO(d);
       latest.current = d;
-      setCustomers(((cu.data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
+      setCustomers((await withPrivate(sb, (cu.data || []) as Customer[])).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
       setSettings(mergeSettings(st.data?.data));
       setCatalog((cat.data || []) as Garment[]);
       setProdNotes(inn.data?.production_notes || "");
@@ -252,7 +253,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       if (run.length) { l.sizeRun = run; if (run.length === 1 && run[0] === "OS") l.oneSize = true; }
     }));
     patch((d) => {
-      const blank = d.groups.length === 1 && !d.groups[0].lines.some((l) => l.style || Object.keys(l.sizes || {}).length);
+      const g0 = d.groups[0];
+      const blank = d.groups.length === 1 && !g0.lines.some((l) => l.style || l.color || Object.keys(l.sizes || {}).length) && !g0.imprints.some((x) => x.design_id) && !(g0.customerMockups || []).length && !g0.mockupAt;
       d.groups = mode === "replace" || blank ? groups : [...d.groups, ...groups];
       if (!d.nickname && p.nickname) d.nickname = p.nickname.slice(0, 120);
       if (!d.due_date && p.due_date && /^\d{4}-\d{2}-\d{2}$/.test(p.due_date)) d.due_date = p.due_date;

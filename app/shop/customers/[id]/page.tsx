@@ -14,6 +14,7 @@ import { staffCustomerMessage } from "@/app/shop/actions";
 import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
 import { PAY_TERMS, payDueDate, type Design, type PayTerms } from "@/lib/pricing";
 import Timeline from "@/components/Timeline";
+import { splitCustomer } from "@/lib/crm/private";
 import { fmtStamp } from "@/lib/format";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -72,10 +73,16 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
 
   async function save() {
     if (!latest.current) return;
-    // last_contact_at is kept up to date by the database
-    const { id: _id, created_at, last_contact_at, ...rest } = latest.current;
+    // staff-only fields (notes, tags, follow-up, owner) are saved to customer_private; last contact is kept by the database
+    const { id: _id, created_at, ...all } = latest.current;
+    const { pub: rest, priv } = splitCustomer(all);
     setState("Saving…");
-    const { error } = await createClient().from("customers").update({ ...rest, email: rest.email.trim().toLowerCase(), contact2_email: (rest.contact2_email || "").trim().toLowerCase() }).eq("id", id);
+    const sb = createClient();
+    const [a, b] = await Promise.all([
+      sb.from("customers").update({ ...rest, email: (rest.email || "").trim().toLowerCase(), contact2_email: (rest.contact2_email || "").trim().toLowerCase() }).eq("id", id),
+      sb.from("customer_private").upsert({ customer_id: id, ...priv }),
+    ]);
+    const error = a.error || b.error;
     setState(error ? "Save failed: " + error.message : "Saved");
   }
   function set<K extends keyof Customer>(k: K, v: Customer[K]) {

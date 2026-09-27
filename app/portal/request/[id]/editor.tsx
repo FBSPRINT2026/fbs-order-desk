@@ -180,7 +180,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         <div className="field"><label htmlFor="rq-notes">Notes for us</label><textarea id="rq-notes" rows={2} placeholder="Anything we should know: event date, who the shirts are for, colors to avoid…" value={o.notes || ""} disabled={preview} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
       </div></section>
 
-      <fieldset disabled={preview} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className="stack">
+      <fieldset disabled={preview || descBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} className="stack">
         {o.groups.map((g, gi) => (
           <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={prices} catalog={catalog} canRemove={o.groups.length > 1}
             armed={armed} arm={arm} hidePrices update={(fn) => patch((d) => fn(d.groups[gi]))}
