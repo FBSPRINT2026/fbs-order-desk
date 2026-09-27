@@ -85,6 +85,18 @@ function buildClipart() {
     console.log(`[idea-lab] ${s.p}: ${names.length} icons`);
   }
   fs.writeFileSync(path.join(OUT, "index.json"), JSON.stringify({ v: 1, built: new Date().toISOString(), sets, cats, i: entries }));
+  // report: which design-idea clip art exists (the Idea Lab falls back to the next candidate when one is missing)
+  try {
+    const have = new Set(entries.map((e) => `${sets[e[0]].p}:${e[1]}`));
+    const src = fs.readFileSync(path.join(ROOT, "lib", "designerTemplates.ts"), "utf8");
+    const ids = [...new Set([...src.matchAll(/"([a-z0-9-]+):([a-z0-9-]+)"/g)].map((m) => `${m[1]}:${m[2]}`))].filter((id) => !id.startsWith("fbs:"));
+    const missing = ids.filter((id) => !have.has(id));
+    console.log(`[idea-lab] design-idea art: ${ids.length - missing.length}/${ids.length} found. Missing: ${missing.join(" ")}`);
+    for (const w of ["football", "baseball", "softball", "eagle", "wolf", "tiger", "cross", "church", "graduat", "christmas", "pumpkin", "trophy", "laurel", "anchor", "deer", "fish"]) {
+      const hits = entries.filter((e) => e[1].includes(w)).map((e) => `${sets[e[0]].p}:${e[1]}`);
+      console.log(`[idea-lab] "${w}": ${hits.length} — ${hits.slice(0, 14).join(" ")}`);
+    }
+  } catch (e) { console.warn("[idea-lab] report skipped", e && e.message); }
   console.log(`[idea-lab] clip art library: ${total} icons in ${sets.length} sets`);
 }
 
