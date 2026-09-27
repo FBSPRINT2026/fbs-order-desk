@@ -13,6 +13,9 @@ import { isVector, knockOut } from "@/lib/artPrep";
 import { starMyDesign } from "@/app/portal/actions";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
+import ShirtDesigner from "@/components/ShirtDesigner";
+import { loadDesignerDoc, saveDesignerLogo } from "@/lib/designerSave";
+import type { DesignDoc } from "@/lib/designerArt";
 import { PMS_HEX, WILFLEX_HEX, closestInk, closestPms, colorHex, detectColors, recolor } from "@/lib/inkColors";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot, basePlacement, maxWidthFor, sideMaxWidth, viewsFor, guessHex, measureGarment, printWidth, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 
@@ -144,6 +147,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
   function toggleBg(d: Design) { resetLogo(d); setKeepBg((k) => ({ ...k, [d.id]: !k[d.id] })); }
   const [msg, setMsg] = useState("");
+  // the shirt designer, opened for one imprint (new design, or editing its logo)
+  const [designerFor, setDesignerFor] = useState<{ imId: string; start: { doc?: DesignDoc | null; imageUrl?: string; name?: string } } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ title: string; url: string }[]>([]);
   const refreshed = useRef(new Set<number>());
@@ -195,6 +200,20 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setUrls(await previewUrls(sb, list));
     })();
   }, [sb, customerId, portal]);
+
+  // ?design=<id>: start with that logo on the shirt (e.g. right after making it in the shirt designer)
+  const designParam = useRef(sp.get("design") || "");
+  useEffect(() => {
+    const id = designParam.current;
+    if (!id || !designs.some((d) => d.id === id)) return;
+    designParam.current = "";
+    setImprints((xs) => {
+      if (xs.some((x) => x.design_id === id)) return xs;
+      const free = xs.find((x) => !x.design_id);
+      if (free) return xs.map((x) => (x === free ? { ...x, design_id: id } : x));
+      return [...xs, { ...newImprint("Full Front"), design_id: id }];
+    });
+  }, [designs]);
 
   // find the colors in each imprint's logo when its design changes
   useEffect(() => {
@@ -411,6 +430,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   </div>
                 );
   };
+
+  async function openDesigner(im: Imprint) {
+    if (!customerId) return setMsg("Pick the customer first. Designs are saved to their account.");
+    const d = designOf(im);
+    if (!d) return setDesignerFor({ imId: im.id, start: {} });
+    const doc = await loadDesignerDoc(sb, d, portal);
+    setDesignerFor({ imId: im.id, start: doc ? { doc, name: d.name } : { imageUrl: urls[d.id], name: d.name } });
+  }
 
   async function uploadNew(im: Imprint, f: File) {
     if (!customerId) return setMsg("Pick the customer first. New art is saved to their account.");
@@ -702,6 +729,26 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               }).map(({ im }) => closeUp(im, cuSize))}
             </div>
           </div>
+          {designerFor && (
+            <div className="sd-modal-back" role="dialog" aria-modal="true" aria-label="Shirt designer">
+              <div className="sd-modal">
+                <ShirtDesigner start={designerFor.start} saveLabel="Save & put on shirt" onClose={() => setDesignerFor(null)}
+                  logos={designs.filter((d) => urls[d.id] && !d.archived_at).map((d) => ({ id: d.id, name: designLabel(d), url: urls[d.id] }))}
+                  onSave={async (out) => {
+                    try {
+                      const { data: u } = portal ? { data: { user: null } } : await sb.auth.getUser();
+                      const r = await saveDesignerLogo(sb, out, { portal, customerId, by: u.user?.email || "" });
+                      setDesigns((x) => [r.design, ...x]);
+                      if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
+                      const imId = designerFor.imId;
+                      setImprints((xs) => xs.map((x) => (x.id === imId ? { ...x, design_id: r.design.id } : x)));
+                      setDesignerFor(null);
+                      setMsg(`Saved ${designLabel(r.design)} to ${portal ? "your" : "the customer's"} logos.`);
+                    } catch (e) { return e instanceof Error ? e.message : "Couldn't save the design."; }
+                  }} />
+              </div>
+            </div>
+          )}
           {rasterAsk && (
             <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="rq-t">
               <div className="mk-modal">
@@ -794,6 +841,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         onMatchAll={unsetColors(im).length > 0 ? () => matchStandard(im) : undefined} />
                     )}
                     <div className="mk-imp-foot">
+                      <button type="button" className="btn sm ghost" onClick={() => openDesigner(im)} title="Add text, clip art and pictures">{p.d ? "Edit in designer" : "Design one"}</button>
                       <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
                       <div className="row mk-wh" style={{ gap: 4 }}>
                         {(() => {

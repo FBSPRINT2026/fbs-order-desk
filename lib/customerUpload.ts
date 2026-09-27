@@ -18,16 +18,16 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
  * A customer uploads a logo from their portal: the original goes straight to storage with a one-time link,
  * files a browser can't show (PDF, AI, HEIC…) get a PNG preview made and uploaded too, then the server records it.
  */
-export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string): Promise<{ design: Design; url: string }> {
+export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string, opts: { preview?: File; layers?: string; colors?: number; inks?: string } = {}): Promise<{ design: Design; url: string }> {
   const t = await logoUploadUrl(f.name);
   if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Upload failed");
   const up = await sb.storage.from("proofs").uploadToSignedUrl(t.path, t.token, f, { contentType: f.type || undefined });
   if (up.error) throw new Error(up.error.message);
-  const direct = PREVIEWABLE_TYPES.test(f.type);
+  const direct = PREVIEWABLE_TYPES.test(f.type) && !opts.preview;
   let previewPath: string | undefined;
   let dims = direct ? await imageSize(f) : null;
   if (!direct) {
-    const pv = await makePreview(f);
+    const pv = opts.preview || await makePreview(f);
     if (pv) {
       const t2 = await logoUploadUrl(pv.name);
       if (t2.ok && t2.path && t2.token) {
@@ -36,7 +36,16 @@ export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string): 
       }
     }
   }
-  const r = await saveMyLogo({ path: t.path, fileName: f.name, fileType: f.type, name: name || f.name.replace(/\.[^.]+$/, ""), previewable: direct, previewPath, w: dims?.w, h: dims?.h });
+  // shirt designer: the editable layers go up as their own file
+  let layersPath: string | undefined;
+  if (opts.layers) {
+    const t3 = await logoUploadUrl("layers.json");
+    if (t3.ok && t3.path && t3.token) {
+      const u3 = await sb.storage.from("proofs").uploadToSignedUrl(t3.path, t3.token, new Blob([opts.layers], { type: "application/json" }), { contentType: "application/json" });
+      if (!u3.error) layersPath = t3.path;
+    }
+  }
+  const r = await saveMyLogo({ path: t.path, fileName: f.name, fileType: f.type, name: name || f.name.replace(/\.[^.]+$/, ""), previewable: direct, previewPath, w: dims?.w, h: dims?.h, layersPath, colors: opts.colors, inks: opts.inks });
   if (!r.ok) throw new Error(r.error);
   return { design: r.design as Design, url: r.url };
 }
