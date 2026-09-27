@@ -115,17 +115,19 @@ export async function logoUploadUrl(fileName: string): Promise<{ ok: boolean; er
 }
 
 /** Step 2: save the uploaded file as one of the customer's logos. */
-export async function saveMyLogo(meta: { path: string; fileName: string; fileType: string; name: string; previewable: boolean; w?: number; h?: number }) {
+export async function saveMyLogo(meta: { path: string; fileName: string; fileType: string; name: string; previewable: boolean; previewPath?: string; w?: number; h?: number }) {
   try {
     const { admin, cust, email } = await me();
     if (!/^designs\/[\w-]+\/[\w.\-]+$/.test(meta.path)) return { ok: false as const, error: "Bad upload." };
+    if (meta.previewPath && !/^designs\/[\w-]+\/[\w.\-]+$/.test(meta.previewPath)) return { ok: false as const, error: "Bad upload." };
+    const pvPath = meta.previewPath || (meta.previewable ? meta.path : "");
     const { data, error } = await admin.from("designs").insert({
       customer_id: cust.id, name: (meta.name || meta.fileName.replace(/\.[^.]+$/, "")).trim().slice(0, 120),
-      file_path: meta.path, file_name: meta.fileName, file_type: meta.fileType || "", preview_path: meta.previewable ? meta.path : "",
+      file_path: meta.path, file_name: meta.fileName, file_type: meta.fileType || "", preview_path: pvPath,
       width_px: meta.w || null, height_px: meta.h || null, method: "screen", colors: 1, inks: "", notes: "", created_by: email,
     }).select("*").single();
     if (error) return { ok: false as const, error: error.message };
-    const { data: sg } = meta.previewable ? await admin.storage.from("proofs").createSignedUrl(meta.path, 3600) : { data: null };
+    const { data: sg } = pvPath ? await admin.storage.from("proofs").createSignedUrl(pvPath, 3600) : { data: null };
     revalidatePath("/portal");
     return { ok: true as const, design: data, url: sg?.signedUrl || "" };
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Upload failed." }; }

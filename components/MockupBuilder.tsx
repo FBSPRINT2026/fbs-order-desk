@@ -5,8 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { LOCATIONS, METHODS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
-import { previewUrls, uploadDesign } from "@/lib/designs";
-import { logoUploadUrl, mockupUploadUrls, myLogos, portalCatalog, saveMyLogo, saveMyMockup } from "@/app/portal/request-actions";
+import { DESIGN_ACCEPT, previewUrls, uploadDesign } from "@/lib/designs";
+import { mockupUploadUrls, myLogos, portalCatalog, saveMyMockup } from "@/app/portal/request-actions";
+import { uploadMyLogo } from "@/lib/customerUpload";
+import { effectiveDpi, isVector, knockOut } from "@/lib/artPrep";
 import { starMyDesign } from "@/app/portal/actions";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
@@ -89,6 +91,30 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number; open?: string } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
   const imgCache = useRef(new Map<string, HTMLImageElement>());
+  // raster logos (JPG, PNG…) on a solid background get it knocked out; staff can keep it per logo
+  const [clean, setClean] = useState<Record<string, string>>({});
+  const [keepBg, setKeepBg] = useState<Record<string, boolean>>({});
+  /** The logo image to draw and read colors from: the cleaned-up version when its background was removed. */
+  async function logoImg(d: Design): Promise<HTMLImageElement> {
+    const hit = imgCache.current.get(d.id);
+    if (hit) return hit;
+    let img = await loadImg(urls[d.id]);
+    if (!keepBg[d.id] && !isVector(d.file_type, d.file_name)) {
+      const k = knockOut(img);
+      if (k) {
+        img = await loadImg(k.url);
+        setClean((c) => ({ ...c, [d.id]: k.url }));
+      }
+    }
+    imgCache.current.set(d.id, img);
+    return img;
+  }
+  function toggleBg(d: Design) {
+    imgCache.current.delete(d.id);
+    setClean((c) => { const n = { ...c }; delete n[d.id]; return n; });
+    setPaints((p) => Object.fromEntries(Object.entries(p).filter(([, v]) => v.design !== d.id)));
+    setKeepBg((k) => ({ ...k, [d.id]: !k[d.id] }));
+  }
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ title: string; url: string }[]>([]);
@@ -149,13 +175,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!d || !urls[d.id]) return;
       if (paints[im.id]?.design === d.id) return;
       try {
-        const img = imgCache.current.get(d.id) || (await loadImg(urls[d.id]));
-        imgCache.current.set(d.id, img);
+        const img = await logoImg(d);
         const sources = detectColors(img);
         setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map: {} } }));
       } catch { /* preview not loadable */ }
     });
-  }, [imprints, designs, urls]);
+  }, [imprints, designs, urls, keepBg]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // repaint logos whenever an ink choice changes
   useEffect(() => {
@@ -217,7 +242,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       return np;
     });
   }
-  const artUrl = (im: Imprint) => { const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? urls[d.id] : ""); };
+  const artUrl = (im: Imprint) => { const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? clean[d.id] || urls[d.id] : ""); };
 
   const garmentFor = (l: Line) => catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase() && (!l.brand || g.brand.toLowerCase() === l.brand.toLowerCase()))
     || catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase());
@@ -314,15 +339,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       let d: Design;
       if (portal) {
         // customers upload straight to storage with a one-time link, then the server records the logo
-        const t = await logoUploadUrl(f.name);
-        if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Upload failed");
-        const up = await sb.storage.from("proofs").uploadToSignedUrl(t.path, t.token, f, { contentType: f.type || undefined });
-        if (up.error) throw new Error(up.error.message);
-        const pv = PREVIEWABLE_TYPES.test(f.type);
-        const dims = pv ? await new Promise<{ w: number; h: number } | null>((res) => { const u0 = URL.createObjectURL(f); const im = new Image(); im.onload = () => res({ w: im.naturalWidth, h: im.naturalHeight }); im.onerror = () => res(null); im.src = u0; }) : null;
-        const r = await saveMyLogo({ path: t.path, fileName: f.name, fileType: f.type, name: f.name.replace(/\.[^.]+$/, ""), previewable: pv, w: dims?.w, h: dims?.h });
-        if (!r.ok) throw new Error(r.error);
-        d = r.design as Design;
+        const r = await uploadMyLogo(sb, f);
+        d = r.design;
         setDesigns((x) => [d, ...x]);
         if (r.url) setUrls((x) => ({ ...x, [d.id]: r.url }));
         setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d.id } : x)));
@@ -393,8 +411,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   const d = im && designs.find((x) => x.id === im.design_id);
                   if (!im || !d || !urls[d.id]) return setMsg("Pick a logo for this location first.");
                   let pt = paints[id];
-                  let img = imgCache.current.get(d.id);
-                  try { if (!img) { img = await loadImg(urls[d.id]); imgCache.current.set(d.id, img); } } catch { return setMsg("Couldn't read this logo's colors. Try re-uploading it as a PNG."); }
+                  let img: HTMLImageElement;
+                  try { img = await logoImg(d); } catch { return setMsg("Couldn't read this logo's colors. Try re-uploading it as a PNG."); }
                   if (!pt || pt.design !== d.id) { pt = { design: d.id, sources: detectColors(img), map: {} }; const np = pt; setPaints((p) => ({ ...p, [id]: np })); }
                   if (!pt.sources.length) return;
                   // look around the click for the nearest solid pixel (thin lettering is easy to miss)
@@ -685,7 +703,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     <div className="row" style={{ justifyContent: "space-between" }}>
                       <select aria-label="Location" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
                       <select aria-label={`Method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x))); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-                      <button className="btn icon ghost" type="button" aria-label={`Remove ${im.location}`} onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>✕</button>
+                      <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
                       <span className="faint" style={{ fontSize: 12 }}>{p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot;</span>
                     </div>
                     <div className="row" style={{ gap: 6 }}>
@@ -719,9 +737,23 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         {unsetColors(im).length > 0 && <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={() => matchStandard(im)}>Use closest standard inks</button>}
                       </div>
                     )}
+                    {p.d && !isVector(p.d.file_type, p.d.file_name) && (() => {
+                      const d = p.d, dpi = effectiveDpi(d.width_px || 0, p.wIn);
+                      return (
+                        <div className="mk-raster">
+                          <div className="row" style={{ gap: 6, justifyContent: "space-between" }}>
+                            <span>{clean[d.id] ? "Picture file: background removed so it sits on the shirt." : keepBg[d.id] ? "Picture file: keeping its background." : "Picture file (JPG / PNG)."}</span>
+                            {(clean[d.id] || keepBg[d.id]) && <button type="button" className="btn sm ghost" onClick={() => toggleBg(d)}>{keepBg[d.id] ? "Remove background" : "Keep background"}</button>}
+                          </div>
+                          {dpi > 0 && (dpi < 150
+                            ? <div className="ink-warn" style={{ margin: 0 }}>Low resolution: about {dpi} dpi at {p.wIn.toFixed(1)}&quot; wide, so it may print blurry. 150+ dpi looks sharp. Ask for a bigger file or vector art (AI, EPS, PDF, SVG).</div>
+                            : <span className="faint">About {dpi} dpi at this size{dpi >= 300 ? ", sharp" : ", OK"}.</span>)}
+                        </div>
+                      );
+                    })()}
                     {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one of the customer&apos;s logos, or upload new art.</div>}
                     <div className="row" style={{ gap: 6 }}>
-                      <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
+                      <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
                     </div>
                     <div className="row mk-wh" style={{ gap: 6 }}>
                       {(() => {

@@ -1,10 +1,11 @@
 "use client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Design } from "@/lib/pricing";
+import { makePreview } from "@/lib/artPrep";
 
 /** Files the browser can draw as a preview. AI / EPS / PDF originals need a separate preview image. */
 export const PREVIEWABLE = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/i;
-export const DESIGN_ACCEPT = ".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd,.dst";
+export const DESIGN_ACCEPT = ".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd,.dst,.heic,.heif,.tif,.tiff,.bmp";
 
 function imageSize(f: File): Promise<{ w: number; h: number } | null> {
   return new Promise((res) => {
@@ -24,7 +25,9 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
   const orig = `designs/${key}/${safe(opts.file.name)}`;
   const up = await sb.storage.from("proofs").upload(orig, opts.file, { contentType: opts.file.type || undefined });
   if (up.error) throw new Error(up.error.message);
-  const pv = PREVIEWABLE.test(opts.file.type) ? opts.file : opts.preview && PREVIEWABLE.test(opts.preview.type) ? opts.preview : null;
+  // files a browser can't draw (PDF, AI, HEIC, TIFF…) get a PNG preview made automatically when none was given
+  const made = !PREVIEWABLE.test(opts.file.type) && !opts.preview ? await makePreview(opts.file) : null;
+  const pv = PREVIEWABLE.test(opts.file.type) ? opts.file : opts.preview && PREVIEWABLE.test(opts.preview.type) ? opts.preview : made;
   let preview_path = "";
   if (pv === opts.file) preview_path = orig;
   else if (pv) {

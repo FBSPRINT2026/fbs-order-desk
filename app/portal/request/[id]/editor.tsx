@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import GroupEditor from "@/components/GroupEditor";
 import { createClient } from "@/lib/supabase/client";
 import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
-import { discardRequest, logoUploadUrl, ownMockupUploadUrl, saveMyLogo, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
+import { discardRequest, ownMockupUploadUrl, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
+import { uploadMyLogo } from "@/lib/customerUpload";
 import { customerMessage } from "@/app/portal/actions";
 
 function imageSize(f: File): Promise<{ w: number; h: number } | null> {
@@ -77,19 +78,14 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
   async function uploadLogo(f: File, name: string): Promise<Design | null> {
     if (preview) return null;
     setErr("");
-    const u = await logoUploadUrl(f.name);
-    if (!u.ok || !u.path || !u.token) { setErr(u.error || "Upload failed."); return null; }
-    const up = await createClient().storage.from("proofs").uploadToSignedUrl(u.path, u.token, f, { contentType: f.type || undefined });
-    if (up.error) { setErr(up.error.message); return null; }
-    const pv = PREVIEWABLE_TYPES.test(f.type);
-    const dims = pv ? await imageSize(f) : null;
-    const r = await saveMyLogo({ path: u.path, fileName: f.name, fileType: f.type, name, previewable: pv, w: dims?.w, h: dims?.h });
-    if (!r.ok) { setErr(r.error || "Upload failed."); return null; }
-    const d = r.design as Design;
-    setDesigns((x) => [d, ...x]);
-    if (r.url) setUrls((x) => ({ ...x, [d.id]: r.url }));
-    return d;
+    try {
+      const r = await uploadMyLogo(createClient(), f, name);
+      setDesigns((x) => [r.design, ...x]);
+      if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
+      return r.design;
+    } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed."); return null; }
   }
+
 
   /** A mockup the customer made in their own software (picture or PDF). */
   async function uploadOwnMockup(gi: number, f: File) {
