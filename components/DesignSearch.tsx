@@ -13,7 +13,7 @@ export function designMatches(d: Design, q: string) {
  * Pick one of the customer's designs. The list opens on their starred (favorite) logos;
  * typing searches everything on file, so a customer with hundreds of logos stays manageable.
  */
-export default function DesignSearch({ designs, urls, value, onPick, onStar, placeholder = "Choose a design…" }: {
+export default function DesignSearch({ designs, urls, value, onPick, onStar, placeholder = "Choose a logo…" }: {
   designs: Design[];
   urls: Record<string, string>;
   value?: string;
@@ -43,14 +43,14 @@ export default function DesignSearch({ designs, urls, value, onPick, onStar, pla
     <div className="ds" ref={box}>
       <button type="button" className="ds-field" aria-haspopup="listbox" aria-expanded={open} onClick={() => { setOpen(!open); setQ(""); }}>
         {cur ? <>{urls[cur.id] ? <img className="ds-th" src={urls[cur.id]} alt="" /> : <span className="ds-th" />}<span className="ds-name">{cur.starred ? "★ " : ""}{designLabel(cur)}</span></>
-          : <span className="ds-name faint">{value ? "Design from another customer" : designs.length ? placeholder : "No designs on this customer yet"}</span>}
+          : <span className="ds-name faint">{value ? "Logo from another customer" : designs.length ? placeholder : "No logos on this customer yet"}</span>}
         <span className="ds-caret">▾</span>
       </button>
       {open && (
         <div className="ds-pop">
-          <input type="search" autoFocus placeholder={`Search ${designs.length} design${designs.length === 1 ? "" : "s"} (number, name, ink)`} value={q} onChange={(e) => setQ(e.target.value)}
+          <input type="search" autoFocus placeholder={`Search ${designs.length} logo${designs.length === 1 ? "" : "s"} (number, name, ink)`} value={q} onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); if (e.key === "Enter" && list[0]) { onPick(list[0]); setOpen(false); } }} />
-          <div className="ds-sub">{q.trim() ? `${list.length} match${list.length === 1 ? "" : "es"}` : starred.length ? "★ Starred designs · type to search all" : "No starred designs yet · newest shown · type to search all"}</div>
+          <div className="ds-sub">{q.trim() ? `${list.length} match${list.length === 1 ? "" : "es"}` : starred.length ? "★ Starred logos · type to search all" : "No starred logos yet · newest shown · type to search all"}</div>
           <div className="ds-list" role="listbox">
             {list.map((d) => (
               <div key={d.id} role="option" aria-selected={d.id === value} className={"ds-item" + (d.id === value ? " on" : "")} onClick={() => { onPick(d); setOpen(false); }}>
@@ -59,9 +59,9 @@ export default function DesignSearch({ designs, urls, value, onPick, onStar, pla
                 {onStar && <button type="button" className={"ds-star" + (d.starred ? " on" : "")} title={d.starred ? "Unstar" : "Star as a favorite"} aria-label={d.starred ? "Unstar" : "Star"} onClick={(e) => { e.stopPropagation(); onStar(d, !d.starred); }}>{d.starred ? "★" : "☆"}</button>}
               </div>
             ))}
-            {!list.length && <div className="ds-empty faint">{q.trim() ? "No designs match." : "No designs yet."}</div>}
+            {!list.length && <div className="ds-empty faint">{q.trim() ? "No logos match." : "No logos yet."}</div>}
           </div>
-          {value && <button type="button" className="btn sm ghost" style={{ margin: 6 }} onClick={() => { onPick(null); setOpen(false); }}>Clear design</button>}
+          {value && <button type="button" className="btn sm ghost" style={{ margin: 6 }} onClick={() => { onPick(null); setOpen(false); }}>Clear logo</button>}
         </div>
       )}
     </div>

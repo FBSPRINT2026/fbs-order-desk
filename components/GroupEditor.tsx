@@ -511,15 +511,15 @@ function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onSta
   const other = cur && val ? designOther(cur, val, given) : 0;
   return (
     <div className="dp">
-      <span className="dp-l">Design</span>
-      <DesignSearch designs={designs} urls={urls} value={imprint.design_id} onPick={onPick} onStar={onStar} placeholder="Choose the customer's design…" />
+      <span className="dp-l">Logo</span>
+      <DesignSearch designs={designs} urls={urls} value={imprint.design_id} onPick={onPick} onStar={onStar} placeholder="Choose the customer's logo…" />
       {canUpload && (
         <label className="btn sm ghost" style={{ cursor: "pointer" }}>{busy ? "Uploading…" : "Upload new art"}
           <input type="file" hidden accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setBusy(true); try { await onUpload(f, f.name.replace(/\.[^.]+$/, "")); } finally { setBusy(false); } }} />
         </label>
       )}
       {cur && val > 0 && other > 0 && <span className="dp-size">{val}&quot; {given === "W" ? "wide" : "tall"} → <b>{other}&quot; {given === "W" ? "tall" : "wide"}</b></span>}
-      {cur && !cur.width_px && <span className="faint" style={{ fontSize: 12 }}>Add a preview image to this design to get its size</span>}
+      {cur && !cur.width_px && <span className="faint" style={{ fontSize: 12 }}>Add a preview image to this logo to get its size</span>}
     </div>
   );
 }

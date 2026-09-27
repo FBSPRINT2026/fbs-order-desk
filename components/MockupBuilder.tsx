@@ -342,7 +342,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** bare = just the shirt photos with the art (the thumbnail on the order), no title or spec lines. */
   async function render(l: Line, bare = false): Promise<Blob> {
     const k = bare ? 0.4 : 0.6, pw = PHOTO_W * k, ph = PHOTO_H * k, pad = bare ? 10 : 24, top = bare ? pad : 70;
-    const specLines = imprints.map((im) => { const p = place(im); return `${im.location}: ${p.d ? designLabel(p.d) : "no design"} · ${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"${im.inks ? " · " + im.inks : ""}`; });
+    const specLines = imprints.map((im) => { const p = place(im); return `${im.location}: ${p.d ? designLabel(p.d) : "no logo"} · ${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"${im.inks ? " · " + im.inks : ""}`; });
     const W = pad * 2 + views.length * pw + (views.length - 1) * pad;
     const H = bare ? ph + pad * 2 : 70 + ph + 30 + specLines.length * 26 + pad;
     const c = document.createElement("canvas");
@@ -391,10 +391,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   async function pickColor(id: string, rx: number, ry: number, cx: number, cy: number) {
                   const im = imprints.find((x) => x.id === id);
                   const d = im && designs.find((x) => x.id === im.design_id);
-                  if (!im || !d || !urls[d.id]) return setMsg("Pick a design for this location first.");
+                  if (!im || !d || !urls[d.id]) return setMsg("Pick a logo for this location first.");
                   let pt = paints[id];
                   let img = imgCache.current.get(d.id);
-                  try { if (!img) { img = await loadImg(urls[d.id]); imgCache.current.set(d.id, img); } } catch { return setMsg("Couldn't read this design's colors. Try re-uploading it as a PNG."); }
+                  try { if (!img) { img = await loadImg(urls[d.id]); imgCache.current.set(d.id, img); } } catch { return setMsg("Couldn't read this logo's colors. Try re-uploading it as a PNG."); }
                   if (!pt || pt.design !== d.id) { pt = { design: d.id, sources: detectColors(img), map: {} }; const np = pt; setPaints((p) => ({ ...p, [id]: np })); }
                   if (!pt.sources.length) return;
                   // look around the click for the nearest solid pixel (thin lettering is easy to miss)
@@ -439,7 +439,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (!lines.some((l) => l.style || l.color)) return setMsg("Add a garment and color first.");
     if (!imprints.length) return setMsg("Add at least one print location first.");
     const missing = imprints.filter((im) => !designOf(im));
-    if (missing.length) return setMsg(`${missing.map((m) => m.location).join(", ")} ${missing.length > 1 ? "have" : "has"} no design yet. ${portal ? "Pick one of your logos or upload one." : "Pick one of the customer's designs or upload new art."}`);
+    if (missing.length) return setMsg(`${missing.map((m) => m.location).join(", ")} ${missing.length > 1 ? "have" : "has"} no logo yet. ${portal ? "Pick one of your logos or upload one." : "Pick one of the customer's logos or upload new art."}`);
     setSaving(true);
     setMsg("");
     const out: { title: string; url: string }[] = [];
@@ -575,7 +575,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             if (!sug.length) return null;
             return (
               <div key={"sug" + im.id} className="confirm-bar" style={{ marginBottom: 8 }}>
-                <span>This design is {p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot; — that&apos;s {sug[0].startsWith("Upper") ? "an upper back" : "a chest"}-size print on the {im.location}. Switch it to {sug[0]} so the close-up and print area fit it?</span>
+                <span>This logo is {p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot; — that&apos;s {sug[0].startsWith("Upper") ? "an upper back" : "a chest"}-size print on the {im.location}. Switch it to {sug[0]} so the close-up and print area fit it?</span>
                 {sug.map((z, i) => <button key={z} type="button" className={"btn sm" + (i === 0 ? " primary" : "")} onClick={() => { setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: z } : x))); setOffsets((o) => { const n = { ...o }; delete n[im.id]; return n; }); }}>{z}</button>)}
                 <button type="button" className="btn sm ghost" onClick={() => { setKeepLoc((k) => [...k, im.id]); setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, keepLocation: true } : x))); }}>Keep {im.location}</button>
               </div>
@@ -636,7 +636,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             return (
               <div className="mk-pop" style={{ left: Math.min(pop.x + 8, (typeof window !== "undefined" ? window.innerWidth : 1200) - 320), top: Math.min(pop.y + 8, (typeof window !== "undefined" ? window.innerHeight : 900) - 80) }}>
                 <div className="row" style={{ justifyContent: "space-between", marginBottom: 4 }}>
-                  <span className="lbl">{list.length > 1 ? `${list.length} COLORS IN THIS DESIGN` : "DESIGN COLOR"}</span>
+                  <span className="lbl">{list.length > 1 ? `${list.length} COLORS IN THIS LOGO` : "LOGO COLOR"}</span>
                   <button className="btn icon ghost" type="button" aria-label="Close" onClick={() => setPop(null)}>✕</button>
                 </div>
                 {list.map((row, i) => {
@@ -689,7 +689,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       <span className="faint" style={{ fontSize: 12 }}>{p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot;</span>
                     </div>
                     <div className="row" style={{ gap: 6 }}>
-                      <DesignSearch designs={designs} urls={urls} value={im.design_id} placeholder="Pick a design…"
+                      <DesignSearch designs={designs} urls={urls} value={im.design_id} placeholder="Pick a logo…"
                         onPick={(d) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d?.id || undefined } : x)))}
                         onStar={async (d, starred) => {
                           setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred } : x)));
@@ -699,7 +699,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     </div>
                     {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <div className="mk-colors">
-                        <div className="lbl">COLORS IN THIS DESIGN</div>
+                        <div className="lbl">COLORS IN THIS LOGO</div>
                         {colorRows(paints[im.id]).map((row) => {
                           const cur = row.cur, pick = (v: { name: string; hex: string } | null) => setInks(im.id, Object.fromEntries(row.hexes.map((h) => [h, v])));
                           return (
@@ -719,7 +719,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         {unsetColors(im).length > 0 && <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={() => matchStandard(im)}>Use closest standard inks</button>}
                       </div>
                     )}
-                    {!p.d && <div className="ink-warn">Which design goes on the {im.location}? Pick one of the customer&apos;s designs, or upload new art.</div>}
+                    {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one of the customer&apos;s logos, or upload new art.</div>}
                     <div className="row" style={{ gap: 6 }}>
                       <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
                     </div>
@@ -941,7 +941,7 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
           {sel && <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />}
         </div>
       </div>
-      <div className="mk-cu-dim">{url ? <>{wIn.toFixed(2)}&quot; W × {hIn.toFixed(2)}&quot; H</> : "No design yet"}</div>
+      <div className="mk-cu-dim">{url ? <>{wIn.toFixed(2)}&quot; W × {hIn.toFixed(2)}&quot; H</> : "No logo yet"}</div>
       {url && (
         <div className="mk-cu-colors">
           {colors.length ? colors.map((c, i) => (
