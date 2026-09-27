@@ -11,7 +11,7 @@ import { loadDesignerDoc, saveDesignerLogo } from "@/lib/designerSave";
 import type { DesignDoc } from "@/lib/designerArt";
 import ShirtDesigner from "@/components/ShirtDesigner";
 
-/** The shirt designer as its own page: staff at /shop/artwork/designer, customers at /portal/designer. */
+/** The Idea Lab (shirt designer) as its own page: staff at /shop/artwork/idea-lab, customers at /portal/idea-lab. */
 export default function DesignerStudio({ portal = false, backHref, mockupHref }: { portal?: boolean; backHref: string; mockupHref: string }) {
   const sb = useMemo(() => createClient(), []);
   const sp = useSearchParams();
@@ -58,7 +58,7 @@ export default function DesignerStudio({ portal = false, backHref, mockupHref }:
       <div className="page-head" style={{ marginBottom: 12 }}>
         <div>
           <Link className="faint" href={backHref} style={{ fontSize: 13, textDecoration: "none" }}>← Artwork</Link>
-          <h1>Shirt designer</h1>
+          <h1>Idea Lab</h1>
         </div>
         {!portal && (
           <div className="field" style={{ minWidth: 260 }}>

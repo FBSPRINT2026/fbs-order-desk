@@ -83,8 +83,8 @@ export default function ArtworkPage() {
       <div className="page-head">
         <div><div className="eyebrow">{liveLogos} logo{liveLogos === 1 ? "" : "s"} · {mockups.length} mockup{mockups.length === 1 ? "" : "s"}</div><h1>Artwork</h1></div>
         <div className="row">
-          <Link className="btn" href="/shop/artwork/mockup">Mockup builder</Link>
-          <Link className="btn" href={`/shop/artwork/designer${cust ? `?customer=${cust}` : ""}`}>Shirt designer</Link>
+          <Link className="btn" href="/shop/artwork/mockup">Mockup Creator</Link>
+          <Link className="btn" href={`/shop/artwork/idea-lab${cust ? `?customer=${cust}` : ""}`}>Idea Lab</Link>
           <button className="btn primary" type="button" onClick={() => setForm(form ? null : { customer_id: cust, name: "", colors: 1, inks: "", notes: "", file: null, preview: null })}>{form ? "Cancel" : "+ Upload logo"}</button>
         </div>
       </div>
@@ -145,7 +145,7 @@ export default function ArtworkPage() {
                 </a>
               ))}
             </div>
-          ) : <div className="aa-empty">{mockups.length ? "No mockups match." : "No mockups yet. Make one in the mockup builder."}</div>}
+          ) : <div className="aa-empty">{mockups.length ? "No mockups match." : "No mockups yet. Make one in the Mockup Creator."}</div>}
           {mocks.length > nM && <button type="button" className="btn" style={{ alignSelf: "center" }} onClick={() => setNM(nM + STEP)}>Show more mockups ({mocks.length - nM} more)</button>}
         </section>
       )}

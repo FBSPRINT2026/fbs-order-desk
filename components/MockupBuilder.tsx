@@ -15,8 +15,10 @@ import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
 import ShirtDesigner from "@/components/ShirtDesigner";
 import { loadDesignerDoc, saveDesignerLogo } from "@/lib/designerSave";
-import type { DesignDoc } from "@/lib/designerArt";
-import { PMS_HEX, WILFLEX_HEX, closestInk, closestPms, colorHex, detectColors, recolor } from "@/lib/inkColors";
+import { FONTS, type DesignDoc } from "@/lib/designerArt";
+import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
+import type { DesignerOut } from "@/components/ShirtDesigner";
+import { PMS_HEX, WILFLEX_HEX, closestInk, closestPms, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot, basePlacement, maxWidthFor, sideMaxWidth, viewsFor, guessHex, measureGarment, printWidth, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
@@ -149,6 +151,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [msg, setMsg] = useState("");
   // the shirt designer, opened for one imprint (new design, or editing its logo)
   const [designerFor, setDesignerFor] = useState<{ imId: string; start: { doc?: DesignDoc | null; imageUrl?: string; name?: string } } | null>(null);
+  // quick text typed right into an imprint (shown as a stand-in logo "qt-<imprint>" until the mockup is saved)
+  const [qt, setQt] = useState<Record<string, QuickText>>({});
+  const qtDone = useRef<Record<string, string>>({});
+  const saveRef = useRef<(force?: boolean) => void>(() => {});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ title: string; url: string }[]>([]);
   const refreshed = useRef(new Set<number>());
@@ -215,11 +221,45 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     });
   }, [designs]);
 
+  // draw quick text whenever it changes (a moment after typing stops)
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      for (const [imId, q] of Object.entries(qt)) {
+        const key = JSON.stringify(q), id = `qt-${imId}`;
+        if (qtDone.current[imId] === key) continue;
+        qtDone.current[imId] = key;
+        const r = q.text.trim() ? await renderQuickText(q) : null;
+        if (!r) { setImprints((xs) => xs.map((x) => (x.id === imId && x.design_id === id ? { ...x, design_id: undefined } : x))); continue; }
+        imgCache.current.delete(id);
+        setUrls((u) => ({ ...u, [id]: r.url }));
+        const d: Design = { id, number: 0, customer_id: customerId || null, name: q.text.split("\n")[0].slice(0, 40), file_path: "", file_name: "text.png", file_type: "image/png", preview_path: "", width_px: r.w, height_px: r.h, method: "screen", colors: 1, inks: q.color.name, notes: "", created_by: "", created_at: "" };
+        setDesigns((ds) => [d, ...ds.filter((x) => x.id !== id)]);
+        setImprints((xs) => xs.map((x) => (x.id === imId ? { ...x, design_id: id, inks: q.color.name, colors: 1 } : x)));
+      }
+    }, 220);
+    return () => clearTimeout(t);
+  }, [qt]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (Object.keys(qt).length) loadShirtFonts(); }, [qt]);
+  const isQuick = (id?: string) => !!id && id.startsWith("qt-");
+  /** Switch an imprint between a logo and typed text. */
+  function textMode(im: Imprint, on: boolean) {
+    setPaints((p) => { const n = { ...p }; delete n[im.id]; return n; });
+    if (on) {
+      const dark = line ? deltaE(shirtHex(line), "#111111") < 30 : false;
+      setQt((q) => ({ ...q, [im.id]: { text: "", font: "Anton", arc: 0, color: dark ? { name: "White", hex: WILFLEX_HEX.White } : { name: "Black", hex: WILFLEX_HEX.Black } } }));
+      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: undefined } : x)));
+    } else {
+      setQt((q) => { const n = { ...q }; delete n[im.id]; return n; });
+      delete qtDone.current[im.id];
+      setImprints((xs) => xs.map((x) => (x.id === im.id && isQuick(x.design_id) ? { ...x, design_id: undefined } : x)));
+    }
+  }
+
   // find the colors in each imprint's logo when its design changes
   useEffect(() => {
     imprints.forEach(async (im) => {
       const d = designs.find((x) => x.id === im.design_id);
-      if (!d || !urls[d.id]) return;
+      if (!d || !urls[d.id] || isQuick(d.id)) return;
       if (paints[im.id]?.design === d.id) return;
       try {
         const img = await logoImg(d);
@@ -433,8 +473,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   async function openDesigner(im: Imprint) {
     if (!customerId) return setMsg("Pick the customer first. Designs are saved to their account.");
+    if (qt[im.id]?.text.trim()) return setDesignerFor({ imId: im.id, start: { doc: quickTextDoc(qt[im.id]), name: qt[im.id].text.split("\n")[0].slice(0, 40) } });
     const d = designOf(im);
-    if (!d) return setDesignerFor({ imId: im.id, start: {} });
+    if (!d || isQuick(d.id)) return setDesignerFor({ imId: im.id, start: {} });
     const doc = await loadDesignerDoc(sb, d, portal);
     setDesignerFor({ imId: im.id, start: doc ? { doc, name: d.name } : { imageUrl: urls[d.id], name: d.name } });
   }
@@ -558,6 +599,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return true;
   }
 
+  saveRef.current = (f?: boolean) => { saveAll(!!f); };
   async function saveAll(force = false) {
     if (!customerId) return setMsg("Pick a customer so the mockups save to their account.");
     if (!force && imprints.some((im) => unsetColors(im).length)) { setAskUploaded(true); return; }
@@ -566,6 +608,32 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (!imprints.length) return setMsg("Add at least one print location first.");
     const missing = imprints.filter((im) => !designOf(im));
     if (missing.length) return setMsg(`${missing.map((m) => m.location).join(", ")} ${missing.length > 1 ? "have" : "has"} no logo yet. ${portal ? "Pick one of your logos or upload one." : "Pick one of the customer's logos or upload new art."}`);
+    // typed text becomes a real logo on the account first (with its Idea Lab layers), then the mockup saves
+    const pending = imprints.filter((im) => isQuick(im.design_id) && qt[im.id]?.text.trim());
+    if (pending.length) {
+      setSaving(true); setMsg("Saving your text…");
+      try {
+        const { data: u } = portal ? { data: { user: null } } : await sb.auth.getUser();
+        const made: Record<string, Design> = {};
+        for (const im of pending) {
+          const q = qt[im.id], big = await renderQuickText(q, 360);
+          if (!big) continue;
+          const png = new File([await (await fetch(big.url)).blob()], "text.png", { type: "image/png" });
+          const first = q.text.split("\n")[0].slice(0, 40);
+          const out: DesignerOut = { svg: png, png, doc: quickTextDoc(q), name: `Text: ${first}`, colors: 1, inks: q.color.name };
+          const r = await saveDesignerLogo(sb, out, { portal, customerId, by: u.user?.email || "" });
+          made[im.id] = r.design;
+          if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
+        }
+        const ids = Object.keys(made);
+        setDesigns((ds) => [...Object.values(made), ...ds.filter((d) => !ids.some((k) => d.id === `qt-${k}`))]);
+        setImprints((xs) => xs.map((x) => (made[x.id] ? { ...x, design_id: made[x.id].id } : x)));
+        setPaints((p) => ({ ...p, ...Object.fromEntries(ids.map((k) => [k, { design: made[k].id, sources: [{ hex: qt[k].color.hex, share: 1 }], map: { [qt[k].color.hex]: qt[k].color } }])) }));
+        setQt((q) => { const n = { ...q }; ids.forEach((k) => { delete n[k]; delete qtDone.current[k]; }); return n; });
+      } catch (e) { setSaving(false); return setMsg("Couldn't save your text: " + (e instanceof Error ? e.message : String(e))); }
+      setTimeout(() => saveRef.current(true), 400);
+      return;
+    }
     setSaving(true);
     setMsg("");
     const out: { title: string; url: string }[] = [];
@@ -627,7 +695,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     <>
       <Link className="back" href={portal ? backHref || "/portal" : orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {portal ? "Dashboard" : orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
       <div className="page-head mk-head">
-        <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || "Mockup builder"}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup builder"}</h1></div>
+        <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
         <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}<button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
       </div>
 
@@ -730,10 +798,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             </div>
           </div>
           {designerFor && (
-            <div className="sd-modal-back" role="dialog" aria-modal="true" aria-label="Shirt designer">
+            <div className="sd-modal-back" role="dialog" aria-modal="true" aria-label="Idea Lab">
               <div className="sd-modal">
                 <ShirtDesigner start={designerFor.start} saveLabel="Save & put on shirt" onClose={() => setDesignerFor(null)}
-                  logos={designs.filter((d) => urls[d.id] && !d.archived_at).map((d) => ({ id: d.id, name: designLabel(d), url: urls[d.id] }))}
+                  logos={designs.filter((d) => urls[d.id] && !d.archived_at && !isQuick(d.id)).map((d) => ({ id: d.id, name: designLabel(d), url: urls[d.id] }))}
                   onSave={async (out) => {
                     try {
                       const { data: u } = portal ? { data: { user: null } } : await sb.auth.getUser();
@@ -742,6 +810,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
                       const imId = designerFor.imId;
                       setImprints((xs) => xs.map((x) => (x.id === imId ? { ...x, design_id: r.design.id } : x)));
+                      setQt((q) => { const n = { ...q }; delete n[imId]; return n; });
                       setDesignerFor(null);
                       setMsg(`Saved ${designLabel(r.design)} to ${portal ? "your" : "the customer's"} logos.`);
                     } catch (e) { return e instanceof Error ? e.message : "Couldn't save the design."; }
@@ -811,7 +880,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         </div>}
         <div className="mk-side stack">
           <section className={"panel" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
-            <div className="panel-h"><h2>Imprints</h2><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}>+ Add {curTab === "sleeve" ? "sleeve" : curTab} location</button></div>
+            <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button><button className="btn sm" type="button" title="Type words right onto the shirt" onClick={() => {
+                const opts = locsFor(curTab), big = curTab === "front" ? "Full Front" : curTab === "back" ? "Full Back" : "";
+                const loc = big && !imprints.some((i) => i.location === big) ? big : opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0];
+                const im = { ...newImprint(loc), size: big === loc ? '10" wide' : "" };
+                setImprints([...imprints, im]); setTab(curTab); textMode(im, true);
+              }}>+ Add text</button></div></div>
             <div className="chips mk-tabs">
               {SIDES.map((t) => { const n = imprints.filter((im) => sideOf(im.location) === t.id).length; return <button key={t.id} type="button" className={"chip" + (curTab === t.id ? " on" : "")} onClick={() => setTab(t.id)}>{t.label}{n ? ` (${n})` : ""}</button>; })}
             </div>
@@ -825,7 +899,33 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       <select aria-label="Location" className="mk-loc" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
                       <select aria-label={`Decoration method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x))); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                     </div>
-                    <DesignSearch designs={designs} urls={urls} value={im.design_id} placeholder="Pick a logo…"
+                    <div className="mk-kind" role="group" aria-label="Logo or text">
+                      <button type="button" className={qt[im.id] ? "" : "on"} onClick={() => qt[im.id] && textMode(im, false)}>Logo</button>
+                      <button type="button" className={qt[im.id] ? "on" : ""} onClick={() => !qt[im.id] && textMode(im, true)}>Text</button>
+                    </div>
+                    {qt[im.id] ? (() => {
+                      const q = qt[im.id];
+                      const setQ = (patch: Partial<QuickText>) => setQt((all) => ({ ...all, [im.id]: { ...all[im.id], ...patch } }));
+                      return (
+                        <div className="mk-qt">
+                          <textarea rows={Math.min(4, q.text.split("\n").length + 1)} placeholder="Type your text (Enter for a new line)" value={q.text} onChange={(e) => setQ({ text: e.target.value })} aria-label="Text" autoFocus />
+                          <div className="mk-qt-row">
+                            <select aria-label="Font" value={q.font} onChange={(e) => setQ({ font: e.target.value })} style={{ fontFamily: `'${q.font}'` }}>
+                              {FONTS.map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}
+                            </select>
+                            <select aria-label="Curve" value={q.arc} onChange={(e) => setQ({ arc: +e.target.value })} disabled={q.text.includes("\n")} title={q.text.includes("\n") ? "Curves work on one line of text" : undefined}>
+                              <option value={0}>Straight</option><option value={1}>Arch ⌒</option><option value={-1}>Smile ‿</option>
+                            </select>
+                          </div>
+                          <div className="mk-qt-row"><span className="sw" style={{ background: q.color.hex }} /><InkSelect value={q.color} onChange={(v) => v && v.name !== "none" && setQ({ color: { name: v.name, hex: v.hex || "#111111" } })} /></div>
+                          <button type="button" className="mk-more" onClick={() => openDesigner(im)}>
+                            <b>Want to do more with this design?</b>
+                            <span>Add clip art, more lines, outlines or a photo in the Idea Lab →</span>
+                          </button>
+                        </div>
+                      );
+                    })() : (<>
+                    <DesignSearch designs={designs.filter((d) => !isQuick(d.id))} urls={urls} value={im.design_id} placeholder="Pick a logo…"
                       onPick={(d) => { setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, design_id: d?.id || undefined } : x))); if (d) askRaster(im.id, d); }}
                       onStar={async (d, starred) => {
                         setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred } : x)));
@@ -840,8 +940,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         onSplit={() => setUnite(im.id, false)}
                         onMatchAll={unsetColors(im).length > 0 ? () => matchStandard(im) : undefined} />
                     )}
+                    </>)}
                     <div className="mk-imp-foot">
-                      <button type="button" className="btn sm ghost" onClick={() => openDesigner(im)} title="Add text, clip art and pictures">{p.d ? "Edit in designer" : "Design one"}</button>
+                      <button type="button" className="btn sm ghost" onClick={() => openDesigner(im)} title="Do more with this design: text, clip art, pictures">{qt[im.id] ? "Idea Lab" : p.d ? "Open in Idea Lab" : "Idea Lab"}</button>
                       <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
                       <div className="row mk-wh" style={{ gap: 4 }}>
                         {(() => {
