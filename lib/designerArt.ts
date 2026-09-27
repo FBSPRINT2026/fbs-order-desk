@@ -71,14 +71,17 @@ export const CLIPART: { key: string; label: string; group: "Shapes" | "Sports" |
 export const clipartOf = (key: string) => CLIPART.find((c) => c.key === key);
 
 export type TextLayer = { kind: "text"; text: string; font: string; /** font weight (default: the font's own) */ weight?: number; size: number; color: string; stroke: string; strokeW: number; spacing: number; arc: number;
-  /** drop shadow color and distance (artboard units) */ shadow?: string; shadowD?: number };
+  /** drop shadow color and distance (artboard units) */ shadow?: string; shadowD?: number;
+  /** line alignment for several lines of text */ align?: "left" | "center" | "right";
+  /** a names & numbers field: filled from the roster for each shirt */ roster?: "name" | "number" };
 /** Clip art: built-in art by key, or library art ("set:name") with its drawing saved in the layer so designs never break. */
 export type ArtLayer = { kind: "art"; art: string; color: string; w: number; body?: string; /** viewBox: left, top, width, height */ vb?: [number, number, number, number]; /** full-color art can't be recolored */ full?: boolean; label?: string };
 export type ImgLayer = { kind: "img"; src: string; w: number; h: number; name?: string; /** the other version (with / without background) */ alt?: string; knocked?: boolean };
 export type Layer = { id: string; x: number; y: number; rot: number; s: number; hidden?: boolean; /** mirrored left-right */ flip?: boolean; /** can't be moved by accident */ lock?: boolean } & (TextLayer | ArtLayer | ImgLayer);
 /** A layer before it gets its id (keeps the text / clip art / picture fields apart). */
 export type LayerInit = Layer extends infer L ? (L extends Layer ? Omit<L, "id"> : never) : never;
-export type DesignDoc = { v: 1; w: number; h: number; layers: Layer[]; /** worn-in "vintage" print look */ distress?: boolean };
+export type RosterRow = { name: string; number: string; size: string };
+export type DesignDoc = { v: 1; w: number; h: number; layers: Layer[]; /** worn-in "vintage" print look */ distress?: boolean; /** names & numbers list */ roster?: RosterRow[] };
 
 /** Shirt colors to preview the design on while you work. */
 export const SHIRT_BG: { name: string; hex: string }[] = [

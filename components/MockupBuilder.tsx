@@ -499,11 +499,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
   const openDesigner = (im: Imprint) => openLab(sideOf(im.location), im);
   /** A design back from the Idea Lab goes on the shirt where it was drawn: size and spot pick the location. */
-  function placeFromLab(side: Side, imId: string, d: Design, box: { x: number; y: number; w: number; h: number }) {
+  function placeFromLab(side: Side, imId: string, d: Design, box: { x: number; y: number; w: number; h: number }, notes = "") {
     const target = imprints.find((x) => x.id === imId) || imprints.find((x) => sideOf(x.location) === side && !x.design_id && !qt[x.id]);
+    const withNotes = (x: Imprint) => (notes ? { ...x, notes } : x);
     if (side === "sleeve") {
-      if (target) setImprints((xs) => xs.map((x) => (x.id === target.id ? { ...x, design_id: d.id } : x)));
-      else setImprints((xs) => [...xs, { ...newImprint("Left Sleeve"), design_id: d.id }]);
+      if (target) setImprints((xs) => xs.map((x) => (x.id === target.id ? withNotes({ ...x, design_id: d.id }) : x)));
+      else setImprints((xs) => [...xs, withNotes({ ...newImprint("Left Sleeve"), design_id: d.id })]);
       return;
     }
     const v = side as View, ppi = PX_PER_IN * scale;
@@ -514,8 +515,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const nb = basePlacement(z, wIn, r, null, scale);
     const id = target?.id || uid();
     setImprints((xs) => target
-      ? xs.map((x) => (x.id === id ? { ...x, design_id: d.id, location: z, size: `${wIn}" wide`, drop: "" } : x))
-      : [...xs, { ...newImprint(z), id, design_id: d.id, size: `${wIn}" wide` }]);
+      ? xs.map((x) => (x.id === id ? withNotes({ ...x, design_id: d.id, location: z, size: `${wIn}" wide`, drop: "" }) : x))
+      : [...xs, withNotes({ ...newImprint(z), id, design_id: d.id, size: `${wIn}" wide` })]);
     setOffsets((o) => ({ ...o, [id]: { dx: left - nb.x, dy: top - nb.y } }));
     setTab(side);
   }
@@ -849,7 +850,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       setDesigns((x) => [r.design, ...x]);
                       if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
                       const imId = designerFor.imId;
-                      placeFromLab(designerFor.side, imId, r.design, out.box);
+                      // names & numbers: the list goes on the imprint's notes for the art team (name · number · size)
+                      const rosterNote = out.roster?.length ? `Names & numbers (${out.roster.length}): ${out.roster.map((x) => [x.name, x.number, x.size].filter(Boolean).join(" ")).join("; ")}`.slice(0, 1500) : "";
+                      placeFromLab(designerFor.side, imId, r.design, out.box, rosterNote);
                       if (imId) { setQt((q) => { const n = { ...q }; delete n[imId]; return n; }); delete qtDone.current[imId]; setPaints((p) => { const n = { ...p }; delete n[imId]; return n; }); }
                       setDesignerFor(null);
                       setMsg(`Saved ${designLabel(r.design)} to ${portal ? "your" : "the customer's"} logos.`);

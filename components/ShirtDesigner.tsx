@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as RPointerEvent, ReactNode } from "react";
-import { SHIRT_BG, UNITS_PER_IN, clipartOf, fontOf, type DesignDoc, type Layer, type LayerInit } from "@/lib/designerArt";
+import { SHIRT_BG, UNITS_PER_IN, clipartOf, fontOf, type DesignDoc, type Layer, type LayerInit, type RosterRow } from "@/lib/designerArt";
 import { TEMPLATES, TEMPLATE_CATS, type Template } from "@/lib/designerTemplates";
 import { CLIP_CATEGORIES, clipCredits, firstIcon, getClipIcons, searchClipart, searchMany, uniqueIds, type ClipHit, type ClipIcon, type ClipSet } from "@/lib/clipart";
 import { FONT_STYLES, boldOf, cssFamily, hasBold, loadFont, loadFontList, pickWeight, previewFont, type WebFont } from "@/lib/webfonts";
@@ -14,10 +14,10 @@ const INKS = Object.entries(WILFLEX_HEX);
 const inkName = (hex: string) => INKS.find(([, h]) => h.toLowerCase() === (hex || "").toLowerCase())?.[0] || "";
 
 /** box = where the design sits on the 12" x 14" artboard (50 units per inch), so it can go back onto the shirt in the same spot. */
-export type DesignerOut = { svg: File; png: File; doc: DesignDoc; name: string; colors: number; inks: string; box: { x: number; y: number; w: number; h: number } };
+export type DesignerOut = { svg: File; png: File; doc: DesignDoc; name: string; colors: number; inks: string; box: { x: number; y: number; w: number; h: number }; roster?: RosterRow[] };
 /** The real shirt photo behind the artboard: area = the full front/back print area on that photo (photo pixels). */
 export type LabShirt = { src: string; hex: string; area: { x: number; y: number; w: number; h: number }; label: string };
-type Tool = "ideas" | "text" | "art" | "upload" | "ai";
+type Tool = "ideas" | "text" | "art" | "upload" | "names" | "ai";
 
 /* ---------- text ---------- */
 const weightOf = (l: { font: string; weight?: number }) => l.weight ?? fontOf(l.font).weight;
@@ -55,9 +55,12 @@ function Inner({ l }: { l: Layer }) {
         );
       }
       const lh = l.size * 1.08;
+      const al = lines.length > 1 ? l.align || "center" : "center";
+      const half = al === "center" ? 0 : Math.max(...lines.map((t) => textWidth(t, l.font, wt, l.size, l.spacing))) / 2;
+      const x0 = al === "left" ? -half : al === "right" ? half : 0;
       return (
-        <text key={key} {...paint} textAnchor="middle" dominantBaseline="central">
-          {lines.map((t, i) => <tspan key={i} x={0} y={(i - (lines.length - 1) / 2) * lh}>{t || " "}</tspan>)}
+        <text key={key} {...paint} textAnchor={al === "left" ? "start" : al === "right" ? "end" : "middle"} dominantBaseline="central">
+          {lines.map((t, i) => <tspan key={i} x={x0} y={(i - (lines.length - 1) / 2) * lh}>{t || " "}</tspan>)}
         </text>
       );
     };
@@ -79,7 +82,8 @@ function Inner({ l }: { l: Layer }) {
 }
 
 const place = (l: Pick<Layer, "x" | "y" | "rot" | "s" | "flip">) => `translate(${l.x} ${l.y}) rotate(${l.rot}) scale(${l.flip ? -l.s : l.s} ${l.s})`;
-const layerLabel = (l: Layer) => (l.kind === "text" ? l.text.split("\n")[0] || "Text" : l.kind === "art" ? l.label || clipartOf(l.art)?.label || "Clip art" : l.name || "Picture");
+const SIZES = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"];
+const layerLabel = (l: Layer) => (l.kind === "text" ? (l.roster === "name" ? "Names (from list)" : l.roster === "number" ? "Numbers (from list)" : l.text.split("\n")[0] || "Text") : l.kind === "art" ? l.label || clipartOf(l.art)?.label || "Clip art" : l.name || "Picture");
 
 /** A clip art layer from a library icon. */
 const artLayer = (ic: ClipIcon, color: string, w: number, x: number, y: number): LayerInit => ({
@@ -131,6 +135,7 @@ const RAIL: { k: Tool; label: string; icon: ReactNode }[] = [
   { k: "text", label: "Add text", icon: <svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6" /></svg> },
   { k: "art", label: "Clip art", icon: <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z" /></svg> },
   { k: "upload", label: "Upload", icon: <svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" /></svg> },
+  { k: "names", label: "Names & numbers", icon: <svg viewBox="0 0 24 24"><path d="M4 7h7M4 12h5M4 17h7M15 6l-1 12M19 6l-1 12M13 10h7M12.5 14h7" /></svg> },
   { k: "ai", label: "AI art", icon: <svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" /></svg> },
 ];
 
@@ -218,7 +223,7 @@ function ClipArtPanel({ onAdd }: { onAdd: (ic: ClipIcon) => void }) {
 }
 
 /** Font browser: search, shirt styles, every Google font; each name shown in its own font (and the customer's own words). */
-function FontPicker({ value, sample, onPick }: { value: string; sample: string; onPick: (font: string, weight: number) => void }) {
+function FontPicker({ value, sample, onPick, onPeek }: { value: string; sample: string; onPick: (font: string, weight: number) => void; onPeek?: (font: string | null, weight?: number) => void }) {
   const [list, setList] = useState<WebFont[]>([]);
   const [q, setQ] = useState("");
   const [style, setStyle] = useState("popular");
@@ -237,7 +242,7 @@ function FontPicker({ value, sample, onPick }: { value: string; sample: string; 
   useEffect(() => setN(60), [q, style]);
   const text = (sample || "").split("\n")[0].slice(0, 22);
   return (
-    <div className="il-fonts">
+    <div className="il-fonts" onMouseLeave={() => onPeek?.(null)}>
       <label className="il-search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
         <input type="search" placeholder={`Search ${list.length > 100 ? list.length.toLocaleString() + " " : ""}fonts`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search fonts" />
@@ -253,14 +258,17 @@ function FontPicker({ value, sample, onPick }: { value: string; sample: string; 
         </div>
       )}
       <div className="il-fontlist">
-        {shown.slice(0, n).map((f) => <FontRow key={f.f} f={f} on={f.f === value} text={text} onPick={() => onPick(f.f, pickWeight(f, FONT_STYLES[1].fonts.includes(f.f) || f.c === "Display" || f.c === "Handwriting" ? 400 : 700))} />)}
+        {shown.slice(0, n).map((f) => {
+          const w = pickWeight(f, FONT_STYLES[1].fonts.includes(f.f) || f.c === "Display" || f.c === "Handwriting" ? 400 : 700);
+          return <FontRow key={f.f} f={f} on={f.f === value} text={text} onPick={() => { onPeek?.(null); onPick(f.f, w); }} onPeek={onPeek ? (on) => onPeek(on ? f.f : null, w) : undefined} />;
+        })}
         {shown.length > n && <button type="button" className="btn sm" onClick={() => setN(n + 80)}>Show more fonts</button>}
         {!shown.length && <div className="faint" style={{ fontSize: 12, padding: 8 }}>No fonts match.</div>}
       </div>
     </div>
   );
 }
-function FontRow({ f, on, text, onPick }: { f: WebFont; on: boolean; text: string; onPick: () => void }) {
+function FontRow({ f, on, text, onPick, onPeek }: { f: WebFont; on: boolean; text: string; onPick: () => void; onPeek?: (on: boolean) => void }) {
   const ref = useRef<HTMLButtonElement>(null);
   const w = pickWeight(f, 400);
   useEffect(() => {
@@ -270,7 +278,7 @@ function FontRow({ f, on, text, onPick }: { f: WebFont; on: boolean; text: strin
     return () => io.disconnect();
   }, [f.f, w]);
   return (
-    <button ref={ref} type="button" className={"il-font" + (on ? " on" : "")} onClick={onPick} title={f.f}>
+    <button ref={ref} type="button" className={"il-font" + (on ? " on" : "")} onClick={onPick} title={f.f} onMouseEnter={() => onPeek?.(true)} onMouseLeave={() => onPeek?.(false)}>
       <span className="il-font-s" style={{ fontFamily: `'${f.f}'`, fontWeight: w }}>{text || f.f}</span>
       {text && <span className="il-font-n">{f.f}</span>}
     </button>
@@ -336,6 +344,12 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const [guide, setGuide] = useState(false);
   const [fontOpen, setFontOpen] = useState(false);
   const [distress, setDistress] = useState(!!start?.doc?.distress);
+  const [roster, setRoster] = useState<RosterRow[]>(() => start?.doc?.roster || []);
+  // several things selected at once (shift-click, Ctrl+A); sel is the last one clicked
+  const [multi, setMulti] = useState<string[]>([]);
+  // hovering a font or color previews it on the selected text / art before it's picked
+  const [peek, setPeek] = useState<{ font?: string; weight?: number; color?: string } | null>(null);
+  const clip = useRef<Layer[]>([]);
   const [credits, setCredits] = useState<ClipSet[]>([]);
   const [fonts, setFonts] = useState<WebFont[]>([]);
   const [, setFontTick] = useState(0);
@@ -347,7 +361,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [all, setAll] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [vs, setVs] = useState(1); // screen px per artboard unit
-  const drag = useRef<{ mode: "move" | "size" | "turn"; id: string; px: number; py: number; l0: Layer; snap: Layer[]; moved: boolean } | null>(null);
+  const drag = useRef<{ mode: "move" | "size" | "turn"; id: string; px: number; py: number; l0: Layer; snap: Layer[]; moved: boolean; group?: { id: string; x: number; y: number }[]; gcx?: number } | null>(null);
 
   useEffect(() => { clipCredits().then(setCredits); loadFontList().then(setFonts); }, []);
   // work in progress is kept in this browser, so closing the Idea Lab by accident doesn't lose it
@@ -402,6 +416,31 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   });
 
   const cur = layers.find((l) => l.id === sel) || null;
+  const picked = multi.length > 1 ? multi.filter((id) => layers.some((l) => l.id === id)) : sel ? [sel] : [];
+  const group = picked.length > 1 ? layers.filter((l) => picked.includes(l.id)) : [];
+  useEffect(() => { if (!sel || (multi.length && !multi.includes(sel))) setMulti([]); setPeek(null); }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** A layer's box on the artboard (after its move/turn/size). */
+  const boundsOf = (l: Layer) => {
+    const g = innerRefs.current[l.id];
+    let r: { x: number; y: number; width: number; height: number };
+    try { r = g!.getBBox(); } catch { return null; }
+    const a = (l.rot * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a), fx = l.flip ? -1 : 1;
+    const pts = [[r.x, r.y], [r.x + r.width, r.y], [r.x, r.y + r.height], [r.x + r.width, r.y + r.height]].map(([x, y]) => {
+      const X = x * l.s * fx, Y = y * l.s;
+      return [l.x + X * c - Y * sn, l.y + X * sn + Y * c];
+    });
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  };
+  const unionOf = (ls: Layer[]) => {
+    const bs = ls.map(boundsOf).filter(Boolean) as { x: number; y: number; w: number; h: number }[];
+    if (!bs.length) return null;
+    const x = Math.min(...bs.map((b) => b.x)), y = Math.min(...bs.map((b) => b.y));
+    return { x, y, w: Math.max(...bs.map((b) => b.x + b.w)) - x, h: Math.max(...bs.map((b) => b.y + b.h)) - y };
+  };
+  const groupBox = group.length ? unionOf(group) : null;
+  /** Change several layers at once (one undo step). */
+  const editMany = (ids: string[], f: (l: Layer) => Partial<Layer>, key = "") => commit(layers.map((l) => (ids.includes(l.id) ? ({ ...l, ...f(l) } as Layer) : l)), key ? `many:${key}` : "");
   useEffect(() => { if (!cur || cur.kind !== "text") setFontOpen(false); }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Change the layers and remember the step for Undo (typing into one field counts as one step). */
   const commit = (next: Layer[], key = "") => {
@@ -422,6 +461,13 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     if (i < 0 || j < 0 || j >= layers.length) return;
     const n = [...layers]; [n[i], n[j]] = [n[j], n[i]]; commit(n);
   };
+  /** Paste copied layers (a little down and to the right) and select them. */
+  const pasteLayers = () => {
+    const copies = clip.current.map((l) => ({ ...l, id: uidOf(), x: l.x + 20, y: l.y + 20, lock: false } as Layer));
+    commit([...layers, ...copies]);
+    clip.current = copies;
+    setMulti(copies.map((c) => c.id)); setSel(copies[copies.length - 1]?.id || "");
+  };
   const nextY = () => (all ? Math.min(H - 60, all.y + all.h + 60) : 220);
   const dark = deltaE(bg, "#111111") < 30;
   const ink = dark ? "#FFFFFF" : "#111111";
@@ -434,10 +480,19 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
+      if (mod && e.key.toLowerCase() === "a") { e.preventDefault(); const ids = layers.filter((l) => !l.hidden).map((l) => l.id); setMulti(ids); setSel(ids[ids.length - 1] || ""); return; }
+      if (mod && e.key.toLowerCase() === "v" && clip.current.length) { e.preventDefault(); pasteLayers(); return; }
       if (!cur) return;
-      if (mod && e.key.toLowerCase() === "d") { e.preventDefault(); duplicate(cur.id); return; }
-      if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); remove(cur.id); return; }
+      if (mod && e.key.toLowerCase() === "c") { e.preventDefault(); clip.current = layers.filter((l) => picked.includes(l.id)); return; }
+      if (mod && e.key.toLowerCase() === "d") { e.preventDefault(); if (group.length) { clip.current = group; pasteLayers(); } else duplicate(cur.id); return; }
+      if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); if (group.length) { commit(layers.filter((l) => !picked.includes(l.id))); setSel(""); } else remove(cur.id); return; }
       if (e.key === "Escape") { setSel(""); return; }
+      if (group.length) {
+        const n = e.shiftKey ? 10 : 2;
+        const d = { ArrowLeft: [-n, 0], ArrowRight: [n, 0], ArrowUp: [0, -n], ArrowDown: [0, n] }[e.key];
+        if (d) { e.preventDefault(); editMany(picked, (l) => (l.lock ? {} : { x: l.x + d[0], y: l.y + d[1] }), "nudge"); }
+        return;
+      }
       if (cur.lock) return;
       const n = e.shiftKey ? 10 : 2;
       const d = { ArrowLeft: [-n, 0], ArrowRight: [n, 0], ArrowUp: [0, -n], ArrowDown: [0, n] }[e.key];
@@ -454,16 +509,36 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   };
   const begin = (e: RPointerEvent, mode: "move" | "size" | "turn", l: Layer) => {
     e.stopPropagation(); e.preventDefault();
+    // shift-click adds to (or takes out of) the selection
+    if (mode === "move" && (e.shiftKey || e.metaKey || e.ctrlKey)) {
+      const now = picked.includes(l.id) ? picked.filter((x) => x !== l.id) : [...picked, l.id];
+      setMulti(now); setSel(now[now.length - 1] || "");
+      return;
+    }
+    const inGroup = mode === "move" && picked.length > 1 && picked.includes(l.id);
+    if (!inGroup) setMulti([]);
     setSel(l.id);
-    if (l.lock) return;
+    if (l.lock && !inGroup) return;
     svgRef.current?.setPointerCapture?.(e.pointerId);
     const p = toPt(e);
-    drag.current = { mode, id: l.id, px: p.x, py: p.y, l0: l, snap: layers, moved: false };
+    const gb = inGroup ? unionOf(group) : null;
+    drag.current = { mode, id: l.id, px: p.x, py: p.y, l0: l, snap: layers, moved: false,
+      ...(inGroup ? { group: group.filter((g) => !g.lock).map((g) => ({ id: g.id, x: g.x, y: g.y })), gcx: gb ? gb.x + gb.w / 2 : W / 2 } : {}) };
   };
   const onMoveEv = (e: RPointerEvent) => {
     const d = drag.current; if (!d) return;
     const p = toPt(e), l0 = d.l0;
     let patch: Partial<Layer> = {};
+    if (d.mode === "move" && d.group) {
+      let dx = p.x - d.px; const dy = p.y - d.py;
+      const near = Math.abs((d.gcx ?? 0) + dx - W / 2) < 12 / vs;
+      if (near) dx = W / 2 - (d.gcx ?? 0);
+      setGuide(near);
+      d.moved = true;
+      const g = d.group;
+      setLayersRaw((ls) => ls.map((l) => { const s0 = g.find((q) => q.id === l.id); return s0 ? ({ ...l, x: s0.x + dx, y: s0.y + dy } as Layer) : l; }));
+      return;
+    }
     if (d.mode === "move") {
       let x = l0.x + p.x - d.px; const y = l0.y + p.y - d.py;
       const near = Math.abs(x - W / 2) < 12 / vs;
@@ -587,7 +662,8 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
       const out: DesignerOut = {
         svg: new File([svg], `${base}.svg`, { type: "image/svg+xml" }),
         png: new File([pngBlob], `${base}.png`, { type: "image/png" }),
-        doc: { v: 1, w: W, h: H, layers, distress },
+        doc: { v: 1, w: W, h: H, layers, distress, ...(hasRoster && roster.length ? { roster } : {}) },
+        ...(hasRoster && roster.length ? { roster } : {}),
         box: vb,
         name: name.trim() || "Custom design",
         colors: used.pictures ? Math.max(used.hex.length, 4) : Math.max(1, used.hex.length),
@@ -601,9 +677,9 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   }
 
   /* ---------- panels ---------- */
-  const swatches = (value: string, pick: (hex: string) => void) => (
-    <div className="sd-inks">
-      {INKS.map(([n, h]) => <button key={n} type="button" title={n} aria-label={n} className={"sd-ink" + ((value || "").toLowerCase() === h.toLowerCase() ? " on" : "")} style={{ background: h }} onClick={() => pick(h)} />)}
+  const swatches = (value: string, pick: (hex: string) => void, preview = false) => (
+    <div className="sd-inks" onMouseLeave={() => preview && setPeek(null)}>
+      {INKS.map(([n, h]) => <button key={n} type="button" title={n} aria-label={n} className={"sd-ink" + ((value || "").toLowerCase() === h.toLowerCase() ? " on" : "")} style={{ background: h }} onClick={() => { setPeek(null); pick(h); }} onMouseEnter={() => preview && setPeek({ color: h })} />)}
       <label className="sd-ink custom" title="Any color (custom ink)"><input type="color" value={value || "#000000"} onChange={(e) => pick(e.target.value.toUpperCase())} />+</label>
     </div>
   );
@@ -614,7 +690,18 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   };
   const hs = (l: Layer) => 9 / (vs * l.s); // handle size in the layer's own units, ~9 screen px
   const curFont = cur?.kind === "text" ? fonts.find((f) => f.f === cur.font) : undefined;
-  const panelTitle: Record<Tool, string> = { ideas: "Design ideas", text: "Add text", art: "Clip art", upload: "Upload a picture", ai: "AI art" };
+  const panelTitle: Record<Tool, string> = { ideas: "Design ideas", text: "Add text", art: "Clip art", upload: "Upload a picture", names: "Names & numbers", ai: "AI art" };
+  /** Add the name or number field (styled once, printed from the list for each shirt). */
+  const addRosterField = (k: "name" | "number") => {
+    const have = layers.find((l) => l.kind === "text" && l.roster === k);
+    if (have) { setSel(have.id); return; }
+    add(k === "name"
+      ? { kind: "text", text: "NAME", font: "Graduate", size: 70, color: ink, stroke: "", strokeW: 0, spacing: 4, arc: 20, roster: "name", x: W / 2, y: 110, rot: 0, s: 1 }
+      : { kind: "text", text: "00", font: "Graduate", size: 260, color: ink, stroke: "", strokeW: 0, spacing: 0, arc: 0, roster: "number", x: W / 2, y: 300, rot: 0, s: 1 });
+  };
+  const hasRoster = layers.some((l) => l.kind === "text" && !!l.roster);
+  const sizeCounts = SIZES.map((z) => [z, roster.filter((r) => r.size === z).length] as [string, number]).filter(([, n]) => n);
+  const [pasteText, setPasteText] = useState("");
 
   return (
     <div className="sd il">
@@ -681,6 +768,41 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
                 )}
               </div>
             )}
+            {tool === "names" && (
+              <div className="il-panel-b">
+                <p className="faint" style={{ fontSize: 12, margin: 0 }}>Every shirt gets its own name and number. Style the sample on the design once; we print each shirt from your list.</p>
+                <div className="row" style={{ gap: 6 }}>
+                  <button type="button" className="btn sm primary" onClick={() => addRosterField("name")}>+ Names</button>
+                  <button type="button" className="btn sm primary" onClick={() => addRosterField("number")}>+ Numbers</button>
+                </div>
+                <div className="lbl">YOUR LIST · {roster.length} {roster.length === 1 ? "shirt" : "shirts"}</div>
+                <div className="il-roster">
+                  {roster.map((r, i) => (
+                    <div key={i} className="il-roster-row">
+                      <input type="text" placeholder="Name" value={r.name} aria-label={`Name ${i + 1}`} onChange={(e) => setRoster((rs) => rs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                      <input type="text" inputMode="numeric" placeholder="#" value={r.number} aria-label={`Number ${i + 1}`} onChange={(e) => setRoster((rs) => rs.map((x, j) => (j === i ? { ...x, number: e.target.value.slice(0, 3) } : x)))} />
+                      <select value={r.size} aria-label={`Size ${i + 1}`} onChange={(e) => setRoster((rs) => rs.map((x, j) => (j === i ? { ...x, size: e.target.value } : x)))}>{SIZES.map((z) => <option key={z}>{z}</option>)}</select>
+                      <button type="button" className="btn icon ghost" aria-label="Remove" onClick={() => setRoster((rs) => rs.filter((_, j) => j !== i))}>✕</button>
+                    </div>
+                  ))}
+                  <button type="button" className="btn sm" onClick={() => setRoster((rs) => [...rs, { name: "", number: "", size: rs[rs.length - 1]?.size || "L" }])}>+ Add a shirt</button>
+                </div>
+                <details className="il-paste">
+                  <summary>Paste a list</summary>
+                  <textarea rows={4} placeholder={"SMITH, 23, L\nJONES, 7, M"} value={pasteText} onChange={(e) => setPasteText(e.target.value)} />
+                  <button type="button" className="btn sm" onClick={() => {
+                    const rows = pasteText.split(/\n+/).map((ln) => ln.split(/[,\t]+/).map((x) => x.trim())).filter((c) => c.some(Boolean)).map(([a = "", b = "", c = ""]) => {
+                      const num = /^\d{1,3}$/.test(a) ? a : b, nm = /^\d{1,3}$/.test(a) ? b : a;
+                      const size = SIZES.find((z) => z.toLowerCase() === (c || "").toLowerCase().replace(/^xxl$/, "2xl").replace(/^xxxl$/, "3xl")) || "L";
+                      return { name: nm, number: num, size };
+                    });
+                    setRoster((rs) => [...rs, ...rows]); setPasteText("");
+                  }}>Add these</button>
+                </details>
+                {sizeCounts.length > 0 && <div className="faint" style={{ fontSize: 12 }}>Sizes: {sizeCounts.map(([z, n]) => `${n} ${z}`).join(" · ")}</div>}
+                {roster.length > 0 && !hasRoster && <div className="ink-warn" style={{ margin: 0 }}>Add names or numbers to the design above so they print.</div>}
+              </div>
+            )}
             {tool === "ai" && (
               <div className="il-panel-b">
                 <div className="il-soon">
@@ -727,13 +849,19 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
               {layers.filter((l) => !l.hidden).map((l) => (
                 <g key={l.id} transform={place(l)} style={{ cursor: l.lock ? "default" : "move" }} onPointerDown={(e) => begin(e, "move", l)}
                   onDoubleClick={() => { if (l.kind === "text") setTimeout(() => document.getElementById("il-text")?.focus(), 0); }}>
-                  <g ref={(el) => { innerRefs.current[l.id] = el; }}><Inner l={l} /></g>
+                  <g ref={(el) => { innerRefs.current[l.id] = el; }}><Inner l={l.kind === "text" && l.roster && roster[0] && (l.roster === "name" ? roster[0].name : roster[0].number) ? ({ ...l, text: l.roster === "name" ? roster[0].name.toUpperCase() : roster[0].number } as Layer) : peek && picked.includes(l.id) ? ({ ...l, ...(l.kind === "text" && peek.font ? { font: peek.font, weight: peek.weight } : {}), ...(peek.color && l.kind !== "img" ? { color: peek.color } : {}) } as Layer) : l} /></g>
                 </g>
               ))}
               </g>
             </g>
             {guide && <line x1={W / 2} y1={VB.y} x2={W / 2} y2={VB.y + VB.h} stroke="#0A7BA6" strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray="4 4" pointerEvents="none" />}
-            {cur && box && !cur.hidden && (
+            {group.length > 0 && groupBox && (
+              <g pointerEvents="none">
+                {group.map((l) => { const b = boundsOf(l); return b ? <rect key={l.id} x={b.x} y={b.y} width={b.w} height={b.h} fill="none" stroke="#0A7BA6" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" /> : null; })}
+                <rect x={groupBox.x - 4} y={groupBox.y - 4} width={groupBox.w + 8} height={groupBox.h + 8} fill="none" stroke="#0A7BA6" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+              </g>
+            )}
+            {!group.length && cur && box && !cur.hidden && (
               <g transform={place({ ...cur, flip: false })}>
                 <rect x={box.x * (cur.flip ? -1 : 1) - (cur.flip ? box.w : 0) - 3 / cur.s} y={box.y - 3 / cur.s} width={box.w + 6 / cur.s} height={box.h + 6 / cur.s} fill="none" stroke={cur.lock ? "#7A8599" : "#0A7BA6"} strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeDasharray={cur.lock ? "4 3" : undefined} pointerEvents="none" />
                 {!cur.lock && (() => {
@@ -757,7 +885,32 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
         </div>
 
         <aside className="sd-props panel">
-          {cur ? (
+          {group.length ? (
+            <div className="sd-prop-b">
+              <b>{group.length} things selected</b>
+              <span className="faint" style={{ fontSize: 12 }}>Drag any of them to move them together. Shift-click to add or remove one.</span>
+              {group.some((l) => l.kind !== "img") && (<><div className="lbl">COLOR FOR ALL</div>{swatches("", (h) => editMany(picked, (l) => (l.kind === "img" || (l.kind === "art" && l.full) ? {} : { color: h })))}</>)}
+              <div className="lbl">ARRANGE</div>
+              <div className="sd-actions">
+                <button type="button" className="btn sm" onClick={() => { const gb = unionOf(group); if (gb) editMany(picked, (l) => ({ x: l.x + W / 2 - (gb.x + gb.w / 2) })); }}>⇔ Center on shirt</button>
+                <button type="button" className="btn sm" onClick={() => editMany(picked, () => ({ x: W / 2 }))}>Line up centers</button>
+                <button type="button" className="btn sm" onClick={() => { const gb = unionOf(group); if (!gb) return; editMany(picked, (l) => { const b = boundsOf(l); return b ? { x: l.x + gb.x - b.x } : {}; }); }}>Align left</button>
+                <button type="button" className="btn sm" onClick={() => { const gb = unionOf(group); if (!gb) return; editMany(picked, (l) => { const b = boundsOf(l); return b ? { x: l.x + gb.x + gb.w - (b.x + b.w) } : {}; }); }}>Align right</button>
+              </div>
+              <div className="lbl">SIZE</div>
+              <div className="sd-actions">
+                {([["Smaller", 0.9], ["Bigger", 1.1]] as [string, number][]).map(([t, k]) => (
+                  <button key={t} type="button" className="btn sm" onClick={() => { const gb = unionOf(group); if (!gb) return; const cx = gb.x + gb.w / 2, cy = gb.y + gb.h / 2; editMany(picked, (l) => ({ s: l.s * k, x: cx + (l.x - cx) * k, y: cy + (l.y - cy) * k }), "gs"); }}>{t}</button>
+                ))}
+                {groupBox && <span className="faint" style={{ fontSize: 12, alignSelf: "center" }}>{(groupBox.w / UNITS_PER_IN).toFixed(1)}&quot; × {(groupBox.h / UNITS_PER_IN).toFixed(1)}&quot;</span>}
+              </div>
+              <div className="sd-actions">
+                <button type="button" className="btn sm" onClick={() => { clip.current = group; pasteLayers(); }}>Duplicate</button>
+                <button type="button" className="btn sm ghost danger" onClick={() => { commit(layers.filter((l) => !picked.includes(l.id))); setSel(""); }}>Delete all</button>
+                <button type="button" className="btn sm ghost" onClick={() => setSel("")}>Done</button>
+              </div>
+            </div>
+          ) : cur ? (
             <div className="sd-prop-b">
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <b>{cur.kind === "text" ? "Text" : cur.kind === "art" ? cur.label || clipartOf(cur.art)?.label || "Clip art" : "Picture"}</b>
@@ -766,7 +919,9 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
               {checks.map((c) => <div key={c} className="ink-warn" style={{ margin: 0 }}>{c}</div>)}
               {cur.kind === "text" && (
                 <>
-                  <textarea id="il-text" rows={Math.min(4, cur.text.split("\n").length + 1)} value={cur.text} onChange={(e) => edit(cur.id, { text: e.target.value }, "text")} aria-label="Text" />
+                  {cur.roster
+                    ? <div className="faint" style={{ fontSize: 12 }}>{cur.roster === "name" ? "Names" : "Numbers"} come from your list (Names &amp; numbers). Style this sample: font, color, outline, curve.</div>
+                    : <textarea id="il-text" rows={Math.min(4, cur.text.split("\n").length + 1)} value={cur.text} onChange={(e) => edit(cur.id, { text: e.target.value }, "text")} aria-label="Text" />}
                   <div className="il-fontbtn-row">
                     <button type="button" className="il-fontbtn" onClick={() => setFontOpen(!fontOpen)} aria-expanded={fontOpen}>
                       <span style={{ fontFamily: `'${cur.font}'`, fontWeight: weightOf(cur) }}>{cur.font}</span><span className="faint">{fontOpen ? "▴" : "▾"}</span>
@@ -775,21 +930,26 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
                       <button type="button" className={"btn sm" + (weightOf(cur) > pickWeight(curFont, 400) ? " primary" : "")} title="Bold" onClick={() => { const reg = pickWeight(curFont, 400); edit(cur.id, { weight: weightOf(cur) > reg ? reg : boldOf(curFont, reg) }); }}><b>B</b></button>
                     )}
                   </div>
-                  {fontOpen && <FontPicker value={cur.font} sample={cur.text} onPick={(f, w) => edit(cur.id, { font: f, weight: w })} />}
+                  {fontOpen && <FontPicker value={cur.font} sample={cur.text} onPick={(f, w) => edit(cur.id, { font: f, weight: w })} onPeek={(f, w) => setPeek(f ? { font: f, weight: w } : null)} />}
+                  {cur.text.includes("\n") && (
+                    <div className="il-presets" role="group" aria-label="Line alignment">
+                      {(["left", "center", "right"] as const).map((a) => <button key={a} type="button" className={"chip" + ((cur.align || "center") === a ? " on" : "")} onClick={() => edit(cur.id, { align: a })}>{a === "left" ? "⫷ Left" : a === "center" ? "☰ Center" : "Right ⫸"}</button>)}
+                    </div>
+                  )}
                 </>
               )}
               {cur.kind !== "img" && !(cur.kind === "art" && cur.full) && (
                 <>
                   <div className="lbl">COLOR <span className="faint" style={{ fontWeight: 400 }}>{inkName(cur.color) || cur.color}</span></div>
-                  {swatches(cur.color, (h) => edit(cur.id, { color: h }))}
+                  {swatches(cur.color, (h) => edit(cur.id, { color: h }), true)}
                 </>
               )}
               {cur.kind === "art" && cur.full && <div className="faint" style={{ fontSize: 12 }}>Full-color art prints digitally (DTF). For screen printing, pick a one-color version in Clip art.</div>}
               {cur.kind === "text" && (
                 <>
-                  <label className="sd-range">Curve <input type="range" min={-180} max={180} step={5} value={cur.arc} onChange={(e) => edit(cur.id, { arc: +e.target.value }, "arc")} /><span>{cur.arc ? `${cur.arc > 0 ? "arch" : "smile"} ${Math.abs(cur.arc)}°` : "none"}</span></label>
+                  <label className="sd-range">Curve <input type="range" min={-350} max={350} step={5} value={cur.arc} onChange={(e) => edit(cur.id, { arc: +e.target.value }, "arc")} /><span>{cur.arc ? `${cur.arc > 0 ? "arch" : "smile"} ${Math.abs(cur.arc)}°` : "none"}</span></label>
                   <div className="il-presets">
-                    {([["Straight", 0], ["Arch", 60], ["Big arch", 120], ["Smile", -60]] as [string, number][]).map(([t, v]) => <button key={t} type="button" className={"chip" + (cur.arc === v ? " on" : "")} onClick={() => edit(cur.id, { arc: v })}>{t}</button>)}
+                    {([["Straight", 0], ["Arch", 60], ["Big arch", 120], ["Smile", -60], ["Big smile", -120], ["Circle", 350]] as [string, number][]).map(([t, v]) => <button key={t} type="button" className={"chip" + (cur.arc === v ? " on" : "")} onClick={() => edit(cur.id, { arc: v })}>{t}</button>)}
                   </div>
                   {cur.text.includes("\n") && cur.arc !== 0 && <div className="faint" style={{ fontSize: 12 }}>Curves work on one line of text.</div>}
                   <label className="sd-range">Spacing <input type="range" min={-5} max={40} step={1} value={cur.spacing} onChange={(e) => edit(cur.id, { spacing: +e.target.value }, "sp")} /><span>{cur.spacing}</span></label>
@@ -828,7 +988,9 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
             </div>
           ) : (
             <div className="sd-prop-b faint" style={{ fontSize: 13 }}>
-              Click anything on the design to change it. Drag to move, drag the corner square to resize, the circle on top to turn. Arrow keys nudge; Ctrl+Z undoes.
+              Click anything on the design to change it. Drag to move, drag the corner square to resize, the circle on top to turn.
+              <span style={{ display: "block", marginTop: 6 }}>Shift-click to pick several things, Ctrl+A for everything (then drag it all at once). Arrow keys nudge; Ctrl+C / Ctrl+V copy; Ctrl+Z undoes.</span>
+              {layers.length > 1 && <button type="button" className="btn sm" style={{ marginTop: 8 }} onClick={() => { const ids = layers.filter((l) => !l.hidden).map((l) => l.id); setMulti(ids); setSel(ids[ids.length - 1]); }}>Select everything</button>}
             </div>
           )}
           {layers.length > 0 && (
