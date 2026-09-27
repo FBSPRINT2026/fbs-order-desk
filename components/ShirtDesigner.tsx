@@ -335,6 +335,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const [msg, setMsg] = useState("");
   const [guide, setGuide] = useState(false);
   const [fontOpen, setFontOpen] = useState(false);
+  const [distress, setDistress] = useState(!!start?.doc?.distress);
   const [credits, setCredits] = useState<ClipSet[]>([]);
   const [fonts, setFonts] = useState<WebFont[]>([]);
   const [, setFontTick] = useState(0);
@@ -349,6 +350,18 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const drag = useRef<{ mode: "move" | "size" | "turn"; id: string; px: number; py: number; l0: Layer; snap: Layer[]; moved: boolean } | null>(null);
 
   useEffect(() => { clipCredits().then(setCredits); loadFontList().then(setFonts); }, []);
+  // work in progress is kept in this browser, so closing the Idea Lab by accident doesn't lose it
+  const DRAFT = "idea-lab-draft";
+  const [draft, setDraft] = useState<Layer[] | null>(null);
+  useEffect(() => {
+    if (start?.doc || start?.imageUrl) return;
+    try { const d = JSON.parse(localStorage.getItem(DRAFT) || "null"); if (d && Array.isArray(d.layers) && d.layers.length) setDraft(d.layers); } catch { /* private window */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!layers.length) return;
+    const t = setTimeout(() => { try { localStorage.setItem(DRAFT, JSON.stringify({ at: Date.now(), layers: layers.filter((l) => l.kind !== "img") })); } catch { /* full or private */ } }, 800);
+    return () => clearTimeout(t);
+  }, [layers]);
   // fonts: load every font in use; redraw when they arrive (curved text is measured with them)
   const fontKey = layers.filter((l) => l.kind === "text").map((l) => (l.kind === "text" ? `${l.font}:${weightOf(l)}` : "")).join("|");
   useEffect(() => {
@@ -574,7 +587,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
       const out: DesignerOut = {
         svg: new File([svg], `${base}.svg`, { type: "image/svg+xml" }),
         png: new File([pngBlob], `${base}.png`, { type: "image/png" }),
-        doc: { v: 1, w: W, h: H, layers },
+        doc: { v: 1, w: W, h: H, layers, distress },
         box: vb,
         name: name.trim() || "Custom design",
         colors: used.pictures ? Math.max(used.hex.length, 4) : Math.max(1, used.hex.length),
@@ -582,6 +595,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
       };
       const err = await onSave(out);
       if (err) setMsg(err);
+      else { try { localStorage.removeItem(DRAFT); } catch { /* private window */ } }
     } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }
     setBusy(false);
   }
@@ -614,12 +628,20 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
           <span className="faint">Shirt</span>
           {SHIRT_BG.map((s) => <button key={s.hex} type="button" title={s.name} aria-label={s.name} className={"sd-shirt" + (bg === s.hex ? " on" : "")} style={{ background: s.hex }} onClick={() => setBg(s.hex)} />)}
         </div>}
+        <label className="check il-vintage" title="A worn-in, vintage print look"><input type="checkbox" checked={distress} onChange={(e) => setDistress(e.target.checked)} /> Vintage look</label>
         <span className="il-inkchip" title="Screen printing prices by the number of ink colors">{used.hex.length ? `${used.hex.length} ink color${used.hex.length === 1 ? "" : "s"}` : "No ink colors yet"}{used.pictures ? " + full color" : ""}</span>
         <span className="spacer" />
         {onClose && <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>}
         <button type="button" className="btn primary" disabled={busy} onClick={save}>{busy ? "Saving…" : saveLabel}</button>
       </div>
       {msg && <div className="banner" style={{ margin: "0 0 10px" }}>{msg}</div>}
+      {draft && !layers.length && (
+        <div className="confirm-bar" style={{ marginBottom: 10 }}>
+          <span>Pick up where you left off? You have an unsaved design from earlier.</span>
+          <button type="button" className="btn sm primary" onClick={() => { setLayersRaw(draft.map((l) => ({ ...l }))); setDraft(null); setTool(""); }}>Restore it</button>
+          <button type="button" className="btn sm ghost" onClick={() => { setDraft(null); try { localStorage.removeItem(DRAFT); } catch { /* private window */ } }}>Start fresh</button>
+        </div>
+      )}
 
       <div className={"il-body" + (tool ? " open" : "")}>
         <nav className="il-rail" aria-label="Idea Lab tools">
@@ -692,12 +714,23 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
             })() : <rect className="sd-bg" x={0} y={0} width={W} height={H} fill={bg} />}
             <rect x={1} y={1} width={W - 2} height={H - 2} fill="none" stroke={outside ? "#C8102E" : dark ? "rgba(255,255,255,.35)" : "rgba(0,0,0,.2)"} strokeWidth={outside ? 2 : 1} vectorEffect="non-scaling-stroke" strokeDasharray="6 6" pointerEvents="none" />
             <g ref={contentRef}>
+              {distress && (
+                <defs>
+                  <filter id="il-distress" x="-5%" y="-5%" width="110%" height="110%" filterUnits="objectBoundingBox">
+                    <feTurbulence type="fractalNoise" baseFrequency="0.085" numOctaves="3" seed="11" result="n" />
+                    <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  14 0 0 0 -5.1" result="holes" />
+                    <feComposite in="SourceGraphic" in2="holes" operator="in" />
+                  </filter>
+                </defs>
+              )}
+              <g filter={distress ? "url(#il-distress)" : undefined}>
               {layers.filter((l) => !l.hidden).map((l) => (
                 <g key={l.id} transform={place(l)} style={{ cursor: l.lock ? "default" : "move" }} onPointerDown={(e) => begin(e, "move", l)}
                   onDoubleClick={() => { if (l.kind === "text") setTimeout(() => document.getElementById("il-text")?.focus(), 0); }}>
                   <g ref={(el) => { innerRefs.current[l.id] = el; }}><Inner l={l} /></g>
                 </g>
               ))}
+              </g>
             </g>
             {guide && <line x1={W / 2} y1={VB.y} x2={W / 2} y2={VB.y + VB.h} stroke="#0A7BA6" strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray="4 4" pointerEvents="none" />}
             {cur && box && !cur.hidden && (

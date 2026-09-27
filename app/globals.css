@@ -1048,3 +1048,4 @@ button.mk-pill:hover{color:var(--ink)}
 @media (max-width: 760px){
   .il-body,.il-body.open{grid-template-columns:minmax(0,1fr)}
 }
+.il-vintage{font-size:12.5px;white-space:nowrap}

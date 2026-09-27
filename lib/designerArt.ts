@@ -78,7 +78,7 @@ export type ImgLayer = { kind: "img"; src: string; w: number; h: number; name?: 
 export type Layer = { id: string; x: number; y: number; rot: number; s: number; hidden?: boolean; /** mirrored left-right */ flip?: boolean; /** can't be moved by accident */ lock?: boolean } & (TextLayer | ArtLayer | ImgLayer);
 /** A layer before it gets its id (keeps the text / clip art / picture fields apart). */
 export type LayerInit = Layer extends infer L ? (L extends Layer ? Omit<L, "id"> : never) : never;
-export type DesignDoc = { v: 1; w: number; h: number; layers: Layer[] };
+export type DesignDoc = { v: 1; w: number; h: number; layers: Layer[]; /** worn-in "vintage" print look */ distress?: boolean };
 
 /** Shirt colors to preview the design on while you work. */
 export const SHIRT_BG: { name: string; hex: string }[] = [

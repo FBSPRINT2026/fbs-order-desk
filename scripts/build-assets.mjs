@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, "public", "clipart");
-const CHUNK = 250;
+const CHUNK = 80;
 
 /** Icon sets: who made them, their license, and which icons to keep. Full-color sets can't be recolored. */
 const SETS = [
