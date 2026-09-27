@@ -802,10 +802,11 @@ td > .sz-dim.on input{padding-right:24px}
 .aa-paybox-sum{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
 .aa-paybox-sum > b{font-size:18px}
 @media (max-width: 1000px){ .aa-payside{position:static;max-height:none} }
-.aa-aging{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
-.aa-age{display:flex;flex-direction:column;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.aa-aging{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.aa-age{display:flex;flex-direction:column;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
 .aa-age span{font-size:12.5px;color:var(--ink-3);font-weight:600}
-.aa-age b{font-size:19px}
+.aa-age b{font-size:17px;white-space:nowrap}
+.aa-age span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .aa-age small{font-size:11.5px;color:var(--ink-3)}
 .aa-age.late{border-color:#F6DDB0;background:#FFF8EC}
 .aa-age.late b{color:#B45309}

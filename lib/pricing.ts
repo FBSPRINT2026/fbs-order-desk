@@ -91,7 +91,7 @@ export type Order = {
   due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; discount_amt?: number; discount_type?: "pct" | "amt"; tax_exempt: boolean; tax_rate: number | null;
   waive_setup: boolean; notes: string; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;
-  price_type: PriceType; submitted_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
+  price_type: PriceType; submitted_at?: string | null; completed_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
 };
 export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; size_costs?: Record<string, number>; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string }> };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
@@ -379,14 +379,16 @@ export function requestHints(groups: Group[]): string[] {
 export type PayTerms = "prepay" | "receipt" | "net30";
 export const PAY_TERMS: Record<PayTerms, string> = { prepay: "Pre-pay", receipt: "Due on receipt", net30: "Net 30 days" };
 /**
- * When an order's payment is due under the customer's terms: pre-pay and due on receipt are due when the order
- * is approved (invoiced); net 30 is 30 days after that.
+ * When an order's payment is due under the customer's terms:
+ * pre-pay = when the order is approved; due on receipt = when the order is closed (completed);
+ * net 30 = 30 days after it's closed. Null = not due yet (still being made).
  */
-export function payDueDate(o: { approved_at?: string | null; sent_at?: string | null; created_at: string }, terms?: PayTerms | null) {
-  const base = (o.approved_at || o.sent_at || o.created_at || "").slice(0, 10);
-  if (!base) return null;
-  if (terms !== "net30") return base;
-  const d = new Date(base + "T12:00:00Z");
+export function payDueDate(o: { approved_at?: string | null; sent_at?: string | null; created_at: string; completed_at?: string | null }, terms?: PayTerms | null) {
+  if (terms === "prepay") return (o.approved_at || o.sent_at || o.created_at || "").slice(0, 10) || null;
+  const closed = (o.completed_at || "").slice(0, 10);
+  if (!closed) return null;
+  if (terms !== "net30") return closed;
+  const d = new Date(closed + "T12:00:00Z");
   d.setUTCDate(d.getUTCDate() + 30);
   return d.toISOString().slice(0, 10);
 }

@@ -110,7 +110,8 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   const invoices = orders.filter((o) => o.type === "invoice");
   const receive = orders.filter((o) => o.price_type === "wholesale" && o.type === "invoice" && WAITING.includes(o.status));
   const due = invoices.reduce((a, o) => a + Math.max(0, o.balance), 0);
-  const payDue = (o: AOrder) => o.pay_due || o.due_date;
+  // payment due date under the customer's terms (null = not due yet, e.g. still being made)
+  const payDue = (o: AOrder) => o.pay_due || null;
   const overdue = invoices.filter((o) => { const d = payDue(o); return d && d < today(); }).reduce((a, o) => a + Math.max(0, o.balance), 0);
   const openQuotes = quotes.filter((o) => o.status === "quote_sent").reduce((a, o) => a + o.total, 0);
 
@@ -222,13 +223,13 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
     const toggle = (id: string, on?: boolean) => setPaySel((x) => ((on ?? !x.includes(id)) ? [...x.filter((y) => y !== id), id] : x.filter((y) => y !== id)));
     // aging: what's owed on orders, by how far past the in-hands date it is
     const aging = [
-      { k: "Due now", test: (d: number) => d <= 0 },
-      { k: "1–30 days past due", test: (d: number) => d >= 1 && d <= 30 },
-      { k: "31–60 days", test: (d: number) => d >= 31 && d <= 60 },
-      { k: "61–90 days", test: (d: number) => d >= 61 && d <= 90 },
-      { k: "Over 90 days", test: (d: number) => d > 90 },
+      { k: "Not due yet", test: (d: number | null) => d === null || d < 0 },
+      { k: "0–30 days", test: (d: number | null) => d !== null && d >= 0 && d <= 30 },
+      { k: "31–60 days", test: (d: number | null) => d !== null && d >= 31 && d <= 60 },
+      { k: "61–90 days", test: (d: number | null) => d !== null && d >= 61 && d <= 90 },
+      { k: "Over 90 days", test: (d: number | null) => d !== null && d > 90 },
     ].map((b) => {
-      const list = invoices.filter((o) => { const d = payDue(o); return o.balance > 0.004 && b.test(d ? Math.floor((Date.parse(today()) - Date.parse(d)) / 86400000) : 0); });
+      const list = invoices.filter((o) => { const d = payDue(o); return o.balance > 0.004 && b.test(d ? Math.floor((Date.parse(today()) - Date.parse(d)) / 86400000) : null); });
       return { ...b, n: list.length, amt: list.reduce((a, o) => a + o.balance, 0) };
     });
     const payTable = (list: AOrder[], isQuote: boolean) => (
@@ -239,7 +240,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
             <tr key={o.id} className={paySel.includes(o.id) ? "sel" : ""} onClick={() => (canPay ? toggle(o.id) : router.push(orderHref(o.id)))}>
               {canPay && <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${isQuote ? "quote" : "order"} ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} /></td>}
               <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-              <td><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{!isQuote && payDue(o) ? `Payment due ${when(payDue(o))}` : o.due_date ? `In hands ${when(o.due_date)}` : ""}</div></td>
+              <td><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{isQuote ? (o.due_date ? `In hands ${when(o.due_date)}` : "") : payDue(o) ? `Payment due ${when(payDue(o))}` : "Due when the order is done"}</div></td>
               <td><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span></td>
               <td className="r num">{money(o.total)}</td>
               {!isQuote && <td className="r num">{money(o.paid)}</td>}
@@ -254,14 +255,14 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
     const searchBox = search("Search by order number, method or amount");
     body = <>
       <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2><span className="aa-sum">Balance due <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b>{!canPay && terms ? <> · Terms <b>{terms}</b></> : null}</span></div>{!canPay && searchBox}</div>
+      <div className={canPay ? "aa-home" : ""}><div className="aa-home-main stack">
       <div className="aa-aging" aria-label="Aging">
         {aging.map((b, i) => (
-          <div key={b.k} className={"aa-age" + (i > 0 && b.amt > 0.004 ? " late" : "") + (i >= 3 && b.amt > 0.004 ? " bad" : "")}>
+          <div key={b.k} className={"aa-age" + (i >= 1 && b.amt > 0.004 ? " late" : "") + (i >= 2 && b.amt > 0.004 ? " bad" : "")}>
             <span>{b.k}</span><b className="num">{money(b.amt)}</b><small>{b.n} order{b.n === 1 ? "" : "s"}</small>
           </div>
         ))}
       </div>
-      <div className={canPay ? "aa-home" : ""}><div className="aa-home-main stack">
       <div className="aa-card aa-tblcard">
         <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Open orders</h3>{canPay && open.length > 1 && <span className="faint">Check the ones you want to pay together.</span>}</div>
         {payTable(open, false)}
@@ -285,8 +286,8 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       </div>
       {canPay && payCfg && (
         <aside className="aa-payside">
-          {searchBox}
           {terms && <div className="aa-terms"><span>Payment terms</span><b>{terms}</b></div>}
+          {searchBox}
           <div className="aa-paybox">
             <div className="aa-paybox-h">Pay orders</div>
             {sel.length ? <>
