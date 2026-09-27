@@ -5,9 +5,18 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "prebuild": "node scripts/build-assets.mjs"
   },
   "dependencies": {
+    "@iconify-json/fluent-emoji-flat": "*",
+    "@iconify-json/fluent-emoji-high-contrast": "*",
+    "@iconify-json/game-icons": "*",
+    "@iconify-json/icon-park-solid": "*",
+    "@iconify-json/mdi": "*",
+    "@iconify-json/mingcute": "*",
+    "@iconify-json/ph": "*",
+    "@iconify-json/tabler": "*",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
     "next": "^15.3.0",

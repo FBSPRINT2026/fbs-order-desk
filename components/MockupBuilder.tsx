@@ -919,6 +919,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {!imprints.some((im) => sideOf(im.location) === curTab) && <div className="faint" style={{ fontSize: 12 }}>Add a {curTab === "sleeve" ? "sleeve" : curTab} location to see it up close here.</div>}
         </div>}
         <div className="mk-side stack">
+          {/* Idea Lab: design on this side of the shirt (sits above the Imprints panel) */}
+          <button type="button" className={"mk-lab" + (ready ? "" : " mk-off")} disabled={!ready} onClick={() => openLab(curTab)}>
+            <span className="mk-lab-ic" aria-hidden="true">✦</span>
+            <span><b>Add graphics, text or clip art to the {curTab === "sleeve" ? "sleeve" : curTab}</b><span>Opens the {curTab === "sleeve" ? "sleeve" : curTab} of this shirt in the Idea Lab. What you make comes right back here.</span></span>
+          </button>
           <section className={"panel" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
             <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button><button className="btn sm" type="button" title="Type words right onto the shirt" onClick={() => {
                 const opts = locsFor(curTab), big = curTab === "front" ? "Full Front" : curTab === "back" ? "Full Back" : "";
@@ -930,10 +935,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               {SIDES.map((t) => { const n = imprints.filter((im) => sideOf(im.location) === t.id).length; return <button key={t.id} type="button" className={"chip" + (curTab === t.id ? " on" : "")} onClick={() => setTab(t.id)}>{t.label}{n ? ` (${n})` : ""}</button>; })}
             </div>
             <div className="panel-b stack">
-              <button type="button" className="mk-lab" onClick={() => openLab(curTab)}>
-                <span className="mk-lab-ic" aria-hidden="true">✦</span>
-                <span><b>Add graphics, text or clip art to the {curTab === "sleeve" ? "sleeve" : curTab}</b><span>Opens the {curTab === "sleeve" ? "sleeve" : curTab} of this shirt in the Idea Lab. What you make comes right back here.</span></span>
-              </button>
               {imprints.every((im) => sideOf(im.location) !== curTab) && <div className="faint" style={{ fontSize: 13 }}>No {curTab === "sleeve" ? "sleeve" : curTab} prints yet.</div>}
               {imprints.filter((im) => sideOf(im.location) === curTab).map((im) => {
                 const p = place(im);
