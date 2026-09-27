@@ -750,7 +750,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
                         onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
                         onSplit={() => setUnite(im.id, false)}
-                        onMatchAll={unsetColors(im).length > 1 ? () => matchStandard(im) : undefined} />
+                        onMatchAll={unsetColors(im).length > 0 ? () => matchStandard(im) : undefined} />
                     )}
                     {p.d && !isVector(p.d.file_type, p.d.file_name) && (() => {
                       const d = p.d, dpi = effectiveDpi(d.width_px || 0, p.wIn);
@@ -998,10 +998,11 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
 
 const matchWord = (dE: number) => (dE < 1 ? "exact" : dE < 3 ? "very close" : dE < 6 ? "close" : "not very close");
 /** The color read from the art, with the closest standard Wilflex ink and the closest Pantone coated color to pick from. */
-function Match({ hex, cur, onPick }: { hex: string; cur?: { name: string; hex: string }; onPick: (v: { name: string; hex: string }) => void }) {
+function Match({ hex, cur, onPick, onHover }: { hex: string; cur?: { name: string; hex: string }; onPick: (v: { name: string; hex: string }) => void; onHover?: (v: { name: string; hex: string } | null) => void }) {
   const ink = closestInk(hex), pms = closestPms(hex);
   const opt = (label: string, c: { name: string; hex: string; dE: number }) => (
-    <button type="button" className={"mk-near" + (cur?.name === c.name ? " on" : "")} title={`${c.name} — ${matchWord(c.dE)} (ΔE ${c.dE})`} onClick={() => onPick({ name: c.name, hex: c.hex })}>
+    <button type="button" className={"mk-near" + (cur?.name === c.name ? " on" : "")} title={`${c.name} — ${matchWord(c.dE)} (ΔE ${c.dE})`} onClick={() => onPick({ name: c.name, hex: c.hex })}
+      onMouseEnter={() => onHover?.({ name: c.name, hex: c.hex })} onMouseLeave={() => onHover?.(null)}>
       <span className="k">{label}</span><span className="sw" style={{ background: c.hex }} /><span className="n">{c.name}</span><span className="q">{matchWord(c.dE)}</span>
     </button>
   );
@@ -1015,8 +1016,9 @@ function Match({ hex, cur, onPick }: { hex: string; cur?: { name: string; hex: s
 }
 
 /**
- * The colors in a logo, kept tight: chosen colors sit in a row of small chips; a color still "as uploaded"
- * shows its suggested standard ink and PMS. Hovering a suggestion previews it on the mockup, clicking picks it.
+ * The colors in a logo. A color still "as uploaded" shows the ink dropdown and the Suggested colors box
+ * (standard ink and PMS, with how close each is); hovering a suggestion previews it on the mockup.
+ * Once a color is picked its row folds up to one tight line, so picked colors stack as a short list.
  */
 function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll }: {
   rows: { hexes: string[]; cur?: { name: string; hex: string } }[];
@@ -1025,51 +1027,39 @@ function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll }: {
   onSplit: () => void;
   onMatchAll?: () => void;
 }) {
-  const [open, setOpen] = useState<string>("");   // a chosen color reopened to change it
-  const [more, setMore] = useState<string>("");   // a color showing the full ink list
+  const [open, setOpen] = useState(""); // a picked color reopened to change it
   const key = (r: { hexes: string[] }) => r.hexes.join();
-  const chosen = rows.filter((r) => r.cur && key(r) !== open);
-  const pending = rows.filter((r) => !r.cur || key(r) === open);
-  const pick = (r: { hexes: string[] }, v: { name: string; hex: string } | null) => { onPick(r.hexes, v); setOpen(""); setMore(""); };
+  const pick = (r: { hexes: string[] }, v: { name: string; hex: string } | null) => { onPick(r.hexes, v); setOpen(""); };
   return (
-    <div className="lc">
-      <div className="lc-h"><span className="lbl">COLORS IN THIS LOGO</span>{onMatchAll && <button type="button" className="lc-link" onClick={onMatchAll}>Use closest standard inks</button>}</div>
-      {chosen.length > 0 && (
-        <div className="lc-chips">
-          {chosen.map((r) => (
-            <span key={key(r)} className="lc-chip" title={`${r.cur!.name}${r.hexes.length > 1 ? ` (${r.hexes.length} colors united)` : ""}. Click to change.`}>
-              <button type="button" className="lc-chip-b" onClick={() => setOpen(key(r))}>
-                <span className="sw" style={{ background: r.cur!.name === "none" ? "transparent" : r.cur!.hex }} />
-                <span className="lc-n">{r.cur!.name === "none" ? "Removed" : r.cur!.name.replace(/^PMS /, "PMS ")}</span>
-                {r.hexes.length > 1 && <span className="lc-u">×{r.hexes.length}</span>}
-              </button>
-              <button type="button" className="lc-reset" title="Back to the color as uploaded" aria-label="Reset to as uploaded" onClick={() => pick(r, null)}>↺</button>
-            </span>
-          ))}
-        </div>
-      )}
-      {pending.map((r) => {
-        const src = r.hexes[0], ink = closestInk(src), pms = closestPms(src);
-        const opt = (label: string, c: { name: string; hex: string; dE: number }) => (
-          <button type="button" className={"lc-opt" + (r.cur?.name === c.name ? " on" : "")} title={`${c.name} (${label}, ΔE ${c.dE})`}
-            onMouseEnter={() => onHover(r.hexes, { name: c.name, hex: c.hex })} onMouseLeave={() => onHover(r.hexes, null)} onFocus={() => onHover(r.hexes, { name: c.name, hex: c.hex })} onBlur={() => onHover(r.hexes, null)}
-            onClick={() => pick(r, { name: c.name, hex: c.hex })}>
-            <span className="sw" style={{ background: c.hex }} /><span className="lc-n">{c.name}</span>
-          </button>
+    <div className="mk-colors">
+      <div className="lbl">COLORS IN THIS LOGO</div>
+      {rows.map((r) => {
+        const cur = r.cur, k = key(r), folded = !!cur && open !== k;
+        const swatches = <span className="mk-srcs">{r.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} title={h} />)}</span>;
+        if (folded) return (
+          <div key={k} className="mk-color tight">
+            {swatches}<span className="arrow">→</span>
+            <span className="sw" style={{ background: cur!.name === "none" ? "transparent" : cur!.hex }} />
+            <span className="mk-cname" title={cur!.name}>{cur!.name === "none" ? "Removed" : cur!.name}{r.hexes.length > 1 ? <span className="faint"> · {r.hexes.length} united</span> : null}</span>
+            <button type="button" className="lc-link" onClick={() => setOpen(k)}>Change</button>
+            <button type="button" className="lc-reset" title="Back to the color as uploaded" aria-label="Reset to as uploaded" onClick={() => pick(r, null)}>↺</button>
+          </div>
         );
         return (
-          <div key={key(r)} className="lc-row">
-            <span className="lc-src" title={`As uploaded: ${src.toUpperCase()}`}>{r.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} />)}</span>
-            <div className="lc-opts">
-              {more === key(r)
-                ? <InkSelect value={r.cur} onChange={(v) => pick(r, v)} />
-                : <>{opt("standard", ink)}{opt("PMS", pms)}<button type="button" className="lc-link" onClick={() => setMore(key(r))}>More…</button></>}
+          <div key={k} className="mk-color-wrap">
+            <div className="mk-color">
+              {swatches}<span className="arrow">→</span>
+              <span className="sw" style={{ background: cur ? (cur.name === "none" ? "transparent" : cur.hex) : r.hexes[0] }} />
+              <InkSelect value={cur} onChange={(v) => pick(r, v)} />
+              {open === k && <button type="button" className="lc-link" onClick={() => setOpen("")}>Done</button>}
             </div>
-            {r.hexes.length > 1 && <button type="button" className="lc-link" onClick={onSplit} title="Print these as separate colors">Split</button>}
-            {key(r) === open && <button type="button" className="lc-link" onClick={() => setOpen("")}>Cancel</button>}
+            {r.hexes.length > 1
+              ? <div className="mk-united"><span>{r.hexes.length} colors united · prints as one color</span><button type="button" className="btn sm ghost" onClick={onSplit}>Split</button></div>
+              : <Match hex={r.hexes[0]} cur={cur} onPick={(v) => pick(r, v)} onHover={(v) => onHover(r.hexes, v)} />}
           </div>
         );
       })}
+      {onMatchAll && <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={onMatchAll}>Use closest standard inks</button>}
     </div>
   );
 }

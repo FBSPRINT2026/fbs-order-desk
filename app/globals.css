@@ -854,3 +854,6 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-modal{background:var(--surface);border-radius:14px;max-width:520px;width:100%;padding:20px 22px;display:flex;flex-direction:column;gap:10px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
 .mk-modal h2{margin:0;font-size:18px}
 .mk-modal p{margin:0;font-size:14px}
+.mk-color.tight{gap:6px;padding:3px 0}
+.mk-cname{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;font-weight:600}
+.mk-color.tight .lc-reset{border:1px solid var(--line);border-radius:6px}
