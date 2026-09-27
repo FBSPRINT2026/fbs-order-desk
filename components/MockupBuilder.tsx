@@ -94,13 +94,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // raster logos (JPG, PNG…) on a solid background get it knocked out; staff can keep it per logo
   const [clean, setClean] = useState<Record<string, string>>({});
   const [keepBg, setKeepBg] = useState<Record<string, boolean>>({});
+  const [keepInside, setKeepInside] = useState<Record<string, boolean>>({});
   /** The logo image to draw and read colors from: the cleaned-up version when its background was removed. */
   async function logoImg(d: Design): Promise<HTMLImageElement> {
     const hit = imgCache.current.get(d.id);
     if (hit) return hit;
     let img = await loadImg(urls[d.id]);
     if (!keepBg[d.id] && !isVector(d.file_type, d.file_name)) {
-      const k = knockOut(img);
+      const k = knockOut(img, { keepInside: !!keepInside[d.id] });
       if (k) {
         img = await loadImg(k.url);
         setClean((c) => ({ ...c, [d.id]: k.url }));
@@ -109,12 +110,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     imgCache.current.set(d.id, img);
     return img;
   }
-  function toggleBg(d: Design) {
+  function resetLogo(d: Design) {
     imgCache.current.delete(d.id);
     setClean((c) => { const n = { ...c }; delete n[d.id]; return n; });
     setPaints((p) => Object.fromEntries(Object.entries(p).filter(([, v]) => v.design !== d.id)));
-    setKeepBg((k) => ({ ...k, [d.id]: !k[d.id] }));
   }
+  function toggleBg(d: Design) { resetLogo(d); setKeepBg((k) => ({ ...k, [d.id]: !k[d.id] })); }
+  function toggleInside(d: Design) { resetLogo(d); setKeepInside((k) => ({ ...k, [d.id]: !k[d.id] })); }
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ title: string; url: string }[]>([]);
@@ -180,7 +182,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map: {} } }));
       } catch { /* preview not loadable */ }
     });
-  }, [imprints, designs, urls, keepBg]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [imprints, designs, urls, keepBg, keepInside]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // repaint logos whenever an ink choice changes
   useEffect(() => {
@@ -745,6 +747,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                             <span>{clean[d.id] ? "Picture file: background removed so it sits on the shirt." : keepBg[d.id] ? "Picture file: keeping its background." : "Picture file (JPG / PNG)."}</span>
                             {(clean[d.id] || keepBg[d.id]) && <button type="button" className="btn sm ghost" onClick={() => toggleBg(d)}>{keepBg[d.id] ? "Remove background" : "Keep background"}</button>}
                           </div>
+                          {clean[d.id] && !keepBg[d.id] && (
+                            <label className="check" style={{ fontSize: 12 }}><input type="checkbox" checked={!!keepInside[d.id]} onChange={() => toggleInside(d)} /> Keep white inside the logo (for white ink, e.g. white letters in a colored badge)</label>
+                          )}
                           {dpi > 0 && (dpi < 150
                             ? <div className="ink-warn" style={{ margin: 0 }}>Low resolution: about {dpi} dpi at {p.wIn.toFixed(1)}&quot; wide, so it may print blurry. 150+ dpi looks sharp. Ask for a bigger file or vector art (AI, EPS, PDF, SVG).</div>
                             : <span className="faint">About {dpi} dpi at this size{dpi >= 300 ? ", sharp" : ", OK"}.</span>)}

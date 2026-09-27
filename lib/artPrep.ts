@@ -17,16 +17,17 @@ function canvasOf(img: CanvasImageSource, w: number, h: number) {
 }
 
 /**
- * If the image has no transparency and its edges are one solid color (white box, colored box),
- * make that background see-through by flooding in from the edges. Colors inside the logo that match
- * the background but aren't connected to the edge (e.g. white inside letters) are kept.
- * Returns null when there's nothing to remove.
+ * If the image has no transparency and its edges are one solid color (the white box around a JPG logo),
+ * make that background see-through everywhere — including inside letters (the holes in e, d, p, ®).
+ * Edge pixels that are part logo / part background get partial see-through and their color "un-mixed"
+ * from the background, so there's no white halo on dark shirts.
+ * Returns null when there's nothing to remove (already transparent, or a busy photo edge).
  */
-export function knockOut(img: HTMLImageElement, tolerance = 42): { url: string; bg: string } | null {
+export function knockOut(img: HTMLImageElement, opts: { keepInside?: boolean } = {}): { url: string; bg: string } | null {
   const W = img.naturalWidth, H = img.naturalHeight;
   if (!W || !H) return null;
-  // work at up to 1600px for speed; the result is used for mockups, not production files
-  const k = Math.min(1, 1600 / Math.max(W, H));
+  // work at up to 2000px; the result is used for mockups, not production files
+  const k = Math.min(1, 2000 / Math.max(W, H));
   const w = Math.max(1, Math.round(W * k)), h = Math.max(1, Math.round(H * k));
   const { c, x } = canvasOf(img, w, h);
   let data: ImageData;
@@ -35,42 +36,56 @@ export function knockOut(img: HTMLImageElement, tolerance = 42): { url: string; 
   // already has see-through pixels? leave it alone
   let clear = 0;
   for (let i = 3; i < d.length; i += 16) if (d[i] < 250) { clear++; if (clear > 20) return null; }
-  // is the border one color?
+  // the background color = the (mostly one) color around the edge
   const border: number[] = [];
-  for (let X = 0; X < w; X += Math.max(1, Math.floor(w / 200))) border.push(X, (h - 1) * w + X);
-  for (let Y = 0; Y < h; Y += Math.max(1, Math.floor(h / 200))) border.push(Y * w, Y * w + w - 1);
-  const avg = [0, 0, 0];
-  border.forEach((p) => { avg[0] += d[p * 4]; avg[1] += d[p * 4 + 1]; avg[2] += d[p * 4 + 2]; });
-  avg.forEach((_, i) => { avg[i] /= border.length; });
-  const dist = (p: number) => Math.hypot(d[p * 4] - avg[0], d[p * 4 + 1] - avg[1], d[p * 4 + 2] - avg[2]);
-  const same = border.filter((p) => dist(p) <= tolerance).length / border.length;
-  if (same < 0.9) return null; // busy edges: probably a photo, keep it as is
-  // flood fill from the border
-  const seen = new Uint8Array(w * h), stack = new Int32Array(w * h);
-  let sp = 0;
-  const push = (p: number) => { if (!seen[p] && dist(p) <= tolerance) { seen[p] = 1; stack[sp++] = p; } };
-  for (let X = 0; X < w; X++) { push(X); push((h - 1) * w + X); }
-  for (let Y = 0; Y < h; Y++) { push(Y * w); push(Y * w + w - 1); }
-  while (sp) {
-    const p = stack[--sp], X = p % w;
-    if (X > 0) push(p - 1);
-    if (X < w - 1) push(p + 1);
-    if (p >= w) push(p - w);
-    if (p < w * (h - 1)) push(p + w);
+  for (let X = 0; X < w; X += Math.max(1, Math.floor(w / 300))) border.push(X, (h - 1) * w + X);
+  for (let Y = 0; Y < h; Y += Math.max(1, Math.floor(h / 300))) border.push(Y * w, Y * w + w - 1);
+  const bg = [0, 0, 0];
+  border.forEach((p) => { bg[0] += d[p * 4]; bg[1] += d[p * 4 + 1]; bg[2] += d[p * 4 + 2]; });
+  bg.forEach((_, i) => { bg[i] /= border.length; });
+  const far = (p: number) => Math.hypot(d[p * 4] - bg[0], d[p * 4 + 1] - bg[1], d[p * 4 + 2] - bg[2]);
+  const same = border.filter((p) => far(p) <= 40).length / border.length;
+  if (same < 0.85) return null; // busy edges: probably a photo, keep it as is
+  // how far each channel can move away from the background (to black or to white), for un-mixing
+  const room = bg.map((v) => Math.max(v, 255 - v) || 1);
+  const smooth = (e0: number, e1: number, v: number) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  // how much of a pixel is "logo" rather than background (0..1)
+  const mixOf = (p: number) => { const i = p * 4; return Math.max(Math.abs(d[i] - bg[0]) / room[0], Math.abs(d[i + 1] - bg[1]) / room[1], Math.abs(d[i + 2] - bg[2]) / room[2]); };
+  // "keep white inside the logo": only background connected to the outside edge is removed
+  let outside: Uint8Array | null = null;
+  if (opts.keepInside) {
+    outside = new Uint8Array(w * h);
+    const stack = new Int32Array(w * h);
+    let sp = 0;
+    const push = (p: number) => { if (!outside![p] && mixOf(p) < 0.32) { outside![p] = 1; stack[sp++] = p; } };
+    for (let X = 0; X < w; X++) { push(X); push((h - 1) * w + X); }
+    for (let Y = 0; Y < h; Y++) { push(Y * w); push(Y * w + w - 1); }
+    while (sp) {
+      const p = stack[--sp], X = p % w;
+      if (X > 0) push(p - 1);
+      if (X < w - 1) push(p + 1);
+      if (p >= w) push(p - w);
+      if (p < w * (h - 1)) push(p + w);
+    }
   }
   let removed = 0;
-  for (let p = 0; p < w * h; p++) if (seen[p]) { d[p * 4 + 3] = 0; removed++; }
-  if (removed < w * h * 0.05) return null;
-  // soften the cut edge: pixels next to the removed area fade by how close they are to the background
   for (let p = 0; p < w * h; p++) {
-    if (seen[p]) continue;
-    const X = p % w;
-    const near = (X > 0 && seen[p - 1]) || (X < w - 1 && seen[p + 1]) || (p >= w && seen[p - w]) || (p < w * (h - 1) && seen[p + w]);
-    if (near) d[p * 4 + 3] = Math.min(255, Math.round(255 * Math.min(1, dist(p) / (tolerance * 2.2))));
+    const i = p * 4;
+    if (outside && !outside[p]) continue; // inside the logo: keep as is
+    const mix = mixOf(p);
+    // JPEG noise near the background is dropped; anything clearly logo is solid
+    const a = smooth(0.07, 0.32, mix);
+    if (a <= 0) { d[i + 3] = 0; removed++; continue; }
+    if (a < 1 && mix > 0.001) {
+      // un-mix the background out of edge pixels so they keep the logo's own color
+      for (let ch = 0; ch < 3; ch++) d[i + ch] = Math.max(0, Math.min(255, Math.round(bg[ch] + (d[i + ch] - bg[ch]) / Math.min(1, mix / 0.32))));
+    }
+    d[i + 3] = Math.round(255 * a);
   }
+  if (removed < w * h * 0.05) return null;
   x.putImageData(data, 0, 0);
   const hex = (n: number) => Math.round(n).toString(16).padStart(2, "0");
-  return { url: c.toDataURL("image/png"), bg: `#${hex(avg[0])}${hex(avg[1])}${hex(avg[2])}` };
+  return { url: c.toDataURL("image/png"), bg: `#${hex(bg[0])}${hex(bg[1])}${hex(bg[2])}` };
 }
 
 /** Dots per inch a raster logo will print at, for a print width in inches. */
