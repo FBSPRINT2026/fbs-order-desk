@@ -884,3 +884,7 @@ button.mk-pill:hover{color:var(--ink)}
 .mk.mk-stack .mk-side{order:2}
 .mk.mk-stack .mk-closeups{order:3}
 .mk.mk-stack .mk-saved{order:4}
+.mk-viewsw{background:var(--surface-2);padding:3px;border-radius:10px;gap:3px}
+.mk-viewsw .chip{font-size:14px;font-weight:700;padding:7px 22px;border-radius:8px;color:var(--ink-2)}
+.mk-viewsw .chip.on{background:var(--accent);color:var(--accent-ink);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.mk.mk-one .mk-viewsw,.mk.mk-stack .mk-viewsw{margin-inline:auto}

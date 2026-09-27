@@ -400,12 +400,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 const o = offsets[im.id] || { dx: 0, dy: 0 };
                 const sp = spotFor(im.location);
                 return (
+                  // clicking a close-up brings up its side: the photo (one-photo layouts) and the Imprints tab
+                  <div key={im.id + size} className="mk-cu-wrap" onPointerDownCapture={() => { if (sideOf(im.location) !== curTab) setTab(sideOf(im.location)); }}>
                   <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} url={artUrl(im)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
                     onResize={(newWIn) => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); }}
                     onEnd={() => settleHere(im.id)} />
+                  </div>
                 );
   };
 
