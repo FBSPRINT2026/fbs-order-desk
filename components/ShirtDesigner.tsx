@@ -1,71 +1,90 @@
 "use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as RPointerEvent } from "react";
-import { CLIPART, FONTS, FONTS_CSS_URL, SHIRT_BG, TEMPLATES, UNITS_PER_IN, clipartOf, fontOf, type DesignDoc, type Layer, type LayerInit } from "@/lib/designerArt";
+import type { PointerEvent as RPointerEvent, ReactNode } from "react";
+import { SHIRT_BG, UNITS_PER_IN, clipartOf, fontOf, type DesignDoc, type Layer, type LayerInit } from "@/lib/designerArt";
+import { TEMPLATES, TEMPLATE_CATS, type Template } from "@/lib/designerTemplates";
+import { CLIP_CATEGORIES, clipCredits, firstIcon, getClipIcons, searchClipart, searchMany, uniqueIds, type ClipHit, type ClipIcon, type ClipSet } from "@/lib/clipart";
+import { FONT_STYLES, boldOf, cssFamily, hasBold, loadFont, loadFontList, pickWeight, previewFont, type WebFont } from "@/lib/webfonts";
 import { WILFLEX_HEX, deltaE } from "@/lib/inkColors";
 import { knockOut, makePreview } from "@/lib/artPrep";
 
 const W = 600, H = 700; // 12" x 14" at 50 units per inch
 const uidOf = () => Math.random().toString(36).slice(2, 10);
 const INKS = Object.entries(WILFLEX_HEX);
-const inkName = (hex: string) => INKS.find(([, h]) => h.toLowerCase() === hex.toLowerCase())?.[0] || "";
+const inkName = (hex: string) => INKS.find(([, h]) => h.toLowerCase() === (hex || "").toLowerCase())?.[0] || "";
 
 /** box = where the design sits on the 12" x 14" artboard (50 units per inch), so it can go back onto the shirt in the same spot. */
 export type DesignerOut = { svg: File; png: File; doc: DesignDoc; name: string; colors: number; inks: string; box: { x: number; y: number; w: number; h: number } };
 /** The real shirt photo behind the artboard: area = the full front/back print area on that photo (photo pixels). */
 export type LabShirt = { src: string; hex: string; area: { x: number; y: number; w: number; h: number }; label: string };
-type Tool = "text" | "art" | "upload" | "templates";
+type Tool = "ideas" | "text" | "art" | "upload" | "ai";
 
-/* ---------- measuring text (for curved text) ---------- */
+/* ---------- text ---------- */
+const weightOf = (l: { font: string; weight?: number }) => l.weight ?? fontOf(l.font).weight;
 let measureCtx: CanvasRenderingContext2D | null = null;
-function textWidth(text: string, font: string, size: number, spacing: number) {
+function textWidth(text: string, font: string, weight: number, size: number, spacing: number) {
   if (typeof document === "undefined") return text.length * size * 0.6;
   measureCtx = measureCtx || document.createElement("canvas").getContext("2d");
-  const f = fontOf(font);
-  measureCtx!.font = `${f.weight} ${size}px '${f.name}'`;
+  measureCtx!.font = `${weight} ${size}px '${font}'`;
   return measureCtx!.measureText(text).width + spacing * Math.max(0, text.length - 1);
 }
 
 /** One layer's drawing around its own center (0,0). The layer's move/turn/size is on the group around it. */
 function Inner({ l }: { l: Layer }) {
   if (l.kind === "text") {
-    const f = fontOf(l.font);
-    const paint = {
-      fontFamily: `'${f.name}'`, fontWeight: f.weight, fontSize: l.size, letterSpacing: l.spacing || undefined, fill: l.color,
-      stroke: l.strokeW ? l.stroke : undefined, strokeWidth: l.strokeW ? l.strokeW * 2 : undefined, strokeLinejoin: "round" as const, paintOrder: "stroke",
-    };
+    const wt = weightOf(l);
     const lines = l.text.split("\n");
-    if (l.arc && lines.length === 1 && l.text.trim()) {
-      const up = l.arc > 0, a = (Math.min(350, Math.abs(l.arc)) * Math.PI) / 180, h = a / 2;
-      const R = Math.max(10, textWidth(l.text, l.font, l.size, l.spacing) / a);
-      const big = Math.abs(l.arc) > 180 ? 1 : 0;
-      // arch up: along the top of a circle below the text; arch down (smile): along the bottom of a circle above it
-      const d = up
-        ? `M ${-R * Math.sin(h)} ${R - R * Math.cos(h)} A ${R} ${R} 0 ${big} 1 ${R * Math.sin(h)} ${R - R * Math.cos(h)}`
-        : `M ${-R * Math.sin(h)} ${-R + R * Math.cos(h)} A ${R} ${R} 0 ${big} 0 ${R * Math.sin(h)} ${-R + R * Math.cos(h)}`;
+    const curved = !!l.arc && lines.length === 1 && !!l.text.trim();
+    const draw = (fill: string, stroke: string | undefined, key: string) => {
+      const paint = {
+        fontFamily: `'${l.font}'`, fontWeight: wt, fontSize: l.size, letterSpacing: l.spacing || undefined, fill,
+        stroke: l.strokeW ? stroke : undefined, strokeWidth: l.strokeW ? l.strokeW * 2 : undefined, strokeLinejoin: "round" as const, paintOrder: "stroke",
+      };
+      if (curved) {
+        const up = l.arc > 0, a = (Math.min(350, Math.abs(l.arc)) * Math.PI) / 180, h = a / 2;
+        const R = Math.max(10, textWidth(l.text, l.font, wt, l.size, l.spacing) / a);
+        const big = Math.abs(l.arc) > 180 ? 1 : 0;
+        const d = up
+          ? `M ${-R * Math.sin(h)} ${R - R * Math.cos(h)} A ${R} ${R} 0 ${big} 1 ${R * Math.sin(h)} ${R - R * Math.cos(h)}`
+          : `M ${-R * Math.sin(h)} ${-R + R * Math.cos(h)} A ${R} ${R} 0 ${big} 0 ${R * Math.sin(h)} ${-R + R * Math.cos(h)}`;
+        return (
+          <g key={key} transform={`translate(0 ${up ? l.size * 0.35 : -l.size * 0.05})`}>
+            <path id={`p-${l.id}-${key}`} d={d} fill="none" />
+            <text {...paint} textAnchor="middle"><textPath href={`#p-${l.id}-${key}`} startOffset="50%">{l.text}</textPath></text>
+          </g>
+        );
+      }
+      const lh = l.size * 1.08;
       return (
-        <g transform={`translate(0 ${up ? l.size * 0.35 : -l.size * 0.05})`}>
-          <path id={`p-${l.id}`} d={d} fill="none" />
-          <text {...paint} textAnchor="middle"><textPath href={`#p-${l.id}`} startOffset="50%">{l.text}</textPath></text>
-        </g>
+        <text key={key} {...paint} textAnchor="middle" dominantBaseline="central">
+          {lines.map((t, i) => <tspan key={i} x={0} y={(i - (lines.length - 1) / 2) * lh}>{t || " "}</tspan>)}
+        </text>
       );
-    }
-    const lh = l.size * 1.08;
+    };
+    const sd = l.shadowD ?? 6;
     return (
-      <text {...paint} textAnchor="middle" dominantBaseline="central">
-        {lines.map((t, i) => <tspan key={i} x={0} y={(i - (lines.length - 1) / 2) * lh}>{t || " "}</tspan>)}
-      </text>
+      <g>
+        {l.shadow && <g transform={`translate(${sd} ${sd})`}>{draw(l.shadow, l.shadow, "sh")}</g>}
+        {draw(l.color, l.stroke, "m")}
+      </g>
     );
   }
   if (l.kind === "art") {
-    const c = clipartOf(l.art);
-    return <g transform={`translate(${-l.w / 2} ${-l.w / 2}) scale(${l.w / 100})`} color={l.color} fill="currentColor" dangerouslySetInnerHTML={{ __html: c?.svg || "" }} />;
+    const vb = l.vb || [0, 0, 100, 100];
+    const body = l.body ?? clipartOf(l.art)?.svg ?? "";
+    const h = (l.w * vb[3]) / vb[2];
+    return <g transform={`translate(${-l.w / 2} ${-h / 2}) scale(${l.w / vb[2]}) translate(${-vb[0]} ${-vb[1]})`} color={l.full ? undefined : l.color} fill={l.full ? undefined : "currentColor"} dangerouslySetInnerHTML={{ __html: uniqueIds(body, l.id) }} />;
   }
   return <image href={l.src} x={-l.w / 2} y={-l.h / 2} width={l.w} height={l.h} preserveAspectRatio="none" />;
 }
 
-const place = (l: Layer) => `translate(${l.x} ${l.y}) rotate(${l.rot}) scale(${l.s})`;
-const layerLabel = (l: Layer) => (l.kind === "text" ? l.text.split("\n")[0] || "Text" : l.kind === "art" ? clipartOf(l.art)?.label || "Clip art" : l.name || "Picture");
+const place = (l: Pick<Layer, "x" | "y" | "rot" | "s" | "flip">) => `translate(${l.x} ${l.y}) rotate(${l.rot}) scale(${l.flip ? -l.s : l.s} ${l.s})`;
+const layerLabel = (l: Layer) => (l.kind === "text" ? l.text.split("\n")[0] || "Text" : l.kind === "art" ? l.label || clipartOf(l.art)?.label || "Clip art" : l.name || "Picture");
+
+/** A clip art layer from a library icon. */
+const artLayer = (ic: ClipIcon, color: string, w: number, x: number, y: number): LayerInit => ({
+  kind: "art", art: ic.id, color, w, body: ic.body, vb: [ic.left, ic.top, ic.w, ic.h], full: ic.full, label: ic.label, x, y, rot: 0, s: 1,
+});
 
 /* ---------- files ---------- */
 function blobToDataUrl(b: Blob): Promise<string> {
@@ -74,8 +93,8 @@ function blobToDataUrl(b: Blob): Promise<string> {
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => res(i); i.onerror = rej; i.src = src; });
 }
-/** Any picture as a PNG data URL no bigger than 2000px, so saved designs stay a sensible size. */
-async function shrink(img: HTMLImageElement, max = 2000) {
+/** Any picture as a PNG data URL no bigger than 2400px, so saved designs stay a sensible size. */
+async function shrink(img: HTMLImageElement, max = 2400) {
   const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
   const c = document.createElement("canvas");
   c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
@@ -88,12 +107,14 @@ function b64(buf: ArrayBuffer) {
   return btoa(s);
 }
 /** @font-face rules with the font files built in, so the saved SVG looks the same anywhere. */
-async function embeddedFonts(names: string[]) {
-  const out: string[] = [];
-  for (const n of [...new Set(names)]) {
+async function embeddedFonts(list: { font: string; weight: number }[]) {
+  const out: string[] = [], done = new Set<string>();
+  for (const { font, weight } of list) {
+    const key = `${font}:${weight}`;
+    if (done.has(key)) continue;
+    done.add(key);
     try {
-      const f = fontOf(n);
-      const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${f.css}&display=swap`)).text();
+      const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${cssFamily(font, weight)}&display=swap`)).text();
       const block = (css.match(/\/\*\s*latin\s*\*\/\s*(@font-face\s*\{[^}]*\})/) || css.match(/(@font-face\s*\{[^}]*\})\s*$/) || [])[1];
       const url = block?.match(/url\((https:[^)]+)\)/)?.[1];
       if (!block || !url) continue;
@@ -104,9 +125,197 @@ async function embeddedFonts(names: string[]) {
   return out.join("\n");
 }
 
+/* ---------- small pieces ---------- */
+const RAIL: { k: Tool; label: string; icon: ReactNode }[] = [
+  { k: "ideas", label: "Design ideas", icon: <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z" /></svg> },
+  { k: "text", label: "Add text", icon: <svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6" /></svg> },
+  { k: "art", label: "Clip art", icon: <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z" /></svg> },
+  { k: "upload", label: "Upload", icon: <svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" /></svg> },
+  { k: "ai", label: "AI art", icon: <svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" /></svg> },
+];
+
+/** Clip art thumbnail (the icon drawn on its own). */
+function ClipThumb({ ic }: { ic: ClipIcon }) {
+  return <svg viewBox={`${ic.left} ${ic.top} ${ic.w} ${ic.h}`} color="#1b1b1b" fill={ic.full ? undefined : "currentColor"} dangerouslySetInnerHTML={{ __html: uniqueIds(ic.body, "t" + ic.id.replace(/[^\w]/g, "")) }} />;
+}
+
+/** Clip art: search box first, then browse by category. One color art can be recolored; full color art prints digitally. */
+function ClipArtPanel({ onAdd }: { onAdd: (ic: ClipIcon) => void }) {
+  const [q, setQ] = useState("");
+  const [style, setStyle] = useState<"all" | "one" | "full">("all");
+  const [cat, setCat] = useState<string>("");
+  const [sub, setSub] = useState(-1);
+  const [hits, setHits] = useState<ClipHit[] | null>(null);
+  const [icons, setIcons] = useState<Record<string, ClipIcon>>({});
+  const [n, setN] = useState(60);
+  const [busy, setBusy] = useState(false);
+  const [recent, setRecent] = useState<ClipIcon[]>(() => { try { return JSON.parse(localStorage.getItem("idea-lab-recent") || "[]"); } catch { return []; } });
+  const c = CLIP_CATEGORIES.find((x) => x.key === cat);
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      if (!q.trim() && !c) { setHits(null); return; }
+      setBusy(true);
+      const list = q.trim() ? await searchClipart(q, { style }) : sub >= 0 ? await searchClipart(c!.subs[sub].q, { style }) : await searchMany(c!.subs.map((s) => s.q), { style });
+      setHits(list); setN(60); setBusy(false);
+    }, q ? 220 : 0);
+    return () => clearTimeout(t);
+  }, [q, style, cat, sub]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!hits) return;
+    const need = hits.slice(0, n).map((h) => h.id).filter((id) => !icons[id]);
+    if (need.length) getClipIcons(need).then((got) => setIcons((m) => ({ ...m, ...got })));
+  }, [hits, n]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pick = (ic: ClipIcon) => {
+    onAdd(ic);
+    const next = [ic, ...recent.filter((r) => r.id !== ic.id)].slice(0, 16);
+    setRecent(next);
+    try { localStorage.setItem("idea-lab-recent", JSON.stringify(next)); } catch { /* private window */ }
+  };
+  const grid = (list: ClipIcon[]) => (
+    <div className="il-clipgrid">
+      {list.map((ic) => <button key={ic.id} type="button" className="il-clip" title={ic.label} aria-label={ic.label} onClick={() => pick(ic)}><ClipThumb ic={ic} />{ic.full && <span className="il-full" title="Full color">●</span>}</button>)}
+    </div>
+  );
+  return (
+    <div className="il-panel-b">
+      <label className="il-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <input type="search" placeholder="Search clip art: football, eagle, cross…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search clip art" />
+      </label>
+      <div className="il-seg" role="group" aria-label="Art style">
+        {([["all", "All"], ["one", "One color"], ["full", "Full color"]] as const).map(([k, t]) => <button key={k} type="button" className={style === k ? "on" : ""} onClick={() => setStyle(k)}>{t}</button>)}
+      </div>
+      {!q.trim() && !c && (
+        <>
+          {recent.length > 0 && <><div className="lbl">RECENTLY USED</div>{grid(recent.slice(0, 8))}</>}
+          <div className="lbl">BROWSE</div>
+          <div className="il-cats">
+            {CLIP_CATEGORIES.map((k) => <button key={k.key} type="button" className="il-cat" onClick={() => { setCat(k.key); setSub(-1); }}><span className="il-cat-e">{k.emoji}</span>{k.label}</button>)}
+          </div>
+        </>
+      )}
+      {!q.trim() && c && (
+        <>
+          <button type="button" className="il-back" onClick={() => { setCat(""); setSub(-1); }}>← All categories</button>
+          <div className="il-subs">
+            <button type="button" className={"chip" + (sub < 0 ? " on" : "")} onClick={() => setSub(-1)}>All {c.label.toLowerCase()}</button>
+            {c.subs.map((s, i) => <button key={s.label} type="button" className={"chip" + (sub === i ? " on" : "")} onClick={() => setSub(i)}>{s.label}</button>)}
+          </div>
+        </>
+      )}
+      {hits && (
+        <>
+          <div className="faint il-count">{busy ? "Searching…" : hits.length ? `${hits.length >= 400 ? "400+" : hits.length} results${q ? ` for “${q.trim()}”` : ""}` : `Nothing found${q ? ` for “${q.trim()}”` : ""}. Try a simpler word (“dog” instead of “bulldog”).`}</div>
+          {grid(hits.slice(0, n).map((h) => icons[h.id]).filter(Boolean))}
+          {hits.length > n && <button type="button" className="btn sm" style={{ alignSelf: "center" }} onClick={() => setN(n + 60)}>Show more</button>}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Font browser: search, shirt styles, every Google font; each name shown in its own font (and the customer's own words). */
+function FontPicker({ value, sample, onPick }: { value: string; sample: string; onPick: (font: string, weight: number) => void }) {
+  const [list, setList] = useState<WebFont[]>([]);
+  const [q, setQ] = useState("");
+  const [style, setStyle] = useState("popular");
+  const [n, setN] = useState(60);
+  useEffect(() => { loadFontList().then(setList); }, []);
+  const byName = useMemo(() => new Map(list.map((f) => [f.f, f])), [list]);
+  const GCATS: Record<string, string> = { sans: "Sans Serif", serif: "Serif", display: "Display", hand: "Handwriting", mono: "Monospace" };
+  const shown = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (t) return list.filter((f) => f.f.toLowerCase().includes(t));
+    if (style.startsWith("g:")) return list.filter((f) => f.c === GCATS[style.slice(2)]);
+    if (style === "all") return list;
+    const st = FONT_STYLES.find((s) => s.key === style);
+    return st ? [...new Set(st.fonts)].map((nm) => byName.get(nm)).filter(Boolean) as WebFont[] : list;
+  }, [q, style, list, byName]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setN(60), [q, style]);
+  const text = (sample || "").split("\n")[0].slice(0, 22);
+  return (
+    <div className="il-fonts">
+      <label className="il-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <input type="search" placeholder={`Search ${list.length > 100 ? list.length.toLocaleString() + " " : ""}fonts`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search fonts" />
+      </label>
+      {!q && (
+        <div className="il-subs">
+          {FONT_STYLES.map((s) => <button key={s.key} type="button" className={"chip" + (style === s.key ? " on" : "")} onClick={() => setStyle(s.key)}>{s.label}</button>)}
+          {list.length > 100 && (<>
+            <button type="button" className={"chip" + (style === "g:display" ? " on" : "")} onClick={() => setStyle("g:display")}>All display</button>
+            <button type="button" className={"chip" + (style === "g:hand" ? " on" : "")} onClick={() => setStyle("g:hand")}>All handwriting</button>
+            <button type="button" className={"chip" + (style === "all" ? " on" : "")} onClick={() => setStyle("all")}>Every font</button>
+          </>)}
+        </div>
+      )}
+      <div className="il-fontlist">
+        {shown.slice(0, n).map((f) => <FontRow key={f.f} f={f} on={f.f === value} text={text} onPick={() => onPick(f.f, pickWeight(f, FONT_STYLES[1].fonts.includes(f.f) || f.c === "Display" || f.c === "Handwriting" ? 400 : 700))} />)}
+        {shown.length > n && <button type="button" className="btn sm" onClick={() => setN(n + 80)}>Show more fonts</button>}
+        {!shown.length && <div className="faint" style={{ fontSize: 12, padding: 8 }}>No fonts match.</div>}
+      </div>
+    </div>
+  );
+}
+function FontRow({ f, on, text, onPick }: { f: WebFont; on: boolean; text: string; onPick: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const w = pickWeight(f, 400);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { previewFont(f.f, w); io.disconnect(); } });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [f.f, w]);
+  return (
+    <button ref={ref} type="button" className={"il-font" + (on ? " on" : "")} onClick={onPick} title={f.f}>
+      <span className="il-font-s" style={{ fontFamily: `'${f.f}'`, fontWeight: w }}>{text || f.f}</span>
+      {text && <span className="il-font-n">{f.f}</span>}
+    </button>
+  );
+}
+
+/** Template card: the layout drawn small, clip art filled in once it loads. */
+function TemplateCard({ t, onUse }: { t: Template; onUse: () => void }) {
+  const [art, setArt] = useState<Record<number, ClipIcon | null>>({});
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const io = new IntersectionObserver(async (es) => {
+      if (!es.some((e) => e.isIntersecting)) return;
+      io.disconnect();
+      const out: Record<number, ClipIcon | null> = {};
+      await Promise.all(t.layers.map(async (l, i) => { if (l.kind === "art") out[i] = await firstIcon(l.art); }));
+      setArt(out);
+      t.layers.forEach((l) => { if (l.kind === "text") void loadFont(l.font, l.weight ?? fontOf(l.font).weight); });
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [t]);
+  return (
+    <button ref={ref} type="button" className="il-tpl" onClick={onUse}>
+      <svg viewBox={`0 60 ${W} ${H - 160}`}>
+        {t.layers.map((l, i) => {
+          if (l.kind === "text") {
+            const L = { id: `t${t.key}${i}`, kind: "text", text: l.text, font: l.font, weight: l.weight, size: l.size, color: l.color || "#111111", stroke: l.stroke || "", strokeW: l.strokeW || 0, spacing: l.spacing || 0, arc: l.arc || 0, x: l.x ?? W / 2, y: l.y, rot: l.rot || 0, s: 1 } as Layer;
+            return <g key={i} transform={place(L)}><Inner l={L} /></g>;
+          }
+          const ic = art[i];
+          if (!ic) return null;
+          const L = { ...artLayer(ic, l.color || "#111111", l.w, l.x ?? W / 2, l.y), rot: l.rot || 0, id: `t${t.key}${i}` } as Layer;
+          return <g key={i} transform={place(L)}><Inner l={L} /></g>;
+        })}
+      </svg>
+      <span>{t.label}</span>
+    </button>
+  );
+}
+
 /**
- * The shirt designer: text, clip art, pictures and templates on a 12" x 14" print area.
- * Saving gives back an SVG (the art, fonts built in), a PNG (for mockups and previews) and the editable layers.
+ * The Idea Lab: text, clip art, pictures and design ideas on the shirt's print area.
+ * Saving gives back an SVG (the art, fonts built in), a PNG (for mockups and previews), the editable layers and where it sits.
  */
 export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClose, saveLabel = "Save design" }: {
   start?: { doc?: DesignDoc | null; imageUrl?: string; name?: string; /** where a picture sits now (artboard units: center + width) */ at?: { x: number; y: number; w: number } };
@@ -120,35 +329,35 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const [sel, setSel] = useState("");
   const [name, setName] = useState(start?.name || "");
   const [bg, setBg] = useState(shirt?.hex || SHIRT_BG[0].hex);
-  // with a shirt photo, show some of the shirt around the print area
-  const VB = shirt ? { x: -170, y: -250, w: 940, h: 1080 } : { x: 0, y: 0, w: W, h: H };
-  const [tool, setTool] = useState<Tool>(start?.doc || start?.imageUrl ? "text" : "templates");
+  const [tool, setTool] = useState<Tool | "">(start?.doc || start?.imageUrl ? "" : "ideas");
+  const [tplCat, setTplCat] = useState(TEMPLATE_CATS[0]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [guide, setGuide] = useState(false);
+  const [fontOpen, setFontOpen] = useState(false);
+  const [credits, setCredits] = useState<ClipSet[]>([]);
+  const [fonts, setFonts] = useState<WebFont[]>([]);
   const [, setFontTick] = useState(0);
+  // with a shirt photo, show some of the shirt around the print area
+  const VB = shirt ? { x: -170, y: -250, w: 940, h: 1080 } : { x: 0, y: 0, w: W, h: H };
   const past = useRef<Layer[][]>([]), future = useRef<Layer[][]>([]), lastKey = useRef({ k: "", t: 0 });
   const svgRef = useRef<SVGSVGElement>(null), contentRef = useRef<SVGGElement>(null);
   const innerRefs = useRef<Record<string, SVGGElement | null>>({});
   const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const [all, setAll] = useState<{ w: number; h: number } | null>(null);
+  const [all, setAll] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [vs, setVs] = useState(1); // screen px per artboard unit
   const drag = useRef<{ mode: "move" | "size" | "turn"; id: string; px: number; py: number; l0: Layer; snap: Layer[]; moved: boolean } | null>(null);
 
-  // fonts: load the stylesheet once, redraw when fonts arrive (curved text is measured with them)
+  useEffect(() => { clipCredits().then(setCredits); loadFontList().then(setFonts); }, []);
+  // fonts: load every font in use; redraw when they arrive (curved text is measured with them)
+  const fontKey = layers.filter((l) => l.kind === "text").map((l) => (l.kind === "text" ? `${l.font}:${weightOf(l)}` : "")).join("|");
   useEffect(() => {
-    if (!document.getElementById("sd-fonts")) {
-      const ln = document.createElement("link");
-      ln.id = "sd-fonts"; ln.rel = "stylesheet"; ln.href = FONTS_CSS_URL;
-      document.head.appendChild(ln);
-    }
-    const bump = () => setFontTick((t) => t + 1);
-    document.fonts?.addEventListener?.("loadingdone", bump);
-    FONTS.forEach((f) => document.fonts?.load?.(`${f.weight} 40px '${f.name}'`).then(bump).catch(() => {}));
-    return () => document.fonts?.removeEventListener?.("loadingdone", bump);
-  }, []);
+    let live = true;
+    layers.forEach((l) => { if (l.kind === "text") loadFont(l.font, weightOf(l)).then(() => { if (live) setFontTick((t) => t + 1); }); });
+    return () => { live = false; };
+  }, [fontKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // starting from an existing logo (no saved layers): it comes in as a picture layer
+  // starting from an existing logo (no saved layers): it comes in as a picture layer, where it sits on the shirt
   useEffect(() => {
     if (!start?.imageUrl || start?.doc) return;
     (async () => {
@@ -157,7 +366,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
         const s = await shrink(img);
         const at = start.at, fit = at ? at.w / s.w : Math.min(440 / s.w, 300 / s.h);
         setLayersRaw((ls) => [...ls, { id: uidOf(), kind: "img", src: s.url, w: s.w * fit, h: s.h * fit, x: at ? at.x : W / 2, y: at ? at.y : 230, rot: 0, s: 1, name: start.name || "Logo" }]);
-      } catch { setMsg("Couldn't load that logo into the designer."); }
+      } catch { setMsg("Couldn't load that logo into the Idea Lab."); }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -166,20 +375,21 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     const ro = new ResizeObserver(() => setVs(el.clientWidth / VB.w || 1));
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // measure the selected layer (its own box) and the whole design (for the size readout)
+  // measure the selected layer (its own box) and the whole design (size readout, print-area check)
   useLayoutEffect(() => {
     const g = sel ? innerRefs.current[sel] : null;
     let b: { x: number; y: number; w: number; h: number } | null = null;
     try { if (g) { const r = g.getBBox(); b = { x: r.x, y: r.y, w: r.width, h: r.height }; } } catch { b = null; }
     if (JSON.stringify(b) !== JSON.stringify(box)) setBox(b);
-    let a: { w: number; h: number } | null = null;
-    try { const r = contentRef.current?.getBBox(); if (r && r.width) a = { w: Math.round(r.width), h: Math.round(r.height) }; } catch { a = null; }
+    let a: { x: number; y: number; w: number; h: number } | null = null;
+    try { const r = contentRef.current?.getBBox(); if (r && r.width) a = { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; } catch { a = null; }
     if (JSON.stringify(a) !== JSON.stringify(all)) setAll(a);
   });
 
   const cur = layers.find((l) => l.id === sel) || null;
+  useEffect(() => { if (!cur || cur.kind !== "text") setFontOpen(false); }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Change the layers and remember the step for Undo (typing into one field counts as one step). */
   const commit = (next: Layer[], key = "") => {
     const now = Date.now();
@@ -193,17 +403,15 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const redo = () => { const f = future.current.pop(); if (!f) return; past.current.push(layers); setLayersRaw(f); };
   const add = (l: LayerInit) => { const id = uidOf(); commit([...layers, { ...l, id } as Layer]); setSel(id); };
   const remove = (id: string) => { commit(layers.filter((l) => l.id !== id)); setSel(""); };
-  const duplicate = (id: string) => { const l = layers.find((x) => x.id === id); if (!l) return; const n = { ...l, id: uidOf(), x: l.x + 20, y: l.y + 20 } as Layer; commit([...layers, n]); setSel(n.id); };
+  const duplicate = (id: string) => { const l = layers.find((x) => x.id === id); if (!l) return; const n = { ...l, id: uidOf(), x: l.x + 20, y: l.y + 20, lock: false } as Layer; commit([...layers, n]); setSel(n.id); };
   const move = (id: string, dir: 1 | -1) => {
     const i = layers.findIndex((l) => l.id === id), j = i + dir;
     if (i < 0 || j < 0 || j >= layers.length) return;
     const n = [...layers]; [n[i], n[j]] = [n[j], n[i]]; commit(n);
   };
-  const nextY = () => {
-    // new things go under what's already there
-    const b = all && contentRef.current ? contentRef.current.getBBox() : null;
-    return b && b.width ? Math.min(H - 60, b.y + b.height + 60) : 220;
-  };
+  const nextY = () => (all ? Math.min(H - 60, all.y + all.h + 60) : 220);
+  const dark = deltaE(bg, "#111111") < 30;
+  const ink = dark ? "#FFFFFF" : "#111111";
 
   // keyboard: delete, nudge, undo/redo, duplicate
   useEffect(() => {
@@ -216,6 +424,8 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
       if (!cur) return;
       if (mod && e.key.toLowerCase() === "d") { e.preventDefault(); duplicate(cur.id); return; }
       if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); remove(cur.id); return; }
+      if (e.key === "Escape") { setSel(""); return; }
+      if (cur.lock) return;
       const n = e.shiftKey ? 10 : 2;
       const d = { ArrowLeft: [-n, 0], ArrowRight: [n, 0], ArrowUp: [0, -n], ArrowDown: [0, n] }[e.key];
       if (d) { e.preventDefault(); edit(cur.id, { x: cur.x + d[0], y: cur.y + d[1] }, "nudge"); }
@@ -232,6 +442,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const begin = (e: RPointerEvent, mode: "move" | "size" | "turn", l: Layer) => {
     e.stopPropagation(); e.preventDefault();
     setSel(l.id);
+    if (l.lock) return;
     svgRef.current?.setPointerCapture?.(e.pointerId);
     const p = toPt(e);
     drag.current = { mode, id: l.id, px: p.x, py: p.y, l0: l, snap: layers, moved: false };
@@ -242,7 +453,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     let patch: Partial<Layer> = {};
     if (d.mode === "move") {
       let x = l0.x + p.x - d.px; const y = l0.y + p.y - d.py;
-      const near = Math.abs(x - W / 2) < 8 / vs * 1.5;
+      const near = Math.abs(x - W / 2) < 12 / vs;
       if (near) x = W / 2;
       setGuide(near);
       patch = { x, y };
@@ -252,7 +463,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     } else {
       let a = (Math.atan2(p.y - l0.y, p.x - l0.x) * 180) / Math.PI + 90;
       a = ((a + 540) % 360) - 180;
-      for (const snap of [-180, -90, 0, 90, 180]) if (Math.abs(a - snap) < 4) a = snap;
+      for (const snap of [-180, -90, -45, 0, 45, 90, 180]) if (Math.abs(a - snap) < 4) a = snap;
       patch = { rot: Math.round(a) };
     }
     d.moved = true;
@@ -264,8 +475,12 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   };
 
   /* ---------- adding things ---------- */
-  const addText = (text: string, font: string, size: number) => add({ kind: "text", text, font, size, color: bg.toLowerCase() === "#1b1b1b" || deltaE(bg, "#111111") < 25 ? "#FFFFFF" : "#111111", stroke: "", strokeW: 0, spacing: 0, arc: 0, x: W / 2, y: nextY(), rot: 0, s: 1 });
-  const addArt = (key: string) => add({ kind: "art", art: key, color: deltaE(bg, "#111111") < 25 ? "#FFFFFF" : "#111111", w: 140, x: W / 2, y: nextY(), rot: 0, s: 1 });
+  const addText = (text: string, font: string, size: number, weight?: number) => {
+    add({ kind: "text", text, font, weight, size, color: ink, stroke: "", strokeW: 0, spacing: 0, arc: 0, x: W / 2, y: nextY(), rot: 0, s: 1 });
+    setTool(""); setFontOpen(false);
+    setTimeout(() => { const el = document.getElementById("il-text") as HTMLTextAreaElement | null; el?.focus(); el?.select(); }, 30);
+  };
+  const addArt = (ic: ClipIcon) => { add(artLayer(ic, ink, 160, W / 2, nextY())); };
   const addPicture = async (src: string, nm: string, knock = false) => {
     try {
       const img = await loadImg(src);
@@ -283,31 +498,53 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     setMsg("");
     let file: File | null = f;
     if (!/^image\/(png|jpe?g|gif|webp|svg\+xml)$/i.test(f.type)) file = await makePreview(f);
-    if (!file) return setMsg("That file type can't go in the designer. Try a PNG, JPG or SVG.");
+    if (!file) return setMsg("That file type can't go in the Idea Lab. Try a PNG, JPG, SVG or PDF.");
     await addPicture(await blobToDataUrl(file), f.name.replace(/\.[^.]+$/, ""), /jpe?g/i.test(file.type));
   };
   const addLogo = async (lg: { name: string; url: string }) => {
     try { const b = await (await fetch(lg.url)).blob(); await addPicture(await blobToDataUrl(b), lg.name, /jpe?g/i.test(b.type)); }
     catch { setMsg("Couldn't load that logo."); }
   };
-  const applyTemplate = (key: string) => {
-    const t = TEMPLATES.find((x) => x.key === key); if (!t) return;
-    commit(t.layers.map((l) => ({ ...l, id: uidOf() } as Layer)));
-    setSel("");
-    setMsg(layers.length ? "Template added in place of your design. Undo brings yours back." : "");
+  const applyTemplate = async (t: Template) => {
+    const out: Layer[] = [];
+    for (const l of t.layers) {
+      if (l.kind === "text") {
+        out.push({ id: uidOf(), kind: "text", text: l.text, font: l.font, weight: l.weight, size: l.size, color: l.color || "#111111", stroke: l.stroke || "", strokeW: l.strokeW || 0, spacing: l.spacing || 0, arc: l.arc || 0, x: l.x ?? W / 2, y: l.y, rot: l.rot || 0, s: 1 });
+      } else {
+        const ic = await firstIcon(l.art);
+        if (ic) out.push({ ...artLayer(ic, l.color || "#111111", l.w, l.x ?? W / 2, l.y), rot: l.rot || 0, id: uidOf() } as Layer);
+      }
+    }
+    // dark shirts: black ink becomes white so the idea shows up
+    if (dark) out.forEach((l) => { if ((l.kind === "text" || l.kind === "art") && deltaE(l.color, bg) < 25) l.color = "#FFFFFF"; });
+    commit(out);
+    setSel(""); setTool("");
+    setMsg(layers.length ? "Design idea added in place of your design. Undo brings yours back." : "Click any words to change them.");
   };
 
-  /* ---------- colors in the design ---------- */
+  /* ---------- checks: colors, small text, outside the print area, blurry pictures ---------- */
   const used = useMemo(() => {
     const hex = new Set<string>(); let pictures = false;
     layers.filter((l) => !l.hidden).forEach((l) => {
-      if (l.kind === "text") { hex.add(l.color.toUpperCase()); if (l.strokeW && l.stroke) hex.add(l.stroke.toUpperCase()); }
-      else if (l.kind === "art") hex.add(l.color.toUpperCase());
+      if (l.kind === "text") { hex.add(l.color.toUpperCase()); if (l.strokeW && l.stroke) hex.add(l.stroke.toUpperCase()); if (l.shadow) hex.add(l.shadow.toUpperCase()); }
+      else if (l.kind === "art") { if (l.full) pictures = true; else hex.add(l.color.toUpperCase()); }
       else pictures = true;
     });
     return { hex: [...hex], pictures };
   }, [layers]);
-  const lowContrast = cur && cur.kind !== "img" && deltaE(bg, cur.color) < 12;
+  const outside = !!all && (all.x < -2 || all.y < -2 || all.x + all.w > W + 2 || all.y + all.h > H + 2);
+  const checks: string[] = [];
+  if (cur && cur.kind !== "img" && !(cur.kind === "art" && cur.full) && deltaE(bg, cur.color) < 12) checks.push("This color is close to the shirt color and may not show up.");
+  if (cur?.kind === "text" && box && (box.h * cur.s) / UNITS_PER_IN / Math.max(1, cur.text.split("\n").length) < 0.3) checks.push("This text is very small (under ⅓\" tall) and may not print clearly.");
+  if (cur?.kind === "img" && box) {
+    const src = layers.find((l) => l.id === cur.id);
+    if (src && src.kind === "img") {
+      const im = new Image(); im.src = src.src;
+      const dpi = im.naturalWidth ? im.naturalWidth / ((box.w * cur.s) / UNITS_PER_IN) : 300;
+      if (dpi < 150) checks.push(`This picture is low resolution at this size (about ${Math.round(dpi)} dpi) and may print blurry.`);
+    }
+  }
+  if (outside) checks.push("Part of the design is outside the print area and won't print.");
 
   /* ---------- saving ---------- */
   async function save() {
@@ -317,11 +554,11 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     try {
       const g = contentRef.current!;
       const r = g.getBBox();
-      const pad = 4 + Math.max(0, ...layers.map((l) => (l.kind === "text" ? l.strokeW * l.s : 0)));
+      const pad = 4 + Math.max(0, ...layers.map((l) => (l.kind === "text" ? (l.strokeW + (l.shadow ? l.shadowD ?? 6 : 0)) * l.s : 0)));
       const vb = { x: Math.floor(r.x - pad), y: Math.floor(r.y - pad), w: Math.ceil(r.width + pad * 2), h: Math.ceil(r.height + pad * 2) };
-      const fonts = await embeddedFonts(layers.filter((l) => l.kind === "text" && !l.hidden).map((l) => (l.kind === "text" ? l.font : "")));
+      const fontsCss = await embeddedFonts(layers.filter((l) => l.kind === "text" && !l.hidden).map((l) => (l.kind === "text" ? { font: l.font, weight: weightOf(l) } : { font: "", weight: 400 })));
       const inner = new XMLSerializer().serializeToString(g);
-      const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${(vb.w / UNITS_PER_IN).toFixed(2)}in" height="${(vb.h / UNITS_PER_IN).toFixed(2)}in"><defs><style>${fonts}</style></defs>${inner}</svg>`;
+      const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h}" width="${(vb.w / UNITS_PER_IN).toFixed(2)}in" height="${(vb.h / UNITS_PER_IN).toFixed(2)}in"><defs><style>${fontsCss}</style></defs>${inner}</svg>`;
       // PNG: 300 dpi, at most 2400px on the long side (mockups and previews)
       const k = Math.min(300 / UNITS_PER_IN, 2400 / Math.max(vb.w, vb.h));
       const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
@@ -341,7 +578,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
         box: vb,
         name: name.trim() || "Custom design",
         colors: used.pictures ? Math.max(used.hex.length, 4) : Math.max(1, used.hex.length),
-        inks: inkList.join(", "),
+        inks: inkList.join(", ") + (used.pictures ? (inkList.length ? ", " : "") + "full-color art" : ""),
       };
       const err = await onSave(out);
       if (err) setMsg(err);
@@ -350,22 +587,23 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   }
 
   /* ---------- panels ---------- */
-  const swatches = (value: string, pick: (hex: string) => void, key: string) => (
+  const swatches = (value: string, pick: (hex: string) => void) => (
     <div className="sd-inks">
-      {INKS.map(([n, h]) => <button key={n} type="button" title={n} aria-label={n} className={"sd-ink" + (value.toLowerCase() === h.toLowerCase() ? " on" : "")} style={{ background: h }} onClick={() => pick(h)} />)}
-      <label className="sd-ink custom" title="Any color"><input type="color" value={value || "#000000"} onChange={(e) => pick(e.target.value.toUpperCase())} data-key={key} />+</label>
+      {INKS.map(([n, h]) => <button key={n} type="button" title={n} aria-label={n} className={"sd-ink" + ((value || "").toLowerCase() === h.toLowerCase() ? " on" : "")} style={{ background: h }} onClick={() => pick(h)} />)}
+      <label className="sd-ink custom" title="Any color (custom ink)"><input type="color" value={value || "#000000"} onChange={(e) => pick(e.target.value.toUpperCase())} />+</label>
     </div>
   );
-  const sizeIn = (l: Layer) => {
+  const sizeOf = (l: Layer) => {
     const g = innerRefs.current[l.id];
-    try { const r = g?.getBBox(); if (r) return `${((r.width * l.s) / UNITS_PER_IN).toFixed(1)}" × ${((r.height * l.s) / UNITS_PER_IN).toFixed(1)}"`; } catch { /* not drawn yet */ }
-    return "";
+    try { const r = g?.getBBox(); if (r) return { w: (r.width * l.s) / UNITS_PER_IN, h: (r.height * l.s) / UNITS_PER_IN, bw: r.width }; } catch { /* not drawn yet */ }
+    return null;
   };
-
   const hs = (l: Layer) => 9 / (vs * l.s); // handle size in the layer's own units, ~9 screen px
+  const curFont = cur?.kind === "text" ? fonts.find((f) => f.f === cur.font) : undefined;
+  const panelTitle: Record<Tool, string> = { ideas: "Design ideas", text: "Add text", art: "Clip art", upload: "Upload a picture", ai: "AI art" };
 
   return (
-    <div className="sd">
+    <div className="sd il">
       <div className="sd-top">
         <input className="sd-name" type="text" placeholder="Name this design" value={name} onChange={(e) => setName(e.target.value)} aria-label="Design name" />
         <div className="row" style={{ gap: 4 }}>
@@ -376,47 +614,41 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
           <span className="faint">Shirt</span>
           {SHIRT_BG.map((s) => <button key={s.hex} type="button" title={s.name} aria-label={s.name} className={"sd-shirt" + (bg === s.hex ? " on" : "")} style={{ background: s.hex }} onClick={() => setBg(s.hex)} />)}
         </div>}
+        <span className="il-inkchip" title="Screen printing prices by the number of ink colors">{used.hex.length ? `${used.hex.length} ink color${used.hex.length === 1 ? "" : "s"}` : "No ink colors yet"}{used.pictures ? " + full color" : ""}</span>
         <span className="spacer" />
         {onClose && <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>}
         <button type="button" className="btn primary" disabled={busy} onClick={save}>{busy ? "Saving…" : saveLabel}</button>
       </div>
       {msg && <div className="banner" style={{ margin: "0 0 10px" }}>{msg}</div>}
 
-      <div className="sd-body">
-        <aside className="sd-tools panel">
-          <div className="sd-tabs">
-            {([["templates", "Templates"], ["text", "Text"], ["art", "Clip art"], ["upload", logos.length ? "Pictures & logos" : "Pictures"]] as [Tool, string][]).map(([k, t]) => (
-              <button key={k} type="button" className={"sd-tab" + (tool === k ? " on" : "")} onClick={() => setTool(k)}>{t}</button>
-            ))}
-          </div>
-          <div className="sd-tool-b">
-            {tool === "text" && (
-              <>
-                <button type="button" className="sd-addtext big" onClick={() => addText("YOUR TEXT", "Anton", 90)}>Add a heading</button>
-                <button type="button" className="sd-addtext mid" onClick={() => addText("Add a subheading", "Oswald", 46)}>Add a subheading</button>
-                <button type="button" className="sd-addtext small" onClick={() => addText("Add small text", "Oswald", 28)}>Add small text</button>
-                <div className="lbl" style={{ marginTop: 8 }}>OR START WITH A FONT</div>
-                <div className="sd-fontgrid">
-                  {FONTS.map((f) => <button key={f.name} type="button" className="sd-font" style={{ fontFamily: `'${f.name}'`, fontWeight: f.weight }} onClick={() => addText(f.group === "Script" ? "Your Text" : "YOUR TEXT", f.name, 80)}>{f.name}</button>)}
-                </div>
-              </>
-            )}
-            {tool === "art" && (["Icons", "Sports", "Shapes"] as const).map((grp) => (
-              <div key={grp}>
-                <div className="lbl">{grp.toUpperCase()}</div>
-                <div className="sd-artgrid">
-                  {CLIPART.filter((c) => c.group === grp).map((c) => (
-                    <button key={c.key} type="button" className="sd-art" title={c.label} aria-label={c.label} onClick={() => addArt(c.key)}>
-                      <svg viewBox="0 0 100 100" color="#1b1b1b" fill="currentColor" dangerouslySetInnerHTML={{ __html: c.svg }} />
-                    </button>
-                  ))}
-                </div>
+      <div className={"il-body" + (tool ? " open" : "")}>
+        <nav className="il-rail" aria-label="Idea Lab tools">
+          {RAIL.map((r) => <button key={r.k} type="button" className={"il-rail-b" + (tool === r.k ? " on" : "")} onClick={() => setTool(tool === r.k ? "" : r.k)} aria-pressed={tool === r.k}>{r.icon}<span>{r.label}</span></button>)}
+        </nav>
+        {tool && (
+          <aside className="il-panel panel">
+            <div className="il-panel-h"><b>{panelTitle[tool]}</b><button type="button" className="btn icon ghost" aria-label="Close" onClick={() => setTool("")}>✕</button></div>
+            {tool === "ideas" && (
+              <div className="il-panel-b">
+                <div className="il-subs">{TEMPLATE_CATS.map((c) => <button key={c} type="button" className={"chip" + (tplCat === c ? " on" : "")} onClick={() => setTplCat(c)}>{c}</button>)}</div>
+                <div className="il-tpls">{TEMPLATES.filter((t) => t.cat === tplCat).map((t) => <TemplateCard key={t.key} t={t} onUse={() => applyTemplate(t)} />)}</div>
+                <p className="faint" style={{ fontSize: 12, margin: 0 }}>Pick an idea, then click any words or art to change them.</p>
               </div>
-            ))}
+            )}
+            {tool === "text" && (
+              <div className="il-panel-b">
+                <button type="button" className="sd-addtext big" onClick={() => addText("YOUR TEXT", "Anton", 90)}>Add a heading</button>
+                <button type="button" className="sd-addtext mid" onClick={() => addText("Add a subheading", "Oswald", 46, 600)}>Add a subheading</button>
+                <button type="button" className="sd-addtext small" onClick={() => addText("Add small text", "Oswald", 28, 500)}>Add small text</button>
+                <div className="lbl" style={{ marginTop: 6 }}>OR START WITH A FONT</div>
+                <FontPicker value="" sample="" onPick={(f, w) => addText(FONT_STYLES[3].fonts.includes(f) ? "Your Text" : "YOUR TEXT", f, 80, w)} />
+              </div>
+            )}
+            {tool === "art" && <ClipArtPanel onAdd={addArt} />}
             {tool === "upload" && (
-              <>
-                <label className="btn" style={{ cursor: "pointer", justifyContent: "center" }}>Upload a picture<input type="file" hidden accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.heic,.heif,.tif,.tiff,.bmp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadFile(f); }} /></label>
-                <p className="faint" style={{ fontSize: 12, margin: "6px 0 10px" }}>PNG, JPG, SVG or PDF. White backgrounds on JPGs are removed for you.</p>
+              <div className="il-panel-b">
+                <label className="btn primary" style={{ cursor: "pointer", justifyContent: "center" }}>Choose a picture…<input type="file" hidden accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.heic,.heif,.tif,.tiff,.bmp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadFile(f); }} /></label>
+                <p className="faint" style={{ fontSize: 12, margin: 0 }}>PNG, JPG, SVG, PDF or AI. White backgrounds on JPGs are removed for you. For the sharpest print, use a large picture or vector art.</p>
                 {logos.length > 0 && (
                   <>
                     <div className="lbl">YOUR LOGOS</div>
@@ -425,98 +657,136 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
                     </div>
                   </>
                 )}
-              </>
+              </div>
             )}
-            {tool === "templates" && (
-              <>
-                <p className="faint" style={{ fontSize: 12, marginTop: 0 }}>Pick a starting point, then click any words to change them.</p>
-                <div className="sd-tpls">
-                  {TEMPLATES.map((t) => (
-                    <button key={t.key} type="button" className="sd-tpl" onClick={() => applyTemplate(t.key)}>
-                      <svg viewBox={`0 60 ${W} ${H - 180}`}>{t.layers.map((l, i) => <g key={i} transform={place(l as Layer)}><Inner l={{ ...l, id: `t${t.key}${i}` } as Layer} /></g>)}</svg>
-                      <span>{t.label}</span>
-                    </button>
-                  ))}
+            {tool === "ai" && (
+              <div className="il-panel-b">
+                <div className="il-soon">
+                  <b>AI art is coming to the Idea Lab</b>
+                  <span>Describe an idea (“a wolf howling at the moon”) and get shirt-ready art in a few seconds. Words are added as real text so they&apos;re always spelled right.</span>
                 </div>
-              </>
+                <p className="faint" style={{ fontSize: 12, margin: 0 }}>Until then, try Clip art: search “wolf” or “moon”, then add your words with Add text.</p>
+              </div>
             )}
-          </div>
-        </aside>
+          </aside>
+        )}
 
-        <div className="sd-stage">
+        <div className="sd-stage il-stage">
+          {!layers.length && !tool && (
+            <div className="il-empty">
+              <b>What do you want to make?</b>
+              <div className="row" style={{ gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
+                <button type="button" className="btn sm primary" onClick={() => setTool("ideas")}>Start from a design idea</button>
+                <button type="button" className="btn sm" onClick={() => setTool("text")}>Add text</button>
+                <button type="button" className="btn sm" onClick={() => setTool("art")}>Add clip art</button>
+                <button type="button" className="btn sm" onClick={() => setTool("upload")}>Upload a picture</button>
+              </div>
+            </div>
+          )}
           <svg ref={svgRef} className="sd-svg" viewBox={`${VB.x} ${VB.y} ${VB.w} ${VB.h}`} onPointerMove={onMoveEv} onPointerUp={onUpEv} onPointerCancel={onUpEv}
-            style={shirt ? { aspectRatio: `${VB.w} / ${VB.h}`, maxWidth: `min(760px, calc((100vh - 190px) * ${(VB.w / VB.h).toFixed(3)}))`, background: "#fff" } : undefined}
+            style={shirt ? { aspectRatio: `${VB.w} / ${VB.h}`, maxWidth: `min(760px, calc((100vh - 200px) * ${(VB.w / VB.h).toFixed(3)}))`, background: "#fff" } : undefined}
             onPointerDown={(e) => { if (e.target === svgRef.current || (e.target as Element).classList?.contains("sd-bg")) setSel(""); }}>
             {shirt ? (() => {
               const k = W / shirt.area.w;
               return <image className="sd-bg" href={shirt.src} x={-shirt.area.x * k} y={-shirt.area.y * k} width={1000 * k} height={1250 * k} />;
             })() : <rect className="sd-bg" x={0} y={0} width={W} height={H} fill={bg} />}
-            <rect x={1} y={1} width={W - 2} height={H - 2} fill="none" stroke={deltaE(bg, "#111111") < 25 ? "rgba(255,255,255,.3)" : "rgba(0,0,0,.18)"} strokeDasharray="6 6" pointerEvents="none" />
+            <rect x={1} y={1} width={W - 2} height={H - 2} fill="none" stroke={outside ? "#C8102E" : dark ? "rgba(255,255,255,.35)" : "rgba(0,0,0,.2)"} strokeWidth={outside ? 2 : 1} vectorEffect="non-scaling-stroke" strokeDasharray="6 6" pointerEvents="none" />
             <g ref={contentRef}>
               {layers.filter((l) => !l.hidden).map((l) => (
-                <g key={l.id} transform={place(l)} style={{ cursor: "move" }} onPointerDown={(e) => begin(e, "move", l)}
-                  onDoubleClick={() => { if (l.kind === "text") setTimeout(() => document.getElementById("sd-text")?.focus(), 0); }}>
+                <g key={l.id} transform={place(l)} style={{ cursor: l.lock ? "default" : "move" }} onPointerDown={(e) => begin(e, "move", l)}
+                  onDoubleClick={() => { if (l.kind === "text") setTimeout(() => document.getElementById("il-text")?.focus(), 0); }}>
                   <g ref={(el) => { innerRefs.current[l.id] = el; }}><Inner l={l} /></g>
                 </g>
               ))}
             </g>
-            {guide && <line x1={W / 2} y1={0} x2={W / 2} y2={H} stroke="#0A7BA6" strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray="4 4" pointerEvents="none" />}
+            {guide && <line x1={W / 2} y1={VB.y} x2={W / 2} y2={VB.y + VB.h} stroke="#0A7BA6" strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray="4 4" pointerEvents="none" />}
             {cur && box && !cur.hidden && (
-              <g transform={place(cur)}>
-                <rect x={box.x - 3 / cur.s} y={box.y - 3 / cur.s} width={box.w + 6 / cur.s} height={box.h + 6 / cur.s} fill="none" stroke="#0A7BA6" strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" />
-                <line x1={box.x + box.w / 2} y1={box.y - 3 / cur.s} x2={box.x + box.w / 2} y2={box.y - 26 / (vs * cur.s)} stroke="#0A7BA6" strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" />
-                <circle cx={box.x + box.w / 2} cy={box.y - 26 / (vs * cur.s)} r={hs(cur) * 0.8} fill="#fff" stroke="#0A7BA6" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ cursor: "grab" }} onPointerDown={(e) => begin(e, "turn", cur)} />
-                <rect x={box.x + box.w + 3 / cur.s - hs(cur) / 2} y={box.y + box.h + 3 / cur.s - hs(cur) / 2} width={hs(cur)} height={hs(cur)} fill="#fff" stroke="#0A7BA6" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ cursor: "nwse-resize" }} onPointerDown={(e) => begin(e, "size", cur)} />
+              <g transform={place({ ...cur, flip: false })}>
+                <rect x={box.x * (cur.flip ? -1 : 1) - (cur.flip ? box.w : 0) - 3 / cur.s} y={box.y - 3 / cur.s} width={box.w + 6 / cur.s} height={box.h + 6 / cur.s} fill="none" stroke={cur.lock ? "#7A8599" : "#0A7BA6"} strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeDasharray={cur.lock ? "4 3" : undefined} pointerEvents="none" />
+                {!cur.lock && (() => {
+                  const bx = cur.flip ? -box.x - box.w : box.x;
+                  return (<>
+                    <line x1={bx + box.w / 2} y1={box.y - 3 / cur.s} x2={bx + box.w / 2} y2={box.y - 26 / (vs * cur.s)} stroke="#0A7BA6" strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                    <circle cx={bx + box.w / 2} cy={box.y - 26 / (vs * cur.s)} r={hs(cur) * 0.8} fill="#fff" stroke="#0A7BA6" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ cursor: "grab" }} onPointerDown={(e) => begin(e, "turn", cur)} />
+                    <rect x={bx + box.w + 3 / cur.s - hs(cur) / 2} y={box.y + box.h + 3 / cur.s - hs(cur) / 2} width={hs(cur)} height={hs(cur)} fill="#fff" stroke="#0A7BA6" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ cursor: "nwse-resize" }} onPointerDown={(e) => begin(e, "size", cur)} />
+                  </>);
+                })()}
               </g>
             )}
           </svg>
           <div className="sd-under faint">
             {shirt && <><b>{shirt.label}</b> · </>}
-            {all ? <>Design is about {(all.w / UNITS_PER_IN).toFixed(1)}&quot; × {(all.h / UNITS_PER_IN).toFixed(1)}&quot; on a 12&quot; × 14&quot; print area · </> : null}
-            {used.hex.length > 0 && <>{used.hex.length} ink color{used.hex.length === 1 ? "" : "s"}{used.pictures ? " + full-color picture" : ""}</>}
-            {!layers.length && "Pick a template or add text to get started."}
+            {all ? <>Design is about {(all.w / UNITS_PER_IN).toFixed(1)}&quot; × {(all.h / UNITS_PER_IN).toFixed(1)}&quot; on a 12&quot; × 14&quot; print area</> : "12\" × 14\" print area"}
           </div>
+          {credits.some((c) => /BY/.test(c.license)) && layers.some((l) => l.kind === "art" && l.art.startsWith("game-icons:")) && (
+            <div className="faint il-credit">Some clip art by {credits.filter((c) => /BY/.test(c.license)).map((c) => `${c.by} (${c.license})`).join(", ")}.</div>
+          )}
         </div>
 
         <aside className="sd-props panel">
           {cur ? (
             <div className="sd-prop-b">
               <div className="row" style={{ justifyContent: "space-between" }}>
-                <b>{cur.kind === "text" ? "Text" : cur.kind === "art" ? clipartOf(cur.art)?.label || "Clip art" : "Picture"}</b>
-                <span className="faint" style={{ fontSize: 12 }}>{sizeIn(cur)}</span>
+                <b>{cur.kind === "text" ? "Text" : cur.kind === "art" ? cur.label || clipartOf(cur.art)?.label || "Clip art" : "Picture"}</b>
+                <button type="button" className="btn icon ghost" title={cur.lock ? "Unlock" : "Lock in place"} aria-label={cur.lock ? "Unlock" : "Lock"} onClick={() => edit(cur.id, { lock: !cur.lock })}>{cur.lock ? "🔒" : "🔓"}</button>
               </div>
+              {checks.map((c) => <div key={c} className="ink-warn" style={{ margin: 0 }}>{c}</div>)}
               {cur.kind === "text" && (
                 <>
-                  <textarea id="sd-text" rows={Math.min(4, cur.text.split("\n").length + 1)} value={cur.text} onChange={(e) => edit(cur.id, { text: e.target.value }, "text")} aria-label="Text" />
-                  <div className="lbl">FONT</div>
-                  <div className="sd-fontgrid tight">
-                    {FONTS.map((f) => <button key={f.name} type="button" className={"sd-font" + (cur.font === f.name ? " on" : "")} style={{ fontFamily: `'${f.name}'`, fontWeight: f.weight }} onClick={() => edit(cur.id, { font: f.name })}>{f.name}</button>)}
+                  <textarea id="il-text" rows={Math.min(4, cur.text.split("\n").length + 1)} value={cur.text} onChange={(e) => edit(cur.id, { text: e.target.value }, "text")} aria-label="Text" />
+                  <div className="il-fontbtn-row">
+                    <button type="button" className="il-fontbtn" onClick={() => setFontOpen(!fontOpen)} aria-expanded={fontOpen}>
+                      <span style={{ fontFamily: `'${cur.font}'`, fontWeight: weightOf(cur) }}>{cur.font}</span><span className="faint">{fontOpen ? "▴" : "▾"}</span>
+                    </button>
+                    {(hasBold(curFont, pickWeight(curFont, 400)) || weightOf(cur) > pickWeight(curFont, 400)) && (
+                      <button type="button" className={"btn sm" + (weightOf(cur) > pickWeight(curFont, 400) ? " primary" : "")} title="Bold" onClick={() => { const reg = pickWeight(curFont, 400); edit(cur.id, { weight: weightOf(cur) > reg ? reg : boldOf(curFont, reg) }); }}><b>B</b></button>
+                    )}
                   </div>
+                  {fontOpen && <FontPicker value={cur.font} sample={cur.text} onPick={(f, w) => edit(cur.id, { font: f, weight: w })} />}
                 </>
               )}
-              {cur.kind !== "img" && (
+              {cur.kind !== "img" && !(cur.kind === "art" && cur.full) && (
                 <>
                   <div className="lbl">COLOR <span className="faint" style={{ fontWeight: 400 }}>{inkName(cur.color) || cur.color}</span></div>
-                  {swatches(cur.color, (h) => edit(cur.id, { color: h }), "fill")}
-                  {lowContrast && <div className="ink-warn" style={{ margin: 0 }}>This color is close to the shirt color and may not show up.</div>}
+                  {swatches(cur.color, (h) => edit(cur.id, { color: h }))}
                 </>
               )}
+              {cur.kind === "art" && cur.full && <div className="faint" style={{ fontSize: 12 }}>Full-color art prints digitally (DTF). For screen printing, pick a one-color version in Clip art.</div>}
               {cur.kind === "text" && (
                 <>
                   <label className="sd-range">Curve <input type="range" min={-180} max={180} step={5} value={cur.arc} onChange={(e) => edit(cur.id, { arc: +e.target.value }, "arc")} /><span>{cur.arc ? `${cur.arc > 0 ? "arch" : "smile"} ${Math.abs(cur.arc)}°` : "none"}</span></label>
+                  <div className="il-presets">
+                    {([["Straight", 0], ["Arch", 60], ["Big arch", 120], ["Smile", -60]] as [string, number][]).map(([t, v]) => <button key={t} type="button" className={"chip" + (cur.arc === v ? " on" : "")} onClick={() => edit(cur.id, { arc: v })}>{t}</button>)}
+                  </div>
                   {cur.text.includes("\n") && cur.arc !== 0 && <div className="faint" style={{ fontSize: 12 }}>Curves work on one line of text.</div>}
                   <label className="sd-range">Spacing <input type="range" min={-5} max={40} step={1} value={cur.spacing} onChange={(e) => edit(cur.id, { spacing: +e.target.value }, "sp")} /><span>{cur.spacing}</span></label>
                   <label className="sd-range">Outline <input type="range" min={0} max={20} step={1} value={cur.strokeW} onChange={(e) => edit(cur.id, { strokeW: +e.target.value, stroke: cur.stroke || (deltaE(cur.color, "#111111") < 25 ? "#FFFFFF" : "#111111") }, "ow")} /><span>{cur.strokeW || "none"}</span></label>
-                  {cur.strokeW > 0 && (<><div className="lbl">OUTLINE COLOR <span className="faint" style={{ fontWeight: 400 }}>{inkName(cur.stroke) || cur.stroke}</span></div>{swatches(cur.stroke, (h) => edit(cur.id, { stroke: h }), "stroke")}</>)}
+                  {cur.strokeW > 0 && (<><div className="lbl">OUTLINE COLOR <span className="faint" style={{ fontWeight: 400 }}>{inkName(cur.stroke) || cur.stroke}</span></div>{swatches(cur.stroke, (h) => edit(cur.id, { stroke: h }))}</>)}
+                  <label className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={!!cur.shadow} onChange={(e) => edit(cur.id, { shadow: e.target.checked ? (dark ? "#53565A" : "#8A8D8F") : undefined })} /> Drop shadow</label>
+                  {cur.shadow && (<>
+                    <label className="sd-range">Distance <input type="range" min={2} max={20} step={1} value={cur.shadowD ?? 6} onChange={(e) => edit(cur.id, { shadowD: +e.target.value }, "sd")} /><span>{cur.shadowD ?? 6}</span></label>
+                    {swatches(cur.shadow, (h) => edit(cur.id, { shadow: h }))}
+                  </>)}
                 </>
               )}
               {cur.kind === "img" && cur.alt !== undefined && (
                 <label className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={!!cur.knocked} onChange={() => edit(cur.id, { src: cur.alt!, alt: cur.src, knocked: !cur.knocked })} /> Remove the white background</label>
               )}
+              {(() => {
+                const sz = sizeOf(cur);
+                const setW = (inches: number) => { if (!sz || !inches) return; edit(cur.id, { s: Math.max(0.05, (inches * UNITS_PER_IN) / sz.bw) }, "w"); };
+                return (
+                  <div className="il-size">
+                    <label>W <input type="number" min={0.25} max={16} step={0.1} value={sz ? sz.w.toFixed(1) : ""} onChange={(e) => setW(+e.target.value)} aria-label="Width in inches" />&quot;</label>
+                    <label>H <input type="number" min={0.25} max={16} step={0.1} value={sz ? sz.h.toFixed(1) : ""} onChange={(e) => { if (sz) setW((+e.target.value * sz.w) / (sz.h || 1)); }} aria-label="Height in inches" />&quot;</label>
+                    <label>↻ <input type="number" min={-180} max={180} step={1} value={cur.rot} onChange={(e) => edit(cur.id, { rot: Math.max(-180, Math.min(180, +e.target.value || 0)) }, "rot")} aria-label="Rotation in degrees" />°</label>
+                  </div>
+                );
+              })()}
               <label className="sd-range">Size <input type="range" min={0.1} max={4} step={0.01} value={cur.s} onChange={(e) => edit(cur.id, { s: +e.target.value }, "s")} /><span>{Math.round(cur.s * 100)}%</span></label>
-              <label className="sd-range">Turn <input type="range" min={-180} max={180} step={1} value={cur.rot} onChange={(e) => edit(cur.id, { rot: +e.target.value }, "rot")} /><span>{cur.rot}°</span></label>
               <div className="sd-actions">
-                <button type="button" className="btn sm" onClick={() => edit(cur.id, { x: W / 2 })}>Center</button>
+                <button type="button" className="btn sm" onClick={() => edit(cur.id, { x: W / 2 })} title="Center left to right">⇔ Center</button>
+                <button type="button" className="btn sm" onClick={() => edit(cur.id, { flip: !cur.flip })} title="Mirror left to right">⇋ Flip</button>
                 <button type="button" className="btn sm" onClick={() => duplicate(cur.id)}>Duplicate</button>
                 <button type="button" className="btn sm" onClick={() => move(cur.id, 1)} title="Bring forward">Forward</button>
                 <button type="button" className="btn sm" onClick={() => move(cur.id, -1)} title="Send backward">Back</button>
@@ -525,7 +795,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
             </div>
           ) : (
             <div className="sd-prop-b faint" style={{ fontSize: 13 }}>
-              Click anything on the design to change it. Drag to move, the corner square to resize, the circle on top to turn.
+              Click anything on the design to change it. Drag to move, drag the corner square to resize, the circle on top to turn. Arrow keys nudge; Ctrl+Z undoes.
             </div>
           )}
           {layers.length > 0 && (
@@ -534,7 +804,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
               {[...layers].reverse().map((l) => (
                 <div key={l.id} className={"sd-layer" + (l.id === sel ? " on" : "")}>
                   <button type="button" className="sd-layer-n" onClick={() => setSel(l.id)}>
-                    <span className="sd-layer-k">{l.kind === "text" ? "T" : l.kind === "art" ? "★" : "▣"}</span>{layerLabel(l)}
+                    <span className="sd-layer-k">{l.kind === "text" ? "T" : l.kind === "art" ? "★" : "▣"}</span>{layerLabel(l)}{l.lock ? " 🔒" : ""}
                   </button>
                   <button type="button" className="btn icon ghost" title={l.hidden ? "Show" : "Hide"} aria-label={l.hidden ? "Show" : "Hide"} onClick={() => edit(l.id, { hidden: !l.hidden })}>{l.hidden ? "◌" : "◉"}</button>
                 </div>
@@ -546,3 +816,4 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     </div>
   );
 }
+

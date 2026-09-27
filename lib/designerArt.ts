@@ -29,7 +29,8 @@ export const FONTS: Font[] = [
   { name: "Roboto Slab", weight: 700, css: "Roboto+Slab:wght@700", group: "Classic" },
   { name: "Playfair Display", weight: 700, css: "Playfair+Display:wght@700", group: "Classic" },
 ];
-export const fontOf = (name: string) => FONTS.find((f) => f.name === name) || FONTS[0];
+/** A font by family name: the built-in shirt fonts know their weight; any other Google family defaults to regular. */
+export const fontOf = (name: string): Font => FONTS.find((f) => f.name === name) || { name: name || "Anton", weight: 400, css: (name || "Anton").replace(/ /g, "+"), group: "Block" };
 export const FONTS_CSS_URL = `https://fonts.googleapis.com/css2?${FONTS.map((f) => `family=${f.css}`).join("&")}&display=swap`;
 
 /** Sun rays, built once */
@@ -69,47 +70,15 @@ export const CLIPART: { key: string; label: string; group: "Shapes" | "Sports" |
 ];
 export const clipartOf = (key: string) => CLIPART.find((c) => c.key === key);
 
-export type TextLayer = { kind: "text"; text: string; font: string; size: number; color: string; stroke: string; strokeW: number; spacing: number; arc: number };
-export type ArtLayer = { kind: "art"; art: string; color: string; w: number };
+export type TextLayer = { kind: "text"; text: string; font: string; /** font weight (default: the font's own) */ weight?: number; size: number; color: string; stroke: string; strokeW: number; spacing: number; arc: number;
+  /** drop shadow color and distance (artboard units) */ shadow?: string; shadowD?: number };
+/** Clip art: built-in art by key, or library art ("set:name") with its drawing saved in the layer so designs never break. */
+export type ArtLayer = { kind: "art"; art: string; color: string; w: number; body?: string; /** viewBox: left, top, width, height */ vb?: [number, number, number, number]; /** full-color art can't be recolored */ full?: boolean; label?: string };
 export type ImgLayer = { kind: "img"; src: string; w: number; h: number; name?: string; /** the other version (with / without background) */ alt?: string; knocked?: boolean };
-export type Layer = { id: string; x: number; y: number; rot: number; s: number; hidden?: boolean } & (TextLayer | ArtLayer | ImgLayer);
+export type Layer = { id: string; x: number; y: number; rot: number; s: number; hidden?: boolean; /** mirrored left-right */ flip?: boolean; /** can't be moved by accident */ lock?: boolean } & (TextLayer | ArtLayer | ImgLayer);
 /** A layer before it gets its id (keeps the text / clip art / picture fields apart). */
 export type LayerInit = Layer extends infer L ? (L extends Layer ? Omit<L, "id"> : never) : never;
 export type DesignDoc = { v: 1; w: number; h: number; layers: Layer[] };
-
-const T = (text: string, font: string, size: number, y: number, more: Partial<TextLayer> = {}) =>
-  ({ kind: "text" as const, text, font, size, y, x: 300, rot: 0, s: 1, color: "#111111", stroke: "", strokeW: 0, spacing: 0, arc: 0, ...more });
-const A = (art: string, w: number, x: number, y: number, color = "#111111") => ({ kind: "art" as const, art, w, x, y, rot: 0, s: 1, color });
-
-/** Starter layouts on the 600 x 700 artboard. Customers change the words. */
-export const TEMPLATES: { key: string; label: string; layers: LayerInit[] }[] = [
-  { key: "class", label: "Class of", layers: [
-    T("CLASS OF", "Graduate", 60, 170, { arc: 60, color: "#1B2A4A", spacing: 4 }),
-    T("2026", "Anton", 200, 300, { color: "#C8102E" }),
-    A("star", 44, 200, 425, "#1B2A4A"), A("star", 44, 300, 425, "#1B2A4A"), A("star", 44, 400, 425, "#1B2A4A"),
-  ] },
-  { key: "5k", label: "Fun run", layers: [
-    T("ANNUAL", "Oswald", 40, 130, { spacing: 10, color: "#003DA5" }),
-    T("5K FUN RUN", "Anton", 110, 215, { color: "#111111" }),
-    A("line", 380, 300, 290, "#003DA5"),
-    T("SATURDAY · MAY 2, 2026", "Oswald", 30, 330, { spacing: 3, color: "#111111" }),
-  ] },
-  { key: "reunion", label: "Family reunion", layers: [
-    T("The Johnson Family", "Pacifico", 56, 160, { arc: 40, color: "#6F263D" }),
-    A("heart", 110, 300, 275, "#C8102E"),
-    T("REUNION 2026", "Bebas Neue", 96, 395, { spacing: 4, color: "#111111" }),
-  ] },
-  { key: "team", label: "Team", layers: [
-    T("WILDCATS", "Alfa Slab One", 100, 190, { arc: 45, color: "#FFFFFF", stroke: "#003DA5", strokeW: 8 }),
-    T("23", "Graduate", 220, 360, { color: "#003DA5" }),
-    T("EST. 2026", "Oswald", 34, 480, { spacing: 8, color: "#003DA5" }),
-  ] },
-  { key: "business", label: "Business", layers: [
-    T("YOUR BUSINESS", "Archivo Black", 70, 200, { color: "#111111" }),
-    A("line", 400, 300, 250, "#C8102E"),
-    T("EST. 2026", "Oswald", 36, 292, { spacing: 10, color: "#111111" }),
-  ] },
-];
 
 /** Shirt colors to preview the design on while you work. */
 export const SHIRT_BG: { name: string; hex: string }[] = [
