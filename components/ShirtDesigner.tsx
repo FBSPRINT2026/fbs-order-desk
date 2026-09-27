@@ -354,13 +354,23 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const [fonts, setFonts] = useState<WebFont[]>([]);
   const [, setFontTick] = useState(0);
   // with a shirt photo, show some of the shirt around the print area
-  const VB = shirt ? { x: -170, y: -250, w: 940, h: 1080 } : { x: 0, y: 0, w: W, h: H };
+  const BASE = shirt ? { x: -170, y: -250, w: 940, h: 1080 } : { x: 0, y: 0, w: W, h: H };
+  // zoom in on the selection (or the middle) for fine work; the frame keeps its size
+  const [zoom, setZoom] = useState(1);
+  const [focus, setFocus] = useState<{ x: number; y: number }>({ x: W / 2, y: H / 2 });
+  const VB = (() => {
+    if (zoom === 1) return BASE;
+    const w = BASE.w / zoom, h = BASE.h / zoom;
+    const x = Math.max(BASE.x, Math.min(BASE.x + BASE.w - w, focus.x - w / 2)), y = Math.max(BASE.y, Math.min(BASE.y + BASE.h - h, focus.y - h / 2));
+    return { x, y, w, h };
+  })();
   const past = useRef<Layer[][]>([]), future = useRef<Layer[][]>([]), lastKey = useRef({ k: "", t: 0 });
   const svgRef = useRef<SVGSVGElement>(null), contentRef = useRef<SVGGElement>(null);
   const innerRefs = useRef<Record<string, SVGGElement | null>>({});
   const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [all, setAll] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const [vs, setVs] = useState(1); // screen px per artboard unit
+  const [svgW, setSvgW] = useState(600);
+  const vs = svgW / VB.w || 1; // screen px per artboard unit
   const drag = useRef<{ mode: "move" | "size" | "turn"; id: string; px: number; py: number; l0: Layer; snap: Layer[]; moved: boolean; group?: { id: string; x: number; y: number }[]; gcx?: number } | null>(null);
 
   useEffect(() => { clipCredits().then(setCredits); loadFontList().then(setFonts); }, []);
@@ -399,7 +409,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
 
   useEffect(() => {
     const el = svgRef.current; if (!el) return;
-    const ro = new ResizeObserver(() => setVs(el.clientWidth / VB.w || 1));
+    const ro = new ResizeObserver(() => setSvgW(el.clientWidth || 600));
     ro.observe(el);
     return () => ro.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -525,7 +535,10 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     drag.current = { mode, id: l.id, px: p.x, py: p.y, l0: l, snap: layers, moved: false,
       ...(inGroup ? { group: group.filter((g) => !g.lock).map((g) => ({ id: g.id, x: g.x, y: g.y })), gcx: gb ? gb.x + gb.w / 2 : W / 2 } : {}) };
   };
+  const pan = useRef<{ x: number; y: number; f: { x: number; y: number } } | null>(null);
   const onMoveEv = (e: RPointerEvent) => {
+    const pn = pan.current;
+    if (pn) { setFocus({ x: pn.f.x - (e.clientX - pn.x) / vs, y: pn.f.y - (e.clientY - pn.y) / vs }); return; }
     const d = drag.current; if (!d) return;
     const p = toPt(e), l0 = d.l0;
     let patch: Partial<Layer> = {};
@@ -558,6 +571,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     setLayersRaw((ls) => ls.map((l) => (l.id === d.id ? ({ ...l, ...patch } as Layer) : l)));
   };
   const onUpEv = () => {
+    if (pan.current) { pan.current = null; return; }
     const d = drag.current; drag.current = null; setGuide(false);
     if (d?.moved) { past.current.push(d.snap); future.current = []; lastKey.current = { k: "", t: 0 }; }
   };
@@ -828,8 +842,13 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
             </div>
           )}
           <svg ref={svgRef} className="sd-svg" viewBox={`${VB.x} ${VB.y} ${VB.w} ${VB.h}`} onPointerMove={onMoveEv} onPointerUp={onUpEv} onPointerCancel={onUpEv}
-            style={shirt ? { aspectRatio: `${VB.w} / ${VB.h}`, maxWidth: `min(760px, calc((100vh - 200px) * ${(VB.w / VB.h).toFixed(3)}))`, background: "#fff" } : undefined}
-            onPointerDown={(e) => { if (e.target === svgRef.current || (e.target as Element).classList?.contains("sd-bg")) setSel(""); }}>
+            onPointerDown={(e) => {
+              if (!(e.target === svgRef.current || (e.target as Element).classList?.contains("sd-bg"))) return;
+              setSel("");
+              // zoomed in: drag the background to look around
+              if (zoom > 1) { pan.current = { x: e.clientX, y: e.clientY, f: { ...focus } }; svgRef.current?.setPointerCapture?.(e.pointerId); }
+            }}
+            style={{ ...(shirt ? { aspectRatio: `${VB.w} / ${VB.h}`, maxWidth: `min(760px, calc((100vh - 200px) * ${(VB.w / VB.h).toFixed(3)}))`, background: "#fff" } : {}), cursor: zoom > 1 ? "grab" : undefined }}>
             {shirt ? (() => {
               const k = W / shirt.area.w;
               return <image className="sd-bg" href={shirt.src} x={-shirt.area.x * k} y={-shirt.area.y * k} width={1000 * k} height={1250 * k} />;
@@ -875,6 +894,11 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
               </g>
             )}
           </svg>
+          <div className="il-zoom" role="group" aria-label="Zoom">
+            <button type="button" className="btn sm ghost" disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z / 1.5))} aria-label="Zoom out">−</button>
+            <button type="button" className="btn sm ghost" onClick={() => { if (zoom === 1) { const l = cur; setFocus(l ? { x: l.x, y: l.y } : { x: W / 2, y: H / 2 }); } setZoom(1); }} title="Show the whole print area">{Math.round(zoom * 100)}%</button>
+            <button type="button" className="btn sm ghost" disabled={zoom >= 3.3} onClick={() => { if (zoom === 1) setFocus(cur ? { x: cur.x, y: cur.y } : all ? { x: all.x + all.w / 2, y: all.y + all.h / 2 } : { x: W / 2, y: H / 2 }); setZoom((z) => Math.min(3.375, z * 1.5)); }} aria-label="Zoom in">+</button>
+          </div>
           <div className="sd-under faint">
             {shirt && <><b>{shirt.label}</b> · </>}
             {all ? <>Design is about {(all.w / UNITS_PER_IN).toFixed(1)}&quot; × {(all.h / UNITS_PER_IN).toFixed(1)}&quot; on a 12&quot; × 14&quot; print area</> : "12\" × 14\" print area"}

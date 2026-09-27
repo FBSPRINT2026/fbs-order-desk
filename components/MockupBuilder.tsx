@@ -925,7 +925,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {/* Idea Lab: design on this side of the shirt (sits above the Imprints panel) */}
           <button type="button" className={"mk-lab" + (ready ? "" : " mk-off")} disabled={!ready} onClick={() => openLab(curTab)}>
             <span className="mk-lab-ic" aria-hidden="true">✦</span>
-            <span><b>Add graphics, text or clip art to the {curTab === "sleeve" ? "sleeve" : curTab}</b><span>Opens the {curTab === "sleeve" ? "sleeve" : curTab} of this shirt in the Idea Lab. What you make comes right back here.</span></span>
+            <span><b>Add clip art, text, names &amp; numbers to the {curTab === "sleeve" ? "sleeve" : curTab}</b><span>Opens the {curTab === "sleeve" ? "sleeve" : curTab} of this shirt in the Idea Lab: 20,000+ clip art pieces, 1,800 fonts and 60 design ideas. What you make comes right back here.</span></span>
           </button>
           <section className={"panel" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
             <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button><button className="btn sm" type="button" title="Type words right onto the shirt" onClick={() => {
