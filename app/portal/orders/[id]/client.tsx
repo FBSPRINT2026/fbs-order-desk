@@ -4,6 +4,23 @@ import { useRouter } from "next/navigation";
 import type { Message, Proof } from "@/lib/pricing";
 import { fmtStamp } from "@/lib/format";
 import { approveQuote, customerMessage, decideProof, requestQuoteChanges, startCheckout } from "../../actions";
+import { reorderRequest } from "../../request-actions";
+
+/** "Order this again": copies this order into a new request the customer can change and send in. */
+export function ReorderButton({ orderId, disabled }: { orderId: string; disabled: boolean }) {
+  const router = useRouter();
+  const [err, setErr] = useState("");
+  const [pending, start] = useTransition();
+  return (
+    <>
+      <button className="btn" type="button" disabled={disabled || pending} title={disabled ? PREVIEW : "Start a new order with the same garments, sizes and logos"}
+        onClick={() => start(async () => { setErr(""); const r = await reorderRequest(orderId); if (r.ok && r.id) router.push(`/portal/request/${r.id}`); else setErr(r.error || "Couldn't start the reorder."); })}>
+        {pending ? "Starting…" : "Order this again"}
+      </button>
+      {err && <span className="err">{err}</span>}
+    </>
+  );
+}
 
 const PREVIEW = "Turned off in preview";
 

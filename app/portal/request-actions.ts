@@ -4,7 +4,10 @@ import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
-import { mergeSettings, newGroup, orderGroups, requestProblems, type Group, type Order } from "@/lib/pricing";
+import { mergeSettings, newGroup, orderGroups, requestProblems, uid, type Group, type Order } from "@/lib/pricing";
+import { aiState } from "@/lib/ai/claude";
+import { orderFromText } from "@/lib/ai/tasks";
+import { proposalToGroups } from "@/lib/ai/normalize";
 
 type Result = { ok: boolean; error?: string; id?: string };
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
@@ -43,7 +46,7 @@ export async function startRequest(): Promise<Result> {
 }
 
 /** Save the customer's edits (only what they're allowed to change). */
-export async function saveRequest(id: string, patch: { groups?: Group[]; nickname?: string; due_date?: string | null; notes?: string; delivery_method?: string; ship_to?: string }): Promise<Result> {
+export async function saveRequest(id: string, patch: { groups?: Group[]; nickname?: string; due_date?: string | null; notes?: string; delivery_method?: string; ship_to?: string; po_number?: string }): Promise<Result> {
   try {
     const { admin, cust } = await myDraft(id);
     const row: Record<string, unknown> = {};
@@ -61,7 +64,8 @@ export async function saveRequest(id: string, patch: { groups?: Group[]; nicknam
     if (patch.nickname !== undefined) row.nickname = patch.nickname.slice(0, 120);
     if (patch.due_date !== undefined) row.due_date = patch.due_date || null;
     if (patch.notes !== undefined) row.notes = patch.notes.slice(0, 5000);
-    if (patch.delivery_method !== undefined) row.delivery_method = patch.delivery_method;
+    if (patch.delivery_method !== undefined && ["pickup", "ship", "deliver"].includes(patch.delivery_method)) row.delivery_method = patch.delivery_method;
+    if (patch.po_number !== undefined) row.po_number = patch.po_number.slice(0, 60);
     if (patch.ship_to !== undefined) row.ship_to = patch.ship_to.slice(0, 1000);
     const { error } = await admin.from("orders").update(row).eq("id", id);
     if (error) return { ok: false, error: error.message };
@@ -89,6 +93,66 @@ export async function submitRequest(id: string): Promise<Result> {
     });
     revalidatePath("/portal");
     return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * "Order this again": a new order request copied from one of the customer's past orders
+ * (garments, sizes, print locations and logos). They adjust it and send it in like any request.
+ */
+export async function reorderRequest(fromId: string): Promise<Result> {
+  try {
+    const { supabase, cust, admin, email } = await me();
+    // row security: they can only read their own sent orders
+    const { data: src } = await supabase.from("orders").select("*").eq("id", fromId).maybeSingle();
+    if (!src || src.status === "request" || src.status === "quote") return { ok: false, error: "We couldn't find that order." };
+    const groups = orderGroups(src as Order).map((g) => ({
+      id: uid(), name: g.name, youth: g.youth, finishing: g.finishing || [],
+      lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })),
+      imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
+      customerMockups: (g.customerMockups || []).filter((m) => m.path.startsWith(`mockups/${src.customer_id}/`)),
+    }));
+    const { data, error } = await admin.from("orders").insert({
+      customer_id: src.customer_id, status: "request", type: "quote", source: "portal",
+      price_type: cust.price_type || src.price_type || "retail", tax_exempt: !!cust.tax_exempt, groups, total: 0,
+      nickname: `${src.nickname || `Order #${src.number}`} (reorder)`.slice(0, 120), notes: `Reorder of #${src.number}.`,
+      delivery_method: src.delivery_method || "pickup", ship_to: src.ship_to || "",
+    }).select("id").single();
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: data.id, kind: "reorder", detail: `From #${src.number}`, actor: email });
+    revalidatePath("/portal");
+    return { ok: true, id: data.id };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * "Describe your order": the customer writes what they need in plain words and the AI fills in
+ * the order form (garments, sizes, print locations) for them to check. Only when the shop has
+ * turned on AI and this option. Never sets prices.
+ */
+export async function describeMyOrder(id: string, text: string): Promise<Result & { added?: number; questions?: string[]; groups?: Group[]; nickname?: string; due_date?: string | null }> {
+  try {
+    const { admin, order, email } = await myDraft(id);
+    const st = await aiState(admin);
+    if (!st.ready || !st.settings.assistant.ai.customerAssist) return { ok: false, error: "This isn't available right now. Please fill in the form below." };
+    const t = text.trim().slice(0, 4000);
+    if (t.length < 10) return { ok: false, error: "Tell us a bit more about what you need." };
+    // a light limit so one customer can't run up the bill
+    const { count } = await admin.from("ai_runs").select("id", { count: "exact", head: true }).eq("created_by", email).gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+    if ((count || 0) >= 10) return { ok: false, error: "Please fill in the form below. You can try this again in an hour." };
+    const r = await orderFromText(st.settings, t, { admin, order_id: id, customer_id: order.customer_id, by: email });
+    if (!r.ok) return { ok: false, error: "We couldn't read that. Please fill in the form below." };
+    const groups = proposalToGroups(r.data).map((g) => ({ ...g, lines: g.lines.map((l) => ({ ...l, cost: "" as const, priceOverride: null })) }));
+    if (!groups.length) return { ok: false, error: "We couldn't find garments or sizes in that. Try naming the shirts, colors and how many of each size." };
+    const cur = orderGroups(order);
+    const blank = cur.length <= 1 && !cur.some((g) => g.lines.some((l) => l.style || Object.values(l.sizes || {}).some((v) => +v)));
+    const row: Record<string, unknown> = { groups: blank ? groups : [...cur, ...groups] };
+    if (!order.nickname && r.data.nickname) row.nickname = r.data.nickname.slice(0, 120);
+    if (!order.due_date && r.data.due_date && /^\d{4}-\d{2}-\d{2}$/.test(r.data.due_date)) row.due_date = r.data.due_date;
+    row.qty = (row.groups as Group[]).reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
+    const { error } = await admin.from("orders").update(row).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, added: groups.length, questions: (r.data.questions || []).slice(0, 6), groups: row.groups as Group[], nickname: (row.nickname as string) || undefined, due_date: (row.due_date as string) || undefined };
   } catch (e) { return fail(e); }
 }
 

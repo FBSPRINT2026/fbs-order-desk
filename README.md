@@ -10,6 +10,11 @@ Shop management and customer portal for FBS Print. It's a private replacement fo
 - Artwork proof uploads, messages with customers, and sending quotes to customers
 - Printable quote/invoice (Print or save as PDF)
 
+**Assistant and CRM (`/shop/assistant`, customer pages)**
+- Follow-up list built from your orders: quotes with no answer, proofs waiting, overdue balances, unanswered messages, jobs at risk of missing their date, annual reorders; each with a ready-to-send message, snooze and dismiss
+- Customer timeline (calls, notes, emails), tags, next follow-up date, order checks and quick replies on the order form
+- AI (Claude) built in but off until you add a key: reads customer emails, fills in orders from an email, drafts follow-ups, reviews orders. See **docs/AI-CRM.md**
+
 **Customer portal (`/portal`)**
 - Sign-in by email link or 6-digit code, with no password
 - Each customer sees only their own orders, never drafts or production notes
@@ -18,8 +23,9 @@ Shop management and customer portal for FBS Print. It's a private replacement fo
 - Pay the deposit or full balance by card (Stripe Checkout)
 - Message the shop about an order, with email alerts both ways
 - Order progress tracker and printable invoice
+- Build an order request (pickup/ship/delivery, PO #), or reorder a past order in one click
 
-**Stack:** Next.js 15, Supabase (Postgres, Auth, Storage, row-level security), Stripe Checkout, Brevo (or Resend) email, hosted on Vercel.
+**Stack:** Next.js 15, Claude API (optional), Supabase (Postgres, Auth, Storage, row-level security), Stripe Checkout, Brevo (or Resend) email, hosted on Vercel.
 
 See **SETUP.md** for step-by-step setup.
 

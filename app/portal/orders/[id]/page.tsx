@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { calcOrder, imprintLabel, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill } from "@/components/bits";
-import { MessageThread, ProofCard, QuoteApproval } from "./client";
+import { MessageThread, ProofCard, QuoteApproval, ReorderButton } from "./client";
 import PayPanel from "@/components/PayPanel";
 
 const STEPS: { label: string; keys: string[] }[] = [
@@ -67,6 +67,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
           <div className="row">
             <Pill status={o.status} portal />
+            {o.type === "invoice" && <ReorderButton orderId={o.id} disabled={preview} />}
             <a className="btn" href={`/print/${o.id}${preview ? `?as=${ctx.preview!.id}` : ""}`} target="_blank" rel="noreferrer">Print or save PDF</a>
           </div>
         </div>
@@ -130,6 +131,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                   </tbody>
                 </table>
               </div>
+              {o.delivery_method !== "pickup" && o.ship_to && <div className="panel-b" style={{ borderTop: "1px solid var(--line-2)", whiteSpace: "pre-wrap" }}><div className="lbl">{o.delivery_method === "ship" ? `Shipping to${o.ship_method ? ` (${o.ship_method.trim()})` : ""}` : "Delivering to"}</div>{o.ship_to}{o.tracking ? `\nTracking: ${o.tracking}` : ""}</div>}
               {o.notes && <div className="panel-b" style={{ borderTop: "1px solid var(--line-2)", whiteSpace: "pre-wrap" }}><div className="lbl">Notes</div>{o.notes}</div>}
             </section>
 

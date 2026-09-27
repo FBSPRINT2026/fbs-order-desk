@@ -5,6 +5,7 @@ import { STATUSES } from "@/lib/pricing";
 import { custLabel, daysUntil, money } from "@/lib/format";
 import { summaryLine, useShopData } from "@/lib/shopData";
 import { Due, Pill } from "@/components/bits";
+import AssistantStrip from "@/components/AssistantStrip";
 
 type F = "all" | "quotes" | "invoices" | "open" | "unpaid" | "messages";
 
@@ -60,6 +61,7 @@ export default function OrdersPage() {
         <button className="stat" type="button" onClick={() => router.push("/shop/calendar")}><span className={"v" + (stats.late ? " alert" : "")}>{stats.dueWeek.length}</span><span className="k">Due within 7 days{stats.late ? ` · ${stats.late} late` : ""}</span></button>
         <button className="stat" type="button" onClick={() => { setType("unpaid"); setStatus(""); }}><span className="v">{money(stats.owed)}</span><span className="k">Balance outstanding</span></button>
       </div>
+      <AssistantStrip />
       <div className="toolbar">
         <div className="chips">
           {chips.map(([k, l]) => <button key={k} className={"chip" + (type === k ? " on" : "")} type="button" onClick={() => setType(k)}>{l}</button>)}
