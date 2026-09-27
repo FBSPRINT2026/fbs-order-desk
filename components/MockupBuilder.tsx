@@ -17,7 +17,7 @@ import ShirtDesigner from "@/components/ShirtDesigner";
 import { loadDesignerDoc, saveDesignerLogo } from "@/lib/designerSave";
 import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
-import type { DesignerOut } from "@/components/ShirtDesigner";
+import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, closestPms, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot, basePlacement, maxWidthFor, sideMaxWidth, viewsFor, guessHex, measureGarment, printWidth, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 
@@ -150,7 +150,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   function toggleBg(d: Design) { resetLogo(d); setKeepBg((k) => ({ ...k, [d.id]: !k[d.id] })); }
   const [msg, setMsg] = useState("");
   // the shirt designer, opened for one imprint (new design, or editing its logo)
-  const [designerFor, setDesignerFor] = useState<{ imId: string; start: { doc?: DesignDoc | null; imageUrl?: string; name?: string } } | null>(null);
+  const [designerFor, setDesignerFor] = useState<{ imId: string; side: Side; shirt: LabShirt | null; start: { doc?: DesignDoc | null; imageUrl?: string; name?: string; at?: { x: number; y: number; w: number } } } | null>(null);
   // quick text typed right into an imprint (shown as a stand-in logo "qt-<imprint>" until the mockup is saved)
   const [qt, setQt] = useState<Record<string, QuickText>>({});
   const qtDone = useRef<Record<string, string>>({});
@@ -471,13 +471,53 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 );
   };
 
-  async function openDesigner(im: Imprint) {
+  /** The shirt photo for one side, lined up with the 12" x 14" full front / full back print area, as the Idea Lab's backdrop. */
+  const labShirt = (side: Side): LabShirt | null => {
+    if (side === "sleeve" || !line) return null;
+    const v = side as View;
+    const b = basePlacement(v === "front" ? "Full Front" : "Full Back", 12, 14 / 12, null, scale, v, fitFor(line, v));
+    return { src: photo(line, v), hex: shirtHex(line), area: b.area, label: `${v === "front" ? "Front" : "Back"} of the ${[line.color, line.style].filter(Boolean).join(" ") || "shirt"}` };
+  };
+  /** Where an imprint sits now, in Idea Lab artboard units (50 per inch, 0,0 = top-left of the full print area). */
+  const labSpot = (im: Imprint) => {
+    const sp = spotFor(im.location); if (sp.wrap) return undefined;
+    const d = designOf(im), r = ratioOf(d) || 0.6, wIn = printWidth(im.size, im.location, ratioOf(d)), ppi = PX_PER_IN * scale, at = refPos(im);
+    const leftIn = (at.left - CENTER_X) / ppi, topIn = (at.top - COLLAR_Y[sp.view]) / ppi - 4;
+    return { x: 300 + (leftIn + wIn / 2) * 50, y: (topIn + (wIn * r) / 2) * 50, w: wIn * 50 };
+  };
+  /** Open the Idea Lab on one side of the shirt: for one imprint (edit its art or typed text), or to make something new. */
+  async function openLab(side: Side, im?: Imprint) {
     if (!customerId) return setMsg("Pick the customer first. Designs are saved to their account.");
-    if (qt[im.id]?.text.trim()) return setDesignerFor({ imId: im.id, start: { doc: quickTextDoc(qt[im.id]), name: qt[im.id].text.split("\n")[0].slice(0, 40) } });
+    if (!line?.style) return setMsg("Pick a garment first so the Idea Lab can show the shirt.");
+    const shirt = labShirt(side);
+    if (!im) return setDesignerFor({ imId: "", side, shirt, start: {} });
+    if (qt[im.id]?.text.trim()) return setDesignerFor({ imId: im.id, side, shirt, start: { doc: quickTextDoc(qt[im.id]), name: qt[im.id].text.split("\n")[0].slice(0, 40) } });
     const d = designOf(im);
-    if (!d || isQuick(d.id)) return setDesignerFor({ imId: im.id, start: {} });
+    if (!d || isQuick(d.id)) return setDesignerFor({ imId: im.id, side, shirt, start: {} });
     const doc = await loadDesignerDoc(sb, d, portal);
-    setDesignerFor({ imId: im.id, start: doc ? { doc, name: d.name } : { imageUrl: urls[d.id], name: d.name } });
+    setDesignerFor({ imId: im.id, side, shirt, start: doc ? { doc, name: d.name } : { imageUrl: urls[d.id], name: d.name, at: labSpot(im) } });
+  }
+  const openDesigner = (im: Imprint) => openLab(sideOf(im.location), im);
+  /** A design back from the Idea Lab goes on the shirt where it was drawn: size and spot pick the location. */
+  function placeFromLab(side: Side, imId: string, d: Design, box: { x: number; y: number; w: number; h: number }) {
+    const target = imprints.find((x) => x.id === imId) || imprints.find((x) => sideOf(x.location) === side && !x.design_id && !qt[x.id]);
+    if (side === "sleeve") {
+      if (target) setImprints((xs) => xs.map((x) => (x.id === target.id ? { ...x, design_id: d.id } : x)));
+      else setImprints((xs) => [...xs, { ...newImprint("Left Sleeve"), design_id: d.id }]);
+      return;
+    }
+    const v = side as View, ppi = PX_PER_IN * scale;
+    const r = d.width_px && d.height_px ? d.height_px / d.width_px : box.h / (box.w || 1);
+    const wIn = Math.round((box.w / 50) * 100) / 100, hIn = wIn * r;
+    const left = CENTER_X + ((box.x - 300) / 50) * ppi, top = COLLAR_Y[v] + (4 + box.y / 50) * ppi;
+    const z = autoSpot(v === "front" ? "Full Front" : "Full Back", v, (box.x + box.w / 2 - 300) / 50, 4 + box.y / 50, wIn, hIn);
+    const nb = basePlacement(z, wIn, r, null, scale);
+    const id = target?.id || uid();
+    setImprints((xs) => target
+      ? xs.map((x) => (x.id === id ? { ...x, design_id: d.id, location: z, size: `${wIn}" wide`, drop: "" } : x))
+      : [...xs, { ...newImprint(z), id, design_id: d.id, size: `${wIn}" wide` }]);
+    setOffsets((o) => ({ ...o, [id]: { dx: left - nb.x, dy: top - nb.y } }));
+    setTab(side);
   }
 
   async function uploadNew(im: Imprint, f: File) {
@@ -620,7 +660,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           if (!big) continue;
           const png = new File([await (await fetch(big.url)).blob()], "text.png", { type: "image/png" });
           const first = q.text.split("\n")[0].slice(0, 40);
-          const out: DesignerOut = { svg: png, png, doc: quickTextDoc(q), name: `Text: ${first}`, colors: 1, inks: q.color.name };
+          const out: DesignerOut = { svg: png, png, doc: quickTextDoc(q), name: `Text: ${first}`, colors: 1, inks: q.color.name, box: { x: 0, y: 0, w: 0, h: 0 } };
           const r = await saveDesignerLogo(sb, out, { portal, customerId, by: u.user?.email || "" });
           made[im.id] = r.design;
           if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
@@ -800,7 +840,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {designerFor && (
             <div className="sd-modal-back" role="dialog" aria-modal="true" aria-label="Idea Lab">
               <div className="sd-modal">
-                <ShirtDesigner start={designerFor.start} saveLabel="Save & put on shirt" onClose={() => setDesignerFor(null)}
+                <ShirtDesigner key={designerFor.side + designerFor.imId} start={designerFor.start} shirt={designerFor.shirt} saveLabel={`Save & put on the ${designerFor.side === "sleeve" ? "sleeve" : designerFor.side}`} onClose={() => setDesignerFor(null)}
                   logos={designs.filter((d) => urls[d.id] && !d.archived_at && !isQuick(d.id)).map((d) => ({ id: d.id, name: designLabel(d), url: urls[d.id] }))}
                   onSave={async (out) => {
                     try {
@@ -809,8 +849,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       setDesigns((x) => [r.design, ...x]);
                       if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
                       const imId = designerFor.imId;
-                      setImprints((xs) => xs.map((x) => (x.id === imId ? { ...x, design_id: r.design.id } : x)));
-                      setQt((q) => { const n = { ...q }; delete n[imId]; return n; });
+                      placeFromLab(designerFor.side, imId, r.design, out.box);
+                      if (imId) { setQt((q) => { const n = { ...q }; delete n[imId]; return n; }); delete qtDone.current[imId]; setPaints((p) => { const n = { ...p }; delete n[imId]; return n; }); }
                       setDesignerFor(null);
                       setMsg(`Saved ${designLabel(r.design)} to ${portal ? "your" : "the customer's"} logos.`);
                     } catch (e) { return e instanceof Error ? e.message : "Couldn't save the design."; }
@@ -890,6 +930,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               {SIDES.map((t) => { const n = imprints.filter((im) => sideOf(im.location) === t.id).length; return <button key={t.id} type="button" className={"chip" + (curTab === t.id ? " on" : "")} onClick={() => setTab(t.id)}>{t.label}{n ? ` (${n})` : ""}</button>; })}
             </div>
             <div className="panel-b stack">
+              <button type="button" className="mk-lab" onClick={() => openLab(curTab)}>
+                <span className="mk-lab-ic" aria-hidden="true">✦</span>
+                <span><b>Add graphics, text or clip art to the {curTab === "sleeve" ? "sleeve" : curTab}</b><span>Opens the {curTab === "sleeve" ? "sleeve" : curTab} of this shirt in the Idea Lab. What you make comes right back here.</span></span>
+              </button>
               {imprints.every((im) => sideOf(im.location) !== curTab) && <div className="faint" style={{ fontSize: 13 }}>No {curTab === "sleeve" ? "sleeve" : curTab} prints yet.</div>}
               {imprints.filter((im) => sideOf(im.location) === curTab).map((im) => {
                 const p = place(im);

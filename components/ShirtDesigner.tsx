@@ -10,7 +10,10 @@ const uidOf = () => Math.random().toString(36).slice(2, 10);
 const INKS = Object.entries(WILFLEX_HEX);
 const inkName = (hex: string) => INKS.find(([, h]) => h.toLowerCase() === hex.toLowerCase())?.[0] || "";
 
-export type DesignerOut = { svg: File; png: File; doc: DesignDoc; name: string; colors: number; inks: string };
+/** box = where the design sits on the 12" x 14" artboard (50 units per inch), so it can go back onto the shirt in the same spot. */
+export type DesignerOut = { svg: File; png: File; doc: DesignDoc; name: string; colors: number; inks: string; box: { x: number; y: number; w: number; h: number } };
+/** The real shirt photo behind the artboard: area = the full front/back print area on that photo (photo pixels). */
+export type LabShirt = { src: string; hex: string; area: { x: number; y: number; w: number; h: number }; label: string };
 type Tool = "text" | "art" | "upload" | "templates";
 
 /* ---------- measuring text (for curved text) ---------- */
@@ -105,8 +108,9 @@ async function embeddedFonts(names: string[]) {
  * The shirt designer: text, clip art, pictures and templates on a 12" x 14" print area.
  * Saving gives back an SVG (the art, fonts built in), a PNG (for mockups and previews) and the editable layers.
  */
-export default function ShirtDesigner({ start, logos = [], onSave, onClose, saveLabel = "Save design" }: {
-  start?: { doc?: DesignDoc | null; imageUrl?: string; name?: string };
+export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClose, saveLabel = "Save design" }: {
+  start?: { doc?: DesignDoc | null; imageUrl?: string; name?: string; /** where a picture sits now (artboard units: center + width) */ at?: { x: number; y: number; w: number } };
+  shirt?: LabShirt | null;
   logos?: { id: string; name: string; url: string }[];
   onSave: (out: DesignerOut) => Promise<string | void> | string | void;
   onClose?: () => void;
@@ -115,7 +119,9 @@ export default function ShirtDesigner({ start, logos = [], onSave, onClose, save
   const [layers, setLayersRaw] = useState<Layer[]>(() => start?.doc?.layers?.map((l) => ({ ...l })) || []);
   const [sel, setSel] = useState("");
   const [name, setName] = useState(start?.name || "");
-  const [bg, setBg] = useState(SHIRT_BG[0].hex);
+  const [bg, setBg] = useState(shirt?.hex || SHIRT_BG[0].hex);
+  // with a shirt photo, show some of the shirt around the print area
+  const VB = shirt ? { x: -170, y: -250, w: 940, h: 1080 } : { x: 0, y: 0, w: W, h: H };
   const [tool, setTool] = useState<Tool>(start?.doc || start?.imageUrl ? "text" : "templates");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -149,15 +155,15 @@ export default function ShirtDesigner({ start, logos = [], onSave, onClose, save
       try {
         const img = await loadImg(start.imageUrl!);
         const s = await shrink(img);
-        const fit = Math.min(440 / s.w, 300 / s.h);
-        setLayersRaw((ls) => [...ls, { id: uidOf(), kind: "img", src: s.url, w: s.w * fit, h: s.h * fit, x: W / 2, y: 230, rot: 0, s: 1, name: start.name || "Logo" }]);
+        const at = start.at, fit = at ? at.w / s.w : Math.min(440 / s.w, 300 / s.h);
+        setLayersRaw((ls) => [...ls, { id: uidOf(), kind: "img", src: s.url, w: s.w * fit, h: s.h * fit, x: at ? at.x : W / 2, y: at ? at.y : 230, rot: 0, s: 1, name: start.name || "Logo" }]);
       } catch { setMsg("Couldn't load that logo into the designer."); }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const el = svgRef.current; if (!el) return;
-    const ro = new ResizeObserver(() => setVs(el.clientWidth / W || 1));
+    const ro = new ResizeObserver(() => setVs(el.clientWidth / VB.w || 1));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -332,6 +338,7 @@ export default function ShirtDesigner({ start, logos = [], onSave, onClose, save
         svg: new File([svg], `${base}.svg`, { type: "image/svg+xml" }),
         png: new File([pngBlob], `${base}.png`, { type: "image/png" }),
         doc: { v: 1, w: W, h: H, layers },
+        box: vb,
         name: name.trim() || "Custom design",
         colors: used.pictures ? Math.max(used.hex.length, 4) : Math.max(1, used.hex.length),
         inks: inkList.join(", "),
@@ -365,10 +372,10 @@ export default function ShirtDesigner({ start, logos = [], onSave, onClose, save
           <button type="button" className="btn sm ghost" onClick={undo} disabled={!past.current.length} title="Undo (Ctrl+Z)">↶ Undo</button>
           <button type="button" className="btn sm ghost" onClick={redo} disabled={!future.current.length} title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
         </div>
-        <div className="sd-shirts" role="group" aria-label="Preview on shirt color">
+        {!shirt && <div className="sd-shirts" role="group" aria-label="Preview on shirt color">
           <span className="faint">Shirt</span>
           {SHIRT_BG.map((s) => <button key={s.hex} type="button" title={s.name} aria-label={s.name} className={"sd-shirt" + (bg === s.hex ? " on" : "")} style={{ background: s.hex }} onClick={() => setBg(s.hex)} />)}
-        </div>
+        </div>}
         <span className="spacer" />
         {onClose && <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>}
         <button type="button" className="btn primary" disabled={busy} onClick={save}>{busy ? "Saving…" : saveLabel}</button>
@@ -437,9 +444,13 @@ export default function ShirtDesigner({ start, logos = [], onSave, onClose, save
         </aside>
 
         <div className="sd-stage">
-          <svg ref={svgRef} className="sd-svg" viewBox={`0 0 ${W} ${H}`} onPointerMove={onMoveEv} onPointerUp={onUpEv} onPointerCancel={onUpEv}
+          <svg ref={svgRef} className="sd-svg" viewBox={`${VB.x} ${VB.y} ${VB.w} ${VB.h}`} onPointerMove={onMoveEv} onPointerUp={onUpEv} onPointerCancel={onUpEv}
+            style={shirt ? { aspectRatio: `${VB.w} / ${VB.h}`, maxWidth: `min(760px, calc((100vh - 190px) * ${(VB.w / VB.h).toFixed(3)}))`, background: "#fff" } : undefined}
             onPointerDown={(e) => { if (e.target === svgRef.current || (e.target as Element).classList?.contains("sd-bg")) setSel(""); }}>
-            <rect className="sd-bg" x={0} y={0} width={W} height={H} fill={bg} />
+            {shirt ? (() => {
+              const k = W / shirt.area.w;
+              return <image className="sd-bg" href={shirt.src} x={-shirt.area.x * k} y={-shirt.area.y * k} width={1000 * k} height={1250 * k} />;
+            })() : <rect className="sd-bg" x={0} y={0} width={W} height={H} fill={bg} />}
             <rect x={1} y={1} width={W - 2} height={H - 2} fill="none" stroke={deltaE(bg, "#111111") < 25 ? "rgba(255,255,255,.3)" : "rgba(0,0,0,.18)"} strokeDasharray="6 6" pointerEvents="none" />
             <g ref={contentRef}>
               {layers.filter((l) => !l.hidden).map((l) => (
@@ -460,6 +471,7 @@ export default function ShirtDesigner({ start, logos = [], onSave, onClose, save
             )}
           </svg>
           <div className="sd-under faint">
+            {shirt && <><b>{shirt.label}</b> · </>}
             {all ? <>Design is about {(all.w / UNITS_PER_IN).toFixed(1)}&quot; × {(all.h / UNITS_PER_IN).toFixed(1)}&quot; on a 12&quot; × 14&quot; print area · </> : null}
             {used.hex.length > 0 && <>{used.hex.length} ink color{used.hex.length === 1 ? "" : "s"}{used.pictures ? " + full-color picture" : ""}</>}
             {!layers.length && "Pick a template or add text to get started."}

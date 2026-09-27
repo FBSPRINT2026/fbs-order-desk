@@ -84,7 +84,6 @@ export default function ArtworkPage() {
         <div><div className="eyebrow">{liveLogos} logo{liveLogos === 1 ? "" : "s"} · {mockups.length} mockup{mockups.length === 1 ? "" : "s"}</div><h1>Artwork</h1></div>
         <div className="row">
           <Link className="btn" href="/shop/artwork/mockup">Mockup Creator</Link>
-          <Link className="btn" href={`/shop/artwork/idea-lab${cust ? `?customer=${cust}` : ""}`}>Idea Lab</Link>
           <button className="btn primary" type="button" onClick={() => setForm(form ? null : { customer_id: cust, name: "", colors: 1, inks: "", notes: "", file: null, preview: null })}>{form ? "Cancel" : "+ Upload logo"}</button>
         </div>
       </div>

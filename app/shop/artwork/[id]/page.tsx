@@ -59,7 +59,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
       <Link className="back" href="/shop/artwork">← Artwork</Link>
       <div className="page-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === d.customer_id)) || "No customer"}</div><h1>{designLabel(d)}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span><Link className="btn" href={`/shop/artwork/idea-lab?customer=${d.customer_id || ""}&design=${d.id}`}>{d.designer ? "Edit in Idea Lab" : "Open in Idea Lab"}</Link>{orig && <a className="btn" href={orig} target="_blank" rel="noreferrer">Download original</a>}<button className={"btn ghost danger" + (armed ? " armed" : "")} type="button" onClick={del}>{armed ? "Delete logo?" : "Delete"}</button></div>
+        <div className="row"><span className="save-state">{msg}</span><Link className="btn" href={`/shop/artwork/mockup?customer=${d.customer_id || ""}&design=${d.id}`}>Put on a shirt</Link>{orig && <a className="btn" href={orig} target="_blank" rel="noreferrer">Download original</a>}<button className={"btn ghost danger" + (armed ? " armed" : "")} type="button" onClick={del}>{armed ? "Delete logo?" : "Delete"}</button></div>
       </div>
       <div className="cust-grid">
         <section className="panel">
