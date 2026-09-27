@@ -77,15 +77,34 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // close-ups fill the column between the photos and the Imprints panel
   const cuRef = useRef<HTMLDivElement>(null);
   const [cuSize, setCuSize] = useState(230);
+  const [cuCols, setCuCols] = useState(2);
   useEffect(() => {
     const el = cuRef.current; if (!el) return;
     const ro = new ResizeObserver(() => {
       // two across, each exactly as wide as the front / back photo above it
-      setCuSize(Math.max(120, Math.floor((el.clientWidth - 14) / 2)));
+      const cols = el.clientWidth < 460 ? 1 : 2;
+      setCuCols(cols);
+      setCuSize(Math.max(120, Math.min(cols === 1 ? 420 : 9999, Math.floor((el.clientWidth - 14 * (cols - 1)) / cols))));
     });
     ro.observe(el);
     return () => ro.disconnect();
   });
+  /**
+   * Layout by how much room there is (not the screen size, the builder's own width):
+   * wide  = front + back photos, a close-up column, Imprints panel
+   * mid   = front + back photos, Imprints panel (close-ups stay under the photos)
+   * one   = one big photo (the side you're working on, with a Front/Back switch), Imprints panel
+   * stack = one photo, then Imprints, then close-ups (phones)
+   */
+  const mkRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<"wide" | "mid" | "one" | "stack">("wide");
+  useEffect(() => {
+    const el = mkRef.current; if (!el) return;
+    const ro = new ResizeObserver(() => { const w = el.clientWidth; setMode(w >= 1190 ? "wide" : w >= 960 ? "mid" : w >= 700 ? "one" : "stack"); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  const single = mode === "one" || mode === "stack";
   // the small close-up column next to the photos takes whatever width is left, so it grows instead of drifting away
   const miniRef = useRef<HTMLDivElement>(null);
   const [miniSize, setMiniSize] = useState(200);
@@ -364,6 +383,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // imprint tabs: front, back, sleeves
   const sideOf = (loc: string): Side => (viewsFor(loc).length > 1 ? "sleeve" : spotFor(loc).view);
   const curTab: Side = tab || (["front", "back", "sleeve"] as Side[]).find((t) => imprints.some((im) => sideOf(im.location) === t)) || "front";
+  // one-photo layouts show the side you're working on (sleeves show on the front)
+  const shownView: View = curTab === "back" ? "back" : "front";
   const locsFor = (t: Side) => LOCATIONS.filter((z) => sideOf(z) === t);
   const views: View[] = (["front", "back"] as View[]).filter((v) => imprints.some((im) => viewsFor(im.location).includes(v)));
   const line = lines[active] || lines[0];
@@ -627,18 +648,26 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             );
           })}
-      <div className="mk">
+      <div className={"mk mk-" + mode} ref={mkRef}>
         <div className="mk-stage-wrap">
           <div className={"mk-canvas" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
           <div className="mk-views">
-            {(["front", "back"] as View[]).map((v) => (
+            {single && (
+              <div className="chips mk-viewsw">
+                {(["front", "back"] as View[]).map((v) => <button key={v} type="button" className={"chip" + (shownView === v ? " on" : "")} onClick={() => setTab(v)}>{v === "front" ? "Front" : "Back"}</button>)}
+              </div>
+            )}
+            {(single ? [shownView] : (["front", "back"] as View[])).map((v) => (
               <Stage key={v} grid={grid} cx={fitFor(line, v)?.cx}
-                corner={v === "front" ? (
-                  <div className="mk-corner l">
-                    <label className="mk-pill"><input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} /> Print areas</label>
-                    {Object.keys(offsets).length > 0 && <button className="mk-pill" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
-                  </div>
-                ) : <div className="mk-corner r"><span className="mk-pill">Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}</span></div>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
+                corner={<>
+                  {(v === "front" || single) && (
+                    <div className="mk-corner l">
+                      <label className="mk-pill"><input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} /> Print areas</label>
+                      {Object.keys(offsets).length > 0 && <button className="mk-pill" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
+                    </div>
+                  )}
+                  {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill">Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}</span></div>}
+                </>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => {
                   const im = imprints.find((x) => x.id === id);
@@ -661,7 +690,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 onPick={pickColor} />
             ))}
           </div>
-            <div className="mk-closeups" ref={cuRef}>
+            <div className="mk-closeups" ref={cuRef} style={{ gridTemplateColumns: `repeat(${cuCols},minmax(0,1fr))` }}>
               {/* front locations first, then back, sleeves always last (in order-form order within each) */}
               {imprints.map((im, i) => ({ im, i })).sort((a, b) => {
                 const rank = (x: Imprint) => (viewsFor(x.location).length > 1 ? 2 : spotFor(x.location).view === "back" ? 1 : 0);
@@ -725,11 +754,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           )}
         </div>
 
-        <div className="mk-mini" ref={miniRef}>
+        {mode === "wide" && <div className="mk-mini" ref={miniRef}>
           <div className="lbl">{curTab === "sleeve" ? "SLEEVE" : curTab.toUpperCase()} CLOSE-UP</div>
           {imprints.filter((im) => sideOf(im.location) === curTab).map((im) => closeUp(im, miniSize))}
           {!imprints.some((im) => sideOf(im.location) === curTab) && <div className="faint" style={{ fontSize: 12 }}>Add a {curTab === "sleeve" ? "sleeve" : curTab} location to see it up close here.</div>}
-        </div>
+        </div>}
         <div className="mk-side stack">
           <section className={"panel" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
             <div className="panel-h"><h2>Imprints</h2><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}>+ Add {curTab === "sleeve" ? "sleeve" : curTab} location</button></div>
