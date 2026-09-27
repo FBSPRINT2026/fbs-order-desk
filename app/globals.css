@@ -530,7 +530,7 @@ td > .sz-dim.on input{padding-right:24px}
 .dp-size b{color:var(--ink)}
 .wo-design{display:inline-flex;align-items:center;gap:6px}
 .wo-design img{width:44px;height:44px;object-fit:contain;border:1px solid #C9D0DA;border-radius:3px}
-.mk{display:grid;grid-template-columns:minmax(0,1fr) 200px 340px;gap:18px;align-items:start}
+.mk{display:grid;grid-template-columns:minmax(0,934px) minmax(200px,1fr) 340px;gap:18px;align-items:start}
 .mk-mini{display:flex;flex-direction:column;gap:14px;min-width:0}
 .mk-mini > .lbl{margin-bottom:-6px}
 .mk-views{display:flex;gap:14px;flex-wrap:nowrap}
@@ -625,6 +625,7 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-thumb:hover{border-color:var(--accent)}
 /* Design picker (starred first, searchable) */
 .ds{position:relative;flex:1 1 220px;min-width:0}
+.mk-imp > .ds{flex:0 0 auto}
 .ds-field{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface,#fff);cursor:pointer;font:inherit;color:inherit;text-align:left}
 .ds-field:hover{border-color:var(--accent)}
 .ds-th{flex:none;width:26px;height:26px;border-radius:4px;object-fit:contain;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 0 0/8px 8px;border:1px solid var(--line-2,var(--line))}

@@ -8,7 +8,7 @@ import { custLabel } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, uploadDesign } from "@/lib/designs";
 import { mockupUploadUrls, myLogos, portalCatalog, saveMyMockup } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
-import { effectiveDpi, isVector, knockOut } from "@/lib/artPrep";
+import { isVector, knockOut } from "@/lib/artPrep";
 import { starMyDesign } from "@/app/portal/actions";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
@@ -85,6 +85,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     ro.observe(el);
     return () => ro.disconnect();
   });
+  // the small close-up column next to the photos takes whatever width is left, so it grows instead of drifting away
+  const miniRef = useRef<HTMLDivElement>(null);
+  const [miniSize, setMiniSize] = useState(200);
+  useEffect(() => {
+    const el = miniRef.current; if (!el) return;
+    const ro = new ResizeObserver(() => setMiniSize(Math.max(160, Math.min(560, Math.floor(el.clientWidth)))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
   const [want, setWant] = useState<Record<string, number>>({}); // width (in) someone tried to drag past the location's max
   const [askUploaded, setAskUploaded] = useState(false);
   const [keepLoc, setKeepLoc] = useState<string[]>([]); // imprints where staff said "keep this location"
@@ -116,7 +125,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setPaints((p) => Object.fromEntries(Object.entries(p).filter(([, v]) => v.design !== d.id)));
   }
   function toggleBg(d: Design) { resetLogo(d); setKeepBg((k) => ({ ...k, [d.id]: !k[d.id] })); }
-  function toggleInside(d: Design) { resetLogo(d); setKeepInside((k) => ({ ...k, [d.id]: !k[d.id] })); }
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ title: string; url: string }[]>([]);
@@ -716,9 +724,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           )}
         </div>
 
-        <div className="mk-mini">
+        <div className="mk-mini" ref={miniRef}>
           <div className="lbl">{curTab === "sleeve" ? "SLEEVE" : curTab.toUpperCase()} CLOSE-UP</div>
-          {imprints.filter((im) => sideOf(im.location) === curTab).map((im) => closeUp(im, 200))}
+          {imprints.filter((im) => sideOf(im.location) === curTab).map((im) => closeUp(im, miniSize))}
           {!imprints.some((im) => sideOf(im.location) === curTab) && <div className="faint" style={{ fontSize: 12 }}>Add a {curTab === "sleeve" ? "sleeve" : curTab} location to see it up close here.</div>}
         </div>
         <div className="mk-side stack">
@@ -752,17 +760,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         onSplit={() => setUnite(im.id, false)}
                         onMatchAll={unsetColors(im).length > 0 ? () => matchStandard(im) : undefined} />
                     )}
-                    {p.d && !isVector(p.d.file_type, p.d.file_name) && (() => {
-                      const d = p.d, dpi = effectiveDpi(d.width_px || 0, p.wIn);
-                      return (
-                        <div className="mk-raster">
-                          <span>Picture file{clean[d.id] ? " · background removed" : keepBg[d.id] ? " · background kept" : ""}{dpi > 0 && dpi >= 150 ? ` · about ${dpi} dpi` : ""}</span>
-                          {(clean[d.id] || keepBg[d.id]) && <button type="button" className="btn sm ghost" onClick={() => toggleBg(d)}>{keepBg[d.id] ? "Remove background" : "Keep background"}</button>}
-                          {clean[d.id] && !keepBg[d.id] && <label className="check"><input type="checkbox" checked={!!keepInside[d.id]} onChange={() => toggleInside(d)} /> Keep white inside the logo</label>}
-                          {dpi > 0 && dpi < 150 && <div className="ink-warn" style={{ margin: 0, width: "100%" }}>Low resolution: about {dpi} dpi at {p.wIn.toFixed(1)}&quot; wide, may print blurry. Vector art (AI, EPS, PDF, SVG) is best.</div>}
-                        </div>
-                      );
-                    })()}
                     <div className="mk-imp-foot">
                       <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
                       <div className="row mk-wh" style={{ gap: 4 }}>
