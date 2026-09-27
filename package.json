@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "prebuild": "node scripts/build-assets.mjs"
+    "prebuild": "node scripts/build-assets.mjs && (npx tsc --noEmit -p . 2>&1 | grep -v \"^ \" | head -150 || true)"
   },
   "dependencies": {
     "@iconify-json/fluent-emoji-flat": "*",
