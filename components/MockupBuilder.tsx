@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { LOCATIONS, METHODS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
@@ -13,7 +14,7 @@ import { starMyDesign } from "@/app/portal/actions";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
 import { PMS_HEX, WILFLEX_HEX, closestInk, closestPms, colorHex, detectColors, recolor } from "@/lib/inkColors";
-import { PHOTO_H, PHOTO_W, PX_PER_IN, basePlacement, maxWidthFor, viewsFor, biggerSpot, guessHex, measureGarment, printWidth, smallerSpot, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot, basePlacement, maxWidthFor, sideMaxWidth, viewsFor, guessHex, measureGarment, printWidth, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -94,9 +95,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     ro.observe(el);
     return () => ro.disconnect();
   });
-  const [want, setWant] = useState<Record<string, number>>({}); // width (in) someone tried to drag past the location's max
   const [askUploaded, setAskUploaded] = useState(false);
-  const [keepLoc, setKeepLoc] = useState<string[]>([]); // imprints where staff said "keep this location"
   const [pop, setPop] = useState<{ id: string; src: string; x: number; y: number; open?: string } | null>(null);
   const [painted, setPainted] = useState<Record<string, string>>({});
   const imgCache = useRef(new Map<string, HTMLImageElement>());
@@ -244,14 +243,45 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Logo colors still printing "as uploaded" (no standard ink picked), per imprint. */
   const unsetColors = (im: Imprint) => { const pt = paints[im.id]; return pt && pt.design === im.design_id ? pt.sources.filter((x) => !pt.map[x.hex]).map((x) => x.hex) : []; };
   const matchStandard = (im: Imprint) => setInks(im.id, Object.fromEntries(unsetColors(im).map((h) => [h, closestInk(h)])));
-  /** Grow a print; past the location's max it stops at the max and offers a bigger location. */
+  /** Resize a sleeve print (sleeves stay a sleeve: capped at the sleeve's max area). */
   const growTo = (im: Imprint, inches: number) => {
-    const cap = maxWidthFor(im.location, ratioOf(designOf(im)));
-    setWant((w) => { const n = { ...w }; if (inches > cap + 0.05) n[im.id] = inches; else delete n[im.id]; return n; });
-    const v = Math.max(0.5, Math.min(cap, Math.round(inches * 100) / 100));
+    const v = Math.max(0.5, Math.min(maxWidthFor(im.location, ratioOf(designOf(im))), Math.round(inches * 100) / 100));
     setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${v}" wide` } : x)));
     return v;
   };
+  /** Top-left of a print on the reference shirt (reference px), where it sits now including any hand move. */
+  const refPos = (im: Imprint) => {
+    const d = designOf(im), r = ratioOf(d) || 0.6;
+    const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
+    const b = basePlacement(im.location, printWidth(im.size, im.location, ratioOf(d)), r, drop, scale);
+    const o = offsets[im.id] || { dx: 0, dy: 0 };
+    return { left: b.x + o.dx, top: b.y + o.dy };
+  };
+  /**
+   * Put a print at this size with its top-left here, and let the location follow on its own:
+   * drag a small logo to the side and it's a left chest, to the middle a center chest, grow it and it becomes a medium or full front.
+   */
+  const settle = (im: Imprint, wantW: number, at = refPos(im)) => {
+    const sp = spotFor(im.location);
+    if (sp.wrap) return growTo(im, wantW);
+    const d = designOf(im), r = ratioOf(d) || 0.6;
+    const wIn = Math.max(0.5, Math.min(sideMaxWidth(im.location, ratioOf(d)), Math.round(wantW * 100) / 100));
+    const ppi = PX_PER_IN * scale;
+    const z = autoSpot(im.location, sp.view, (at.left + (wIn * ppi) / 2 - CENTER_X) / ppi, (at.top - COLLAR_Y[sp.view]) / ppi, wIn, wIn * r);
+    const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
+    const nb = basePlacement(z, wIn, r, drop, scale);
+    setOffsets((o) => ({ ...o, [im.id]: { dx: at.left - nb.x, dy: at.top - nb.y } }));
+    setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: z, size: `${wIn}" wide`, keepLocation: false } : x)));
+    return wIn;
+  };
+  /** After typing a size: the width asked for (not cut to the current location), then let the location follow. */
+  const settleTyped = (im: Imprint) => {
+    if (spotFor(im.location).wrap) return;
+    const r = ratioOf(designOf(im)), m = im.size.match(/^([\d.]+)/); if (!m) return;
+    const w = /tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1];
+    if (w > 0) settle(im, w);
+  };
+  const settleHere = (id: string) => { const im = imprints.find((x) => x.id === id); if (im && !spotFor(im.location).wrap) settle(im, printWidth(im.size, im.location, ratioOf(designOf(im)))); };
 
   function setInk(im: Imprint, src: string, v: { name: string; hex: string } | null) {
     setPaints((p) => {
@@ -353,7 +383,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
-                    onResize={(newWIn) => { growTo(im, newWIn); }} />
+                    onResize={(newWIn) => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); }}
+                    onEnd={() => settleHere(im.id)} />
                 );
   };
 
@@ -596,41 +627,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             );
           })}
-          {ready && imprints.map((im) => {
-            const w = want[im.id]; if (!w) return null;
-            const r = ratioOf(designOf(im));
-            const big = biggerSpot(im.location, w, r ? w * r : 0);
-            const sp = spotFor(im.location);
-            return (
-              <div key={"big" + im.id} className="confirm-bar" style={{ marginBottom: 8 }}>
-                <span>The {im.location} print area tops out at {sp.maxW}&quot; × {sp.maxH}&quot;. {big.length ? `Move it to ${big.join(" or ")} to make it ${w.toFixed(1)}" wide?` : "That's as big as a print gets here."}</span>
-                {big.map((z, i) => <button key={z} type="button" className={"btn sm" + (i === 0 ? " primary" : "")} onClick={() => {
-                  setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: z, size: `${Math.round(Math.min(w, maxWidthFor(z, r)) * 100) / 100}" wide`, keepLocation: false } : x)));
-                  setOffsets((o) => { const n = { ...o }; delete n[im.id]; return n; });
-                  setWant((q) => { const n = { ...q }; delete n[im.id]; return n; });
-                }}>{z}</button>)}
-                <button type="button" className="btn sm ghost" onClick={() => setWant((q) => { const n = { ...q }; delete n[im.id]; return n; })}>Keep {im.location}</button>
-              </div>
-            );
-          })}
-          {ready && imprints.map((im) => {
-            const p = place(im);
-            const sug = keepLoc.includes(im.id) || im.keepLocation || !p.d ? [] : smallerSpot(im.location, p.wIn, p.hIn, (offsets[im.id]?.dx || 0) / (PX_PER_IN * scale));
-            if (!sug.length) return null;
-            return (
-              <div key={"sug" + im.id} className="confirm-bar" style={{ marginBottom: 8 }}>
-                <span>This logo is {p.wIn.toFixed(1)}&quot; × {(p.hIn || 0).toFixed(1)}&quot; — that&apos;s {sug[0].startsWith("Upper") ? "an upper back" : "a chest"}-size print on the {im.location}. Switch it to {sug[0]} so the close-up and print area fit it?</span>
-                {sug.map((z, i) => <button key={z} type="button" className={"btn sm" + (i === 0 ? " primary" : "")} onClick={() => { setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: z } : x))); setOffsets((o) => { const n = { ...o }; delete n[im.id]; return n; }); }}>{z}</button>)}
-                <button type="button" className="btn sm ghost" onClick={() => { setKeepLoc((k) => [...k, im.id]); setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, keepLocation: true } : x))); }}>Keep {im.location}</button>
-              </div>
-            );
-          })}
       <div className="mk">
         <div className="mk-stage-wrap">
           <div className={"mk-canvas" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
           <div className="mk-views">
             {(["front", "back"] as View[]).map((v) => (
-              <Stage key={v} grid={grid} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
+              <Stage key={v} grid={grid} cx={fitFor(line, v)?.cx}
+                corner={v === "front" ? (
+                  <div className="mk-corner l">
+                    <label className="mk-pill"><input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} /> Print areas</label>
+                    {Object.keys(offsets).length > 0 && <button className="mk-pill" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
+                    <span className="mk-pill mk-help" tabIndex={0} aria-label="How to use">?<span className="mk-tip">Drag a logo to move it. Drag its corner to resize. Double-click a color to change it. The location updates on its own as you move and size it.</span></span>
+                  </div>
+                ) : <div className="mk-corner r"><span className="mk-pill quiet">Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}</span></div>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => {
                   const im = imprints.find((x) => x.id === id);
@@ -646,19 +655,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 onResize={(id, newW) => {
                   const im = imprints.find((x) => x.id === id); if (!im) return;
                   const old = place(im, v);
-                  const inches = growTo(im, newW / (PX_PER_IN * scale * old.k));
-                  newW = inches * PX_PER_IN * scale * old.k;
-                  // keep the left edge where it is while the size changes (sleeves stay centered on the fold)
-                  if (!old.clip) setOffsets((o) => ({ ...o, [id]: { dx: (o[id]?.dx || 0) + (newW - old.w) / 2 / old.k, dy: o[id]?.dy || 0 } }));
+                  const inches = newW / (PX_PER_IN * scale * old.k);
+                  if (old.clip) growTo(im, inches); else settle(im, inches);
                 }}
+                onEnd={settleHere}
                 onPick={pickColor} />
             ))}
-          </div>
-          <div className="row mk-tools">
-            <label className="check" style={{ fontSize: 12 }}><input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} /> Show print areas</label>
-            <span className="faint" style={{ fontSize: 12 }}>Drag to move · corner handle to resize · double-click a color to change it</span>
-            {Object.keys(offsets).length > 0 && <button className="btn sm ghost" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
-            <span className="spacer" /><span className="faint" style={{ fontSize: 12 }}>Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}</span>
           </div>
             <div className="mk-closeups" ref={cuRef}>
               {/* front locations first, then back, sleeves always last (in order-form order within each) */}
@@ -768,19 +770,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           const typed = (im.size.match(/^([\d.]+)/) || [])[1] || "";
                           const set = (v: string, dim: "wide" | "tall") => {
                             let t = v.replace(/[^\d.]/g, "");
-                            // cap at the location's max print area (e.g. sleeves 3.5" x 3.5")
+                            // cap at the biggest print this side of the shirt takes (sleeves: 3.5" x 3.5"); the location follows when you leave the box
                             const r = ratioOf(designOf(im)) || 0;
-                            const cap = dim === "wide" ? maxWidthFor(im.location, r) : maxWidthFor(im.location, r) * (r || 1);
-                            const over = t && !t.endsWith(".") && +t > cap ? +t : 0;
-                            setWant((w) => { const n = { ...w }; if (over) n[im.id] = dim === "wide" ? over : r ? over / r : over; else delete n[im.id]; return n; });
-                            if (over) t = String(Math.round(cap * 100) / 100);
+                            const capW = sideMaxWidth(im.location, r), cap = dim === "wide" ? capW : capW * (r || 1);
+                            if (t && !t.endsWith(".") && +t > cap) t = String(Math.round(cap * 100) / 100);
                             setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "" } : x)));
                           };
                           return (
                             <>
-                              <label title="Width (proportions locked)">W <input type="text" inputMode="decimal" aria-label="Width in inches" placeholder={p.wIn.toFixed(2)} value={!tall ? typed : p.wIn ? p.wIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "wide")} />&quot;</label>
+                              <label title="Width (proportions locked)">W <input type="text" inputMode="decimal" aria-label="Width in inches" placeholder={p.wIn.toFixed(2)} value={!tall ? typed : p.wIn ? p.wIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "wide")} onBlur={() => settleTyped(im)} />&quot;</label>
                               <span className="faint">×</span>
-                              <label title="Height (proportions locked)">H <input type="text" inputMode="decimal" aria-label="Height in inches" placeholder={(p.hIn || 0).toFixed(2)} value={tall ? typed : p.hIn ? p.hIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "tall")} />&quot;</label>
+                              <label title="Height (proportions locked)">H <input type="text" inputMode="decimal" aria-label="Height in inches" placeholder={(p.hIn || 0).toFixed(2)} value={tall ? typed : p.hIn ? p.hIn.toFixed(2) : ""} onChange={(e) => set(e.target.value, "tall")} onBlur={() => settleTyped(im)} />&quot;</label>
                             </>
                           );
                         })()}
@@ -800,8 +800,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 }
 
 /** One garment photo with designs you can drag, resize from the corner (proportions locked) and double-click to recolor. */
-function Stage({ src, label, items, grid, mask, onMove, onResize, onPick }: {
-  src: string; label: string; grid?: boolean; /** shirt-shaped mask: art never shows past the edge of the shirt */ mask?: string;
+function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, onEnd, onPick }: {
+  src: string; label: string; /** the shirt's center on this photo, so the label sits under the shirt */ cx?: number; corner?: ReactNode; onEnd?: (id: string) => void; grid?: boolean; /** shirt-shaped mask: art never shows past the edge of the shirt */ mask?: string;
   items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; clip?: "" | "left" | "right"; area: { x: number; y: number; w: number; h: number } }; url: string }[];
   onMove: (id: string, dx: number, dy: number) => void;
   onResize: (id: string, newW: number) => void;
@@ -832,8 +832,10 @@ function Stage({ src, label, items, grid, mask, onMove, onResize, onPick }: {
         }}
         onPointerUp={(e) => {
           const d = drag.current; drag.current = null;
+          // only after a real drag: a plain click never changes the location
+          if (d && onEnd && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id);
         }}
-        onPointerLeave={() => { drag.current = null; }}
+        onPointerLeave={(e) => { const d = drag.current; drag.current = null; if (d && onEnd && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id); }}
         onPointerDown={(e) => { if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg")) setSel(""); }}>
         <img src={src} alt="" draggable={false} className="mk-bg" />
         {grid && items.map((it) => <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }} />)}
@@ -884,8 +886,9 @@ function Stage({ src, label, items, grid, mask, onMove, onResize, onPick }: {
             )}
           </div>
         ))}
+        {corner}
       </div>
-      <div className="mk-label">{label}</div>
+      <div className="mk-label" style={cx ? { transform: `translateX(${((cx / PHOTO_W) - 0.5) * 100}%)` } : undefined}>{label}</div>
     </div>
   );
 }
@@ -923,10 +926,10 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
 }
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
-function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, offIn, colors, onMove, onResize, onPick }: {
+function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, offIn, colors, onMove, onResize, onEnd, onPick }: {
   size: number; topAlign?: boolean; title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
   colors: { hex: string; name: string }[];
-  onMove: (dxIn: number, dyIn: number) => void; onResize: (newWIn: number) => void;
+  onMove: (dxIn: number, dyIn: number) => void; onResize: (newWIn: number) => void; onEnd?: () => void;
   onPick: (relX: number, relY: number, clientX: number, clientY: number) => void;
 }) {
   const lastDown = useRef<{ t: number; x: number; y: number } | null>(null);
@@ -942,7 +945,7 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
   const spanW = maxW + 2, spanH = maxH + 2; // inches shown: the max print area plus a margin
   const PX = Math.min(BOX / spanW, (BOX * 1.25) / spanH); // css px per inch (tall areas can run a bit taller than wide)
   const W = spanW * PX, H = spanH * PX;
-  const drag = useRef<{ x: number; y: number; mode: "move" | "size"; w: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; mode: "move" | "size"; w: number; moved?: boolean } | null>(null);
   const cx = W / 2 + offIn.x * PX, top0 = (H - maxH * PX) / 2;
   const cy = (topAlign ? top0 + (hIn * PX) / 2 : H / 2) + offIn.y * PX; // same spot as on the photos: top of the area for full front/back, else centered
   return (
@@ -953,9 +956,9 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
           const d = drag.current; if (!d) return;
           if (d.mode === "move") onMove((e.clientX - d.x) / PX, (e.clientY - d.y) / PX);
           else { d.w += (e.clientX - d.x) / PX; onResize(d.w); }
-          drag.current = { ...d, x: e.clientX, y: e.clientY };
+          drag.current = { ...d, x: e.clientX, y: e.clientY, moved: true };
         }}
-        onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
+        onPointerUp={() => { const d = drag.current; drag.current = null; if (d?.moved) onEnd?.(); }} onPointerLeave={() => { const d = drag.current; drag.current = null; if (d?.moved) onEnd?.(); }}>
         <div className="mk-sleeve-max" style={{ width: maxW * PX, height: maxH * PX, left: (W - maxW * PX) / 2, top: top0 }} />
         {fold && <div className="mk-sleeve-seam" />}
         {fold && <><span className="mk-side-l">FRONT</span><span className="mk-side-r">BACK</span></>}

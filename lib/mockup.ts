@@ -157,6 +157,53 @@ export function biggerSpot(location: string, wIn: number, hIn: number): string[]
   return opts.filter((z) => z !== location && LOCATION_SPOTS[z].maxW >= wIn && LOCATION_SPOTS[z].maxH >= (hIn || 0) && LOCATION_SPOTS[z].maxW > spot.maxW);
 }
 
+type Kind = "side-chest" | "center-chest" | "big" | "vertical" | "bottom" | "yoke";
+const KIND: Record<string, Kind> = {
+  "Left Chest": "side-chest", "Right Chest": "side-chest", Pocket: "side-chest", "Center Chest": "center-chest",
+  "Full Front": "big", "Medium Front": "big", "Across Chest": "big", "Left Vertical": "vertical", "Right Vertical": "vertical",
+  "Front Bottom Left": "bottom", "Front Bottom Right": "bottom", "Full Back": "big", "Medium Back": "big", "Across Shoulders": "big", "Upper Back (Yoke)": "yoke",
+};
+const fits = (z: string, wIn: number, hIn: number) => { const s = LOCATION_SPOTS[z]; return !!s && wIn <= s.maxW + 0.01 && hIn <= s.maxH + 0.01; };
+
+/**
+ * The location a print is, from where it sits and how big it is (no questions asked):
+ * a small logo off to one side is a left/right chest, centered it's a center chest, bigger is a medium/full front, etc.
+ * dxIn = inches from center to the art's middle (+ = right as you look at the shirt), topIn = inches from the collar to the art's top.
+ * The current location is kept whenever it's the same kind of spot and the print still fits it (a Full Front stays a Full Front).
+ */
+export function autoSpot(current: string, view: View, dxIn: number, topIn: number, wIn: number, hIn: number): string {
+  const cur = LOCATION_SPOTS[current];
+  if (!cur || cur.wrap) return current;
+  const side = dxIn >= 0 ? "Left" : "Right"; // right of center as you look = the wearer's left
+  const off = Math.abs(dxIn);
+  let z: string;
+  if (view === "back") {
+    if (wIn <= 4 && hIn <= 4 && topIn < 3.5) z = "Upper Back (Yoke)";
+    else if (wIn > 8 && hIn <= 4 && topIn < 4) z = "Across Shoulders";
+    else if (wIn <= 8 && hIn <= 8) z = "Medium Back";
+    else z = "Full Back";
+  } else {
+    const mid = topIn + hIn / 2;
+    if (wIn <= 5 && hIn <= 6 && mid > 17 && off >= 1.75) z = `Front Bottom ${side}`;
+    else if (wIn <= 5 && hIn <= 5) z = off >= 1.75 ? (current === "Pocket" && fits("Pocket", wIn, hIn) ? "Pocket" : `${side} Chest`) : "Center Chest";
+    else if (wIn <= 5 && off >= 2) z = `${side} Vertical`;
+    else if (wIn > 8 && hIn <= 4) z = "Across Chest";
+    else if (wIn <= 8 && hIn <= 8) z = "Medium Front";
+    else z = "Full Front";
+  }
+  // same kind of spot on the same side, and it still fits: keep what was chosen
+  const sameSide = (a: string, b: string) => (/Left/.test(a) === /Left/.test(b) && /Right/.test(a) === /Right/.test(b)) || KIND[a] === "big";
+  if (cur.view === view && KIND[current] === KIND[z] && sameSide(current, z) && fits(current, wIn, hIn)) return current;
+  return fits(z, wIn, hIn) ? z : view === "back" ? "Full Back" : "Full Front";
+}
+
+/** The biggest a print can go on this side of the shirt (any location there), for a design of this height/width ratio. */
+export function sideMaxWidth(location: string, ratio: number) {
+  const s = spotFor(location);
+  if (s.wrap) return maxWidthFor(location, ratio);
+  return Math.max(...Object.keys(LOCATION_SPOTS).filter((z) => !LOCATION_SPOTS[z].wrap && LOCATION_SPOTS[z].view === s.view).map((z) => maxWidthFor(z, ratio)));
+}
+
 /** Width in inches from the imprint's print size ("11\" wide", "4\" tall", "MAX wide") and the design's proportions. */
 export function printWidth(size: string, location: string, ratio: number): number {
   const spot = spotFor(location);
