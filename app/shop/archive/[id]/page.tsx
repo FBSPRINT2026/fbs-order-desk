@@ -52,7 +52,7 @@ const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLoc
 /** Customer goods tied to this Printavo order from supplier manifests: what shipped vs what the order lists, with tracking. */
 function ArchivedGoods({ id, groups }: { id: string; groups: PvGroup[] }) {
   const [lines, setLines] = useState<GLine[] | null>(null);
-  useEffect(() => { createClient().from("supplier_manifest_lines").select("*").eq("archived_order_id", id).eq("kind", "goods").then(({ data }) => setLines((data || []) as GLine[])); }, [id]);
+  useEffect(() => { createClient().from("supplier_manifest_lines").select("*").eq("archived_order_id", id).in("kind", ["goods", "blanks"]).then(({ data }) => setLines((data || []) as GLine[])); }, [id]);
   if (!lines?.length) return null;
   const sz = (z: string) => z.replace(/^size_/, "").toUpperCase().replace(/^XXL$/, "2XL").replace(/^XXXL$/, "3XL");
   const want = groups.flatMap((g) => (g.lines || []).flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +q > 0).map(([z, q]) => ({ style: l.itemNumber || "", color: l.color || "", size: sz(z), qty: +q }))));
@@ -60,7 +60,7 @@ function ArchivedGoods({ id, groups }: { id: string; groups: PvGroup[] }) {
   const trk = [...new Map(lines.map((l) => [l.tracking || l.supplier_order, l])).values()];
   return (
     <section className="panel" style={{ marginTop: 10 }}>
-      <div className="panel-h"><b>Customer goods on the way</b><span className="faint" style={{ fontSize: 12.5 }}>from {[...new Set(lines.map((l) => (l.supplier === "sanmar" ? "SanMar" : "S&S")))].join(" + ")} manifests · {lines.reduce((a, l) => a + l.qty_shipped, 0)} pcs</span></div>
+      <div className="panel-h"><b>{lines.every((l) => (l as GLine & { kind?: string }).kind === "blanks") ? "Our blanks for this job" : "Customer goods on the way"}</b><span className="faint" style={{ fontSize: 12.5 }}>from {[...new Set(lines.map((l) => (l.supplier === "sanmar" ? "SanMar" : "S&S")))].join(" + ")} manifests · {lines.reduce((a, l) => a + l.qty_shipped, 0)} pcs</span></div>
       <div className="panel-b stack" style={{ gap: 8 }}>
         <ul className="rv-ships">{trk.map((l) => (
           <li key={l.id}>{l.tracking ? <a href={trackingUrl("", l.tracking)} target="_blank" rel="noreferrer">{l.tracking}</a> : <span>{l.method || "local truck"}</span>}

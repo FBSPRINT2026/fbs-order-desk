@@ -79,16 +79,50 @@ export async function customerForAccount(admin: SupabaseClient, supplier: string
 }
 type Candidate = { id: string; number: number; nickname: string; po_number: string; customer_id: string | null; price_type: string; status: string; supplier_po?: string };
 
-/** Our own blanks on a manifest ("FBS"): which retail order they're for. */
-async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: string; kind: "blanks"; how: string } | null> {
-  const po = norm(g.customer_po);
-  const { data } = await admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).limit(400);
-  const list = (data || []) as unknown as (Candidate & { customers: { company: string; name: string } | null })[];
+/**
+ * Our own blanks on a manifest ("FBS"): which retail job they're for. The PO is usually the customer or job name
+ * ("Peticolas"), so: exact PO / job name, else the customer's name in the PO, then the garments decide between that
+ * customer's open jobs. Looks at orders here and (until go-live) open Printavo orders. `sure` = link without asking.
+ */
+async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: string; kind: "blanks"; how: string; sure: boolean } | null> {
+  const po = norm(g.customer_po), core = poCore(g.customer_po);
+  const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
+  const [{ data }, { data: ar }] = await Promise.all([
+    admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, due_date, groups, lines, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).limit(400),
+    admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data, customers(company, name)").or(`due_date.gte.${since},due_date.is.null`).limit(600),
+  ]);
+  type C = Open & { who: string };
+  const who = (c: { company: string; name: string } | null) => [c?.company || "", c?.name || ""];
+  const list: C[] = [
+    ...((data || []) as unknown as (Candidate & { due_date: string | null; customers: { company: string; name: string } | null })[]).map((o) => {
+      const items: Open["items"] = [];
+      for (const gr of orderGroups(o as unknown as Order)) for (const l of gr.lines) for (const [z, q] of Object.entries(l.sizes || {})) if (q) items.push({ style: l.style || "", brand: l.brand || "", color: l.color || "", size: sizeKey(z), need: +q || 0 });
+      return { ...o, items, who: who(o.customers).join("|") };
+    }),
+    ...((ar || []) as unknown as { id: string; visual_id: string | number; nickname: string; po_number: string; customer_id: string | null; status_name: string; due_date: string | null; data: { groups?: { lines?: { itemNumber?: string; brand?: string; color?: string; sizes?: Record<string, number> }[] }[] }; customers: { company: string; name: string } | null }[])
+      .filter((o) => !PV_CLOSED.test(o.status_name || "") && !/^shipping/i.test(o.status_name || ""))
+      .map((o): C => {
+        const items: Open["items"] = [];
+        for (const gr of o.data?.groups || []) for (const l of gr.lines || []) for (const [k, q] of Object.entries(l.sizes || {})) if (+q > 0) items.push({ style: l.itemNumber || "", brand: l.brand || "", color: l.color || "", size: pvSize(k), need: +q });
+        return { id: PV + o.id, number: +o.visual_id || 0, nickname: o.nickname || "", po_number: o.po_number || "", customer_id: o.customer_id, price_type: "", status: o.status_name, due_date: o.due_date, items, who: who(o.customers).join("|") };
+      }),
+  ];
+  // how well the shipment's garments fit an order (share of pieces that are on it)
+  const fit = (o: C) => { const a = allocate(g.lines as Line[], [o]); const pcs = g.lines.reduce((x, l) => x + l.qty_shipped, 0) || 1; return a.alloc.reduce((x, r) => x + r.line.qty_shipped, 0) / pcs; };
   const exact = list.filter((o) => poHit(o, g));
-  const byCustomer = po.length >= 4 ? list.filter((o) => { const c = norm(o.customers?.company || o.customers?.name || ""); return c && (c.includes(po) || po.includes(c)); }) : [];
-  const pick = exact.length === 1 ? exact[0] : byCustomer.length === 1 ? byCustomer[0] : null;
-  return pick ? { orderId: pick.id, kind: "blanks", how: exact.length === 1 ? "PO / job name" : "customer name in PO" } : null;
+  const nameHit = (o: C) => { const key = core || po; return key.length >= 4 && o.who.split("|").some((n) => { const c = norm(n); return c.length >= 4 && (c.includes(key) || key.includes(c)); }) || (key.length >= 5 && norm(o.nickname).includes(key)); };
+  const byName = exact.length ? [] : list.filter(nameHit);
+  const pool = exact.length ? exact : byName;
+  if (!pool.length) return null;
+  const scored = pool.map((o) => ({ o, f: o.items.length ? fit(o) : 0.5 })).sort((a, b) => b.f - a.f);
+  const best = scored[0], next = scored[1];
+  if (best.f < 0.5 && pool.length > 1) return null;
+  const clear = !next || best.f - next.f >= 0.25;
+  const how = `${exact.length ? "PO / job name" : "customer name in PO"}${best.o.items.length ? `; ${Math.round(best.f * 100)}% of the pieces are on #${best.o.number}` : ""}`;
+  // sure: one clear order whose garments cover (almost) everything that shipped
+  return { orderId: best.o.id, kind: "blanks", how, sure: clear && (best.f >= 0.9 || (!best.o.items.length && pool.length === 1 && exact.length === 1)) };
 }
+
 /** The PO without "PO", "#" and spaces: "PO 207" → "207". */
 const poCore = (po: string) => norm(po.replace(/^\s*(p\.?\s*o\.?|purchase\s*order)\s*[#:-]?\s*/i, ""));
 const words = (t: string) => t.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
@@ -286,9 +320,20 @@ export async function resolveShipment(admin: SupabaseClient, g: Group): Promise<
   return "suggested";
 }
 
+/** Our best guess for our own blanks, saved for someone to OK. */
+async function suggestBlanks(admin: SupabaseClient, g: Group, orderId: string, how: string) {
+  const ids = g.lines.map((l) => l.id).filter(Boolean) as string[];
+  await admin.from("supplier_manifest_lines").update(orderId.startsWith(PV) ? { suggest_order_id: null, suggest_archived_id: orderId.slice(PV.length), suggest_how: how } : { suggest_order_id: orderId, suggest_archived_id: null, suggest_how: how }).in("id", ids);
+}
+
 /** Put a matched supplier shipment on the order: goods tracking (wholesale) or just the link (our blanks). */
 export async function applyGroup(admin: SupabaseClient, supplier: string, g: Group, orderId: string, kind: "goods" | "blanks", how: string) {
   const ids = g.lines.map((l) => l.id).filter(Boolean) as string[];
+  if (orderId.startsWith(PV)) {
+    // a Printavo job (still worked in Printavo): tie the lines to our copy of it; tracking keeps updating here
+    if (ids.length) await admin.from("supplier_manifest_lines").update({ kind, archived_order_id: orderId.slice(PV.length), order_id: null, match_how: how, suggest_order_id: null, suggest_archived_id: null, suggest_how: "" }).in("id", ids);
+    return;
+  }
   if (ids.length) await admin.from("supplier_manifest_lines").update({ order_id: orderId, kind, match_how: how }).in("id", ids);
   if (kind === "blanks") return applyBlanks(admin, supplier, g, orderId);
   if (kind !== "goods") return;
@@ -358,7 +403,9 @@ export async function importManifest(admin: SupabaseClient, supplier: "ss" | "sa
   for (const g of groups.values()) {
     if (isUs(g.customer_name)) {
       const m = await matchBlanks(admin, g).catch(() => null);
-      if (m) { await applyGroup(admin, supplier, g, m.orderId, m.kind, m.how); out.blanks++; } else out.unmatched++;
+      if (m?.sure) { await applyGroup(admin, supplier, g, m.orderId, m.kind, m.how); out.blanks++; }
+      else { if (m) { await suggestBlanks(admin, g, m.orderId, m.how); out.suggested++; } else out.unmatched++; }
+      await trackWaiting(admin, g.lines as Line[]).catch(() => null);
       continue;
     }
     const r = await resolveShipment(admin, g).catch(() => "waiting" as const);
@@ -373,7 +420,7 @@ async function trackWaiting(admin: SupabaseClient, lines: Line[]) {
   for (const trk of [...new Set(lines.map((l) => l.tracking).filter(Boolean))]) {
     const l = lines.find((x) => x.tracking === trk)!;
     const f = await startTracker(trk, carrierOf(trk) || (/ups/i.test(l.method) ? "UPS" : /fedex/i.test(l.method) ? "FedEx" : "")).catch(() => null);
-    if (f) await admin.from("supplier_manifest_lines").update(f).eq("supplier", l.supplier).eq("tracking", trk).in("kind", ["", "goods"]).is("order_id", null);
+    if (f) await admin.from("supplier_manifest_lines").update(f).eq("supplier", l.supplier).eq("tracking", trk).in("kind", ["", "goods", "blanks"]).is("order_id", null);
   }
 }
 
@@ -400,7 +447,8 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
     if (Date.now() > deadline - 15000) break;
     if (isUs(g.customer_name)) {
       const m = await matchBlanks(admin, g).catch(() => null);
-      if (m) { await applyGroup(admin, g.supplier, g, m.orderId, m.kind, m.how); out.linked++; }
+      if (m?.sure) { await applyGroup(admin, g.supplier, g, m.orderId, m.kind, m.how); out.linked++; }
+      else if (m && !g.lines.some((l) => l.suggest_order_id || l.suggest_archived_id)) { await suggestBlanks(admin, g, m.orderId, m.how); out.suggested++; }
       continue;
     }
     const had = g.lines.some((l) => l.suggest_order_id || l.suggest_archived_id);
@@ -417,13 +465,13 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
   }
   // tracking for shipments still waiting for an order
   const trk = new Map<string, Waiting>();
-  const { data: pvLinked } = await admin.from("supplier_manifest_lines").select("*").eq("kind", "goods").not("archived_order_id", "is", null).neq("track_status", "delivered").neq("tracking", "").limit(1000);
+  const { data: pvLinked } = await admin.from("supplier_manifest_lines").select("*").in("kind", ["goods", "blanks"]).not("archived_order_id", "is", null).neq("track_status", "delivered").neq("tracking", "").limit(1000);
   for (const l of [...((data || []) as Waiting[]), ...((pvLinked || []) as Waiting[])]) if (l.tracking && l.track_status !== "delivered" && !trk.has(l.tracking)) trk.set(l.tracking, l);
   for (const l of trk.values()) {
     if (Date.now() > deadline - 10000) break;
     if (l.track_updated_at && Date.now() - Date.parse(l.track_updated_at) < 25 * 60000) continue;
     const f = l.tracker_id ? await readTracker(l.tracker_id).catch(() => null) : await startTracker(l.tracking, carrierOf(l.tracking)).catch(() => null);
-    if (f) { await admin.from("supplier_manifest_lines").update(f).eq("tracking", l.tracking).in("kind", ["", "goods"]).is("order_id", null); out.tracked++; }
+    if (f) { await admin.from("supplier_manifest_lines").update(f).eq("tracking", l.tracking).in("kind", ["", "goods", "blanks"]).is("order_id", null); out.tracked++; }
   }
   return out;
 }
@@ -487,6 +535,20 @@ export async function unmatchedGroups(admin: SupabaseClient, onlyCustomers?: str
         ]);
       }
       orders = orderCache.get(customer.id) || [];
+    }
+    if (!customer) {
+      // our blanks (or unknown account): the order(s) we guessed, so the guess can be shown and OK'd
+      const liveIds = [...new Set(g.lines.map((l) => l.suggest_order_id).filter(Boolean))] as string[];
+      const pvIds = [...new Set(g.lines.map((l) => l.suggest_archived_id).filter(Boolean))] as string[];
+      const [{ data: lo }, { data: po }] = await Promise.all([
+        liveIds.length ? admin.from("orders").select("id, number, nickname, po_number, due_date, customers(company, name)").in("id", liveIds) : Promise.resolve({ data: [] }),
+        pvIds.length ? admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, customers(company, name)").in("id", pvIds) : Promise.resolve({ data: [] }),
+      ]);
+      type R = { id: string; number?: number; visual_id?: string | number; nickname: string; po_number: string; due_date: string | null; customers: { company: string; name: string } | null };
+      orders = [
+        ...((lo || []) as unknown as R[]).map((o) => ({ id: o.id, number: o.number || 0, nickname: [o.customers?.company || o.customers?.name, o.nickname].filter(Boolean).join(" · "), po: o.po_number || "", due_date: o.due_date, printavo: false })),
+        ...((po || []) as unknown as R[]).map((o) => ({ id: PV + o.id, number: +(o.visual_id || 0), nickname: [o.customers?.company || o.customers?.name, o.nickname].filter(Boolean).join(" · "), po: o.po_number || "", due_date: o.due_date, printavo: true })),
+      ];
     }
     out.push(summarize(g, customer, orders));
   }
@@ -562,13 +624,13 @@ async function applyBlanks(admin: SupabaseClient, supplier: string, g: Group, or
 }
 export const __test = { allocate, styleEq, colorEq };
 
-export type PrintavoGoods = { archivedId: string; number: number; nickname: string; customer: string; due_date: string | null; supplier: string; supplier_order: string; pcs: number; boxes: number; tracking: PendingShipment["tracking"]; delivered: boolean; eta: string | null };
+export type PrintavoGoods = { kind: "goods" | "blanks"; archivedId: string; number: number; nickname: string; customer: string; due_date: string | null; supplier: string; supplier_order: string; pcs: number; boxes: number; tracking: PendingShipment["tracking"]; delivered: boolean; eta: string | null };
 /** Goods linked to Printavo orders (until go-live), shipment by shipment, for Goods & receiving. Delivered ones for 10 days. */
 export async function printavoGoods(admin: SupabaseClient): Promise<PrintavoGoods[]> {
-  const { data } = await admin.from("supplier_manifest_lines").select("*, archived_orders(visual_id, nickname, due_date, customers(company, name))").eq("kind", "goods").not("archived_order_id", "is", null).order("created_at", { ascending: false }).limit(2000);
+  const { data } = await admin.from("supplier_manifest_lines").select("*, archived_orders(visual_id, nickname, due_date, customers(company, name))").in("kind", ["goods", "blanks"]).not("archived_order_id", "is", null).order("created_at", { ascending: false }).limit(2000);
   type Row = Waiting & { archived_order_id: string; archived_orders: { visual_id: string | number; nickname: string; due_date: string | null; customers: { company: string; name: string } | null } | null };
   const m = new Map<string, Row[]>();
-  for (const l of (data || []) as Row[]) { const k = `${l.archived_order_id}|${l.supplier}|${l.supplier_order}`; m.set(k, [...(m.get(k) || []), l]); }
+  for (const l of (data || []) as Row[]) { const k = `${l.archived_order_id}|${l.supplier}|${l.supplier_order}|${(l as Row & { kind: string }).kind}`; m.set(k, [...(m.get(k) || []), l]); }
   const out: PrintavoGoods[] = [];
   for (const ls of m.values()) {
     const f = ls[0], a = f.archived_orders;
@@ -576,7 +638,7 @@ export async function printavoGoods(admin: SupabaseClient): Promise<PrintavoGood
     const delivered = s.tracking.length > 0 && s.tracking.every((t) => t.delivered);
     const lastDelivered = ls.map((l) => l.delivered_at).filter(Boolean).sort().pop();
     if (delivered && lastDelivered && Date.now() - Date.parse(lastDelivered) > 10 * 86400000) continue;
-    out.push({ archivedId: f.archived_order_id, number: +(a?.visual_id || 0), nickname: a?.nickname || "", customer: a?.customers?.company || a?.customers?.name || f.customer_name, due_date: a?.due_date || null, supplier: f.supplier, supplier_order: f.supplier_order, pcs: s.pcs, boxes: s.boxes, tracking: s.tracking, delivered, eta: s.tracking.map((t) => t.eta).filter(Boolean).sort().pop() || null });
+    out.push({ kind: (f as Row & { kind: string }).kind === "blanks" ? "blanks" : "goods", archivedId: f.archived_order_id, number: +(a?.visual_id || 0), nickname: a?.nickname || "", customer: a?.customers?.company || a?.customers?.name || f.customer_name, due_date: a?.due_date || null, supplier: f.supplier, supplier_order: f.supplier_order, pcs: s.pcs, boxes: s.boxes, tracking: s.tracking, delivered, eta: s.tracking.map((t) => t.eta).filter(Boolean).sort().pop() || null });
   }
   return out.sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"));
 }

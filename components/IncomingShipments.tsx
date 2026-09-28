@@ -117,10 +117,16 @@ function ResolveRow({ g, onDone }: { g: PendingShipment; onDone: () => void }) {
   async function run(body: unknown) { setBusy(true); setErr(""); try { await post(body); onDone(); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); }
   const linkAll = () => run({ link: g.lines.filter((l) => sel[l.id]).flatMap((l) => idsOf(l.id).map((id) => ({ lineId: id, orderId: sel[l.id] }))) });
   async function blanks() {
-    const { data } = await createClient().from("orders").select("id").eq("number", +num.replace(/\D/g, "")).maybeSingle();
-    if (!data) return setErr(`No order #${num}.`);
-    run({ assign: { lineIds: g.lineIds, orderId: data.id, kind: "blanks" } });
+    const n = num.replace(/\D/g, "");
+    const sb = createClient();
+    const { data } = await sb.from("orders").select("id").eq("number", +n).maybeSingle();
+    if (data) return run({ assign: { lineIds: g.lineIds, orderId: data.id, kind: "blanks" } });
+    // still a Printavo job (until go-live)
+    const { data: pv } = await sb.from("archived_orders").select("id").eq("visual_id", n).maybeSingle();
+    if (!pv) return setErr(`No order #${num}.`);
+    run({ assign: { lineIds: g.lineIds, orderId: "pv:" + pv.id, kind: "blanks" } });
   }
+  const guess = g.us ? g.orders.find((o) => g.lines.some((l) => l.suggest === o.id)) : undefined;
   const picked = custs.find((c) => c.label.toLowerCase() === who.trim().toLowerCase());
 
   return (
@@ -137,6 +143,11 @@ function ResolveRow({ g, onDone }: { g: PendingShipment; onDone: () => void }) {
         </div>
       ) : g.us ? (
         <div className="in-a">
+          {guess && <>
+            <span className="in-sugg" style={{ padding: "4px 9px" }}><b>Our guess:</b> {orderLabel(guess)}{g.how ? <span className="faint"> · {g.how}</span> : null}</span>
+            <button type="button" className="btn primary sm" disabled={busy} onClick={() => run({ assign: { lineIds: g.lineIds, orderId: guess.id, kind: "blanks" } })}>{busy ? "Linking…" : "OK, link it"}</button>
+            <span className="faint">or</span>
+          </>}
           <span>Our blanks for order</span>
           <input type="text" inputMode="numeric" placeholder="Order #" value={num} onChange={(e) => setNum(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && num) blanks(); }} aria-label="Order number" style={{ width: 110 }} />
           <button type="button" className="btn primary sm" disabled={busy || !num} onClick={blanks}>{busy ? "Saving…" : "Link"}</button>
