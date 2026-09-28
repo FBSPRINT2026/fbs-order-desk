@@ -11,11 +11,6 @@ export type ShipTarget = {
   bill: BillTo; account: string; zip: string;
 };
 
-const LAST = "fbs-ship-last-box";
-const lastSize = (): { length: number; width: number; height: number } | undefined => {
-  try { const v = JSON.parse(localStorage.getItem(LAST) || "null"); return v && v.length && v.width && v.height ? v : undefined; } catch { return undefined; }
-};
-const rememberSize = (b: Box) => { try { if (boxReady(b)) localStorage.setItem(LAST, JSON.stringify({ length: b.length, width: b.width, height: b.height })); } catch { /* not important */ } };
 /** When a rate arrives: the carrier's date, else business days from today. */
 export function arrival(r: Rate): Date | null {
   if (r.deliveryDate) { const d = new Date(r.deliveryDate.slice(0, 10) + "T12:00"); if (!isNaN(+d)) return d; } // a calendar day, not a time
@@ -57,8 +52,11 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
 }) {
   const sb = createClient();
   const estimate = estimateBoxes(t.pieces, settings.perBox);
-  // new boxes start at the size used last on this computer, so the usual box is just Tab, Tab, Tab
-  const [boxes, setBoxes] = useState<Box[]>(() => (existing?.boxes?.length ? existing.boxes : newBoxes(estimate, lastSize())));
+  // new boxes start at the default box (Large 21×16×13 unless changed in Settings), so it's straight to the weights
+  const defaultSize = settings.boxes.find((b) => b.name === settings.defaultBox) || settings.boxes[0];
+  const [boxes, setBoxes] = useState<Box[]>(() => (existing?.boxes?.length ? existing.boxes : newBoxes(estimate, defaultSize)));
+  const [askAll, setAskAll] = useState<{ length: number; width: number; height: number } | null>(null);
+  const [multi, setMulti] = useState<{ step: "count" | "size"; count: number } | null>(null);
   const [to, setTo] = useState<ShipAddress>(existing?.ship_to?.street1 ? existing.ship_to : t.to);
   const [bill, setBill] = useState<BillTo>(existing?.bill_to || t.bill);
   const [account, setAccount] = useState(existing?.bill_account || t.account);
@@ -84,6 +82,20 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const renumber = (bs: Box[]) => bs.map((b, i) => ({ ...b, n: i + 1 }));
   const addBox = () => { setBoxes((bs) => { const last = bs[bs.length - 1]; return renumber([...bs, { n: bs.length + 1, length: last?.length ?? "", width: last?.width ?? "", height: last?.height ?? "", weight: "" }]); }); setRates(null); const last = boxes[boxes.length - 1]; setTimeout(() => refs.current[`${sized(last) ? "w" : "l"}${boxes.length + 1}`]?.focus(), 30); };
   const removeBox = (i: number) => { setBoxes((bs) => renumber(bs.filter((_, j) => j !== i))); setRates(null); };
+  /** Box 1's size changed to something the other boxes don't have: ask whether to use it for every box. */
+  const offerAll = () => {
+    const b1 = boxes[0];
+    if (!sized(b1) || boxes.length < 2) return;
+    const d = { length: +b1.length, width: +b1.width, height: +b1.height };
+    if (boxes.slice(1).some((b) => +b.length !== d.length || +b.width !== d.width || +b.height !== d.height)) setAskAll(d);
+  };
+  /** Add several boxes at once (e.g. 40), all at one size or with the sizes left blank. */
+  const addMany = (count: number, size: { length: number; width: number; height: number } | null) => {
+    const start = boxes.length;
+    setBoxes((bs) => renumber([...bs, ...Array.from({ length: count }, (_, j) => ({ n: start + j + 1, length: size?.length ?? "", width: size?.width ?? "", height: size?.height ?? "", weight: "" } as Box))]));
+    setRates(null); setMulti(null);
+    setTimeout(() => refs.current[`${size ? "w" : "l"}${start + 1}`]?.focus(), 40);
+  };
   const sizeAll = (s: { length: number; width: number; height: number }) => {
     const next = boxes.map((b) => ({ ...b, length: s.length, width: s.width, height: s.height }));
     setBoxes(next); setRates(null);
@@ -207,7 +219,10 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
           <section className="sw-main">
             <div className="sw-est">
               <div><b>{t.pieces.toLocaleString()}</b> pieces · estimated <b>{estimate} box{estimate === 1 ? "" : "es"}</b> at {settings.perBox} per box{boxes.length !== estimate ? <span className="faint"> · using {boxes.length}</span> : null}</div>
-              <div className="sw-presets"><span className="faint">All boxes:</span>{settings.boxes.map((s) => <button key={s.name} type="button" className="chip" onClick={() => sizeAll(s)}>{s.name} {s.length}×{s.width}×{s.height}</button>)}</div>
+              <div className="sw-presets"><span className="faint">All boxes:</span>{settings.boxes.map((s) => {
+                const on = boxes.length > 0 && boxes.every((b) => +b.length === s.length && +b.width === s.width && +b.height === s.height);
+                return <button key={s.name} type="button" tabIndex={-1} className={"chip" + (on ? " on" : "")} onClick={() => sizeAll(s)}>{s.name} {s.length}×{s.width}×{s.height}{s.name === settings.defaultBox ? " · default" : ""}</button>;
+              })}</div>
             </div>
             <div style={{ overflowX: "auto" }}><table className="sw-boxes">
               <thead><tr><th>Box</th><th>Length</th><th>Width</th><th>Height</th><th>Weight</th>{tracking && <th>Tracking #</th>}<th /></tr></thead>
@@ -218,15 +233,15 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
                     {(["length", "width", "height"] as const).map((k) => (
                       <td key={k}><div className="sw-in"><input ref={k === "length" ? (el) => { refs.current[`l${b.n}`] = el; } : undefined} type="number" inputMode="decimal" min={0} step="0.5" value={b[k]}
                         onFocus={(e) => e.target.select()} onChange={(e) => setBox(i, { [k]: num(e.target.value) })}
+                        data-dims={b.n}
+                        onBlur={(e) => { if (i === 0 && (e.relatedTarget as HTMLElement | null)?.dataset?.dims !== "1") offerAll(); }}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.closest("td")?.nextElementSibling?.querySelector("input") as HTMLInputElement | null)?.focus(); } }} aria-label={`Box ${b.n} ${k}`} /><span>in</span></div></td>
                     ))}
                     <td><div className="sw-in w"><input ref={(el) => { refs.current[`w${b.n}`] = el; }} type="number" inputMode="decimal" min={0} step="0.1" value={b.weight}
                       onFocus={(e) => e.target.select()} onChange={(e) => setBox(i, { weight: num(e.target.value) })}
-                      onBlur={() => rememberSize(b)}
-                      onKeyDown={(e) => {
+                                            onKeyDown={(e) => {
                         // Tab or Enter after a weight goes to the next box: its weight when its size is filled in (22 Tab 23 Tab 24…), else its length
                         if ((e.key === "Tab" && !e.shiftKey) || e.key === "Enter") {
-                          rememberSize(b);
                           const nb = boxes[b.n];
                           if (nb) { e.preventDefault(); refs.current[`${sized(nb) ? "w" : "l"}${b.n + 1}`]?.focus(); }
                           else if (e.key === "Enter") { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur(); }
@@ -241,8 +256,38 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
                 ))}
               </tbody>
             </table></div>
+            {askAll && (
+              <div className="sw-ask">
+                <span>Box 1 is now <b>{askAll.length}×{askAll.width}×{askAll.height}</b>. Use that size for all {boxes.length} boxes?</span>
+                <button type="button" className="btn primary sm" onClick={() => { sizeAll(askAll); setAskAll(null); }}>Yes, all boxes</button>
+                <button type="button" className="btn sm" onClick={() => { setAskAll(null); setTimeout(() => refs.current.w1?.focus(), 30); }}>No, just box 1</button>
+              </div>
+            )}
+            {multi && (
+              <div className="sw-ask">
+                {multi.step === "count" ? (
+                  <>
+                    <span>How many boxes to add?</span>
+                    <input type="number" min={1} max={200} autoFocus className="sw-many" value={multi.count || ""} onChange={(e) => setMulti({ ...multi, count: Math.max(0, Math.min(200, Math.round(+e.target.value || 0))) })}
+                      onKeyDown={(e) => { if (e.key === "Enter" && multi.count > 0) { e.preventDefault(); setMulti({ ...multi, step: "size" }); } }} aria-label="How many boxes" />
+                    <button type="button" className="btn primary sm" disabled={!multi.count} onClick={() => setMulti({ ...multi, step: "size" })}>Next</button>
+                    <button type="button" className="btn sm ghost" onClick={() => setMulti(null)}>Cancel</button>
+                  </>
+                ) : (() => {
+                  const sz = sized(boxes[0]) ? { length: +boxes[0].length, width: +boxes[0].width, height: +boxes[0].height } : defaultSize;
+                  return (
+                    <>
+                      <span>Add <b>{multi.count}</b> box{multi.count === 1 ? "" : "es"}. Make them all <b>{sz.length}×{sz.width}×{sz.height}</b>?</span>
+                      <button type="button" className="btn primary sm" autoFocus onClick={() => addMany(multi.count, sz)}>Yes, same size</button>
+                      <button type="button" className="btn sm" onClick={() => addMany(multi.count, null)}>No, I&apos;ll enter sizes</button>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
             <div className="sw-foot">
               <button type="button" className="btn" onClick={addBox}>+ Add a box</button>
+              <button type="button" className="btn" onClick={() => { setAskAll(null); setMulti({ step: "count", count: 10 }); }}>+ Add several boxes</button>
               <span className="faint">{boxes.length} box{boxes.length === 1 ? "" : "es"} · {Math.round(totalWeight * 10) / 10} lb total{ready ? "" : " · fill in every size and weight"}</span>
             </div>
 

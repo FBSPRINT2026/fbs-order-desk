@@ -230,6 +230,9 @@ function ShipSettingsPanel({ s, onSaved }: { s: Settings; onSaved: (s: Settings)
               </div>
             ))}
             <button type="button" className="btn sm" onClick={() => setV({ ...v, boxes: [...v.boxes, { name: "New", length: 0, width: 0, height: 0 }] })}>+ Box size</button>
+            <label style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12.5, fontWeight: 600, color: "var(--ink-2)", marginTop: 8 }}>New boxes start at
+              <select value={v.defaultBox} onChange={(e) => setV({ ...v, defaultBox: e.target.value })}>{v.boxes.map((b) => <option key={b.name} value={b.name}>{b.name} {b.length}×{b.width}×{b.height}</option>)}</select>
+            </label>
             <div className="sw-h" style={{ marginTop: 14 }}>What customers pay</div>
             <div className="sc-nums">
               {n("markupPct", "Markup on our account", "%")}

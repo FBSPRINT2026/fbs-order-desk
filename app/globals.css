@@ -1880,3 +1880,7 @@ a.as-ai{text-decoration:none}
 .sw-rate.dim{opacity:.55;background:var(--surface-2)}
 .sw-rate.dim.on{opacity:1}
 .sw-rate-list{max-height:none}
+.chip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.sw-ask{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding:10px 12px;border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;font-size:13.5px}
+.sw-ask>span{flex:1 1 220px}
+.sw-many{width:80px}

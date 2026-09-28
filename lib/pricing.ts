@@ -148,6 +148,7 @@ export type ShipSettings = {
   perBox: number;          // pieces that fit in one box (for the box estimate)
   from: ShipAddress;       // our return / pickup address
   boxes: BoxSize[];        // box sizes we keep on hand
+  defaultBox: string;      // the size new boxes start at (by name)
   markupPct: number;       // on our account: what we paid + this %
   perBoxFee: number;       // + this per box
   minCharge: number;       // at least this
@@ -243,9 +244,10 @@ export const DEFAULT_SETTINGS: Settings = {
     boxes: [
       { name: "Small", length: 14, width: 10, height: 8 },
       { name: "Medium", length: 18, width: 14, height: 10 },
-      { name: "Large", length: 20, width: 16, height: 12 },
+      { name: "Large", length: 21, width: 16, height: 13 },
       { name: "XL", length: 24, width: 18, height: 12 },
     ],
+    defaultBox: "Large",
     markupPct: 15, perBoxFee: 2, minCharge: 0, thirdPartyFee: 0,
   },
 };
