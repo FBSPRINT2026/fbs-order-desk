@@ -2253,3 +2253,8 @@ a.as-ai{text-decoration:none}
   :root{--fbs-fade:linear-gradient(in oklab 90deg,var(--fbs-blue) 0%,var(--fbs-salmon) 52%,var(--fbs-orange) 100%)}
 }
 .page-head h1::after{height:5px}
+/* group headers: white and bold again; the line above each takes its color (Sales blue, Production salmon, Shop Tools orange) */
+.nav-h-sales,.nav-h-production,.nav-h-shoptools{color:var(--side-ink-strong)}
+.nav-h-sales{border-top:2px solid var(--fbs-blue)}
+.nav-h-production{border-top:2px solid var(--fbs-salmon)}
+.nav-h-shoptools{border-top:2px solid var(--fbs-orange)}
