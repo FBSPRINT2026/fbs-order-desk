@@ -76,7 +76,8 @@ export default function PrintavoCensus() {
           Counts every order in Printavo, then checks the file sizes on {SAMPLE} randomly picked orders to estimate the storage everything would need.
           Sizes only: nothing is downloaded, copied or changed. Keep this tab open while it runs (about 20–30 minutes).
         </p>
-        {phase === "list" && <div className="pv-prog"><span>Counting orders {listed.toLocaleString()}{total ? ` / ${total.toLocaleString()}` : ""}</span><i style={{ ["--p" as string]: (total ? Math.round((listed / total) * 100) : 0) + "%" }} /></div>}
+        {phase === "list" && (total ? <div className="pv-prog"><span>Counting orders {listed.toLocaleString()} / {total.toLocaleString()}</span><i style={{ ["--p" as string]: Math.round((listed / total) * 100) + "%" }} /></div>
+          : <div style={{ fontSize: 13 }}>Counting orders… <b>{listed.toLocaleString()}</b> so far</div>)}
         {phase === "measure" && s && <div className="pv-prog"><span>Measuring sample {done} / {Math.min(SAMPLE, s.orders)}</span><i style={{ ["--p" as string]: Math.round((done / Math.max(1, Math.min(SAMPLE, s.orders))) * 100) + "%" }} /></div>}
         {err && <div className="pv-err">{err}</div>}
         {note && !phase && <div className="faint" style={{ fontSize: 13 }}>{note}</div>}
