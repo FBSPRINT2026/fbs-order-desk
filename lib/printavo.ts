@@ -128,7 +128,7 @@ export const Q = {
           ... on EmailMessage{ id from to cc subject text incoming timestamps{ createdAt } }
           ... on TextMessage{ id from to text incoming timestamps{ createdAt } } } } } }`,
   // census: every order in the account (50 at a time), and just the file links on one order
-  list: `query($after:String){ orders(first:50, after:$after){ nodes{ __typename ${typed("id visualId createdAt total contact{ customer{ id companyName } }")} } pageInfo{ hasNextPage endCursor } } }`,
+  list: `query($after:String){ orders(first:25, after:$after){ nodes{ __typename ${typed("id visualId createdAt total contact{ customer{ id companyName } }")} } pageInfo{ hasNextPage endCursor } } }`,
   fileList: `query($id:ID!){ order(id:$id){ ${typed("productionFiles(first:50){ nodes{ fileUrl } } lineItemGroups(first:50){ nodes{ id } }")} } }`,
   groupFiles: `query($id:ID!){ lineItemGroup(id:$id){ imprints(first:25){ nodes{ mockups(first:20){ nodes{ fullImageUrl } } } } lineItems(first:100){ nodes{ mockups(first:10){ nodes{ fullImageUrl } } } } } }`,
 };
@@ -136,10 +136,11 @@ export const Q = {
 /* ---------- census (sizes only, nothing copied) ---------- */
 
 export type PvListed = { id: string; visualId: string; kind: "invoice" | "quote"; createdAt: string; total: number; customerId: string; company: string };
-/** One page (50) of every order in the Printavo account. */
+/** One page (25, Printavo's most) of every order in the Printavo account. */
 export async function listOrders(after: string | null): Promise<{ orders: PvListed[]; next: string | null; totalNodes: number | null }> {
   const d = await pv<{ orders: { nodes: Raw[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(Q.list, { after });
   const c = d.orders;
+  if (!c) throw new PrintavoError("Printavo didn't return the order list.");
   return {
     orders: (c?.nodes || []).filter((o) => o?.id).map((o) => ({ id: s(o.id), visualId: s(o.visualId), kind: o.__typename === "Quote" ? "quote" : "invoice", createdAt: s(o.createdAt), total: n(o.total), customerId: s(o.contact?.customer?.id), company: s(o.contact?.customer?.companyName) })),
     next: c?.pageInfo?.hasNextPage ? c.pageInfo.endCursor : null,
@@ -281,7 +282,7 @@ export async function checkQueries(): Promise<Record<string, string>> {
   for (const [name, query] of Object.entries(Q)) {
     if (name === "search") continue; // would return real customers
     await sleep(600);
-    const r = await fetch(PV_URL, { method: "POST", headers: { "Content-Type": "application/json", email: email || "", token: token || "" }, body: JSON.stringify({ query: name === "list" ? query.replace("first:50", "first:1") : query, variables: query.includes("$id") ? { id: "0", after: null } : { after: null } }), cache: "no-store" });
+    const r = await fetch(PV_URL, { method: "POST", headers: { "Content-Type": "application/json", email: email || "", token: token || "" }, body: JSON.stringify({ query: name === "list" ? query.replace("first:25", "first:1") : query, variables: query.includes("$id") ? { id: "0", after: null } : { after: null } }), cache: "no-store" });
     const j = await r.json().catch(() => null) as { errors?: { message: string; path?: unknown }[] } | null;
     const schema = (j?.errors || []).filter((e) => !e.path).map((e) => e.message);
     const other = (j?.errors || []).filter((e) => e.path).map((e) => e.message);

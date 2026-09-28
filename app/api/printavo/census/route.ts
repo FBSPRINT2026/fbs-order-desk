@@ -15,7 +15,7 @@ export async function GET() {
 }
 
 /**
- * step "list": reads Printavo's order list (50 per request) for about 40 seconds; call again with `after` until `after` is null.
+ * step "list": reads Printavo's order list (25 per request) for about 40 seconds; call again with `after` until `after` is null.
  * step "measure": reads file sizes on randomly picked orders for about 40 seconds (sizes only, nothing is downloaded or copied).
  */
 export async function POST(req: Request) {
