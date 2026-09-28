@@ -29,6 +29,39 @@ type LinkInfo = { lineIds: string[]; customerId: string | null; customerName: st
 type Via = "ss" | "ups" | "fedex" | "freight" | "other";
 const VIAS: { k: string; label: string }[] = [{ k: "ss", label: "S&S truck" }, { k: "ups", label: "UPS" }, { k: "fedex", label: "FedEx" }, { k: "freight", label: "Freight (LTL pallets)" }, { k: "other", label: "DHL / other" }];
 const SUPPLIERS_G: { k: string; label: string }[] = [{ k: "ss", label: "S&S Activewear" }, { k: "sanmar", label: "SanMar" }, { k: "other", label: "Other vendors" }];
+/**
+ * Forgiving search: ignores spaces and punctuation ("Nine18" = "Nine 18"), and allows a typo or two
+ * ("Peticoles" finds Peticolas). Every word typed has to be found.
+ */
+const squash = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+function nearIn(text: string, word: string) {
+  if (text.includes(word)) return true;
+  const n = word.length, max = n >= 8 ? 2 : n >= 4 ? 1 : 0;
+  if (!max) return false;
+  for (let i = 0; i + n - max <= text.length; i++) for (let len = n - max; len <= n + max; len++) {
+    if (i + len > text.length) break;
+    const a = text.slice(i, i + len), b = word;
+    // edit distance, stopped early past `max`
+    let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let x = 1; x <= a.length; x++) {
+      const cur = [x]; let best = x;
+      for (let y = 1; y <= b.length; y++) { cur[y] = Math.min(prev[y] + 1, cur[y - 1] + 1, prev[y - 1] + (a[x - 1] === b[y - 1] ? 0 : 1)); best = Math.min(best, cur[y]); }
+      if (best > max) { prev = []; break; }
+      prev = cur;
+    }
+    if (prev.length && prev[b.length] <= max) return true;
+  }
+  return false;
+}
+const fuzzyHas = (text: string, query: string) => {
+  const t = squash(text);
+  const whole = squash(query);
+  if (whole && nearIn(t, whole)) return true;
+  const words = query.toLowerCase().split(/\s+/).map(squash).filter(Boolean);
+  return words.length > 1 && words.every((w) => nearIn(t, w));
+};
+/** The full FBS orders / customer goods boards are hidden for now: those tabs just filter today's update. */
+const SHOW_BOARDS = false as boolean;
 const nextBiz = (d: string) => { const x = new Date(d.slice(0, 10) + "T12:00"); do { x.setDate(x.getDate() + 1); } while (x.getDay() === 0 || x.getDay() === 6); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
 type Pkg = { key: string; kind: "blanks" | "goods"; orderId: string; number: number; who: string; label: string; tracking: string; carrier: string; status: string; detail: string; at: string | null; delivered: boolean; need: string | null; href: string };
 
@@ -198,10 +231,12 @@ export default function GoodsReceiving() {
     link: h.order ? undefined : { lineIds: h.lineIds, customerId: h.customer_id, customerName: h.customer_id ? h.who : "", us: h.who === "FBS", supplier: h.supplier, name: h.customer_name, account: h.customer_account, suggest: null, styles: h.styles } }));
   // searching filters the whole update (Cowboy Cool → only Cowboy Cool), and adds matches from older manifests
   const term = q.trim().toLowerCase();
-  const hay = (r: Row) => [r.who, r.po, r.so, r.sub, r.number ? `#${r.number} ${r.number}` : "", ...r.trks.map((k) => `${k.tracking} ${k.carrier}`)].join(" ").toLowerCase();
-  const view_rows: Row[] = term.length >= 2
-    ? [...rows.filter((r) => hay(r).includes(term)), ...hitRows.filter((h) => !rows.some((r) => r.so && r.so === h.so && r.sub === h.sub && r.who === h.who) && !rows.some((r) => r.key === h.key))]
+  const hay = (r: Row) => [r.who, r.po, r.so, r.sub, r.number ? `#${r.number} ${r.number}` : "", ...r.trks.map((k) => `${k.tracking} ${k.carrier}`)].join(" ");
+  const searched: Row[] = term.length >= 2
+    ? [...rows.filter((r) => fuzzyHas(hay(r), term)), ...hitRows.filter((h) => !rows.some((r) => r.so && r.so === h.so && r.sub === h.sub && r.who === h.who) && !rows.some((r) => r.key === h.key))]
     : rows;
+  // the FBS orders / Customer supplied goods tabs just narrow the update to our blanks or the customers' goods
+  const view_rows: Row[] = view === "fbs" ? searched.filter((r) => r.side === "fbs") : view === "customer" ? searched.filter((r) => r.side === "customer") : searched;
   const byAt = (a: Row, b: Row) => (a.at || "9999").localeCompare(b.at || "9999");
   const L = {
     arrived: view_rows.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
@@ -293,14 +328,14 @@ export default function GoodsReceiving() {
       <div className="rv-tabrow">
       <div className="aa-sub rv-views" role="tablist">
         <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; overview</button>
-        <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS orders<span className={"aa-n" + (v.need.length ? " hot" : "")}>{v.need.length + arriving.length}</span></button>
-        <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer supplied goods<span className="aa-n">{data.goods.filter((it) => it.goods.status !== "received").length + unlinked.length}</span></button>
+        <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS orders<span className="aa-n">{searched.filter((r) => r.side === "fbs" && r.state !== "arrived").length}</span></button>
+        <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer supplied goods<span className="aa-n">{searched.filter((r) => r.side === "customer" && r.state !== "arrived").length}</span></button>
         {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
       </div>
-        <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => { setQ(e.target.value); if (view !== "today") setView("today"); }} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
+        <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
       </div>
 
-      {view === "customer" && <>
+      {SHOW_BOARDS && view === "customer" && <>
         {pvCust.length > 0 && (
           <section className="rv-pane" style={{ marginBottom: 14, minHeight: 0 }}>
             <div className="rv-pane-h"><b>On Printavo jobs</b><span className="faint">customer goods tied to jobs still worked in Printavo (until go-live)</span></div>
@@ -315,7 +350,7 @@ export default function GoodsReceiving() {
           {!pending ? <div className="empty">Loading…</div> : <ResolveList list={pending} onDone={() => { loadPending(); load(); setRefreshKey((k) => k + 1); }} />}
         </>
       )}
-      {view === "today" && <>
+      {(view === "today" || view === "fbs" || view === "customer") && <>
 
       {/* today's update: arriving today, then what already arrived; the boxes open the other lists */}
       <section className="rv-day">
@@ -347,7 +382,7 @@ export default function GoodsReceiving() {
       </section>
       </>}
 
-      {view === "fbs" && <>
+      {SHOW_BOARDS && view === "fbs" && <>
       <div className="rv-one">
         {/* FBS orders (retail) */}
         <section className="rv-pane">
