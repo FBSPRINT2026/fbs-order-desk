@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { allocateOldest, applyPay, describePay, hasFilter, parsePay, type PayFilter, type PayOrderLite } from "@/lib/paySelect";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -11,7 +11,9 @@ const SUGGEST = ["Everything due", "Past due", "Completed orders", "Last month",
  * "the Brewery jobs") or tap a suggestion; the matching orders get checked, ready to pay together.
  * Common phrasings are understood right away; anything else is read by Claude.
  */
-export default function QuickPay({ open, onSelect, ask, onPayAmount }: {
+export default function QuickPay({ open, onSelect, ask, onPayAmount, initial }: {
+  /** run this request right away (e.g. from the dashboard helper: "all of August") */
+  initial?: string;
   open: PayOrderLite[];
   onSelect: (ids: string[]) => void;
   /** "pay an amount": pay these (oldest first; the last one partly) */
@@ -29,6 +31,8 @@ export default function QuickPay({ open, onSelect, ask, onPayAmount }: {
   const parts = amtN >= 1 ? allocateOldest(open, Math.min(amtN, owed)) : [];
   const partial = parts.find((p) => p.amount < p.item.balance - 0.004);
   useEffect(() => { try { setRecent(JSON.parse(localStorage.getItem(KEY) || "[]").slice(0, 4)); } catch { /* private window */ } }, []);
+  const ran = useRef(false);
+  useEffect(() => { if (initial && !ran.current && open.length) { ran.current = true; setQ(initial); run(initial); } }, [initial, open.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const remember = (s: string) => { const r = [s, ...recent.filter((x) => x.toLowerCase() !== s.toLowerCase())].slice(0, 4); setRecent(r); try { localStorage.setItem(KEY, JSON.stringify(r)); } catch { /* ignore */ } };
 
   const pick = (f: PayFilter, text: string, why: string, ai = false) => {

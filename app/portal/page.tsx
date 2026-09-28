@@ -10,6 +10,7 @@ import { orderSearchText } from "@/lib/search";
 import { withFiles, type HubMsg } from "@/lib/messages";
 import PortalMessages from "@/components/PortalMessages";
 import PortalGoods from "@/components/PortalGoods";
+import PortalAssistant from "@/components/PortalAssistant";
 import { aiPaySelect } from "@/app/portal/pay-select";
 import { needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
@@ -92,7 +93,6 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     if (g.goods.status === "issue") attention.push({ kind: "receive", order_id: g.order.id, number: g.order.number, date: "", label: "Issue with your goods", href: goodsHref });
   });
   const acct = ctx.customers[0];
-  const firstName = (acct?.name || "").trim().split(/\s+/)[0];
   const hubOrders = orders.filter((o) => o.status !== "request" || o.submitted_at).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", href: `/portal/orders/${o.id}${qs}` }));
   const company = acct?.company || acct?.name || "";
 
@@ -110,7 +110,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             <p className="muted" style={{ marginBottom: 0 }}>If you were expecting a quote, it may be under a different email address. Contact {ctx.settings.shop.name}{ctx.settings.shop.email ? ` at ${ctx.settings.shop.email}` : ""}{ctx.settings.shop.phone ? ` or ${ctx.settings.shop.phone}` : ""}.</p>
           </div></div>
         ) : (
-          <AccountAreas mode="portal" greeting={firstName ? `Hi, ${firstName}` : undefined}
+          <AccountAreas mode="portal" assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}
             goodsPanel={wholesale ? <PortalGoods items={goodsItems} canAct={!ctx.preview} qs={qs} empty="No open jobs need goods from you right now." /> : undefined}
             goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
             goodsCount={goodsOpen.length}

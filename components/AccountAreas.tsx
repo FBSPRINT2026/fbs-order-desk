@@ -52,7 +52,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ mode, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the printable statement (open invoices + aging + pay it all) */
   statementHref?: string;
@@ -64,6 +64,8 @@ export default function AccountAreas({ mode, onPaySelect, statementHref, onEmail
   onPaySelect?: (text: string) => Promise<{ ok: boolean; error?: string; filter?: PayFilter; explain?: string; off?: boolean }>;
   /** the Messages hub (the dashboard's centerpiece in the portal, and the Messages area) */
   messagesPanel?: ReactNode;
+  /** portal: the helper at the top of the dashboard ("What can I help you with today?") */
+  assistant?: ReactNode;
   /** portal: "Hi Jordan" line over the dashboard */
   greeting?: string;
   /** wholesale: the customer supplied goods area (full), a compact version for the dashboard, and how many need attention */
@@ -204,7 +206,7 @@ export default function AccountAreas({ mode, onPaySelect, statementHref, onEmail
     body = (
       <div className="pd">
         <div className="pd-top">
-          <div className="pd-hello">{greeting && <h2>{greeting}</h2>}<span>Everything about your account in one place. Message us any time.</span></div>
+          {assistant || <div className="pd-hello">{greeting && <h2>{greeting}</h2>}<span>Everything about your account in one place. Message us any time.</span></div>}
           <div className="pd-actions">
             {homeTop}
             {due > 0.004 && (
@@ -475,7 +477,7 @@ export default function AccountAreas({ mode, onPaySelect, statementHref, onEmail
         <aside className="aa-payside">
           {terms && <div className="aa-terms"><span>Payment terms</span><b>{terms}</b></div>}
           {canPay && (
-        <QuickPay ask={onPaySelect} onSelect={(ids) => { setPaySel(ids); setPayNow(null); setPayAmt(undefined); }}
+        <QuickPay initial={sp.get("find") || undefined} ask={onPaySelect} onSelect={(ids) => { setPaySel(ids); setPayNow(null); setPayAmt(undefined); }}
           onPayAmount={(parts, amount) => {
             const byId = new Map(liveInvoices.map((o) => [o.id, o]));
             setPaySel(parts.map((p) => p.id));
