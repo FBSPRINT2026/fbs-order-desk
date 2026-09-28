@@ -62,7 +62,11 @@ export async function POST(req: Request) {
       ? buf.toString("utf8").split(/\r?\n/).map((line) => (line.match(/("([^"]|"")*"|[^,]*)(,|$)/g) || []).map((c) => c.replace(/,$/, "").replace(/^"|"$/g, "").replace(/""/g, '"')))
       : readXlsx(buf);
     const title = rows.slice(0, 3).flat().join(" ");
-    const supplier = String(form.get("supplier") || "") === "sanmar" || /sanmar/i.test(title + file.name) ? "sanmar" : "ss";
+    // SanMar's freight manifest never says "SanMar": know it by its columns (Decorator customer name, Catalog Style,
+    // Carton Number, Sales Order "SO-…"); S&S's says "S&S Activewear" in its title row
+    const head = rows.slice(0, 5).flat().join(" | ");
+    const sanmarCols = /decorator\s*customer\s*name|catalog\s*style|carton\s*number|customer\s*account/i.test(head) || rows.slice(0, 20).some((r) => r.some((c) => /^SO-\d{6,}$/.test(c.trim())));
+    const supplier = String(form.get("supplier") || "") === "sanmar" || /sanmar/i.test(title + file.name) || (sanmarCols && !/s&s\s*activewear/i.test(title)) ? "sanmar" : "ss";
     const lines = parseManifest(rows);
     if (!lines.length) return NextResponse.json({ error: "No shipments in that file." }, { status: 400 });
     return NextResponse.json({ supplier, ...(await importManifest(admin, supplier, lines, file.name)) });
