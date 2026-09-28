@@ -8,6 +8,8 @@ import { mergeSettings } from "@/lib/pricing";
 import { carrierOf, supplierLabel } from "@/lib/goods";
 import { cleanAttachments, type Attachment } from "@/lib/messages";
 import { startTracker } from "@/lib/goodsTrack";
+import { getPortalCtx } from "@/lib/portal";
+import { linkByHand } from "@/lib/manifest";
 
 type Result = { ok: boolean; error?: string };
 export type TrackingInput = { carrier: string; tracking: string; boxes: number | null; eta: string | null; note: string; files: Attachment[] };
@@ -76,4 +78,16 @@ export async function saveGoodsInfo(orderId: string, g: GoodsInfo): Promise<Resu
     revalidatePath("/portal");
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
+}
+
+/** "These goods are for my order #…": the customer links an incoming shipment (not on an order yet) to their order. */
+export async function linkIncoming(pick: { lineId: string; orderId: string }[]): Promise<Result> {
+  try {
+    const ctx = await getPortalCtx();
+    if (ctx.isStaff || ctx.preview) return { ok: false, error: "This is a preview. Customers link goods from their own login." };
+    if (!ctx.customerIds.length || !pick.length) return { ok: false, error: "Pick your order." };
+    await linkByHand(createAdminClient(), pick, ctx.email || "customer", ctx.customerIds);
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

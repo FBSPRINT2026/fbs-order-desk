@@ -320,8 +320,8 @@ export default function AccountAreas({ mode, projectsPanel, projectsCount, progr
                 <div key={g.kind} className="aa-attn-g">
                   <div className="aa-attn-t">{g.title}</div>
                   {items.map((a, i) => (
-                    <Link key={g.kind + a.order_id + i} href={orderHref(a.order_id, a.hash)} className="aa-attn-i">
-                      <span><span className="k">{g.label}</span><span className="v">#{a.number}</span></span>
+                    <Link key={g.kind + a.order_id + i} href={!a.number && a.href ? a.href : orderHref(a.order_id, a.hash)} className="aa-attn-i">
+                      {a.number ? <span><span className="k">{g.label}</span><span className="v">#{a.number}</span></span> : <span><span className="k">Supplier shipment</span><span className="v">{a.label}</span></span>}
                       <span><span className="k">{g.kind === "pay" ? "Balance" : g.kind === "draft" ? "Started" : "Since"}</span><span className="v">{a.date}</span></span>
                       <span className="go"><Ico d={I.arrow} size={18} /></span>
                     </Link>

@@ -134,3 +134,54 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
     image: st.styleImage ? `https://www.ssactivewear.com/${st.styleImage}` : "",
   };
 }
+
+/* ---------- ordering blanks ---------- */
+
+export type SSSku = { sku: string; skuID_Master: number; colorName: string; sizeName: string; size: string; price: number; qty: number; warehouses: { warehouseAbbr: string; qty: number }[] };
+
+/** Every sku of a style (by S&S style id, or what someone typed), with our price and stock by warehouse. */
+export async function ssSkus(styleIdOrQuery: number | string): Promise<{ styleID: number; brand: string; style: string; skus: SSSku[] } | null> {
+  const st = typeof styleIdOrQuery === "number" ? (await ssGet<SSStyle[]>(`/styles/?styleid=${styleIdOrQuery}`))[0] : await findStyle(styleIdOrQuery);
+  if (!st) return null;
+  const prods = await ssGet<(SSProduct & { sku: string; skuID_Master: number; warehouses?: { warehouseAbbr: string; qty: number }[] })[]>(`/products/?styleid=${st.styleID}&fields=sku,skuID_Master,colorName,sizeName,customerPrice,piecePrice,qty,warehouses`);
+  const youth = /youth|toddler|kids|infant/i.test(`${st.title} ${st.baseCategory}`);
+  const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
+  return {
+    styleID: st.styleID, brand: st.brandName, style: st.styleName,
+    skus: (Array.isArray(prods) ? prods : []).map((p) => {
+      const raw = SIZE_MAP[(p.sizeName || "").toUpperCase().trim()] || p.sizeName;
+      return { sku: p.sku, skuID_Master: p.skuID_Master, colorName: p.colorName, sizeName: p.sizeName, size: youth && YOUTH[raw] ? YOUTH[raw] : raw, price: +(p.customerPrice || p.piecePrice || 0), qty: p.qty || 0, warehouses: (p.warehouses || []).map((w) => ({ warehouseAbbr: w.warehouseAbbr, qty: w.qty || 0 })) };
+    }),
+  };
+}
+
+export type SSOrderResult = { orderNumber: string; warehouseAbbr: string; expectedDeliveryDate: string | null; total: number; orderStatus: string };
+
+/**
+ * Place an order with S&S (shipped to our shop). `test: true` creates the order and cancels it right away (a dry run
+ * that checks stock, price and the address). S&S may split an order across warehouses: one result per warehouse.
+ */
+export async function ssPlaceOrder(o: {
+  lines: { identifier: string; qty: number }[]; po: string; shipTo: { customer: string; attn: string; address: string; city: string; state: string; zip: string };
+  shippingMethod: string; test: boolean; email?: string;
+}): Promise<SSOrderResult[]> {
+  const auth = btoa(`${process.env.SS_ACCOUNT_NUMBER!.trim()}:${process.env.SS_API_KEY!.trim()}`);
+  const r = await fetch(BASE + "/orders/", {
+    method: "POST", cache: "no-store",
+    headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      shippingAddress: { customer: o.shipTo.customer, attn: o.shipTo.attn, address: o.shipTo.address, city: o.shipTo.city, state: o.shipTo.state, zip: o.shipTo.zip, residential: false },
+      shippingMethod: o.shippingMethod || "1", poNumber: o.po.slice(0, 50), testOrder: o.test, autoselectWarehouse: true, AutoSelectWarehouse_Preference: "fewest",
+      rejectLineErrors: true, ...(o.email ? { emailConfirmation: o.email } : {}),
+      lines: o.lines.map((l) => ({ identifier: l.identifier, qty: l.qty })),
+    }),
+  });
+  const text = await r.text();
+  let j: unknown = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
+  if (!r.ok) {
+    const msg = (j as { message?: string; errors?: { message?: string }[] } | null);
+    throw new Error("S&S: " + (msg?.errors?.map((e) => e.message).filter(Boolean).join("; ") || msg?.message || text.slice(0, 300) || `HTTP ${r.status}`));
+  }
+  const list = (Array.isArray(j) ? j : [j]) as { orderNumber?: string; warehouseAbbr?: string; expectedDeliveryDate?: string; total?: number; orderStatus?: string }[];
+  return list.filter(Boolean).map((x) => ({ orderNumber: String(x.orderNumber || ""), warehouseAbbr: x.warehouseAbbr || "", expectedDeliveryDate: x.expectedDeliveryDate || null, total: +(x.total || 0), orderStatus: x.orderStatus || "" }));
+}

@@ -39,7 +39,7 @@ export async function startTracker(tracking: string, carrier: string) {
   const j = await r.json().catch(() => null) as EpTracker | null;
   return r.ok && j?.id ? fromTracker(j) : null;
 }
-async function readTracker(id: string) {
+export async function readTracker(id: string) {
   const r = await fetch(`${EP}/trackers/${id}`, { headers: auth(), cache: "no-store" });
   const j = await r.json().catch(() => null) as EpTracker | null;
   return r.ok && j?.id ? fromTracker(j) : null;
@@ -71,6 +71,28 @@ export async function goodsCheck(admin: SupabaseClient, deadline: number) {
   const s = mergeSettings(st?.data);
   const ctx: Ctx = { admin, shop: s.shop.name, leadDays: s.ship.goodsLeadDays };
   const done = { trackers: 0, updated: 0, alerts: 0 };
+
+  // our own blanks on the way: refresh tracking; tell the shop about delays, problems and late arrivals
+  {
+    const { data: bs } = await admin.from("blank_shipments").select("*, orders(id, number, due_date, production_date, status)").neq("track_status", "delivered").neq("tracking", "").limit(300);
+    for (const x of (bs || []) as { id: string; tracking: string; carrier: string; tracker_id: string; track_status: string; est_delivery: string | null; track_updated_at: string | null; alerted: Record<string, string>; orders: { id: string; number: number; due_date: string | null; production_date: string | null; status: string } | null }[]) {
+      if (Date.now() > deadline - 20000) break;
+      if (!x.orders || x.orders.status === "completed") continue;
+      if (x.track_updated_at && Date.now() - Date.parse(x.track_updated_at) < 25 * 60000) continue;
+      const before = { status: x.track_status, est: x.est_delivery };
+      const f = x.tracker_id ? await readTracker(x.tracker_id) : await startTracker(x.tracking, x.carrier);
+      if (!f) continue;
+      const alerted = { ...(x.alerted || {}) };
+      const o = x.orders, label = `${x.carrier} ${x.tracking}`.trim();
+      const need = o.production_date || (o.due_date ? businessDaysBefore(o.due_date, ctx.leadDays).toISOString().slice(0, 10) : null);
+      const shopMail = async (subject: string, body: string) => { if (SHOP_NOTIFY_EMAIL) await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `[Blanks] ${subject}`, html: emailLayout(ctx.shop, subject, body, "Open Goods & receiving", `${siteUrl()}/shop/receiving`) }).catch(() => false); };
+      if (["failure", "return_to_sender", "error"].includes(f.track_status) && alerted.problem !== f.track_status) { await shopMail(`Delivery problem: blanks for #${o.number}`, `${label}: ${TRACK[f.track_status] || f.track_status}${f.track_detail ? `, ${f.track_detail}` : ""}.`); alerted.problem = f.track_status; done.alerts++; }
+      if (before.est && f.est_delivery && Date.parse(f.est_delivery) - Date.parse(before.est) > 12 * 3600000 && alerted.delay !== f.est_delivery.slice(0, 10)) { await shopMail(`Blanks for #${o.number} delayed`, `${label} is now expected ${day(f.est_delivery)} (was ${day(before.est)}).`); alerted.delay = f.est_delivery.slice(0, 10); done.alerts++; }
+      if (need && f.est_delivery && f.track_status !== "delivered" && Date.parse(f.est_delivery) > Date.parse(need + "T23:59") && alerted.late !== f.est_delivery.slice(0, 10)) { await shopMail(`Blanks for #${o.number} arrive too late`, `${label} is expected ${day(f.est_delivery)}, but we need them by ${day(need)}${o.due_date ? ` (in-hands ${day(o.due_date)})` : ""}.`); alerted.late = f.est_delivery.slice(0, 10); done.alerts++; }
+      await admin.from("blank_shipments").update({ ...f, alerted }).eq("id", x.id);
+      done.updated++;
+    }
+  }
 
   // open wholesale jobs and their goods
   const { data: os } = await admin.from("orders").select("id, number, nickname, status, due_date, customer_id, price_type, submitted_at").eq("price_type", "wholesale").not("status", "in", "(completed,quote)").limit(500);

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readXlsx } from "@/lib/xlsx";
-import { applyGroup, importManifest, parseManifest, rememberAccount, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
+import { applyGroup, importManifest, linkByHand, parseManifest, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export async function GET() {
 /**
  * Upload a supplier manifest (.xlsx or .csv): multipart form with `file`.
  * Or JSON { assign: { lineIds, orderId, kind } } to match a shipment by hand, { alias: { supplier, name, account, customerId } }
- * to say which customer a supplier account is, or { ignore: lineIds }.
+ * to say which customer a supplier account is, { link: [{ lineId, orderId }] } (resolution center), { retry: true }, or { ignore: lineIds }.
  */
 export async function POST(req: Request) {
   if (!(await staff())) return NextResponse.json({ error: "Staff only." }, { status: 403 });
@@ -36,6 +36,13 @@ export async function POST(req: Request) {
         if (!a.customerId || !a.supplier) return NextResponse.json({ error: "Pick the customer." }, { status: 400 });
         return NextResponse.json({ ok: true, ...(await rememberAccount(admin, a.supplier, a.name || "", a.account || "", a.customerId)) });
       }
+      if (Array.isArray(b.link)) {
+        // resolution center: line → order (a suggestion OK'd, or picked by hand)
+        const v = await staff();
+        const n = await linkByHand(admin, (b.link as { lineId: string; orderId: string }[]).filter((x) => x.lineId && x.orderId), v?.email || "staff");
+        return NextResponse.json({ ok: true, orders: n });
+      }
+      if (b.retry) return NextResponse.json({ ok: true, ...(await resolvePending(admin, Date.now() + 45000)) });
       if (Array.isArray(b.ignore)) { await admin.from("supplier_manifest_lines").update({ kind: "ignored", match_how: "ignored by staff" }).in("id", b.ignore); return NextResponse.json({ ok: true }); }
       const a = b.assign as { lineIds: string[]; orderId: string; kind: "goods" | "blanks" };
       if (!a?.lineIds?.length || !a.orderId) return NextResponse.json({ error: "Pick an order." }, { status: 400 });

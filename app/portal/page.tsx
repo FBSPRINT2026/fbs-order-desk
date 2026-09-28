@@ -10,6 +10,7 @@ import { orderSearchText } from "@/lib/search";
 import { withFiles, type HubMsg } from "@/lib/messages";
 import PortalMessages from "@/components/PortalMessages";
 import PortalGoods from "@/components/PortalGoods";
+import { unmatchedGroups } from "@/lib/manifest";
 import PortalAssistant from "@/components/PortalAssistant";
 import PortalProjects from "@/components/PortalProjects";
 import ProgramOrder from "@/components/ProgramOrder";
@@ -88,7 +89,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     // payments live in Payments (and the Pay button up top), not in "Needs your attention"
   });
   // wholesale: the garments they send us for their jobs (goods have their own status)
-  const wholesale = ctx.customers.some((c) => c.price_type === "wholesale") || orders.some((o) => o.price_type === "wholesale");
+  // supplier shipments on their account that aren't on one of their orders yet
+  const incoming = ctx.customerIds.length ? (await unmatchedGroups(admin, ctx.customerIds).catch(() => [])).filter((g) => !g.us) : [];
+  const wholesale = ctx.customers.some((c) => c.price_type === "wholesale") || orders.some((o) => o.price_type === "wholesale") || incoming.length > 0;
   const goodsItems = wholesale ? await loadGoodsItems(admin, orders.filter(needsGoods) as never, "customer", (id) => `/portal/orders/${id}${qs}`) : [];
   const goodsOpen = goodsItems.filter((g) => g.goods.status !== "received");
   const goodsHref = `/portal${qs ? qs + "&" : "?"}area=receive`;
@@ -113,6 +116,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     if (g.goods.status === "waiting") attention.push({ kind: "receive", order_id: g.order.id, number: g.order.number, date: "", label: "Send us your goods", href: goodsHref });
     if (g.goods.status === "issue") attention.push({ kind: "receive", order_id: g.order.id, number: g.order.number, date: "", label: "Issue with your goods", href: goodsHref });
   });
+  if (incoming.length) attention.push({ kind: "receive", order_id: "", number: 0, date: "", label: `${incoming.length} incoming shipment${incoming.length === 1 ? "" : "s"} not linked to an order`, href: goodsHref });
   const acct = ctx.customers[0];
   const hubOrders = orders.filter((o) => o.status !== "request" || o.submitted_at).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", href: `/portal/orders/${o.id}${qs}` }));
   const company = acct?.company || acct?.name || "";
@@ -135,9 +139,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
             programPanel={<ProgramOrder program={program} items={programItems} images={programImages} projects={projects.filter((p) => p.status !== "closed").map((p) => ({ id: p.id, name: p.name }))} canAct={!ctx.preview} qs={qs} />} hasProgram={!!program && programItems.length > 0}
             assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}
-            goodsPanel={wholesale ? <PortalGoods items={goodsItems} canAct={!ctx.preview} qs={qs} empty="No open jobs need goods from you right now." /> : undefined}
-            goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
-            goodsCount={goodsOpen.length}
+            goodsPanel={wholesale ? <PortalGoods items={goodsItems} incoming={incoming} canAct={!ctx.preview} qs={qs} empty="No open jobs need goods from you right now." /> : undefined}
+            goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} incoming={incoming} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
+            goodsCount={goodsOpen.length + incoming.length}
             onPaySelect={aiPaySelect}
             statementHref={`/portal/statement${qs}`}
             messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} projects={projects.map((p) => ({ id: p.id, name: p.name, href: `/portal/projects/${p.id}${qs}` }))} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}

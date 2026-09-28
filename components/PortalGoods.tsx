@@ -2,16 +2,20 @@
 import { useRouter } from "next/navigation";
 import GoodsBoard from "@/components/GoodsBoard";
 import { createClient } from "@/lib/supabase/client";
-import { addTracking, saveGoodsInfo } from "@/app/portal/goods-actions";
+import { addTracking, linkIncoming, saveGoodsInfo } from "@/app/portal/goods-actions";
+import { PortalIncoming } from "@/components/IncomingShipments";
+import type { PendingShipment } from "@/lib/manifest";
 import { portalAttachUrl, portalSend } from "@/app/portal/message-actions";
 import type { GoodsItem } from "@/lib/goods";
 
 /** The customer's goods area (wholesale). `hub`: a Messages hub is on the same page, so "Message" opens it there. */
-export default function PortalGoods({ items, canAct, qs, compact, hub, empty }: { items: GoodsItem[]; canAct: boolean; qs: string; compact?: boolean; hub?: boolean; empty?: string }) {
+export default function PortalGoods({ items, incoming = [], canAct, qs, compact, hub, empty }: { items: GoodsItem[]; incoming?: PendingShipment[]; canAct: boolean; qs: string; compact?: boolean; hub?: boolean; empty?: string }) {
   const router = useRouter();
   const chatHref = (id: string) => `/portal${qs ? qs + "&" : "?"}area=messages&c=${id}:goods`;
   return (
-    <GoodsBoard mode="portal" items={items} canAct={canAct} compact={compact} empty={empty}
+    <>
+    <PortalIncoming list={incoming} canAct={canAct} link={async (pick) => { const r = await linkIncoming(pick); if (r.ok) router.refresh(); return r; }} />
+    {(items.length > 0 || !incoming.length) && <GoodsBoard mode="portal" items={items} canAct={canAct} compact={compact} empty={empty}
       act={{
         addTracking, saveInfo: saveGoodsInfo, changed: () => router.refresh(), chatHref,
         message: (id, body) => portalSend(id, body, [], "goods"),
@@ -23,6 +27,7 @@ export default function PortalGoods({ items, canAct, qs, compact, hub, empty }: 
           if (up.error) throw new Error(up.error.message);
           return { path: t.path, name: f.name, mime: f.type || "application/octet-stream", size: f.size };
         },
-      }} />
+      }} />}
+    </>
   );
 }

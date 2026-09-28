@@ -67,7 +67,6 @@ export default function ShopNav({ email }: { email: string }) {
     ["/shop/incoming", "incoming", "Incoming orders"],
     ["/shop/board", "board", "Production"],
     ["/shop/calendar", "calendar", "Calendar"],
-    ["/shop/goods", "goods", "Customer goods"],
     ["/shop/projects", "projects", "Projects"],
     ["/shop/customers", "customers", "Customers"],
     ["/shop/artwork", "artwork", "Artwork"],
@@ -99,6 +98,7 @@ export default function ShopNav({ email }: { email: string }) {
       </nav>
       <button className="btn primary btn-new btn-side" type="button" onClick={newQuote} disabled={creating}>{creating ? "Creating…" : "+ New quote"}</button>
       <Link href="/shop/shipping" className="btn primary btn-new btn-side">{"Shipping center"}</Link>
+      <Link href="/shop/receiving" className="btn primary btn-new btn-side">{"Goods & receiving"}</Link>
       <div className="side-user">
         <span>{email}</span>
         <form action="/auth/signout" method="post"><button className="btn ghost sm" style={{ color: "inherit", padding: 0 }} type="submit">Sign out</button></form>
