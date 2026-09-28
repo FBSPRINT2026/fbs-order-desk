@@ -327,7 +327,7 @@ export default function GoodsReceiving() {
 
         <div className="rv-head-r"><div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="btn primary" onClick={() => setTruck(true)}>Receive S&amp;S truck</button>
-          <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import supplier manifests"}<input type="file" hidden accept=".xlsx,.csv" multiple onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ""; upload(fs); }} /></label>
+          <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import supplier manifests"}<input type="file" hidden accept=".xlsx,.csv" multiple onChange={(e) => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ""; upload(fs); }} /></label>
         </div>
 </div>
       </div>
