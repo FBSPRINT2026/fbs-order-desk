@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkQueries } from "@/lib/printavo";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,7 @@ const Q = `{ __schema { types { name kind possibleTypes { name } enumValues { na
 let cache: { at: number; body: unknown } | null = null;
 
 export async function GET(req: Request) {
+  if (new URL(req.url).searchParams.get("check")) return NextResponse.json(await checkQueries());
   const want = new URL(req.url).searchParams.get("types")?.split(",").filter(Boolean);
   if (!cache || Date.now() - cache.at > 600000) {
     const email = process.env.PRINTAVO_EMAIL?.trim(), token = process.env.PRINTAVO_TOKEN?.trim();

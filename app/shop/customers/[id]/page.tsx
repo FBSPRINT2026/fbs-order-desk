@@ -16,6 +16,7 @@ import { PAY_TERMS, payDueDate, type Design, type PayTerms } from "@/lib/pricing
 import Timeline from "@/components/Timeline";
 import { splitCustomer } from "@/lib/crm/private";
 import { fmtStamp } from "@/lib/format";
+import ArchiveList, { type ArchiveItem } from "@/components/ArchiveList";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -39,6 +40,11 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [pendingArt, setPendingArt] = useState<Record<string, string>>({});
   const [reload, setReload] = useState(0);
   const [usedIds, setUsedIds] = useState<string[]>([]);
+  const [archive, setArchive] = useState<ArchiveItem[]>([]);
+  useEffect(() => {
+    createClient().from("archived_orders").select("id, kind, visual_id, nickname, status_name, status_color, order_date, due_date, total, paid, balance, qty, files_total, files_copied")
+      .eq("customer_id", id).order("order_date", { ascending: false }).then(({ data }) => setArchive((data || []) as ArchiveItem[]));
+  }, [id]);
   const orderIds = orders.filter((o) => o.customer_id === id).map((o) => o.id).join(",");
   useEffect(() => {
     if (loading) return;
@@ -110,7 +116,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const owed = os.filter((o) => o.type === "invoice").reduce((a, o) => a + Math.max(0, o.balance), 0);
 
   async function del() {
-    if (os.length) return;
+    if (os.length || archive.length) return;
     if (!armed) { setArmed(true); setTimeout(() => setArmed(false), 3500); return; }
     if (timer.current) clearTimeout(timer.current);
     await createClient().from("customers").delete().eq("id", id);
@@ -129,10 +135,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           <Link className="btn" href={`/shop/customers/${id}?area=details`} scroll={false}>Customer details</Link>
           <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">View their portal</a>
           <button className="btn primary" type="button" onClick={newQuote}>+ New quote</button>
-          <button className={"btn danger" + (armed ? " armed" : "")} type="button" onClick={del} disabled={os.length > 0} title={os.length ? "Delete this customer's orders first" : ""}>{armed ? "Confirm delete" : "Delete"}</button>
+          <button className={"btn danger" + (armed ? " armed" : "")} type="button" onClick={del} disabled={os.length > 0 || archive.length > 0} title={os.length ? "Delete this customer's orders first" : archive.length ? "This customer has archived Printavo orders" : ""}>{armed ? "Confirm delete" : "Delete"}</button>
         </div>
       </div>
-      <AccountAreas mode="shop" attention={os.flatMap((o): AAttn[] => {
+      <AccountAreas mode="shop" archive={{ count: archive.length, node: <ArchiveList items={archive} /> }} attention={os.flatMap((o): AAttn[] => {
           const out: AAttn[] = [];
           const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "");
           if (o.status === "request") out.push({ kind: "request", order_id: o.id, number: o.number, date: d(o.submitted_at || o.created_at) });

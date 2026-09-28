@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { daysUntil, fmtDate, fmtStamp, money } from "@/lib/format";
 import { useShopData } from "@/lib/shopData";
@@ -41,7 +42,8 @@ export default function CustomersPage() {
     <>
       <div className="page-head">
         <div><div className="eyebrow">{Object.keys(customers).length} on file</div><h1>Customers</h1></div>
-        <button className="btn primary" type="button" onClick={add} disabled={busy}>+ New customer</button>
+        <div className="row"><Link className="btn" href="/shop/customers/import">Import from Printavo</Link>
+        <button className="btn primary" type="button" onClick={add} disabled={busy}>+ New customer</button></div>
       </div>
       <div className="toolbar">
         <input type="search" placeholder="Search name, company, email, tag…" value={q} onChange={(e) => setQ(e.target.value)} />

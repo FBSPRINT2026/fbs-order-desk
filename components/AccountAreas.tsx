@@ -13,7 +13,7 @@ export type AMockup = { id: string; title: string; url: string; thumb: string; n
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
 export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string };
-export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "receive" | "details";
+export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "receive" | "details" | "archive";
 
 const IN_WORK = ["approved", "art", "blanks", "production", "ready"];
 const WAITING = ["approved", "art", "blanks"];
@@ -46,8 +46,10 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ mode, archive, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
+  /** staff only: the customer's archived Printavo orders */
+  archive?: { count: number; node: ReactNode };
   orders: AOrder[]; payments: APayment[]; designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
   attention: AAttn[];
   /** shown at the top of the dashboard (portal: Start an order / Make a mockup) */
@@ -123,6 +125,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
     { id: "artwork", label: "Artwork", icon: I.artwork },
     { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
     { id: "receive", label: mode === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: receive.length, show: receive.length > 0 },
+    { id: "archive", label: "Printavo archive", icon: I.archive, n: archive?.count, show: !!archive?.count },
     // staff reach Details from the "Customer details" button in the page header
   ];
 
@@ -440,6 +443,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       {tableHead(<><h2>{mode === "shop" ? "Waiting to receive" : "Garments to send us"}</h2><span className="aa-sum">{mode === "shop" ? "Customer-supplied garments we need before these jobs can print" : "These orders print on garments you supply"}</span></>, "Search by order number or name")}
       {orderTable(receive, "work")}</>;
   } else if (area === "details") body = details;
+  else if (area === "archive") body = archive?.node || null;
 
   return (
     <div className="aa">
