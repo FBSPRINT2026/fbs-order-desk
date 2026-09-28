@@ -125,9 +125,10 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s portal. Buttons are turned off in preview.</div>}
       <main className="p-main">
-        <div>
-          <div className="eyebrow">{ctx.settings.shop.name} customer portal</div>
+        <div className="p-hero">
+          <div className="eyebrow">Welcome back</div>
           <h1>{company || "Your Account"}</h1>
+          <p className="p-hero-sub">Your quotes, orders, artwork and payments with {ctx.settings.shop.name}, all in one place.</p>
         </div>
         {!ctx.customerIds.length ? (
           <div className="panel"><div className="panel-b">

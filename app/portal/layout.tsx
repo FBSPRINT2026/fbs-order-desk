@@ -13,8 +13,9 @@ export default async function PortalLayout({ children }: { children: React.React
     <div className="portal">
       <header className="p-top">
         <div className="p-top-in">
-          <Link href="/portal" className="shop" style={{ display: "flex", alignItems: "center" }}>
-            {s.shop.logoUrl ? <img className="logo" src={s.shop.logoUrl} alt={s.shop.name} /> : s.shop.name}
+          <Link href="/portal" className="shop p-brand">
+            {s.brand.sideLogoUrl ? <img className="logo" src={s.brand.sideLogoUrl} alt={s.shop.name} /> : s.shop.logoUrl ? <img className="logo" src={s.shop.logoUrl} alt={s.shop.name} /> : s.shop.name}
+            <span className="p-brand-t">Customer Portal</span>
           </Link>
           <div className="who">
             {email && <span>{email}</span>}
@@ -23,8 +24,11 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
       </header>
       {children}
-      <footer className="p-main" style={{ paddingBlock: "0 40px", fontSize: 12, color: "var(--ink-3)" }}>
-        {[s.shop.name, s.shop.phone, s.shop.email].filter(Boolean).join(" · ")}
+      <footer className="p-foot">
+        <div className="p-foot-in">
+          {s.brand.sideLogoUrl && <img src={s.brand.sideLogoUrl} alt="" className="p-foot-logo" />}
+          <span>{[s.shop.name, s.shop.phone, s.shop.email].filter(Boolean).join(" · ")}</span>
+        </div>
       </footer>
     </div>
   );

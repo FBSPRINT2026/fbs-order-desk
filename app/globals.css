@@ -2259,3 +2259,63 @@ a.as-ai{text-decoration:none}
 .nav-h-production{border-top:2px solid var(--fbs-salmon)}
 .nav-h-shoptools{border-top:2px solid var(--fbs-orange)}
 .rv-grid col.c-ord{width:130px}
+
+/* ======================= Customer portal: FBS colors ======================= */
+.portal{background:linear-gradient(180deg,color-mix(in srgb,var(--fbs-blue) 5%,var(--bg)) 0,var(--bg) 420px)}
+/* header: dark bar with the white logo, the color fade under it */
+.portal .p-top{background:var(--side);border-bottom:0;box-shadow:0 2px 14px rgba(0,0,0,.12)}
+.portal .p-top::after{height:4px;background:var(--fbs-fade)}
+.portal .p-top-in{padding-block:12px}
+.p-brand{display:flex;align-items:center;gap:12px;text-decoration:none}
+.portal .p-top .logo{max-height:40px}
+.p-brand-t{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--side-ink);border-left:1px solid rgba(255,255,255,.2);padding-left:12px}
+.portal .p-top .who{color:var(--side-ink)}
+.portal .p-top .who .btn{background:transparent;color:#fff;border-color:rgba(255,255,255,.3)}
+.portal .p-top .who .btn:hover{background:rgba(255,255,255,.1)}
+/* welcome band */
+.p-hero{position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:26px 28px 24px;box-shadow:0 1px 3px rgba(20,29,43,.05)}
+.p-hero::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,color-mix(in srgb,var(--fbs-blue) 12%,transparent) 0%,color-mix(in srgb,var(--fbs-salmon) 9%,transparent) 55%,color-mix(in srgb,var(--fbs-orange) 12%,transparent) 100%);pointer-events:none}
+.p-hero>*{position:relative}
+.p-hero .eyebrow{color:var(--fbs-blue);font-weight:700}
+.p-hero h1{font-size:34px;display:inline-block}
+.p-hero-sub{margin:10px 0 0;color:var(--ink-2);font-size:14.5px}
+/* every page title in the portal gets the fade bar */
+.portal .p-main h1{display:inline-block}
+.portal .p-main h1::after{content:"";display:block;height:5px;border-radius:4px;margin-top:10px;width:calc(100% + 60px);min-width:140px;background:var(--fbs-fade)}
+/* area tabs: the chosen one in the fade */
+.portal .aa-nav{box-shadow:0 1px 3px rgba(20,29,43,.05)}
+.portal .aa-tab.on{background:var(--fbs-fade);color:#fff;box-shadow:0 3px 10px color-mix(in srgb,var(--fbs-salmon) 30%,transparent)}
+.portal .aa-tab.on .aa-n{background:rgba(255,255,255,.25);color:#fff}
+/* stat cards: one logo color each */
+.portal .aa-stat{position:relative;overflow:hidden;box-shadow:0 1px 3px rgba(20,29,43,.05)}
+.portal .aa-stat::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--c,var(--fbs-blue))}
+.portal .aa-stat:nth-child(1){--c:var(--fbs-blue)}
+.portal .aa-stat:nth-child(2){--c:var(--fbs-salmon)}
+.portal .aa-stat:nth-child(3){--c:var(--fbs-orange)}
+.portal .aa-stat:nth-child(4){--c:var(--ok)}
+.portal .aa-stat .ic{color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent)}
+.portal .aa-stat.red{background:var(--fbs-salmon);border-color:var(--fbs-salmon)}
+/* home tabs + table */
+.portal .aa-htabs button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--fbs-blue)}
+.portal .aa-htab-body,.portal .aa-card,.portal .panel{box-shadow:0 1px 3px rgba(20,29,43,.05)}
+.portal .aa-tbl thead th{background:color-mix(in srgb,var(--fbs-blue) 8%,var(--surface));color:var(--ink-2);border-bottom:2px solid transparent;border-image:var(--fbs-fade) 1}
+/* "requires your attention": white card with the fade down its left edge */
+.portal .aa-attn{position:relative;background:var(--surface);border:1px solid var(--line);padding-left:20px;box-shadow:0 1px 3px rgba(20,29,43,.05)}
+.portal .aa-attn::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;border-radius:14px 0 0 14px;background:linear-gradient(180deg,var(--fbs-blue),var(--fbs-salmon) 52%,var(--fbs-orange))}
+.portal .aa-attn-h{color:var(--ink)}
+.portal .aa-attn-i{background:var(--surface);border-color:var(--line)}
+.portal .aa-attn-i:hover{border-color:var(--fbs-salmon);box-shadow:0 2px 10px color-mix(in srgb,var(--fbs-salmon) 18%,transparent)}
+.portal .aa-attn-i .k{color:var(--fbs-salmon)}
+.portal .aa-attn-i .go{background:color-mix(in srgb,var(--fbs-orange) 20%,transparent);color:#b36d00}
+.portal .aa-attn-none{color:var(--ink-3)}
+/* section headings */
+.portal .aa-sec-h h3{position:relative;padding-bottom:6px}
+.portal .aa-sec-h h3::after{content:"";position:absolute;left:0;bottom:0;width:56px;height:3px;border-radius:3px;background:var(--fbs-fade)}
+.portal .aa-due{color:var(--danger)}
+/* footer */
+.p-foot{background:var(--side);color:var(--side-ink);margin-top:20px}
+.p-foot::before{content:"";display:block;height:4px;background:var(--fbs-fade)}
+.p-foot-in{max-width:1120px;margin:0 auto;padding:18px 20px 26px;display:flex;align-items:center;gap:14px;font-size:12.5px}
+.p-foot-logo{height:26px;width:auto;opacity:.9}
+.portal .p-top-in{max-width:1120px}
+.p-brand-t{white-space:nowrap}
