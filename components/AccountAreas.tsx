@@ -86,7 +86,7 @@ export default function AccountAreas({ mode, onPaySelect, statementHref, onEmail
   /** the customer's payment terms, e.g. "Net 30 days" */
   terms?: string;
   /** portal: online payments (card fee %, Zelle/Venmo details, Stax web payments token, deposit %) */
-  payCfg?: { cardFeePct: number; zelle: string; venmo: string; staxToken: string; depositPct: number };
+  payCfg?: { cardFeePct: number; zelle: string; venmo: string; staxToken: string; depositPct: number; /** receipts go here by default */ receiptEmail?: string };
   /** false in the staff preview of a portal: sending is turned off */
   canAct?: boolean;
 }) {
@@ -493,7 +493,7 @@ export default function AccountAreas({ mode, onPaySelect, statementHref, onEmail
               <button type="button" className="btn sm ghost" onClick={() => { setPaySel([]); setPayNow(null); setPayAmt(undefined); }}>Clear selection</button>
             </> : <div className="faint" style={{ fontSize: 13 }}>{open.length || waitingQuotes.length ? "Check the orders or quotes you want to pay, or press Pay on one." : "Nothing due right now."}</div>}
           </div>
-          {payNow && <PayPanel key={payNow.map((x) => x.id).join() + (payAmt || "")} items={payNow} amount={payAmt} pay={payCfg} staxToken={payCfg.staxToken} canAct={canAct} onClose={() => { setPayNow(null); setPayAmt(undefined); }} />}
+          {payNow && <PayPanel modal receiptEmail={payCfg.receiptEmail} key={payNow.map((x) => x.id).join() + (payAmt || "")} items={payNow} amount={payAmt} pay={payCfg} staxToken={payCfg.staxToken} canAct={canAct} onClose={() => { setPayNow(null); setPayAmt(undefined); }} />}
         </aside>
       )}
       </div></>;

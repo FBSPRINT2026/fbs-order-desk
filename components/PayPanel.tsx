@@ -16,8 +16,12 @@ const STAX_SRC = "https://staxjs.staxpayments.com/staxjs-captcha.js";
  * Pay one order or several together: credit card (with the card fee), ACH bank transfer, Zelle or Venmo.
  * Card and bank numbers go into Stax's own secure fields; we only get back a one-time token to charge.
  */
-export default function PayPanel({ items, pay, staxToken, canAct = true, onClose, amount }: {
+export default function PayPanel({ items, pay, staxToken, canAct = true, onClose, amount, modal = false, receiptEmail = "" }: {
   items: PayItem[];
+  /** open as its own window over the page (payments screen) instead of inline */
+  modal?: boolean;
+  /** where the receipt goes by default (the customer's email) */
+  receiptEmail?: string;
   /** "pay an amount": the amount, applied oldest first (the server allocates it again) */
   amount?: number;
   pay: { cardFeePct: number; zelle: string; venmo: string };
@@ -33,6 +37,17 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [ready, setReady] = useState(false);
+  const [receipt, setReceipt] = useState(receiptEmail);
+  const [sentTo, setSentTo] = useState("");
+  // the window closes with Esc, and the page behind it doesn't scroll
+  useEffect(() => {
+    if (!modal) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !busyRef.current) onClose?.(); };
+    addEventListener("keydown", k);
+    const prev = document.body.style.overflow; document.body.style.overflow = "hidden";
+    return () => { removeEventListener("keydown", k); document.body.style.overflow = prev; };
+  }, [modal, onClose]);
+  const busyRef = useRef(false);
   const stax = useRef<StaxJsT | null>(null);
 
   const sum = r2(items.reduce((a, it) => a + (single && kind === "deposit" && it.deposit ? it.deposit : it.balance), 0));
@@ -86,42 +101,22 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
       if (!/^\d{4,17}$/.test(f.account)) return setMsg({ ok: false, text: "Check the account number." });
       Object.assign(details, { method: "bank", bank_type: f.bankType, bank_holder_type: f.holder, bank_account: f.account, bank_routing: f.routing, person_name: `${f.first} ${f.last}`.trim() });
     }
-    setBusy(true);
+    if (receipt.trim() && !receipt.split(/[,;\s]+/).filter(Boolean).every((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) return setMsg({ ok: false, text: "Check the email address for your receipt." });
+    setBusy(true); busyRef.current = true;
     try {
       const pm = await stax.current.tokenize(details);
-      const r = await payOrders({ items: itemsReq, method: method === "card" ? "card" : "bank", paymentMethodId: pm.id, applyAmount: amount });
+      const r = await payOrders({ items: itemsReq, method: method === "card" ? "card" : "bank", paymentMethodId: pm.id, applyAmount: amount, receiptTo: receipt.trim() });
       if (!r.ok) setMsg({ ok: false, text: r.error || "The payment didn't go through." });
-      else { setMsg({ ok: true, text: `Payment of ${money(r.paid)} received. Thank you!` }); router.refresh(); }
+      else { setSentTo(r.receiptTo || ""); setMsg({ ok: true, text: `Payment of ${money(r.paid)} received. Thank you!` }); router.refresh(); }
     } catch (e) {
       const m = e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : "Check your payment details and try again.";
       setMsg({ ok: false, text: m });
     }
-    setBusy(false);
+    setBusy(false); busyRef.current = false;
   }
 
   const done = msg?.ok;
-  return (
-    <div className="pay-panel">
-      <div className="pp-h"><b>{items.length > 1 ? `Pay ${items.length} orders together` : `Pay order #${single?.number}`}</b>{onClose && <button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>✕</button>}</div>
-
-      {single && single.deposit && single.deposit < single.balance - 0.004 ? (
-        <div className="pp-amt">
-          <label className={kind === "deposit" ? "on" : ""}><input type="radio" name="pp-kind" checked={kind === "deposit"} onChange={() => setKind("deposit")} /> Deposit <b>{money(single.deposit)}</b></label>
-          <label className={kind === "balance" ? "on" : ""}><input type="radio" name="pp-kind" checked={kind === "balance"} onChange={() => setKind("balance")} /> Full balance <b>{money(single.balance)}</b></label>
-        </div>
-      ) : items.length > 1 ? (
-        <div className="pp-list">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}{it.full && it.full - it.balance > 0.004 ? <small className="faint"> (part of {money(it.full)})</small> : null}</span><b className="num">{money(it.balance)}</b></div>)}</div>
-      ) : null}
-
-      {items.some((it) => it.quote) && (method === "card" || method === "bank") && <div className="pp-note">Paying {items.filter((it) => it.quote).map((it) => `quote #${it.number}`).join(", ")} approves {items.filter((it) => it.quote).length > 1 ? "them" : "it"} and our terms, so we can get started.</div>}
-      <div className="pp-methods" role="tablist" aria-label="How do you want to pay?">
-        {([["card", "Credit card"], ["bank", "ACH bank transfer"], ["Zelle", "Zelle"], ["Venmo", "Venmo"]] as [Method, string][]).map(([k, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={method === k} className={"pp-m" + (method === k ? " on" : "")} onClick={() => { setMethod(k); setMsg(null); }}>{label}</button>
-        ))}
-      </div>
-
-      {(method === "card" || method === "bank") && !online && <div className="pp-note">Online card and bank payments are being set up. Please pay by Zelle or Venmo, or contact us.</div>}
-
+  const FORMS = (<>
       {/* Stax's secure card fields stay mounted so the form only loads once */}
       <div className="pp-form" hidden={!(online && (method === "card" || method === "bank"))}>
         <div className="grid g2">
@@ -163,6 +158,112 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
         </div>
       )}
 
+  </>);
+  const title = items.length > 1 ? `Pay ${items.length} orders together` : `Pay order #${single?.number}`;
+  const receiptBox = (method === "card" || method === "bank") && !done ? (
+    <div className="pp-receipt">
+      <label htmlFor="pp-rc">Send my receipt to</label>
+      <input id="pp-rc" type="email" inputMode="email" autoComplete="email" placeholder="you@company.com" value={receipt} onChange={(e) => setReceipt(e.target.value)} />
+      <span className="faint">A detailed receipt listing every invoice this pays, for your records. Separate more than one email with commas.</span>
+    </div>
+  ) : null;
+
+  if (modal) return (
+    <div className="pp-modal" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose?.(); }}>
+      <div className="pp-sheet">
+        <div className="pp-sheet-h"><b>{done ? "Payment received" : title}</b>{onClose && <button type="button" className="btn icon ghost" aria-label="Close" disabled={busy} onClick={onClose}>✕</button>}</div>
+        {done ? (
+          <div className="pp-done">
+            <div className="pp-check" aria-hidden="true">✓</div>
+            <h3>{msg?.text}</h3>
+            <p>{sentTo ? <>A detailed receipt is on its way to <b>{sentTo}</b>.</> : "It shows in your payment history now."}</p>
+            <div className="pp-list">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}</span><b className="num">{money(single && kind === "deposit" && it.deposit ? it.deposit : it.balance)}</b></div>)}</div>
+            <button type="button" className="btn primary" onClick={onClose}>Done</button>
+          </div>
+        ) : (
+          <div className="pp-cols">
+            <section className="pp-left">
+              <h4>Your payment</h4>
+              {single && single.deposit && single.deposit < single.balance - 0.004 ? (
+                <div className="pp-amt">
+                  <label className={kind === "deposit" ? "on" : ""}><input type="radio" name="pp-kind" checked={kind === "deposit"} onChange={() => setKind("deposit")} /> Deposit <b>{money(single.deposit)}</b></label>
+                  <label className={kind === "balance" ? "on" : ""}><input type="radio" name="pp-kind" checked={kind === "balance"} onChange={() => setKind("balance")} /> Full balance <b>{money(single.balance)}</b></label>
+                </div>
+              ) : (
+                <div className="pp-list tall">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}{it.full && it.full - it.balance > 0.004 ? <small className="faint"> (part of {money(it.full)})</small> : null}</span><b className="num">{money(it.balance)}</b></div>)}</div>
+              )}
+              {items.some((it) => it.quote) && (method === "card" || method === "bank") && <div className="pp-note">Paying {items.filter((it) => it.quote).map((it) => `quote #${it.number}`).join(", ")} approves {items.filter((it) => it.quote).length > 1 ? "them" : "it"} and our terms, so we can get started.</div>}
+              <div className="pp-sum">
+                <div><span>{items.length > 1 ? `${items.length} orders` : single && kind === "deposit" ? "Deposit" : "Balance"}</span><b className="num">{money(sum)}</b></div>
+                {method === "card" && <div className="pp-fee"><span>Credit card fee ({pay.cardFeePct}%)</span><b className="num">{money(fee)}</b></div>}
+                <div className="pp-total"><span>Total</span><b className="num">{money(total)}</b></div>
+                {method === "card" && <div className="faint" style={{ fontSize: 12 }}>Pay by ACH bank transfer, Zelle or Venmo to skip the {pay.cardFeePct}% card fee.</div>}
+              </div>
+              {receiptBox}
+            </section>
+            <section className="pp-right">
+              <h4>How would you like to pay?</h4>
+              {methodTabs()}
+              {forms()}
+              {msg && <div className={msg.ok ? "okmsg" : "banner"} role={msg.ok ? "status" : "alert"}>{msg.text}</div>}
+              {payButton()}
+              <div className="pp-secure">🔒 Card and bank numbers go straight to our payment processor (Stax). We never see or store them.</div>
+            </section>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  function methodTabs() {
+    return (
+      <div className="pp-methods" role="tablist" aria-label="How do you want to pay?">
+        {([["card", "Credit card"], ["bank", "ACH bank transfer"], ["Zelle", "Zelle"], ["Venmo", "Venmo"]] as [Method, string][]).map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={method === k} className={"pp-m" + (method === k ? " on" : "")} onClick={() => { setMethod(k); setMsg(null); }}>{label}</button>
+        ))}
+      </div>
+    );
+  }
+  function payButton() {
+    return <>
+      {!done && (
+        <button type="button" className="btn primary pp-go" disabled={!canAct || busy || sum <= 0 || ((method === "card" || method === "bank") && (!online || !ready))} onClick={submit}>
+          {busy ? "Working…" : method === "Zelle" || method === "Venmo" ? `I sent ${money(total)} by ${method}` : `Pay ${money(total)}`}
+        </button>
+      )}
+      {!canAct && <div className="faint" style={{ fontSize: 12 }}>Payments are turned off in the preview.</div>}
+    </>;
+  }
+  function forms() {
+    return <>
+      {(method === "card" || method === "bank") && !online && <div className="pp-note">Online card and bank payments are being set up. Please pay by Zelle or Venmo, or contact us.</div>}
+      {FORMS}
+    </>;
+  }
+
+  return (
+    <div className="pay-panel">
+      <div className="pp-h"><b>{items.length > 1 ? `Pay ${items.length} orders together` : `Pay order #${single?.number}`}</b>{onClose && <button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>✕</button>}</div>
+
+      {single && single.deposit && single.deposit < single.balance - 0.004 ? (
+        <div className="pp-amt">
+          <label className={kind === "deposit" ? "on" : ""}><input type="radio" name="pp-kind" checked={kind === "deposit"} onChange={() => setKind("deposit")} /> Deposit <b>{money(single.deposit)}</b></label>
+          <label className={kind === "balance" ? "on" : ""}><input type="radio" name="pp-kind" checked={kind === "balance"} onChange={() => setKind("balance")} /> Full balance <b>{money(single.balance)}</b></label>
+        </div>
+      ) : items.length > 1 ? (
+        <div className="pp-list">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}{it.full && it.full - it.balance > 0.004 ? <small className="faint"> (part of {money(it.full)})</small> : null}</span><b className="num">{money(it.balance)}</b></div>)}</div>
+      ) : null}
+
+      {items.some((it) => it.quote) && (method === "card" || method === "bank") && <div className="pp-note">Paying {items.filter((it) => it.quote).map((it) => `quote #${it.number}`).join(", ")} approves {items.filter((it) => it.quote).length > 1 ? "them" : "it"} and our terms, so we can get started.</div>}
+      <div className="pp-methods" role="tablist" aria-label="How do you want to pay?">
+        {([["card", "Credit card"], ["bank", "ACH bank transfer"], ["Zelle", "Zelle"], ["Venmo", "Venmo"]] as [Method, string][]).map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={method === k} className={"pp-m" + (method === k ? " on" : "")} onClick={() => { setMethod(k); setMsg(null); }}>{label}</button>
+        ))}
+      </div>
+
+      {(method === "card" || method === "bank") && !online && <div className="pp-note">Online card and bank payments are being set up. Please pay by Zelle or Venmo, or contact us.</div>}
+
+      {FORMS}
       <div className="pp-sum">
         <div><span>{items.length > 1 ? `${items.length} orders` : single && kind === "deposit" ? "Deposit" : "Balance"}</span><b className="num">{money(sum)}</b></div>
         {method === "card" && <div className="pp-fee"><span>Credit card fee ({pay.cardFeePct}%)</span><b className="num">{money(fee)}</b></div>}
@@ -170,6 +271,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
         {method === "card" && <div className="faint" style={{ fontSize: 12 }}>A {pay.cardFeePct}% fee applies to credit card payments. Pay by ACH, Zelle or Venmo to avoid it.</div>}
       </div>
 
+      {receiptBox}
       {msg && <div className={msg.ok ? "okmsg" : "banner"} role={msg.ok ? "status" : "alert"}>{msg.text}</div>}
       {!done && (
         <button type="button" className="btn primary pp-go" disabled={!canAct || busy || sum <= 0 || ((method === "card" || method === "bank") && (!online || !ready))} onClick={submit}>

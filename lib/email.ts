@@ -50,3 +50,32 @@ export function emailLayout(shopName: string, heading: string, body: string, but
   <div style="font-size:12px;color:#7A8599">Or open this link: ${url}</div>
 </div>`;
 }
+
+/** A detailed payment receipt: every invoice it paid, the card fee, the total, and the transaction number. */
+export function receiptHtml(r: {
+  shop: { name: string; phone?: string; email?: string }; customer: string; date: string; method: string; txn: string;
+  lines: { number: number; nickname: string; amount: number; balanceAfter: number }[]; subtotal: number; fee: number; total: number; url: string;
+}) {
+  const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const rows = r.lines.map((l) => `<tr><td style="padding:6px 8px;border-bottom:1px solid #eef1f4;font-family:Menlo,monospace">#${l.number}</td><td style="padding:6px 8px;border-bottom:1px solid #eef1f4">${escape(l.nickname || "Order")}</td><td style="padding:6px 8px;border-bottom:1px solid #eef1f4;text-align:right">${m(l.amount)}</td><td style="padding:6px 8px;border-bottom:1px solid #eef1f4;text-align:right;color:#7A8599">${l.balanceAfter > 0.004 ? m(l.balanceAfter) : "Paid"}</td></tr>`).join("");
+  return `<div style="font-family:Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#141D2B">
+  <div style="font-weight:800;font-size:18px;margin-bottom:4px">${escape(r.shop.name)}</div>
+  <div style="font-size:12px;color:#7A8599;margin-bottom:18px">${escape([r.shop.phone, r.shop.email].filter(Boolean).join(" · "))}</div>
+  <h1 style="font-size:20px;margin:0 0 6px">Payment receipt</h1>
+  <div style="font-size:14px;color:#3C475A;margin-bottom:16px">Thank you, ${escape(r.customer)}. Here's what your payment of <b>${m(r.total)}</b> covered.</div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
+    <tr><td style="color:#7A8599;padding:2px 0">Date</td><td style="text-align:right">${escape(r.date)}</td></tr>
+    <tr><td style="color:#7A8599;padding:2px 0">Paid by</td><td style="text-align:right">${escape(r.method)}</td></tr>
+    <tr><td style="color:#7A8599;padding:2px 0">Transaction</td><td style="text-align:right;font-family:Menlo,monospace">${escape(r.txn || "—")}</td></tr>
+  </table>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="text-align:left;color:#5B6576;font-size:11px;text-transform:uppercase;letter-spacing:.05em"><th style="padding:6px 8px;border-bottom:2px solid #d5dbe3">Invoice</th><th style="padding:6px 8px;border-bottom:2px solid #d5dbe3">Job</th><th style="padding:6px 8px;border-bottom:2px solid #d5dbe3;text-align:right">Paid</th><th style="padding:6px 8px;border-bottom:2px solid #d5dbe3;text-align:right">Still owed</th></tr>
+    ${rows}
+    <tr><td colspan="2" style="padding:8px">${r.lines.length} invoice${r.lines.length === 1 ? "" : "s"}</td><td style="padding:8px;text-align:right">${m(r.subtotal)}</td><td></td></tr>
+    ${r.fee > 0.004 ? `<tr><td colspan="2" style="padding:2px 8px;color:#5B6576">Credit card fee</td><td style="padding:2px 8px;text-align:right">${m(r.fee)}</td><td></td></tr>` : ""}
+    <tr><td colspan="2" style="padding:8px;font-weight:800;border-top:2px solid #d5dbe3">Total paid</td><td style="padding:8px;text-align:right;font-weight:800;border-top:2px solid #d5dbe3">${m(r.total)}</td><td style="border-top:2px solid #d5dbe3"></td></tr>
+  </table>
+  <p style="margin:24px 0"><a href="${r.url}" style="background:#0A7BA6;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;font-weight:600;display:inline-block">View your payments</a></p>
+  <div style="font-size:12px;color:#7A8599">Keep this email for your records.</div>
+</div>`;
+}

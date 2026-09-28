@@ -1551,3 +1551,23 @@ a.as-ai{text-decoration:none}
 .ph-line span{color:var(--accent);font-weight:700}
 .ph-sum{margin-top:8px;font-size:12.5px;color:var(--ink-2);font-weight:600}
 .ph-pager{padding:10px 16px}
+/* checkout window */
+.pp-modal{position:fixed;inset:0;z-index:90;background:rgba(10,16,24,.55);display:flex;align-items:flex-start;justify-content:center;padding:4vh 16px;overflow:auto}
+.pp-sheet{width:min(980px,100%);background:var(--surface);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden}
+.pp-sheet-h{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--line);font-size:18px}
+.pp-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}
+.pp-left{padding:20px 22px;background:var(--surface-2);display:flex;flex-direction:column;gap:14px;border-right:1px solid var(--line)}
+.pp-right{padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+.pp-cols h4{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3)}
+.pp-list.tall{max-height:300px;overflow:auto;background:var(--surface);border-radius:10px;padding:6px 10px}
+.pp-receipt{display:flex;flex-direction:column;gap:5px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.pp-receipt label{font-weight:700;font-size:13.5px}
+.pp-receipt span{font-size:12px}
+.pp-secure{font-size:12px;color:var(--ink-3)}
+.pp-done{padding:32px 24px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
+.pp-done h3{margin:0;font-size:20px}
+.pp-done p{margin:0;color:var(--ink-2)}
+.pp-done .pp-list{width:min(440px,100%);text-align:left;max-height:220px;overflow:auto}
+.pp-check{width:64px;height:64px;border-radius:50%;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center;font-size:34px;font-weight:800}
+.pp-modal .pp-go{width:100%;padding:13px;font-size:16px}
+@media (max-width:760px){.pp-list.tall{max-height:170px}.pp-cols{grid-template-columns:1fr}.pp-left{border-right:0;border-bottom:1px solid var(--line)}.pp-modal{padding:0}.pp-sheet{border-radius:0;min-height:100%}}

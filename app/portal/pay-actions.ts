@@ -3,12 +3,12 @@ import { revalidatePath } from "next/cache";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
+import { emailLayout, receiptHtml, sendEmail, siteUrl } from "@/lib/email";
 import { calcOrder, mergeSettings, r2, type Order, type Payment } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { allocateOldest } from "@/lib/paySelect";
 
-type Result = { ok: boolean; error?: string; paid?: number; fee?: number };
+type Result = { receiptTo?: string; ok: boolean; error?: string; paid?: number; fee?: number };
 const STAX_API = "https://apiprod.fattlabs.com";
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
 
@@ -61,7 +61,7 @@ const cardFee = (sum: number, pct: number) => r2((sum * Math.max(0, pct)) / 100)
  * Pay one or more orders together with a card or bank account the customer entered in Stax's secure fields.
  * paymentMethodId comes from Stax.js tokenize(); the card or bank numbers never touch our server.
  */
-export async function payOrders(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "card" | "bank"; paymentMethodId: string; applyAmount?: number }): Promise<Result> {
+export async function payOrders(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "card" | "bank"; paymentMethodId: string; applyAmount?: number; receiptTo?: string }): Promise<Result> {
   try {
     if (!process.env.STAX_API_KEY) return { ok: false, error: "Online payments aren't set up yet. Please contact the shop." };
     if (!/^[\w-]{6,}$/.test(input.paymentMethodId || "")) return { ok: false, error: "Enter your payment details again." };
@@ -117,9 +117,24 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
       subject: `Payment received: ${money(total)} for ${ref}`,
       html: emailLayout(settings.shop.name, `${customer?.company || customer?.name || email} paid ${money(total)}`, `${methodName} payment for ${ref}: ${money(sum)}${fee ? ` + ${money(fee)} card fee` : ""}. Stax transaction ${txn.id || ""}.`, "Open orders", `${siteUrl()}/shop`),
     });
+    // a detailed receipt for their records (every invoice it paid, what's still owed on each)
+    const to = (input.receiptTo || "").split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).slice(0, 3);
+    let receiptTo = "";
+    if (to.length) {
+      const { data: pays2 } = await admin.from("payments").select("order_id, amount").in("order_id", lines.map((l) => l.o.id));
+      const paidNow: Record<string, number> = {};
+      (pays2 || []).forEach((p) => { paidNow[p.order_id] = (paidNow[p.order_id] || 0) + (+p.amount || 0); });
+      const html = receiptHtml({
+        shop: settings.shop, customer: customer?.company || customer?.name || email, date: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+        method: methodName, txn: String(txn.id || ""), subtotal: sum, fee, total, url: `${siteUrl()}/portal?area=payments`,
+        lines: lines.map((l) => ({ number: l.o.number, nickname: l.o.nickname || "", amount: l.amount, balanceAfter: r2((+l.o.total || 0) - (paidNow[l.o.id] || 0)) })),
+      });
+      const sent = await Promise.all(to.map((addr) => sendEmail({ to: addr, replyTo: SHOP_NOTIFY_EMAIL, subject: `Receipt: ${money(total)} paid to ${settings.shop.name}`, html })));
+      receiptTo = to.filter((_, i) => sent[i]).join(", ");
+    }
     revalidatePath("/portal");
     lines.forEach((l) => revalidatePath(`/portal/orders/${l.o.id}`));
-    return { ok: true, paid: total, fee };
+    return { ok: true, paid: total, fee, receiptTo };
   } catch (e) { return fail(e); }
 }
 
