@@ -17,8 +17,13 @@ async function staff() {
 export async function GET() {
   if (!(await staff())) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const admin = createAdminClient();
-  const [groups, printavo] = await Promise.all([unmatchedGroups(admin), printavoGoods(admin)]);
-  return NextResponse.json({ groups, printavo });
+  // one list failing must not blank the other (show the problem instead of an empty page)
+  const [groups, printavo] = await Promise.all([
+    unmatchedGroups(admin).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
+    printavoGoods(admin).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
+  ]);
+  const err = [groups, printavo].map((x) => (!Array.isArray(x) ? x.error : "")).filter(Boolean).join(" · ");
+  return NextResponse.json({ groups: Array.isArray(groups) ? groups : [], printavo: Array.isArray(printavo) ? printavo : [], error: err || undefined });
 }
 
 /**

@@ -629,7 +629,9 @@ export const __test = { allocate, styleEq, colorEq };
 export type PrintavoGoods = { kind: "goods" | "blanks"; lineIds: string[]; archivedId: string; number: number; nickname: string; customer: string; due_date: string | null; supplier: string; supplier_order: string; pcs: number; boxes: number; tracking: PendingShipment["tracking"]; delivered: boolean; eta: string | null };
 /** Goods linked to Printavo orders (until go-live), shipment by shipment, for Goods & receiving. Delivered ones for 10 days. */
 export async function printavoGoods(admin: SupabaseClient): Promise<PrintavoGoods[]> {
-  const { data } = await admin.from("supplier_manifest_lines").select("*, archived_orders(visual_id, nickname, due_date, customers(company, name))").in("kind", ["goods", "blanks"]).not("archived_order_id", "is", null).order("created_at", { ascending: false }).limit(2000);
+  // two links to archived_orders (linked + guessed): name the one we mean, or the query fails and returns nothing
+  const { data, error } = await admin.from("supplier_manifest_lines").select("*, archived_orders!supplier_manifest_lines_archived_order_id_fkey(visual_id, nickname, due_date, customers(company, name))").in("kind", ["goods", "blanks"]).not("archived_order_id", "is", null).order("created_at", { ascending: false }).limit(2000);
+  if (error) throw new Error(`Goods on Printavo jobs: ${error.message}`);
   type Row = Waiting & { archived_order_id: string; archived_orders: { visual_id: string | number; nickname: string; due_date: string | null; customers: { company: string; name: string } | null } | null };
   const m = new Map<string, Row[]>();
   for (const l of (data || []) as Row[]) { const k = `${l.archived_order_id}|${l.supplier}|${l.supplier_order}|${(l as Row & { kind: string }).kind}`; m.set(k, [...(m.get(k) || []), l]); }

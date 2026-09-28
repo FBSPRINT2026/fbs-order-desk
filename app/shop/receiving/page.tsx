@@ -48,7 +48,7 @@ export default function GoodsReceiving() {
   const [upBusy, setUpBusy] = useState(false), [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "customer" || v === "resolve") setViewState(v); }, []);
   const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "today") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
-  const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); }, []);
+  const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); if (j.error) setNote(`Couldn't load everything: ${j.error}`); }, []);
   useEffect(() => { loadPending(); }, [loadPending]);
   async function upload(f: File) {
     setUpBusy(true); setNote("");
