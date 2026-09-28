@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { carrierOf, CARRIERS, GOODS, GOODS_ORDER, ISSUES, trackingUrl, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
+import { carrierOf, CARRIERS, GOODS, GOODS_ORDER, goodsNeedInfo, ISSUES, supplierLabel, TRACK, trackingUrl, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
+import GoodsInfoFields, { cleanGoodsInfo, type GoodsInfoValue } from "@/components/GoodsInfoFields";
 import type { Attachment } from "@/lib/messages";
 import { fmtDateLong } from "@/lib/format";
 
@@ -10,6 +11,8 @@ export type GoodsActions = {
   message: (orderId: string, body: string) => Promise<{ ok: boolean; error?: string }>;
   /** portal only: attach a packing slip or photo */
   upload?: (f: File) => Promise<Attachment>;
+  /** where the goods come from (supplier, supplier order #, ship date) */
+  saveInfo?: (orderId: string, v: GoodsInfoValue) => Promise<{ ok: boolean; error?: string }>;
   /** shop only */
   setStatus?: (orderId: string, s: GoodsStatus, issue: IssueType, note: string) => Promise<{ ok: boolean; error?: string; emailed?: boolean }>;
   /** after any change: reload the list */
@@ -37,7 +40,9 @@ export default function GoodsBoard({ mode, items, act, canAct = true, compact = 
 
 function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "portal" | "shop"; act: GoodsActions; canAct: boolean; compact: boolean }) {
   const g = GOODS[it.goods.status];
-  const [panel, setPanel] = useState<"" | "track" | "msg" | "status">("");
+  const [panel, setPanel] = useState<"" | "track" | "msg" | "status" | "info" | "count">("");
+  const needInfo = goodsNeedInfo(it.goods, it.shipments);
+  const [info, setInfo] = useState<GoodsInfoValue>({ supplier: it.goods.supplier || "", supplier_po: it.goods.supplier_po || "", ship_date: it.goods.ship_date || null });
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -51,7 +56,7 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
           <b>{it.order.nickname || "Order"}</b>
           <span className="gc-sub">{it.order.statusLabel}{it.order.due_date ? ` · in hands ${when(it.order.due_date)}` : ""}{it.order.qty ? ` · ${it.order.qty} pcs` : ""}</span>
         </div>
-        <span className="gc-st">{mode === "portal" ? g.portal : g.label}</span>
+        <span className="gc-st">{needInfo ? (mode === "portal" ? "Tell us where your goods are coming from" : "Waiting on info") : mode === "portal" ? g.portal : g.label}</span>
       </header>
 
       <ol className="gc-steps" aria-label="Goods progress">
@@ -62,6 +67,19 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
         ? <div className="gc-issue"><b>{ISSUES[(it.goods.issue_type || "other") as Exclude<IssueType, "">]}</b>{it.goods.issue_note && <p>{it.goods.issue_note}</p>}<span>{mode === "portal" ? "Tap Message about goods so we can sort it out." : "The customer was told in their goods conversation."}</span></div>
         : !compact && <p className="gc-help">{mode === "portal" ? g.help : ""}</p>}
 
+      <div className={"gc-from" + (needInfo ? " need" : "")}>
+        {it.goods.supplier
+          ? <span>Coming from <b>{supplierLabel(it.goods.supplier)}</b>{it.goods.supplier_po ? <> · order/PO {it.goods.supplier_po}</> : null}{it.goods.ship_date ? <> · ships {when(it.goods.ship_date)}</> : null}</span>
+          : <span>{mode === "portal" ? "Where are these goods coming from? SanMar, S&S Activewear…" : "Supplier not known yet."}</span>}
+        {act.saveInfo && <button type="button" className="linkbtn" disabled={!canAct} onClick={() => setPanel(panel === "info" ? "" : "info")}>{it.goods.supplier ? "Change" : "Add"}</button>}
+      </div>
+      {panel === "info" && act.saveInfo && (
+        <div className="gc-form">
+          <GoodsInfoFields v={info} onChange={setInfo} disabled={busy} />
+          <div className="row"><button type="button" className="btn primary sm" disabled={busy} onClick={() => run(act.saveInfo!(it.order.id, cleanGoodsInfo(info)), "Saved.")}>{busy ? "Saving…" : "Save"}</button><button type="button" className="btn sm ghost" onClick={() => setPanel("")}>Cancel</button></div>
+        </div>
+      )}
+
       {it.shipments.length > 0 && (
         <ul className="gc-ships">
           {it.shipments.map((s) => (
@@ -69,7 +87,14 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
               <span className="gc-ship-ic">🚚</span>
               <div>
                 {s.tracking ? <a href={trackingUrl(s.carrier, s.tracking)} target="_blank" rel="noreferrer"><b>{s.carrier || carrierOf(s.tracking) || "Tracking"}</b> {s.tracking}</a> : <b>Shipment note</b>}
-                <small>{[s.boxes ? `${s.boxes} box${s.boxes === 1 ? "" : "es"}` : "", s.eta ? `expected ${when(s.eta)}` : "", `added ${ago(s.created_at)}${mode === "shop" ? ` by ${s.added_by === "staff" ? "shop" : s.author_name || "customer"}` : s.added_by === "staff" ? " by us" : ""}`].filter(Boolean).join(" · ")}</small>
+                {s.track_status && (
+                  <div className={"gc-track t-" + s.track_status}>
+                    <b>{TRACK[s.track_status] || s.track_status}</b>
+                    {s.track_status === "delivered" ? (s.delivered_at ? ` ${when(s.delivered_at)}` : "") : s.est_delivery ? ` · arrives ${when(s.est_delivery)}` : ""}
+                    {s.track_detail ? <span> · {s.track_detail}</span> : null}
+                  </div>
+                )}
+                <small>{[s.source === "manifest" ? "from the supplier's manifest" : "", s.boxes ? `${s.boxes} box${s.boxes === 1 ? "" : "es"}` : "", s.eta && !s.est_delivery ? `expected ${when(s.eta)}` : "", `added ${ago(s.created_at)}${mode === "shop" ? ` by ${s.added_by === "staff" ? "shop" : s.author_name || "customer"}` : s.added_by === "staff" ? " by us" : ""}`].filter(Boolean).join(" · ")}</small>
                 {s.note && <p>{s.note}</p>}
                 {s.files.length > 0 && <div className="gc-files">{s.files.map((f, k) => <a key={k} href={f.url || undefined} target="_blank" rel="noreferrer">{/^image\//.test(f.mime) && f.url ? <img src={f.url} alt={f.name} /> : <span>📄 {f.name}</span>}</a>)}</div>}
               </div>
@@ -85,6 +110,7 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
       )}
 
       <div className="gc-acts">
+        {mode === "shop" && act.setStatus && !!it.lines?.length && it.goods.status !== "received" && <button type="button" className={"btn sm" + (panel === "count" ? " primary" : ["arrived", "partial"].includes(it.goods.status) ? " primary" : "")} disabled={!canAct} onClick={() => setPanel(panel === "count" ? "" : "count")}>Count in</button>}
         {mode === "shop" && <button type="button" className={"btn sm" + (panel === "status" ? " primary" : "")} disabled={!canAct} onClick={() => setPanel(panel === "status" ? "" : "status")}>Update status</button>}
         {(mode === "shop" || it.goods.status !== "received") && <button type="button" className={"btn sm" + (panel === "track" ? " primary" : mode === "portal" && it.goods.status === "waiting" ? " primary" : "")} disabled={!canAct} onClick={() => setPanel(panel === "track" ? "" : "track")}>+ Add tracking</button>}
         <button type="button" className={"btn sm" + (panel === "msg" ? " primary" : "")} disabled={!canAct} onClick={() => setPanel(panel === "msg" ? "" : "msg")}>Message about goods</button>
@@ -100,6 +126,7 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
           <div className="row"><button type="button" className="btn primary sm" disabled={busy || !msg.trim()} onClick={() => run(act.message(it.order.id, msg).then((r) => { if (r.ok) setMsg(""); return r; }), "Sent.")}>{busy ? "Sending…" : "Send"}</button><button type="button" className="btn sm ghost" onClick={() => setPanel("")}>Cancel</button></div>
         </div>
       )}
+      {panel === "count" && act.setStatus && it.lines && <CountForm it={it} busy={busy} onSave={(st, i, n) => run(act.setStatus!(it.order.id, st, i, n), st === "received" ? "Counted in. The customer was told everything checked out." : "Saved. The customer was told about the difference.")} onCancel={() => setPanel("")} />}
       {panel === "status" && act.setStatus && <StatusForm it={it} busy={busy} onSave={(s, i, n) => run(act.setStatus!(it.order.id, s, i, n), s === "issue" || s === "received" ? "Saved. The customer was emailed." : "Saved.")} onCancel={() => setPanel("")} />}
       {note && <div className="gc-note">{note}</div>}
     </article>
@@ -152,6 +179,53 @@ function StatusForm({ it, busy, onSave, onCancel }: { it: GoodsItem; busy: boole
       )}
       <div className="faint" style={{ fontSize: 12 }}>{["arrived", "partial", "received", "issue"].includes(s) ? "This posts in their goods conversation" + (s === "issue" || s === "received" ? " and emails them." : ".") : "Only changes the status."}</div>
       <div className="row"><button type="button" className="btn primary sm" disabled={busy} onClick={() => onSave(s, s === "issue" ? i : "", n)}>{busy ? "Saving…" : "Save"}</button><button type="button" className="btn sm ghost" onClick={onCancel}>Cancel</button></div>
+    </div>
+  );
+}
+
+/**
+ * Counting goods in against the order: expected quantity next to a count box for every size. All matching →
+ * Received. Anything different → an issue (short / over) with the differences written out for the customer.
+ */
+function CountForm({ it, busy, onSave, onCancel }: { it: GoodsItem; busy: boolean; onSave: (s: GoodsStatus, i: IssueType, n: string) => void; onCancel: () => void }) {
+  const lines = it.lines || [];
+  const [n, setN] = useState<Record<string, string>>({});
+  const key = (li: number, z: string) => `${li}|${z}`;
+  const diffs = lines.flatMap((l, li) => Object.entries(l.sizes).map(([z, want]) => ({ l, z, want, got: n[key(li, z)] === undefined || n[key(li, z)] === "" ? null : +n[key(li, z)] })));
+  const counted = diffs.every((d) => d.got !== null);
+  const off = diffs.filter((d) => d.got !== null && d.got !== d.want);
+  const short = off.some((d) => (d.got ?? 0) < d.want), over = off.some((d) => (d.got ?? 0) > d.want);
+  const note = off.map((d) => `${d.l.label} ${d.z}: counted ${d.got} of ${d.want}`).join("\n");
+  return (
+    <div className="gc-form">
+      <div className="gc-count">
+        {lines.map((l, li) => (
+          <div key={li} className="gc-count-l">
+            <b>{l.label}</b>
+            <div className="gc-count-sz">
+              {Object.entries(l.sizes).map(([z, want]) => {
+                const v = n[key(li, z)] ?? "", bad = v !== "" && +v !== want;
+                return (
+                  <label key={z} className={bad ? "bad" : v !== "" ? "ok" : ""}>
+                    <span>{z === "OS" ? "Qty" : z}</span>
+                    <input type="number" min={0} inputMode="numeric" value={v} placeholder={String(want)} onChange={(e) => setN({ ...n, [key(li, z)]: e.target.value })} aria-label={`${l.label} ${z} counted`} />
+                    <small>of {want}</small>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <button type="button" className="btn sm" onClick={() => setN(Object.fromEntries(lines.flatMap((l, li) => Object.entries(l.sizes).map(([z, want]) => [key(li, z), String(want)]))))}>Everything matches</button>
+        <span className="faint" style={{ fontSize: 12.5 }}>{!counted ? "Type what you counted for each size (empty = not counted yet)." : off.length ? `${off.length} size${off.length === 1 ? " doesn't" : "s don't"} match. Saving marks it as an issue and tells the customer.` : "All counts match."}</span>
+      </div>
+      {counted && off.length > 0 && <pre className="gc-count-note">{note}</pre>}
+      <div className="row">
+        <button type="button" className="btn primary sm" disabled={busy || !counted} onClick={() => off.length ? onSave("issue", short && !over ? "short" : over && !short ? "over" : "other", `Counted in:\n${note}`) : onSave("received", "", "")}>{busy ? "Saving…" : off.length ? "Save and tell the customer" : "Counted in: all received"}</button>
+        <button type="button" className="btn sm ghost" onClick={onCancel}>Cancel</button>
+      </div>
     </div>
   );
 }

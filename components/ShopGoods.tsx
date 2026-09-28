@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import GoodsBoard from "@/components/GoodsBoard";
-import { setGoods, shopGoods, staffAddTracking } from "@/app/shop/goods-actions";
+import { setGoods, shopGoods, staffAddTracking, staffGoodsInfo } from "@/app/shop/goods-actions";
 import { staffMessage } from "@/app/shop/actions";
 import type { GoodsItem } from "@/lib/goods";
 
@@ -19,6 +19,7 @@ export default function ShopGoods({ orderIds, customerId, hub, compact, onCount 
         addTracking: (id, t) => staffAddTracking(id, t),
         message: (id, body) => staffMessage(id, body, [], "goods"),
         setStatus: (id, s, i, n) => setGoods(id, s, i, n),
+        saveInfo: (id, v) => staffGoodsInfo(id, v),
         chatHref: (id) => (customerId ? `/shop/customers/${customerId}?area=messages&c=${id}:goods` : `/shop/orders/${id}`),
         openChat: hub ? (id) => window.dispatchEvent(new CustomEvent("mh:open", { detail: `${id}:goods` })) : undefined,
       }} />

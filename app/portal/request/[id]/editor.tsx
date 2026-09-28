@@ -8,6 +8,8 @@ import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PRE
 import { describeMyOrder, discardRequest, ownMockupUploadUrl, saveOwnMockup, saveRequest, submitRequest } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { customerMessage } from "@/app/portal/actions";
+import { saveGoodsInfo } from "@/app/portal/goods-actions";
+import GoodsInfoFields, { cleanGoodsInfo, type GoodsInfoValue } from "@/components/GoodsInfoFields";
 
 function imageSize(f: File): Promise<{ w: number; h: number } | null> {
   return new Promise((res) => {
@@ -20,11 +22,13 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
 }
 
 /** The customer's order builder: garments, sizes, print locations and logos, no prices. */
-export default function RequestEditor({ initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, mockupUrls: mu0, mockupHref, preview, backHref, aiAssist }: {
+export default function RequestEditor({ initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
   initial: Order; settings: Settings; catalog: Garment[]; designs: Design[]; designUrls: Record<string, string>; messages: Message[];
+  /** wholesale: where their goods are coming from (null on retail orders) */ goodsInfo?: GoodsInfoValue | null;
   savedMockups: { path: string; name: string }[]; mockupUrls: Record<string, string>; mockupHref: string; preview: boolean; backHref: string; aiAssist?: boolean;
 }) {
   const [mUrls, setMUrls] = useState(mu0);
+  const [goods, setGoods] = useState<GoodsInfoValue | null>(gi0 || null);
   const [upBusy, setUpBusy] = useState("");
   const router = useRouter();
   const [o, setO] = useState<Order>(initial);
@@ -123,6 +127,8 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
   async function send() {
     setBusy(true); setErr("");
     await flush();
+    // wholesale: where the goods come from (optional) goes into the order's goods conversation
+    if (goods) { const g = await saveGoodsInfo(o.id, cleanGoodsInfo(goods)); if (!g.ok) { setBusy(false); return setErr(g.error || "Couldn't save the goods info."); } }
     const r = await submitRequest(o.id);
     setBusy(false);
     if (!r.ok) return setErr(r.error || "Couldn't send it in.");
@@ -221,6 +227,13 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         )])}
         <button type="button" className="btn" style={{ alignSelf: "flex-start" }} onClick={() => patch((d) => { d.groups.push(newGroup()); })}>+ Add another group</button>
       </fieldset>
+
+      {goods && (
+        <section className="panel">
+          <div className="panel-h"><h2>Your goods</h2><span className="faint" style={{ fontSize: 12 }}>You&apos;re sending us the garments. Tell us what you know now; tracking and dates can be added later in Customer supplied goods.</span></div>
+          <div className="panel-b"><GoodsInfoFields v={goods} onChange={setGoods} disabled={preview} /></div>
+        </section>
+      )}
 
       <section className="panel">
         <div className="panel-h"><h2>Questions for us</h2><span className="faint" style={{ fontSize: 12 }}>Not sure a logo will print well? Ask here. We&apos;ll answer on this order.</span></div>

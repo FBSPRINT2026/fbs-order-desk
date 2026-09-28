@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import GoodsBoard from "@/components/GoodsBoard";
 import { createClient } from "@/lib/supabase/client";
-import { addTracking } from "@/app/portal/goods-actions";
+import { addTracking, saveGoodsInfo } from "@/app/portal/goods-actions";
 import { portalAttachUrl, portalSend } from "@/app/portal/message-actions";
 import type { GoodsItem } from "@/lib/goods";
 
@@ -13,7 +13,7 @@ export default function PortalGoods({ items, canAct, qs, compact, hub, empty }: 
   return (
     <GoodsBoard mode="portal" items={items} canAct={canAct} compact={compact} empty={empty}
       act={{
-        addTracking, changed: () => router.refresh(), chatHref,
+        addTracking, saveInfo: saveGoodsInfo, changed: () => router.refresh(), chatHref,
         message: (id, body) => portalSend(id, body, [], "goods"),
         openChat: hub ? (id) => window.dispatchEvent(new CustomEvent("mh:open", { detail: `${id}:goods` })) : undefined,
         upload: async (f) => {

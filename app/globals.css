@@ -1886,3 +1886,26 @@ a.as-ai{text-decoration:none}
 .sw-ask{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding:10px 12px;border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;font-size:13.5px}
 .sw-ask>span{flex:1 1 220px}
 .sw-many{width:80px}
+.gi{display:flex;flex-direction:column;gap:8px}
+.gi-l{font-size:13px;font-weight:700}
+.gi-chips{display:flex;flex-wrap:wrap;gap:6px}
+.gi-chips .chip{font-size:13.5px;padding:6px 12px}
+.gi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.gi-grid label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.gi-grid small{font-weight:400;color:var(--ink-3)}
+.gc-from{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);padding:6px 0}
+.gc-from.need{color:var(--warn);font-weight:600}
+.gc-track{font-size:12.5px;margin:2px 0}
+.gc-track b{color:var(--accent)}
+.gc-track.t-delivered b{color:var(--ok)}
+.gc-track.t-failure b,.gc-track.t-return_to_sender b,.gc-track.t-error b{color:var(--danger)}
+.gc-count{display:flex;flex-direction:column;gap:10px}
+.gc-count-l{display:flex;flex-direction:column;gap:6px}
+.gc-count-l>b{font-size:13.5px}
+.gc-count-sz{display:flex;flex-wrap:wrap;gap:6px}
+.gc-count-sz label{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px;border:1px solid var(--line);border-radius:8px;min-width:62px;font-size:12px;font-weight:700}
+.gc-count-sz label input{width:56px;text-align:center;font-weight:700}
+.gc-count-sz label small{font-weight:500;color:var(--ink-3)}
+.gc-count-sz label.ok{border-color:var(--ok);background:var(--ok-soft)}
+.gc-count-sz label.bad{border-color:var(--danger);background:var(--danger-soft)}
+.gc-count-note{white-space:pre-wrap;font-size:12.5px;background:var(--surface-2);padding:8px 10px;border-radius:8px;margin:0}

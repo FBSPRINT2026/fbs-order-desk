@@ -15,10 +15,11 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   const order = { ...(o as Order), groups: orderGroups(o as Order) };
   if (order.status !== "request" || order.submitted_at) redirect(`/portal/orders/${id}${as ? `?as=${as}` : ""}`);
   const admin = createAdminClient();
-  const [{ data: g }, { data: d }, { data: m }] = await Promise.all([
+  const [{ data: g }, { data: d }, { data: m }, { data: gd }] = await Promise.all([
     admin.from("garments").select("*").order("style"),
     ctx.db.from("designs").select("*").eq("customer_id", order.customer_id).is("archived_at", null).order("number", { ascending: false }),
     ctx.db.from("messages").select("*").eq("order_id", id).order("created_at"),
+    ctx.db.from("order_goods").select("supplier, supplier_po, ship_date").eq("order_id", id).maybeSingle(),
   ]);
   // customers never see our blank costs
   const catalog = ((g || []) as Garment[]).map((x) => ({ ...x, cost: 0, size_costs: {} }));
@@ -41,7 +42,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   return (
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s order request. Editing is turned off in preview.</div>}
-      <RequestEditor initial={order} settings={ctx.settings} catalog={catalog} designs={designs} designUrls={urls} messages={(m || []) as Message[]} savedMockups={savedList.map((m) => ({ path: m.file_path, name: m.title }))} mockupUrls={mockupUrls} mockupHref={`/portal/mockup${as ? `?as=${as}` : ""}`} preview={!!ctx.preview} aiAssist={hasAiKey() && ctx.settings.assistant.ai.enabled && ctx.settings.assistant.ai.customerAssist} backHref={`/portal${as ? `?as=${as}` : ""}`} />
+      <RequestEditor initial={order} settings={ctx.settings} catalog={catalog} designs={designs} designUrls={urls} messages={(m || []) as Message[]} savedMockups={savedList.map((m) => ({ path: m.file_path, name: m.title }))} mockupUrls={mockupUrls} mockupHref={`/portal/mockup${as ? `?as=${as}` : ""}`} preview={!!ctx.preview} goodsInfo={order.price_type === "wholesale" ? { supplier: gd?.supplier || "", supplier_po: gd?.supplier_po || "", ship_date: gd?.ship_date || null } : null} aiAssist={hasAiKey() && ctx.settings.assistant.ai.enabled && ctx.settings.assistant.ai.customerAssist} backHref={`/portal${as ? `?as=${as}` : ""}`} />
     </>
   );
 }

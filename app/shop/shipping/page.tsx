@@ -197,7 +197,7 @@ function ShipSettingsPanel({ s, onSaved }: { s: Settings; onSaved: (s: Settings)
   const [v, setV] = useState(s.ship);
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const f = (k: keyof ShipAddress, label: string, cls = "") => <label className={cls}>{label}<input type="text" value={v.from[k]} onChange={(e) => setV({ ...v, from: { ...v.from, [k]: e.target.value } })} /></label>;
-  const n = (k: "perBox" | "markupPct" | "perBoxFee" | "minCharge" | "thirdPartyFee", label: string, unit: string) => (
+  const n = (k: "perBox" | "markupPct" | "perBoxFee" | "minCharge" | "thirdPartyFee" | "goodsLeadDays", label: string, unit: string) => (
     <label>{label}<div className="sw-in"><input type="number" min={0} step="0.01" value={v[k]} onChange={(e) => setV({ ...v, [k]: +e.target.value || 0 })} /><span>{unit}</span></div></label>
   );
   async function save() {
@@ -240,6 +240,8 @@ function ShipSettingsPanel({ s, onSaved }: { s: Settings; onSaved: (s: Settings)
               {n("minCharge", "Minimum charge", "$")}
               {n("thirdPartyFee", "Per box on their own account", "$")}
             </div>
+            <div className="sw-h" style={{ marginTop: 14 }}>Customer supplied goods</div>
+            <div className="sc-nums">{n("goodsLeadDays", "Goods must arrive this many business days before the in-hands date", "days")}</div>
           </div>
         </div>
         {err && <div className="pv-err">{err}</div>}

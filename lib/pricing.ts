@@ -153,6 +153,7 @@ export type ShipSettings = {
   perBoxFee: number;       // + this per box
   minCharge: number;       // at least this
   thirdPartyFee: number;   // per box, when it ships on the customer's own account (0 = free)
+  goodsLeadDays: number;   // customer supplied goods must arrive this many business days before the in-hands date
 };
 
 /** When the Assistant flags things, and what the AI is allowed to do. AI stays off until an API key is set AND ai.enabled is on. */
@@ -249,6 +250,7 @@ export const DEFAULT_SETTINGS: Settings = {
     ],
     defaultBox: "Large",
     markupPct: 15, perBoxFee: 2, minCharge: 0, thirdPartyFee: 0,
+    goodsLeadDays: 3,
   },
 };
 

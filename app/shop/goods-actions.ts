@@ -4,8 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { mergeSettings } from "@/lib/pricing";
-import { carrierOf, GOODS, ISSUES, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
+import { carrierOf, GOODS, ISSUES, supplierLabel, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
+import { startTracker } from "@/lib/goodsTrack";
 import type { TrackingInput } from "@/app/portal/goods-actions";
 
 async function staff() {
@@ -19,7 +20,7 @@ export async function shopGoods(orderIds: string[]): Promise<{ ok: boolean; erro
   try {
     await staff();
     const admin = createAdminClient();
-    const { data: os } = orderIds.length ? await admin.from("orders").select("id, number, nickname, status, due_date, qty").in("id", orderIds.slice(0, 300)) : { data: [] };
+    const { data: os } = orderIds.length ? await admin.from("orders").select("id, number, nickname, status, due_date, qty, groups, lines").in("id", orderIds.slice(0, 300)) : { data: [] };
     return { ok: true, items: await loadGoodsItems(admin, (os || []) as never, "staff", (id) => `/shop/orders/${id}`) };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
@@ -66,11 +67,30 @@ export async function staffAddTracking(orderId: string, t: TrackingInput): Promi
     const admin = createAdminClient();
     const tracking = (t.tracking || "").trim().slice(0, 80);
     if (!tracking && !t.note?.trim()) return { ok: false, error: "Add a tracking number or a note." };
-    const { error } = await admin.from("goods_shipments").insert({ order_id: orderId, carrier: (t.carrier || carrierOf(tracking)).slice(0, 40), tracking, boxes: t.boxes && t.boxes > 0 ? Math.round(t.boxes) : null,
-      eta: t.eta && /^\d{4}-\d{2}-\d{2}$/.test(t.eta) ? t.eta : null, note: (t.note || "").trim().slice(0, 2000), files: [], added_by: "staff", author_name: email });
+    const carrier = (t.carrier || carrierOf(tracking)).slice(0, 40);
+    const { data: row, error } = await admin.from("goods_shipments").insert({ order_id: orderId, carrier, tracking, boxes: t.boxes && t.boxes > 0 ? Math.round(t.boxes) : null,
+      eta: t.eta && /^\d{4}-\d{2}-\d{2}$/.test(t.eta) ? t.eta : null, note: (t.note || "").trim().slice(0, 2000), files: [], added_by: "staff", author_name: email }).select("id").single();
     if (error) return { ok: false, error: error.message };
+    if (tracking && row) { const f = await startTracker(tracking, carrier).catch(() => null); if (f) await admin.from("goods_shipments").update(f).eq("id", row.id); }
     const { data: g } = await admin.from("order_goods").select("status").eq("order_id", orderId).maybeSingle();
     if (!g || g.status === "waiting") await admin.from("order_goods").upsert({ order_id: orderId, status: "on_way", updated_by: email, updated_at: new Date().toISOString() });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/** Staff record where the goods come from (supplier, supplier order #, ship date), e.g. from a phone call or the manifest. */
+export async function staffGoodsInfo(orderId: string, g: { supplier: string; supplier_po: string; ship_date: string | null }): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { email } = await staff();
+    const admin = createAdminClient();
+    const supplier = (g.supplier || "").trim().slice(0, 60), po = (g.supplier_po || "").trim().slice(0, 60);
+    const ship = g.ship_date && /^\d{4}-\d{2}-\d{2}$/.test(g.ship_date) ? g.ship_date : null;
+    const { error } = await admin.from("order_goods").upsert({ order_id: orderId, supplier, supplier_po: po, ship_date: ship, updated_by: email, updated_at: new Date().toISOString() }, { onConflict: "order_id" });
+    if (error) return { ok: false, error: error.message };
+    const { data: o } = await admin.from("orders").select("number").eq("id", orderId).maybeSingle();
+    const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const parts = [supplier ? `coming from ${supplierLabel(supplier)}` : "supplier not known yet", po && `order/PO ${po}`, ship && `ships ${new Date(ship + "T12:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`].filter(Boolean);
+    await admin.from("messages").insert({ order_id: orderId, topic: "goods", author_type: "staff", author_email: email, author_name: mergeSettings(s?.data).shop.name, body: `📦 Goods for #${o?.number ?? ""}: ${parts.join(" · ")}.` });
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

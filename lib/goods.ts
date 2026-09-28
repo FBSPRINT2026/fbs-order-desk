@@ -24,15 +24,32 @@ export const ISSUES: Record<Exclude<IssueType, "">, string> = {
 };
 
 export type GoodsFile = { name: string; mime: string; size: number; url: string };
-export type Shipment = { id: string; carrier: string; tracking: string; boxes: number | null; eta: string | null; note: string; files: GoodsFile[]; added_by: "customer" | "staff"; author_name: string; created_at: string };
-export type GoodsState = { status: GoodsStatus; issue_type: IssueType; issue_note: string; expected: string; updated_at: string | null };
+export type Shipment = {
+  id: string; carrier: string; tracking: string; boxes: number | null; eta: string | null; note: string; files: GoodsFile[]; added_by: "customer" | "staff"; author_name: string; created_at: string;
+  /** live tracking (EasyPost): status, latest scan, estimated delivery */
+  track_status?: string; track_detail?: string; est_delivery?: string | null; delivered_at?: string | null; source?: string;
+};
+export type GoodsState = { status: GoodsStatus; issue_type: IssueType; issue_note: string; expected: string; updated_at: string | null; supplier?: string; supplier_po?: string; ship_date?: string | null };
 export type GoodsItem = {
   order: { id: string; number: number; nickname: string; status: string; statusLabel: string; due_date: string | null; qty: number; href: string };
   goods: GoodsState; shipments: Shipment[];
+  /** shop only: what the order says is coming, for counting in (style + color, quantities by size) */
+  lines?: { label: string; sizes: Record<string, number> }[];
   /** latest message in the goods conversation, and how many the viewer hasn't read */
   last: { body: string; at: string; mine: boolean; who: string } | null; unread: number;
 };
-export const NO_GOODS: GoodsState = { status: "waiting", issue_type: "", issue_note: "", expected: "", updated_at: null };
+export const NO_GOODS: GoodsState = { status: "waiting", issue_type: "", issue_note: "", expected: "", updated_at: null, supplier: "", supplier_po: "", ship_date: null };
+
+/** Where wholesale customers' goods usually come from. Anything else is stored as its name. */
+export const SUPPLIERS: Record<string, string> = { sanmar: "SanMar", ss: "S&S Activewear" };
+export const supplierLabel = (s?: string | null) => (s ? SUPPLIERS[s] || s : "");
+/** Nothing known yet about the goods: no supplier and no tracking. */
+export const goodsNeedInfo = (g: GoodsState, shipments: { tracking: string }[]) => g.status === "waiting" && !g.supplier && !shipments.some((x) => x.tracking);
+/** Live tracking status in words. */
+export const TRACK: Record<string, string> = {
+  pre_transit: "Label created", in_transit: "In transit", out_for_delivery: "Out for delivery", delivered: "Delivered",
+  available_for_pickup: "Waiting at carrier", return_to_sender: "Returning to sender", failure: "Delivery problem", cancelled: "Cancelled", error: "Tracking problem", unknown: "No scans yet",
+};
 
 /** Which carrier a tracking number belongs to, from its shape. */
 export function carrierOf(t: string): string {
@@ -56,5 +73,6 @@ export function trackingUrl(carrier: string, t: string): string {
 }
 export const CARRIERS = ["UPS", "FedEx", "USPS", "DHL", "S&S freight", "SanMar", "Other"];
 
-/** Wholesale jobs whose goods matter: invoices not finished yet (plus anything with a goods record not yet received). */
-export const needsGoods = (o: { price_type?: string | null; type: string; status: string }) => o.price_type === "wholesale" && o.type === "invoice" && o.status !== "completed";
+/** Wholesale jobs whose goods matter: from the moment the order is sent in (request) until it's completed. */
+export const needsGoods = (o: { price_type?: string | null; type: string; status: string; submitted_at?: string | null }) =>
+  o.price_type === "wholesale" && o.status !== "completed" && o.status !== "quote" && !(o.status === "request" && !o.submitted_at);
