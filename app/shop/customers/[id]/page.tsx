@@ -19,6 +19,7 @@ import { fmtStamp } from "@/lib/format";
 import { orderSearchText } from "@/lib/search";
 import ShopMessages from "@/components/ShopMessages";
 import ShopGoods from "@/components/ShopGoods";
+import { emailStatement, recordLumpPayment } from "@/app/shop/pay-actions";
 import { needsGoods } from "@/lib/goods";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 
@@ -27,7 +28,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const router = useRouter();
   const searchParams = useSearchParams();
   const isNew = searchParams.get("new") === "1";
-  const { orders, customers, settings, loading } = useShopData();
+  const { orders, customers, settings, loading, reload: reloadShop } = useShopData();
   const [c, setC] = useState<Customer | null>(null);
   const [state, setState] = useState("");
   const [armed, setArmed] = useState(false);
@@ -146,6 +147,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         </div>
       </div>
       <AccountAreas mode="shop" goodsCount={goodsOpen}
+          statementHref={`/portal/statement?as=${id}`} onEmailStatement={() => emailStatement(id)}
+          onRecordPayment={async (p) => { const r = await recordLumpPayment(id, p); if (r.ok && !p.preview) { reloadShop(); setReload((n) => n + 1); } return r; }}
           goodsPanel={c.price_type === "wholesale" || os.some((o) => o.price_type === "wholesale") ? <ShopGoods orderIds={os.filter(needsGoods).map((o) => o.id)} customerId={id} onCount={setGoodsOpen} /> : undefined}
           messagesPanel={<ShopMessages customerId={id} customerName={c.name || c.company || "Customer"} shopName={settings?.shop?.name || "FBS Print"}
           orders={os.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", href: `/shop/orders/${o.id}` }))} start={searchParams.get("c")} />} attention={os.flatMap((o): AAttn[] => {

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { applyPay, describePay, hasFilter, parsePay, type PayFilter, type PayOrderLite } from "@/lib/paySelect";
+import { allocateOldest, applyPay, describePay, hasFilter, parsePay, type PayFilter, type PayOrderLite } from "@/lib/paySelect";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const KEY = "fbs-quickpay-recent";
@@ -11,9 +11,11 @@ const SUGGEST = ["Everything due", "Past due", "Completed orders", "Last month",
  * "the Brewery jobs") or tap a suggestion; the matching orders get checked, ready to pay together.
  * Common phrasings are understood right away; anything else is read by Claude.
  */
-export default function QuickPay({ open, onSelect, ask }: {
+export default function QuickPay({ open, onSelect, ask, onPayAmount }: {
   open: PayOrderLite[];
   onSelect: (ids: string[]) => void;
+  /** "pay an amount": pay these (oldest first; the last one partly) */
+  onPayAmount?: (parts: { id: string; amount: number }[], amount: number) => void;
   ask?: (text: string) => Promise<{ ok: boolean; error?: string; filter?: PayFilter; explain?: string; off?: boolean }>;
 }) {
   const [q, setQ] = useState("");
@@ -21,6 +23,11 @@ export default function QuickPay({ open, onSelect, ask }: {
   const [result, setResult] = useState<{ text: string; why: string; n: number; sum: number; ai?: boolean } | null>(null);
   const [err, setErr] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
+  const [amt, setAmt] = useState("");
+  const owed = open.reduce((a, o) => a + o.balance, 0);
+  const amtN = Math.round((+amt.replace(/[$,\s]/g, "") || 0) * 100) / 100;
+  const parts = amtN >= 1 ? allocateOldest(open, Math.min(amtN, owed)) : [];
+  const partial = parts.find((p) => p.amount < p.item.balance - 0.004);
   useEffect(() => { try { setRecent(JSON.parse(localStorage.getItem(KEY) || "[]").slice(0, 4)); } catch { /* private window */ } }, []);
   const remember = (s: string) => { const r = [s, ...recent.filter((x) => x.toLowerCase() !== s.toLowerCase())].slice(0, 4); setRecent(r); try { localStorage.setItem(KEY, JSON.stringify(r)); } catch { /* ignore */ } };
 
@@ -56,7 +63,7 @@ export default function QuickPay({ open, onSelect, ask }: {
         <label htmlFor="qp-in" className="qp-l">What do you want to pay?</label>
         <div className="qp-in">
           <span aria-hidden="true">✨</span>
-          <input id="qp-in" value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. all orders in August · everything under $100 · the Brewery jobs · past due" autoComplete="off" />
+          <input type="text" id="qp-in" value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. all orders in August · everything under $100 · the Brewery jobs · past due" autoComplete="off" />
           <button type="submit" className="btn primary" disabled={busy || !q.trim()}>{busy ? "Finding…" : "Select"}</button>
         </div>
       </form>
@@ -65,6 +72,18 @@ export default function QuickPay({ open, onSelect, ask }: {
           <button key={s} type="button" className={"qp-chip" + (i < recent.length && !SUGGEST.includes(s) ? " recent" : "")} onClick={() => { setQ(s); run(s === "Everything due" ? "everything" : s); }}>{s}</button>
         ))}
       </div>
+      {onPayAmount && open.length > 0 && (
+        <div className="qp-amt">
+          <label htmlFor="qp-amt">Or pay an amount</label>
+          <div className="qp-amt-in"><span>$</span><input type="text" id="qp-amt" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="5,000" /></div>
+          {parts.length > 0 ? (
+            <>
+              <span className="qp-amt-say">{amtN > owed + 0.004 ? `That's more than you owe; we'll use ${money(owed)}. ` : ""}Pays {parts.length - (partial ? 1 : 0)} of your oldest order{parts.length - (partial ? 1 : 0) === 1 ? "" : "s"} in full{partial ? ` and ${money(partial.amount)} toward #${partial.item.number}` : ""}.</span>
+              <button type="button" className="btn primary sm" onClick={() => onPayAmount(parts.map((p) => ({ id: p.item.id, amount: p.amount })), Math.min(amtN, owed))}>Pay {money(Math.min(amtN, owed))}</button>
+            </>
+          ) : <span className="qp-amt-say faint">Goes to your oldest orders first.</span>}
+        </div>
+      )}
       {result && (
         <div className={"qp-res" + (result.n ? "" : " none")} role="status">
           {result.n ? <><b>{result.n} order{result.n === 1 ? "" : "s"} selected · {money(result.sum)}</b><span>{result.why}{result.ai ? " (read by AI; check the list)" : ""}</span></>

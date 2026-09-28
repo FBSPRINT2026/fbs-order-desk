@@ -143,3 +143,18 @@ export function describePay(f: PayFilter): string {
   if (f.ranges?.length) p.push(f.ranges.map(([a, b]) => `#${a}–${b}`).join(", "));
   return p.length ? p.join(" · ") : "everything due";
 }
+
+/**
+ * "Pay an amount": the amount goes to the oldest orders first (by order date, then number);
+ * the last one it reaches is paid partly. The server does the same with its own numbers.
+ */
+export function allocateOldest<T extends { balance: number; created_at: string; number: number }>(list: T[], amount: number): { item: T; amount: number }[] {
+  let left = Math.round(amount * 100) / 100;
+  const out: { item: T; amount: number }[] = [];
+  for (const it of [...list].sort((a, b) => (a.created_at || "").localeCompare(b.created_at || "") || a.number - b.number)) {
+    if (left <= 0.004) break;
+    const a = Math.min(Math.round(it.balance * 100) / 100, left);
+    if (a > 0.004) { out.push({ item: it, amount: Math.round(a * 100) / 100 }); left = Math.round((left - a) * 100) / 100; }
+  }
+  return out;
+}

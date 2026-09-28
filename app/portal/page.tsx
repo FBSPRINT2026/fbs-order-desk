@@ -1,7 +1,7 @@
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PAY_TERMS, payDueDate, type Design, type Order } from "@/lib/pricing";
-import { fmtDateLong, money } from "@/lib/format";
+import { fmtDateLong } from "@/lib/format";
 import StartPanel from "@/components/StartPanel";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
 import { customerGeneralMessage, starMyDesign, starMyMockup } from "@/app/portal/actions";
@@ -80,7 +80,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     if (o.status === "request" && !o.submitted_at) attention.push({ kind: "draft", order_id: o.id, number: o.number, date: short(o.created_at) });
     if (o.status === "quote_sent") attention.push({ kind: "quote", order_id: o.id, number: o.number, date: short(o.sent_at || o.updated_at) });
     if (pendingProofs[o.id]) attention.push({ kind: "art", order_id: o.id, number: o.number, date: short(o.updated_at), hash: "proofs" });
-    if (o.type === "invoice" && bal(o) > 0.004 && o.status !== "quote") attention.push({ kind: "pay", order_id: o.id, number: o.number, date: money(bal(o)), hash: "pay" });
+    // payments live in Payments (and the Pay button up top), not in "Needs your attention"
   });
   // wholesale: the garments they send us for their jobs (goods have their own status)
   const wholesale = ctx.customers.some((c) => c.price_type === "wholesale") || orders.some((o) => o.price_type === "wholesale");
@@ -115,6 +115,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
             goodsCount={goodsOpen.length}
             onPaySelect={aiPaySelect}
+            statementHref={`/portal/statement${qs}`}
             messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
             orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}

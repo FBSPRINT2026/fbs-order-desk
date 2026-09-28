@@ -1486,3 +1486,54 @@ a.as-ai{text-decoration:none}
 .qp-res.none{background:var(--warn-soft)}
 .qp-res.none b{color:var(--warn)}
 .pp-list{max-height:260px;overflow:auto}
+.aa-sub{display:inline-flex;gap:4px;background:var(--surface-2);padding:4px;border-radius:12px;margin-bottom:12px}
+.aa-sub button{border:0;background:none;border-radius:9px;padding:8px 18px;font-weight:700;font-size:14px;color:var(--ink-2);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.aa-sub button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.qp-amt{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;border-top:1px dashed color-mix(in srgb,var(--accent) 30%,var(--line));padding-top:10px}
+.qp-amt label{font-weight:700;font-size:13.5px}
+.qp-amt-in{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:0 10px;width:130px}
+.qp-amt-in input{border:0;outline:0;background:none;padding:7px 0;width:100%;font-size:14.5px;font-weight:700}
+.qp-amt-say{font-size:13px;color:var(--ink-2);flex:1;min-width:200px}
+.aa-stmt{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-4px 0 12px}
+.rp{display:flex;flex-direction:column;gap:10px}
+.rp-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.rp-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--ink-2)}
+.rp-grid .qp-amt-in{width:auto}
+.rp-prev{font-size:13px;background:var(--ok-soft);border-radius:10px;padding:9px 12px}
+.rp-prev.bad{background:var(--warn-soft);color:var(--warn)}
+.rp-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;max-height:120px;overflow:auto}
+.rp-list span{background:var(--surface);border-radius:6px;padding:2px 8px;font-family:var(--mono);font-size:12px}
+.rp-list span.part{outline:1px dashed var(--warn)}
+@media (max-width:760px){.rp-grid{grid-template-columns:1fr 1fr}}
+/* statement */
+.st-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.st-bar .spacer{flex:1}
+.st-page{background:#fff;color:#141d2b;border:1px solid var(--line);border-radius:12px;padding:32px;display:flex;flex-direction:column;gap:20px}
+.st-h{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.st-logo{max-height:52px}
+.st-shop{font-size:22px}
+.st-small{font-size:12.5px;color:#5b6576}
+.st-title{text-align:right}
+.st-title h1{margin:0;font-size:28px;letter-spacing:.02em;text-transform:uppercase}
+.st-to{display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;border-top:1px solid #e3e7ec;border-bottom:1px solid #e3e7ec;padding:14px 0;font-size:13.5px}
+.st-to span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#7a8599;font-weight:700}
+.st-due b{font-size:24px}
+.st-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.st-tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#5b6576;border-bottom:2px solid #d5dbe3;padding:8px 6px}
+.st-tbl td{padding:8px 6px;border-bottom:1px solid #eef1f4}
+.st-tbl .r{text-align:right}.st-tbl .b{font-weight:700}.st-tbl .num{font-variant-numeric:tabular-nums}
+.st-tbl tr.late td{color:#9b1c1c}
+.st-tbl tfoot td{font-weight:700;border-top:2px solid #d5dbe3;border-bottom:0;font-size:14px}
+.st-none{text-align:center;color:#5b6576;padding:24px}
+.st-aging{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.st-aging div{border:1px solid #e3e7ec;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;font-size:12px}
+.st-aging div.late{border-color:#f3c0c0;background:#fdf1f1}
+.st-aging b{font-size:15px}
+@media (max-width:700px){.st-page{padding:18px}.st-to{grid-template-columns:1fr}.st-aging{grid-template-columns:repeat(2,1fr)}.st-tbl{font-size:12px}.st-tbl th:nth-child(4),.st-tbl td:nth-child(4),.st-tbl th:nth-child(7),.st-tbl td:nth-child(7){display:none}}
+@media print{.no-print,.p-top,.preview-bar,footer{display:none!important}.st-page{border:0;padding:0}.p-main.st{padding:0}}
+.aa-payside .qp{padding:12px}
+.aa-payside .qp-in{flex-wrap:wrap;padding:4px 4px 4px 10px}
+.aa-payside .qp-in input{min-width:150px}
+.aa-payside .qp-in .btn{flex:none}
+.aa-payside .qp-amt-say,.aa-payside .qp-res span{min-width:0;flex-basis:100%}
+.aa-payside .qp-chip{padding:4px 10px;font-size:12px}

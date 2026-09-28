@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { calcOrder, mergeSettings, r2, type Order, type Payment } from "@/lib/pricing";
 import { money } from "@/lib/format";
+import { allocateOldest } from "@/lib/paySelect";
 
 type Result = { ok: boolean; error?: string; paid?: number; fee?: number };
 const STAX_API = "https://apiprod.fattlabs.com";
@@ -15,7 +16,7 @@ const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e
  * The signed-in customer's orders (row security checks they're theirs) with what's owed on each,
  * worked out here from the order and its payments — never taken from the browser.
  */
-async function owed(items: { orderId: string; kind: "deposit" | "balance" }[]) {
+async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], applyAmount?: number) {
   const { supabase, user, email, isStaff } = await getViewer();
   if (!user) throw new Error("Please sign in again.");
   if (isStaff) throw new Error("This is a preview. Customers pay from their own login.");
@@ -41,7 +42,16 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[]) {
     if (amount <= 0.004) throw new Error(`#${o.number} is already paid.`);
     return { o, amount };
   });
-  return { admin, email, settings, lines, customer: (cs || [])[0] as { id: string; name: string; company: string; email: string } | undefined };
+  // "pay an amount": oldest orders first, the last one partly
+  let use = lines;
+  if (applyAmount !== undefined) {
+    const total = r2(lines.reduce((a, l) => a + l.amount, 0));
+    const amt = r2(+applyAmount);
+    if (!(amt >= 1)) throw new Error("Enter an amount of at least $1.");
+    if (amt > total + 0.004) throw new Error(`That's more than these orders owe (${money(total)}).`);
+    use = allocateOldest(lines.map((l) => ({ ...l, balance: l.amount, created_at: l.o.created_at, number: l.o.number })), amt).map((x) => ({ o: x.item.o, amount: x.amount }));
+  }
+  return { admin, email, settings, lines: use, customer: (cs || [])[0] as { id: string; name: string; company: string; email: string } | undefined };
 }
 
 /** Card fee on a credit card payment (a setting; never on ACH, Zelle or Venmo). */
@@ -51,11 +61,11 @@ const cardFee = (sum: number, pct: number) => r2((sum * Math.max(0, pct)) / 100)
  * Pay one or more orders together with a card or bank account the customer entered in Stax's secure fields.
  * paymentMethodId comes from Stax.js tokenize(); the card or bank numbers never touch our server.
  */
-export async function payOrders(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "card" | "bank"; paymentMethodId: string }): Promise<Result> {
+export async function payOrders(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "card" | "bank"; paymentMethodId: string; applyAmount?: number }): Promise<Result> {
   try {
     if (!process.env.STAX_API_KEY) return { ok: false, error: "Online payments aren't set up yet. Please contact the shop." };
     if (!/^[\w-]{6,}$/.test(input.paymentMethodId || "")) return { ok: false, error: "Enter your payment details again." };
-    const { admin, email, settings, lines, customer } = await owed(input.items);
+    const { admin, email, settings, lines, customer } = await owed(input.items, input.applyAmount);
     const sum = r2(lines.reduce((a, l) => a + l.amount, 0));
     const fee = input.method === "card" ? cardFee(sum, settings.pay.cardFeePct) : 0;
     const total = r2(sum + fee);
@@ -114,9 +124,9 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
 }
 
 /** Customer says they sent a Zelle or Venmo payment. Staff confirm it and record the payment. */
-export async function sentPaymentNotice(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "Zelle" | "Venmo"; note: string }): Promise<Result> {
+export async function sentPaymentNotice(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "Zelle" | "Venmo"; note: string; applyAmount?: number }): Promise<Result> {
   try {
-    const { admin, email, settings, lines, customer } = await owed(input.items);
+    const { admin, email, settings, lines, customer } = await owed(input.items, input.applyAmount);
     const sum = r2(lines.reduce((a, l) => a + l.amount, 0));
     const ref = lines.map((l) => `#${l.o.number}`).join(", ");
     const { error } = await admin.from("payment_notices").insert({ customer_id: customer?.id || null, order_ids: lines.map((l) => l.o.id), method: input.method, amount: sum, note: input.note.slice(0, 500), created_by: email });

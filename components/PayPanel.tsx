@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
 import { payOrders, sentPaymentNotice } from "@/app/portal/pay-actions";
 
-export type PayItem = { id: string; number: number; nickname: string; balance: number; deposit?: number; quote?: boolean };
+export type PayItem = { id: string; number: number; nickname: string; balance: number; deposit?: number; quote?: boolean; /** "pay an amount": what the order owes in full, when only part of it is being paid */ full?: number };
 type Method = "card" | "bank" | "Zelle" | "Venmo";
 type StaxJsT = { showCardForm: () => Promise<unknown>; tokenize: (d: Record<string, unknown>) => Promise<{ id: string }> };
 declare global { interface Window { StaxJs?: new (token: string, opts: Record<string, unknown>) => StaxJsT } }
@@ -16,8 +16,10 @@ const STAX_SRC = "https://staxjs.staxpayments.com/staxjs-captcha.js";
  * Pay one order or several together: credit card (with the card fee), ACH bank transfer, Zelle or Venmo.
  * Card and bank numbers go into Stax's own secure fields; we only get back a one-time token to charge.
  */
-export default function PayPanel({ items, pay, staxToken, canAct = true, onClose }: {
+export default function PayPanel({ items, pay, staxToken, canAct = true, onClose, amount }: {
   items: PayItem[];
+  /** "pay an amount": the amount, applied oldest first (the server allocates it again) */
+  amount?: number;
   pay: { cardFeePct: number; zelle: string; venmo: string };
   staxToken: string;
   canAct?: boolean;
@@ -67,7 +69,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
     setMsg(null);
     if (method === "Zelle" || method === "Venmo") {
       setBusy(true);
-      const r = await sentPaymentNotice({ items: itemsReq, method, note: f.note });
+      const r = await sentPaymentNotice({ items: itemsReq, method, note: f.note, applyAmount: amount });
       setBusy(false);
       if (!r.ok) return setMsg({ ok: false, text: r.error || "Couldn't send that." });
       setMsg({ ok: true, text: `Thanks! We'll confirm your ${method} payment of ${money(r.paid)} and mark it paid.` });
@@ -87,7 +89,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
     setBusy(true);
     try {
       const pm = await stax.current.tokenize(details);
-      const r = await payOrders({ items: itemsReq, method: method === "card" ? "card" : "bank", paymentMethodId: pm.id });
+      const r = await payOrders({ items: itemsReq, method: method === "card" ? "card" : "bank", paymentMethodId: pm.id, applyAmount: amount });
       if (!r.ok) setMsg({ ok: false, text: r.error || "The payment didn't go through." });
       else { setMsg({ ok: true, text: `Payment of ${money(r.paid)} received. Thank you!` }); router.refresh(); }
     } catch (e) {
@@ -108,7 +110,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
           <label className={kind === "balance" ? "on" : ""}><input type="radio" name="pp-kind" checked={kind === "balance"} onChange={() => setKind("balance")} /> Full balance <b>{money(single.balance)}</b></label>
         </div>
       ) : items.length > 1 ? (
-        <div className="pp-list">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}</span><b className="num">{money(it.balance)}</b></div>)}</div>
+        <div className="pp-list">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}{it.full && it.full - it.balance > 0.004 ? <small className="faint"> (part of {money(it.full)})</small> : null}</span><b className="num">{money(it.balance)}</b></div>)}</div>
       ) : null}
 
       {items.some((it) => it.quote) && (method === "card" || method === "bank") && <div className="pp-note">Paying {items.filter((it) => it.quote).map((it) => `quote #${it.number}`).join(", ")} approves {items.filter((it) => it.quote).length > 1 ? "them" : "it"} and our terms, so we can get started.</div>}

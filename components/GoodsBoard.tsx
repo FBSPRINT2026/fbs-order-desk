@@ -113,7 +113,7 @@ function TrackForm({ mode, busy, upload, onSave, onCancel }: { mode: "portal" | 
   return (
     <div className="gc-form">
       <div className="gc-grid">
-        <label className="wide">Tracking number<input autoFocus value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="1Z… / 7712… / 9400…" />{guess && !carrier && <small>Looks like {guess}</small>}</label>
+        <label className="wide">Tracking number<input type="text" autoFocus value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="1Z… / 7712… / 9400…" />{guess && !carrier && <small>Looks like {guess}</small>}</label>
         <label>Carrier<select value={carrier} onChange={(e) => setCarrier(e.target.value)}><option value="">{guess ? `${guess} (detected)` : "Choose…"}</option>{CARRIERS.map((c) => <option key={c}>{c}</option>)}</select></label>
         <label>Boxes<input type="number" min={1} value={boxes} onChange={(e) => setBoxes(e.target.value)} placeholder="#" /></label>
         <label>Expected<input type="date" value={eta} onChange={(e) => setEta(e.target.value)} /></label>
