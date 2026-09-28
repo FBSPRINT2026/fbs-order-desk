@@ -20,6 +20,9 @@ type Arrive = "past" | "today" | "tomorrow" | "later" | "nodate";
 const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
   { k: "past", label: "Should be here: not marked received" }, { k: "today", label: "Arriving today" }, { k: "tomorrow", label: "Tomorrow" }, { k: "later", label: "Later" }, { k: "nodate", label: "On the way, no date yet" },
 ];
+type Focus = "arrived" | "today" | "tomorrow" | "way" | "late" | "problems" | "count" | "need" | "unlinked" | "info";
+type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; boxes: number; pcs: number;
+  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string }[]; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean };
 type Pkg = { key: string; kind: "blanks" | "goods"; orderId: string; number: number; who: string; label: string; tracking: string; carrier: string; status: string; detail: string; at: string | null; delivered: boolean; need: string | null; href: string };
 
 /** Today's date here (not UTC: after 7 pm the UTC date is already tomorrow). */
@@ -27,6 +30,9 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 const addDays = (d: string, n: number) => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
 const bizBefore = (d: string, n: number) => { const x = new Date(d.slice(0, 10) + "T12:00"); while (n > 0) { x.setDate(x.getDate() - 1); if (x.getDay() !== 0 && x.getDay() !== 6) n--; } return x.toISOString().slice(0, 10); };
 const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "—");
+/** Plain words for a package: arrived, a real problem, or just "On the way" (carrier scan details stay in the tooltip). */
+const PROBLEMS = ["failure", "return_to_sender", "error", "available_for_pickup", "cancelled"];
+const stLabel = (st: string | undefined) => (st === "delivered" ? "Arrived" : st && PROBLEMS.includes(st) ? TRACK[st] || st : "On the way");
 const SS_METHODS: [string, string][] = [["1", "Ground (S&S picks)"], ["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
 
 /**
@@ -40,6 +46,7 @@ export default function GoodsReceiving() {
   const sb = createClient();
   const [data, setData] = useState<{ orders: O[]; cust: Record<string, Customer>; blanks: BO[]; bships: BS[]; goods: GoodsItem[]; lead: number } | null>(null);
   const [tab, setTab] = useState<"arriving" | "need" | "ordered" | "received">("arriving");
+  const [focus, setFocus] = useState<Focus | null>(null);
   const [order, setOrder] = useState<O | null>(null);
   const [note, setNote] = useState("");
   const [view, setViewState] = useState<View>("today");
@@ -124,7 +131,6 @@ export default function GoodsReceiving() {
   const unlinked = (pending || []).filter((g) => !g.us);
   // goods tied to Printavo orders (until go-live): into today's lists too
   const pvCust = pvGoods.filter((g) => g.kind === "goods"), pvBlanks = pvGoods.filter((g) => g.kind === "blanks");
-  const pvPkgs: Pkg[] = pvGoods.filter((g) => !g.delivered).flatMap((g) => g.tracking.map((t): Pkg => ({ key: `pv${g.kind}${g.archivedId}${g.supplier_order}${t.tracking}`, kind: g.kind, orderId: g.archivedId, number: g.number, who: g.customer, label: `Printavo order · ${g.supplier === "sanmar" ? "SanMar" : "S&S"} ${g.supplier_order} · ${g.pcs} pcs`, tracking: t.tracking, carrier: t.carrier, status: t.status, detail: t.detail, at: t.eta, delivered: t.delivered, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, href: `/shop/archive/${g.archivedId}` })));
   const pvHere = pvGoods.filter((g) => g.delivered);
   // FBS blanks on the way (ours in this system + Printavo jobs), by the day they arrive
   const whenOf = (d: string | null | undefined): Arrive => { if (!d) return "nodate"; const x = d.slice(0, 10), t = today(); return x < t ? "past" : x === t ? "today" : x === addDays(t, 1) ? "tomorrow" : "later"; };
@@ -137,23 +143,84 @@ export default function GoodsReceiving() {
     }),
   ].sort((a, b) => (a.at || "9999").localeCompare(b.at || "9999"));
   const arrivingToday = arriving.filter((a) => a.when === "today" || a.when === "past").length;
-  const tm = addDays(today(), 1);
-  const u = {
-    ...u0,
-    today: [...u0.today, ...pvPkgs.filter((p) => p.at && p.at.slice(0, 10) === today())],
-    tomorrow: [...u0.tomorrow, ...pvPkgs.filter((p) => p.at && p.at.slice(0, 10) === tm)],
-    problems: [...u0.problems, ...pvPkgs.filter((p) => ["failure", "return_to_sender", "error", "available_for_pickup"].includes(p.status))],
-    late: [...u0.late, ...pvPkgs.filter((p) => p.at && p.need && p.at.slice(0, 10) > p.need)],
-    count: [...u0.count, ...pvHere.map((g) => ({ n: g.number, id: g.archivedId, what: g.kind === "blanks" ? "Our blanks (Printavo order)" : "Customer goods (Printavo order)", who: g.customer }))],
+  // ---------- today's update: every shipment coming to us, linked or not, one row per shipment ----------
+  const t0 = today(), tm = addDays(t0, 1);
+  const PROBLEM = ["failure", "return_to_sender", "error", "available_for_pickup", "cancelled"];
+  const localDay = (iso: string | null | undefined) => { if (!iso) return ""; if (iso.length === 10) return iso; const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const rowOf = (x: Omit<Row, "state" | "late"> & { statuses: string[] }): Row => {
+    const state: Row["state"] = x.trks.length && x.trks.every((k) => k.delivered) ? "arrived" : x.statuses.some((st) => PROBLEM.includes(st)) ? "problem" : "way";
+    return { ...x, state, late: state !== "arrived" && !!x.at && !!x.need && localDay(x.at) > x.need };
   };
-  const unlinkedHere = unlinked.filter((g) => g.tracking.length > 0 && g.tracking.every((t) => t.delivered));
-  const pkgLine = (p: Pkg) => (
-    <li key={p.key}>
-      <Link href={p.href}>#{p.number}</Link> <b>{p.who}</b> <span className="faint">· {p.kind === "blanks" ? "our blanks" : "customer goods"} · {p.label}</span>
-      {p.tracking && <> · <a href={trackingUrl(p.carrier, p.tracking)} target="_blank" rel="noreferrer">{p.carrier} {p.tracking}</a></>}
-      {p.status && <span className="rv-st"> {TRACK[p.status] || p.status}</span>}{p.at ? <span className="faint"> · arrives {day(p.at)}</span> : null}{p.need ? <span className="faint"> · needed by {day(p.need)}</span> : null}
+  const rows: Row[] = [
+    // our blanks ordered here
+    ...data.bships.filter((sh) => v.byId.has(sh.order_id)).map((sh) => { const o = v.byId.get(sh.order_id)!; return rowOf({ key: "b" + sh.id, side: "fbs", number: o.number, href: `/shop/orders/${o.id}`, who: v.who(o), what: "Our blanks", sub: sh.note || "", boxes: sh.boxes || 0, pcs: sh.pcs || 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status }], statuses: [sh.track_status], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at, need: v.needBy(o), unlinked: false }); }),
+    // customers' goods on orders here
+    ...data.goods.flatMap((it) => it.shipments.filter((sh) => sh.tracking || sh.eta).map((sh) => { const o = v.byId.get(it.order.id); return rowOf({ key: "g" + sh.id, side: "customer", number: it.order.number, href: `/shop/orders/${it.order.id}`, who: v.who(o), what: "Customer goods", sub: supplierLabel(it.goods.supplier) || "", boxes: sh.boxes || 0, pcs: 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status || "" }], statuses: [sh.track_status || ""], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at || null, need: v.needBy(o), unlinked: false }); })),
+    // tied to Printavo jobs (until go-live)
+    ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: `Printavo job · ${g.supplier === "sanmar" ? "SanMar" : "S&S"} order ${g.supplier_order}`, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false })),
+    // on a manifest, not on any order yet: still coming in (or already here)
+    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : `${g.customer?.name || g.customer_name} goods`, sub: `${g.supplier === "sanmar" ? "SanMar" : "S&S"} order ${g.supplier_order} · PO ${g.customer_po || "none"}`, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true })),
+  ];
+  const byAt = (a: Row, b: Row) => (a.at || "9999").localeCompare(b.at || "9999");
+  const L = {
+    arrived: rows.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0),
+    today: rows.filter((r) => r.state !== "arrived" && localDay(r.at) === t0),
+    tomorrow: rows.filter((r) => r.state !== "arrived" && localDay(r.at) === tm),
+    way: rows.filter((r) => r.state !== "arrived").sort(byAt),
+    late: rows.filter((r) => r.late).sort(byAt),
+    problems: rows.filter((r) => r.state === "problem"),
+  };
+  const count = [...u0.count, ...pvHere.map((g) => ({ n: g.number, id: g.archivedId, what: g.kind === "blanks" ? "Our blanks (Printavo job)" : "Customer goods (Printavo job)", who: g.customer }))];
+  const KPIS: { k: Focus; label: string; n: number; tone?: string }[] = [
+    { k: "arrived", label: "Arrived today", n: L.arrived.length, tone: L.arrived.length ? "ok" : "" },
+    { k: "today", label: "Arriving today", n: L.today.length, tone: L.today.length ? "info" : "" },
+    { k: "tomorrow", label: "Arriving tomorrow", n: L.tomorrow.length },
+    { k: "way", label: "On the way", n: L.way.length },
+    { k: "late", label: "Arriving too late", n: L.late.length, tone: L.late.length ? "bad" : "" },
+    { k: "problems", label: "Delayed / problem", n: L.problems.length, tone: L.problems.length ? "bad" : "" },
+    { k: "count", label: "Delivered, count in", n: count.length, tone: count.length ? "warn" : "" },
+    { k: "need", label: "Blanks to order", n: v.need.length, tone: v.need.length ? "warn" : "" },
+    { k: "unlinked", label: "Not linked to an order", n: unlinked.length + (pending || []).filter((g) => g.us).length, tone: (pending || []).length ? "warn" : "" },
+    { k: "info", label: "Goods: no info yet", n: u0.info.length, tone: u0.info.length ? "warn" : "" },
+  ];
+  const statusPill = (r: Row) => r.state === "arrived"
+    ? <span className="rv-pill ok">Arrived{r.deliveredAt && r.deliveredAt.length > 10 ? ` ${new Date(r.deliveredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span>
+    : r.state === "problem" ? <span className="rv-pill bad">{TRACK[r.trks.map((k) => k.status).find((st) => PROBLEM.includes(st)) || ""] || "Problem"}</span>
+    : <span className="rv-pill way">On the way</span>;
+  const rowLine = (r: Row) => (
+    <li key={r.key} className="rv-row">
+      <div className="rv-row-t">
+        {r.unlinked ? <button type="button" className="rv-pill unl" onClick={() => setView("resolve")} title="Link it in the Resolution center">Unlinked order</button> : <Link href={r.href} className="num">#{r.number}</Link>}
+        <b>{r.unlinked ? r.what : r.who}</b>
+        {!r.unlinked && <span className="faint">{r.what}</span>}
+        {statusPill(r)}
+        <span className="spacer" />
+        {r.state !== "arrived" && r.at ? <span className={"rv-due" + (r.late ? " bad" : "")}>arrives {day(r.at)}</span> : null}
+      </div>
+      <div className="rv-row-m">
+        {[r.sub, r.boxes ? `${r.boxes} box${r.boxes === 1 ? "" : "es"}` : "", r.pcs ? `${r.pcs} pcs` : "", r.need ? `needed by ${day(r.need)}` : ""].filter(Boolean).join(" · ")}
+        {r.late ? <b className="bad"> · arrives after it&apos;s needed</b> : null}
+      </div>
+      <div className="rv-row-k">{r.trks.map((k, i) => k.tracking
+        ? <a key={k.tracking} href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" className={k.delivered ? "done" : ""}>{k.carrier} {k.tracking}</a>
+        : <span key={"l" + i}>{k.carrier} local truck{k.delivered ? " · received" : ""}</span>)}</div>
     </li>
   );
+  const LISTS: { k: Focus; title: string; tone?: string; body: React.ReactNode; n: number }[] = [
+    { k: "late", title: "Arriving after they're needed", tone: "bad", n: L.late.length, body: <ul className="rv-rows">{L.late.map(rowLine)}</ul> },
+    { k: "problems", title: "Delayed or a delivery problem", tone: "bad", n: L.problems.length, body: <ul className="rv-rows">{L.problems.map(rowLine)}</ul> },
+    { k: "arrived", title: "Arrived today", n: L.arrived.length, body: <ul className="rv-rows">{L.arrived.map(rowLine)}</ul> },
+    { k: "today", title: "Arriving today", n: L.today.length, body: <ul className="rv-rows">{L.today.map(rowLine)}</ul> },
+    { k: "tomorrow", title: "Arriving tomorrow", n: L.tomorrow.length, body: <ul className="rv-rows">{L.tomorrow.map(rowLine)}</ul> },
+    { k: "way", title: "Everything on the way", n: L.way.length, body: <ul className="rv-rows">{L.way.map(rowLine)}</ul> },
+    { k: "count", title: "Delivered: count these in", n: count.length, body: <ul className="rv-rows">{count.map((c) => <li key={c.what + c.id} className="rv-row"><div className="rv-row-t"><Link className="num" href={c.what === "Our blanks" ? `/shop/orders/${c.id}` : c.what.includes("Printavo") ? `/shop/archive/${c.id}` : "/shop/receiving?view=customer"} onClick={(e) => { if (c.what === "Customer goods") { e.preventDefault(); setView("customer"); } }}>#{c.n}</Link><b>{c.who}</b><span className="faint">{c.what}</span></div></li>)}</ul> },
+    { k: "need", title: "Blanks to order", n: v.need.length, body: <ul className="rv-rows">{v.need.map((o) => <li key={o.id} className="rv-row"><div className="rv-row-t"><Link className="num" href={`/shop/orders/${o.id}`}>#{o.number}</Link><b>{v.who(o)}</b><span className="faint">{o.nickname}</span><span className="spacer" /><button type="button" className="btn primary sm" onClick={() => setOrder(o)}>Order blanks</button></div></li>)}</ul> },
+    { k: "unlinked", title: "Not linked to an order", n: (pending || []).length, body: <ul className="rv-rows">{rows.filter((r) => r.unlinked).sort(byAt).map(rowLine)}</ul> },
+    { k: "info", title: "Customer goods: no info yet", n: u0.info.length, body: <ul className="rv-rows">{u0.info.map((it) => <li key={it.order.id} className="rv-row"><div className="rv-row-t"><Link className="num" href={`/shop/orders/${it.order.id}`}>#{it.order.number}</Link><b>{v.who(v.byId.get(it.order.id))}</b><span className="faint">in hands {day(it.order.due_date)} · no supplier or tracking yet</span></div></li>)}</ul> },
+  ];
+  const shown = focus ? LISTS.filter((x) => x.k === focus) : LISTS.filter((x) => ["late", "problems", "arrived", "today", "tomorrow"].includes(x.k) && x.n > 0);
+  // FBS pane boxes
+  const fbsToday = arriving.filter((a) => a.when === "today" || a.when === "past").length;
 
   return (
     <>
@@ -179,27 +246,24 @@ export default function GoodsReceiving() {
       )}
       {view === "today" && <>
 
-      {/* today's update */}
+      {/* today's update: click a box to see its list */}
       <section className="rv-day">
-        <div className="rv-day-h"><b>Today&apos;s update</b><span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</span></div>
+        <div className="rv-day-h"><b>Today&apos;s update</b><span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} · tracking checks every 20 minutes</span>{focus && <><span className="spacer" /><button type="button" className="linkbtn" onClick={() => setFocus(null)}>Show the summary</button></>}</div>
         <div className="rv-kpis">
-          <div className={u.late.length ? "bad" : ""}><span>Arriving too late</span><b>{u.late.length}</b></div>
-          <div className={u.problems.length ? "bad" : ""}><span>Delayed / problem</span><b>{u.problems.length}</b></div>
-          <div><span>Arriving today</span><b>{u.today.length}</b></div>
-          <div><span>Arriving tomorrow</span><b>{u.tomorrow.length}</b></div>
-          <div className={u.count.length ? "warn" : ""}><span>Delivered, count in</span><b>{u.count.length}</b></div>
-          <div className={v.need.length ? "warn" : ""}><span>Blanks to order</span><b>{v.need.length}</b></div>
-          <div className={u.info.length ? "warn" : ""}><span>Goods: no info yet</span><b>{u.info.length}</b></div>
-          <button type="button" className={(pending?.length ? "warn" : "") + (unlinkedHere.length ? " bad" : "")} onClick={() => setView("resolve")}><span>Not linked to an order</span><b>{pending ? pending.length : "…"}</b></button>
+          {KPIS.map((k) => (
+            <button key={k.k} type="button" className={[k.tone || "", focus === k.k ? "on" : ""].join(" ").trim()} onClick={() => setFocus(focus === k.k ? null : k.k)} aria-pressed={focus === k.k}>
+              <span>{k.label}</span><b>{k.n}</b>
+            </button>
+          ))}
         </div>
         <div className="rv-lists">
-          {u.late.length > 0 && <div><h4 className="bad">Arriving after they&apos;re needed</h4><ul>{u.late.map(pkgLine)}</ul></div>}
-          {u.problems.length > 0 && <div><h4 className="bad">Delayed or a delivery problem</h4><ul>{u.problems.map(pkgLine)}</ul></div>}
-          {u.today.length > 0 && <div><h4>Arriving today</h4><ul>{u.today.map(pkgLine)}</ul></div>}
-          {u.tomorrow.length > 0 && <div><h4>Arriving tomorrow</h4><ul>{u.tomorrow.map(pkgLine)}</ul></div>}
-          {u.count.length > 0 && <div><h4>Delivered: count these in</h4><ul>{u.count.map((c) => <li key={c.what + c.id}><Link href={c.what === "Our blanks" ? `/shop/orders/${c.id}` : c.what.includes("Printavo") ? `/shop/archive/${c.id}` : "/shop/receiving?view=customer"} onClick={(e) => { if (c.what === "Customer goods") { e.preventDefault(); setView("customer"); } }}>#{c.n}</Link> <b>{c.who}</b> <span className="faint">· {c.what}</span></li>)}</ul></div>}
-          {unlinkedHere.length > 0 && <div><h4 className="bad">Arrived, but not linked to an order</h4><ul>{unlinkedHere.map((g) => <li key={g.key}><button type="button" className="linkbtn" onClick={() => setView("resolve")}>{g.customer?.name || g.customer_name}</button> <span className="faint">· PO {g.customer_po || "none"} · {g.pcs} pcs · {g.styles}</span></li>)}</ul></div>}
-          {!u.late.length && !u.problems.length && !u.today.length && !u.tomorrow.length && !u.count.length && !unlinkedHere.length && <div className="faint" style={{ fontSize: 13.5 }}>Nothing urgent coming in today.</div>}
+          {shown.map((x) => (
+            <div key={x.k} className="rv-list">
+              <h4 className={x.tone || ""}>{x.title} <span className="faint">({x.n})</span></h4>
+              {x.n ? x.body : <div className="faint" style={{ fontSize: 13 }}>Nothing here right now.</div>}
+            </div>
+          ))}
+          {!shown.length && <div className="faint" style={{ fontSize: 13.5 }}>Nothing arriving or arrived today. Click a box above to see its list.</div>}
         </div>
       </section>
 
@@ -207,6 +271,12 @@ export default function GoodsReceiving() {
         {/* FBS orders (retail) */}
         <section className="rv-pane">
           <div className="rv-pane-h"><b>FBS orders</b><span className="faint">retail · blanks we buy</span></div>
+          <div className="rv-stages">
+            <button type="button" className={v.need.length ? "warn" : ""} onClick={() => setTab("need")}><span>Need to order</span><b>{v.need.length}</b></button>
+            <button type="button" className={fbsToday ? "info" : ""} onClick={() => setTab("arriving")}><span>Arriving today</span><b>{fbsToday}</b></button>
+            <button type="button" onClick={() => setTab("arriving")}><span>On the way</span><b>{arriving.length}</b></button>
+            <button type="button" onClick={() => setTab("received")}><span>Received</span><b>{v.received.length + pvBlanks.filter((g) => g.delivered).length}</b></button>
+          </div>
           <div className="aa-sub" role="tablist" style={{ padding: "8px 12px 0" }}>
             <button type="button" className={tab === "arriving" ? "on" : ""} onClick={() => setTab("arriving")}>Arriving<span className={"aa-n" + (arrivingToday ? " hot" : "")}>{arriving.length}</span></button>
             <button type="button" className={tab === "need" ? "on" : ""} onClick={() => setTab("need")}>Need to order<span className="aa-n">{v.need.length}</span></button>
@@ -255,7 +325,7 @@ export default function GoodsReceiving() {
               return (
                 <Link key={g.archivedId + g.supplier_order} href={`/shop/archive/${g.archivedId}`} className={"rv-card link" + (late ? " late" : "")}>
                   <div className="rv-card-t"><span className="num">#{g.number}</span><b>{g.customer}</b><span className="rv-st">Printavo</span><span className="spacer" /><span className="rv-due">in hands {day(g.due_date)}</span></div>
-                  <div className="faint" style={{ fontSize: 12.5 }}>{g.supplier === "sanmar" ? "SanMar" : "S&S"} order {g.supplier_order} · {g.boxes} box{g.boxes === 1 ? "" : "es"} · {g.pcs} pcs · {g.delivered ? "delivered, count in" : g.tracking.map((t) => TRACK[t.status] || t.status).filter(Boolean)[0] || "shipped"}{!g.delivered && g.eta ? ` · arrives ${day(g.eta)}` : ""}{late ? <b className="bad"> · after it&apos;s needed</b> : null}</div>
+                  <div className="faint" style={{ fontSize: 12.5 }}>{g.supplier === "sanmar" ? "SanMar" : "S&S"} order {g.supplier_order} · {g.boxes} box{g.boxes === 1 ? "" : "es"} · {g.pcs} pcs · {g.delivered ? "arrived, count in" : stLabel(g.tracking.map((t) => t.status).find((st) => PROBLEMS.includes(st)))}{!g.delivered && g.eta ? ` · arrives ${day(g.eta)}` : ""}{late ? <b className="bad"> · after it&apos;s needed</b> : null}</div>
                 </Link>
               );
             })}
@@ -299,7 +369,7 @@ function PvCard({ g, lead, onReceived }: { g: PrintavoGoods; lead: number; onRec
       <div className="faint" style={{ fontSize: 12.5 }}>{g.nickname ? `${g.nickname} · ` : ""}{g.supplier === "sanmar" ? "SanMar" : "S&S"} order {g.supplier_order} · {g.boxes} box{g.boxes === 1 ? "" : "es"} · {g.pcs} pcs</div>
       <ul className="rv-ships">{g.tracking.map((t) => (
         <li key={t.tracking || "local"}>{t.tracking ? <a href={trackingUrl(t.carrier, t.tracking)} target="_blank" rel="noreferrer">{t.carrier} {t.tracking}</a> : <span>{t.carrier} local truck · {t.detail}</span>}
-          {t.status ? <span className="rv-st"> {TRACK[t.status] || t.status}</span> : null}{!t.delivered && t.eta ? <span className="faint"> · arrives {day(t.eta)}</span> : null}{t.tracking && t.detail ? <span className="faint"> · {t.detail}</span> : null}</li>
+          <span className={"rv-st" + (t.delivered ? " ok" : "")} title={TRACK[t.status] || ""}> {stLabel(t.delivered ? "delivered" : t.status)}</span>{!t.delivered && t.eta ? <span className="faint"> · arrives {day(t.eta)}</span> : null}{t.tracking && t.detail ? <span className="faint"> · {t.detail}</span> : null}</li>
       ))}</ul>
       {late ? <div className="bad" style={{ fontSize: 12.5 }}>Arrives after it&apos;s needed ({day(bizBefore(g.due_date!, lead))})</div> : null}
       <div className="row" style={{ gap: 6, marginTop: 4 }}>
@@ -320,7 +390,7 @@ function BlankCard({ b, o, who, need, ships, onChange }: { b: BO; o: O; who: str
     <div className={"rv-card" + (late ? " late" : "")}>
       <div className="rv-card-t"><Link href={`/shop/orders/${o.id}`} className="num">#{o.number}</Link><b>{who}</b><span className="spacer" />{b.status === "received" ? <span className="rv-ok">Received {day(b.received_at)}</span> : <span className="rv-due">{eta ? `arrives ${day(eta)}` : "no date yet"}</span>}</div>
       <div className="faint" style={{ fontSize: 12.5 }}>{supplierLabel(b.supplier) || b.supplier}{b.supplier_order ? ` order ${b.supplier_order}` : ""}{b.total ? ` · ${money(b.total)}` : ""} · {b.placed_via === "api" ? "ordered here" : b.placed_via === "manifest" ? "from the supplier's manifest" : "ordered outside"}{need ? ` · needed by ${day(need)}` : ""}{late ? " · LATE" : ""}</div>
-      {ships.length > 0 && <ul className="rv-ships">{ships.map((s) => <li key={s.id}>{s.tracking ? <a href={trackingUrl(s.carrier, s.tracking)} target="_blank" rel="noreferrer">{s.carrier} {s.tracking}</a> : <span>{s.note}</span>}{s.track_status && <span className="rv-st"> {TRACK[s.track_status] || s.track_status}</span>}{s.track_detail && <span className="faint"> · {s.track_detail}</span>}</li>)}</ul>}
+      {ships.length > 0 && <ul className="rv-ships">{ships.map((s) => <li key={s.id}>{s.tracking ? <a href={trackingUrl(s.carrier, s.tracking)} target="_blank" rel="noreferrer">{s.carrier} {s.tracking}</a> : <span>{s.note}</span>}<span className={"rv-st" + (s.track_status === "delivered" ? " ok" : "")} title={TRACK[s.track_status] || ""}> {stLabel(s.track_status)}</span>{s.track_detail && <span className="faint"> · {s.track_detail}</span>}</li>)}</ul>}
       {b.note && <div className="faint" style={{ fontSize: 12.5 }}>{b.note}</div>}
       <div className="row" style={{ gap: 6, marginTop: 6 }}>
         {b.status === "ordered"

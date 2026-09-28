@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { TRACK, trackingUrl } from "@/lib/goods";
+import { TRACK, trackWord, trackingUrl } from "@/lib/goods";
 import type { PendingShipment } from "@/lib/manifest";
 
 const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "");
@@ -26,7 +26,7 @@ function Head({ g, staff }: { g: PendingShipment; staff: boolean }) {
         <ul className="in-trk">{g.tracking.map((t) => (
           <li key={t.tracking || "local"}>
             {t.tracking ? <a href={trackingUrl(t.carrier, t.tracking)} target="_blank" rel="noreferrer">{t.carrier} {t.tracking}</a> : <span>{t.carrier} · {t.detail}</span>}
-            {t.status && <span className="rv-st"> {TRACK[t.status] || t.status}</span>}
+            <span className="rv-st" title={TRACK[t.status] || ""}> {trackWord(t.status)}</span>
             {t.eta && !t.delivered && <span className="faint"> · arrives {day(t.eta)}</span>}
             {t.tracking && t.detail && <span className="faint"> · {t.detail}</span>}
           </li>

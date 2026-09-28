@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { carrierOf, CARRIERS, GOODS, GOODS_ORDER, goodsNeedInfo, ISSUES, supplierLabel, TRACK, trackingUrl, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
+import { carrierOf, CARRIERS, GOODS, GOODS_ORDER, goodsNeedInfo, ISSUES, supplierLabel, TRACK, trackWord, trackingUrl, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
 import GoodsInfoFields, { cleanGoodsInfo, type GoodsInfoValue } from "@/components/GoodsInfoFields";
 import type { Attachment } from "@/lib/messages";
 import { fmtDateLong } from "@/lib/format";
@@ -89,7 +89,7 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
                 {s.tracking ? <a href={trackingUrl(s.carrier, s.tracking)} target="_blank" rel="noreferrer"><b>{s.carrier || carrierOf(s.tracking) || "Tracking"}</b> {s.tracking}</a> : <b>Shipment note</b>}
                 {s.track_status && (
                   <div className={"gc-track t-" + s.track_status}>
-                    <b>{TRACK[s.track_status] || s.track_status}</b>
+                    <b title={TRACK[s.track_status] || ""}>{trackWord(s.track_status)}</b>
                     {s.track_status === "delivered" ? (s.delivered_at ? ` ${when(s.delivered_at)}` : "") : s.est_delivery ? ` · arrives ${when(s.est_delivery)}` : ""}
                     {s.track_detail ? <span> · {s.track_detail}</span> : null}
                   </div>

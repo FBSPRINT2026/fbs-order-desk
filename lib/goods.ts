@@ -68,9 +68,13 @@ export function trackingUrl(carrier: string, t: string): string {
     case "fedex": return `https://www.fedex.com/fedextrack/?trknbr=${n}`;
     case "usps": return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${n}`;
     case "dhl": return `https://www.dhl.com/us-en/home/tracking.html?tracking-id=${n}`;
+    case "r&l": return `https://www2.rlcarriers.com/freight/shipping/shipment-tracing?pro=${n}`;
     default: return `https://www.google.com/search?q=${n}+tracking`;
   }
 }
+/** Plain words for a package: "Arrived", a real problem (delivery problem, waiting at carrier…), or just "On the way". */
+export const TRACK_PROBLEMS = ["failure", "return_to_sender", "error", "available_for_pickup", "cancelled"];
+export const trackWord = (st: string | null | undefined) => (st === "delivered" ? "Arrived" : st && TRACK_PROBLEMS.includes(st) ? TRACK[st] || st : "On the way");
 export const CARRIERS = ["UPS", "FedEx", "USPS", "DHL", "S&S freight", "SanMar", "Other"];
 
 /** Wholesale jobs whose goods matter: from the moment the order is sent in (request) until it's completed. */

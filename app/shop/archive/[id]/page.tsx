@@ -4,7 +4,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { ArchivedRow } from "@/lib/archive";
 import ArchivedOrderView from "@/components/ArchivedOrderView";
-import { TRACK, trackingUrl } from "@/lib/goods";
+import { TRACK, trackWord, trackingUrl } from "@/lib/goods";
 
 /** An archived Printavo invoice or quote (read-only). Artwork shows from our storage copies, or from Printavo until copied. */
 export default function ArchivedOrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -64,7 +64,7 @@ function ArchivedGoods({ id, groups }: { id: string; groups: PvGroup[] }) {
       <div className="panel-b stack" style={{ gap: 8 }}>
         <ul className="rv-ships">{trk.map((l) => (
           <li key={l.id}>{l.tracking ? <a href={trackingUrl("", l.tracking)} target="_blank" rel="noreferrer">{l.tracking}</a> : <span>{l.method || "local truck"}</span>}
-            {l.track_status && <span className="rv-st"> {TRACK[l.track_status] || l.track_status}</span>}{l.est_delivery && l.track_status !== "delivered" ? <span className="faint"> · arrives {day(l.est_delivery)}</span> : null}{l.track_detail ? <span className="faint"> · {l.track_detail}</span> : null}</li>
+            <span className="rv-st" title={TRACK[l.track_status] || ""}> {trackWord(l.track_status)}</span>{l.est_delivery && l.track_status !== "delivered" ? <span className="faint"> · arrives {day(l.est_delivery)}</span> : null}{l.track_detail ? <span className="faint"> · {l.track_detail}</span> : null}</li>
         ))}</ul>
         {want.length > 0 && (
           <div style={{ overflowX: "auto" }}><table className="rv-tbl">

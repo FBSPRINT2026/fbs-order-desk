@@ -480,17 +480,21 @@ export type PendingLine = { id: string; style: string; mill: string; color: stri
 export type PendingShipment = {
   key: string; supplier: string; customer_name: string; customer_account: string; customer_po: string; supplier_order: string; ship_date: string | null;
   boxes: number; pcs: number; methods: string; styles: string; lineIds: string[]; customer: { id: string; name: string } | null; us: boolean;
-  tracking: { carrier: string; tracking: string; status: string; detail: string; eta: string | null; delivered: boolean }[]; how: string; lines: PendingLine[];
+  tracking: { carrier: string; tracking: string; status: string; detail: string; eta: string | null; delivered: boolean; delivered_at?: string | null; boxes?: number; pcs?: number }[]; how: string; lines: PendingLine[];
   orders: { id: string; number: number; nickname: string; po: string; due_date: string | null; printavo: boolean }[];
 };
 
 function summarize(g: Group<Waiting>, customer: { id: string; name: string } | null, orders: PendingShipment["orders"]): PendingShipment {
   const trk = new Map<string, PendingShipment["tracking"][number]>();
-  for (const l of g.lines) if (l.tracking && !trk.has(l.tracking)) trk.set(l.tracking, { carrier: carrierOf(l.tracking) || (/ups/i.test(l.method) ? "UPS" : /fedex/i.test(l.method) ? "FedEx" : ""), tracking: l.tracking, status: l.track_status, detail: l.track_detail, eta: l.est_delivery || (l.ship_date ? null : null), delivered: l.track_status === "delivered" });
+  const carrierFor = (l: Waiting) => carrierOf(l.tracking) || (/ups/i.test(l.method) ? "UPS" : /fedex/i.test(l.method) ? "FedEx" : /r\s*&\s*l/i.test(l.method) ? "R&L" : (l.method.split(/[-–]/)[0] || "").trim());
+  for (const l of g.lines) if (l.tracking && !trk.has(l.tracking)) {
+    const same = g.lines.filter((x) => x.tracking === l.tracking);
+    trk.set(l.tracking, { carrier: carrierFor(l), tracking: l.tracking, status: l.track_status, detail: l.track_detail || (/ltl|freight/i.test(l.method) ? `freight · PRO ${l.tracking}` : ""), eta: l.est_delivery, delivered: l.track_status === "delivered", delivered_at: l.delivered_at, boxes: new Set(same.map((x) => x.box)).size, pcs: same.reduce((a, x) => a + x.qty_shipped, 0) });
+  }
   const noTrk = g.lines.find((l) => !l.tracking);
   // no tracking (the supplier's local truck): due the next business day; "delivered" only when someone marks it received
   const here = !!noTrk && g.lines.filter((l) => !l.tracking).every((l) => l.track_status === "delivered");
-  if (noTrk) trk.set("", { carrier: SUPPLIER_NAME[g.supplier] || g.supplier, tracking: "", status: here ? "delivered" : "", detail: noTrk.method || "local truck", eta: noTrk.ship_date ? nextBusinessDay(noTrk.ship_date) : null, delivered: here });
+  if (noTrk) { const same = g.lines.filter((x) => !x.tracking); trk.set("", { carrier: SUPPLIER_NAME[g.supplier] || g.supplier, tracking: "", status: here ? "delivered" : "", detail: noTrk.method || "local truck", eta: noTrk.ship_date ? nextBusinessDay(noTrk.ship_date) : null, delivered: here, delivered_at: here ? same.map((x) => x.delivered_at).filter(Boolean).sort().pop() || null : null, boxes: new Set(same.map((x) => x.box)).size, pcs: same.reduce((a, x) => a + x.qty_shipped, 0) }); }
   return {
     key: g.key, supplier: g.supplier, customer_name: g.customer_name, customer_account: g.customer_account, customer_po: g.customer_po, supplier_order: g.supplier_order,
     ship_date: g.lines[0].ship_date, boxes: new Set(g.lines.map((l) => `${l.tracking}|${l.box}`)).size, pcs: g.lines.reduce((a, l) => a + l.qty_shipped, 0),
