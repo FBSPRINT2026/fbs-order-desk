@@ -4,11 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
 import { ST, type Order } from "@/lib/pricing";
 import { portalSend } from "@/app/portal/message-actions";
-import { GOODS, type GoodsStatus } from "@/lib/goods";
+import { GOODS, trackingUrl, type GoodsStatus } from "@/lib/goods";
 
 /** What the helper can offer to do. Nothing happens until the customer presses the button. */
 export type AssistAction = {
-  kind: "open_order" | "pay" | "reorder" | "new_order" | "new_order_from_text" | "open_mockup" | "message_shop" | "open_goods" | "open_payments" | "open_statement" | "open_orders" | "open_artwork";
+  kind: "open_order" | "track" | "pay" | "reorder" | "new_order" | "new_order_from_text" | "open_mockup" | "message_shop" | "open_goods" | "open_payments" | "open_statement" | "open_orders" | "open_artwork";
   label: string;
   /** resolved by the server from the customer's own orders */
   orderId?: string; href?: string; archived?: boolean; number?: number;
@@ -29,9 +29,9 @@ const TOOL = {
         items: {
           type: "object",
           properties: {
-            kind: { type: "string", enum: ["open_order", "pay", "reorder", "new_order", "new_order_from_text", "open_mockup", "message_shop", "open_goods", "open_payments", "open_statement", "open_orders", "open_artwork"] },
+            kind: { type: "string", enum: ["open_order", "track", "pay", "reorder", "new_order", "new_order_from_text", "open_mockup", "message_shop", "open_goods", "open_payments", "open_statement", "open_orders", "open_artwork"] },
             label: { type: "string", description: "Button text, e.g. 'Reorder #1005 Summer Camp Tees' or 'Pay all of August ($812.40)'." },
-            number: { type: "integer", description: "The order number this is about (for open_order, reorder)." },
+            number: { type: "integer", description: "The order number this is about (for open_order, track, reorder)." },
             text: { type: "string", description: "pay: the selection in plain words ('all orders in August', 'everything under $100'). message_shop: the message to send the shop. new_order_from_text: what they want made." },
           },
           required: ["kind", "label"],
@@ -63,7 +63,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     const { data: cs } = await supabase.from("customers").select("id, company, price_type, payment_terms");
     const ids = (cs || []).map((c) => c.id);
     if (!ids.length) return { ok: false, error: "We couldn't find your account." };
-    const { data: os } = await supabase.from("orders").select("id, number, nickname, status, type, total, due_date, created_at, qty, po_number, price_type, submitted_at").neq("status", "quote").order("created_at", { ascending: false }).limit(150);
+    const { data: os } = await supabase.from("orders").select("id, number, nickname, status, type, total, due_date, created_at, qty, po_number, price_type, submitted_at, delivery_method, ship_method, tracking").neq("status", "quote").order("created_at", { ascending: false }).limit(150);
     const orders = ((os || []) as (Order & { submitted_at: string | null })[]).filter((o) => !(o.status === "request" && !o.submitted_at));
     const oids = orders.map((o) => o.id);
     const [{ data: pays }, { data: arch }, { data: goods }] = await Promise.all([
@@ -78,7 +78,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     const lines = orders.map((o) => {
       const bal = o.type === "invoice" ? r2((+o.total || 0) - (paid[o.id] || 0)) : 0;
       const g = gmap.get(o.id);
-      return `#${o.number} | ${(o.created_at || "").slice(0, 10)} | ${o.nickname || "(no name)"} | ${o.type === "quote" ? "quote: " : ""}${ST[o.status as keyof typeof ST]?.portal || o.status} | total $${(+o.total || 0).toFixed(2)}${bal > 0.004 ? ` | owes $${bal.toFixed(2)}` : ""}${o.due_date ? ` | in-hands ${o.due_date}` : ""}${o.qty ? ` | ${o.qty} pcs` : ""}${o.po_number ? ` | PO ${o.po_number}` : ""}${wholesale && g ? ` | goods: ${GOODS[g.status]?.portal}${g.issue_type ? ` (${g.issue_type})` : ""}` : ""}`;
+      return `#${o.number} | ${(o.created_at || "").slice(0, 10)} | ${o.nickname || "(no name)"} | ${o.type === "quote" ? "quote: " : ""}${ST[o.status as keyof typeof ST]?.portal || o.status} | total $${(+o.total || 0).toFixed(2)}${bal > 0.004 ? ` | owes $${bal.toFixed(2)}` : ""}${o.due_date ? ` | in-hands ${o.due_date}` : ""}${o.qty ? ` | ${o.qty} pcs` : ""}${o.po_number ? ` | PO ${o.po_number}` : ""}${o.delivery_method === "ship" ? ` | shipping${o.ship_method ? ` ${o.ship_method}` : ""}${o.tracking ? ` tracking ${o.tracking}` : " (no tracking yet)"}` : o.delivery_method === "deliver" ? " | we deliver" : " | pickup"}${wholesale && g ? ` | goods: ${GOODS[g.status]?.portal}${g.issue_type ? ` (${g.issue_type})` : ""}` : ""}`;
     });
     const old = ((arch || []) as { id: string; visual_id: string; nickname: string; status_name: string; order_date: string | null; total: number; qty: number }[])
       .map((a) => `#${a.visual_id} | ${a.order_date || ""} | ${a.nickname || "(no name)"} | past order (${a.status_name}) | total $${(+a.total || 0).toFixed(2)}${a.qty ? ` | ${a.qty} pcs` : ""}`);
@@ -86,6 +86,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
 
     const byNumber = new Map<number, AssistAction>();
     orders.forEach((o) => byNumber.set(o.number, { kind: "open_order", label: "", orderId: o.id, href: `/portal/orders/${o.id}`, number: o.number }));
+    const trackOf = new Map(orders.filter((o) => o.tracking?.trim()).map((o) => [o.number, trackingUrl(o.ship_method || "", o.tracking.trim())]));
     (arch || []).forEach((a) => { const n = +a.visual_id; if (n && !byNumber.has(n)) byNumber.set(n, { kind: "open_order", label: "", orderId: a.id, href: `/portal/archive/${a.id}`, archived: true, number: n }); });
 
     const ai = await aiState(admin);
@@ -105,7 +106,8 @@ Rules:
 - Paying: offer "pay" with text describing the selection ("all orders in August", "everything", "#1002 and #1004", "everything under $100"). Include the amount in the label when you can work it out.
 - New orders described in words ("48 navy tees with our logo on the front"): offer "new_order_from_text" with their description as text. Otherwise "new_order".
 - Questions for a person, changes to an order in progress, rush requests, complaints: offer "message_shop" with a clear message written for them as text.
-- Use open_order for status questions about one order.`,
+- Use open_order for status questions about one order.
+- Tracking: if the order ships and has a tracking number, give the carrier and number and offer "track" with that order number. If it's a pickup order, say it's for pickup (and whether it's ready). If it ships but has no tracking yet, say it hasn't shipped yet and when it's due. If they didn't say which order, use their most recent shipped or shipping orders.`,
         prompt: `ACCOUNT\nCompany: ${(cs || [])[0]?.company || ""}\nBalance due: $${due.toFixed(2)}\n\nORDERS (newest first; number | date | name | status | money | details)\n${lines.join("\n") || "(none)"}\n\nPAST ORDERS FROM BEFORE THE PORTAL\n${old.join("\n") || "(none)"}\n\nCONVERSATION\n${turns.map((t) => `${t.role === "user" ? "Customer" : "Helper"}: ${t.text}`).join("\n")}`,
       });
       if (!r.ok) return { ok: false, error: r.off ? "The helper is resting right now. Use the buttons below or message us." : r.error };
@@ -117,12 +119,22 @@ Rules:
       else if (/reorder|again|same as/.test(t)) { reply = "Pick the order to repeat from your orders, then press Order this again."; raw = [{ kind: "open_orders", label: "See my orders" }]; }
       else if (/new order|place an order|quote|need shirts|order some/.test(t)) { reply = "Let's start a new order."; raw = [{ kind: "new_order", label: "Start an order" }]; }
       else if (/mockup|design|idea/.test(t)) { reply = "Try the Mockup Creator."; raw = [{ kind: "open_mockup", label: "Open Mockup Creator" }]; }
+      else if (/track|package|shipment|deliver/.test(t)) {
+        const shipped = orders.filter((o) => o.tracking?.trim()).slice(0, 3);
+        reply = shipped.length ? `Here's the latest tracking: ${shipped.map((o) => `#${o.number} ${o.ship_method || ""} ${o.tracking}`.replace(/\s+/g, " ")).join("; ")}.` : "Nothing has shipped with tracking yet.";
+        raw = shipped.map((o) => ({ kind: "track" as const, label: `Track #${o.number}`, number: o.number }));
+      }
       else if (/status|where|when|ready|done|ship/.test(t)) { reply = "Here are your orders with their status."; raw = [{ kind: "open_orders", label: "See my orders" }]; }
       else { reply = "I'll pass that to the shop."; raw = [{ kind: "message_shop", label: "Send this to the shop", text: last }]; }
     }
 
     const actions: AssistAction[] = [];
     for (const a of raw.slice(0, 4)) {
+      if (a.kind === "track") {
+        const href = a.number !== undefined ? trackOf.get(a.number) : undefined;
+        if (href) actions.push({ kind: "track", label: a.label || `Track #${a.number}`, href, number: a.number });
+        continue;
+      }
       if (["open_order", "reorder"].includes(a.kind)) {
         const hit = a.number !== undefined ? byNumber.get(a.number) : undefined;
         if (!hit) continue; // never offer an order that isn't theirs

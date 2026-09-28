@@ -8,7 +8,7 @@ import { portalSend } from "@/app/portal/message-actions";
 
 type Turn = AssistTurn & { actions?: AssistAction[]; done?: string };
 
-const IDEAS = ["Where's my order?", "I'd like to pay my bill", "Reorder my last job", "Place a new order", "Make a mockup"];
+const IDEAS = ["Where's my order?", "Track my shipment", "Pay my bill", "Reorder a past job"];
 
 /**
  * The dashboard's helper: "What can I help you with today?". The customer types what they need;
@@ -44,6 +44,7 @@ export default function PortalAssistant({ qs, canAct, wholesale }: { qs: string;
     try {
       switch (a.kind) {
         case "open_order": router.push(url(a.href || "/portal")); break;
+        case "track": if (a.href) window.open(a.href, "_blank", "noopener"); break;
         case "open_orders": router.push(url("/portal?area=orders")); break;
         case "open_payments": router.push(url("/portal?area=payments")); break;
         case "pay": router.push(url(`/portal?area=payments&find=${encodeURIComponent(a.text || "everything")}`)); break;
@@ -70,7 +71,7 @@ export default function PortalAssistant({ qs, canAct, wholesale }: { qs: string;
     } finally { setDoing(""); }
   }
 
-  const ideas = wholesale ? [...IDEAS.slice(0, 4), "Where are my goods?"] : IDEAS;
+  const ideas = wholesale ? [...IDEAS, "Where are my goods?"] : IDEAS;
   return (
     <section className="pa" aria-label="Help">
       <h2 className="pa-hello">{hello}</h2>
