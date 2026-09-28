@@ -115,7 +115,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
       </nav>
       {/* my shortcuts: each admin's own quick links (customers, reports, dashboards, outside sites) */}
       <div className="nav-g nav-mine">
-        <div className="nav-h">My shortcuts<span className="spacer" /><button type="button" className="nav-hb" onClick={() => setEditing((x) => !x)} title="Edit my shortcuts">{editing ? "Done" : "Edit"}</button></div>
+        <div className="nav-h">My shortcuts</div>
         <nav className="nav">
           {mine.map((m, i) => (
             <div key={i} className="nav-mine-i">
@@ -138,7 +138,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
             <div className="row" style={{ gap: 6 }}><button type="submit" className="btn primary sm">Add</button><button type="button" className="btn ghost sm" style={{ color: "inherit" }} onClick={() => setAdding(null)}>Cancel</button></div>
           </form>
         ) : (
-          <div className="nav-add-btns"><button type="button" onClick={pinHere}>+ Pin this page</button><button type="button" onClick={() => setAdding({ label: "", href: "" })}>+ Add a link</button></div>
+          <div className="nav-add-btns"><button type="button" onClick={pinHere}>+ Pin this page</button><button type="button" onClick={() => setAdding({ label: "", href: "" })}>+ Add a link</button>{mine.length > 0 && <button type="button" onClick={() => setEditing((x) => !x)}>{editing ? "Done" : "Edit"}</button>}</div>
         )}
       </div>
       <nav className="nav nav-foot">{link(["/shop/settings", "settings", "Settings"])}</nav>
