@@ -1909,3 +1909,13 @@ a.as-ai{text-decoration:none}
 .gc-count-sz label.ok{border-color:var(--ok);background:var(--ok-soft)}
 .gc-count-sz label.bad{border-color:var(--danger);background:var(--danger-soft)}
 .gc-count-note{white-space:pre-wrap;font-size:12.5px;background:var(--surface-2);padding:8px 10px;border-radius:8px;margin:0}
+.mm{display:flex;flex-direction:column;gap:8px}
+.mm-row{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.mm-t{display:flex;flex-direction:column;gap:2px;font-size:13.5px;min-width:260px;flex:1}
+.mm-a{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.mm-a input{width:100px}
+.mm-a select{width:auto}
+.mm-who{max-width:520px}
+.mm-who input{width:220px}
+.mm-q{font-size:13.5px;flex-basis:100%}
+.mm-who small{flex-basis:100%;font-size:12px}

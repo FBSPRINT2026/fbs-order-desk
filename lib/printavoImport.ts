@@ -11,7 +11,7 @@ import { fileUrls, orderFiles, type PvAddress, type PvOrder } from "@/lib/archiv
 const addr = (a: PvAddress) => !a ? "" : [a.address1, a.address2, [[a.city, a.state].filter(Boolean).join(", "), a.zipCode].filter(Boolean).join(" ")].map((x) => (x || "").trim()).filter(Boolean).join("\n");
 /** "theMcKennagroup", "The McKenna Group, LLC" and "the  mckenna group" are the same company. */
 export const companyKey = (name: string) => name.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ")
-  .replace(/\b(inc|llc|ltd|co|corp|corporation|company|pllc|pc)\b/g, " ").replace(/^\s*the/, "").replace(/\s+/g, "");
+  .replace(/\b(inc|llc|ltd|co|corp|corporation|company|pllc|pc)\b/g, " ").replace(/^\s*the/, "").replace(/\bthe\s*$/, "").replace(/\s+/g, "");
 const terms = (t: PvCustomer["defaultPaymentTerm"]) => !t ? "receipt" : /prepa|up ?front|in advance|before/i.test(t.name) ? "prepay" : t.days >= 15 || /net/i.test(t.name) ? "net30" : "receipt";
 
 /**
