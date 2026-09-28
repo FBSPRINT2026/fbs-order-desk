@@ -2244,3 +2244,12 @@ a.as-ai{text-decoration:none}
 .nav-g-production a.on{background:var(--fbs-salmon);color:#fff}
 .nav-g-shoptools a.on{background:var(--fbs-orange);color:#1a1405}
 .nav-g-shoptools a.on .badge{background:#1a1405;color:#fff}
+/* one smooth fade (blue → salmon → orange) instead of three separate bars */
+:root{--fbs-fade:linear-gradient(90deg,var(--fbs-blue) 0%,var(--fbs-salmon) 52%,var(--fbs-orange) 100%)}
+.page-head h1::after{background:var(--fbs-fade);height:4px;border-radius:4px;width:calc(100% + 60px);min-width:140px;margin-top:10px}
+.pp-sheet::before,.p-top::after{background:var(--fbs-fade)}
+.panel-h h2::before{background:linear-gradient(180deg,var(--fbs-blue) 0%,var(--fbs-salmon) 52%,var(--fbs-orange) 100%)}
+@supports (background: linear-gradient(in oklab 90deg, red, blue)){
+  :root{--fbs-fade:linear-gradient(in oklab 90deg,var(--fbs-blue) 0%,var(--fbs-salmon) 52%,var(--fbs-orange) 100%)}
+}
+.page-head h1::after{height:5px}
