@@ -239,7 +239,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   ship: {
     perBox: 72,
-    from: { name: "Shipping", company: "FBS Print", street1: "", street2: "", city: "", state: "TX", zip: "", country: "US", phone: "9724877858", email: "" },
+    from: { name: "Shipping", company: "FBS Print", street1: "", street2: "", city: "Richardson", state: "TX", zip: "75081", country: "US", phone: "9724877858", email: "" },
     boxes: [
       { name: "Small", length: 14, width: 10, height: 8 },
       { name: "Medium", length: 18, width: 14, height: 10 },

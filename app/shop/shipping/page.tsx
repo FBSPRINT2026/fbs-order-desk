@@ -21,6 +21,13 @@ const billOf = (c?: Customer): { bill: BillTo; account: string; zip: string } =>
   const b = (c?.ship_bill || "fbs") as BillTo;
   return { bill: b, account: b === "ups" ? c?.ship_ups_account || "" : b === "fedex" ? c?.ship_fedex_account || "" : "", zip: c?.ship_bill_zip || "" };
 };
+/** What still has to be filled in before an order can ship. */
+const missingOf = (x: Item) => [
+  !addressReady(x.to) && "Ship-to address",
+  x.bill !== "fbs" && !x.account && `${x.bill === "ups" ? "UPS" : "FedEx"} account #`,
+  x.bill !== "fbs" && !x.zip && "Billing ZIP",
+  !x.pieces && "Piece count",
+].filter(Boolean) as string[];
 const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "—");
 
 /**
@@ -95,6 +102,7 @@ export default function ShippingCenter() {
     const t = q.trim().toLowerCase();
     return (items || []).filter((x) => !t || [x.number, x.customer, x.job, x.to.city].some((s) => String(s || "").toLowerCase().includes(t)));
   }, [items, q]);
+  const ready = list.filter((x) => !missingOf(x).length), missing = list.filter((x) => missingOf(x).length);
 
   return (
     <>
@@ -107,7 +115,7 @@ export default function ShippingCenter() {
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
       {showSettings && <ShipSettingsPanel s={settings} onSaved={(s) => { setSettings(s); setShowSettings(false); }} />}
-      {!addressReady(settings.ship.from) && !showSettings && <div className="banner" style={{ marginBottom: 10 }}>Add our ship-from address in <button type="button" className="linkbtn" style={{ fontSize: "inherit" }} onClick={() => setShowSettings(true)}>Settings</button> so rates can be pulled.</div>}
+      {!addressReady(settings.ship.from) && !showSettings && <div className="banner" style={{ marginBottom: 10 }}>Rates and transit times are figured from ZIP {settings.ship.from.zip || "(not set)"}. Add our street address in <button type="button" className="linkbtn" style={{ fontSize: "inherit" }} onClick={() => setShowSettings(true)}>Settings</button> before labels can be printed.</div>}
 
       <div className="aa-sub" role="tablist" style={{ marginBottom: 10 }}>
         <button type="button" className={tab === "ready" ? "on" : ""} onClick={() => setTab("ready")}>Ready to ship<span className="aa-n">{items?.length ?? "…"}</span></button>
@@ -118,29 +126,21 @@ export default function ShippingCenter() {
 
       {tab === "ready" ? (
         items === null ? <div className="empty">Loading…</div> : (
-          <div className="aa-card aa-tblcard">
-            <table className="aa-tbl">
-              <thead><tr><th>#</th><th>Customer</th><th>Job</th><th className="r">Pieces</th><th className="r">Boxes</th><th>Ship to</th><th>Paid by</th><th>In hands</th><th /></tr></thead>
-              <tbody>
-                {list.map((x) => {
-                  const late = x.due && x.due.slice(0, 10) < new Date().toISOString().slice(0, 10);
-                  return (
-                    <tr key={x.kind + x.id} onClick={() => setOpen({ item: x, box: null })} className={late ? "late" : ""}>
-                      <td className="num"><Link href={x.kind === "order" ? `/shop/orders/${x.id}` : `/shop/archive/${x.id}`} onClick={(e) => e.stopPropagation()}>{x.number}</Link>{x.printavo && <div className="aa-s">Printavo</div>}</td>
-                      <td><div className="aa-t">{x.customer}</div></td>
-                      <td>{x.job || <span className="faint">—</span>}</td>
-                      <td className="r num">{x.pieces || "—"}</td>
-                      <td className="r num">{x.shipment?.boxes?.length || estimateBoxes(x.pieces, settings.ship.perBox)}{!x.shipment && <span className="faint"> est.</span>}</td>
-                      <td className="aa-s" style={{ maxWidth: 260 }}>{addressReady(x.to) ? `${x.to.city}, ${x.to.state}` : <span className="bad">Address needed</span>}</td>
-                      <td className="aa-s">{x.bill === "fbs" ? "FBS" : `${x.bill === "ups" ? "UPS" : "FedEx"} ${x.account ? "…" + x.account.slice(-4) : "(no #)"}`}</td>
-                      <td>{day(x.due)}</td>
-                      <td className="r"><button type="button" className="btn primary sm" onClick={(e) => { e.stopPropagation(); setOpen({ item: x, box: null }); }}>{x.shipment ? "Continue" : "Ship"}</button></td>
-                    </tr>
-                  );
-                })}
-                {!list.length && <tr><td colSpan={9}><div className="aa-empty">{q ? `No matches for “${q}”.` : "Nothing is waiting to ship. Orders show up here when they're Ready and set to ship (and Printavo orders in “Shipping - Ready to Ship”)."}</div></td></tr>}
-              </tbody>
-            </table>
+          <div className="sc-panes">
+            <section className="sc-pane">
+              <div className="sc-pane-h"><b>Ready to ship</b><span className="aa-n">{ready.length}</span><span className="faint">everything's filled in</span></div>
+              <div className="sc-pane-b">
+                {ready.map((x) => <ShipCard key={x.kind + x.id} x={x} perBox={settings.ship.perBox} onOpen={() => setOpen({ item: x, box: null })} />)}
+                {!ready.length && <div className="aa-empty">{q ? `No matches for “${q}”.` : "Nothing ready right now."}</div>}
+              </div>
+            </section>
+            <section className="sc-pane warn">
+              <div className="sc-pane-h"><b>Ready to ship, missing shipping info</b><span className="aa-n">{missing.length}</span></div>
+              <div className="sc-pane-b">
+                {missing.map((x) => <ShipCard key={x.kind + x.id} x={x} perBox={settings.ship.perBox} missing={missingOf(x)} onOpen={() => setOpen({ item: x, box: null })} />)}
+                {!missing.length && <div className="aa-empty">Nothing missing. 👍</div>}
+              </div>
+            </section>
           </div>
         )
       ) : (
@@ -169,6 +169,26 @@ export default function ShippingCenter() {
         onClose={() => { setOpen(null); setTimeout(() => scanRef.current?.focus(), 50); }}
         onDone={(m) => { setOpen(null); setNote(m); load(); setTimeout(() => scanRef.current?.focus(), 50); }} />}
     </>
+  );
+}
+
+function ShipCard({ x, perBox, missing, onOpen }: { x: Item; perBox: number; missing?: string[]; onOpen: () => void }) {
+  const late = x.due && x.due.slice(0, 10) < new Date().toISOString().slice(0, 10);
+  const boxes = x.shipment?.boxes?.length || estimateBoxes(x.pieces, perBox);
+  return (
+    <button type="button" className={"sc-card" + (late ? " late" : "")} onClick={onOpen}>
+      <div className="sc-card-t">
+        <b className="num">#{x.number}</b>{x.printavo && <span className="sc-tag">Printavo</span>}{x.shipment && <span className="sc-tag draft">Started</span>}
+        <span className="spacer" /><span className={"sc-due" + (late ? " late" : "")}>{late ? "Late · " : ""}{day(x.due)}</span>
+      </div>
+      <div className="sc-card-c">{x.customer}{x.job ? <span className="faint"> · {x.job}</span> : null}</div>
+      <div className="sc-card-m">
+        <span>{x.pieces || "?"} pcs · {boxes} box{boxes === 1 ? "" : "es"}{x.shipment ? "" : " est."}</span>
+        <span>{addressReady(x.to) ? `${x.to.city}, ${x.to.state}` : ""}</span>
+        <span>{x.bill === "fbs" ? "Our account" : `${x.bill === "ups" ? "UPS" : "FedEx"} ${x.account ? "…" + x.account.slice(-4) : ""}`}</span>
+      </div>
+      {missing?.length ? <div className="sc-missing">Missing: {missing.join(", ")}</div> : null}
+    </button>
   );
 }
 

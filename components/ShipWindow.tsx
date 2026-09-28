@@ -11,6 +11,25 @@ export type ShipTarget = {
   bill: BillTo; account: string; zip: string;
 };
 
+const LAST = "fbs-ship-last-box";
+const lastSize = (): { length: number; width: number; height: number } | undefined => {
+  try { const v = JSON.parse(localStorage.getItem(LAST) || "null"); return v && v.length && v.width && v.height ? v : undefined; } catch { return undefined; }
+};
+const rememberSize = (b: Box) => { try { if (boxReady(b)) localStorage.setItem(LAST, JSON.stringify({ length: b.length, width: b.width, height: b.height })); } catch { /* not important */ } };
+/** When a rate arrives: the carrier's date, else business days from today. */
+export function arrival(r: Rate): Date | null {
+  if (r.deliveryDate) { const d = new Date(r.deliveryDate); if (!isNaN(+d)) return d; }
+  if (!r.days) return null;
+  const d = new Date(); let n = r.days;
+  while (n > 0) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
+  return d;
+}
+const dayName = (d: Date) => d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+const niceService = (s: string) => {
+  let x = s.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Za-z])(\d)/g, "$1 $2").replace(/^(fedex|ups|usps)\s+/i, "").trim();
+  if (x === x.toUpperCase()) x = x.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()); // FEDEX_2_DAY → 2 Day
+  return x;
+};
 const num = (v: string): number | "" => (v.trim() === "" ? "" : Math.max(0, +v || 0));
 
 /**
@@ -23,7 +42,8 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
 }) {
   const sb = createClient();
   const estimate = estimateBoxes(t.pieces, settings.perBox);
-  const [boxes, setBoxes] = useState<Box[]>(() => (existing?.boxes?.length ? existing.boxes : newBoxes(estimate)));
+  // new boxes start at the size used last on this computer, so the usual box is just Tab, Tab, Tab
+  const [boxes, setBoxes] = useState<Box[]>(() => (existing?.boxes?.length ? existing.boxes : newBoxes(estimate, lastSize())));
   const [to, setTo] = useState<ShipAddress>(existing?.ship_to?.street1 ? existing.ship_to : t.to);
   const [bill, setBill] = useState<BillTo>(existing?.bill_to || t.bill);
   const [account, setAccount] = useState(existing?.bill_account || t.account);
@@ -38,12 +58,13 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const [scan, setScan] = useState("");
   const refs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  useEffect(() => { const b = focusBox && boxes[focusBox - 1] ? focusBox : 1; setTimeout(() => refs.current[`w${b}`]?.focus(), 60); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // start in Box 1's length (or the scanned box): type, Tab, type, Tab… Enter after a weight goes to the next box
+  useEffect(() => { const b = focusBox && boxes[focusBox - 1] ? focusBox : 1; setTimeout(() => refs.current[`l${b}`]?.focus(), 60); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) onClose(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [busy, onClose]);
 
   const setBox = (i: number, patch: Partial<Box>) => { setBoxes((bs) => bs.map((b, j) => (j === i ? { ...b, ...patch } : b))); setRates(null); };
   const renumber = (bs: Box[]) => bs.map((b, i) => ({ ...b, n: i + 1 }));
-  const addBox = () => { setBoxes((bs) => { const last = bs[bs.length - 1]; return renumber([...bs, { n: bs.length + 1, length: last?.length ?? "", width: last?.width ?? "", height: last?.height ?? "", weight: "" }]); }); setRates(null); setTimeout(() => refs.current[`w${boxes.length + 1}`]?.focus(), 30); };
+  const addBox = () => { setBoxes((bs) => { const last = bs[bs.length - 1]; return renumber([...bs, { n: bs.length + 1, length: last?.length ?? "", width: last?.width ?? "", height: last?.height ?? "", weight: "" }]); }); setRates(null); setTimeout(() => refs.current[`l${boxes.length + 1}`]?.focus(), 30); };
   const removeBox = (i: number) => { setBoxes((bs) => renumber(bs.filter((_, j) => j !== i))); setRates(null); };
   const sizeAll = (s: { length: number; width: number; height: number }) => { setBoxes((bs) => bs.map((b) => ({ ...b, length: s.length, width: s.width, height: s.height }))); setRates(null); };
 
@@ -51,6 +72,39 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const ready = boxes.length > 0 && boxes.every(boxReady);
   const perBox = t.pieces ? Math.ceil(t.pieces / Math.max(1, boxes.length)) : 0;
   const chosen = useMemo(() => rates?.find((r) => `${r.carrier}|${r.service}` === pick) || null, [rates, pick]);
+  const canRate = ready && !!(to.zip && to.city && to.state && to.street1) && (bill === "fbs" || !!(account.trim() && zip.trim()));
+
+  /** Every option with its arrival day, sorted soonest first, tagged Cheapest / Fastest / Recommended. */
+  const { options, best } = useMemo(() => {
+    const need = t.due ? new Date(t.due.slice(0, 10) + "T23:59") : null;
+    const cost = (r: Rate) => (bill === "fbs" ? r.price : r.cost);
+    const list = (rates || []).map((r) => { const at = arrival(r); return { r, at, late: !!(need && at && at > need), tags: [] as string[] }; })
+      .sort((a, b) => (a.at ? +a.at : 9e15) - (b.at ? +b.at : 9e15) || cost(a.r) - cost(b.r));
+    if (!list.length) return { options: list, best: null };
+    const cheapest = list.reduce((m, o) => (cost(o.r) < cost(m.r) ? o : m));
+    const fastest = list.find((o) => o.at) || list[0];
+    const onTime = list.filter((o) => !o.late);
+    // best value: the cheapest that makes the in-hands date; with no date, the cheapest unless paying a little more is much faster
+    let pickO = onTime.length ? onTime.reduce((m, o) => (cost(o.r) < cost(m.r) ? o : m)) : fastest;
+    let why = need ? (onTime.length ? `Cheapest option that arrives by the in-hands date (${dayName(need)}).` : `In-hands date is ${dayName(need)}. Consider calling the customer.`) : "Cheapest option.";
+    if (!need && fastest !== cheapest && fastest.at && cheapest.at) {
+      const daysSaved = Math.round((+cheapest.at - +fastest.at) / 86400000), extra = cost(fastest.r) - cost(cheapest.r);
+      if (daysSaved >= 2 && extra <= Math.max(5, cost(cheapest.r) * 0.15)) { pickO = fastest; why = `Arrives ${daysSaved} days sooner for only ${money(extra)} more.`; }
+    }
+    cheapest.tags.push("Cheapest"); fastest.tags.push("Fastest"); if (!pickO.tags.includes("Recommended")) pickO.tags.unshift("Recommended");
+    list.forEach((o) => { if (o.late) o.tags.push("Late"); });
+    return { options: list, best: { ...pickO, why } };
+  }, [rates, bill, t.due]);
+
+  // rates pop up by themselves once every box and the address are filled in (and again after a change)
+  const rateKey = JSON.stringify([boxes.map((b) => [b.length, b.width, b.height, b.weight]), to.street1, to.city, to.state, to.zip, bill, account, zip]);
+  const tried = useRef("");
+  useEffect(() => {
+    if (!canRate || rates || busy || tried.current === rateKey) return;
+    const h = setTimeout(() => { tried.current = rateKey; getRates(); }, 900);
+    return () => clearTimeout(h);
+  }, [rateKey, canRate, rates, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (best && !rates?.some((r) => `${r.carrier}|${r.service}` === pick)) setPick(`${best.r.carrier}|${best.r.service}`); }, [best]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** A scanned box label ("34317-2") jumps to that box; the order number alone jumps to the next box without a weight. */
   function onScan(v: string) {
@@ -58,7 +112,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     if (!m) return;
     let n = m[2] ? +m[2] : (boxes.findIndex((b) => !b.weight) + 1 || boxes.length);
     if (n > boxes.length) { addBox(); n = boxes.length + 1; }
-    setTimeout(() => refs.current[`w${n}`]?.focus(), 40);
+    setTimeout(() => refs.current[`l${n}`]?.focus(), 40);
     setScan("");
   }
 
@@ -91,15 +145,14 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   }
 
   async function getRates() {
+    tried.current = rateKey;
     setBusy("rates"); setErr(""); setRates(null);
     try {
       const r = await fetch("/api/shipping/rates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to, boxes, bill, account, zip, reference: `#${t.number}` }) });
       const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
       if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+      setPick(""); // the recommendation is picked when the rates arrive
       setRates(j.rates);
-      const want = (service || "").toLowerCase().replace(/\s+/g, "");
-      const match = (j.rates as Rate[]).find((x) => `${x.carrier}${x.service}`.toLowerCase().replace(/\s+/g, "").includes(want.replace(/^ups|^fedex|^usps/, "")) && want.startsWith(x.carrier.toLowerCase()));
-      setPick(match ? `${match.carrier}|${match.service}` : j.rates[0] ? `${j.rates[0].carrier}|${j.rates[0].service}` : "");
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     setBusy("");
   }
@@ -133,14 +186,18 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
                   <tr key={i} className={boxReady(b) ? "ok" : ""}>
                     <td className="sw-n">Box {b.n}<small>{perBox ? `~${Math.min(perBox, Math.max(0, t.pieces - perBox * i))} pcs` : ""}</small></td>
                     {(["length", "width", "height"] as const).map((k) => (
-                      <td key={k}><div className="sw-in"><input type="number" inputMode="decimal" min={0} step="0.5" value={b[k]} onChange={(e) => setBox(i, { [k]: num(e.target.value) })} aria-label={`Box ${b.n} ${k}`} /><span>in</span></div></td>
+                      <td key={k}><div className="sw-in"><input ref={k === "length" ? (el) => { refs.current[`l${b.n}`] = el; } : undefined} type="number" inputMode="decimal" min={0} step="0.5" value={b[k]}
+                        onFocus={(e) => e.target.select()} onChange={(e) => setBox(i, { [k]: num(e.target.value) })}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.closest("td")?.nextElementSibling?.querySelector("input") as HTMLInputElement | null)?.focus(); } }} aria-label={`Box ${b.n} ${k}`} /><span>in</span></div></td>
                     ))}
-                    <td><div className="sw-in w"><input ref={(el) => { refs.current[`w${b.n}`] = el; }} type="number" inputMode="decimal" min={0} step="0.1" value={b.weight} onChange={(e) => setBox(i, { weight: num(e.target.value) })}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); refs.current[`w${b.n + 1}`]?.focus(); } }} aria-label={`Box ${b.n} weight`} /><span>lb</span></div></td>
+                    <td><div className="sw-in w"><input ref={(el) => { refs.current[`w${b.n}`] = el; }} type="number" inputMode="decimal" min={0} step="0.1" value={b.weight}
+                      onFocus={(e) => e.target.select()} onChange={(e) => setBox(i, { weight: num(e.target.value) })}
+                      onBlur={() => rememberSize(b)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); rememberSize(b); const nx = refs.current[`l${b.n + 1}`]; if (nx) nx.focus(); else (e.currentTarget as HTMLInputElement).blur(); } }} aria-label={`Box ${b.n} weight`} /><span>lb</span></div></td>
                     {tracking && <td><input type="text" className="sw-trk" value={b.tracking || ""} placeholder="1Z… / 7…" onChange={(e) => setBox(i, { tracking: e.target.value.trim() })} aria-label={`Box ${b.n} tracking`} />{b.tracking && carrierOf(b.tracking) && <small className="faint"> {carrierOf(b.tracking)}</small>}</td>}
                     <td className="sw-act">
-                      {i > 0 && <button type="button" className="btn sm ghost" title="Same size as the box above" onClick={() => setBox(i, { length: boxes[i - 1].length, width: boxes[i - 1].width, height: boxes[i - 1].height })}>Same ↑</button>}
-                      {boxes.length > 1 && <button type="button" className="btn icon ghost sm" aria-label={`Remove box ${b.n}`} onClick={() => removeBox(i)}>✕</button>}
+                      {i > 0 && <button type="button" tabIndex={-1} className="btn sm ghost" title="Same size as the box above" onClick={() => setBox(i, { length: boxes[i - 1].length, width: boxes[i - 1].width, height: boxes[i - 1].height })}>Same ↑</button>}
+                      {boxes.length > 1 && <button type="button" tabIndex={-1} className="btn icon ghost sm" aria-label={`Remove box ${b.n}`} onClick={() => removeBox(i)}>✕</button>}
                     </td>
                   </tr>
                 ))}
@@ -153,24 +210,40 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
 
             <div className="sw-rates">
               <div className="row" style={{ justifyContent: "space-between" }}>
-                <b>Rates</b>
-                <button type="button" className="btn" disabled={!ready || !addressReady(to) || busy !== "" || (bill !== "fbs" && (!account.trim() || !zip.trim()))} onClick={getRates}>{busy === "rates" ? "Getting rates…" : rates ? "Refresh rates" : "Get rates"}</button>
+                <b>How would you like to ship it?</b>
+                <button type="button" className="btn sm" tabIndex={-1} disabled={!canRate || busy !== ""} onClick={getRates}>{busy === "rates" ? "Checking UPS, FedEx, USPS…" : rates ? "Check again" : "Compare rates"}</button>
               </div>
-              {rates ? (rates.length ? (
-                <div className="sw-rate-list">{rates.map((r) => {
-                  const k = `${r.carrier}|${r.service}`;
-                  return (
-                    <label key={k} className={"sw-rate" + (pick === k ? " on" : "")}>
-                      <input type="radio" name="rate" checked={pick === k} onChange={() => setPick(k)} />
-                      <span className="sw-rate-n"><b>{r.carrier} {r.service.replace(/([a-z])([A-Z])/g, "$1 $2")}</b><small>{r.days ? `${r.days} day${r.days === 1 ? "" : "s"}` : ""}{r.deliveryDate ? ` · arrives ${new Date(r.deliveryDate).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}</small></span>
-                      {bill === "fbs"
-                        ? <span className="sw-rate-p"><b>{money(r.price)}</b><small>we pay {money(r.cost)}</small></span>
-                        : <span className="sw-rate-p"><b>Their account</b><small>{r.price ? `+ ${money(r.price)} handling` : "no charge from us"}</small></span>}
-                    </label>
-                  );
-                })}</div>
+              {busy === "rates" && !rates && <div className="faint" style={{ fontSize: 13 }}>Comparing UPS, FedEx and USPS from {settings.from.zip || "our ZIP"}…</div>}
+              {rates ? (options.length ? (
+                <>
+                  {best && (
+                    <div className={"sw-rec" + (best.late ? " late" : "")}>
+                      <div className="sw-rec-t">{best.late ? "Nothing arrives by the in-hands date. Fastest:" : "Recommended"}</div>
+                      <div className="sw-rec-b"><b>{best.r.carrier} {niceService(best.r.service)}</b> arrives <b>{best.at ? dayName(best.at) : "(no estimate)"}</b>{bill === "fbs" ? <> for <b>{money(best.r.price)}</b></> : " on their account"}</div>
+                      <div className="sw-rec-w">{best.why}</div>
+                    </div>
+                  )}
+                  <div className="sw-rate-list">{options.map((o) => {
+                    const k = `${o.r.carrier}|${o.r.service}`;
+                    return (
+                      <label key={k} className={"sw-rate" + (pick === k ? " on" : "") + (o.late ? " late" : "")}>
+                        <input type="radio" name="rate" checked={pick === k} onChange={() => setPick(k)} />
+                        <span className="sw-rate-n">
+                          <b>{o.at ? o.at.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "No estimate"}</b>
+                          <small>{o.r.carrier} {niceService(o.r.service)}{o.r.days ? ` · ${o.r.days} business day${o.r.days === 1 ? "" : "s"}` : ""}</small>
+                        </span>
+                        <span className="sw-tags">
+                          {o.tags.map((tg) => <span key={tg} className={"sw-tag " + tg.toLowerCase().replace(/\W+/g, "")}>{tg}</span>)}
+                        </span>
+                        {bill === "fbs"
+                          ? <span className="sw-rate-p"><b>{money(o.r.price)}</b><small>we pay {money(o.r.cost)}</small></span>
+                          : <span className="sw-rate-p"><b>Their account</b><small>{o.r.price ? `+ ${money(o.r.price)} handling` : `about ${money(o.r.cost)} list`}</small></span>}
+                      </label>
+                    );
+                  })}</div>
+                </>
               ) : <div className="faint">No rates came back for this shipment. Check the address and box sizes.</div>)
-                : <div className="faint" style={{ fontSize: 13 }}>Fill in the boxes, then get live UPS, FedEx and USPS rates{bill === "fbs" ? `, with what the customer pays (${settings.markupPct}% + ${money(settings.perBoxFee)}/box)` : ""}.</div>}
+                : busy !== "rates" && <div className="faint" style={{ fontSize: 13 }}>{canRate ? "Getting rates…" : `Fill in every box and the ship-to address; rates from UPS, FedEx and USPS pop up here with arrival days${bill === "fbs" ? ` and what the customer pays (${settings.markupPct}% + ${money(settings.perBoxFee)}/box)` : ""}.`}</div>}
             </div>
           </section>
 

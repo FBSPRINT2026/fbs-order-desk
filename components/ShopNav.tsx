@@ -27,6 +27,7 @@ export default function ShopNav({ email }: { email: string }) {
   const [incoming, setIncoming] = useState(0);
   const [creating, setCreating] = useState(false);
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
+  const [toShip, setToShip] = useState(0);
 
   // Assistant badge: follow-ups due now (refreshed every few minutes, not on every click)
   useEffect(() => {
@@ -58,6 +59,24 @@ export default function ShopNav({ email }: { email: string }) {
       .then(({ count }) => setUnread(count || 0));
     sb.from("orders").select("id", { count: "exact", head: true }).eq("status", "request").not("submitted_at", "is", null)
       .then(({ count }) => setIncoming(count || 0));
+    // waiting to ship: new orders Ready + set to ship, and Printavo orders in "Ready to Ship" (minus ones already shipped here)
+    Promise.all([
+      sb.from("orders").select("id", { count: "exact", head: true }).eq("status", "ready").eq("delivery_method", "ship"),
+      sb.from("archived_orders").select("id", { count: "exact", head: true }).ilike("status_name", "%ready to ship%"),
+      sb.from("shipments").select("order_id, archived_order_id").eq("status", "shipped").gte("shipped_at", new Date(Date.now() - 60 * 86400000).toISOString()),
+    ]).then(async ([a, b, c]) => {
+      const shipped = (c.data || []) as { order_id: string | null; archived_order_id: string | null }[];
+      let done = 0;
+      if (shipped.length) {
+        const aIds = shipped.map((x) => x.archived_order_id).filter(Boolean) as string[], oIds = shipped.map((x) => x.order_id).filter(Boolean) as string[];
+        const [r1, r2] = await Promise.all([
+          aIds.length ? sb.from("archived_orders").select("id", { count: "exact", head: true }).in("id", aIds).ilike("status_name", "%ready to ship%") : Promise.resolve({ count: 0 }),
+          oIds.length ? sb.from("orders").select("id", { count: "exact", head: true }).in("id", oIds).eq("status", "ready").eq("delivery_method", "ship") : Promise.resolve({ count: 0 }),
+        ]);
+        done = (r1.count || 0) + (r2.count || 0);
+      }
+      setToShip(Math.max(0, (a.count || 0) + (b.count || 0) - done));
+    }).catch(() => {});
   }, [path]);
 
   const items: [string, string, string][] = [
@@ -66,7 +85,6 @@ export default function ShopNav({ email }: { email: string }) {
     ["/shop/incoming", "incoming", "Incoming orders"],
     ["/shop/board", "board", "Production"],
     ["/shop/calendar", "calendar", "Calendar"],
-    ["/shop/shipping", "shipping", "Shipping center"],
     ["/shop/projects", "projects", "Projects"],
     ["/shop/customers", "customers", "Customers"],
     ["/shop/artwork", "artwork", "Artwork"],
@@ -97,6 +115,9 @@ export default function ShopNav({ email }: { email: string }) {
         ))}
       </nav>
       <button className="btn primary btn-new" type="button" onClick={newQuote} disabled={creating}>{creating ? "Creating…" : "+ New quote"}</button>
+      <Link href="/shop/shipping" className={"btn-ship" + (path.startsWith("/shop/shipping") ? " on" : "")} title="Shipping center">
+        {ICONS.shipping}<span className="lbl-t">Shipping center</span>{toShip > 0 && <span className="badge">{toShip}</span>}
+      </Link>
       <div className="side-user">
         <span>{email}</span>
         <form action="/auth/signout" method="post"><button className="btn ghost sm" style={{ color: "inherit", padding: 0 }} type="submit">Sign out</button></form>

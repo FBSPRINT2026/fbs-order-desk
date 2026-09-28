@@ -20,7 +20,8 @@ export async function POST(req: Request) {
   if (bill !== "fbs" && (!String(b.account || "").trim() || !String(b.zip || "").trim())) return NextResponse.json({ error: "Enter the customer's account number and its billing ZIP." }, { status: 400 });
   const { data: st } = await v.supabase.from("settings").select("data").eq("id", 1).maybeSingle();
   const s = mergeSettings(st?.data).ship;
-  if (!addressReady(s.from)) return NextResponse.json({ error: "Set our ship-from address first (Shipping center → Settings)." }, { status: 400 });
+  // rates and transit times are figured from our ZIP (75081); the street is only needed for labels
+  if (!s.from.zip) return NextResponse.json({ error: "Set our ship-from ZIP first (Shipping center → Settings)." }, { status: 400 });
   try {
     const r = await rateShipment({ from: s.from, to: b.to, boxes, bill, account: String(b.account || "").trim(), zip: String(b.zip || "").trim(), reference: String(b.reference || "") });
     return NextResponse.json({ easypostOrder: r.orderId, rates: r.rates.map((x) => ({ ...x, price: shippingPrice(x.cost, boxes.length, bill, s) })) });
