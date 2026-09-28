@@ -2048,3 +2048,17 @@ a.as-ai{text-decoration:none}
 .rv-linked{font-weight:700;color:var(--accent);text-decoration:none}
 .rv-tag{font-size:10.5px;font-weight:700;padding:0 6px;border-radius:99px;background:var(--surface-2);color:var(--ink-3)}
 .rv-grid .rv-pill{font-weight:600}
+/* every carrier / supplier block uses the same column widths, so the columns line up down the page */
+.rv-grid{table-layout:fixed;min-width:1080px}
+.rv-grid col.c-co{width:22%}
+.rv-grid col.c-from{width:70px}
+.rv-grid col.c-po{width:14%}
+.rv-grid col.c-n{width:60px}
+.rv-grid col.c-st{width:150px}
+.rv-grid col.c-at{width:100px}
+.rv-grid col.c-trk{width:180px}
+.rv-grid col.c-so{width:130px}
+.rv-grid col.c-ord{width:100px}
+.rv-grid td{overflow:hidden;text-overflow:ellipsis}
+.rv-grid td.po,.rv-grid td.co{white-space:nowrap}
+.rv-grid td.so{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
