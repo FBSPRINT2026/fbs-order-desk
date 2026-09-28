@@ -281,21 +281,23 @@ export default function GoodsReceiving() {
           <button type="button" className="btn primary" onClick={() => setTruck(true)}>Receive S&amp;S truck</button>
           <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import supplier manifest"}<input type="file" hidden accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) upload(f); }} /></label>
         </div>
-        <label className="rv-search rv-search-under"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label></div>
+</div>
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
+      <div className="aa-sub rv-views" role="tablist">
+        <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; overview</button>
+        <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS orders<span className={"aa-n" + (v.need.length ? " hot" : "")}>{v.need.length + arriving.length}</span></button>
+        <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer supplied goods<span className="aa-n">{data.goods.filter((it) => it.goods.status !== "received").length + unlinked.length}</span></button>
+        <button type="button" className={view === "resolve" ? "on" : ""} onClick={() => setView("resolve")}>Resolution center<span className={"aa-n" + (pending?.length ? " hot" : "")}>{pending ? pending.length : "…"}</span></button>
+        <span className="spacer" />
+        <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
+      </div>
       {q.trim().length >= 2 && (
         <section className="rv-day rv-results">
           <div className="rv-day-h"><b>Search: “{q.trim()}”</b><span className="faint">{searching ? "Searching…" : `${hitRows.length} shipment${hitRows.length === 1 ? "" : "s"} on the manifests`}</span><span className="spacer" /><button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></div>
           {!searching && grouped(hitRows, "Nothing on any manifest matches that. It may not have shipped yet.")}
         </section>
       )}
-      <div className="aa-sub rv-views" role="tablist">
-        <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; overview</button>
-        <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS orders<span className={"aa-n" + (v.need.length ? " hot" : "")}>{v.need.length + arriving.length}</span></button>
-        <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer supplied goods<span className="aa-n">{data.goods.filter((it) => it.goods.status !== "received").length + unlinked.length}</span></button>
-        <button type="button" className={view === "resolve" ? "on" : ""} onClick={() => setView("resolve")}>Resolution center<span className={"aa-n" + (pending?.length ? " hot" : "")}>{pending ? pending.length : "…"}</span></button>
-      </div>
 
       {view === "customer" && <>
         {pvCust.length > 0 && (

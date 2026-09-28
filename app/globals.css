@@ -2150,3 +2150,7 @@ a.as-ai{text-decoration:none}
 .lk-r{display:flex;align-items:center;gap:6px;white-space:nowrap}
 .rv-tag.lk-match{background:var(--ok-soft);color:var(--ok, #1a7f4b)}
 @media (max-width:700px){.rv-head-r{align-items:stretch}.rv-search.rv-search-under{width:auto}}
+.rv-views{align-items:center;flex-wrap:wrap}
+.rv-search.rv-search-tabs{margin:0 0 4px;width:420px;max-width:100%;flex:none;padding:0 10px}
+.rv-search.rv-search-tabs input{padding:7px 0;font-size:13.5px}
+@media (max-width:900px){.rv-search.rv-search-tabs{width:100%}}
