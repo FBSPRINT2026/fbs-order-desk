@@ -10,6 +10,7 @@ import { orderSearchText } from "@/lib/search";
 import { withFiles, type HubMsg } from "@/lib/messages";
 import PortalMessages from "@/components/PortalMessages";
 import PortalGoods from "@/components/PortalGoods";
+import { aiPaySelect } from "@/app/portal/pay-select";
 import { needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
@@ -113,6 +114,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             goodsPanel={wholesale ? <PortalGoods items={goodsItems} canAct={!ctx.preview} qs={qs} empty="No open jobs need goods from you right now." /> : undefined}
             goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
             goodsCount={goodsOpen.length}
+            onPaySelect={aiPaySelect}
             messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
             orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}

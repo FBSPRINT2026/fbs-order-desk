@@ -7,6 +7,8 @@ import { fmtDateLong, money } from "@/lib/format";
 import { designMatches } from "@/components/DesignSearch";
 import PayPanel, { type PayItem } from "@/components/PayPanel";
 import { matches } from "@/lib/search";
+import QuickPay from "@/components/QuickPay";
+import type { PayFilter } from "@/lib/paySelect";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
@@ -49,8 +51,10 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ mode, onPaySelect, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
+  /** portal: reads "pay all of August"-style requests (AI); without it the built-in phrase reader is used */
+  onPaySelect?: (text: string) => Promise<{ ok: boolean; error?: string; filter?: PayFilter; explain?: string; off?: boolean }>;
   /** the Messages hub (the dashboard's centerpiece in the portal, and the Messages area) */
   messagesPanel?: ReactNode;
   /** portal: "Hi Jordan" line over the dashboard */
@@ -351,6 +355,10 @@ export default function AccountAreas({ mode, messagesPanel, greeting, goodsPanel
     body = <>
       <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2><span className="aa-sum">Balance due <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b>{!canPay && terms ? <> · Terms <b>{terms}</b></> : null}</span></div>{!canPay && searchBox}</div>
       <div className={canPay ? "aa-home" : ""}><div className="aa-home-main stack">
+      {canPay && (
+        <QuickPay ask={onPaySelect} onSelect={(ids) => { setPaySel(ids); setPayNow(null); }}
+          open={liveInvoices.filter((o) => o.balance > 0.004).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname, status: o.status, total: o.total, balance: Math.round(o.balance * 100) / 100, created_at: o.created_at, due_date: o.due_date, pay_due: payDue(o), search: o.search }))} />
+      )}
       <div className="aa-aging" aria-label="Aging">
         {aging.map((b, i) => (
           <div key={b.k} className={"aa-age" + (i >= 1 && b.amt > 0.004 ? " late" : "") + (i >= 2 && b.amt > 0.004 ? " bad" : "")}>

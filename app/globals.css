@@ -1468,3 +1468,21 @@ a.as-ai{text-decoration:none}
 .pd-goods .pd-card-h h3{font-size:17px;display:flex;align-items:center;gap:8px}
 .mh-av.goods{background:#FDE7C2;font-size:17px}
 @media (max-width:560px){.gb,.gb.compact{grid-template-columns:1fr}.gc-grid{grid-template-columns:1fr 1fr}}
+
+/* ---------- Quick pay: "What do you want to pay?" ---------- */
+.qp{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 9%,var(--surface)),var(--surface));border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.qp-row{display:flex;flex-direction:column;gap:6px}
+.qp-l{font-weight:800;font-size:15px}
+.qp-in{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px 4px 4px 12px}
+.qp-in:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.qp-in input{flex:1;border:0;outline:0;background:none;padding:8px 0;font-size:14.5px;min-width:0}
+.qp-chips{display:flex;flex-wrap:wrap;gap:6px}
+.qp-chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:5px 12px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer}
+.qp-chip:hover{border-color:var(--accent);color:var(--accent)}
+.qp-chip.recent{border-style:dashed}
+.qp-res{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;background:var(--ok-soft);border-radius:10px;padding:9px 12px;font-size:13.5px}
+.qp-res b{color:var(--ok)}
+.qp-res span{color:var(--ink-2);flex:1;min-width:200px}
+.qp-res.none{background:var(--warn-soft)}
+.qp-res.none b{color:var(--warn)}
+.pp-list{max-height:260px;overflow:auto}
