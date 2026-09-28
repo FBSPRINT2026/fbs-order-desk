@@ -2017,3 +2017,6 @@ a.as-ai{text-decoration:none}
 .rv-pill.bad{background:var(--danger-soft);color:var(--danger)}
 .rv-pill.unl{background:var(--warn-soft);color:var(--warn);cursor:pointer}
 .rv-st.ok{background:var(--ok-soft);color:var(--ok, #1a7f4b)}
+.rv-vias{display:flex;flex-direction:column;gap:10px}
+.rv-via-h{display:flex;align-items:baseline;gap:8px;font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink);border-bottom:2px solid var(--line);padding-bottom:3px;margin-bottom:6px}
+.rv-via-h span{font-weight:600;text-transform:none;letter-spacing:0;color:var(--ink-3);font-size:12px}

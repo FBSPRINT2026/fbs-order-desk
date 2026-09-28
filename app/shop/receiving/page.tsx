@@ -22,7 +22,9 @@ const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
 ];
 type Focus = "arrived" | "today" | "tomorrow" | "way" | "late" | "problems" | "count" | "need" | "unlinked" | "info";
 type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; boxes: number; pcs: number;
-  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string }[]; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean };
+  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string }[]; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via };
+type Via = "ss" | "ups" | "fedex" | "other";
+const VIAS: { k: Via; label: string }[] = [{ k: "ss", label: "S&S truck" }, { k: "ups", label: "UPS" }, { k: "fedex", label: "FedEx" }, { k: "other", label: "DHL / other (freight, USPS…)" }];
 type Pkg = { key: string; kind: "blanks" | "goods"; orderId: string; number: number; who: string; label: string; tracking: string; carrier: string; status: string; detail: string; at: string | null; delivered: boolean; need: string | null; href: string };
 
 /** Today's date here (not UTC: after 7 pm the UTC date is already tomorrow). */
@@ -148,9 +150,11 @@ export default function GoodsReceiving() {
   const t0 = today(), tm = addDays(t0, 1);
   const PROBLEM = ["failure", "return_to_sender", "error", "available_for_pickup", "cancelled"];
   const localDay = (iso: string | null | undefined) => { if (!iso) return ""; if (iso.length === 10) return iso; const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-  const rowOf = (x: Omit<Row, "state" | "late"> & { statuses: string[] }): Row => {
+  const rowOf = (x: Omit<Row, "state" | "late" | "via"> & { statuses: string[] }): Row => {
     const state: Row["state"] = x.trks.length && x.trks.every((k) => k.delivered) ? "arrived" : x.statuses.some((st) => PROBLEM.includes(st)) ? "problem" : "way";
-    return { ...x, state, late: state !== "arrived" && !!x.at && !!x.need && localDay(x.at) > x.need };
+    const k0 = x.trks[0];
+    const via: Via = !k0 ? "other" : !k0.tracking ? (/s&s|s & s|ss activewear/i.test(k0.carrier) ? "ss" : "other") : /^ups$/i.test(k0.carrier) || /^1Z/i.test(k0.tracking) ? "ups" : /fedex/i.test(k0.carrier) ? "fedex" : "other";
+    return { ...x, via, state, late: state !== "arrived" && !!x.at && !!x.need && localDay(x.at) > x.need };
   };
   const rows: Row[] = [
     // our blanks ordered here
@@ -173,8 +177,8 @@ export default function GoodsReceiving() {
   };
   const count = [...u0.count, ...pvHere.map((g) => ({ n: g.number, id: g.archivedId, what: g.kind === "blanks" ? "Our blanks (Printavo job)" : "Customer goods (Printavo job)", who: g.customer }))];
   const KPIS: { k: Focus; label: string; n: number; tone?: string }[] = [
-    { k: "arrived", label: "Arrived today", n: L.arrived.length, tone: L.arrived.length ? "ok" : "" },
     { k: "today", label: "Arriving today", n: L.today.length, tone: L.today.length ? "info" : "" },
+    { k: "arrived", label: "Arrived today", n: L.arrived.length, tone: L.arrived.length ? "ok" : "" },
     { k: "tomorrow", label: "Arriving tomorrow", n: L.tomorrow.length },
     { k: "way", label: "On the way", n: L.way.length },
     { k: "late", label: "Arriving too late", n: L.late.length, tone: L.late.length ? "bad" : "" },
@@ -207,11 +211,17 @@ export default function GoodsReceiving() {
         : <span key={"l" + i}>{k.carrier} local truck{k.delivered ? " · received" : ""}</span>)}</div>
     </li>
   );
+  // arrived / arriving today: one block per way it comes (S&S truck, UPS, FedEx, other)
+  const byVia = (list: Row[]) => (
+    <div className="rv-vias">{VIAS.map((vi) => { const rs = list.filter((r) => r.via === vi.k); return rs.length ? (
+      <div key={vi.k} className="rv-via"><div className="rv-via-h">{vi.label}<span>{rs.length} shipment{rs.length === 1 ? "" : "s"} · {rs.reduce((a, r) => a + (r.boxes || 0), 0)} boxes</span></div><ul className="rv-rows">{rs.map(rowLine)}</ul></div>
+    ) : null; })}</div>
+  );
   const LISTS: { k: Focus; title: string; tone?: string; body: React.ReactNode; n: number }[] = [
     { k: "late", title: "Arriving after they're needed", tone: "bad", n: L.late.length, body: <ul className="rv-rows">{L.late.map(rowLine)}</ul> },
     { k: "problems", title: "Delayed or a delivery problem", tone: "bad", n: L.problems.length, body: <ul className="rv-rows">{L.problems.map(rowLine)}</ul> },
-    { k: "arrived", title: "Arrived today", n: L.arrived.length, body: <ul className="rv-rows">{L.arrived.map(rowLine)}</ul> },
-    { k: "today", title: "Arriving today", n: L.today.length, body: <ul className="rv-rows">{L.today.map(rowLine)}</ul> },
+    { k: "arrived", title: "Arrived today", n: L.arrived.length, body: byVia(L.arrived) },
+    { k: "today", title: "Arriving today", n: L.today.length, body: byVia(L.today) },
     { k: "tomorrow", title: "Arriving tomorrow", n: L.tomorrow.length, body: <ul className="rv-rows">{L.tomorrow.map(rowLine)}</ul> },
     { k: "way", title: "Everything on the way", n: L.way.length, body: <ul className="rv-rows">{L.way.map(rowLine)}</ul> },
     { k: "count", title: "Delivered: count these in", n: count.length, body: <ul className="rv-rows">{count.map((c) => <li key={c.what + c.id} className="rv-row"><div className="rv-row-t"><Link className="num" href={c.what === "Our blanks" ? `/shop/orders/${c.id}` : c.what.includes("Printavo") ? `/shop/archive/${c.id}` : "/shop/receiving?view=customer"} onClick={(e) => { if (c.what === "Customer goods") { e.preventDefault(); setView("customer"); } }}>#{c.n}</Link><b>{c.who}</b><span className="faint">{c.what}</span></div></li>)}</ul> },
@@ -219,7 +229,8 @@ export default function GoodsReceiving() {
     { k: "unlinked", title: "Not linked to an order", n: (pending || []).length, body: <ul className="rv-rows">{rows.filter((r) => r.unlinked).sort(byAt).map(rowLine)}</ul> },
     { k: "info", title: "Customer goods: no info yet", n: u0.info.length, body: <ul className="rv-rows">{u0.info.map((it) => <li key={it.order.id} className="rv-row"><div className="rv-row-t"><Link className="num" href={`/shop/orders/${it.order.id}`}>#{it.order.number}</Link><b>{v.who(v.byId.get(it.order.id))}</b><span className="faint">in hands {day(it.order.due_date)} · no supplier or tracking yet</span></div></li>)}</ul> },
   ];
-  const shown = focus ? LISTS.filter((x) => x.k === focus) : LISTS.filter((x) => ["late", "problems", "arrived", "today", "tomorrow"].includes(x.k) && x.n > 0);
+  // first look: only what's arriving today and what already arrived (click a box for anything else)
+  const shown = focus ? LISTS.filter((x) => x.k === focus) : (["today", "arrived"] as Focus[]).map((k) => LISTS.find((x) => x.k === k)!);
   // FBS pane boxes
   const fbsToday = arriving.filter((a) => a.when === "today" || a.when === "past").length;
 
@@ -262,10 +273,9 @@ export default function GoodsReceiving() {
           {shown.map((x) => (
             <div key={x.k} className="rv-list">
               <h4 className={x.tone || ""}>{x.title} <span className="faint">({x.n})</span></h4>
-              {x.n ? x.body : <div className="faint" style={{ fontSize: 13 }}>Nothing here right now.</div>}
+              {x.n ? x.body : <div className="faint" style={{ fontSize: 13 }}>{x.k === "today" ? "Nothing else due today." : x.k === "arrived" ? "Nothing has arrived yet today." : "Nothing here right now."}</div>}
             </div>
           ))}
-          {!shown.length && <div className="faint" style={{ fontSize: 13.5 }}>Nothing arriving or arrived today. Click a box above to see its list.</div>}
         </div>
       </section>
 
