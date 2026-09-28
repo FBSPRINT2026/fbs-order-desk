@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { customerOrderIds } from "@/lib/printavo";
 import { importCustomer } from "@/lib/printavoImport";
-import { fail, staffOnly } from "../guard";
+import { fail, holdSync, staffOnly } from "../guard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,6 +10,7 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const g = await staffOnly();
   if ("error" in g) return g.error;
+  await holdSync();
   const { printavoId } = await req.json().catch(() => ({}));
   if (!printavoId) return NextResponse.json({ error: "Which Printavo customer?" }, { status: 400 });
   try {

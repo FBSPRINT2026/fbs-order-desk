@@ -3,13 +3,21 @@ import type { PvAddress, PvFile, PvGroup, PvLine, PvMessage, PvOrder, PvTransact
 
 /**
  * Printavo API v2 (GraphQL). Read-only: nothing here can change anything in Printavo (see assertReadOnly).
- * Limits: 10 requests per 5 seconds per account, so calls are spaced out and retried when Printavo says slow down.
+ * Limits: 10 requests per 5 seconds per account. We send at most one every 0.8 seconds and back off when Printavo says slow down.
  */
 const PV_URL = "https://www.printavo.com/api/v2";
 let last = 0;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class PrintavoError extends Error {}
+/** Printavo asked us to slow down and kept asking: callers stop and try again later. */
+export class PrintavoThrottled extends PrintavoError {}
+
+/**
+ * Staying well inside Printavo's limit (10 requests per 5 seconds): one request every 0.8 seconds is 6 per 5 seconds.
+ * The background sync is the only thing that runs continuously, and only one copy of it talks to Printavo at a time.
+ */
+const SPACING_MS = 800;
 
 export function printavoConfigured() {
   return !!(process.env.PRINTAVO_EMAIL?.trim() && process.env.PRINTAVO_TOKEN?.trim());
@@ -30,7 +38,7 @@ export async function pv<T = Record<string, unknown>>(query: string, variables: 
   const email = process.env.PRINTAVO_EMAIL?.trim(), token = process.env.PRINTAVO_TOKEN?.trim();
   if (!email || !token) throw new PrintavoError("Printavo isn't connected (PRINTAVO_EMAIL / PRINTAVO_TOKEN missing in Vercel).");
   for (let attempt = 0; ; attempt++) {
-    const wait = last + 550 - Date.now();
+    const wait = last + SPACING_MS - Date.now();
     if (wait > 0) await sleep(wait);
     last = Date.now();
     let r: Response;
@@ -42,7 +50,11 @@ export async function pv<T = Record<string, unknown>>(query: string, variables: 
     }
     const j = await r.json().catch(() => null) as { data?: T; errors?: { message: string }[] } | null;
     const msg = j?.errors?.map((e) => e.message).join("; ") || "";
-    if ((r.status === 429 || /rate|throttl|too many/i.test(msg)) && attempt < 5) { await sleep(5500); continue; }
+    if (r.status === 429 || /rate limit|throttl|too many requests/i.test(msg)) {
+      // back off: as long as Printavo says (at least 10 seconds); after 3 tries give up for now
+      if (attempt < 3) { const ra = +(r.headers.get("retry-after") || 0); await sleep(Math.max(10000, Math.min(ra * 1000, 60000)) * (attempt + 1)); continue; }
+      throw new PrintavoThrottled("Printavo asked us to slow down. The sync pauses for a few minutes and then carries on.");
+    }
     if (r.status >= 500 && attempt < 3) { await sleep(2000 * (attempt + 1)); continue; }
     if (!r.ok && !j?.data) throw new PrintavoError(`Printavo answered HTTP ${r.status}${msg ? ": " + msg : ""}`);
     if (msg && !j?.data) throw new PrintavoError("Printavo: " + msg);
@@ -223,11 +235,12 @@ export async function getOrder(id: string): Promise<PvOrder> {
   let extra: Raw = {};
   try { extra = (await pv<{ order: Raw | null }>(Q.extra, { id })).order || {}; }
   catch (e) {
+    if (e instanceof PrintavoThrottled) throw e;
     warnings.push("payments/files/tasks: " + (e instanceof Error ? e.message : String(e)));
     // try the parts one at a time so one bad part doesn't lose the others
     for (const part of EXTRA_FIELDS.split(/\n\s*/)) {
       try { Object.assign(extra, (await pv<{ order: Raw | null }>(`query($id:ID!){ order(id:$id){ ${typed(part)} } }`, { id })).order || {}); }
-      catch (e2) { warnings.push(part.split("(")[0] + ": " + (e2 instanceof Error ? e2.message : String(e2))); }
+      catch (e2) { if (e2 instanceof PrintavoThrottled) throw e2; warnings.push(part.split("(")[0] + ": " + (e2 instanceof Error ? e2.message : String(e2))); }
     }
   }
 
@@ -263,7 +276,7 @@ export async function getOrder(id: string): Promise<PvOrder> {
         })).sort((a, b) => a.position - b.position),
         imprints: (g.imprints?.nodes || []).map((i: Raw) => ({ id: s(i.id), typeOfWork: s(i.typeOfWork?.name), details: s(i.details), column: s(i.pricingMatrixColumn?.columnName), mockups: (i.mockups?.nodes || []).map(file) })),
       });
-    } catch (e) { warnings.push(`line item group ${gid.id}: ` + (e instanceof Error ? e.message : String(e))); }
+    } catch (e) { if (e instanceof PrintavoThrottled) throw e; warnings.push(`line item group ${gid.id}: ` + (e instanceof Error ? e.message : String(e))); }
   }
   groups.sort((a, b) => a.position - b.position);
 
@@ -285,7 +298,7 @@ export async function getOrder(id: string): Promise<PvOrder> {
         sender: s(m.sender?.name || m.sender?.fullName),
         attachments: (m.attachments?.nodes || []).filter((a: Raw) => a?.url).map((a: Raw) => ({ name: s(a.filename), url: s(a.url) })),
       })).sort((a: PvMessage, b: PvMessage) => a.at.localeCompare(b.at));
-    } catch (e) { warnings.push("messages: " + (e instanceof Error ? e.message : String(e))); }
+    } catch (e) { if (e instanceof PrintavoThrottled) throw e; warnings.push("messages: " + (e instanceof Error ? e.message : String(e))); }
   }
 
   const addr = (a: Raw | null): PvAddress => a ? { companyName: a.companyName ?? null, customerName: a.customerName ?? null, address1: a.address1 ?? null, address2: a.address2 ?? null, city: a.city ?? null, state: a.state ?? null, zipCode: a.zipCode ?? null, country: a.country ?? null } : null;

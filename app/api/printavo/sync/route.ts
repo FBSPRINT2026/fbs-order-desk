@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { listCustomers, listOrders, PrintavoError } from "@/lib/printavo";
+import { listCustomers, listOrders, PrintavoError, PrintavoThrottled } from "@/lib/printavo";
 import { copyFiles, importCustomer, importOrder } from "@/lib/printavoImport";
 
 export const runtime = "nodejs";
@@ -21,16 +21,18 @@ export const maxDuration = 60;
  */
 const RUN_MS = 47000;
 const QUICK_EVERY = 5 * 60000, QUICK_PAGES = 20; // active jobs: 20 pages x 25 = the 500 orders with the latest due dates
-type Sync = { enabled: boolean; token: string; quick_cursor: string | null; quick_pages: number; quick_done_at: string | null; sweep_cursor: string | null; sweep_no: number; sweep_started_at: string | null; sweep_done_at: string | null; customers_cursor: string | null; customers_done_at: string | null };
+type Sync = { enabled: boolean; token: string; pause_until: string | null; quick_cursor: string | null; quick_pages: number; quick_done_at: string | null; sweep_cursor: string | null; sweep_no: number; sweep_started_at: string | null; sweep_done_at: string | null; customers_cursor: string | null; customers_done_at: string | null };
 type Idx = { printavo_id: string; fingerprint: string; status: string };
 
 export async function GET(req: Request) {
   const admin = createAdminClient();
-  const { data: s } = await admin.from("printavo_sync").select("enabled, token, quick_cursor, quick_pages, quick_done_at, sweep_cursor, sweep_no, sweep_started_at, sweep_done_at, customers_cursor, customers_done_at").eq("id", 1).single();
+  const { data: s } = await admin.from("printavo_sync").select("enabled, token, pause_until, quick_cursor, quick_pages, quick_done_at, sweep_cursor, sweep_no, sweep_started_at, sweep_done_at, customers_cursor, customers_done_at").eq("id", 1).single();
   const sync = s as Sync | null;
   if (!sync || req.headers.get("x-sync-token") !== sync.token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   if (!sync.enabled) return NextResponse.json({ off: true });
   const job = new URL(req.url).searchParams.get("job") || "api";
+  // Printavo asked us to slow down recently: the part that talks to Printavo waits (copying files doesn't use Printavo's limit)
+  if (job === "api" && sync.pause_until && new Date(sync.pause_until).getTime() > Date.now()) return NextResponse.json({ pausedUntil: sync.pause_until });
   if (!/^(api|files-\d)$/.test(job)) return NextResponse.json({ error: "Unknown job" }, { status: 400 });
   const { data: got } = await admin.rpc("printavo_sync_claim", { p_job: job, p_seconds: 58 });
   if (!got) return NextResponse.json({ busy: true });
@@ -41,7 +43,8 @@ export async function GET(req: Request) {
     await admin.from("printavo_sync").update({ last_run_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", 1);
   } catch (e) {
     const msg = (e instanceof Error ? e.message : String(e)).slice(0, 500);
-    await admin.from("printavo_sync").update({ last_error: `${job}: ${msg}`, last_error_at: new Date().toISOString(), last_run_at: new Date().toISOString() }).eq("id", 1);
+    const pause = e instanceof PrintavoThrottled ? { pause_until: new Date(Date.now() + 5 * 60000).toISOString() } : {};
+    await admin.from("printavo_sync").update({ last_error: `${job}: ${msg}`, last_error_at: new Date().toISOString(), last_run_at: new Date().toISOString(), ...pause }).eq("id", 1);
     out = { error: msg };
   } finally {
     await admin.rpc("printavo_sync_release", { p_job: job });
@@ -67,7 +70,8 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     const pending = next?.[0] as { printavo_id: string; attempts: number } | undefined;
 
     // 2. keep noticing changes even during the big import: every 6th turn reads one page of the order list
-    const sweepDue = !!sync.sweep_cursor || !sync.sweep_done_at || Date.now() - new Date(sync.sweep_done_at).getTime() > 10 * 60000;
+    // the full pass over every order: during the import it keeps going alongside; once caught up, a new pass starts 30 minutes after the last
+    const sweepDue = !!sync.sweep_cursor || !sync.sweep_done_at || Date.now() - new Date(sync.sweep_done_at).getTime() > 30 * 60000;
     if (sweepDue && (!pending || turn % 6 === 0)) { await sweepPage(admin, sync, did); continue; }
 
     if (pending) { await importOne(admin, pending.printavo_id, pending.attempts, did); continue; }
@@ -151,8 +155,9 @@ async function importOne(admin: SupabaseClient, printavoId: string, attempts: nu
   } catch (e) {
     const msg = (e instanceof Error ? e.message : String(e)).slice(0, 500);
     const gone = e instanceof PrintavoError && /not found/i.test(msg);
+    if (e instanceof PrintavoThrottled) throw e; // not the order's fault: leave it as it was
     await admin.from("printavo_index").update({ status: gone ? "gone" : attempts + 1 >= 3 ? "error" : "pending", attempts: attempts + 1, error: msg, deep_at: new Date().toISOString() }).eq("printavo_id", printavoId);
-    if (/Printavo answered HTTP 401|403|isn't connected/i.test(msg)) throw e; // bad credentials: stop and show it
+    if (e instanceof PrintavoThrottled || /Printavo answered HTTP 401|403|isn't connected/i.test(msg)) throw e; // slow down / bad credentials: stop this run
   }
 }
 
@@ -165,7 +170,7 @@ async function customersPage(admin: SupabaseClient, sync: Sync, did: Record<stri
     for (const c of page.customers) {
       if (known.has(c.id)) continue;
       if (Date.now() > deadline) return; // finish this page next run
-      try { await importCustomer(admin, c.id); did.customers++; } catch { /* next time */ }
+      try { await importCustomer(admin, c.id); did.customers++; } catch (e) { if (e instanceof PrintavoThrottled) throw e; /* otherwise next time */ }
     }
   }
   sync.customers_cursor = page.next;

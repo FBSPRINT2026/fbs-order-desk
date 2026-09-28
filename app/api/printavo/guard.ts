@@ -2,6 +2,12 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { PrintavoError } from "@/lib/printavo";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+/** A staff member is importing by hand: the background sync steps aside for a bit so together we stay inside Printavo's limit. */
+export async function holdSync(seconds = 90) {
+  await createAdminClient().from("printavo_sync").update({ pause_until: new Date(Date.now() + seconds * 1000).toISOString() }).eq("id", 1);
+}
 
 /** Only shop staff can import; returns their database client (row security applies). */
 export async function staffOnly() {

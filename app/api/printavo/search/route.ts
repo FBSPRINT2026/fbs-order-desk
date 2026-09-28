@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { searchCustomers } from "@/lib/printavo";
-import { fail, staffOnly } from "../guard";
+import { fail, holdSync, staffOnly } from "../guard";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const g = await staffOnly();
   if ("error" in g) return g.error;
+  await holdSync();
   const q = (new URL(req.url).searchParams.get("q") || "").trim();
   if (q.length < 2) return NextResponse.json({ hits: [] });
   try {
