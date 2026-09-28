@@ -14,7 +14,7 @@ import type { PayFilter } from "@/lib/paySelect";
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
   /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string };
-export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string };
+export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
@@ -115,6 +115,10 @@ export default function AccountAreas({ mode, onPaySelect, statementHref, onEmail
   // "Pay this statement" arrives with ?pay=all: everything open is checked
   const [paySel, setPaySel] = useState<string[]>(() => (sp.get("pay") === "all" ? orders.filter((o) => o.type === "invoice" && !o.archived && o.balance > 0.004).map((o) => o.id) : []));
   const [stNote, setStNote] = useState("");
+  // payment history: its own search, 10 per page, one line per payment (open it to see the invoices it paid)
+  const [hq, setHq] = useState("");
+  const [hp, setHp] = useState(0);
+  const [openPay, setOpenPay] = useState<string | null>(null);
   const [payNow, setPayNow] = useState<PayItem[] | null>(null);
   const [payAmt, setPayAmt] = useState<number | undefined>(undefined);
   const PER = 6;
@@ -336,7 +340,6 @@ export default function AccountAreas({ mode, onPaySelect, statementHref, onEmail
     {tableHead(<><h2>Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders: number, name, garment, color, print details…")}
     {orderTable(invoices, "invoice")}</>;
   else if (area === "payments") {
-    const rows = payments.filter((p) => has(q, p.number, p.method, money(p.amount), p.paid_on));
     const open = liveInvoices.filter((o) => o.balance > 0.004 && has(q, o.number, o.nickname));
     const waitingQuotes = quotes.filter((o) => !o.archived && o.status === "quote_sent" && has(q, o.number, o.nickname));
     const canPay = mode === "portal" && !!payCfg;
@@ -405,14 +408,67 @@ export default function AccountAreas({ mode, onPaySelect, statementHref, onEmail
         </div>
       )}
       <div className="aa-card aa-tblcard">
-        <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Payment history</h3></div>
-        <table className="aa-tbl">
-          <thead><tr><th>Date</th><th>Order</th><th>Method</th><th className="r">Amount</th></tr></thead>
-          <tbody>
-            {rows.map((p) => <tr key={p.id} onClick={() => router.push(p.href || orderHref(p.order_id))}><td>{when(p.paid_on || p.created_at)}</td><td className="num"><Link href={p.href || orderHref(p.order_id)} onClick={(e) => e.stopPropagation()}>{p.number}</Link></td><td>{p.method || "—"}</td><td className="r num b">{money(p.amount)}</td></tr>)}
-            {!rows.length && <tr><td colSpan={4}><div className="aa-empty">{payments.length ? `No matches for “${q}”.` : "No payments yet."}</div></td></tr>}
-          </tbody>
-        </table>
+        {(() => {
+          // one line per payment: an online payment (same processor id) or a check applied to many invoices (same note) groups its invoices
+          const groups = new Map<string, { key: string; date: string; method: string; total: number; fee: number; lines: APayment[] }>();
+          for (const p of payments) {
+            const k = p.processor_id ? `px:${p.processor_id}` : p.note && /paid together|applied to \d+ invoice/i.test(p.note) ? `n:${p.paid_on}|${p.method}|${p.note}` : `p:${p.id}`;
+            const g = groups.get(k) || { key: k, date: p.paid_on || p.created_at, method: p.method, total: 0, fee: 0, lines: [] };
+            g.total = Math.round((g.total + p.amount) * 100) / 100; g.fee += +(p.fee || 0); g.lines.push(p);
+            groups.set(k, g);
+          }
+          const all = [...groups.values()].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+          const w = hq.trim().toLowerCase().replace(/[$,]/g, "").replace(/^#/, "");
+          const hit = (g: (typeof all)[number]) => !w || [g.total.toFixed(2), money(g.total), (g.total + g.fee).toFixed(2), when(g.date), g.method, ...g.lines.flatMap((l) => [String(l.number), l.amount.toFixed(2)])].some((x) => String(x).toLowerCase().replace(/[$,]/g, "").includes(w));
+          const list = all.filter(hit);
+          const PERH = 10, pages = Math.max(1, Math.ceil(list.length / PERH)), pg = Math.min(hp, pages - 1);
+          const shown = list.slice(pg * PERH, pg * PERH + PERH);
+          return (<>
+            <div className="aa-sec-h ph-h"><h3>Payment history</h3>
+              <label className="aa-search ph-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={15} /><input type="search" placeholder="Amount, order # or method" value={hq} onChange={(e) => { setHq(e.target.value); setHp(0); }} aria-label="Search payment history" /></label>
+            </div>
+            <table className="aa-tbl ph">
+              <thead><tr><th>Date</th><th>Paid for</th><th>Method</th><th className="r">Amount</th></tr></thead>
+              <tbody>
+                {shown.map((g) => {
+                  const many = g.lines.length > 1, open = openPay === g.key;
+                  return [
+                    <tr key={g.key} className={many ? "ph-g" + (open ? " open" : "") : ""} onClick={() => (many ? setOpenPay(open ? null : g.key) : router.push(g.lines[0].href || orderHref(g.lines[0].order_id)))}>
+                      <td>{when(g.date)}</td>
+                      <td>{many ? <button type="button" className="ph-toggle" aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpenPay(open ? null : g.key); }}>{g.lines.length} invoices <span aria-hidden="true">{open ? "▴" : "▾"}</span></button>
+                        : <Link className="num" href={g.lines[0].href || orderHref(g.lines[0].order_id)} onClick={(e) => e.stopPropagation()}>#{g.lines[0].number}</Link>}</td>
+                      <td>{g.method || "—"}{g.fee > 0.004 ? <small className="faint"> (+{money(g.fee)} card fee)</small> : null}</td>
+                      <td className="r num b">{money(g.total + g.fee)}</td>
+                    </tr>,
+                    many && open ? (
+                      <tr key={g.key + "-d"} className="ph-d"><td colSpan={4}>
+                        <div className="ph-lines">
+                          {g.lines.slice().sort((a, b) => a.number - b.number).map((l) => (
+                            <Link key={l.id} href={l.href || orderHref(l.order_id)} className="ph-line"><span className="num">#{l.number}</span><b className="num">{money(l.amount)}</b></Link>
+                          ))}
+                        </div>
+                        <div className="ph-sum">{g.lines.length} invoices · {money(g.total)}{g.fee > 0.004 ? ` + ${money(g.fee)} card fee` : ""}</div>
+                      </td></tr>
+                    ) : null,
+                  ];
+                })}
+                {!shown.length && <tr><td colSpan={4}><div className="aa-empty">{payments.length ? `No payments match “${hq}”.` : "No payments yet."}</div></td></tr>}
+              </tbody>
+            </table>
+            {pages > 1 && (
+              <div className="aa-pager ph-pager">
+                <span className="faint">Showing {pg * PERH + 1}–{Math.min(list.length, pg * PERH + PERH)} of {list.length} payments</span>
+                <span className="spacer" />
+                <button type="button" className="aa-pg" disabled={pg === 0} aria-label="Previous page" onClick={() => setHp(pg - 1)}>‹</button>
+                {Array.from({ length: pages }, (_, i) => i).filter((i) => pages <= 7 || i === 0 || i === pages - 1 || Math.abs(i - pg) <= 1).map((i, k, arr) => (
+                  <span key={i} className="row" style={{ gap: 4 }}>{k > 0 && i - arr[k - 1] > 1 && <span className="faint">…</span>}
+                    <button type="button" className={"aa-pg" + (i === pg ? " on" : "")} aria-current={i === pg ? "page" : undefined} onClick={() => setHp(i)}>{i + 1}</button></span>
+                ))}
+                <button type="button" className="aa-pg" disabled={pg >= pages - 1} aria-label="Next page" onClick={() => setHp(pg + 1)}>›</button>
+              </div>
+            )}
+          </>);
+        })()}
       </div>
       </div>
       {canPay && payCfg && (

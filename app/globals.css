@@ -1537,3 +1537,17 @@ a.as-ai{text-decoration:none}
 .aa-payside .qp-in .btn{flex:none}
 .aa-payside .qp-amt-say,.aa-payside .qp-res span{min-width:0;flex-basis:100%}
 .aa-payside .qp-chip{padding:4px 10px;font-size:12px}
+/* payment history */
+.ph-h{padding:14px 16px 8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.ph-search{max-width:260px;flex:1}
+.ph-g{cursor:pointer}
+.ph-g.open{background:var(--accent-soft)}
+.ph-toggle{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:3px 10px;font-weight:700;font-size:12.5px;color:var(--accent);cursor:pointer}
+.aa-tbl tr.ph-d{cursor:default;background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.aa-tbl tr.ph-d:hover{background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.ph-lines{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.ph-line{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:8px;background:var(--surface);border:1px solid var(--line-2);text-decoration:none;color:inherit;font-size:13px}
+.ph-line:hover{border-color:var(--accent)}
+.ph-line span{color:var(--accent);font-weight:700}
+.ph-sum{margin-top:8px;font-size:12.5px;color:var(--ink-2);font-weight:600}
+.ph-pager{padding:10px 16px}
