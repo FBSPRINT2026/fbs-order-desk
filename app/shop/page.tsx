@@ -1,5 +1,9 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { matches, orderSearchText, words } from "@/lib/search";
+import { ARCHIVE_LIST_COLS, type ArchiveSummary } from "@/lib/archive";
+import { fmtDateLong } from "@/lib/format";
 import { useRouter } from "next/navigation";
 import { STATUSES } from "@/lib/pricing";
 import { custLabel, daysUntil, money } from "@/lib/format";
@@ -37,12 +41,34 @@ export default function OrdersPage() {
       if (status && o.status !== status) return false;
       if (qq) {
         const c = customers[o.customer_id || ""];
-        const hay = [o.number, o.nickname, o.po_number, c?.company, c?.name, c?.email, summaryLine(o)].join(" ").toLowerCase();
-        if (!hay.includes(qq)) return false;
+        if (!matches(qq, o.number, o.nickname, o.po_number, c?.company, c?.name, c?.email, summaryLine(o), orderSearchText(o))) return false;
       }
       return true;
     });
   }, [orders, customers, type, status, q]);
+
+  // old archived (Printavo) orders only show up when searching
+  const [arch, setArch] = useState<ArchiveSummary[]>([]);
+  useEffect(() => {
+    const w = words(q);
+    if (!w.length || w.join("").length < 2) { setArch([]); return; }
+    const timer = setTimeout(async () => {
+      const sb = createClient();
+      const esc = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
+      let byText = sb.from("archived_orders").select(ARCHIVE_LIST_COLS).order("order_date", { ascending: false }).limit(100);
+      for (const x of w) byText = byText.ilike("search_staff", `%${esc(x)}%`);
+      // customer names count too: orders of customers whose name matches every word
+      const custIds = Object.values(customers).filter((c) => matches(q, c.company, c.name, c.email)).map((c) => c.id).slice(0, 50);
+      const [a, b] = await Promise.all([
+        byText,
+        custIds.length ? sb.from("archived_orders").select(ARCHIVE_LIST_COLS).in("customer_id", custIds).order("order_date", { ascending: false }).limit(100) : Promise.resolve({ data: [] }),
+      ]);
+      const seen = new Set<string>();
+      setArch([...((a.data || []) as ArchiveSummary[]), ...((b.data || []) as ArchiveSummary[])].filter((x) => !seen.has(x.id) && !!seen.add(x.id)));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [q, customers]);
+  const archShown = arch.filter((a) => !status && (type === "all" || (type === "quotes" && a.kind === "quote") || (type === "invoices" && a.kind === "invoice")));
 
   const chips: [F, string][] = [["all", "All"], ["quotes", "Quotes"], ["invoices", "Invoices"], ["open", "In progress"], ["unpaid", "Unpaid"], ["messages", `Messages${stats.unread ? ` (${stats.unread})` : ""}`]];
 
@@ -70,7 +96,7 @@ export default function OrdersPage() {
           <option value="">Any status</option>
           {STATUSES.map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
         </select>
-        <input type="search" placeholder="Search #, customer, garment…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input type="search" placeholder="Search #, customer, garment, color, print details… (includes archived orders)" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <div className="tbl-wrap">
         <table className="tbl">
@@ -93,9 +119,24 @@ export default function OrdersPage() {
                   <td className="r"><span className={"bal" + (paid ? " paid" : "")}>{paid ? "Paid" : money(o.balance)}</span></td>
                 </tr>
               );
-            }) : (
+            }) : !archShown.length ? (
               <tr><td colSpan={8}><div className="empty">{orders.length ? "No orders match these filters." : "No orders yet. Start with + New quote."}</div></td></tr>
-            )}
+            ) : null}
+            {!loading && archShown.map((a) => {
+              const c = customers[a.customer_id];
+              return (
+                <tr key={a.id} tabIndex={0} onClick={() => router.push(`/shop/archive/${a.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/archive/${a.id}`)}>
+                  <td><span className="ordno">{a.visual_id}</span> <span className={"tag " + (a.kind === "quote" ? "q" : "i")}>{a.kind === "quote" ? "Quote" : "Inv"}</span></td>
+                  <td><div>{a.nickname || "Untitled job"}<span className="aa-arch">Archived</span></div><div className="sub">{a.order_date ? fmtDateLong(a.order_date) : ""}</div></td>
+                  <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
+                  <td><span className="pv-dot" style={{ ["--sc" as string]: a.status_color || "#888" }}>{a.status_name}</span></td>
+                  <td>{a.due_date ? fmtDateLong(a.due_date) : "—"}</td>
+                  <td className="r">{a.qty}</td>
+                  <td className="r">{money(a.total)}</td>
+                  <td className="r"><span className={"bal" + (+a.balance <= 0.004 ? " paid" : "")}>{+a.balance <= 0.004 ? "Paid" : money(a.balance)}</span></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

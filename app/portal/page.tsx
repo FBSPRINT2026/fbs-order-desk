@@ -6,6 +6,7 @@ import StartPanel from "@/components/StartPanel";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
 import { customerGeneralMessage, starMyDesign, starMyMockup } from "@/app/portal/actions";
 import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
+import { orderSearchText } from "@/lib/search";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 
 export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string }> }) {
@@ -23,7 +24,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   // past orders from before the portal (read with the server key: only the summary and payments leave the server)
   let archived: (ArchiveSummary & { transactions: PvTransaction[] | null })[] = [];
   if (ctx.customerIds.length) {
-    const { data: ar } = await admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, transactions:data->transactions`).in("customer_id", ctx.customerIds).order("order_date", { ascending: false });
+    const { data: ar } = await admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_text, transactions:data->transactions`).in("customer_id", ctx.customerIds).order("order_date", { ascending: false });
     archived = (ar || []) as never;
     const { data } = await ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).neq("status", "quote").order("number", { ascending: false });
     orders = (data || []) as Order[];
@@ -55,7 +56,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     messages = ((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) }));
   }
   const bal = (o: Order) => Math.round(((+o.total || 0) - (paid[o.id] || 0)) * 100) / 100;
-  const aOrders: AOrder[] = orders.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type,
+  const aOrders: AOrder[] = orders.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type, search: orderSearchText(o),
     pay_due: o.type === "invoice" ? payDueDate(o, ctx.customers.find((c) => c.id === o.customer_id)?.payment_terms) : null }));
   const archHref = (id: string) => `/portal/archive/${id}${qs}`;
   aOrders.push(...archived.map((a) => archiveAsOrder(a, archHref(a.id))));

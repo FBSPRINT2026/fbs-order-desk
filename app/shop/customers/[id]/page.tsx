@@ -16,6 +16,7 @@ import { PAY_TERMS, payDueDate, type Design, type PayTerms } from "@/lib/pricing
 import Timeline from "@/components/Timeline";
 import { splitCustomer } from "@/lib/crm/private";
 import { fmtStamp } from "@/lib/format";
+import { orderSearchText } from "@/lib/search";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -43,7 +44,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   // old orders brought over from Printavo: listed with the rest, marked "Archived"
   const [archive, setArchive] = useState<(ArchiveSummary & { transactions: PvTransaction[] | null })[]>([]);
   useEffect(() => {
-    createClient().from("archived_orders").select(`${ARCHIVE_LIST_COLS}, transactions:data->transactions`)
+    createClient().from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_staff, transactions:data->transactions`)
       .eq("customer_id", id).order("order_date", { ascending: false }).then(({ data }) => setArchive((data || []) as never));
   }, [id]);
   const orderIds = orders.filter((o) => o.customer_id === id).map((o) => o.id).join(",");
@@ -148,7 +149,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           if (o.type === "invoice" && o.balance > 0.004) out.push({ kind: "pay", order_id: o.id, number: o.number, date: money(o.balance) });
           if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) out.push({ kind: "receive", order_id: o.id, number: o.number, date: d(o.due_date) || "—" });
           return out;
-        })} orders={[...os.map((o) => ({ ...o, nickname: o.nickname || "", price_type: o.price_type, pay_due: o.type === "invoice" ? payDueDate(o, c.payment_terms) : null })),
+        })} orders={[...os.map((o) => ({ ...o, search: orderSearchText(o), nickname: o.nickname || "", price_type: o.price_type, pay_due: o.type === "invoice" ? payDueDate(o, c.payment_terms) : null })),
           ...archive.map((a) => archiveAsOrder(a, `/shop/archive/${a.id}`))]} terms={PAY_TERMS[c.payment_terms || "receipt"]} payments={[...payments, ...archive.flatMap((a) => archivePayments(a, `/shop/archive/${a.id}`))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at))} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
         hrefBase="/shop/orders/"
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}

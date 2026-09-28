@@ -84,13 +84,14 @@ export function forCustomer(o: PvOrder): PvOrder {
 
 /** The summary columns lists need (not the whole record). */
 export const ARCHIVE_LIST_COLS = "id, kind, visual_id, customer_id, nickname, status_name, status_color, order_date, due_date, total, paid, balance, qty";
-export type ArchiveSummary = Pick<ArchivedRow, "id" | "kind" | "visual_id" | "customer_id" | "nickname" | "status_name" | "status_color" | "order_date" | "due_date" | "total" | "paid" | "balance" | "qty">;
+export type ArchiveSummary = Pick<ArchivedRow, "id" | "kind" | "visual_id" | "customer_id" | "nickname" | "status_name" | "status_color" | "order_date" | "due_date" | "total" | "paid" | "balance" | "qty"> & {
+  /** searchable text (select `search:search_text` for customers, `search:search_staff` for the shop) */ search?: string | null };
 
 const METHOD_NAMES: Record<string, string> = { BANK_TRANSFER: "Bank transfer", CASH: "Cash", CHECK: "Check", CREDIT_CARD: "Credit card", ECHECK: "eCheck", OTHER: "Other" };
 /** An archived order as a row in the customer's order lists (same shape as new orders, marked archived). */
 export function archiveAsOrder(r: ArchiveSummary, href: string) {
   return { id: r.id, number: +r.visual_id || 0, nickname: r.nickname || "", status: "archived", type: r.kind, total: +r.total || 0, paid: +r.paid || 0, balance: +r.balance || 0,
-    due_date: r.due_date, created_at: r.order_date || "", qty: r.qty || 0, pay_due: null, archived: true, href, statusLabel: r.status_name, statusColor: r.status_color };
+    due_date: r.due_date, created_at: r.order_date || "", qty: r.qty || 0, pay_due: null, archived: true, href, statusLabel: r.status_name, statusColor: r.status_color, search: r.search || "" };
 }
 /** An archived order's payments as rows in the payment history. */
 export function archivePayments(r: ArchiveSummary & { transactions?: PvTransaction[] | null }, href: string) {

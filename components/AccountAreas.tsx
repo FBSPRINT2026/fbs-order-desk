@@ -6,9 +6,11 @@ import { ST, type Design } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import { designMatches } from "@/components/DesignSearch";
 import PayPanel, { type PayItem } from "@/components/PayPanel";
+import { matches } from "@/lib/search";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
-  /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string };
+  /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
+  /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
@@ -18,7 +20,7 @@ export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "art
 
 const IN_WORK = ["approved", "art", "blanks", "production", "ready"];
 const WAITING = ["approved", "art", "blanks"];
-const has = (q: string, ...xs: (string | number | null | undefined)[]) => { const t = q.trim().toLowerCase().replace(/^#/, ""); return !t || xs.some((x) => String(x ?? "").toLowerCase().includes(t)); };
+const has = matches;
 const when = (d?: string | null) => (d ? fmtDateLong(d.slice(0, 10)) : "");
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -137,7 +139,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
     <label className="aa-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={ph} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
   );
   const orderTable = (list: AOrder[], cols: "quote" | "work" | "invoice") => {
-    const rows = list.filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, ST[o.status]?.portal, o.statusLabel, o.archived ? "archived" : ""));
+    const rows = list.filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, ST[o.status]?.portal, o.statusLabel, o.archived ? "archived" : "", o.search));
     return (
       <div className="aa-card aa-tblcard">
         <table className="aa-tbl">
@@ -188,7 +190,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
               <button type="button" className={homeTab === "quotes" ? "on" : ""} onClick={() => setHomeTab("quotes")}>Quotes</button>
             </div>
             <div className="aa-htab-body">
-              {tableHead(<span className="faint">{homeTab === "orders" ? `${invoices.length} order${invoices.length === 1 ? "" : "s"}` : `${quotes.length} quote${quotes.length === 1 ? "" : "s"}`}</span>, homeTab === "orders" ? "Search orders" : "Search quotes")}
+              {tableHead(<span className="faint">{homeTab === "orders" ? `${invoices.length} order${invoices.length === 1 ? "" : "s"}` : `${quotes.length} quote${quotes.length === 1 ? "" : "s"}`}</span>, homeTab === "orders" ? "Search orders: number, garment, color, print…" : "Search quotes")}
               {homeTab === "orders" ? orderTable(invoices, "invoice") : orderTable(quotes, "quote")}
             </div>
           </div>
@@ -215,9 +217,9 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
         </div>
       </>
     );
-  } else if (area === "quotes") body = <>{tableHead(<h2>Quotes</h2>, "Search quotes by number, name or status")}{orderTable(quotes, "quote")}</>;
+  } else if (area === "quotes") body = <>{tableHead(<h2>Quotes</h2>, "Search quotes: number, name, garment, color…")}{orderTable(quotes, "quote")}</>;
   else if (area === "orders" || area === "invoices") body = <>
-    {tableHead(<><h2>Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders by number, name or status")}
+    {tableHead(<><h2>Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders: number, name, garment, color, print details…")}
     {orderTable(invoices, "invoice")}</>;
   else if (area === "payments") {
     const rows = payments.filter((p) => has(q, p.number, p.method, money(p.amount), p.paid_on));
