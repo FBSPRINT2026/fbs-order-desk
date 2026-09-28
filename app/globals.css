@@ -2212,3 +2212,20 @@ a.as-ai{text-decoration:none}
 .side .nav-foot{margin-top:auto}
 .nav-h{font-family:inherit;font-stretch:normal;font-size:11px;font-weight:800;letter-spacing:.12em}
 .nav-add-btns{flex-wrap:wrap}
+
+/* ---------- FBS brand bars: the blue / salmon / orange under the logo, used as a signature across the site ---------- */
+:root{--fbs-blue:#0e9bd8;--fbs-salmon:#f26660;--fbs-orange:#fcb122;
+  --fbs-bars:linear-gradient(90deg,var(--fbs-blue) 0 32%,transparent 32% 34%,var(--fbs-salmon) 34% 66%,transparent 66% 68%,var(--fbs-orange) 68% 100%);
+  --fbs-strip:linear-gradient(90deg,var(--fbs-blue) 0 33.33%,var(--fbs-salmon) 33.33% 66.66%,var(--fbs-orange) 66.66% 100%)}
+/* under every page title */
+.page-head h1::after{content:"";display:block;width:84px;height:5px;margin-top:9px;background:var(--fbs-bars)}
+/* across the top of pop-ups and the customer portal header */
+.pp-sheet{border-top:0;position:relative}
+.pp-sheet::before{content:"";display:block;height:4px;background:var(--fbs-strip)}
+.p-top::after{content:"";display:block;height:3px;background:var(--fbs-strip)}
+/* section headings inside panels */
+.panel-h h2{position:relative;padding-left:12px}
+.panel-h h2::before{content:"";position:absolute;left:0;top:.18em;bottom:.18em;width:4px;border-radius:2px;background:linear-gradient(180deg,var(--fbs-blue) 0 33.33%,var(--fbs-salmon) 33.33% 66.66%,var(--fbs-orange) 66.66% 100%)}
+/* the thin line under the menu logo */
+.brand.brand-logo{border-bottom:0;position:relative}
+.side-hello{position:relative;padding-top:2px}
