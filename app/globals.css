@@ -2319,3 +2319,13 @@ a.as-ai{text-decoration:none}
 .p-foot-logo{height:26px;width:auto;opacity:.9}
 .portal .p-top-in{max-width:1120px}
 .p-brand-t{white-space:nowrap}
+
+/* page titles: the small label moves under the title (below the color bar) as a quiet subtitle */
+.page-head > div:first-child{display:flex;flex-direction:column;align-items:flex-start}
+.page-head > div:first-child > .eyebrow{order:2;margin-top:8px;font-family:inherit;font-size:13px;letter-spacing:0;text-transform:none;color:var(--ink-3)}
+/* portal tabs: the chosen tab in a solid logo color (blue, salmon, orange in turn) */
+.portal .aa-tab.on{box-shadow:none}
+.portal .aa-tab.on:nth-child(3n+1){background:var(--fbs-blue);color:#fff}
+.portal .aa-tab.on:nth-child(3n+2){background:var(--fbs-salmon);color:#fff}
+.portal .aa-tab.on:nth-child(3n){background:var(--fbs-orange);color:#1f1605}
+.portal .aa-tab.on:nth-child(3n) .aa-n{background:rgba(0,0,0,.12);color:#1f1605}
