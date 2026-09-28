@@ -6,7 +6,7 @@ import type { PendingShipment } from "@/lib/manifest";
 
 const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "");
 const supName = (s: string) => (s === "sanmar" ? "SanMar" : s === "ss" ? "S&S Activewear" : s);
-const orderLabel = (o: PendingShipment["orders"][number]) => `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}${o.po ? ` · PO ${o.po}` : ""}`;
+const orderLabel = (o: PendingShipment["orders"][number]) => `${o.printavo ? "Printavo " : ""}#${o.number}${o.nickname ? ` ${o.nickname}` : ""}${o.po ? ` · PO ${o.po}` : ""}`;
 /** every line id behind a row (a row can cover several boxes) */
 const idsOf = (rowId: string) => rowId.split(",").filter(Boolean);
 

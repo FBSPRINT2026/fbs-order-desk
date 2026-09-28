@@ -8,7 +8,7 @@ import { goodsNeedInfo, needsGoods, supplierLabel, TRACK, trackingUrl, type Good
 import { shopGoods } from "@/app/shop/goods-actions";
 import CustomerGoodsBoard from "@/components/CustomerGoodsBoard";
 import { ResolveList } from "@/components/IncomingShipments";
-import type { PendingShipment } from "@/lib/manifest";
+import type { PendingShipment, PrintavoGoods } from "@/lib/manifest";
 import { blanksPlan, blanksReceived, orderBlanksSS, recordBlanks, type BlankLine } from "@/app/shop/receiving-actions";
 
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
@@ -38,10 +38,11 @@ export default function GoodsReceiving() {
   const [note, setNote] = useState("");
   const [view, setViewState] = useState<View>("today");
   const [pending, setPending] = useState<PendingShipment[] | null>(null);
+  const [pvGoods, setPvGoods] = useState<PrintavoGoods[]>([]);
   const [upBusy, setUpBusy] = useState(false), [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "customer" || v === "resolve") setViewState(v); }, []);
   const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "today") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
-  const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); }, []);
+  const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); }, []);
   useEffect(() => { loadPending(); }, [loadPending]);
   async function upload(f: File) {
     setUpBusy(true); setNote("");
@@ -113,8 +114,20 @@ export default function GoodsReceiving() {
   }, [data]);
 
   if (!data || !v) return <div className="empty">Loading…</div>;
-  const u = v.update;
+  const u0 = v.update;
   const unlinked = (pending || []).filter((g) => !g.us);
+  // goods tied to Printavo orders (until go-live): into today's lists too
+  const pvPkgs: Pkg[] = pvGoods.filter((g) => !g.delivered).flatMap((g) => g.tracking.map((t): Pkg => ({ key: `pv${g.archivedId}${g.supplier_order}${t.tracking}`, kind: "goods", orderId: g.archivedId, number: g.number, who: g.customer, label: `Printavo order · ${g.supplier === "sanmar" ? "SanMar" : "S&S"} ${g.supplier_order} · ${g.pcs} pcs`, tracking: t.tracking, carrier: t.carrier, status: t.status, detail: t.detail, at: t.eta, delivered: t.delivered, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, href: `/shop/archive/${g.archivedId}` })));
+  const pvHere = pvGoods.filter((g) => g.delivered);
+  const tm = addDays(today(), 1);
+  const u = {
+    ...u0,
+    today: [...u0.today, ...pvPkgs.filter((p) => p.at && p.at.slice(0, 10) === today())],
+    tomorrow: [...u0.tomorrow, ...pvPkgs.filter((p) => p.at && p.at.slice(0, 10) === tm)],
+    problems: [...u0.problems, ...pvPkgs.filter((p) => ["failure", "return_to_sender", "error", "available_for_pickup"].includes(p.status))],
+    late: [...u0.late, ...pvPkgs.filter((p) => p.at && p.need && p.at.slice(0, 10) > p.need)],
+    count: [...u0.count, ...pvHere.map((g) => ({ n: g.number, id: g.archivedId, what: "Customer goods (Printavo order)", who: g.customer }))],
+  };
   const unlinkedHere = unlinked.filter((g) => g.tracking.length > 0 && g.tracking.every((t) => t.delivered));
   const pkgLine = (p: Pkg) => (
     <li key={p.key}>
@@ -166,7 +179,7 @@ export default function GoodsReceiving() {
           {u.problems.length > 0 && <div><h4 className="bad">Delayed or a delivery problem</h4><ul>{u.problems.map(pkgLine)}</ul></div>}
           {u.today.length > 0 && <div><h4>Arriving today</h4><ul>{u.today.map(pkgLine)}</ul></div>}
           {u.tomorrow.length > 0 && <div><h4>Arriving tomorrow</h4><ul>{u.tomorrow.map(pkgLine)}</ul></div>}
-          {u.count.length > 0 && <div><h4>Delivered: count these in</h4><ul>{u.count.map((c) => <li key={c.what + c.id}><Link href={c.what === "Our blanks" ? `/shop/orders/${c.id}` : "/shop/receiving?view=customer"} onClick={(e) => { if (c.what !== "Our blanks") { e.preventDefault(); setView("customer"); } }}>#{c.n}</Link> <b>{c.who}</b> <span className="faint">· {c.what}</span></li>)}</ul></div>}
+          {u.count.length > 0 && <div><h4>Delivered: count these in</h4><ul>{u.count.map((c) => <li key={c.what + c.id}><Link href={c.what === "Our blanks" ? `/shop/orders/${c.id}` : c.what.includes("Printavo") ? `/shop/archive/${c.id}` : "/shop/receiving?view=customer"} onClick={(e) => { if (c.what === "Customer goods") { e.preventDefault(); setView("customer"); } }}>#{c.n}</Link> <b>{c.who}</b> <span className="faint">· {c.what}</span></li>)}</ul></div>}
           {unlinkedHere.length > 0 && <div><h4 className="bad">Arrived, but not linked to an order</h4><ul>{unlinkedHere.map((g) => <li key={g.key}><button type="button" className="linkbtn" onClick={() => setView("resolve")}>{g.customer?.name || g.customer_name}</button> <span className="faint">· PO {g.customer_po || "none"} · {g.pcs} pcs · {g.styles}</span></li>)}</ul></div>}
           {!u.late.length && !u.problems.length && !u.today.length && !u.tomorrow.length && !u.count.length && !unlinkedHere.length && <div className="faint" style={{ fontSize: 13.5 }}>Nothing urgent coming in today.</div>}
         </div>
@@ -207,6 +220,15 @@ export default function GoodsReceiving() {
             <button type="button" className={unlinked.length ? "warn" : ""} onClick={() => setView("resolve")}><span>Not linked yet</span><b>{unlinked.length}</b></button>
           </div>
           <div className="rv-pane-b">
+            {pvGoods.map((g) => {
+              const late = !g.delivered && g.eta && g.due_date && g.eta.slice(0, 10) > bizBefore(g.due_date, data.lead);
+              return (
+                <Link key={g.archivedId + g.supplier_order} href={`/shop/archive/${g.archivedId}`} className={"rv-card link" + (late ? " late" : "")}>
+                  <div className="rv-card-t"><span className="num">#{g.number}</span><b>{g.customer}</b><span className="rv-st">Printavo</span><span className="spacer" /><span className="rv-due">in hands {day(g.due_date)}</span></div>
+                  <div className="faint" style={{ fontSize: 12.5 }}>{g.supplier === "sanmar" ? "SanMar" : "S&S"} order {g.supplier_order} · {g.boxes} box{g.boxes === 1 ? "" : "es"} · {g.pcs} pcs · {g.delivered ? "delivered, count in" : g.tracking.map((t) => TRACK[t.status] || t.status).filter(Boolean)[0] || "shipped"}{!g.delivered && g.eta ? ` · arrives ${day(g.eta)}` : ""}{late ? <b className="bad"> · after it&apos;s needed</b> : null}</div>
+                </Link>
+              );
+            })}
             {data.goods.length ? data.goods.filter((it) => it.goods.status !== "received").map((it) => {
               const o = v.byId.get(it.order.id);
               const next = it.shipments.filter((s) => s.track_status !== "delivered").map((s) => s.est_delivery || s.eta).filter(Boolean).sort().pop() as string | undefined;
@@ -220,7 +242,7 @@ export default function GoodsReceiving() {
                   </div>
                 </Link>
               );
-            }) : <div className="gb-empty">No customer supplied goods on open jobs.</div>}
+            }) : !pvGoods.length ? <div className="gb-empty">No customer supplied goods on open jobs.</div> : null}
           </div>
         </section>
       </div>

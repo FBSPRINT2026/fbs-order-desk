@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readXlsx } from "@/lib/xlsx";
-import { applyGroup, importManifest, linkByHand, parseManifest, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
+import { applyGroup, importManifest, linkByHand, parseManifest, printavoGoods, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,9 @@ async function staff() {
 /** Manifest shipments waiting to be matched to an order. */
 export async function GET() {
   if (!(await staff())) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  return NextResponse.json({ groups: await unmatchedGroups(createAdminClient()) });
+  const admin = createAdminClient();
+  const [groups, printavo] = await Promise.all([unmatchedGroups(admin), printavoGoods(admin)]);
+  return NextResponse.json({ groups, printavo });
 }
 
 /**

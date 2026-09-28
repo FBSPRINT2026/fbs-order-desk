@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { ArchivedRow } from "@/lib/archive";
 import ArchivedOrderView from "@/components/ArchivedOrderView";
+import { TRACK, trackingUrl } from "@/lib/goods";
 
 /** An archived Printavo invoice or quote (read-only). Artwork shows from our storage copies, or from Printavo until copied. */
 export default function ArchivedOrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -35,9 +36,46 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <Link className="back" href={`/shop/customers/${row.customer_id}?area=orders`}>← {company || "Customer"} · Orders</Link>
+      <ArchivedGoods id={row.id} groups={(row.data as unknown as { groups?: PvGroup[] }).groups || []} />
       <div style={{ marginTop: 10 }}>
         <ArchivedOrderView o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} />
       </div>
     </>
+  );
+}
+
+type PvGroup = { lines?: { itemNumber?: string; color?: string; sizes?: Record<string, number> }[] };
+type GLine = { id: string; supplier: string; supplier_order: string; style: string; color: string; size: string; qty_shipped: number; tracking: string; method: string; track_status: string; track_detail: string; est_delivery: string | null; ship_date: string | null; match_how: string };
+const n = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "");
+const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "");
+
+/** Customer goods tied to this Printavo order from supplier manifests: what shipped vs what the order lists, with tracking. */
+function ArchivedGoods({ id, groups }: { id: string; groups: PvGroup[] }) {
+  const [lines, setLines] = useState<GLine[] | null>(null);
+  useEffect(() => { createClient().from("supplier_manifest_lines").select("*").eq("archived_order_id", id).eq("kind", "goods").then(({ data }) => setLines((data || []) as GLine[])); }, [id]);
+  if (!lines?.length) return null;
+  const sz = (z: string) => z.replace(/^size_/, "").toUpperCase().replace(/^XXL$/, "2XL").replace(/^XXXL$/, "3XL");
+  const want = groups.flatMap((g) => (g.lines || []).flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +q > 0).map(([z, q]) => ({ style: l.itemNumber || "", color: l.color || "", size: sz(z), qty: +q }))));
+  const got = (w: { style: string; color: string; size: string }) => lines.filter((l) => (n(l.style) === n(w.style) || n(w.style).endsWith(n(l.style))) && (n(l.color) === n(w.color) || n(w.color).includes(n(l.color)) || n(l.color).includes(n(w.color))) && l.size.toUpperCase() === w.size).reduce((a, l) => a + l.qty_shipped, 0);
+  const trk = [...new Map(lines.map((l) => [l.tracking || l.supplier_order, l])).values()];
+  return (
+    <section className="panel" style={{ marginTop: 10 }}>
+      <div className="panel-h"><b>Customer goods on the way</b><span className="faint" style={{ fontSize: 12.5 }}>from {[...new Set(lines.map((l) => (l.supplier === "sanmar" ? "SanMar" : "S&S")))].join(" + ")} manifests · {lines.reduce((a, l) => a + l.qty_shipped, 0)} pcs</span></div>
+      <div className="panel-b stack" style={{ gap: 8 }}>
+        <ul className="rv-ships">{trk.map((l) => (
+          <li key={l.id}>{l.tracking ? <a href={trackingUrl("", l.tracking)} target="_blank" rel="noreferrer">{l.tracking}</a> : <span>{l.method || "local truck"}</span>}
+            {l.track_status && <span className="rv-st"> {TRACK[l.track_status] || l.track_status}</span>}{l.est_delivery && l.track_status !== "delivered" ? <span className="faint"> · arrives {day(l.est_delivery)}</span> : null}{l.track_detail ? <span className="faint"> · {l.track_detail}</span> : null}</li>
+        ))}</ul>
+        {want.length > 0 && (
+          <div style={{ overflowX: "auto" }}><table className="rv-tbl">
+            <thead><tr><th>Garment</th><th>Color</th><th>Size</th><th className="r">On the order</th><th className="r">Shipped</th></tr></thead>
+            <tbody>{want.map((w, i) => { const g = got(w); return (
+              <tr key={i} className={g < w.qty ? "low" : ""}><td>{w.style}</td><td>{w.color}</td><td>{w.size}</td><td className="r">{w.qty}</td><td className="r">{g}{g < w.qty ? <span className="bad"> ({w.qty - g} not shipped)</span> : null}</td></tr>
+            ); })}</tbody>
+          </table></div>
+        )}
+        <small className="faint">Linked {lines[0].match_how ? `(${lines[0].match_how})` : ""}. This order is still worked in Printavo; nothing is sent back to Printavo.</small>
+      </div>
+    </section>
   );
 }
