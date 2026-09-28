@@ -6,13 +6,13 @@ import { portalAttachUrl, portalMarkRead, portalMessages, portalSend } from "@/a
 import type { HubMsg, HubOrder } from "@/lib/messages";
 
 /** The customer's side of the Messages hub. In a staff preview (`as`) it's read-only. */
-export default function PortalMessages({ initial, orders, shopName, as, canAct, start, height }: { initial: HubMsg[]; orders: HubOrder[]; shopName: string; as?: string; canAct: boolean; start?: string | null; height?: number }) {
+export default function PortalMessages({ initial, orders, projects, only, shopName, as, canAct, start, height }: { initial: HubMsg[]; orders: HubOrder[]; projects?: { id: string; name: string; href?: string }[]; only?: string; shopName: string; as?: string; canAct: boolean; start?: string | null; height?: number }) {
   const load = useCallback(async () => { const r = await portalMessages(as); return r.ok ? r.messages || [] : null; }, [as]);
   return (
-    <MessageHub mode="portal" initial={initial} orders={orders} shopName={shopName} canAct={canAct} start={start} height={height}
+    <MessageHub mode="portal" initial={initial} orders={orders} projects={projects} only={only} shopName={shopName} canAct={canAct} start={start} height={height}
       load={load}
-      send={(orderId, body, files, topic) => portalSend(orderId, body, files, topic)}
-      markRead={(orderId, topic) => portalMarkRead(orderId, topic)}
+      send={(orderId, body, files, topic, projectId) => portalSend(orderId, body, files, topic, projectId)}
+      markRead={(orderId, topic, projectId) => portalMarkRead(orderId, topic, projectId)}
       upload={async (f) => {
         const t = await portalAttachUrl(f.name);
         if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Upload failed");

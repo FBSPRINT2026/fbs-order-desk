@@ -11,6 +11,10 @@ import { withFiles, type HubMsg } from "@/lib/messages";
 import PortalMessages from "@/components/PortalMessages";
 import PortalGoods from "@/components/PortalGoods";
 import PortalAssistant from "@/components/PortalAssistant";
+import PortalProjects from "@/components/PortalProjects";
+import ProgramOrder from "@/components/ProgramOrder";
+import { projectSummaries } from "@/lib/projectsServer";
+import type { Program, ProgramItem } from "@/lib/programs";
 import { aiPaySelect } from "@/app/portal/pay-select";
 import { needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
@@ -88,6 +92,23 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const goodsItems = wholesale ? await loadGoodsItems(admin, orders.filter(needsGoods) as never, "customer", (id) => `/portal/orders/${id}${qs}`) : [];
   const goodsOpen = goodsItems.filter((g) => g.goods.status !== "received");
   const goodsHref = `/portal${qs ? qs + "&" : "?"}area=receive`;
+  // projects and program pricing
+  const projects = await projectSummaries(admin, ctx.customerIds, true);
+  const { data: progs } = ctx.customerIds.length ? await admin.from("programs").select("*").in("customer_id", ctx.customerIds).eq("active", true).limit(1) : { data: [] };
+  const program = ((progs || [])[0] || null) as Program | null;
+  const { data: pits } = program ? await admin.from("program_items").select("*").eq("program_id", program.id).eq("active", true).order("position") : { data: [] };
+  const programItems = (pits || []) as ProgramItem[];
+  const programImages: Record<string, string> = {};
+  {
+    const withImg = programItems.filter((i) => i.image_path);
+    const designIds = programItems.filter((i) => !i.image_path && i.design_id).map((i) => i.design_id as string);
+    const { data: ds } = designIds.length ? await admin.from("designs").select("id, preview_path").in("id", designIds) : { data: [] };
+    const dPath = new Map((ds || []).map((d) => [d.id, d.preview_path]));
+    const paths = [...withImg.map((i) => i.image_path), ...programItems.filter((i) => !i.image_path && i.design_id && dPath.get(i.design_id)).map((i) => dPath.get(i.design_id as string) as string)];
+    const { data: sg } = paths.length ? await admin.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
+    const url = new Map(paths.map((p, i) => [p, sg?.[i]?.signedUrl || ""]));
+    programItems.forEach((i) => { const p = i.image_path || (i.design_id ? dPath.get(i.design_id) : ""); if (p && url.get(p)) programImages[i.id] = url.get(p)!; });
+  }
   goodsItems.forEach((g) => {
     if (g.goods.status === "waiting") attention.push({ kind: "receive", order_id: g.order.id, number: g.order.number, date: "", label: "Send us your goods", href: goodsHref });
     if (g.goods.status === "issue") attention.push({ kind: "receive", order_id: g.order.id, number: g.order.number, date: "", label: "Issue with your goods", href: goodsHref });
@@ -110,13 +131,16 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             <p className="muted" style={{ marginBottom: 0 }}>If you were expecting a quote, it may be under a different email address. Contact {ctx.settings.shop.name}{ctx.settings.shop.email ? ` at ${ctx.settings.shop.email}` : ""}{ctx.settings.shop.phone ? ` or ${ctx.settings.shop.phone}` : ""}.</p>
           </div></div>
         ) : (
-          <AccountAreas mode="portal" assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}
+          <AccountAreas mode="portal"
+            projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
+            programPanel={<ProgramOrder program={program} items={programItems} images={programImages} projects={projects.filter((p) => p.status !== "closed").map((p) => ({ id: p.id, name: p.name }))} canAct={!ctx.preview} qs={qs} />} hasProgram={!!program && programItems.length > 0}
+            assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}
             goodsPanel={wholesale ? <PortalGoods items={goodsItems} canAct={!ctx.preview} qs={qs} empty="No open jobs need goods from you right now." /> : undefined}
             goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
             goodsCount={goodsOpen.length}
             onPaySelect={aiPaySelect}
             statementHref={`/portal/statement${qs}`}
-            messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
+            messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} projects={projects.map((p) => ({ id: p.id, name: p.name, href: `/portal/projects/${p.id}${qs}` }))} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
             orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
             onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup}

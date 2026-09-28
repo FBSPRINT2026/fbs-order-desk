@@ -2,13 +2,13 @@
 export type Attachment = { path: string; name: string; mime: string; size: number };
 export type HubFile = { name: string; mime: string; size: number; url: string };
 export type HubMsg = {
-  id: string; order_id: string | null; /** "goods": about the customer supplied goods on the order */ topic: string; author_type: "staff" | "customer"; author_name: string; body: string;
+  id: string; order_id: string | null; /** the project this conversation is about */ project_id: string | null; /** "goods": about the customer supplied goods on the order */ topic: string; author_type: "staff" | "customer"; author_name: string; body: string;
   created_at: string; read_at: string | null; files: HubFile[];
 };
 export type HubOrder = { id: string; number: number; nickname: string; status?: string; href: string };
 export const MAX_ATTACH = 25 * 1024 * 1024;
 
-type Row = { id: string; order_id: string | null; topic?: string | null; author_type: string; author_name: string | null; body: string; created_at: string; read_at: string | null; attachments?: Attachment[] | null };
+type Row = { id: string; order_id: string | null; project_id?: string | null; topic?: string | null; author_type: string; author_name: string | null; body: string; created_at: string; read_at: string | null; attachments?: Attachment[] | null };
 
 /** Adds signed links (valid 1 hour) to each message's files. `sign` is a storage client allowed to read them. */
 export async function withFiles(rows: Row[], sign: (paths: string[]) => Promise<(string | null)[]>): Promise<HubMsg[]> {
@@ -16,7 +16,7 @@ export async function withFiles(rows: Row[], sign: (paths: string[]) => Promise<
   const urls = paths.length ? await sign(paths) : [];
   const map = new Map(paths.map((p, i) => [p, urls[i] || ""]));
   return rows.map((r) => ({
-    id: r.id, order_id: r.order_id, topic: r.order_id ? r.topic || "" : "", author_type: r.author_type === "staff" ? "staff" : "customer", author_name: r.author_name || "", body: r.body || "",
+    id: r.id, order_id: r.order_id, project_id: r.order_id ? null : r.project_id || null, topic: r.order_id ? r.topic || "" : "", author_type: r.author_type === "staff" ? "staff" : "customer", author_name: r.author_name || "", body: r.body || "",
     created_at: r.created_at, read_at: r.read_at,
     files: (r.attachments || []).map((a) => ({ name: a.name, mime: a.mime, size: a.size, url: map.get(a.path) || "" })),
   }));

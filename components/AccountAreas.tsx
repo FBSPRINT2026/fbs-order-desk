@@ -19,7 +19,7 @@ export type AMockup = { id: string; title: string; url: string; thumb: string; n
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
 export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string; /** overrides the default wording */ label?: string; href?: string };
-export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "receive" | "details";
+export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "receive" | "details" | "projects" | "program";
 
 const IN_WORK = ["approved", "art", "blanks", "production", "ready"];
 const WAITING = ["approved", "art", "blanks"];
@@ -43,6 +43,8 @@ const I = {
   arrow: "M5 12h14M13 6l6 6-6 6",
   trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
   archive: "M3 4h18v4H3zM5 8v12h14V8M10 12h4",
+  projects: "M3 7h6l2 2h10v10H3zM3 7V5h6l2 2",
+  program: "M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z",
 };
 export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -52,7 +54,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ mode, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the printable statement (open invoices + aging + pay it all) */
   statementHref?: string;
@@ -64,6 +66,10 @@ export default function AccountAreas({ mode, assistant, onPaySelect, statementHr
   onPaySelect?: (text: string) => Promise<{ ok: boolean; error?: string; filter?: PayFilter; explain?: string; off?: boolean }>;
   /** the Messages hub (the dashboard's centerpiece in the portal, and the Messages area) */
   messagesPanel?: ReactNode;
+  /** projects (a conference, a season: several orders, dates, tasks, one conversation) */
+  projectsPanel?: ReactNode; projectsCount?: number;
+  /** program pricing: the customer's flat-price items and order form; grayed out when they don't have one */
+  programPanel?: ReactNode; hasProgram?: boolean;
   /** portal: the helper at the top of the dashboard ("What can I help you with today?") */
   assistant?: ReactNode;
   /** portal: "Hi Jordan" line over the dashboard */
@@ -157,6 +163,8 @@ export default function AccountAreas({ mode, assistant, onPaySelect, statementHr
     { id: "home", label: "Dashboard", icon: I.home },
     { id: "quotes", label: "Quotes", icon: I.quotes, n: quotes.length, show: mode === "shop" },
     { id: "orders", label: "Orders", icon: I.orders, n: mode === "portal" ? inWork.length + quotes.filter((o) => !o.archived && o.status === "quote_sent").length : inWork.length },
+    { id: "projects", label: "Projects", icon: I.projects, n: projectsCount, show: !!projectsPanel },
+    { id: "program", label: "Program", icon: I.program, show: !!programPanel },
     { id: "payments", label: "Payments", icon: I.payments },
     { id: "artwork", label: "Artwork", icon: I.artwork },
     { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
@@ -247,7 +255,7 @@ export default function AccountAreas({ mode, assistant, onPaySelect, statementHr
             <div className="pd-card">
               <div className="pd-card-h"><h3>Your orders</h3><button type="button" className="pd-link" onClick={() => go("orders")}>See all</button></div>
               <div className="pd-tabs" role="tablist">
-                {([["current", "Current", current.length], ["quotes", "Quotes", openQ.length], ["past", "Past", past.length]] as const).map(([k, l, n]) => (
+                {([["current", "Current", current.length], ["quotes", "Quotes", openQ.length], ["past", "Completed", past.length]] as const).map(([k, l, n]) => (
                   <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setHomeTab(k as never)}>{l}{n ? <span>{n}</span> : null}</button>
                 ))}
               </div>
@@ -259,7 +267,7 @@ export default function AccountAreas({ mode, assistant, onPaySelect, statementHr
                     {pill(o)}
                   </Link>
                 ))}
-                {!rows.length && <div className="pd-none">{tab === "current" ? "No orders in progress right now." : tab === "quotes" ? "No quotes waiting on you." : "No past orders yet."}</div>}
+                {!rows.length && <div className="pd-none">{tab === "current" ? "No orders in progress right now." : tab === "quotes" ? "No quotes waiting on you." : "No completed orders yet."}</div>}
               </div>
             </div>
             <div className="pd-card">
@@ -646,12 +654,16 @@ export default function AccountAreas({ mode, assistant, onPaySelect, statementHr
       {tableHead(<><h2>{mode === "shop" ? "Waiting to receive" : "Garments to send us"}</h2><span className="aa-sum">{mode === "shop" ? "Customer-supplied garments we need before these jobs can print" : "These orders print on garments you supply"}</span></>, "Search by order number or name")}
       {orderTable(receive, "work")}</>;
   } else if (area === "details") body = details;
+  else if (area === "projects" && projectsPanel) body = <>
+    <div className="aa-bar"><div className="aa-bar-l"><h2>Projects</h2><span className="aa-sum">{mode === "shop" ? "Events and bigger efforts with several orders" : "Planning an event, a season or a launch with several orders? Keep the dates, orders, to-dos and messages together."}</span></div></div>
+    {projectsPanel}</>;
+  else if (area === "program" && programPanel) body = programPanel;
 
   return (
     <div className="aa">
       <nav className="aa-nav" aria-label="Account areas">
         {AREAS.filter((a) => a.show !== false).map((a) => (
-          <button key={a.id} type="button" className={"aa-tab" + (area === a.id ? " on" : "")} onClick={() => { go(a.id); setQ(""); }}>
+          <button key={a.id} type="button" className={"aa-tab" + (area === a.id ? " on" : "") + (a.id === "program" && !hasProgram ? " off" : "")} title={a.id === "program" && !hasProgram ? (mode === "portal" ? "Program pricing: special flat prices on the items you order often. Ask us about it." : "No program set up yet") : undefined} onClick={() => { go(a.id); setQ(""); }}>
             <Ico d={a.icon} /><span>{a.label}</span>{a.n ? <span className="aa-n">{a.n}</span> : null}
           </button>
         ))}

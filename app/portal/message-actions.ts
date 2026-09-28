@@ -39,7 +39,7 @@ export async function portalMessages(as?: string): Promise<{ ok: boolean; error?
     const ids = customers.map((c) => c.id);
     const { data: os } = await admin.from("orders").select("id").in("customer_id", ids).neq("status", "quote");
     const oids = (os || []).map((o) => o.id);
-    const { data } = await admin.from("messages").select("id, order_id, topic, author_type, author_name, body, created_at, read_at, attachments")
+    const { data } = await admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments")
       .or(`customer_id.in.(${ids.join(",")})${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").limit(2000);
     return { ok: true, messages: await withFiles(data || [], sign(admin)) };
   } catch (e) { return fail(e); }
@@ -58,7 +58,7 @@ export async function portalAttachUrl(fileName: string): Promise<{ ok: boolean; 
 }
 
 /** The customer sends a message: general (no order) or about one of their orders. The shop gets an email. */
-export async function portalSend(orderId: string | null, body: string, files: Attachment[] = [], topic = ""): Promise<Result> {
+export async function portalSend(orderId: string | null, body: string, files: Attachment[] = [], topic = "", projectId: string | null = null): Promise<Result> {
   try {
     const { admin, email, customers, preview } = await who();
     if (preview) return { ok: false, error: "This is a preview. Customers send messages from their own login." };
@@ -74,15 +74,22 @@ export async function portalSend(orderId: string | null, body: string, files: At
       if (!o) return { ok: false, error: "We couldn't find that order." };
       number = o.number;
     }
+    let projectName = "";
+    if (!orderId && projectId) {
+      const { supabase } = await getViewer();
+      const { data: pr } = await supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle();
+      if (!pr) return { ok: false, error: "We couldn't find that project." };
+      projectName = pr.name;
+    }
     const author = cust.name || email;
     const tp = orderId && topic === "goods" ? "goods" : "";
-    const { error } = await admin.from("messages").insert({ order_id: orderId, customer_id: orderId ? null : cust.id, topic: tp, author_type: "customer", author_email: email, author_name: author, body: text, attachments });
+    const { error } = await admin.from("messages").insert({ order_id: orderId, customer_id: orderId ? null : cust.id, project_id: orderId ? null : projectName ? projectId : null, topic: tp, author_type: "customer", author_email: email, author_name: author, body: text, attachments });
     if (error) return { ok: false, error: error.message };
     if (SHOP_NOTIFY_EMAIL) {
       const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
       const shop = mergeSettings(s?.data).shop.name;
       const link = orderId ? `${siteUrl()}/shop/orders/${orderId}` : `${siteUrl()}/shop/customers/${cust.id}?area=messages`;
-      await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: number ? `New ${tp ? "goods " : ""}message on #${number}` : `New message from ${cust.company || author}`,
+      await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: number ? `New ${tp ? "goods " : ""}message on #${number}` : projectName ? `New message on project ${projectName}` : `New message from ${cust.company || author}`,
         html: emailLayout(shop, number ? `${author} wrote about #${number}` : `${author} wrote`, (text || "(no text)") + attachNote(attachments, "the order desk"), "Open", link) });
     }
     return { ok: true };
@@ -90,7 +97,7 @@ export async function portalSend(orderId: string | null, body: string, files: At
 }
 
 /** The customer opened a conversation: the shop's messages in it are now read. */
-export async function portalMarkRead(orderId: string | null, topic = ""): Promise<Result> {
+export async function portalMarkRead(orderId: string | null, topic = "", projectId: string | null = null): Promise<Result> {
   try {
     const { admin, customers, preview } = await who();
     if (preview) return { ok: true };
@@ -100,7 +107,8 @@ export async function portalMarkRead(orderId: string | null, topic = ""): Promis
       const { data: o } = await supabase.from("orders").select("id").eq("id", orderId).maybeSingle();
       if (!o) return { ok: false };
       q = q.eq("order_id", orderId).eq("topic", topic === "goods" ? "goods" : "");
-    } else q = q.is("order_id", null).in("customer_id", customers.map((c) => c.id));
+    } else if (projectId) q = q.is("order_id", null).eq("project_id", projectId).in("customer_id", customers.map((c) => c.id));
+    else q = q.is("order_id", null).is("project_id", null).in("customer_id", customers.map((c) => c.id));
     await q;
     return { ok: true };
   } catch (e) { return fail(e); }

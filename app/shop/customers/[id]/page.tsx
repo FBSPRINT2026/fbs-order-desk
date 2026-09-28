@@ -19,6 +19,8 @@ import { fmtStamp } from "@/lib/format";
 import { orderSearchText } from "@/lib/search";
 import ShopMessages from "@/components/ShopMessages";
 import ShopGoods from "@/components/ShopGoods";
+import ShopCustomerProjects from "@/components/ShopCustomerProjects";
+import ProgramAdmin from "@/components/ProgramAdmin";
 import { emailStatement, recordLumpPayment } from "@/app/shop/pay-actions";
 import { needsGoods } from "@/lib/goods";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
@@ -48,6 +50,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [usedIds, setUsedIds] = useState<string[]>([]);
   // old orders brought over from Printavo: listed with the rest, marked "Archived"
   const [goodsOpen, setGoodsOpen] = useState(0);
+  const [projOpen, setProjOpen] = useState(0);
+  const [hasProgram, setHasProgram] = useState(false);
+  useEffect(() => { createClient().from("programs").select("id", { count: "exact", head: true }).eq("customer_id", id).then(({ count }) => setHasProgram(!!count)); }, [id]);
   const [archive, setArchive] = useState<(ArchiveSummary & { transactions: PvTransaction[] | null })[]>([]);
   useEffect(() => {
     createClient().from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_staff, transactions:data->transactions`)
@@ -147,6 +152,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         </div>
       </div>
       <AccountAreas mode="shop" goodsCount={goodsOpen}
+          projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} onCount={setProjOpen} />} projectsCount={projOpen}
+          programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
           statementHref={`/portal/statement?as=${id}`} onEmailStatement={() => emailStatement(id)}
           onRecordPayment={async (p) => { const r = await recordLumpPayment(id, p); if (r.ok && !p.preview) { reloadShop(); setReload((n) => n + 1); } return r; }}
           goodsPanel={c.price_type === "wholesale" || os.some((o) => o.price_type === "wholesale") ? <ShopGoods orderIds={os.filter(needsGoods).map((o) => o.id)} customerId={id} onCount={setGoodsOpen} /> : undefined}

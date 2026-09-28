@@ -94,7 +94,7 @@ export async function staffMessage(orderId: string, body: string, files: Attachm
 }
 
 /** A general message to a customer (not about one order): shows in their portal's Messages area and emails them. */
-export async function staffCustomerMessage(customerId: string, body: string, files: Attachment[] = []) {
+export async function staffCustomerMessage(customerId: string, body: string, files: Attachment[] = [], projectId: string | null = null) {
   const { email: staffEmail } = await requireStaff();
   const text = body.trim().slice(0, 5000);
   const attachments = cleanAttachments(files, customerId);
@@ -106,15 +106,15 @@ export async function staffCustomerMessage(customerId: string, body: string, fil
   ]);
   if (!customer) return { ok: false, error: "Customer not found." };
   const settings = mergeSettings(s?.data);
-  const { error } = await admin.from("messages").insert({ customer_id: customerId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text, attachments });
+  const { error } = await admin.from("messages").insert({ customer_id: customerId, project_id: projectId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text, attachments });
   if (error) return { ok: false, error: error.message };
   let emailed = false;
   if (customer.email) {
     emailed = await sendEmail({
       to: customer.email,
       replyTo: SHOP_NOTIFY_EMAIL,
-      subject: `New message from ${settings.shop.name}`,
-      html: emailLayout(settings.shop.name, `A message from ${settings.shop.name}`, (text || "") + attachNote(attachments), "Reply in your portal", `${siteUrl()}/portal?area=messages`),
+      subject: projectId ? `New message about your project` : `New message from ${settings.shop.name}`,
+      html: emailLayout(settings.shop.name, `A message from ${settings.shop.name}`, (text || "") + attachNote(attachments), "Reply in your portal", projectId ? `${siteUrl()}/portal/projects/${projectId}` : `${siteUrl()}/portal?area=messages`),
     });
   }
   return { ok: true, emailed };
@@ -127,7 +127,7 @@ export async function shopMessages(customerId: string): Promise<{ ok: boolean; e
     const admin = createAdminClient();
     const { data: os } = await admin.from("orders").select("id").eq("customer_id", customerId);
     const oids = (os || []).map((o) => o.id);
-    const { data } = await admin.from("messages").select("id, order_id, topic, author_type, author_name, body, created_at, read_at, attachments")
+    const { data } = await admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments")
       .or(`customer_id.eq.${customerId}${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").limit(2000);
     const messages = await withFiles(data || [], async (paths) => {
       const { data: s } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
@@ -138,11 +138,11 @@ export async function shopMessages(customerId: string): Promise<{ ok: boolean; e
 }
 
 /** Staff opened a conversation: the customer's messages in it are now read. */
-export async function shopMarkRead(customerId: string, orderId: string | null, topic = "") {
+export async function shopMarkRead(customerId: string, orderId: string | null, topic = "", projectId: string | null = null) {
   await requireStaff();
   const admin = createAdminClient();
   let q = admin.from("messages").update({ read_at: new Date().toISOString() }).eq("author_type", "customer").is("read_at", null);
-  q = orderId ? q.eq("order_id", orderId).eq("topic", topic === "goods" ? "goods" : "") : q.is("order_id", null).eq("customer_id", customerId);
+  q = orderId ? q.eq("order_id", orderId).eq("topic", topic === "goods" ? "goods" : "") : projectId ? q.is("order_id", null).eq("project_id", projectId) : q.is("order_id", null).is("project_id", null).eq("customer_id", customerId);
   await q;
   return { ok: true };
 }
