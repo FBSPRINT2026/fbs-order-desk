@@ -183,9 +183,9 @@ export default function GoodsReceiving() {
     // delivery problems, labels never scanned by the next business day, and anything arriving after it's needed
     problems: rows.filter((r) => r.state === "problem" || r.late).sort(byAt),
   };
-  const KPIS: { k: Focus; label: string; n: number; tone?: string }[] = [
-    { k: "today", label: "Arriving today", n: L.today.length, tone: L.today.length ? "info" : "" },
-    { k: "arrived", label: "Arrived today", n: L.arrived.length, tone: L.arrived.length ? "ok" : "" },
+  // one "today" box: arriving today / arrived today (the home view)
+  const KPIS: { k: Focus; label: string; n: React.ReactNode; tone?: string }[] = [
+    { k: "today", label: "Arriving / arrived today", n: <>{L.today.length}<span className="rv-slash"> / </span><span className="rv-ok-n">{L.arrived.length}</span></>, tone: "info" },
     { k: "way", label: "In transit", n: L.way.length },
     { k: "past", label: "Already arrived", n: L.past.length },
     { k: "problems", label: "Delayed / problems", n: L.problems.length, tone: L.problems.length ? "bad" : "" },
@@ -293,7 +293,7 @@ export default function GoodsReceiving() {
         </div>
         <div className="rv-kpis">
           {KPIS.map((k) => (
-            <button key={k.k} type="button" className={[k.tone || "", (focus || "today") === k.k || (!focus && k.k === "arrived") ? "on" : ""].join(" ").trim()} onClick={() => setFocus(k.k === "today" || k.k === "arrived" || focus === k.k ? null : k.k)} aria-pressed={focus === k.k}>
+            <button key={k.k} type="button" className={["rv-kpi-" + k.k, k.tone || "", (focus || "today") === k.k ? "on" : ""].join(" ").trim()} onClick={() => setFocus(k.k === "today" || focus === k.k ? null : k.k)} aria-pressed={(focus || "today") === k.k}>
               <span>{k.label}</span><b>{k.n}</b>
             </button>
           ))}

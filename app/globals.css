@@ -2062,3 +2062,6 @@ a.as-ai{text-decoration:none}
 .rv-grid td{overflow:hidden;text-overflow:ellipsis}
 .rv-grid td.po,.rv-grid td.co{white-space:nowrap}
 .rv-grid td.so{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.rv-kpis{grid-template-columns:1.4fr repeat(3,minmax(0,1fr))}
+.rv-slash{color:var(--ink-3);font-weight:400}
+.rv-ok-n{color:var(--ok, #1a7f4b)}
