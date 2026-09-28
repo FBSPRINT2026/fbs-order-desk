@@ -74,7 +74,7 @@ export default function PrintavoSync() {
         )}
         <div className="faint" style={{ fontSize: 12.5 }}>
           {s.sweep_no > 0 && <>Last full check of Printavo {ago(s.sweep_done_at)}. </>}
-          Runs on our server every minute, so this page doesn&apos;t need to stay open. New orders, changes, payments and status updates in Printavo come over automatically; recent orders are re-read in full once a day for new messages and files.
+          Runs on our server every minute, so this page doesn&apos;t need to stay open. Active jobs are checked for changes every 5 minutes (status, payments, due dates, edits, new orders) and every order about every half hour; recent orders are re-read in full once a day for new messages and files.
           {s.gone > 0 && <> {s.gone} order{s.gone === 1 ? " was" : "s were"} removed in Printavo (our copies are kept).</>}
         </div>
         {stale && <div className="banner">The sync hasn&apos;t run in a few minutes. It usually picks up again by itself; if it stays like this, let us know.</div>}

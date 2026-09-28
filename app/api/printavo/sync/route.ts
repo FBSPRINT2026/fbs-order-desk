@@ -12,18 +12,21 @@ export const maxDuration = 60;
  * The Printavo sync, run every minute by the database's schedule (see migration 029). READ-ONLY toward Printavo.
  *   job=api      talks to Printavo (about 2 requests a second, Printavo's limit):
  *                1. lists every order once, 2. imports what's new or changed (newest first),
- *                3. keeps walking Printavo's order list comparing each order's fingerprint (changed time, total, balance, status,
- *                   due date, customer) so edits, payments, status changes and new orders come over,
+ *                3. every 5 minutes checks the active jobs (the ~500 orders with the latest due dates) for changes, and
+ *                   keeps walking Printavo's whole order list the same way (a full pass about every half hour): each order's
+ *                   fingerprint (changed time, total, balance, status, due date, customer) is compared, so edits, payments,
+ *                   status changes and new orders come over,
  *                4. re-reads recent orders in full once a day (catches new messages/files), 5. picks up new customers daily.
  *   job=files-N  copies artwork into our storage (doesn't use Printavo's request limit).
  */
 const RUN_MS = 47000;
-type Sync = { enabled: boolean; token: string; sweep_cursor: string | null; sweep_no: number; sweep_started_at: string | null; sweep_done_at: string | null; customers_cursor: string | null; customers_done_at: string | null };
+const QUICK_EVERY = 5 * 60000, QUICK_PAGES = 20; // active jobs: 20 pages x 25 = the 500 orders with the latest due dates
+type Sync = { enabled: boolean; token: string; quick_cursor: string | null; quick_pages: number; quick_done_at: string | null; sweep_cursor: string | null; sweep_no: number; sweep_started_at: string | null; sweep_done_at: string | null; customers_cursor: string | null; customers_done_at: string | null };
 type Idx = { printavo_id: string; fingerprint: string; status: string };
 
 export async function GET(req: Request) {
   const admin = createAdminClient();
-  const { data: s } = await admin.from("printavo_sync").select("enabled, token, sweep_cursor, sweep_no, sweep_started_at, sweep_done_at, customers_cursor, customers_done_at").eq("id", 1).single();
+  const { data: s } = await admin.from("printavo_sync").select("enabled, token, quick_cursor, quick_pages, quick_done_at, sweep_cursor, sweep_no, sweep_started_at, sweep_done_at, customers_cursor, customers_done_at").eq("id", 1).single();
   const sync = s as Sync | null;
   if (!sync || req.headers.get("x-sync-token") !== sync.token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   if (!sync.enabled) return NextResponse.json({ off: true });
@@ -56,6 +59,10 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     // 1. the first pass lists every order before anything else (so we know the whole job and can go newest first)
     if (sync.sweep_no === 0) { await sweepPage(admin, sync, did); continue; }
 
+    // every 5 minutes: the active jobs (the ~500 orders with the latest due dates) are checked for changes first
+    const quickDue = !!sync.quick_cursor || !sync.quick_done_at || Date.now() - new Date(sync.quick_done_at).getTime() > QUICK_EVERY;
+    if (quickDue) { await quickPage(admin, sync, did); continue; }
+
     const { data: next } = await admin.from("printavo_index").select("printavo_id, attempts").eq("status", "pending").order("created_at", { ascending: false, nullsFirst: false }).limit(1);
     const pending = next?.[0] as { printavo_id: string; attempts: number } | undefined;
 
@@ -77,6 +84,42 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
   return did;
 }
 
+/** Compares a page of Printavo's order list with what we have: new orders are queued, changed ones are queued again. */
+async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typeof listOrders>>["orders"], did: Record<string, number>, pass: number | null, currentPass = 0) {
+  if (!orders.length) return;
+  const ids = orders.map((o) => o.id);
+  const { data: have } = await admin.from("printavo_index").select("printavo_id, fingerprint, status").in("printavo_id", ids);
+  const known = new Map(((have || []) as Idx[]).map((r) => [r.printavo_id, r]));
+  const rows = orders.flatMap((o) => {
+    const k = known.get(o.id);
+    const row = { printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "pending", ...(pass ? { seen_sweep: pass } : {}) };
+    if (!k && !pass) Object.assign(row, { seen_sweep: currentPass }); // new order spotted by the quick check counts as seen
+    if (!k) return [row];
+    if (k.fingerprint !== o.fingerprint || k.status === "gone") { did.changed++; return [row]; }
+    return [];
+  });
+  if (rows.length) { const { error } = await admin.from("printavo_index").upsert(rows, { onConflict: "printavo_id" }); if (error) throw new Error(error.message); }
+  if (pass) {
+    const unchanged = ids.filter((id) => !rows.some((r) => r.printavo_id === id));
+    if (unchanged.length) await admin.from("printavo_index").update({ seen_sweep: pass }).in("printavo_id", unchanged);
+  }
+  did.listed += orders.length;
+}
+
+/** One page of the active jobs (latest due dates first). */
+async function quickPage(admin: SupabaseClient, sync: Sync, did: Record<string, number>) {
+  const page = await listOrders(sync.quick_cursor, true);
+  await comparePage(admin, page.orders, did, null, sync.sweep_no + 1);
+  sync.quick_pages = (sync.quick_cursor ? sync.quick_pages : 0) + 1;
+  if (!page.next || sync.quick_pages >= QUICK_PAGES) {
+    sync.quick_cursor = null; sync.quick_done_at = new Date().toISOString();
+    await admin.from("printavo_sync").update({ quick_cursor: null, quick_pages: 0, quick_done_at: sync.quick_done_at }).eq("id", 1);
+  } else {
+    sync.quick_cursor = page.next;
+    await admin.from("printavo_sync").update({ quick_cursor: page.next, quick_pages: sync.quick_pages }).eq("id", 1);
+  }
+}
+
 /** One page (25 orders) of Printavo's order list: new orders are queued; changed ones (different fingerprint) are queued again. */
 async function sweepPage(admin: SupabaseClient, sync: Sync, did: Record<string, number>) {
   const pass = sync.sweep_no + 1;
@@ -85,21 +128,7 @@ async function sweepPage(admin: SupabaseClient, sync: Sync, did: Record<string, 
     await admin.from("printavo_sync").update({ sweep_started_at: sync.sweep_started_at }).eq("id", 1);
   }
   const page = await listOrders(sync.sweep_cursor);
-  if (page.orders.length) {
-    const ids = page.orders.map((o) => o.id);
-    const { data: have } = await admin.from("printavo_index").select("printavo_id, fingerprint, status").in("printavo_id", ids);
-    const known = new Map(((have || []) as Idx[]).map((r) => [r.printavo_id, r]));
-    const rows = page.orders.flatMap((o) => {
-      const k = known.get(o.id);
-      if (!k) return [{ printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "pending", seen_sweep: pass }];
-      if (k.fingerprint !== o.fingerprint || k.status === "gone") { did.changed++; return [{ printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "pending", seen_sweep: pass }]; }
-      return [];
-    });
-    if (rows.length) { const { error } = await admin.from("printavo_index").upsert(rows, { onConflict: "printavo_id" }); if (error) throw new Error(error.message); }
-    const unchanged = ids.filter((id) => !rows.some((r) => r.printavo_id === id));
-    if (unchanged.length) await admin.from("printavo_index").update({ seen_sweep: pass }).in("printavo_id", unchanged);
-    did.listed += page.orders.length;
-  }
+  await comparePage(admin, page.orders, did, pass);
   sync.sweep_cursor = page.next;
   if (!page.next) {
     // a full pass is done: orders we didn't see anymore were removed in Printavo (we keep our copy, just mark it)

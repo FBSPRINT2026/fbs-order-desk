@@ -142,6 +142,8 @@ export const Q = {
   allCustomers: `query($after:String){ customers(first:25, after:$after){ nodes{ id companyName orderCount primaryContact{ fullName email } } pageInfo{ hasNextPage endCursor } } }`,
   // every order in the account (25 at a time, oldest first) with what changes when an order changes, and just the file links on one order
   list: `query($after:String){ orders(first:25, after:$after){ nodes{ __typename ${typed("id visualId createdAt total amountOutstanding customerDueAt status{ name } timestamps{ updatedAt } contact{ customer{ id companyName } }")} } pageInfo{ hasNextPage endCursor } } }`,
+  // the orders with the latest due dates first: that is where the active jobs are
+  listActive: `query($after:String){ orders(first:25, after:$after, sortOn:CUSTOMER_DUE_AT, sortDescending:true){ nodes{ __typename ${typed("id visualId createdAt total amountOutstanding customerDueAt status{ name } timestamps{ updatedAt } contact{ customer{ id companyName } }")} } pageInfo{ hasNextPage endCursor } } }`,
   fileList: `query($id:ID!){ order(id:$id){ ${typed("productionFiles(first:50){ nodes{ fileUrl } } lineItemGroups(first:50){ nodes{ id } }")} } }`,
   groupFiles: `query($id:ID!){ lineItemGroup(id:$id){ imprints(first:25){ nodes{ mockups(first:20){ nodes{ fullImageUrl } } } } lineItems(first:100){ nodes{ mockups(first:10){ nodes{ fullImageUrl } } } } } }`,
 };
@@ -161,8 +163,8 @@ export async function listCustomers(after: string | null): Promise<{ customers: 
 
 export type PvListed = { id: string; visualId: string; kind: "invoice" | "quote"; createdAt: string; total: number; customerId: string; company: string; updatedAt: string; fingerprint: string };
 /** One page (25, Printavo's most) of every order in the Printavo account. */
-export async function listOrders(after: string | null): Promise<{ orders: PvListed[]; next: string | null; totalNodes: number | null }> {
-  const d = await pv<{ orders: { nodes: Raw[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(Q.list, { after });
+export async function listOrders(after: string | null, active = false): Promise<{ orders: PvListed[]; next: string | null; totalNodes: number | null }> {
+  const d = await pv<{ orders: { nodes: Raw[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(active ? Q.listActive : Q.list, { after });
   const c = d.orders;
   if (!c) throw new PrintavoError("Printavo didn't return the order list.");
   return {
