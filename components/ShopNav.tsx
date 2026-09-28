@@ -107,7 +107,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
       <nav className="nav">
         {link(["/shop/assistant", "assistant", "Assistant"])}
         {GROUPS.map((g) => (
-          <div key={g.title} className="nav-g">
+          <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>
             {g.items.map(link)}
           </div>

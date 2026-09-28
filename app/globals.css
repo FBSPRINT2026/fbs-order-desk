@@ -2239,3 +2239,8 @@ a.as-ai{text-decoration:none}
 .page-head h1::after{width:calc(100% + 28px);min-width:84px;height:5px}
 /* two- and more-word headings and buttons: Every Word Capitalized */
 .nav .lbl-t,.panel-h h2,.rv-sec span,.rv-kpis span,.rv-views button,.rv-via-h,.pp-sheet-h b,.btn:not(.icon){text-transform:capitalize}
+/* the selected page takes its group's logo color: Sales blue, Production salmon, Shop Tools orange */
+.nav-g-sales .nav a.on,.nav-g-sales a.on{background:var(--fbs-blue);color:#fff}
+.nav-g-production a.on{background:var(--fbs-salmon);color:#fff}
+.nav-g-shoptools a.on{background:var(--fbs-orange);color:#1a1405}
+.nav-g-shoptools a.on .badge{background:#1a1405;color:#fff}
