@@ -18,6 +18,8 @@ import { splitCustomer } from "@/lib/crm/private";
 import { fmtStamp } from "@/lib/format";
 import { orderSearchText } from "@/lib/search";
 import ShopMessages from "@/components/ShopMessages";
+import ShopGoods from "@/components/ShopGoods";
+import { needsGoods } from "@/lib/goods";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -44,6 +46,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [reload, setReload] = useState(0);
   const [usedIds, setUsedIds] = useState<string[]>([]);
   // old orders brought over from Printavo: listed with the rest, marked "Archived"
+  const [goodsOpen, setGoodsOpen] = useState(0);
   const [archive, setArchive] = useState<(ArchiveSummary & { transactions: PvTransaction[] | null })[]>([]);
   useEffect(() => {
     createClient().from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_staff, transactions:data->transactions`)
@@ -142,7 +145,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           <button className={"btn danger" + (armed ? " armed" : "")} type="button" onClick={del} disabled={os.length > 0 || archive.length > 0} title={os.length ? "Delete this customer's orders first" : archive.length ? "This customer has archived Printavo orders" : ""}>{armed ? "Confirm delete" : "Delete"}</button>
         </div>
       </div>
-      <AccountAreas mode="shop" messagesPanel={<ShopMessages customerId={id} customerName={c.name || c.company || "Customer"} shopName={settings?.shop?.name || "FBS Print"}
+      <AccountAreas mode="shop" goodsCount={goodsOpen}
+          goodsPanel={c.price_type === "wholesale" || os.some((o) => o.price_type === "wholesale") ? <ShopGoods orderIds={os.filter(needsGoods).map((o) => o.id)} customerId={id} onCount={setGoodsOpen} /> : undefined}
+          messagesPanel={<ShopMessages customerId={id} customerName={c.name || c.company || "Customer"} shopName={settings?.shop?.name || "FBS Print"}
           orders={os.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", href: `/shop/orders/${o.id}` }))} start={searchParams.get("c")} />} attention={os.flatMap((o): AAttn[] => {
           const out: AAttn[] = [];
           const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "");

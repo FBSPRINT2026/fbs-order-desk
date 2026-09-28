@@ -72,21 +72,22 @@ export async function requestProofApproval(orderId: string) {
 }
 
 /** Post a shop message on an order and email the customer. */
-export async function staffMessage(orderId: string, body: string, files: Attachment[] = []) {
+export async function staffMessage(orderId: string, body: string, files: Attachment[] = [], topic = "") {
   const { email: staffEmail } = await requireStaff();
   const text = body.trim().slice(0, 5000);
   const { admin, order, customer, settings } = await loadOrderAndCustomer(orderId);
   const attachments = customer ? cleanAttachments(files, customer.id) : [];
   if (!text && !attachments.length) return { ok: false, error: "Write a message first." };
-  const { error } = await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text, attachments });
+  const tp = topic === "goods" ? "goods" : "";
+  const { error } = await admin.from("messages").insert({ order_id: orderId, topic: tp, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text, attachments });
   if (error) return { ok: false, error: error.message };
   let emailed = false;
   if (customer?.email && order.status !== "quote") {
     emailed = await sendEmail({
       to: customer.email,
       replyTo: SHOP_NOTIFY_EMAIL,
-      subject: `New message about order #${order.number}`,
-      html: emailLayout(settings.shop.name, `Message about #${order.number}`, (text || "") + attachNote(attachments), "Reply in your portal", `${siteUrl()}/portal?area=messages&c=${orderId}`),
+      subject: `New message about ${tp ? "the goods for " : ""}order #${order.number}`,
+      html: emailLayout(settings.shop.name, `Message about #${order.number}`, (text || "") + attachNote(attachments), "Reply in your portal", `${siteUrl()}/portal?area=messages&c=${orderId}${tp ? ":goods" : ""}`),
     });
   }
   return { ok: true, emailed };
@@ -126,7 +127,7 @@ export async function shopMessages(customerId: string): Promise<{ ok: boolean; e
     const admin = createAdminClient();
     const { data: os } = await admin.from("orders").select("id").eq("customer_id", customerId);
     const oids = (os || []).map((o) => o.id);
-    const { data } = await admin.from("messages").select("id, order_id, author_type, author_name, body, created_at, read_at, attachments")
+    const { data } = await admin.from("messages").select("id, order_id, topic, author_type, author_name, body, created_at, read_at, attachments")
       .or(`customer_id.eq.${customerId}${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").limit(2000);
     const messages = await withFiles(data || [], async (paths) => {
       const { data: s } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
@@ -137,11 +138,11 @@ export async function shopMessages(customerId: string): Promise<{ ok: boolean; e
 }
 
 /** Staff opened a conversation: the customer's messages in it are now read. */
-export async function shopMarkRead(customerId: string, orderId: string | null) {
+export async function shopMarkRead(customerId: string, orderId: string | null, topic = "") {
   await requireStaff();
   const admin = createAdminClient();
   let q = admin.from("messages").update({ read_at: new Date().toISOString() }).eq("author_type", "customer").is("read_at", null);
-  q = orderId ? q.eq("order_id", orderId) : q.is("order_id", null).eq("customer_id", customerId);
+  q = orderId ? q.eq("order_id", orderId).eq("topic", topic === "goods" ? "goods" : "") : q.is("order_id", null).eq("customer_id", customerId);
   await q;
   return { ok: true };
 }

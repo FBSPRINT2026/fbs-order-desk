@@ -11,8 +11,8 @@ export default function PortalMessages({ initial, orders, shopName, as, canAct, 
   return (
     <MessageHub mode="portal" initial={initial} orders={orders} shopName={shopName} canAct={canAct} start={start} height={height}
       load={load}
-      send={(orderId, body, files) => portalSend(orderId, body, files)}
-      markRead={(orderId) => portalMarkRead(orderId)}
+      send={(orderId, body, files, topic) => portalSend(orderId, body, files, topic)}
+      markRead={(orderId, topic) => portalMarkRead(orderId, topic)}
       upload={async (f) => {
         const t = await portalAttachUrl(f.name);
         if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Upload failed");

@@ -15,7 +15,7 @@ export type APayment = { id: string; order_id: string; number: number; amount: n
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
-export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string };
+export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string; /** overrides the default wording */ label?: string; href?: string };
 export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "receive" | "details";
 
 const IN_WORK = ["approved", "art", "blanks", "production", "ready"];
@@ -49,12 +49,14 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, messagesPanel, greeting, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ mode, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the Messages hub (the dashboard's centerpiece in the portal, and the Messages area) */
   messagesPanel?: ReactNode;
   /** portal: "Hi Jordan" line over the dashboard */
   greeting?: string;
+  /** wholesale: the customer supplied goods area (full), a compact version for the dashboard, and how many need attention */
+  goodsPanel?: ReactNode; goodsHome?: ReactNode; goodsCount?: number;
   orders: AOrder[]; payments: APayment[]; designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
   attention: AAttn[];
   /** shown at the top of the dashboard (portal: Start an order / Make a mockup) */
@@ -135,7 +137,7 @@ export default function AccountAreas({ mode, messagesPanel, greeting, orders, pa
     { id: "payments", label: "Payments", icon: I.payments },
     { id: "artwork", label: "Artwork", icon: I.artwork },
     { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
-    { id: "receive", label: mode === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: receive.length, show: receive.length > 0 },
+    { id: "receive", label: goodsPanel ? (mode === "shop" ? "Customer goods" : "Customer supplied goods") : mode === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
     // staff reach Details from the "Customer details" button in the page header
   ];
 
@@ -192,14 +194,22 @@ export default function AccountAreas({ mode, messagesPanel, greeting, orders, pa
           </div>
         </div>
         <div className="pd-grid">
-          <div className="pd-main">{messagesPanel}</div>
+          <div className="pd-main">
+            {messagesPanel}
+            {goodsHome && (
+              <section className="pd-goods">
+                <div className="pd-card-h"><h3><span aria-hidden="true">📦</span> Customer supplied goods{goodsCount ? <span className="aa-n">{goodsCount}</span> : null}</h3><button type="button" className="pd-link" onClick={() => go("receive")}>See all</button></div>
+                {goodsHome}
+              </section>
+            )}
+          </div>
           <aside className="pd-side">
             {attention.length > 0 && (
               <div className="pd-card pd-attn">
                 <div className="pd-card-h"><h3>Needs your attention</h3><span className="aa-n">{attention.length}</span></div>
                 {attention.slice(0, 6).map((a, i) => (
-                  <Link key={a.kind + a.order_id + i} href={orderHref(a.order_id, a.hash)} className="pd-attn-i">
-                    <span className="k">{a.kind === "quote" ? "Approve quote" : a.kind === "art" ? "Approve artwork" : a.kind === "pay" ? "Payment due" : a.kind === "draft" ? "Finish your order" : a.kind === "receive" ? "Send us garments" : "Order"}</span>
+                  <Link key={a.kind + a.order_id + i} href={a.href || orderHref(a.order_id, a.hash)} className="pd-attn-i">
+                    <span className="k">{a.label || (a.kind === "quote" ? "Approve quote" : a.kind === "art" ? "Approve artwork" : a.kind === "pay" ? "Payment due" : a.kind === "draft" ? "Finish your order" : a.kind === "receive" ? "Send us garments" : "Order")}</span>
                     <span className="v">#{a.number}{a.kind === "pay" ? ` · ${a.date}` : ""}</span>
                     <Ico d={I.arrow} size={16} />
                   </Link>
@@ -521,6 +531,11 @@ export default function AccountAreas({ mode, messagesPanel, greeting, orders, pa
         ))}
         {!rows.length && <div className="aa-empty">{messages.length ? `No messages match “${q}”.` : "No messages yet."}</div>}
       </div>
+    </>;
+  } else if (area === "receive" && goodsPanel) {
+    body = <>
+      <div className="aa-bar"><div className="aa-bar-l"><h2>{mode === "shop" ? "Customer supplied goods" : "Customer supplied goods"}</h2><span className="aa-sum">{mode === "shop" ? "Garments this customer sends us for their jobs" : "The garments you send us for your jobs: add tracking, see when they're checked in, and message us about them"}</span></div></div>
+      {goodsPanel}
     </>;
   } else if (area === "receive") {
     body = <>

@@ -9,6 +9,9 @@ import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
 import { orderSearchText } from "@/lib/search";
 import { withFiles, type HubMsg } from "@/lib/messages";
 import PortalMessages from "@/components/PortalMessages";
+import PortalGoods from "@/components/PortalGoods";
+import { needsGoods } from "@/lib/goods";
+import { loadGoodsItems } from "@/lib/goodsServer";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 
 export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string; c?: string }> }) {
@@ -77,7 +80,15 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     if (o.status === "quote_sent") attention.push({ kind: "quote", order_id: o.id, number: o.number, date: short(o.sent_at || o.updated_at) });
     if (pendingProofs[o.id]) attention.push({ kind: "art", order_id: o.id, number: o.number, date: short(o.updated_at), hash: "proofs" });
     if (o.type === "invoice" && bal(o) > 0.004 && o.status !== "quote") attention.push({ kind: "pay", order_id: o.id, number: o.number, date: money(bal(o)), hash: "pay" });
-    if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) attention.push({ kind: "receive", order_id: o.id, number: o.number, date: short(o.approved_at || o.updated_at) });
+  });
+  // wholesale: the garments they send us for their jobs (goods have their own status)
+  const wholesale = ctx.customers.some((c) => c.price_type === "wholesale") || orders.some((o) => o.price_type === "wholesale");
+  const goodsItems = wholesale ? await loadGoodsItems(admin, orders.filter(needsGoods) as never, "customer", (id) => `/portal/orders/${id}${qs}`) : [];
+  const goodsOpen = goodsItems.filter((g) => g.goods.status !== "received");
+  const goodsHref = `/portal${qs ? qs + "&" : "?"}area=receive`;
+  goodsItems.forEach((g) => {
+    if (g.goods.status === "waiting") attention.push({ kind: "receive", order_id: g.order.id, number: g.order.number, date: "", label: "Send us your goods", href: goodsHref });
+    if (g.goods.status === "issue") attention.push({ kind: "receive", order_id: g.order.id, number: g.order.number, date: "", label: "Issue with your goods", href: goodsHref });
   });
   const acct = ctx.customers[0];
   const firstName = (acct?.name || "").trim().split(/\s+/)[0];
@@ -99,6 +110,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
           </div></div>
         ) : (
           <AccountAreas mode="portal" greeting={firstName ? `Hi, ${firstName}` : undefined}
+            goodsPanel={wholesale ? <PortalGoods items={goodsItems} canAct={!ctx.preview} qs={qs} empty="No open jobs need goods from you right now." /> : undefined}
+            goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
+            goodsCount={goodsOpen.length}
             messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
             orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}

@@ -14,8 +14,8 @@ export default function ShopMessages({ customerId, customerName, orders, shopNam
   return (
     <MessageHub mode="shop" initial={initial} orders={orders} shopName={shopName} customerName={customerName} start={start} height={height}
       load={load}
-      send={(orderId, body, files) => (orderId ? staffMessage(orderId, body, files) : staffCustomerMessage(customerId, body, files))}
-      markRead={(orderId) => shopMarkRead(customerId, orderId)}
+      send={(orderId, body, files, topic) => (orderId ? staffMessage(orderId, body, files, topic) : staffCustomerMessage(customerId, body, files))}
+      markRead={(orderId, topic) => shopMarkRead(customerId, orderId, topic)}
       upload={async (f) => {
         const path = `messages/${customerId}/${crypto.randomUUID()}/${f.name.replace(/[^\w.\-]+/g, "_").slice(-120) || "file"}`;
         const up = await createClient().storage.from("proofs").upload(path, f, { contentType: f.type || undefined });

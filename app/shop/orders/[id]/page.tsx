@@ -12,6 +12,7 @@ import GroupEditor from "@/components/GroupEditor";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
 import ProductionPanel from "@/components/ProductionPanel";
+import ShopGoods from "@/components/ShopGoods";
 import { Pill } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import { checkOrder } from "@/lib/orderChecks";
@@ -658,6 +659,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               )}
             </div>
           </section>
+          {o.price_type === "wholesale" && o.type === "invoice" && (
+            <section className="panel">
+              <div className="panel-h"><h2>Customer supplied goods</h2></div>
+              <div className="panel-b"><ShopGoods orderIds={[o.id]} customerId={o.customer_id} compact /></div>
+            </section>
+          )}
           <ProductionPanel compact note={prodNotes} onNote={onProdNotes} uploading={artUploading}
             files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type }))}
             onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }} />

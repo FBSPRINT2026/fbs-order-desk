@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { MAX_ATTACH, type Attachment, type HubMsg, type HubOrder } from "@/lib/messages";
 
-type Convo = { key: string; orderId: string | null; title: string; sub: string; order?: HubOrder; msgs: HubMsg[]; last: HubMsg | null; unread: number };
+type Convo = { key: string; orderId: string | null; topic: string; title: string; sub: string; order?: HubOrder; msgs: HubMsg[]; last: HubMsg | null; unread: number };
 type Pending = { id: string; name: string; size: number; mime: string; done?: Attachment; error?: string };
 
 const isImg = (m: string) => /^image\/(png|jpe?g|gif|webp|svg\+xml|heic)$/i.test(m);
@@ -36,9 +36,9 @@ export default function MessageHub({ mode, initial, orders, load, send, upload, 
   /** orders a conversation can be about (newest first) */
   orders: HubOrder[];
   load: () => Promise<HubMsg[] | null>;
-  send: (orderId: string | null, body: string, files: Attachment[]) => Promise<{ ok: boolean; error?: string }>;
+  send: (orderId: string | null, body: string, files: Attachment[], topic: string) => Promise<{ ok: boolean; error?: string }>;
   upload: (f: File) => Promise<Attachment>;
-  markRead: (orderId: string | null) => Promise<unknown>;
+  markRead: (orderId: string | null, topic: string) => Promise<unknown>;
   canAct?: boolean;
   shopName: string;
   customerName?: string;
@@ -52,15 +52,16 @@ export default function MessageHub({ mode, initial, orders, load, send, upload, 
 
   const convos = useMemo(() => {
     const by = new Map<string, HubMsg[]>();
-    for (const m of msgs) { const k = m.order_id || "general"; if (!by.has(k)) by.set(k, []); by.get(k)!.push(m); }
+    for (const m of msgs) { const k = m.order_id ? m.order_id + (m.topic === "goods" ? ":goods" : "") : "general"; if (!by.has(k)) by.set(k, []); by.get(k)!.push(m); }
     const list: Convo[] = [];
     const mk = (key: string): Convo => {
       const ms = by.get(key) || [];
-      const o = key === "general" ? undefined : ordersById.get(key);
-      return { key, orderId: key === "general" ? null : key, order: o, msgs: ms, last: ms[ms.length - 1] || null,
+      const [oid, topic = ""] = key === "general" ? [null, ""] : key.split(":");
+      const o = oid ? ordersById.get(oid) : undefined;
+      return { key, orderId: oid, topic, order: o, msgs: ms, last: ms[ms.length - 1] || null,
         unread: ms.filter((m) => !mine(m) && !m.read_at).length,
-        title: key === "general" ? (mode === "portal" ? `Chat with ${shopName}` : "General") : o ? `#${o.number}${o.nickname ? ` · ${o.nickname}` : ""}` : "An order",
-        sub: key === "general" ? "Questions, ideas, files" : "About this order" };
+        title: key === "general" ? (mode === "portal" ? `Chat with ${shopName}` : "General") : o ? `#${o.number}${topic === "goods" ? " · Goods" : o.nickname ? ` · ${o.nickname}` : ""}` : topic === "goods" ? "Goods" : "An order",
+        sub: key === "general" ? "Questions, ideas, files" : topic === "goods" ? "Customer supplied goods" : "About this order" };
     };
     list.push(mk("general"));
     for (const k of by.keys()) if (k !== "general") list.push(mk(k));
@@ -68,9 +69,22 @@ export default function MessageHub({ mode, initial, orders, load, send, upload, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msgs, ordersById, mode, shopName]);
 
-  const [open, setOpen] = useState<string>(start && (start === "general" || ordersById.has(start)) ? start : "");
-  const [showThread, setShowThread] = useState(!!start);
-  const cur = convos.find((c) => c.key === open) || (open && ordersById.has(open) ? { key: open, orderId: open, order: ordersById.get(open), msgs: [], last: null, unread: 0, title: `#${ordersById.get(open)!.number}${ordersById.get(open)!.nickname ? ` · ${ordersById.get(open)!.nickname}` : ""}`, sub: "About this order" } as Convo : null) || convos[0];
+  const valid = (k?: string | null) => !!k && (k === "general" || ordersById.has(k.split(":")[0]));
+  const [open, setOpen] = useState<string>(valid(start) ? start! : "");
+  const [showThread, setShowThread] = useState(valid(start));
+  const blank = (k: string): Convo | null => {
+    const [oid, topic = ""] = k.split(":"); const o = ordersById.get(oid);
+    return o ? { key: k, orderId: oid, topic, order: o, msgs: [], last: null, unread: 0, title: `#${o.number}${topic === "goods" ? " · Goods" : o.nickname ? ` · ${o.nickname}` : ""}`, sub: topic === "goods" ? "Customer supplied goods" : "About this order" } : null;
+  };
+  const cur = convos.find((c) => c.key === open) || (open && open !== "general" ? blank(open) : null) || convos[0];
+  // other parts of the page can open a conversation (e.g. "Message us about goods")
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: Event) => { const k = (e as CustomEvent<string>).detail; if (valid(k)) { setOpen(k); setShowThread(true); root.current?.scrollIntoView({ behavior: "smooth", block: "start" }); setTimeout(() => ta.current?.focus(), 350); } };
+    window.addEventListener("mh:open", h);
+    return () => window.removeEventListener("mh:open", h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordersById]);
   const [q, setQ] = useState("");
   const shown = q.trim() ? convos.filter((c) => [c.title, ...c.msgs.map((m) => m.body + " " + m.files.map((f) => f.name).join(" "))].join(" ").toLowerCase().includes(q.trim().toLowerCase())) : convos;
   const noConvo = orders.filter((o) => !convos.some((c) => c.key === o.id));
@@ -86,9 +100,9 @@ export default function MessageHub({ mode, initial, orders, load, send, upload, 
   // opening a conversation marks the other side's messages read
   useEffect(() => {
     if (!cur || !cur.unread || !canAct) return;
-    const k = cur.orderId;
-    markRead(k);
-    setMsgs((ms) => ms.map((m) => ((m.order_id || null) === k && !mine(m) && !m.read_at ? { ...m, read_at: new Date().toISOString() } : m)));
+    const k = cur.orderId, tp = cur.topic;
+    markRead(k, tp);
+    setMsgs((ms) => ms.map((m) => ((m.order_id || null) === k && (m.topic || "") === tp && !mine(m) && !m.read_at ? { ...m, read_at: new Date().toISOString() } : m)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cur?.key, cur?.unread]);
 
@@ -122,12 +136,12 @@ export default function MessageHub({ mode, initial, orders, load, send, upload, 
     const ready = files.filter((f) => f.done).map((f) => f.done!);
     if (!canAct || busy || uploading || (!text.trim() && !ready.length) || !cur) return;
     setBusy(true); setErr("");
-    const r = await send(cur.orderId, text, ready);
+    const r = await send(cur.orderId, text, ready, cur.topic);
     setBusy(false);
     if (!r.ok) { setErr(r.error || "Couldn't send."); return; }
     setText(""); setFiles([]);
     // show it right away, then sync with the server
-    setMsgs((ms) => [...ms, { id: "tmp-" + Date.now(), order_id: cur.orderId, author_type: mode === "portal" ? "customer" : "staff", author_name: "You", body: text.trim(), created_at: new Date().toISOString(), read_at: null, files: ready.map((a) => ({ name: a.name, mime: a.mime, size: a.size, url: "" })) }]);
+    setMsgs((ms) => [...ms, { id: "tmp-" + Date.now(), order_id: cur.orderId, topic: cur.topic, author_type: mode === "portal" ? "customer" : "staff", author_name: "You", body: text.trim(), created_at: new Date().toISOString(), read_at: null, files: ready.map((a) => ({ name: a.name, mime: a.mime, size: a.size, url: "" })) }]);
     refresh();
   }
 
@@ -136,7 +150,7 @@ export default function MessageHub({ mode, initial, orders, load, send, upload, 
   const totalUnread = convos.reduce((a, c) => a + c.unread, 0);
 
   return (
-    <div className="mh-box">
+    <div className="mh-box" ref={root}>
     <section className={"mh" + (showThread ? " thread-open" : "")} style={{ ["--mh-h" as string]: `${height}px` }} aria-label="Messages">
       <div className="mh-list">
         <div className="mh-list-h">
@@ -146,7 +160,7 @@ export default function MessageHub({ mode, initial, orders, load, send, upload, 
         <div className="mh-convos">
           {shown.map((c) => (
             <button key={c.key} type="button" className={"mh-c" + (cur?.key === c.key ? " on" : "") + (c.unread ? " is-unread" : "")} onClick={() => openConvo(c.key)}>
-              <span className={"mh-av" + (c.key === "general" ? " gen" : "")}>{c.key === "general" ? "💬" : "#"}</span>
+              <span className={"mh-av" + (c.key === "general" ? " gen" : c.topic === "goods" ? " goods" : "")}>{c.key === "general" ? "💬" : c.topic === "goods" ? "📦" : "#"}</span>
               <span className="mh-c-main">
                 <span className="mh-c-top"><b>{c.title}</b>{c.last && <span className="mh-c-t">{ago(c.last.created_at)}</span>}</span>
                 <span className="mh-c-sub">{c.last ? `${mine(c.last) ? "You: " : ""}${c.last.body || (c.last.files.length ? `📎 ${c.last.files[0].name}` : "")}` : c.sub}</span>
@@ -174,7 +188,7 @@ export default function MessageHub({ mode, initial, orders, load, send, upload, 
         {cur && <>
           <div className="mh-th">
             <button type="button" className="mh-back" onClick={() => setShowThread(false)} aria-label="All conversations"><Ico d={BACK} /></button>
-            <div className="mh-th-t"><b>{cur.title}</b><span>{cur.orderId ? (cur.order?.status ? cur.order.status : "Order conversation") : mode === "portal" ? "We read every message. Send questions, ideas and files here." : "General conversation with this customer"}</span></div>
+            <div className="mh-th-t"><b>{cur.title}</b><span>{cur.orderId ? (cur.topic === "goods" ? "The garments you send us for this job: tracking, counts, issues" : cur.order?.status ? cur.order.status : "Order conversation") : mode === "portal" ? "We read every message. Send questions, ideas and files here." : "General conversation with this customer"}</span></div>
             {cur.order && <Link className="btn sm" href={cur.order.href}>Open order</Link>}
           </div>
           <div className="mh-scroll" ref={scroller} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; }}>
