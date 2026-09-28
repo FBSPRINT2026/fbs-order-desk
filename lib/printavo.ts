@@ -127,7 +127,54 @@ export const Q = {
   thread: `query($id:ID!){ thread(id:$id){ messages(first:100){ nodes{ __typename
           ... on EmailMessage{ id from to cc subject text incoming timestamps{ createdAt } }
           ... on TextMessage{ id from to text incoming timestamps{ createdAt } } } } } }`,
+  // census: every order in the account (50 at a time), and just the file links on one order
+  list: `query($after:String){ orders(first:50, after:$after){ totalNodes nodes{ __typename ${typed("id visualId createdAt total contact{ customer{ id companyName } }")} } pageInfo{ hasNextPage endCursor } } }`,
+  fileList: `query($id:ID!){ order(id:$id){ ${typed("productionFiles(first:50){ nodes{ fileUrl } } lineItemGroups(first:50){ nodes{ id } }")} } }`,
+  groupFiles: `query($id:ID!){ lineItemGroup(id:$id){ imprints(first:25){ nodes{ mockups(first:20){ nodes{ fullImageUrl } } } } lineItems(first:100){ nodes{ mockups(first:10){ nodes{ fullImageUrl } } } } } }`,
 };
+
+/* ---------- census (sizes only, nothing copied) ---------- */
+
+export type PvListed = { id: string; visualId: string; kind: "invoice" | "quote"; createdAt: string; total: number; customerId: string; company: string };
+/** One page (50) of every order in the Printavo account. */
+export async function listOrders(after: string | null): Promise<{ orders: PvListed[]; next: string | null; totalNodes: number | null }> {
+  const d = await pv<{ orders: { totalNodes: number | null; nodes: Raw[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(Q.list, { after });
+  const c = d.orders;
+  return {
+    orders: (c?.nodes || []).filter((o) => o?.id).map((o) => ({ id: s(o.id), visualId: s(o.visualId), kind: o.__typename === "Quote" ? "quote" : "invoice", createdAt: s(o.createdAt), total: n(o.total), customerId: s(o.contact?.customer?.id), company: s(o.contact?.customer?.companyName) })),
+    next: c?.pageInfo?.hasNextPage ? c.pageInfo.endCursor : null,
+    totalNodes: c?.totalNodes ?? null,
+  };
+}
+/** The full-size file links on one order (mockups on imprints and line items, and production files), no duplicates. */
+export async function orderFileLinks(id: string): Promise<string[]> {
+  const o = (await pv<{ order: Raw | null }>(Q.fileList, { id })).order;
+  if (!o) throw new PrintavoError("Order not found in Printavo.");
+  const urls = new Set<string>((o.productionFiles?.nodes || []).map((f: Raw) => s(f.fileUrl)));
+  for (const g of o.lineItemGroups?.nodes || []) {
+    const lg = (await pv<{ lineItemGroup: Raw | null }>(Q.groupFiles, { id: g.id })).lineItemGroup;
+    for (const i of lg?.imprints?.nodes || []) for (const m of i.mockups?.nodes || []) urls.add(s(m.fullImageUrl));
+    for (const l of lg?.lineItems?.nodes || []) for (const m of l.mockups?.nodes || []) urls.add(s(m.fullImageUrl));
+  }
+  return [...urls].filter((u) => /^https?:\/\//.test(u));
+}
+/** A file's size in bytes without downloading it (HEAD, or a 1-byte ranged GET); null if the server won't say. */
+export async function remoteSize(url: string): Promise<number | null> {
+  try {
+    const h = await fetch(url, { method: "HEAD", cache: "no-store", redirect: "follow" });
+    const len = +(h.headers.get("content-length") || 0);
+    if (h.ok && len > 0) return len;
+  } catch { /* fall through */ }
+  try {
+    const r = await fetch(url, { headers: { Range: "bytes=0-0" }, cache: "no-store", redirect: "follow" });
+    const cr = r.headers.get("content-range"), tot = cr ? +(cr.split("/")[1] || 0) : 0;
+    await r.body?.cancel().catch(() => {});
+    if (tot > 0) return tot;
+    const len = +(r.headers.get("content-length") || 0);
+    if (r.status === 200 && len > 1) return len;
+  } catch { /* unknown */ }
+  return null;
+}
 
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (x: unknown) => (x == null ? "" : String(x));
@@ -234,7 +281,7 @@ export async function checkQueries(): Promise<Record<string, string>> {
   for (const [name, query] of Object.entries(Q)) {
     if (name === "search") continue; // would return real customers
     await sleep(600);
-    const r = await fetch(PV_URL, { method: "POST", headers: { "Content-Type": "application/json", email: email || "", token: token || "" }, body: JSON.stringify({ query, variables: { id: "0", after: null } }), cache: "no-store" });
+    const r = await fetch(PV_URL, { method: "POST", headers: { "Content-Type": "application/json", email: email || "", token: token || "" }, body: JSON.stringify({ query: name === "list" ? query.replace("first:50", "first:1") : query, variables: query.includes("$id") ? { id: "0", after: null } : { after: null } }), cache: "no-store" });
     const j = await r.json().catch(() => null) as { errors?: { message: string; path?: unknown }[] } | null;
     const schema = (j?.errors || []).filter((e) => !e.path).map((e) => e.message);
     const other = (j?.errors || []).filter((e) => e.path).map((e) => e.message);

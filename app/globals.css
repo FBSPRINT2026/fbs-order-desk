@@ -1223,6 +1223,13 @@ a.as-ai{text-decoration:none}
 .pv-err{margin:10px 0;padding:10px 14px;border-radius:8px;background:var(--danger-soft);color:var(--danger)}
 .pv-prog{display:grid;grid-template-columns:190px 1fr;align-items:center;gap:12px;font-size:13px}
 .pv-prog i{height:8px;border-radius:99px;background:var(--surface-2);position:relative;overflow:hidden}
+.pvc-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.pvc-kpis>div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.pvc-kpis span{font-size:12px;color:var(--ink-3)}
+.pvc-kpis b{font-size:20px}
+.pvc-kpis small{font-size:12px;color:var(--ink-3)}
+.pvc-kpis .hi{border-color:var(--accent);background:var(--accent-soft)}
+@media (max-width:700px){.pvc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pv-prog i::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--p);background:var(--accent);transition:width .3s}
 .pv-log{list-style:none;margin:0;padding:0;max-height:320px;overflow:auto;font-size:12.5px;display:flex;flex-direction:column;gap:3px}
 .pv-log li span{color:var(--ink-3);font-family:var(--mono);font-size:11px;margin-right:8px}

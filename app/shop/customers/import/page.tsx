@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import Link from "next/link";
+import PrintavoCensus from "@/components/PrintavoCensus";
 
 type Hit = { id: string; companyName: string; contact: string; email: string; phone: string; orderCount: number; customerId: string | null };
 type Step = { at: string; text: string; bad?: boolean };
@@ -132,6 +133,8 @@ export default function ImportPage() {
           </div>
         </section>
       )}
+
+      <PrintavoCensus />
     </>
   );
 }
