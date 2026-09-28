@@ -2020,3 +2020,13 @@ a.as-ai{text-decoration:none}
 .rv-vias{display:flex;flex-direction:column;gap:10px}
 .rv-via-h{display:flex;align-items:baseline;gap:8px;font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink);border-bottom:2px solid var(--line);padding-bottom:3px;margin-bottom:6px}
 .rv-via-h span{font-weight:600;text-transform:none;letter-spacing:0;color:var(--ink-3);font-size:12px}
+.rv-stack{display:flex;flex-direction:column;gap:16px}
+.rv-stack .rv-list h4{margin:0 0 8px;font-size:15px}
+.rv-empty{font-size:13px;padding:8px 2px}
+.rv-one{display:flex;flex-direction:column;gap:14px}
+.rv-one .rv-pane{max-height:none}
+.rv-kpis{grid-template-columns:repeat(5,minmax(0,1fr))}
+.rv-seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.rv-seg button{all:unset;cursor:pointer;padding:5px 12px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.rv-seg button.on{background:var(--accent);color:#fff}
+@media (max-width:700px){.rv-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}

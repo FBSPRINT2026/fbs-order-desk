@@ -15,16 +15,19 @@ import { blanksPlan, blanksReceived, orderBlanksSS, recordBlanks, type BlankLine
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
 type BS = { id: string; order_id: string; blank_order_id: string | null; carrier: string; tracking: string; boxes: number | null; pcs: number | null; note: string; eta: string | null; track_status: string; track_detail: string; est_delivery: string | null; delivered_at: string | null };
-type View = "today" | "customer" | "resolve";
+type View = "today" | "fbs" | "customer" | "resolve";
 type Arrive = "past" | "today" | "tomorrow" | "later" | "nodate";
 const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
   { k: "past", label: "Should be here: not marked received" }, { k: "today", label: "Arriving today" }, { k: "tomorrow", label: "Tomorrow" }, { k: "later", label: "Later" }, { k: "nodate", label: "On the way, no date yet" },
 ];
-type Focus = "arrived" | "today" | "tomorrow" | "way" | "late" | "problems" | "count" | "need" | "unlinked" | "info";
+type Focus = "arrived" | "today" | "tomorrow" | "way" | "problems";
+type GroupBy = "carrier" | "supplier";
 type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; boxes: number; pcs: number;
-  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string }[]; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via };
+  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string }[]; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
 type Via = "ss" | "ups" | "fedex" | "other";
-const VIAS: { k: Via; label: string }[] = [{ k: "ss", label: "S&S truck" }, { k: "ups", label: "UPS" }, { k: "fedex", label: "FedEx" }, { k: "other", label: "DHL / other (freight, USPS…)" }];
+const VIAS: { k: string; label: string }[] = [{ k: "ss", label: "S&S truck" }, { k: "ups", label: "UPS" }, { k: "fedex", label: "FedEx" }, { k: "other", label: "DHL / other (freight, USPS…)" }];
+const SUPPLIERS_G: { k: string; label: string }[] = [{ k: "ss", label: "S&S Activewear" }, { k: "sanmar", label: "SanMar" }, { k: "other", label: "Other vendors" }];
+const nextBiz = (d: string) => { const x = new Date(d.slice(0, 10) + "T12:00"); do { x.setDate(x.getDate() + 1); } while (x.getDay() === 0 || x.getDay() === 6); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
 type Pkg = { key: string; kind: "blanks" | "goods"; orderId: string; number: number; who: string; label: string; tracking: string; carrier: string; status: string; detail: string; at: string | null; delivered: boolean; need: string | null; href: string };
 
 /** Today's date here (not UTC: after 7 pm the UTC date is already tomorrow). */
@@ -49,6 +52,7 @@ export default function GoodsReceiving() {
   const [data, setData] = useState<{ orders: O[]; cust: Record<string, Customer>; blanks: BO[]; bships: BS[]; goods: GoodsItem[]; lead: number } | null>(null);
   const [tab, setTab] = useState<"arriving" | "need" | "ordered" | "received">("arriving");
   const [focus, setFocus] = useState<Focus | null>(null);
+  const [groupBy, setGroupBy] = useState<GroupBy>("carrier");
   const [truck, setTruck] = useState(false);
   const [order, setOrder] = useState<O | null>(null);
   const [note, setNote] = useState("");
@@ -56,7 +60,7 @@ export default function GoodsReceiving() {
   const [pending, setPending] = useState<PendingShipment[] | null>(null);
   const [pvGoods, setPvGoods] = useState<PrintavoGoods[]>([]);
   const [upBusy, setUpBusy] = useState(false), [refreshKey, setRefreshKey] = useState(0);
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "customer" || v === "resolve") setViewState(v); }, []);
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "fbs" || v === "customer" || v === "resolve") setViewState(v); }, []);
   const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "today") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
   const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); if (j.error) setNote(`Couldn't load everything: ${j.error}`); }, []);
   useEffect(() => { loadPending(); }, [loadPending]);
@@ -130,11 +134,9 @@ export default function GoodsReceiving() {
   }, [data]);
 
   if (!data || !v) return <div className="empty">Loading…</div>;
-  const u0 = v.update;
   const unlinked = (pending || []).filter((g) => !g.us);
   // goods tied to Printavo orders (until go-live): into today's lists too
   const pvCust = pvGoods.filter((g) => g.kind === "goods"), pvBlanks = pvGoods.filter((g) => g.kind === "blanks");
-  const pvHere = pvGoods.filter((g) => g.delivered);
   // FBS blanks on the way (ours in this system + Printavo jobs), by the day they arrive
   const whenOf = (d: string | null | undefined): Arrive => { if (!d) return "nodate"; const x = d.slice(0, 10), t = today(); return x < t ? "past" : x === t ? "today" : x === addDays(t, 1) ? "tomorrow" : "later"; };
   const arriving: { key: string; at: string | null; when: Arrive; node: React.ReactNode }[] = [
@@ -150,47 +152,45 @@ export default function GoodsReceiving() {
   const t0 = today(), tm = addDays(t0, 1);
   const PROBLEM = ["failure", "return_to_sender", "error", "available_for_pickup", "cancelled"];
   const localDay = (iso: string | null | undefined) => { if (!iso) return ""; if (iso.length === 10) return iso; const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-  const rowOf = (x: Omit<Row, "state" | "late" | "via"> & { statuses: string[] }): Row => {
-    const state: Row["state"] = x.trks.length && x.trks.every((k) => k.delivered) ? "arrived" : x.statuses.some((st) => PROBLEM.includes(st)) ? "problem" : "way";
+  const rowOf = (x: Omit<Row, "state" | "late" | "via" | "supplier" | "noScan"> & { statuses: string[]; supplierRaw: string }): Row => {
+    // a label was made but the carrier never scanned it by the next business day after it shipped
+    const noScan = x.trks.some((k) => k.tracking && !k.delivered && ["", "unknown", "pre_transit"].includes(k.status || "")) && !!x.shipped && t0 >= nextBiz(x.shipped);
+    const state: Row["state"] = x.trks.length && x.trks.every((k) => k.delivered) ? "arrived" : x.statuses.some((st) => PROBLEM.includes(st)) || noScan ? "problem" : "way";
+    const supplier = /^ss$|s&s|s & s/i.test(x.supplierRaw) ? "ss" : /sanmar/i.test(x.supplierRaw) ? "sanmar" : "other";
     const k0 = x.trks[0];
     const via: Via = !k0 ? "other" : !k0.tracking ? (/s&s|s & s|ss activewear/i.test(k0.carrier) ? "ss" : "other") : /^ups$/i.test(k0.carrier) || /^1Z/i.test(k0.tracking) ? "ups" : /fedex/i.test(k0.carrier) ? "fedex" : "other";
-    return { ...x, via, state, late: state !== "arrived" && !!x.at && !!x.need && localDay(x.at) > x.need };
+    return { ...x, via, supplier, noScan, state, late: state !== "arrived" && !!x.at && !!x.need && localDay(x.at) > x.need };
   };
   const rows: Row[] = [
     // our blanks ordered here
-    ...data.bships.filter((sh) => v.byId.has(sh.order_id)).map((sh) => { const o = v.byId.get(sh.order_id)!; return rowOf({ key: "b" + sh.id, side: "fbs", number: o.number, href: `/shop/orders/${o.id}`, who: v.who(o), what: "Our blanks", sub: sh.note || "", boxes: sh.boxes || 0, pcs: sh.pcs || 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status }], statuses: [sh.track_status], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at, need: v.needBy(o), unlinked: false }); }),
+    ...data.bships.filter((sh) => v.byId.has(sh.order_id)).map((sh) => { const o = v.byId.get(sh.order_id)!; return rowOf({ key: "b" + sh.id, side: "fbs", number: o.number, href: `/shop/orders/${o.id}`, who: v.who(o), what: "Our blanks", sub: sh.note || "", boxes: sh.boxes || 0, pcs: sh.pcs || 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status }], statuses: [sh.track_status], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at, need: v.needBy(o), unlinked: false, supplierRaw: sh.carrier + " " + (sh.note || ""), shipped: null }); }),
     // customers' goods on orders here
-    ...data.goods.flatMap((it) => it.shipments.filter((sh) => sh.tracking || sh.eta).map((sh) => { const o = v.byId.get(it.order.id); return rowOf({ key: "g" + sh.id, side: "customer", number: it.order.number, href: `/shop/orders/${it.order.id}`, who: v.who(o), what: "Customer goods", sub: supplierLabel(it.goods.supplier) || "", boxes: sh.boxes || 0, pcs: 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status || "" }], statuses: [sh.track_status || ""], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at || null, need: v.needBy(o), unlinked: false }); })),
+    ...data.goods.flatMap((it) => it.shipments.filter((sh) => sh.tracking || sh.eta).map((sh) => { const o = v.byId.get(it.order.id); return rowOf({ key: "g" + sh.id, side: "customer", number: it.order.number, href: `/shop/orders/${it.order.id}`, who: v.who(o), what: "Customer goods", sub: supplierLabel(it.goods.supplier) || "", boxes: sh.boxes || 0, pcs: 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status || "" }], statuses: [sh.track_status || ""], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at || null, need: v.needBy(o), unlinked: false, supplierRaw: it.goods.supplier || "", shipped: sh.created_at ? sh.created_at.slice(0, 10) : null }); })),
     // tied to Printavo jobs (until go-live)
-    ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: `Printavo job · ${g.supplier === "sanmar" ? "SanMar" : "S&S"} order ${g.supplier_order}`, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false })),
+    ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: `Printavo job · ${g.supplier === "sanmar" ? "SanMar" : "S&S"} order ${g.supplier_order}`, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
     // on a manifest, not on any order yet: still coming in (or already here)
-    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : `${g.customer?.name || g.customer_name} goods`, sub: `${g.supplier === "sanmar" ? "SanMar" : "S&S"} order ${g.supplier_order} · PO ${g.customer_po || "none"}`, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true })),
+    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : `${g.customer?.name || g.customer_name} goods`, sub: `${g.supplier === "sanmar" ? "SanMar" : "S&S"} order ${g.supplier_order} · PO ${g.customer_po || "none"}`, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date })),
   ];
   const byAt = (a: Row, b: Row) => (a.at || "9999").localeCompare(b.at || "9999");
   const L = {
-    arrived: rows.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0),
+    arrived: rows.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
     today: rows.filter((r) => r.state !== "arrived" && localDay(r.at) === t0),
     tomorrow: rows.filter((r) => r.state !== "arrived" && localDay(r.at) === tm),
     way: rows.filter((r) => r.state !== "arrived").sort(byAt),
-    late: rows.filter((r) => r.late).sort(byAt),
-    problems: rows.filter((r) => r.state === "problem"),
+    // delivery problems, labels never scanned by the next business day, and anything arriving after it's needed
+    problems: rows.filter((r) => r.state === "problem" || r.late).sort(byAt),
   };
-  const count = [...u0.count, ...pvHere.map((g) => ({ n: g.number, id: g.archivedId, what: g.kind === "blanks" ? "Our blanks (Printavo job)" : "Customer goods (Printavo job)", who: g.customer }))];
   const KPIS: { k: Focus; label: string; n: number; tone?: string }[] = [
     { k: "today", label: "Arriving today", n: L.today.length, tone: L.today.length ? "info" : "" },
     { k: "arrived", label: "Arrived today", n: L.arrived.length, tone: L.arrived.length ? "ok" : "" },
     { k: "tomorrow", label: "Arriving tomorrow", n: L.tomorrow.length },
-    { k: "way", label: "On the way", n: L.way.length },
-    { k: "late", label: "Arriving too late", n: L.late.length, tone: L.late.length ? "bad" : "" },
-    { k: "problems", label: "Delayed / problem", n: L.problems.length, tone: L.problems.length ? "bad" : "" },
-    { k: "count", label: "Delivered, count in", n: count.length, tone: count.length ? "warn" : "" },
-    { k: "need", label: "Blanks to order", n: v.need.length, tone: v.need.length ? "warn" : "" },
-    { k: "unlinked", label: "Not linked to an order", n: unlinked.length + (pending || []).filter((g) => g.us).length, tone: (pending || []).length ? "warn" : "" },
-    { k: "info", label: "Goods: no info yet", n: u0.info.length, tone: u0.info.length ? "warn" : "" },
+    { k: "way", label: "In transit", n: L.way.length },
+    { k: "problems", label: "Delayed / problems", n: L.problems.length, tone: L.problems.length ? "bad" : "" },
   ];
   const statusPill = (r: Row) => r.state === "arrived"
     ? <span className="rv-pill ok">Arrived{r.deliveredAt && r.deliveredAt.length > 10 ? ` ${new Date(r.deliveredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span>
-    : r.state === "problem" ? <span className="rv-pill bad">{TRACK[r.trks.map((k) => k.status).find((st) => PROBLEM.includes(st)) || ""] || "Problem"}</span>
+    : r.state === "problem" ? <span className="rv-pill bad">{r.noScan ? "Not scanned since label created" : TRACK[r.trks.map((k) => k.status).find((st) => PROBLEM.includes(st)) || ""] || "Problem"}</span>
+    : r.late ? <span className="rv-pill bad">Arrives after it&apos;s needed</span>
     : <span className="rv-pill way">On the way</span>;
   const rowLine = (r: Row) => (
     <li key={r.key} className="rv-row">
@@ -211,26 +211,27 @@ export default function GoodsReceiving() {
         : <span key={"l" + i}>{k.carrier} local truck{k.delivered ? " · received" : ""}</span>)}</div>
     </li>
   );
-  // arrived / arriving today: one block per way it comes (S&S truck, UPS, FedEx, other)
-  const byVia = (list: Row[]) => (
-    <div className="rv-vias">{VIAS.map((vi) => { const rs = list.filter((r) => r.via === vi.k); return rs.length ? (
-      <div key={vi.k} className="rv-via"><div className="rv-via-h">{vi.label}<span>{rs.length} shipment{rs.length === 1 ? "" : "s"} · {rs.reduce((a, r) => a + (r.boxes || 0), 0)} boxes</span></div><ul className="rv-rows">{rs.map(rowLine)}</ul></div>
-    ) : null; })}</div>
-  );
-  const LISTS: { k: Focus; title: string; tone?: string; body: React.ReactNode; n: number }[] = [
-    { k: "late", title: "Arriving after they're needed", tone: "bad", n: L.late.length, body: <ul className="rv-rows">{L.late.map(rowLine)}</ul> },
-    { k: "problems", title: "Delayed or a delivery problem", tone: "bad", n: L.problems.length, body: <ul className="rv-rows">{L.problems.map(rowLine)}</ul> },
-    { k: "arrived", title: "Arrived today", n: L.arrived.length, body: byVia(L.arrived) },
-    { k: "today", title: "Arriving today", n: L.today.length, body: byVia(L.today) },
-    { k: "tomorrow", title: "Arriving tomorrow", n: L.tomorrow.length, body: <ul className="rv-rows">{L.tomorrow.map(rowLine)}</ul> },
-    { k: "way", title: "Everything on the way", n: L.way.length, body: <ul className="rv-rows">{L.way.map(rowLine)}</ul> },
-    { k: "count", title: "Delivered: count these in", n: count.length, body: <ul className="rv-rows">{count.map((c) => <li key={c.what + c.id} className="rv-row"><div className="rv-row-t"><Link className="num" href={c.what === "Our blanks" ? `/shop/orders/${c.id}` : c.what.includes("Printavo") ? `/shop/archive/${c.id}` : "/shop/receiving?view=customer"} onClick={(e) => { if (c.what === "Customer goods") { e.preventDefault(); setView("customer"); } }}>#{c.n}</Link><b>{c.who}</b><span className="faint">{c.what}</span></div></li>)}</ul> },
-    { k: "need", title: "Blanks to order", n: v.need.length, body: <ul className="rv-rows">{v.need.map((o) => <li key={o.id} className="rv-row"><div className="rv-row-t"><Link className="num" href={`/shop/orders/${o.id}`}>#{o.number}</Link><b>{v.who(o)}</b><span className="faint">{o.nickname}</span><span className="spacer" /><button type="button" className="btn primary sm" onClick={() => setOrder(o)}>Order blanks</button></div></li>)}</ul> },
-    { k: "unlinked", title: "Not linked to an order", n: (pending || []).length, body: <ul className="rv-rows">{rows.filter((r) => r.unlinked).sort(byAt).map(rowLine)}</ul> },
-    { k: "info", title: "Customer goods: no info yet", n: u0.info.length, body: <ul className="rv-rows">{u0.info.map((it) => <li key={it.order.id} className="rv-row"><div className="rv-row-t"><Link className="num" href={`/shop/orders/${it.order.id}`}>#{it.order.number}</Link><b>{v.who(v.byId.get(it.order.id))}</b><span className="faint">in hands {day(it.order.due_date)} · no supplier or tracking yet</span></div></li>)}</ul> },
-  ];
-  // first look: only what's arriving today and what already arrived (click a box for anything else)
-  const shown = focus ? LISTS.filter((x) => x.k === focus) : (["today", "arrived"] as Focus[]).map((k) => LISTS.find((x) => x.k === k)!);
+  // every list: one block per carrier (S&S truck, UPS, FedEx, other) or per supplier (S&S, SanMar, other vendors)
+  const grouped = (list: Row[], empty: string) => {
+    if (!list.length) return <div className="faint rv-empty">{empty}</div>;
+    const groups = groupBy === "carrier" ? VIAS : SUPPLIERS_G;
+    const key = (r: Row) => (groupBy === "carrier" ? r.via : r.supplier);
+    return (
+      <div className="rv-vias">{groups.map((gr) => { const rs = list.filter((r) => key(r) === gr.k); return rs.length ? (
+        <div key={gr.k} className="rv-via"><div className="rv-via-h">{gr.label}<span>{rs.length} shipment{rs.length === 1 ? "" : "s"} · {rs.reduce((a, r) => a + (r.boxes || 0), 0)} boxes</span></div><ul className="rv-rows">{rs.map(rowLine)}</ul></div>
+      ) : null; })}</div>
+    );
+  };
+  const LISTS: Record<Focus, { title: string; tone?: string; n: number; empty: string; rows: Row[] }> = {
+    today: { title: "Arriving today", n: L.today.length, rows: L.today, empty: "Nothing else due today." },
+    arrived: { title: "Already arrived today", n: L.arrived.length, rows: L.arrived, empty: "Nothing has arrived yet today." },
+    tomorrow: { title: "Arriving tomorrow", n: L.tomorrow.length, rows: L.tomorrow, empty: "Nothing due tomorrow yet." },
+    way: { title: "In transit", n: L.way.length, rows: L.way, empty: "Nothing on the way." },
+    problems: { title: "Delayed / problems", tone: "bad", n: L.problems.length, rows: L.problems, empty: "No problems." },
+  };
+  // first look: arriving today, and underneath it what already arrived
+  const shown: Focus[] = focus ? [focus] : ["today", "arrived"];
+
   // FBS pane boxes
   const fbsToday = arriving.filter((a) => a.when === "today" || a.when === "past").length;
 
@@ -246,11 +247,20 @@ export default function GoodsReceiving() {
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
       <div className="aa-sub rv-views" role="tablist">
         <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; overview</button>
+        <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS orders<span className={"aa-n" + (v.need.length ? " hot" : "")}>{v.need.length + arriving.length}</span></button>
         <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer supplied goods<span className="aa-n">{data.goods.filter((it) => it.goods.status !== "received").length + unlinked.length}</span></button>
         <button type="button" className={view === "resolve" ? "on" : ""} onClick={() => setView("resolve")}>Resolution center<span className={"aa-n" + (pending?.length ? " hot" : "")}>{pending ? pending.length : "…"}</span></button>
       </div>
 
-      {view === "customer" && <CustomerGoodsBoard pending={pending || []} onPending={() => { loadPending(); load(); }} refreshKey={refreshKey} />}
+      {view === "customer" && <>
+        {pvCust.length > 0 && (
+          <section className="rv-pane" style={{ marginBottom: 14, minHeight: 0 }}>
+            <div className="rv-pane-h"><b>On Printavo jobs</b><span className="faint">customer goods tied to jobs still worked in Printavo (until go-live)</span></div>
+            <div className="rv-pane-b">{pvCust.map((g) => <PvCard key={g.archivedId + g.supplier_order} g={g} lead={data.lead} onReceived={loadPending} />)}</div>
+          </section>
+        )}
+        <CustomerGoodsBoard pending={pending || []} onPending={() => { loadPending(); load(); }} refreshKey={refreshKey} />
+      </>}
       {view === "resolve" && (
         <>
           <p className="muted" style={{ marginTop: 0, fontSize: 13.5 }}>Supplier shipments that aren&apos;t on an order yet. An exact PO match links on its own. Everything else waits here with our best guess (one PO can be several orders: we read the styles, colors and sizes). OK it or change it. Customers see their incoming shipments on their portal and can link them too.</p>
@@ -259,27 +269,37 @@ export default function GoodsReceiving() {
       )}
       {view === "today" && <>
 
-      {/* today's update: click a box to see its list */}
+      {/* today's update: arriving today, then what already arrived; the boxes open the other lists */}
       <section className="rv-day">
-        <div className="rv-day-h"><b>Today&apos;s update</b><span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} · tracking checks every 20 minutes</span>{focus && <><span className="spacer" /><button type="button" className="linkbtn" onClick={() => setFocus(null)}>Show the summary</button></>}</div>
+        <div className="rv-day-h">
+          <b>Today&apos;s update</b><span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} · tracking checks every 20 minutes</span>
+          <span className="spacer" />
+          <div className="rv-seg" role="group" aria-label="Group by">
+            <button type="button" className={groupBy === "carrier" ? "on" : ""} onClick={() => setGroupBy("carrier")}>By carrier</button>
+            <button type="button" className={groupBy === "supplier" ? "on" : ""} onClick={() => setGroupBy("supplier")}>By supplier</button>
+          </div>
+        </div>
         <div className="rv-kpis">
           {KPIS.map((k) => (
-            <button key={k.k} type="button" className={[k.tone || "", focus === k.k ? "on" : ""].join(" ").trim()} onClick={() => setFocus(focus === k.k ? null : k.k)} aria-pressed={focus === k.k}>
+            <button key={k.k} type="button" className={[k.tone || "", (focus || "today") === k.k || (!focus && k.k === "arrived") ? "on" : ""].join(" ").trim()} onClick={() => setFocus(focus === k.k ? null : k.k)} aria-pressed={focus === k.k}>
               <span>{k.label}</span><b>{k.n}</b>
             </button>
           ))}
         </div>
-        <div className="rv-lists">
-          {shown.map((x) => (
-            <div key={x.k} className="rv-list">
-              <h4 className={x.tone || ""}>{x.title} <span className="faint">({x.n})</span></h4>
-              {x.n ? x.body : <div className="faint" style={{ fontSize: 13 }}>{x.k === "today" ? "Nothing else due today." : x.k === "arrived" ? "Nothing has arrived yet today." : "Nothing here right now."}</div>}
+        {focus && <div className="row" style={{ marginBottom: 6 }}><button type="button" className="linkbtn" onClick={() => setFocus(null)}>← Back to today</button></div>}
+        <div className="rv-stack">
+          {shown.map((k) => (
+            <div key={k} className="rv-list">
+              <h4 className={LISTS[k].tone || ""}>{LISTS[k].title} <span className="faint">({LISTS[k].n})</span></h4>
+              {grouped(LISTS[k].rows, LISTS[k].empty)}
             </div>
           ))}
         </div>
       </section>
+      </>}
 
-      <div className="rv-panes">
+      {view === "fbs" && <>
+      <div className="rv-one">
         {/* FBS orders (retail) */}
         <section className="rv-pane">
           <div className="rv-pane-h"><b>FBS orders</b><span className="faint">retail · blanks we buy</span></div>
@@ -321,44 +341,7 @@ export default function GoodsReceiving() {
           </div>
         </section>
 
-        {/* customer supplied goods (wholesale) */}
-        <section className="rv-pane">
-          <div className="rv-pane-h"><b>Customer supplied goods</b><span className="faint">wholesale · customers send us</span><span className="spacer" /><button type="button" onClick={() => setView("customer")} className="linkbtn" style={{ fontSize: 12.5 }}>Open the board →</button></div>
-          <div className="rv-stages">
-            <button type="button" onClick={() => setView("customer")}><span>Waiting on info</span><b>{v.goodsStages.info}</b></button>
-            <button type="button" onClick={() => setView("customer")}><span>On the way</span><b>{v.goodsStages.coming}</b></button>
-            <button type="button" className={v.goodsStages.counting ? "warn" : ""} onClick={() => setView("customer")}><span>Delivered, count in</span><b>{v.goodsStages.counting}</b></button>
-            <button type="button" className={v.goodsStages.issue ? "bad" : ""} onClick={() => setView("customer")}><span>Issues</span><b>{v.goodsStages.issue}</b></button>
-            <button type="button" className={unlinked.length ? "warn" : ""} onClick={() => setView("resolve")}><span>Not linked yet</span><b>{unlinked.length}</b></button>
-          </div>
-          <div className="rv-pane-b">
-            {pvCust.map((g) => {
-              const late = !g.delivered && g.eta && g.due_date && g.eta.slice(0, 10) > bizBefore(g.due_date, data.lead);
-              return (
-                <Link key={g.archivedId + g.supplier_order} href={`/shop/archive/${g.archivedId}`} className={"rv-card link" + (late ? " late" : "")}>
-                  <div className="rv-card-t"><span className="num">#{g.number}</span><b>{g.customer}</b><span className="rv-st">Printavo</span><span className="spacer" /><span className="rv-due">in hands {day(g.due_date)}</span></div>
-                  <div className="faint" style={{ fontSize: 12.5 }}>{g.supplier === "sanmar" ? "SanMar" : "S&S"} order {g.supplier_order} · {g.boxes} box{g.boxes === 1 ? "" : "es"} · {g.pcs} pcs · {g.delivered ? "arrived, count in" : stLabel(g.tracking.map((t) => t.status).find((st) => PROBLEMS.includes(st)))}{!g.delivered && g.eta ? ` · arrives ${day(g.eta)}` : ""}{late ? <b className="bad"> · after it&apos;s needed</b> : null}</div>
-                </Link>
-              );
-            })}
-            {data.goods.length ? data.goods.filter((it) => it.goods.status !== "received").map((it) => {
-              const o = v.byId.get(it.order.id);
-              const next = it.shipments.filter((s) => s.track_status !== "delivered").map((s) => s.est_delivery || s.eta).filter(Boolean).sort().pop() as string | undefined;
-              const late = next && v.needBy(o) && next.slice(0, 10) > v.needBy(o)!;
-              return (
-                <Link key={it.order.id} href={`/shop/orders/${it.order.id}`} className={"rv-card link" + (late ? " late" : "")}>
-                  <div className="rv-card-t"><span className="num">#{it.order.number}</span><b>{v.who(o)}</b><span className="spacer" /><span className="rv-due">in hands {day(it.order.due_date)}</span></div>
-                  <div className="faint" style={{ fontSize: 12.5 }}>
-                    {goodsNeedInfo(it.goods, it.shipments) ? "Waiting on info from the customer" : `${supplierLabel(it.goods.supplier) || "Supplier?"} · ${it.shipments.length} shipment${it.shipments.length === 1 ? "" : "s"}${next ? ` · arrives ${day(next)}` : ""}`}
-                    {late ? <b className="bad"> · after it&apos;s needed ({day(v.needBy(o))})</b> : null}
-                  </div>
-                </Link>
-              );
-            }) : !pvCust.length ? <div className="gb-empty">No customer supplied goods on open jobs.</div> : null}
-          </div>
-        </section>
       </div>
-
       </>}
       {truck && <TruckModal onClose={() => setTruck(false)} onDone={(m) => { setTruck(false); setNote(m); load(); loadPending(); setRefreshKey((k) => k + 1); }} />}
       {order && <OrderBlanks o={order} who={v.who(order)} onClose={() => setOrder(null)} onDone={(m) => { setOrder(null); setNote(m); setTab("ordered"); load(); }} />}
