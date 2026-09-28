@@ -54,6 +54,7 @@ export default function GoodsReceiving() {
   const [focus, setFocus] = useState<Focus | null>(null);
   const [groupBy, setGroupBy] = useState<GroupBy>("carrier");
   const [truck, setTruck] = useState(false);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<ManifestHit[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -221,11 +222,12 @@ export default function GoodsReceiving() {
       <td>{statusPill(r)}{r.trks.some((k) => k.freight) && r.lineIds?.length ? (r.state === "arrived"
         ? null
         : <div style={{ marginTop: 4 }}><button type="button" className="btn sm primary" onClick={() => setFreight(r)}>Freight received</button></div>) : null}</td>
-      <td className={r.late ? "bad" : ""}>{r.state === "arrived" ? "" : r.at ? day(r.at) : "—"}{r.need && r.state !== "arrived" ? <div className="faint" style={{ fontSize: 11.5 }}>need by {day(r.need)}</div> : null}</td>
-      <td className="trk"><div>{r.trks.map((k, i) => k.tracking
+      <td className={r.late ? "bad" : ""}>{r.state === "arrived" ? "" : r.at ? new Date(r.at.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "numeric", day: "numeric" }) : "—"}{r.need && r.state !== "arrived" ? <div className="faint" style={{ fontSize: 11.5 }}>need by {day(r.need)}</div> : null}</td>
+      <td className="trk"><div>{(open[r.key] ? r.trks : r.trks.slice(0, 1)).map((k, i) => k.tracking
         ? k.freight ? <span key={k.tracking}><b style={{ fontFamily: "inherit" }}>{k.carrier}</b><br /><a href={trackingUrl(/r&l/i.test(k.carrier) ? "r&l" : "", k.tracking)} target="_blank" rel="noreferrer">PRO {k.tracking}</a></span>
         : <a key={k.tracking} href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" className={unscanned(r, k) ? "noscan" : k.delivered ? "done" : ""} title={unscanned(r, k) ? "Label created, never scanned by the carrier" : ""}>{k.tracking}</a>
-        : <span key={"l" + i} className="faint">{k.carrier === "S&S Activewear" ? "S&S truck" : k.carrier} · no tracking</span>)}</div></td>
+        : <span key={"l" + i} className="faint">{k.carrier === "S&S Activewear" ? "S&S truck" : k.carrier} · no tracking</span>)}
+        {r.trks.length > 1 && <button type="button" className="rv-more" onClick={() => setOpen({ ...open, [r.key]: !open[r.key] })} title={r.trks.map((k) => k.tracking).join("\n")}>{open[r.key] ? "show less" : `+${r.trks.length - 1} more`}</button>}</div></td>
       <td className="so">{r.so || "—"}</td>
       <td className="act">{r.unlinked
         ? <button type="button" className="btn sm" onClick={() => setView("resolve")}>Link order</button>
@@ -239,7 +241,7 @@ export default function GoodsReceiving() {
     const key = (r: Row) => (groupBy === "carrier" ? r.via : r.supplier);
     return (
       <div className="rv-vias">{groups.map((gr) => { const rs = list.filter((r) => key(r) === gr.k).sort((a, b) => a.who.localeCompare(b.who, undefined, { sensitivity: "base" })); return rs.length ? (
-        <div key={gr.k} className="rv-via"><div className="rv-via-h">{gr.label}<span>{rs.length} shipment{rs.length === 1 ? "" : "s"} · {rs.reduce((a, r) => a + (r.boxes || 0), 0)} boxes</span></div>
+        <div key={gr.k} className="rv-via"><div className="rv-via-h">{gr.label}<span>{rs.length} shipment{rs.length === 1 ? "" : "s"} · {rs.reduce((a, r) => a + (r.boxes || 0), 0)} box{rs.reduce((a, r) => a + (r.boxes || 0), 0) === 1 ? "" : "es"}</span></div>
           <div className="rv-grid-wrap"><table className="rv-grid">
             <colgroup><col className="c-co" /><col className="c-from" /><col className="c-po" /><col className="c-n" /><col className="c-n" /><col className="c-st" /><col className="c-at" /><col className="c-trk" /><col className="c-so" /><col className="c-ord" /></colgroup>
             <thead><tr><th>Company</th><th>From</th><th>PO</th><th className="r">Boxes</th><th className="r">Pcs</th><th>Status</th><th>Arrives</th><th>Tracking</th><th>Supplier order</th><th>Our order</th></tr></thead>
@@ -328,7 +330,7 @@ export default function GoodsReceiving() {
         <div className="rv-stack">
           {shown.map((k) => (
             <div key={k} className="rv-list">
-              <h4 className={LISTS[k].tone || ""}>{LISTS[k].title} <span className="faint">({LISTS[k].n})</span></h4>
+              <h4 className={"rv-sec rv-sec-" + k}><span>{LISTS[k].title}</span><em>{LISTS[k].n}</em></h4>
               {grouped(LISTS[k].rows, LISTS[k].empty)}
             </div>
           ))}
