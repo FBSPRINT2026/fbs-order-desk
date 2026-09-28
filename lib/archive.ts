@@ -14,9 +14,14 @@ export type PvGroup = { id: string; position: number; columns: { category: boole
 export type PvFee = { id: string; description: string; quantity: number | null; unitPrice: number | null; pct: boolean; amount: number; taxable: boolean };
 export type PvTransaction = { id: string; kind: "Payment" | "Refund" | "Void" | "Return" | "PaymentDispute" | string; amount: number; category: string; description: string; date: string; source: string; processing: boolean; status?: string };
 export type PvTask = { id: string; name: string; completed: boolean; completedAt: string | null; dueAt: string | null; assignee: string };
-export type PvApproval = { id: string; name: string; status: string; requester: string; response: { name: string; email: string; reason: string; at: string } | null; at: string };
+export type PvApproval = { id: string; name: string; status: string; requester: string; response: { name: string; email: string; reason: string; at: string } | null; at: string; retractor?: string; updatedAt?: string };
 export type PvExpense = { id: string; name: string; amount: number; at: string };
-export type PvMessage = { id: string; kind: "email" | "text"; incoming: boolean; from: string; to: string; cc: string; subject: string; text: string; at: string };
+export type PvAttachment = { name: string; url: string };
+export type PvMessage = {
+  id: string; kind: "email" | "text"; incoming: boolean; from: string; to: string; cc: string; subject: string; text: string; at: string;
+  /** who sent it (a staff member or the customer's contact), delivery status (e.g. OPENED), bcc, attached files */
+  sender?: string; status?: string; bcc?: string; attachments?: PvAttachment[];
+};
 export type PvOrder = {
   v: 1; kind: "invoice" | "quote"; id: string; visualId: string; nickname: string;
   status: { name: string; color: string };
@@ -52,9 +57,10 @@ export function orderFiles(o: PvOrder): PvFile[] {
     ...o.files,
   ];
 }
-/** The URLs worth copying into our storage (full files and their thumbnails). */
+/** The URLs worth copying into our storage (full files and their thumbnails, and files attached to messages). */
 export function fileUrls(o: PvOrder): string[] {
-  return [...new Set(orderFiles(o).flatMap((f) => [f.full, f.thumb]).filter((u): u is string => !!u && /^https?:\/\//.test(u)))];
+  return [...new Set([...orderFiles(o).flatMap((f) => [f.full, f.thumb]), ...o.messages.flatMap((m) => (m.attachments || []).map((a) => a.url))]
+    .filter((u): u is string => !!u && /^https?:\/\//.test(u)))];
 }
 
 export const addressLines = (a: PvAddress) => !a ? [] : [a.companyName, a.customerName, a.address1, a.address2, [[a.city, a.state].filter(Boolean).join(", "), a.zipCode].filter(Boolean).join(" "), a.country && !/^(us|usa|united states)$/i.test(a.country) ? a.country : ""].map((x) => (x || "").trim()).filter(Boolean);
@@ -77,7 +83,9 @@ export function plain(s?: string | null): string {
 
 /** What a customer may see of an archived order: no production notes, internal tasks, expenses, shop emails or owner. */
 export function forCustomer(o: PvOrder): PvOrder {
-  return { ...o, groups: o.groups.map((g) => ({ ...g, lines: g.lines.map((l) => ({ ...l, status: "" })) })), productionNote: "", tasks: [], expenses: [], messages: [], files: [], owner: "", tags: [], warnings: undefined,
+  return { ...o, groups: o.groups.map((g) => ({ ...g, lines: g.lines.map((l) => ({ ...l, status: "" })) })), productionNote: "", tasks: [], expenses: [], files: [],
+    // the emails and texts sent to or from them stay (without the internal relay address, bcc or delivery tracking)
+    messages: o.messages.map((m) => ({ ...m, from: m.incoming ? m.from : "", bcc: "", status: "" })), owner: "", tags: [], warnings: undefined,
     urls: { url: "", publicUrl: "", publicPdf: "", workorderUrl: "", packingSlipUrl: "" },
     transactions: o.transactions.filter((t) => !t.processing) };
 }

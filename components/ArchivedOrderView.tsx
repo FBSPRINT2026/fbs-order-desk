@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { addressLines, plain, sizeLabel, sizeOrder, type PvFile, type PvGroup, type PvOrder } from "@/lib/archive";
 import { fmtDateLong, money } from "@/lib/format";
 import ProductionPanel from "@/components/ProductionPanel";
@@ -35,6 +35,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
   const feeTotal = o.fees.reduce((a, f) => a + f.amount, 0);
   const bill = addressLines(o.billingAddress), ship = addressLines(o.shippingAddress);
   const label = o.kind === "quote" ? "Quote" : "Invoice";
+  const approval = approvalBadge(o);
 
   return (
     <div className="pv">
@@ -55,6 +56,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
           </div>
           <div className="pv-head-r">
             {o.status.name && <span className="pv-status" style={{ background: o.status.color || "#888", color: inkOn(o.status.color || "#888") }}>{o.status.name}</span>}
+            {approval && <span className={"pv-appr " + approval.cls} title={approval.title}>{approval.label}</span>}
             <div className="pv-bal"><span>Total</span><b>{money(o.total)}</b></div>
             <div className="pv-bal"><span>Balance</span><b className={o.amountOutstanding > 0.004 ? "due" : ""}>{money(o.amountOutstanding)}</b></div>
           </div>
@@ -105,6 +107,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             <div className="faint" style={{ fontSize: 12 }}>{o.totalQuantity} item{o.totalQuantity === 1 ? "" : "s"}{o.paidInFull ? " · Paid in full" : ""}</div>
           </div>
         </div>
+        {(o.messages.length > 0 || o.approvals.length > 0) && <History o={o} fileUrl={fileUrl} audience={audience} />}
         </div>
         <aside className="ed-aside pv-aside">
         {audience === "shop" && (
@@ -126,15 +129,6 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             </div>
           </section>
         )}
-        {o.approvals.length > 0 && (
-          <section className="panel"><div className="panel-h"><h2>Approvals</h2></div><div className="panel-b">
-            <ul className="pv-list">{o.approvals.map((a) => (
-              <li key={a.id}><b>{a.name}</b> <span className={"pv-chip " + a.status}>{a.status}</span> <span className="faint">requested {stamp(a.at)}{a.requester ? ` by ${a.requester}` : ""}</span>
-                {a.response && <div className="faint">{a.response.name}{a.response.email ? ` (${a.response.email})` : ""} · {stamp(a.response.at)}{a.response.reason ? ` · “${a.response.reason}”` : ""}</div>}</li>
-            ))}</ul>
-          </div></section>
-        )}
-
         {o.tasks.length > 0 && (
           <section className="panel"><div className="panel-h"><h2>Tasks</h2></div><div className="panel-b">
             <ul className="pv-list">{o.tasks.map((t) => (
@@ -146,18 +140,6 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         {o.expenses.length > 0 && (
           <section className="panel"><div className="panel-h"><h2>Expenses</h2></div><div className="panel-b">
             <table className="pv-tbl"><tbody>{o.expenses.map((x) => <tr key={x.id}><td>{d(x.at)}</td><td>{x.name}</td><td className="r num">{money(x.amount)}</td></tr>)}</tbody></table>
-          </div></section>
-        )}
-
-        {o.messages.length > 0 && (
-          <section className="panel"><div className="panel-h"><h2>Messages</h2><span className="faint" style={{ fontSize: 12 }}>from Printavo</span></div><div className="panel-b">
-            <div className="pv-msgs">{o.messages.map((m) => (
-              <div key={m.id} className={"pv-msg" + (m.incoming ? " in" : "")}>
-                <div className="pv-msg-h"><b>{m.incoming ? m.from : `To ${m.to}`}</b>{m.kind === "text" && <span className="pv-chip">Text</span>}<span className="faint">{stamp(m.at)}</span></div>
-                {m.subject && <div className="pv-msg-s">{m.subject}</div>}
-                <div className="pv-pre">{plain(m.text)}</div>
-              </div>
-            ))}</div>
           </div></section>
         )}
 
@@ -221,4 +203,83 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
       </section>
     );
   }
+}
+
+/* ---------- messages & approvals ---------- */
+
+const cap = (x: string) => x ? x.charAt(0).toUpperCase() + x.slice(1).toLowerCase().replace(/_/g, " ") : "";
+const APPROVED = /^approved$/i, DECLINED = /declin|reject|unapprov/i, WITHDRAWN = /revok|retract|withdr|cancel/i;
+
+/** The latest approval on the order, as a small badge: Approved · Leona Harder · Sep 16 */
+function approvalBadge(o: PvOrder): { label: string; cls: string; title: string } | null {
+  const a = [...o.approvals].sort((x, y) => (x.response?.at || x.at).localeCompare(y.response?.at || y.at)).pop();
+  if (!a) return null;
+  const when = a.response?.at ? fmtDateLong(a.response.at.slice(0, 10)) : "";
+  if (APPROVED.test(a.status)) return { label: `✓ Approved${a.response?.name ? ` by ${a.response.name}` : ""}`, cls: "ok", title: `${a.name}${when ? ` · ${when}` : ""}` };
+  if (DECLINED.test(a.status)) return { label: `Changes requested${a.response?.name ? ` by ${a.response.name}` : ""}`, cls: "bad", title: `${a.name}${a.response?.reason ? ` · “${a.response.reason}”` : ""}` };
+  if (WITHDRAWN.test(a.status) || a.retractor) return { label: "Approval withdrawn", cls: "", title: a.name };
+  return { label: "Waiting for approval", cls: "wait", title: `${a.name} · sent ${fmtDateLong(a.at.slice(0, 10))}` };
+}
+
+type Ev = { at: string; key: string; kind: "msg" | "appr"; node: ReactNode };
+
+/**
+ * Everything that was said and approved on this order, oldest first: emails and texts (with who sent them, whether they
+ * were opened, and their attachments) and each approval request with its answer.
+ */
+function History({ o, fileUrl, audience }: { o: PvOrder; fileUrl: (u: string) => string; audience: "shop" | "customer" }) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const evs: Ev[] = [];
+  for (const a of o.approvals) {
+    evs.push({ at: a.at, key: a.id + "-req", kind: "appr", node: (
+      <div className="pvh-appr"><span className="pvh-dot" aria-hidden="true">⧗</span><div><b>Approval requested</b>: {a.name || "Order"}<div className="faint">{a.requester ? `by ${a.requester} · ` : ""}{stamp(a.at)}</div></div></div>
+    ) });
+    if (a.response?.at) {
+      const ok = APPROVED.test(a.status);
+      evs.push({ at: a.response.at, key: a.id + "-res", kind: "appr", node: (
+        <div className={"pvh-appr " + (ok ? "ok" : "bad")}><span className="pvh-dot" aria-hidden="true">{ok ? "✓" : "✕"}</span><div>
+          <b>{ok ? "Approved" : cap(a.status) || "Answered"}</b>: {a.name || "Order"}
+          <div className="faint">{[a.response.name, audience === "shop" ? a.response.email : ""].filter(Boolean).join(" · ")}{a.response.name || a.response.email ? " · " : ""}{stamp(a.response.at)}</div>
+          {a.response.reason && <div className="pvh-reason">“{a.response.reason}”</div>}
+        </div></div>
+      ) });
+    }
+    if (a.retractor || (WITHDRAWN.test(a.status) && !a.response)) {
+      evs.push({ at: a.updatedAt || a.at, key: a.id + "-wd", kind: "appr", node: (
+        <div className="pvh-appr"><span className="pvh-dot" aria-hidden="true">↺</span><div><b>Approval withdrawn</b>: {a.name || "Order"}<div className="faint">{a.retractor ? `by ${a.retractor} · ` : ""}{stamp(a.updatedAt || a.at)}</div></div></div>
+      ) });
+    }
+  }
+  for (const m of o.messages) {
+    const long = plain(m.text).length > 700 || plain(m.text).split("\n").length > 8;
+    const shown = open[m.id] || !long;
+    const who = m.incoming ? (m.sender || m.from || "Customer") : (m.sender || "FBS Print");
+    evs.push({ at: m.at, key: m.id, kind: "msg", node: (
+      <div className={"pv-msg" + (m.incoming ? " in" : "")}>
+        <div className="pv-msg-h">
+          <b>{who}</b>
+          <span className="pv-chip">{m.kind === "text" ? "Text" : "Email"}</span>
+          {audience === "shop" && m.status && <span className={"pv-chip st-" + m.status.toLowerCase()}>{cap(m.status)}</span>}
+          <span className="faint">{stamp(m.at)}</span>
+        </div>
+        <div className="faint pvh-to">{m.incoming ? "To FBS Print" : `To ${m.to.split(",").map((x) => x.trim()).filter(Boolean).join(", ")}`}{m.cc ? ` · cc ${m.cc}` : ""}{audience === "shop" && m.bcc ? ` · bcc ${m.bcc}` : ""}</div>
+        {m.subject && <div className="pv-msg-s">{m.subject}</div>}
+        <div className={"pv-pre" + (shown ? "" : " clamp")}>{plain(m.text)}</div>
+        {long && <button type="button" className="linkbtn" onClick={() => setOpen((x) => ({ ...x, [m.id]: !x[m.id] }))}>{shown ? "Show less" : "Show more"}</button>}
+        {!!m.attachments?.length && (
+          <div className="pvh-att">{m.attachments.map((f, i) => {
+            const u = fileUrl(f.url);
+            return u ? <a key={i} href={u} target="_blank" rel="noreferrer">📎 {f.name || "Attachment"}</a> : <span key={i} className="faint">📎 {f.name || "Attachment"}</span>;
+          })}</div>
+        )}
+      </div>
+    ) });
+  }
+  evs.sort((a, b) => a.at.localeCompare(b.at));
+  const nMsg = o.messages.length, nAppr = o.approvals.length;
+  return (
+    <section className="panel"><div className="panel-h"><h2>Messages &amp; approvals</h2><span className="faint" style={{ fontSize: 12 }}>{[nMsg ? `${nMsg} message${nMsg === 1 ? "" : "s"}` : "", nAppr ? `${nAppr} approval${nAppr === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")}</span></div>
+      <div className="panel-b"><div className="pvh">{evs.map((e) => <div key={e.key} className={"pvh-ev " + e.kind}>{e.node}</div>)}</div></div>
+    </section>
+  );
 }

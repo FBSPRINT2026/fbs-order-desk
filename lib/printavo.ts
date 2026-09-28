@@ -2,7 +2,7 @@ import "server-only";
 import type { PvAddress, PvFile, PvGroup, PvLine, PvMessage, PvOrder, PvTransaction } from "@/lib/archive";
 
 /**
- * Printavo API v2 (GraphQL). Read-only: the importer never changes anything in Printavo.
+ * Printavo API v2 (GraphQL). Read-only: nothing here can change anything in Printavo (see assertReadOnly).
  * Limits: 10 requests per 5 seconds per account, so calls are spaced out and retried when Printavo says slow down.
  */
 const PV_URL = "https://www.printavo.com/api/v2";
@@ -15,7 +15,18 @@ export function printavoConfigured() {
   return !!(process.env.PRINTAVO_EMAIL?.trim() && process.env.PRINTAVO_TOKEN?.trim());
 }
 
+/**
+ * READ-ONLY, ALWAYS. Our portal never changes anything in Printavo: every request is checked here and anything that
+ * isn't a plain read (a GraphQL "mutation" or "subscription") is refused before it leaves our server.
+ */
+export function assertReadOnly(query: string) {
+  const body = query.replace(/#[^\n]*/g, " ").replace(/"(?:[^"\\]|\\.)*"/g, '""').trim();
+  if (!/^(query\b|\{)/.test(body) || /\b(mutation|subscription)\b/i.test(body))
+    throw new PrintavoError("Blocked: the portal only reads from Printavo and never changes anything there.");
+}
+
 export async function pv<T = Record<string, unknown>>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
+  assertReadOnly(query);
   const email = process.env.PRINTAVO_EMAIL?.trim(), token = process.env.PRINTAVO_TOKEN?.trim();
   if (!email || !token) throw new PrintavoError("Printavo isn't connected (PRINTAVO_EMAIL / PRINTAVO_TOKEN missing in Vercel).");
   for (let attempt = 0; ; attempt++) {
@@ -104,13 +115,14 @@ const ORDER_FIELDS = `id visualId nickname createdAt startAt dueAt customerDueAt
 const EXTRA_FIELDS = `transactions(first:50){ nodes{ __typename ... on Payment{ ${TX} source } ... on Refund{ ${TX} } ... on Void{ ${TX} } ... on Return{ ${TX} } ... on PaymentDispute{ ${TX} status } } }
   productionFiles(first:50){ nodes{ id name fileUrl mimeType } }
   tasks(first:50){ nodes{ id name completed completedAt dueAt assignedTo{ name } } }
-  approvalRequests(first:25){ nodes{ id name status requester{ name } response{ name email reason respondedAt } timestamps{ createdAt } } }
+  approvalRequests(first:25){ nodes{ id name status requester{ name } retractor{ name } response{ name email reason respondedAt } timestamps{ createdAt updatedAt } } }
   expenses(first:50){ nodes{ id name amount transactionAt } }`;
 const GROUP_FIELDS = `id position enabledColumns{ category color itemNumber markupPercentage sizes }
   imprints(first:25){ nodes{ id details typeOfWork{ name } pricingMatrixColumn{ columnName } mockups(first:20){ nodes{ ${MOCK} } } } }`;
 const LINE_FIELDS = `id position category{ name } itemNumber color description items price markupPercentage taxed productStatus
   product{ brand } sizes{ size count } personalizations{ name personalization } mockups(first:10){ nodes{ ${MOCK} } }`;
 
+const MSG_EXTRA = "sender{ __typename ... on User{ name } ... on Contact{ fullName } } attachments(first:25){ nodes{ filename url } }";
 const typed = (f: string) => `... on Invoice{ ${f} } ... on Quote{ ${f} }`;
 /** Every query the importer sends. */
 export const Q = {
@@ -124,25 +136,42 @@ export const Q = {
   moreGroups: `query($id:ID!,$after:String){ order(id:$id){ ${typed("lineItemGroups(first:50, after:$after){ nodes{ id position } pageInfo{ hasNextPage endCursor } }")} } }`,
   group: `query($id:ID!){ lineItemGroup(id:$id){ ${GROUP_FIELDS} lineItems(first:100){ nodes{ ${LINE_FIELDS} } pageInfo{ hasNextPage endCursor } } } }`,
   moreLines: `query($id:ID!,$after:String){ lineItemGroup(id:$id){ lineItems(first:100, after:$after){ nodes{ ${LINE_FIELDS} } pageInfo{ hasNextPage endCursor } } } }`,
-  thread: `query($id:ID!){ thread(id:$id){ messages(first:100){ nodes{ __typename
-          ... on EmailMessage{ id from to cc subject text incoming timestamps{ createdAt } }
-          ... on TextMessage{ id from to text incoming timestamps{ createdAt } } } } } }`,
-  // census: every order in the account (50 at a time), and just the file links on one order
-  list: `query($after:String){ orders(first:25, after:$after){ nodes{ __typename ${typed("id visualId createdAt total contact{ customer{ id companyName } }")} } pageInfo{ hasNextPage endCursor } } }`,
+  thread: `query($id:ID!,$after:String){ thread(id:$id){ messages(first:100, after:$after){ nodes{ __typename
+          ... on EmailMessage{ id from to cc bcc subject text incoming status timestamps{ createdAt } ${MSG_EXTRA} }
+          ... on TextMessage{ id from to text incoming status timestamps{ createdAt } ${MSG_EXTRA} } } pageInfo{ hasNextPage endCursor } } } }`,
+  allCustomers: `query($after:String){ customers(first:25, after:$after){ nodes{ id companyName orderCount primaryContact{ fullName email } } pageInfo{ hasNextPage endCursor } } }`,
+  // every order in the account (25 at a time, oldest first) with what changes when an order changes, and just the file links on one order
+  list: `query($after:String){ orders(first:25, after:$after){ nodes{ __typename ${typed("id visualId createdAt total amountOutstanding customerDueAt status{ name } timestamps{ updatedAt } contact{ customer{ id companyName } }")} } pageInfo{ hasNextPage endCursor } } }`,
   fileList: `query($id:ID!){ order(id:$id){ ${typed("productionFiles(first:50){ nodes{ fileUrl } } lineItemGroups(first:50){ nodes{ id } }")} } }`,
   groupFiles: `query($id:ID!){ lineItemGroup(id:$id){ imprints(first:25){ nodes{ mockups(first:20){ nodes{ fullImageUrl } } } } lineItems(first:100){ nodes{ mockups(first:10){ nodes{ fullImageUrl } } } } } }`,
 };
 
+/** One page (25) of every customer in the Printavo account. */
+export async function listCustomers(after: string | null): Promise<{ customers: { id: string; companyName: string; contact: string; orderCount: number }[]; next: string | null }> {
+  const d = await pv<{ customers: { nodes: Raw[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } | null }>(Q.allCustomers, { after });
+  const c = d.customers;
+  if (!c) throw new PrintavoError("Printavo didn't return the customer list.");
+  return {
+    customers: (c.nodes || []).filter((x) => x?.id).map((x) => ({ id: s(x.id), companyName: s(x.companyName), contact: s(x.primaryContact?.fullName || x.primaryContact?.email), orderCount: n(x.orderCount) })),
+    next: c.pageInfo?.hasNextPage ? c.pageInfo.endCursor : null,
+  };
+}
+
 /* ---------- census (sizes only, nothing copied) ---------- */
 
-export type PvListed = { id: string; visualId: string; kind: "invoice" | "quote"; createdAt: string; total: number; customerId: string; company: string };
+export type PvListed = { id: string; visualId: string; kind: "invoice" | "quote"; createdAt: string; total: number; customerId: string; company: string; updatedAt: string; fingerprint: string };
 /** One page (25, Printavo's most) of every order in the Printavo account. */
 export async function listOrders(after: string | null): Promise<{ orders: PvListed[]; next: string | null; totalNodes: number | null }> {
   const d = await pv<{ orders: { nodes: Raw[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(Q.list, { after });
   const c = d.orders;
   if (!c) throw new PrintavoError("Printavo didn't return the order list.");
   return {
-    orders: (c?.nodes || []).filter((o) => o?.id).map((o) => ({ id: s(o.id), visualId: s(o.visualId), kind: o.__typename === "Quote" ? "quote" : "invoice", createdAt: s(o.createdAt), total: n(o.total), customerId: s(o.contact?.customer?.id), company: s(o.contact?.customer?.companyName) })),
+    orders: (c?.nodes || []).filter((o) => o?.id).map((o) => ({
+      id: s(o.id), visualId: s(o.visualId), kind: o.__typename === "Quote" ? "quote" : "invoice", createdAt: s(o.createdAt), total: n(o.total),
+      customerId: s(o.contact?.customer?.id), company: s(o.contact?.customer?.companyName), updatedAt: s(o.timestamps?.updatedAt),
+      // anything here changing means the order changed in Printavo
+      fingerprint: [s(o.timestamps?.updatedAt), n(o.total).toFixed(2), n(o.amountOutstanding).toFixed(2), s(o.status?.name), s(o.customerDueAt), s(o.contact?.customer?.id)].join("|"),
+    })),
     next: c?.pageInfo?.hasNextPage ? c.pageInfo.endCursor : null,
     totalNodes: null,
   };
@@ -240,9 +269,20 @@ export async function getOrder(id: string): Promise<PvOrder> {
   let messages: PvMessage[] = [];
   if (o.threadSummary?.id) {
     try {
-      const t = (await pv<{ thread: Raw }>(Q.thread, { id: o.threadSummary.id })).thread;
-      messages = (t?.messages?.nodes || []).map((m: Raw): PvMessage => ({ id: s(m.id), kind: m.__typename === "TextMessage" ? "text" : "email", incoming: !!m.incoming, from: s(m.from), to: s(m.to), cc: s(m.cc), subject: s(m.subject), text: s(m.text), at: s(m.timestamps?.createdAt) }))
-        .sort((a: PvMessage, b: PvMessage) => a.at.localeCompare(b.at));
+      const nodes: Raw[] = [];
+      let after: string | null = null;
+      for (let page = 0; page < 10; page++) {
+        const t: Raw | null = (await pv<{ thread: Raw }>(Q.thread, { id: o.threadSummary.id, after })).thread;
+        nodes.push(...(t?.messages?.nodes || []));
+        if (!t?.messages?.pageInfo?.hasNextPage) break;
+        after = t.messages.pageInfo.endCursor;
+      }
+      messages = nodes.filter(Boolean).map((m: Raw): PvMessage => ({
+        id: s(m.id), kind: m.__typename === "TextMessage" ? "text" : "email", incoming: !!m.incoming, from: s(m.from), to: s(m.to), cc: s(m.cc), bcc: s(m.bcc),
+        subject: s(m.subject), text: s(m.text), at: s(m.timestamps?.createdAt), status: s(m.status),
+        sender: s(m.sender?.name || m.sender?.fullName),
+        attachments: (m.attachments?.nodes || []).filter((a: Raw) => a?.url).map((a: Raw) => ({ name: s(a.filename), url: s(a.url) })),
+      })).sort((a: PvMessage, b: PvMessage) => a.at.localeCompare(b.at));
     } catch (e) { warnings.push("messages: " + (e instanceof Error ? e.message : String(e))); }
   }
 
@@ -264,7 +304,7 @@ export async function getOrder(id: string): Promise<PvOrder> {
       .sort((a: PvTransaction, b: PvTransaction) => a.date.localeCompare(b.date)),
     files: (extra.productionFiles?.nodes || []).map(file),
     tasks: (extra.tasks?.nodes || []).map((t: Raw) => ({ id: s(t.id), name: s(t.name), completed: !!t.completed, completedAt: t.completedAt || null, dueAt: t.dueAt || null, assignee: s(t.assignedTo?.name) })),
-    approvals: (extra.approvalRequests?.nodes || []).map((a: Raw) => ({ id: s(a.id), name: s(a.name), status: s(a.status), requester: s(a.requester?.name), response: a.response ? { name: s(a.response.name), email: s(a.response.email), reason: s(a.response.reason), at: s(a.response.respondedAt) } : null, at: s(a.timestamps?.createdAt) })),
+    approvals: (extra.approvalRequests?.nodes || []).map((a: Raw) => ({ id: s(a.id), name: s(a.name), status: s(a.status), requester: s(a.requester?.name), response: a.response ? { name: s(a.response.name), email: s(a.response.email), reason: s(a.response.reason), at: s(a.response.respondedAt) } : null, at: s(a.timestamps?.createdAt), retractor: s(a.retractor?.name), updatedAt: s(a.timestamps?.updatedAt) })),
     expenses: (extra.expenses?.nodes || []).map((x: Raw) => ({ id: s(x.id), name: s(x.name), amount: n(x.amount), at: s(x.transactionAt) })),
     messages,
     urls: { url: s(o.url), publicUrl: s(o.publicUrl), publicPdf: s(o.publicPdf), workorderUrl: s(o.workorderUrl), packingSlipUrl: s(o.packingSlipUrl) },
@@ -281,6 +321,7 @@ export async function checkQueries(): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const [name, query] of Object.entries(Q)) {
     if (name === "search") continue; // would return real customers
+    assertReadOnly(query);
     await sleep(600);
     const r = await fetch(PV_URL, { method: "POST", headers: { "Content-Type": "application/json", email: email || "", token: token || "" }, body: JSON.stringify({ query: name === "list" ? query.replace("first:25", "first:1") : query, variables: query.includes("$id") ? { id: "0", after: null } : { after: null } }), cache: "no-store" });
     const j = await r.json().catch(() => null) as { errors?: { message: string; path?: unknown }[] } | null;
