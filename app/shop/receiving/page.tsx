@@ -20,7 +20,7 @@ type Arrive = "past" | "today" | "tomorrow" | "later" | "nodate";
 const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
   { k: "past", label: "Should be here: not marked received" }, { k: "today", label: "Arriving today" }, { k: "tomorrow", label: "Tomorrow" }, { k: "later", label: "Later" }, { k: "nodate", label: "On the way, no date yet" },
 ];
-type Focus = "arrived" | "today" | "tomorrow" | "way" | "problems";
+type Focus = "arrived" | "today" | "way" | "past" | "problems";
 type GroupBy = "carrier" | "supplier";
 type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; po: string; so: string; boxes: number; pcs: number;
   trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean }[]; lineIds?: string[]; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
@@ -150,7 +150,7 @@ export default function GoodsReceiving() {
   ].sort((a, b) => (a.at || "9999").localeCompare(b.at || "9999"));
   const arrivingToday = arriving.filter((a) => a.when === "today" || a.when === "past").length;
   // ---------- today's update: every shipment coming to us, linked or not, one row per shipment ----------
-  const t0 = today(), tm = addDays(t0, 1);
+  const t0 = today();
   const PROBLEM = ["failure", "return_to_sender", "error", "available_for_pickup", "cancelled"];
   const localDay = (iso: string | null | undefined) => { if (!iso) return ""; if (iso.length === 10) return iso; const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const rowOf = (x: Omit<Row, "state" | "late" | "via" | "supplier" | "noScan"> & { statuses: string[]; supplierRaw: string }): Row => {
@@ -177,7 +177,8 @@ export default function GoodsReceiving() {
     arrived: rows.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
     // due today, plus S&S truck / freight still not signed for (they never report delivery on their own)
     today: rows.filter((r) => r.state !== "arrived" && (localDay(r.at) === t0 || (!!r.at && localDay(r.at) < t0 && r.trks.some((k) => !k.tracking || k.freight)))),
-    tomorrow: rows.filter((r) => r.state !== "arrived" && localDay(r.at) === tm),
+    // the last week before today
+    past: rows.filter((r) => r.state === "arrived" && !!r.deliveredAt && localDay(r.deliveredAt) < t0 && localDay(r.deliveredAt) >= addDays(t0, -7)).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
     way: rows.filter((r) => r.state !== "arrived").sort(byAt),
     // delivery problems, labels never scanned by the next business day, and anything arriving after it's needed
     problems: rows.filter((r) => r.state === "problem" || r.late).sort(byAt),
@@ -185,12 +186,12 @@ export default function GoodsReceiving() {
   const KPIS: { k: Focus; label: string; n: number; tone?: string }[] = [
     { k: "today", label: "Arriving today", n: L.today.length, tone: L.today.length ? "info" : "" },
     { k: "arrived", label: "Arrived today", n: L.arrived.length, tone: L.arrived.length ? "ok" : "" },
-    { k: "tomorrow", label: "Arriving tomorrow", n: L.tomorrow.length },
     { k: "way", label: "In transit", n: L.way.length },
+    { k: "past", label: "Already arrived", n: L.past.length },
     { k: "problems", label: "Delayed / problems", n: L.problems.length, tone: L.problems.length ? "bad" : "" },
   ];
   const statusPill = (r: Row) => r.state === "arrived"
-    ? <span className="rv-pill ok">Arrived{r.deliveredAt && r.deliveredAt.length > 10 ? ` ${new Date(r.deliveredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span>
+    ? <span className="rv-pill ok">Arrived{r.deliveredAt && localDay(r.deliveredAt) !== t0 ? ` ${new Date(r.deliveredAt.length > 10 ? r.deliveredAt : r.deliveredAt + "T12:00").toLocaleDateString([], { weekday: "short", month: "numeric", day: "numeric" })}` : ""}{r.deliveredAt && r.deliveredAt.length > 10 ? ` ${new Date(r.deliveredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span>
     : r.state === "problem" ? <span className="rv-pill bad">{r.noScan ? "Not scanned since label created" : TRACK[r.trks.map((k) => k.status).find((st) => PROBLEM.includes(st)) || ""] || "Problem"}</span>
     : r.late ? <span className="rv-pill bad">Arrives after it&apos;s needed</span>
     : <span className="rv-pill way">On the way</span>;
@@ -235,8 +236,8 @@ export default function GoodsReceiving() {
   };
   const LISTS: Record<Focus, { title: string; tone?: string; n: number; empty: string; rows: Row[] }> = {
     today: { title: "Arriving today", n: L.today.length, rows: L.today, empty: "Nothing else due today." },
-    arrived: { title: "Already arrived today", n: L.arrived.length, rows: L.arrived, empty: "Nothing has arrived yet today." },
-    tomorrow: { title: "Arriving tomorrow", n: L.tomorrow.length, rows: L.tomorrow, empty: "Nothing due tomorrow yet." },
+    arrived: { title: "Arrived today", n: L.arrived.length, rows: L.arrived, empty: "Nothing has arrived yet today." },
+    past: { title: "Already arrived · the last 7 days", n: L.past.length, rows: L.past, empty: "Nothing arrived in the last week." },
     way: { title: "In transit", n: L.way.length, rows: L.way, empty: "Nothing on the way." },
     problems: { title: "Delayed / problems", tone: "bad", n: L.problems.length, rows: L.problems, empty: "No problems." },
   };
@@ -292,12 +293,11 @@ export default function GoodsReceiving() {
         </div>
         <div className="rv-kpis">
           {KPIS.map((k) => (
-            <button key={k.k} type="button" className={[k.tone || "", (focus || "today") === k.k || (!focus && k.k === "arrived") ? "on" : ""].join(" ").trim()} onClick={() => setFocus(focus === k.k ? null : k.k)} aria-pressed={focus === k.k}>
+            <button key={k.k} type="button" className={[k.tone || "", (focus || "today") === k.k || (!focus && k.k === "arrived") ? "on" : ""].join(" ").trim()} onClick={() => setFocus(k.k === "today" || k.k === "arrived" || focus === k.k ? null : k.k)} aria-pressed={focus === k.k}>
               <span>{k.label}</span><b>{k.n}</b>
             </button>
           ))}
         </div>
-        {focus && <div className="row" style={{ marginBottom: 6 }}><button type="button" className="linkbtn" onClick={() => setFocus(null)}>← Back to today</button></div>}
         <div className="rv-stack">
           {shown.map((k) => (
             <div key={k} className="rv-list">
