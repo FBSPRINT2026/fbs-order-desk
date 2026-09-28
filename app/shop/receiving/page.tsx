@@ -674,7 +674,7 @@ function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone
   const [orders, setOrders] = useState<{ id: string; number: number; nickname: string; po: string; due_date: string | null; status: string; printavo: boolean; items: string; pcs: number; match: boolean }[] | null>(null);
   const [pick, setPick] = useState("");
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
-  const [remember, setRemember] = useState(true);
+  const [ask, setAsk] = useState<string | null>(null); // linked; now: make this a rule?
   useEffect(() => {
     createClient().from("customers").select("id, company, name").order("company").limit(4000)
       .then(({ data }) => setCusts(((data || []) as { id: string; company: string; name: string }[]).map((c) => ({ id: c.id, label: c.company || c.name })).filter((c) => c.label)));
@@ -699,16 +699,37 @@ function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone
     try {
       if (li.us) await post({ assign: { lineIds: li.lineIds, orderId: pick, kind: "blanks" } });
       else await post({ link: li.lineIds.map((id) => ({ lineId: id, orderId: pick })) });
-      // an account name we didn't know (GUNPOWDER & WHISKEY → Cowboy Cool): remember it for next time
-      if (newAccount && remember && li.name) await post({ alias: { supplier: li.supplier, name: li.name, account: li.account, customerId: cust!.id } }).catch(() => null);
       const o = orders?.find((x) => x.id === pick);
-      onDone(`Linked ${r.who === "FBS" ? "our blanks" : r.who} (${r.sub} ${r.so}) to ${o?.printavo ? "Printavo " : ""}#${o?.number}.`);
+      const msg = `Linked ${r.who === "FBS" ? "our blanks" : cust?.name || r.who} (${r.sub} ${r.so}) to ${o?.printavo ? "Printavo " : ""}#${o?.number}.`;
+      // the manifest calls them something else (BEETLEJUICE GLOBAL LLC → Purple Stitch): ask to make it a rule
+      if (newAccount && li.name) { setAsk(msg); setBusy(false); return; }
+      onDone(msg);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setBusy(false); }
   }
   return (
     <div className="pp-modal" role="dialog" aria-modal="true" aria-label="Link order" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <div className="pp-sheet lk-sheet">
         <div className="pp-sheet-h"><div><b>Link order</b> <span className="faint" style={{ fontSize: 14 }}>· {r.sub} {r.so}{r.po ? ` · PO ${r.po}` : ""} · {r.boxes} box{r.boxes === 1 ? "" : "es"} · {r.pcs} pcs</span></div><button type="button" className="btn icon ghost" aria-label="Close" disabled={busy} onClick={onClose}>✕</button></div>
+        {ask ? (
+          <div className="lk-body">
+            <div className="okmsg">{ask}</div>
+            <div className="lk-rule">
+              <b>Create a rule for this customer?</b>
+              <p>Every time <b>“{li.name}”</b>{li.account ? <> (account {li.account})</> : null} is on a{li.supplier === "sanmar" ? " SanMar" : li.supplier === "ss" ? "n S&S" : ""} manifest, it&apos;s <b>{cust?.name}</b>. Their shipments will show under {cust?.name} and match {cust?.name}&apos;s orders on their own.</p>
+            </div>
+            {err && <div className="pv-err">{err}</div>}
+            <div className="row" style={{ gap: 8 }}><span className="spacer" />
+              <button type="button" className="btn ghost" disabled={busy} onClick={() => onDone(ask)}>No, just this once</button>
+              <button type="button" className="btn primary" disabled={busy} onClick={async () => {
+                setBusy(true); setErr("");
+                const x = await fetch("/api/goods/manifest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ alias: { supplier: li.supplier, name: li.name, account: li.account, customerId: cust!.id } }) });
+                const j = await x.json().catch(() => ({}));
+                if (!x.ok || j.error) { setBusy(false); return setErr(j.error || "Couldn't save the rule."); }
+                onDone(`${ask} Rule saved: “${li.name}” is ${cust?.name} from now on${j.matched ? ` (${j.matched} more shipment${j.matched === 1 ? "" : "s"} linked)` : ""}.`);
+              }}>{busy ? "Saving…" : "Yes, create the rule"}</button>
+            </div>
+          </div>
+        ) : (
         <div className="lk-body">
           {li.styles && <div className="faint" style={{ fontSize: 13 }}>What shipped: {li.styles}</div>}
           <div className="lk-cust">
@@ -737,10 +758,11 @@ function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone
               </div>
             )
           )}
-          {newAccount && li.name && <label className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ width: "auto" }} />Remember: {li.name}{li.account ? ` (account ${li.account})` : ""} is {cust!.name}</label>}
+          {false && <label className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" style={{ width: "auto" }} />Remember: {li.name}{li.account ? ` (account ${li.account})` : ""} is {cust!.name}</label>}
           {err && <div className="pv-err">{err}</div>}
           <div className="row" style={{ gap: 8 }}><span className="spacer" /><button type="button" className="btn ghost" disabled={busy} onClick={onClose}>Cancel</button><button type="button" className="btn primary" disabled={busy || !pick} onClick={link}>{busy ? "Linking…" : "Link order"}</button></div>
         </div>
+      )}
       </div>
     </div>
   );
