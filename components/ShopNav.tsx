@@ -21,13 +21,18 @@ const ICONS: Record<string, React.ReactNode> = {
   settings: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>,
 };
 
-export default function ShopNav({ email }: { email: string }) {
+const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
+
+export default function ShopNav({ email, firstName, brand }: { email: string; firstName: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string } }) {
   const path = usePathname();
   const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [incoming, setIncoming] = useState(0);
   const [creating, setCreating] = useState(false);
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
+  const [hello, setHello] = useState("Hello");
+  const [q, setQ] = useState("");
+  useEffect(() => { setHello(greet()); const t = setInterval(() => setHello(greet()), 10 * 60 * 1000); return () => clearInterval(t); }, []);
 
   // Assistant badge: follow-ups due now (refreshed every few minutes, not on every click)
   useEffect(() => {
@@ -61,16 +66,11 @@ export default function ShopNav({ email }: { email: string }) {
       .then(({ count }) => setIncoming(count || 0));
   }, [path]);
 
-  const items: [string, string, string][] = [
-    ["/shop", "orders", "Orders"],
-    ["/shop/assistant", "assistant", "Assistant"],
-    ["/shop/incoming", "incoming", "Incoming orders"],
-    ["/shop/board", "board", "Production"],
-    ["/shop/calendar", "calendar", "Calendar"],
-    ["/shop/projects", "projects", "Projects"],
-    ["/shop/customers", "customers", "Customers"],
-    ["/shop/artwork", "artwork", "Artwork"],
-    ["/shop/settings", "settings", "Settings"],
+  // the menu, in groups
+  const GROUPS: { title: string; items: [string, string, string][] }[] = [
+    { title: "Sales", items: [["/shop", "orders", "Orders"], ["/shop/incoming", "incoming", "Incoming orders"], ["/shop/projects", "projects", "Projects"], ["/shop/customers", "customers", "Customers"]] },
+    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/board", "board", "Production"], ["/shop/calendar", "calendar", "Production calendar"]] },
+    { title: "Shop tools", items: [["/shop/shipping", "shipping", "Shipping center"], ["/shop/receiving", "goods", "Goods & receiving"]] },
   ];
   const active = (href: string) => (href === "/shop" ? path === "/shop" || path.startsWith("/shop/orders") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
@@ -83,22 +83,37 @@ export default function ShopNav({ email }: { email: string }) {
     else alert("Couldn't create the quote: " + (error?.message || ""));
   }
 
+  const link = ([href, icon, label]: [string, string, string]) => (
+    <Link key={href} href={href} className={active(href) ? "on" : ""} title={label}>
+      {ICONS[icon]}<span className="lbl-t">{label}</span>
+      {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
+      {href === "/shop/incoming" && incoming > 0 && <span className="badge" title={`${incoming} order request${incoming === 1 ? "" : "s"} to review`}>{incoming}</span>}
+      {href === "/shop" && unread > 0 && <span className="badge" title={`${unread} unread customer message${unread === 1 ? "" : "s"}`}>{unread}</span>}
+    </Link>
+  );
+
   return (
     <aside className="side">
-      <div className="brand"><b>FBS Order Desk</b><span>Shop management</span></div>
+      <Link href="/shop" className="brand brand-logo" title="Home">
+        {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}
+        {brand.sideTagline && <span>{brand.sideTagline}</span>}
+      </Link>
+      <div className="side-hello">{hello}{firstName ? `, ${firstName}` : ""}</div>
+      <form className="side-search" role="search" onSubmit={(e) => { e.preventDefault(); const t = q.trim(); if (t) router.push(`/shop/search?q=${encodeURIComponent(t)}`); }}>
+        <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search everything…" aria-label="Search orders, customers, artwork, shipments" />
+      </form>
       <nav className="nav">
-        {items.map(([href, icon, label]) => (
-          <Link key={href} href={href} className={active(href) ? "on" : ""} title={label}>
-            {ICONS[icon]}<span className="lbl-t">{label}</span>
-            {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
-            {href === "/shop/incoming" && incoming > 0 && <span className="badge" title={`${incoming} order request${incoming === 1 ? "" : "s"} to review`}>{incoming}</span>}
-            {href === "/shop" && unread > 0 && <span className="badge" title={`${unread} unread customer message${unread === 1 ? "" : "s"}`}>{unread}</span>}
-          </Link>
+        {link(["/shop/assistant", "assistant", "Assistant"])}
+        {GROUPS.map((g) => (
+          <div key={g.title} className="nav-g">
+            <div className="nav-h">{g.title}</div>
+            {g.items.map(link)}
+          </div>
         ))}
       </nav>
       <button className="btn primary btn-new btn-side" type="button" onClick={newQuote} disabled={creating}>{creating ? "Creating…" : "+ New quote"}</button>
-      <Link href="/shop/shipping" className="btn primary btn-new btn-side">{"Shipping center"}</Link>
-      <Link href="/shop/receiving" className="btn primary btn-new btn-side">{"Goods & receiving"}</Link>
+      <nav className="nav nav-foot">{link(["/shop/settings", "settings", "Settings"])}</nav>
       <div className="side-user">
         <span>{email}</span>
         <form action="/auth/signout" method="post"><button className="btn ghost sm" style={{ color: "inherit", padding: 0 }} type="submit">Sign out</button></form>

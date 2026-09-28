@@ -164,6 +164,21 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        <section className="panel" id="brand">
+          <div className="panel-h"><h2>Menu logo</h2><span className="faint" style={{ fontSize: 12 }}>The logo at the top of the shop&apos;s left menu (dark background: use a light version)</span></div>
+          <div className="panel-b grid g2" style={{ alignItems: "start" }}>
+            <div className="stack" style={{ gap: 10 }}>
+              <div className="field"><label htmlFor="b-logo">Logo image link</label><input id="b-logo" type="text" placeholder="/brand/fbs-logo-white.svg" value={s.brand.sideLogoUrl} onChange={(e) => upd((d) => { d.brand.sideLogoUrl = e.target.value; })} />
+                <small className="faint">Built in: <button type="button" className="linkbtn" onClick={() => upd((d) => { d.brand.sideLogoUrl = "/brand/fbs-logo-white.svg"; })}>FBS (white letters)</button> · <button type="button" className="linkbtn" onClick={() => upd((d) => { d.brand.sideLogoUrl = "/brand/fbs-logo.svg"; })}>FBS (original)</button></small></div>
+              <div className="field"><label htmlFor="b-w">Logo width: {s.brand.sideLogoWidth}px</label><input id="b-w" type="range" min={32} max={200} step={2} value={s.brand.sideLogoWidth} onChange={(e) => upd((d) => { d.brand.sideLogoWidth = n(e.target.value); })} /></div>
+              <div className="field"><label htmlFor="b-tag">Line under the logo</label><input id="b-tag" type="text" value={s.brand.sideTagline} onChange={(e) => upd((d) => { d.brand.sideTagline = e.target.value; })} /></div>
+            </div>
+            <div className="brand-prev" aria-label="Preview">
+              <div className="brand brand-logo">{s.brand.sideLogoUrl ? <img src={s.brand.sideLogoUrl} alt="Logo preview" style={{ width: s.brand.sideLogoWidth }} /> : <b>{s.shop.name}</b>}{s.brand.sideTagline && <span>{s.brand.sideTagline}</span>}</div>
+            </div>
+          </div>
+        </section>
+
         <section className="panel" id="payments">
           <div className="panel-h"><h2>Customer payments</h2><span className="faint" style={{ fontSize: 12 }}>What customers see when they pay in their portal</span></div>
           <div className="panel-b grid g3">

@@ -131,6 +131,8 @@ export function isLightColor(color: string, pl: Pick<PriceList, "lightColors">, 
 export type Finishing = { id: string; name: string; price: number };
 export type Settings = PriceList & {
   shop: { name: string; address: string; phone: string; email: string; terms: string; logoUrl: string };
+  /** The logo at the top of the shop's left menu (dark background, so a light version), its width, and the line under it. */
+  brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string };
   markup: number; taxRate: number; depositPct: number;
   /** online payments: card fee % (credit card only), and where to send Zelle / Venmo */
   pay: { cardFeePct: number; zelle: string; venmo: string };
@@ -178,6 +180,7 @@ export type AssistantSettings = {
 
 export const DEFAULT_SETTINGS: Settings = {
   shop: { name: "FBS Print", address: "", phone: "", email: "", terms: "50% deposit to start production. Balance due at pickup.", logoUrl: "" },
+  brand: { sideLogoUrl: "/brand/fbs-logo-white.svg", sideLogoWidth: 64, sideTagline: "Shop management" },
   markup: 50,
   taxRate: 8.25,
   depositPct: 50,
@@ -261,6 +264,7 @@ export function mergeSettings(data: unknown): Settings {
     ...DEFAULT_SETTINGS,
     ...d,
     shop: { ...DEFAULT_SETTINGS.shop, ...(d.shop || {}) },
+    brand: { ...DEFAULT_SETTINGS.brand, ...(d.brand || {}) },
     pay: { ...DEFAULT_SETTINGS.pay, ...(d.pay || {}) },
     upcharges: { ...DEFAULT_SETTINGS.upcharges, ...(d.upcharges || {}) },
     wholesale: { ...DEFAULT_SETTINGS.wholesale, ...(d.wholesale || {}), upcharges: { ...DEFAULT_SETTINGS.wholesale.upcharges, ...(d.wholesale?.upcharges || {}) } },
