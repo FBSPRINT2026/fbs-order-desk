@@ -1126,3 +1126,13 @@ button.mk-pill:hover{color:var(--ink)}
 .qr-row select{width:auto;font-size:12.5px;padding:4px 6px}
 .as-strip a.as-chip{text-decoration:none;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .as-strip a.as-chip:hover{color:var(--accent)}
+/* Settings: one sidebar item, tabs inside */
+.set-tabs{display:flex;gap:4px;flex-wrap:wrap;margin:-4px 0 14px;border-bottom:1px solid var(--line);padding-bottom:0}
+.set-tabs a{padding:8px 12px;font-size:13.5px;font-weight:600;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.set-tabs a:hover{color:var(--ink)}
+.set-tabs a.on{color:var(--accent);border-bottom-color:var(--accent)}
+.stack > section.panel[id]{scroll-margin-top:16px}
+.conn-row{display:flex;gap:10px;align-items:flex-start}
+.conn-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--line);margin-top:5px}
+.conn-dot.ok{background:var(--ok)}.conn-dot.bad{background:var(--danger)}
+a.as-ai{text-decoration:none}

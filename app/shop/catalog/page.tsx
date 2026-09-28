@@ -1,4 +1,5 @@
 "use client";
+import SettingsTabs from "@/components/SettingsTabs";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SIZES, type Garment } from "@/lib/pricing";
@@ -122,6 +123,7 @@ export default function CatalogPage() {
         <div><div className="eyebrow">{items.length} styles</div><h1>Garment catalog</h1></div>
         <button className="btn" type="button" onClick={() => setShowBulk(!showBulk)}>{showBulk ? "Close import" : "Paste a list"}</button>
       </div>
+      <SettingsTabs />
       <p className="muted" style={{ marginTop: -8, maxWidth: 720 }}>Type a style number on an order and the description, brand and your cost fill in from here. Colors show up as suggestions.</p>
       {msg && <div className="banner" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{msg}</div>}
       {showBulk && (

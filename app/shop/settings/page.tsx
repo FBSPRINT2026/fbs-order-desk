@@ -1,4 +1,5 @@
 "use client";
+import SettingsTabs, { ConnectionsPanel } from "@/components/SettingsTabs";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ROLES, calcGroup, mergeSettings, newGLine, newImprint, uid, type PriceList, type Settings } from "@/lib/pricing";
@@ -63,11 +64,12 @@ export default function SettingsPage() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">Drives every quote&apos;s auto-pricing</div><h1>Pricing & shop</h1></div>
+        <div><div className="eyebrow">Pricing, payments, garments, AI and connections</div><h1>Settings</h1></div>
         <div className="row"><span className="save-state">{state}</span><button className="btn primary" type="button" onClick={save}>Save changes</button></div>
       </div>
+      <SettingsTabs />
       <div className="stack">
-        <section className="panel">
+        <section className="panel" id="pricing">
           <div className="panel-h"><h2>Tax & payments</h2></div>
           <div className="panel-b grid g4">
             <div className="field"><label htmlFor="s-tax">Default sales tax %</label><input id="s-tax" type="number" step="0.01" value={s.taxRate} onChange={(e) => upd((d) => { d.taxRate = n(e.target.value); })} /></div>
@@ -150,7 +152,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel" id="shop">
           <div className="panel-h"><h2>Shop info</h2><span className="faint" style={{ fontSize: 12 }}>Shown in the customer portal, emails and invoices</span></div>
           <div className="panel-b grid g2">
             <div className="field"><label htmlFor="s-name">Shop name</label><input id="s-name" type="text" value={s.shop.name} onChange={(e) => upd((d) => { d.shop.name = e.target.value; })} /></div>
@@ -162,7 +164,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel" id="payments">
           <div className="panel-h"><h2>Customer payments</h2><span className="faint" style={{ fontSize: 12 }}>What customers see when they pay in their portal</span></div>
           <div className="panel-b grid g3">
             <div className="field"><label htmlFor="s-cardfee">Credit card fee %</label><input id="s-cardfee" type="number" step="0.05" min="0" max="10" value={s.pay.cardFeePct} onChange={(e) => upd((d) => { d.pay.cardFeePct = n(e.target.value); })} />
@@ -216,7 +218,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel" id="staff">
           <div className="panel-h"><h2>Shop staff</h2><span className="faint" style={{ fontSize: 12 }}>These emails sign in to the shop side. Roles will decide what each person sees.</span></div>
           <div className="panel-b stack">
             {staff.map((x) => (
@@ -231,6 +233,7 @@ export default function SettingsPage() {
             <div className="row"><input type="email" placeholder="name@fbsprint.com" value={newStaff} onChange={(e) => setNewStaff(e.target.value)} style={{ maxWidth: 280 }} aria-label="New staff email" /><select aria-label="Role for new staff" value={newRole} onChange={(e) => setNewRole(e.target.value)} style={{ width: 240 }}>{Object.entries(ROLES).filter(([k]) => k !== "owner").map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button className="btn" type="button" onClick={addStaff}>Add staff</button></div>
           </div>
         </section>
+        <ConnectionsPanel />
       </div>
     </>
   );
