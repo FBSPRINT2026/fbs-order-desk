@@ -1759,3 +1759,13 @@ a.as-ai{text-decoration:none}
 .pga-imp{display:flex;flex-wrap:wrap;gap:6px}
 .pga-imp select,.pga-imp input{flex:1 1 130px;width:auto}
 @media (max-width:700px){.pga-item{grid-template-columns:1fr}.pga-head{grid-template-columns:1fr}}
+
+/* customer contacts (staff) */
+.cc{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.cc-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.cc-row{display:grid;grid-template-columns:1.1fr 1.4fr 1fr auto 30px;gap:6px;align-items:center}
+.cc-row input[type=text],.cc-row input[type=email],.cc-row input[type=tel]{min-width:0}
+.cc-row .check{font-size:12.5px;white-space:nowrap}
+.cc-tag{font-size:11px;font-weight:700;color:var(--ink-3);text-align:center}
+.cc .btn.sm{align-self:flex-start}
+@media (max-width:700px){.cc-row{grid-template-columns:1fr 1fr}.cc-row input[type=email]{grid-column:span 2}}

@@ -9,6 +9,9 @@ import { fileUrls, orderFiles, type PvAddress, type PvOrder } from "@/lib/archiv
  */
 
 const addr = (a: PvAddress) => !a ? "" : [a.address1, a.address2, [[a.city, a.state].filter(Boolean).join(", "), a.zipCode].filter(Boolean).join(" ")].map((x) => (x || "").trim()).filter(Boolean).join("\n");
+/** "theMcKennagroup", "The McKenna Group, LLC" and "the  mckenna group" are the same company. */
+export const companyKey = (name: string) => name.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ")
+  .replace(/\b(inc|llc|ltd|co|corp|corporation|company|pllc|pc)\b/g, " ").replace(/^\s*the/, "").replace(/\s+/g, "");
 const terms = (t: PvCustomer["defaultPaymentTerm"]) => !t ? "receipt" : /prepa|up ?front|in advance|before/i.test(t.name) ? "prepay" : t.days >= 15 || /net/i.test(t.name) ? "net30" : "receipt";
 
 /**
@@ -30,9 +33,21 @@ export async function importCustomer(sb: SupabaseClient, printavoId: string): Pr
 
   const { data: linked } = await sb.from("printavo_customers").select("customer_id").eq("printavo_id", pc.id).maybeSingle();
   let customerId: string | null = linked?.customer_id || null, how = "already imported";
-  if (!customerId && email) {
-    const { data: same } = await sb.from("customers").select("id").ilike("email", email).limit(1);
+  // one company = one customer: Printavo sometimes has the same company twice (different contacts, extra spaces);
+  // they all land on one customer, matched by company name, then by any contact's email
+  const key = companyKey(pc.companyName || "");
+  if (!customerId && key) {
+    const { data: same } = await sb.from("customers").select("id").eq("company_key", key).order("created_at").limit(1);
+    if (same?.[0]) { customerId = same[0].id; how = "matched by company name"; }
+  }
+  const emails = [...new Set([email, ...pc.contacts.map((c) => (c.email || "").trim().toLowerCase())].filter(Boolean))];
+  if (!customerId && emails.length) {
+    const { data: same } = await sb.from("customers").select("id").in("email", emails).limit(1);
     if (same?.[0]) { customerId = same[0].id; how = "matched by email"; }
+    else {
+      const { data: viaContact } = await sb.from("customer_contacts").select("customer_id").in("email", emails).limit(1);
+      if (viaContact?.[0]) { customerId = viaContact[0].customer_id; how = "matched by email"; }
+    }
   }
   if (customerId) {
     const { data: cur } = await sb.from("customers").select("*").eq("id", customerId).single();
@@ -51,14 +66,24 @@ export async function importCustomer(sb: SupabaseClient, printavoId: string): Pr
     const note = `From Printavo: ${pc.internalNote.trim()}`;
     if (!(priv?.notes || "").includes(note)) await sb.from("customer_private").upsert({ customer_id: customerId, notes: [priv?.notes, note].filter(Boolean).join("\n\n") });
   }
-  await sb.from("printavo_customers").upsert({ printavo_id: pc.id, customer_id: customerId, data: { ...pc, extraContacts: others }, imported_at: new Date().toISOString() });
+  await sb.from("printavo_customers").upsert({ printavo_id: pc.id, customer_id: customerId, data: { ...pc, extraContacts: others, contactsSaved: true }, imported_at: new Date().toISOString() });
+
+  // every Printavo contact is kept under the company (they can all sign in to its portal)
+  const contacts = pc.contacts.filter((c) => c.fullName || c.email || c.phone).map((c) => ({
+    customer_id: customerId, printavo_id: c.id, name: (c.fullName || "").trim(), email: (c.email || "").trim().toLowerCase(), phone: (c.phone || "").trim(), is_primary: c.id === p?.id,
+  }));
+  if (p && !contacts.some((c) => c.printavo_id === p.id) && (p.fullName || p.email)) contacts.push({ customer_id: customerId, printavo_id: p.id, name: (p.fullName || "").trim(), email, phone: (p.phone || "").trim(), is_primary: true });
+  if (contacts.length) {
+    const { error: ce } = await sb.from("customer_contacts").upsert(contacts, { onConflict: "printavo_id" });
+    if (ce) console.warn("[printavo] contacts:", ce.message);
+  }
   return { customerId: customerId!, how, company: fields.company || fields.name };
 }
 
 /** Our customer for a Printavo customer id, importing the customer first if we don't have them yet. */
 export async function ensureCustomer(sb: SupabaseClient, printavoCustomerId: string): Promise<string> {
-  const { data } = await sb.from("printavo_customers").select("customer_id").eq("printavo_id", printavoCustomerId).maybeSingle();
-  if (data?.customer_id) return data.customer_id;
+  const { data } = await sb.from("printavo_customers").select("customer_id, saved:data->contactsSaved").eq("printavo_id", printavoCustomerId).maybeSingle();
+  if (data?.customer_id && data.saved) return data.customer_id; // (customers imported before contacts were kept are read once more)
   return (await importCustomer(sb, printavoCustomerId)).customerId;
 }
 

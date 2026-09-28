@@ -19,6 +19,7 @@ import { fmtStamp } from "@/lib/format";
 import { orderSearchText } from "@/lib/search";
 import ShopMessages from "@/components/ShopMessages";
 import ShopGoods from "@/components/ShopGoods";
+import CustomerContacts from "@/components/CustomerContacts";
 import ShopCustomerProjects from "@/components/ShopCustomerProjects";
 import ProgramAdmin from "@/components/ProgramAdmin";
 import { emailStatement, recordLumpPayment } from "@/app/shop/pay-actions";
@@ -195,6 +196,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                 <div className="field"><label htmlFor="cu-c2e">Email</label><input id="cu-c2e" type="email" value={c.contact2_email || ""} onChange={(e) => set("contact2_email", e.target.value)} /></div>
                 <div className="field"><label htmlFor="cu-c2p">Phone</label><input id="cu-c2p" type="tel" value={c.contact2_phone || ""} onChange={(e) => set("contact2_phone", e.target.value)} /></div>
               </div>
+              <CustomerContacts customerId={id} />
               <div className="field"><label htmlFor="cu-type">Customer type</label>
                 <select id="cu-type" value={c.price_type || "retail"} onChange={(e) => set("price_type", e.target.value as Customer["price_type"])}>
                   <option value="retail">Retail: we supply the garments</option>

@@ -27,7 +27,9 @@ export async function withPrivate<T extends Customer>(sb: SupabaseClient<any, an
 
 /** Splits a customer into the public row and the private row for saving. last_contact_at is kept by the database. */
 export function splitCustomer(c: Partial<Customer>) {
-  const { notes, tags, next_follow_up, owner_email, last_contact_at: _lc, ...pub } = c;
+  const { notes, tags, next_follow_up, owner_email, last_contact_at: _lc, ...pub0 } = c;
+  // company_key is worked out by the database from the company name (never saved directly)
+  const { company_key: _ck, ...pub } = pub0 as typeof pub0 & { company_key?: string };
   const priv: Record<string, unknown> = {};
   if (notes !== undefined) priv.notes = notes;
   if (tags !== undefined) priv.tags = tags;
