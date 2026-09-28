@@ -295,7 +295,7 @@ export default function GoodsReceiving() {
         <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; overview</button>
         <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS orders<span className={"aa-n" + (v.need.length ? " hot" : "")}>{v.need.length + arriving.length}</span></button>
         <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer supplied goods<span className="aa-n">{data.goods.filter((it) => it.goods.status !== "received").length + unlinked.length}</span></button>
-        <button type="button" className={view === "resolve" ? "on" : ""} onClick={() => setView("resolve")}>Resolution center<span className={"aa-n" + (pending?.length ? " hot" : "")}>{pending ? pending.length : "…"}</span></button>
+        {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
       </div>
         <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => { setQ(e.target.value); if (view !== "today") setView("today"); }} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
       </div>
