@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readXlsx } from "@/lib/xlsx";
-import { applyGroup, importManifest, linkByHand, markReceived, receiveFreight, receiveTruck, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
+import { applyGroup, importManifest, linkByHand, markReceived, receiveFreight, receiveTruck, searchManifests, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +17,11 @@ async function staff() {
 export async function GET(req: Request) {
   if (!(await staff())) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const admin = createAdminClient();
+  const q = new URL(req.url).searchParams.get("q");
+  if (q != null) {
+    try { return NextResponse.json({ hits: await searchManifests(admin, q) }); }
+    catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
+  }
   if (new URL(req.url).searchParams.get("truck")) {
     try { return NextResponse.json({ stops: await truckPending(admin) }); }
     catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }

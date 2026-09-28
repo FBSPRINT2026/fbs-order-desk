@@ -726,3 +726,38 @@ export async function receiveFreight(admin: SupabaseClient, lineIds: string[], a
   }
   return { lines: (data || []).length };
 }
+
+export type ManifestHit = {
+  key: string; supplier: string; supplier_order: string; who: string; po: string; ship_date: string | null; boxes: number; pcs: number; kind: string;
+  order: { number: number; href: string } | null; styles: string; tracking: PendingShipment["tracking"];
+};
+/**
+ * Search every manifest line we've ever imported (PO, customer, supplier order, tracking/PRO, style, color), one hit per
+ * shipment, with where it is now and which order it's on.
+ */
+export async function searchManifests(admin: SupabaseClient, q: string): Promise<ManifestHit[]> {
+  const t = q.trim().replace(/[%,()*]/g, " ").trim().slice(0, 60);
+  if (t.length < 2) return [];
+  const like = `%${t}%`;
+  const { data, error } = await admin.from("supplier_manifest_lines")
+    .select("*, orders!supplier_manifest_lines_order_id_fkey(id, number, customers(company, name)), archived_orders!supplier_manifest_lines_archived_order_id_fkey(id, visual_id, customers(company, name)), customers(company, name)")
+    .neq("kind", "ignored")
+    .or(["customer_po", "customer_name", "supplier_order", "tracking", "style", "color", "invoice", "sku"].map((c) => `${c}.ilike.${like}`).join(","))
+    .order("ship_date", { ascending: false }).limit(1500);
+  if (error) throw new Error(error.message);
+  type R = Waiting & { kind: string; order_id: string | null; archived_order_id: string | null;
+    orders: { id: string; number: number; customers: { company: string; name: string } | null } | null;
+    archived_orders: { id: string; visual_id: string | number; customers: { company: string; name: string } | null } | null; customers: { company: string; name: string } | null };
+  const m = new Map<string, R[]>();
+  for (const l of (data || []) as R[]) { const k = `${l.supplier}|${l.supplier_order}|${l.order_id || l.archived_order_id || ""}|${l.kind}`; m.set(k, [...(m.get(k) || []), l]); }
+  return [...m.entries()].slice(0, 100).map(([key, ls]) => {
+    const f = ls[0];
+    const c = f.orders?.customers || f.archived_orders?.customers || f.customers;
+    const s = summarize({ key, supplier: f.supplier, customer_name: f.customer_name, customer_account: f.customer_account, customer_po: f.customer_po, supplier_order: f.supplier_order, lines: ls }, null, []);
+    return {
+      key, supplier: f.supplier, supplier_order: f.supplier_order, who: isUs(f.customer_name) && !c ? "FBS" : c?.company || c?.name || f.customer_name, po: f.customer_po, ship_date: f.ship_date,
+      boxes: s.boxes, pcs: s.pcs, kind: f.kind, styles: s.styles, tracking: s.tracking,
+      order: f.order_id && f.orders ? { number: f.orders.number, href: `/shop/orders/${f.order_id}` } : f.archived_order_id && f.archived_orders ? { number: +f.archived_orders.visual_id, href: `/shop/archive/${f.archived_order_id}` } : null,
+    };
+  });
+}

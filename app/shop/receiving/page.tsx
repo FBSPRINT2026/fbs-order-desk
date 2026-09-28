@@ -9,7 +9,7 @@ import { goodsNeedInfo, needsGoods, supplierLabel, TRACK, trackingUrl, type Good
 import { shopGoods } from "@/app/shop/goods-actions";
 import CustomerGoodsBoard from "@/components/CustomerGoodsBoard";
 import { ResolveList } from "@/components/IncomingShipments";
-import type { PendingShipment, PrintavoGoods } from "@/lib/manifest";
+import type { ManifestHit, PendingShipment, PrintavoGoods } from "@/lib/manifest";
 import { blanksPlan, blanksReceived, orderBlanksSS, recordBlanks, type BlankLine } from "@/app/shop/receiving-actions";
 
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
@@ -54,6 +54,20 @@ export default function GoodsReceiving() {
   const [focus, setFocus] = useState<Focus | null>(null);
   const [groupBy, setGroupBy] = useState<GroupBy>("carrier");
   const [truck, setTruck] = useState(false);
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<ManifestHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    const t = q.trim();
+    if (t.length < 2) { setHits(null); return; }
+    setSearching(true);
+    const id = setTimeout(async () => {
+      const r = await fetch(`/api/goods/manifest?q=${encodeURIComponent(t)}`, { cache: "no-store" }).catch(() => null);
+      const j = r ? await r.json().catch(() => ({})) : {};
+      setHits(j.hits || []); setSearching(false);
+    }, 300);
+    return () => clearTimeout(id);
+  }, [q]);
   const [freight, setFreight] = useState<Row | null>(null);
   const [order, setOrder] = useState<O | null>(null);
   const [note, setNote] = useState("");
@@ -191,10 +205,10 @@ export default function GoodsReceiving() {
     { k: "problems", label: "Delayed / problems", n: L.problems.length, tone: L.problems.length ? "bad" : "" },
   ];
   const statusPill = (r: Row) => r.state === "arrived"
-    ? <span className="rv-pill ok">Arrived{r.deliveredAt && localDay(r.deliveredAt) !== t0 ? ` ${new Date(r.deliveredAt.length > 10 ? r.deliveredAt : r.deliveredAt + "T12:00").toLocaleDateString([], { weekday: "short", month: "numeric", day: "numeric" })}` : ""}{r.deliveredAt && r.deliveredAt.length > 10 ? ` ${new Date(r.deliveredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span>
-    : r.state === "problem" ? <span className="rv-pill bad">{r.noScan ? "Not scanned since label created" : TRACK[r.trks.map((k) => k.status).find((st) => PROBLEM.includes(st)) || ""] || "Problem"}</span>
-    : r.late ? <span className="rv-pill bad">Arrives after it&apos;s needed</span>
-    : <span className="rv-pill way">On the way</span>;
+    ? <span className="rv-dot ok">Arrived{r.deliveredAt && localDay(r.deliveredAt) !== t0 ? ` ${new Date(r.deliveredAt.length > 10 ? r.deliveredAt : r.deliveredAt + "T12:00").toLocaleDateString([], { weekday: "short", month: "numeric", day: "numeric" })}` : ""}{r.deliveredAt && r.deliveredAt.length > 10 ? ` ${new Date(r.deliveredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span>
+    : r.state === "problem" ? <span className="rv-dot bad">{r.noScan ? "Not scanned since label created" : TRACK[r.trks.map((k) => k.status).find((st) => PROBLEM.includes(st)) || ""] || "Problem"}</span>
+    : r.late ? <span className="rv-dot bad">Arrives after it&apos;s needed</span>
+    : <span className="rv-dot way">On the way</span>;
   // a label made but never scanned by the next business day after it shipped
   const unscanned = (r: Row, k: Row["trks"][number]) => !!k.tracking && !k.delivered && ["", "unknown", "pre_transit"].includes(k.status || "") && !!r.shipped && t0 >= nextBiz(r.shipped);
   const rowLine = (r: Row) => (
@@ -241,6 +255,10 @@ export default function GoodsReceiving() {
     way: { title: "In transit", n: L.way.length, rows: L.way, empty: "Nothing on the way." },
     problems: { title: "Delayed / problems", tone: "bad", n: L.problems.length, rows: L.problems, empty: "No problems." },
   };
+  // search results (every manifest, any age) as rows in the same grid
+  const hitRows: Row[] = (hits || []).map((h) => rowOf({ key: "h" + h.key, side: h.kind === "blanks" || h.who === "FBS" ? "fbs" : "customer", number: h.order?.number || 0, href: h.order?.href || "", who: h.who, what: h.kind === "blanks" ? "Our blanks" : "Customer goods", sub: h.supplier === "sanmar" ? "SanMar" : "S&S", so: h.supplier_order, po: h.po, boxes: h.boxes, pcs: h.pcs,
+    trks: h.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), statuses: h.tracking.map((k) => k.status),
+    at: h.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: h.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: !h.order, supplierRaw: h.supplier, shipped: h.ship_date }));
   // first look: arriving today, and underneath it what already arrived
   const shown: Focus[] = focus ? [focus] : ["today", "arrived"];
 
@@ -251,12 +269,19 @@ export default function GoodsReceiving() {
     <>
       <div className="page-head">
         <div><div className="eyebrow">Receiving</div><h1>Goods &amp; receiving</h1></div>
+        <label className="rv-search"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
         <div className="row" style={{ gap: 8 }}>
           <button type="button" className="btn primary" onClick={() => setTruck(true)}>Receive S&amp;S truck</button>
           <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import supplier manifest"}<input type="file" hidden accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) upload(f); }} /></label>
         </div>
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
+      {q.trim().length >= 2 && (
+        <section className="rv-day rv-results">
+          <div className="rv-day-h"><b>Search: “{q.trim()}”</b><span className="faint">{searching ? "Searching…" : `${hitRows.length} shipment${hitRows.length === 1 ? "" : "s"} on the manifests`}</span><span className="spacer" /><button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></div>
+          {!searching && grouped(hitRows, "Nothing on any manifest matches that. It may not have shipped yet.")}
+        </section>
+      )}
       <div className="aa-sub rv-views" role="tablist">
         <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; overview</button>
         <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS orders<span className={"aa-n" + (v.need.length ? " hot" : "")}>{v.need.length + arriving.length}</span></button>
@@ -294,7 +319,9 @@ export default function GoodsReceiving() {
         <div className="rv-kpis">
           {KPIS.map((k) => (
             <button key={k.k} type="button" className={["rv-kpi-" + k.k, k.tone || "", (focus || "today") === k.k ? "on" : ""].join(" ").trim()} onClick={() => setFocus(k.k === "today" || focus === k.k ? null : k.k)} aria-pressed={(focus || "today") === k.k}>
-              <span>{k.label}</span><b>{k.n}</b>
+              {k.k === "today"
+                ? <div className="rv-kpi2"><div><span>Arriving today</span><b>{L.today.length}</b></div><div><span>Arrived today</span><b className="okc">{L.arrived.length}</b></div></div>
+                : <><span>{k.label}</span><b>{k.n}</b></>}
             </button>
           ))}
         </div>
