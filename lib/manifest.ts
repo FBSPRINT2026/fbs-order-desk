@@ -53,6 +53,12 @@ export function parseManifest(rows: string[][]): ManifestLine[] {
   });
 }
 
+/** Freight (LTL pallets: R&L, Estes, XPO…): no parcel tracking; receiving signs for it. */
+export const isFreight = (method: string) => /\bltl\b|freight|r\s*&\s*l\b|estes|xpo|saia|old dominion|\bodfl\b|yrc|abf|southeastern|averitt/i.test(method || "");
+const freightCarrier = (method: string) => {
+  const m = (method.split(/[-–]/)[0] || method).trim();
+  return m.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase()).replace(/\bR&l\b/i, "R&L").replace(/\bLtl\b/, "LTL");
+};
 const isUs = (name: string) => /^fbs(\s|$|print)/i.test(name.trim());
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
 const day = (d: string) => new Date(d + "T12:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -417,7 +423,7 @@ export async function importManifest(admin: SupabaseClient, supplier: "ss" | "sa
 
 /** Live tracking for a shipment we can't put on an order yet (so it still shows as on the way / arrived). */
 async function trackWaiting(admin: SupabaseClient, lines: Line[]) {
-  for (const trk of [...new Set(lines.map((l) => l.tracking).filter(Boolean))]) {
+  for (const trk of [...new Set(lines.filter((l) => !isFreight(l.method)).map((l) => l.tracking).filter(Boolean))]) {
     const l = lines.find((x) => x.tracking === trk)!;
     const f = await startTracker(trk, carrierOf(trk) || (/ups/i.test(l.method) ? "UPS" : /fedex/i.test(l.method) ? "FedEx" : "")).catch(() => null);
     if (f) await admin.from("supplier_manifest_lines").update(f).eq("supplier", l.supplier).eq("tracking", trk).in("kind", ["", "goods", "blanks"]).is("order_id", null);
@@ -466,7 +472,7 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
   // tracking for shipments still waiting for an order
   const trk = new Map<string, Waiting>();
   const { data: pvLinked } = await admin.from("supplier_manifest_lines").select("*").in("kind", ["goods", "blanks"]).not("archived_order_id", "is", null).neq("track_status", "delivered").neq("tracking", "").limit(1000);
-  for (const l of [...((data || []) as Waiting[]), ...((pvLinked || []) as Waiting[])]) if (l.tracking && l.track_status !== "delivered" && !trk.has(l.tracking)) trk.set(l.tracking, l);
+  for (const l of [...((data || []) as Waiting[]), ...((pvLinked || []) as Waiting[])]) if (l.tracking && !isFreight(l.method) && l.track_status !== "delivered" && !trk.has(l.tracking)) trk.set(l.tracking, l);
   for (const l of trk.values()) {
     if (Date.now() > deadline - 10000) break;
     if (l.track_updated_at && Date.now() - Date.parse(l.track_updated_at) < 25 * 60000) continue;
@@ -480,16 +486,18 @@ export type PendingLine = { id: string; style: string; mill: string; color: stri
 export type PendingShipment = {
   key: string; supplier: string; customer_name: string; customer_account: string; customer_po: string; supplier_order: string; ship_date: string | null;
   boxes: number; pcs: number; methods: string; styles: string; lineIds: string[]; customer: { id: string; name: string } | null; us: boolean;
-  tracking: { carrier: string; tracking: string; status: string; detail: string; eta: string | null; delivered: boolean; delivered_at?: string | null; boxes?: number; pcs?: number }[]; how: string; lines: PendingLine[];
+  tracking: { carrier: string; tracking: string; status: string; detail: string; eta: string | null; delivered: boolean; delivered_at?: string | null; boxes?: number; pcs?: number; freight?: boolean }[]; how: string; lines: PendingLine[];
   orders: { id: string; number: number; nickname: string; po: string; due_date: string | null; printavo: boolean }[];
 };
 
 function summarize(g: Group<Waiting>, customer: { id: string; name: string } | null, orders: PendingShipment["orders"]): PendingShipment {
   const trk = new Map<string, PendingShipment["tracking"][number]>();
-  const carrierFor = (l: Waiting) => carrierOf(l.tracking) || (/ups/i.test(l.method) ? "UPS" : /fedex/i.test(l.method) ? "FedEx" : /r\s*&\s*l/i.test(l.method) ? "R&L" : (l.method.split(/[-–]/)[0] || "").trim());
+  const carrierFor = (l: Waiting) => (isFreight(l.method) ? freightCarrier(l.method) : carrierOf(l.tracking) || (/ups/i.test(l.method) ? "UPS" : /fedex/i.test(l.method) ? "FedEx" : (l.method.split(/[-–]/)[0] || "").trim()));
   for (const l of g.lines) if (l.tracking && !trk.has(l.tracking)) {
     const same = g.lines.filter((x) => x.tracking === l.tracking);
-    trk.set(l.tracking, { carrier: carrierFor(l), tracking: l.tracking, status: l.track_status, detail: l.track_detail || (/ltl|freight/i.test(l.method) ? `freight · PRO ${l.tracking}` : ""), eta: l.est_delivery, delivered: l.track_status === "delivered", delivered_at: l.delivered_at, boxes: new Set(same.map((x) => x.box)).size, pcs: same.reduce((a, x) => a + x.qty_shipped, 0) });
+    const freight = isFreight(l.method);
+    // freight (LTL) can't be tracked here: expect it the next business day after it ships, and sign for it when it comes
+    trk.set(l.tracking, { carrier: carrierFor(l), tracking: l.tracking, status: l.track_status, detail: l.track_detail || (freight ? `PRO ${l.tracking}` : ""), eta: l.est_delivery || (freight && l.ship_date ? nextBusinessDay(l.ship_date) : null), delivered: l.track_status === "delivered", delivered_at: l.delivered_at, boxes: new Set(same.map((x) => x.box)).size, pcs: same.reduce((a, x) => a + x.qty_shipped, 0), freight });
   }
   const noTrk = g.lines.find((l) => !l.tracking);
   // no tracking (the supplier's local truck): due the next business day; "delivered" only when someone marks it received
@@ -701,4 +709,20 @@ export async function receiveTruck(admin: SupabaseClient, lineIds: string[], at:
     if (r.kind === "goods") await admin.from("order_goods").update({ status: "arrived", updated_by: who, updated_at: new Date().toISOString() }).eq("order_id", r.order_id!).in("status", ["waiting", "on_way"]);
   }
   return { lines: rows.length };
+}
+
+/** Freight (an LTL pallet) is here: delivered at `at`, received by `by`. Also marks it on orders here, if linked. */
+export async function receiveFreight(admin: SupabaseClient, lineIds: string[], at: string, by: string, yes = true) {
+  if (!lineIds.length) throw new Error("Nothing to receive.");
+  const who = by.trim().slice(0, 80);
+  if (yes && !who) throw new Error("Who received it?");
+  const when = isNaN(Date.parse(at)) ? new Date().toISOString() : new Date(at).toISOString();
+  const { data } = await admin.from("supplier_manifest_lines").update(yes
+    ? { track_status: "delivered", delivered_at: when, track_detail: `Freight received · signed by ${who}`, track_updated_at: new Date().toISOString() }
+    : { track_status: "", delivered_at: null, track_detail: "" }).in("id", lineIds).select("order_id, kind, tracking");
+  for (const r of ((data || []) as { order_id: string | null; kind: string; tracking: string }[]).filter((x) => x.order_id && x.tracking)) {
+    await admin.from(r.kind === "blanks" ? "blank_shipments" : "goods_shipments").update(yes ? { track_status: "delivered", delivered_at: when, track_detail: `Freight received · signed by ${who}` } : { track_status: "", delivered_at: null, track_detail: "" }).eq("order_id", r.order_id!).eq("tracking", r.tracking);
+    if (yes && r.kind === "goods") await admin.from("order_goods").update({ status: "arrived", updated_by: who, updated_at: new Date().toISOString() }).eq("order_id", r.order_id!).in("status", ["waiting", "on_way"]);
+  }
+  return { lines: (data || []).length };
 }

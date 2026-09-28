@@ -23,9 +23,9 @@ const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
 type Focus = "arrived" | "today" | "tomorrow" | "way" | "problems";
 type GroupBy = "carrier" | "supplier";
 type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; po: string; so: string; boxes: number; pcs: number;
-  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string }[]; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
-type Via = "ss" | "ups" | "fedex" | "other";
-const VIAS: { k: string; label: string }[] = [{ k: "ss", label: "S&S truck" }, { k: "ups", label: "UPS" }, { k: "fedex", label: "FedEx" }, { k: "other", label: "DHL / other (freight, USPS…)" }];
+  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean }[]; lineIds?: string[]; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
+type Via = "ss" | "ups" | "fedex" | "freight" | "other";
+const VIAS: { k: string; label: string }[] = [{ k: "ss", label: "S&S truck" }, { k: "ups", label: "UPS" }, { k: "fedex", label: "FedEx" }, { k: "freight", label: "Freight (LTL pallets)" }, { k: "other", label: "DHL / other" }];
 const SUPPLIERS_G: { k: string; label: string }[] = [{ k: "ss", label: "S&S Activewear" }, { k: "sanmar", label: "SanMar" }, { k: "other", label: "Other vendors" }];
 const nextBiz = (d: string) => { const x = new Date(d.slice(0, 10) + "T12:00"); do { x.setDate(x.getDate() + 1); } while (x.getDay() === 0 || x.getDay() === 6); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
 type Pkg = { key: string; kind: "blanks" | "goods"; orderId: string; number: number; who: string; label: string; tracking: string; carrier: string; status: string; detail: string; at: string | null; delivered: boolean; need: string | null; href: string };
@@ -54,6 +54,7 @@ export default function GoodsReceiving() {
   const [focus, setFocus] = useState<Focus | null>(null);
   const [groupBy, setGroupBy] = useState<GroupBy>("carrier");
   const [truck, setTruck] = useState(false);
+  const [freight, setFreight] = useState<Row | null>(null);
   const [order, setOrder] = useState<O | null>(null);
   const [note, setNote] = useState("");
   const [view, setViewState] = useState<View>("today");
@@ -154,11 +155,11 @@ export default function GoodsReceiving() {
   const localDay = (iso: string | null | undefined) => { if (!iso) return ""; if (iso.length === 10) return iso; const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const rowOf = (x: Omit<Row, "state" | "late" | "via" | "supplier" | "noScan"> & { statuses: string[]; supplierRaw: string }): Row => {
     // a label was made but the carrier never scanned it by the next business day after it shipped
-    const noScan = x.trks.some((k) => k.tracking && !k.delivered && ["", "unknown", "pre_transit"].includes(k.status || "")) && !!x.shipped && t0 >= nextBiz(x.shipped);
+    const noScan = x.trks.some((k) => k.tracking && !k.freight && !k.delivered && ["", "unknown", "pre_transit"].includes(k.status || "")) && !!x.shipped && t0 >= nextBiz(x.shipped);
     const state: Row["state"] = x.trks.length && x.trks.every((k) => k.delivered) ? "arrived" : x.statuses.some((st) => PROBLEM.includes(st)) || noScan ? "problem" : "way";
     const supplier = /^ss$|s&s|s & s/i.test(x.supplierRaw) ? "ss" : /sanmar/i.test(x.supplierRaw) ? "sanmar" : "other";
     const k0 = x.trks[0];
-    const via: Via = !k0 ? "other" : !k0.tracking ? (/s&s|s & s|ss activewear/i.test(k0.carrier) ? "ss" : "other") : /^ups$/i.test(k0.carrier) || /^1Z/i.test(k0.tracking) ? "ups" : /fedex/i.test(k0.carrier) ? "fedex" : "other";
+    const via: Via = !k0 ? "other" : k0.freight ? "freight" : !k0.tracking ? (/s&s|s & s|ss activewear/i.test(k0.carrier) ? "ss" : "other") : /^ups$/i.test(k0.carrier) || /^1Z/i.test(k0.tracking) ? "ups" : /fedex/i.test(k0.carrier) ? "fedex" : "other";
     return { ...x, via, supplier, noScan, state, late: state !== "arrived" && !!x.at && !!x.need && localDay(x.at) > x.need };
   };
   const rows: Row[] = [
@@ -167,14 +168,15 @@ export default function GoodsReceiving() {
     // customers' goods on orders here
     ...data.goods.flatMap((it) => it.shipments.filter((sh) => sh.tracking || sh.eta).map((sh) => { const o = v.byId.get(it.order.id); return rowOf({ key: "g" + sh.id, side: "customer", number: it.order.number, href: `/shop/orders/${it.order.id}`, who: v.who(o), what: "Customer goods", sub: it.goods.supplier === "ss" ? "S&S" : it.goods.supplier === "sanmar" ? "SanMar" : supplierLabel(it.goods.supplier) || "Customer", boxes: sh.boxes || 0, pcs: 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status || "" }], statuses: [sh.track_status || ""], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at || null, need: v.needBy(o), unlinked: false, supplierRaw: it.goods.supplier || "", shipped: sh.created_at ? sh.created_at.slice(0, 10) : null, po: "", so: it.goods.supplier_po || "" }); })),
     // tied to Printavo jobs (until go-live)
-    ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
+    ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
     // on a manifest, not on any order yet: still coming in (or already here)
-    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date })),
+    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date })),
   ];
   const byAt = (a: Row, b: Row) => (a.at || "9999").localeCompare(b.at || "9999");
   const L = {
     arrived: rows.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
-    today: rows.filter((r) => r.state !== "arrived" && localDay(r.at) === t0),
+    // due today, plus S&S truck / freight still not signed for (they never report delivery on their own)
+    today: rows.filter((r) => r.state !== "arrived" && (localDay(r.at) === t0 || (!!r.at && localDay(r.at) < t0 && r.trks.some((k) => !k.tracking || k.freight)))),
     tomorrow: rows.filter((r) => r.state !== "arrived" && localDay(r.at) === tm),
     way: rows.filter((r) => r.state !== "arrived").sort(byAt),
     // delivery problems, labels never scanned by the next business day, and anything arriving after it's needed
@@ -201,10 +203,13 @@ export default function GoodsReceiving() {
       <td className="po" title={r.po}>{r.po || "—"}</td>
       <td className="r">{r.boxes || "—"}</td>
       <td className="r">{r.pcs || "—"}</td>
-      <td>{statusPill(r)}</td>
+      <td>{statusPill(r)}{r.trks.some((k) => k.freight) && r.lineIds?.length ? (r.state === "arrived"
+        ? null
+        : <div style={{ marginTop: 4 }}><button type="button" className="btn sm primary" onClick={() => setFreight(r)}>Freight received</button></div>) : null}</td>
       <td className={r.late ? "bad" : ""}>{r.state === "arrived" ? "" : r.at ? day(r.at) : "—"}{r.need && r.state !== "arrived" ? <div className="faint" style={{ fontSize: 11.5 }}>need by {day(r.need)}</div> : null}</td>
       <td className="trk"><div>{r.trks.map((k, i) => k.tracking
-        ? <a key={k.tracking} href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" className={unscanned(r, k) ? "noscan" : k.delivered ? "done" : ""} title={unscanned(r, k) ? "Label created, never scanned by the carrier" : ""}>{k.tracking}</a>
+        ? k.freight ? <span key={k.tracking}><b style={{ fontFamily: "inherit" }}>{k.carrier}</b><br /><a href={trackingUrl(/r&l/i.test(k.carrier) ? "r&l" : "", k.tracking)} target="_blank" rel="noreferrer">PRO {k.tracking}</a></span>
+        : <a key={k.tracking} href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" className={unscanned(r, k) ? "noscan" : k.delivered ? "done" : ""} title={unscanned(r, k) ? "Label created, never scanned by the carrier" : ""}>{k.tracking}</a>
         : <span key={"l" + i} className="faint">{k.carrier === "S&S Activewear" ? "S&S truck" : k.carrier} · no tracking</span>)}</div></td>
       <td className="so">{r.so || "—"}</td>
       <td className="act">{r.unlinked
@@ -218,7 +223,7 @@ export default function GoodsReceiving() {
     const groups = groupBy === "carrier" ? VIAS : SUPPLIERS_G;
     const key = (r: Row) => (groupBy === "carrier" ? r.via : r.supplier);
     return (
-      <div className="rv-vias">{groups.map((gr) => { const rs = list.filter((r) => key(r) === gr.k); return rs.length ? (
+      <div className="rv-vias">{groups.map((gr) => { const rs = list.filter((r) => key(r) === gr.k).sort((a, b) => a.who.localeCompare(b.who, undefined, { sensitivity: "base" })); return rs.length ? (
         <div key={gr.k} className="rv-via"><div className="rv-via-h">{gr.label}<span>{rs.length} shipment{rs.length === 1 ? "" : "s"} · {rs.reduce((a, r) => a + (r.boxes || 0), 0)} boxes</span></div>
           <div className="rv-grid-wrap"><table className="rv-grid">
             <colgroup><col className="c-co" /><col className="c-from" /><col className="c-po" /><col className="c-n" /><col className="c-n" /><col className="c-st" /><col className="c-at" /><col className="c-trk" /><col className="c-so" /><col className="c-ord" /></colgroup>
@@ -349,6 +354,7 @@ export default function GoodsReceiving() {
 
       </div>
       </>}
+      {freight && <FreightModal r={freight} onClose={() => setFreight(null)} onDone={(m) => { setFreight(null); setNote(m); loadPending(); }} />}
       {truck && <TruckModal onClose={() => setTruck(false)} onDone={(m) => { setTruck(false); setNote(m); load(); loadPending(); setRefreshKey((k) => k + 1); }} />}
       {order && <OrderBlanks o={order} who={v.who(order)} onClose={() => setOrder(null)} onDone={(m) => { setOrder(null); setNote(m); setTab("ordered"); load(); }} />}
     </>
@@ -538,6 +544,43 @@ function TruckModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: st
               {err && <div className="pv-err">{err}</div>}
             </>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** An LTL freight pallet is here (no parcel tracking): when it came and who received it. */
+function FreightModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone: (msg: string) => void }) {
+  const now = new Date();
+  const [date, setDate] = useState(today());
+  const [time, setTime] = useState(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
+  const [by, setBy] = useState("");
+  const [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const f = r.trks.find((k) => k.freight);
+  async function save() {
+    if (!by.trim()) return setErr("Who received it?");
+    setBusy(true); setErr("");
+    const at = new Date(`${date}T${time || "12:00"}`).toISOString();
+    const res = await fetch("/api/goods/manifest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ freight: { lineIds: r.lineIds, at, signedBy: by.trim() } }) });
+    const j = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok || j.error) return setErr(j.error || "Couldn't save.");
+    onDone(`Freight received: ${r.who}${f ? ` (${f.carrier} PRO ${f.tracking})` : ""} at ${new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}, received by ${by.trim()}.`);
+  }
+  return (
+    <div className="pp-modal" role="dialog" aria-modal="true" aria-label="Freight received" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="pp-sheet" style={{ maxWidth: 560 }}>
+        <div className="pp-sheet-h"><div><b>Freight received</b> <span className="faint" style={{ fontSize: 14 }}>· {r.who}</span></div><button type="button" className="btn icon ghost" aria-label="Close" disabled={busy} onClick={onClose}>✕</button></div>
+        <div style={{ padding: "14px 22px" }} className="stack">
+          <div className="faint" style={{ fontSize: 13.5 }}>{f ? `${f.carrier} · PRO ${f.tracking} · ` : ""}{r.sub} {r.so} · {r.boxes} carton{r.boxes === 1 ? "" : "s"} · {r.pcs} pcs{r.po ? ` · PO ${r.po}` : ""}</div>
+          <div className="rv-other" style={{ gridTemplateColumns: "auto auto 1fr" }}>
+            <label>Delivered on<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+            <label>What time?<input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>
+            <label>Received by<input type="text" value={by} onChange={(e) => setBy(e.target.value)} placeholder="Name of who signed" autoFocus /></label>
+          </div>
+          {err && <div className="pv-err">{err}</div>}
+          <div className="row" style={{ gap: 8 }}><span className="spacer" /><button type="button" className="btn ghost" disabled={busy} onClick={onClose}>Cancel</button><button type="button" className="btn primary" disabled={busy || !by.trim()} onClick={save}>{busy ? "Saving…" : "Freight received"}</button></div>
         </div>
       </div>
     </div>

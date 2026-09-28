@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readXlsx } from "@/lib/xlsx";
-import { applyGroup, importManifest, linkByHand, markReceived, receiveTruck, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
+import { applyGroup, importManifest, linkByHand, markReceived, receiveFreight, receiveTruck, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,6 +62,11 @@ export async function POST(req: Request) {
         // the S&S local truck is here: sign for what came
         const t = b.truck as { lineIds: string[]; at: string; signedBy: string };
         return NextResponse.json({ ok: true, ...(await receiveTruck(admin, t.lineIds || [], t.at, t.signedBy || "")) });
+      }
+      if (b.freight) {
+        // an LTL pallet is here: sign for it (no parcel tracking for freight)
+        const f = b.freight as { lineIds: string[]; at: string; signedBy: string; undo?: boolean };
+        return NextResponse.json({ ok: true, ...(await receiveFreight(admin, f.lineIds || [], f.at, f.signedBy || "", !f.undo)) });
       }
       if (b.retry) return NextResponse.json({ ok: true, ...(await resolvePending(admin, Date.now() + 45000)) });
       if (Array.isArray(b.ignore)) { await admin.from("supplier_manifest_lines").update({ kind: "ignored", match_how: "ignored by staff" }).in("id", b.ignore); return NextResponse.json({ ok: true }); }
