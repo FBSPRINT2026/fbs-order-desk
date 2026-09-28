@@ -182,16 +182,17 @@ async function customersPage(admin: SupabaseClient, sync: Sync, did: Record<stri
 
 async function filesJob(admin: SupabaseClient, deadline: number) {
   let orders = 0, copied = 0;
-  while (Date.now() < deadline - 5000) {
+  while (Date.now() < deadline - 12000) {
     const { data: rows } = await admin.from("printavo_index").select("printavo_id, archived_id").eq("status", "files").not("archived_id", "is", null).order("created_at", { ascending: false }).limit(12);
     let worked = false;
     for (const r of (rows || []) as { printavo_id: string; archived_id: string }[]) {
-      if (Date.now() > deadline - 5000) break;
+      if (Date.now() > deadline - 12000) break;
       const { data: mine } = await admin.rpc("printavo_sync_claim", { p_job: "file:" + r.archived_id, p_seconds: 55 });
       if (!mine) continue; // the other file job has it
       worked = true;
       try {
-        const res = await copyFiles(admin, r.archived_id, deadline - 3000);
+        // no new download starts in the last ~20 seconds (a big mockup can take a while)
+        const res = await copyFiles(admin, r.archived_id, deadline - 12000);
         copied += res.copied; orders++;
         if (res.storageFull) throw new Error("Storage is full: " + res.failed.join("; "));
         if (!res.left) await admin.from("printavo_index").update({ status: "done" }).eq("printavo_id", r.printavo_id);

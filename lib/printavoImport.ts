@@ -144,6 +144,8 @@ export async function copyFiles(sb: SupabaseClient, archivedId: string, deadline
         throw new Error(up.error.message);
       }
       files[url] = path;
+      // saved after every file, so a run that gets cut off never copies the same file twice
+      await sb.from("archived_orders").update({ files, files_copied: Object.values(files).filter((p) => p && !["failed", "too-big"].includes(p)).length }).eq("id", row.id);
     } catch (e) { failed.push(`${url.slice(0, 80)}: ${e instanceof Error ? e.message : e}`); files[url] = "failed"; }
   }
   const copied = Object.values(files).filter((p) => p && !["failed", "too-big"].includes(p)).length;
