@@ -114,7 +114,7 @@ const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "
  * Copies an archived order's artwork (mockups, production files, message attachments) into our storage so it stays after
  * Printavo is gone. Stops at `deadline` (ms timestamp); call again until `left` is 0. Files are downloaded, never changed.
  */
-export async function copyFiles(sb: SupabaseClient, archivedId: string, deadline: number): Promise<{ copied: number; total: number; left: number; failed: string[]; storageFull?: boolean }> {
+export async function copyFiles(sb: SupabaseClient, archivedId: string, deadline: number, hardStop = deadline + 15000): Promise<{ copied: number; total: number; left: number; failed: string[]; storageFull?: boolean }> {
   const { data: row, error } = await sb.from("archived_orders").select("id, data, files").eq("id", archivedId).single();
   if (error || !row) throw new Error("Archived order not found.");
   const o = row.data as PvOrder;
@@ -128,7 +128,8 @@ export async function copyFiles(sb: SupabaseClient, archivedId: string, deadline
   for (const [i, url] of todo.entries()) {
     if (Date.now() > deadline) break;
     try {
-      const r = await fetch(url, { cache: "no-store" });
+      // a download that can't finish before the run has to end is dropped and simply tried again next run
+      const r = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(Math.max(1000, hardStop - Date.now())) });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const len = +(r.headers.get("content-length") || 0);
       if (len > MAX) { files[url] = "too-big"; await r.body?.cancel().catch(() => {}); continue; }
@@ -146,7 +147,10 @@ export async function copyFiles(sb: SupabaseClient, archivedId: string, deadline
       files[url] = path;
       // saved after every file, so a run that gets cut off never copies the same file twice
       await sb.from("archived_orders").update({ files, files_copied: Object.values(files).filter((p) => p && !["failed", "too-big"].includes(p)).length }).eq("id", row.id);
-    } catch (e) { failed.push(`${url.slice(0, 80)}: ${e instanceof Error ? e.message : e}`); files[url] = "failed"; }
+    } catch (e) {
+      if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) break; // out of time, not a bad file
+      failed.push(`${url.slice(0, 80)}: ${e instanceof Error ? e.message : e}`); files[url] = "failed";
+    }
   }
   const copied = Object.values(files).filter((p) => p && !["failed", "too-big"].includes(p)).length;
   await sb.from("archived_orders").update({ files, files_copied: copied }).eq("id", row.id);

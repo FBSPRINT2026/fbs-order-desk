@@ -193,7 +193,7 @@ async function filesJob(admin: SupabaseClient, deadline: number) {
       worked = true;
       try {
         // no new download starts in the last ~20 seconds (a big mockup can take a while)
-        const res = await copyFiles(admin, r.archived_id, deadline - 12000);
+        const res = await copyFiles(admin, r.archived_id, deadline - 17000, deadline + 6000);
         copied += res.copied; orders++;
         if (res.storageFull) throw new Error("Storage is full: " + res.failed.join("; "));
         if (!res.left) await admin.from("printavo_index").update({ status: "done" }).eq("printavo_id", r.printavo_id);
