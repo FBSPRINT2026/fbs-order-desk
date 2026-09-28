@@ -116,17 +116,24 @@ export default function GoodsReceiving() {
   const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "today") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
   const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); if (j.error) setNote(`Couldn't load everything: ${j.error}`); }, []);
   useEffect(() => { loadPending(); }, [loadPending]);
-  async function upload(f: File) {
+  /** One or more manifests at once (S&S and SanMar mixed is fine): read one after another, then one summary. */
+  async function upload(files: File[]) {
+    if (!files.length) return;
     setUpBusy(true); setNote("");
-    const fd = new FormData(); fd.append("file", f);
-    const r = await fetch("/api/goods/manifest", { method: "POST", body: fd });
-    const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+    const lines: string[] = [];
+    let waiting = 0;
+    for (const [i, f] of files.entries()) {
+      setNote(files.length > 1 ? `Reading ${i + 1} of ${files.length}: ${f.name}…` : "");
+      const fd = new FormData(); fd.append("file", f);
+      const r = await fetch("/api/goods/manifest", { method: "POST", body: fd }).catch(() => null);
+      const j = r ? await r.json().catch(() => ({ error: `HTTP ${r.status}` })) : { error: "Couldn't reach the server." };
+      if (!r || !r.ok || j.error) { lines.push(`${f.name}: ${j.error || "couldn't read it"}`); continue; }
+      const w = (j.suggested || 0) + (j.unmatched || 0); waiting += w;
+      lines.push(`${j.supplier === "sanmar" ? "SanMar" : "S&S"} (${f.name}): ${j.shipments} shipment${j.shipments === 1 ? "" : "s"}, ${j.new} new line${j.new === 1 ? "" : "s"}${j.lines !== j.new ? ` (${j.lines - j.new} already imported)` : ""}; linked ${j.matched} to customer orders, ${j.blanks} to our blanks${w ? `, ${w} to link` : ""}.`);
+    }
     setUpBusy(false);
-    if (!r.ok || j.error) return setNote(j.error || "Couldn't read that file.");
-    const waiting = (j.suggested || 0) + (j.unmatched || 0);
-    setNote(`${j.supplier === "sanmar" ? "SanMar" : "S&S"} manifest: ${j.shipments} shipment${j.shipments === 1 ? "" : "s"} (${j.new} new line${j.new === 1 ? "" : "s"}${j.lines !== j.new ? `, ${j.lines - j.new} already imported` : ""}). Linked: ${j.matched} to customer orders, ${j.blanks} to our blanks.${waiting ? ` ${waiting} waiting in the resolution center${j.suggested ? ` (${j.suggested} with our guess to OK)` : ""}.` : ""}`);
+    setNote(`${files.length > 1 ? `${files.length} manifests imported. ` : ""}${lines.join("  ·  ")}${waiting ? `  Anything not linked shows a Link order button below.` : ""}`);
     load(); loadPending(); setRefreshKey((k) => k + 1);
-    if (waiting) setView("resolve");
   }
   const load = useCallback(async () => {
     const [{ data: os }, { data: bo }, { data: st }] = await Promise.all([
@@ -320,7 +327,7 @@ export default function GoodsReceiving() {
 
         <div className="rv-head-r"><div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="btn primary" onClick={() => setTruck(true)}>Receive S&amp;S truck</button>
-          <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import supplier manifest"}<input type="file" hidden accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) upload(f); }} /></label>
+          <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import supplier manifests"}<input type="file" hidden accept=".xlsx,.csv" multiple onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ""; upload(fs); }} /></label>
         </div>
 </div>
       </div>
