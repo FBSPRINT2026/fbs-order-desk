@@ -18,18 +18,33 @@ const lastSize = (): { length: number; width: number; height: number } | undefin
 const rememberSize = (b: Box) => { try { if (boxReady(b)) localStorage.setItem(LAST, JSON.stringify({ length: b.length, width: b.width, height: b.height })); } catch { /* not important */ } };
 /** When a rate arrives: the carrier's date, else business days from today. */
 export function arrival(r: Rate): Date | null {
-  if (r.deliveryDate) { const d = new Date(r.deliveryDate); if (!isNaN(+d)) return d; }
+  if (r.deliveryDate) { const d = new Date(r.deliveryDate.slice(0, 10) + "T12:00"); if (!isNaN(+d)) return d; } // a calendar day, not a time
   if (!r.days) return null;
   const d = new Date(); let n = r.days;
   while (n > 0) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) n--; }
   return d;
 }
+/**
+ * Roughly when in the day a service delivers (the carriers' usual commitments for business addresses), so a
+ * pricier option that arrives the same day is only worth it when it arrives earlier in that day.
+ */
+export function deliveredBy(service: string): { rank: number; label: string } {
+  const s = service.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (/early|firstovernight/.test(s)) return { rank: 1, label: "by 8:30 AM" };
+  if (/priorityovernight|^nextdayair$|2nddayairam|2dayam|fedex2dayam/.test(s)) return { rank: 2, label: "by 10:30 AM" };
+  if (/standardovernight|nextdayairsaver/.test(s)) return { rank: 3, label: "by 3 PM" };
+  return { rank: 4, label: "by end of day" };
+}
+const dayKey = (d: Date | null) => (d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : "none");
 const dayName = (d: Date) => d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
 const niceService = (s: string) => {
   let x = s.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Za-z])(\d)/g, "$1 $2").replace(/^(fedex|ups|usps)\s+/i, "").trim();
   if (x === x.toUpperCase()) x = x.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()); // FEDEX_2_DAY → 2 Day
   return x;
 };
+/** "the same day" / "sooner", comparing two options' arrival. */
+const when2 = (a: { at: Date | null; by: { rank: number } }, b: { at: Date | null; by: { rank: number } }) =>
+  dayKey(a.at) === dayKey(b.at) ? (a.by.rank < b.by.rank ? "earlier that day" : "the same day") : "sooner";
 const num = (v: string): number | "" => (v.trim() === "" ? "" : Math.max(0, +v || 0));
 
 /**
@@ -82,26 +97,32 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const chosen = useMemo(() => rates?.find((r) => `${r.carrier}|${r.service}` === pick) || null, [rates, pick]);
   const canRate = ready && !!(to.zip && to.city && to.state && to.street1) && (bill === "fbs" || !!(account.trim() && zip.trim()));
 
-  /** Every option with its arrival day, sorted soonest first, tagged Cheapest / Fastest / Recommended. */
-  const { options, best } = useMemo(() => {
+  /**
+   * The options, arranged: Cheapest and Fastest up top, then every useful option by arrival day. An option is grayed out
+   * ("no gain") when another one costs the same or less and arrives the same day at the same time of day or sooner, e.g.
+   * overnight vs ground that both arrive Thursday afternoon. Same day but earlier in the day (overnight by 10:30 AM) stays.
+   */
+  const plan = useMemo(() => {
     const need = t.due ? new Date(t.due.slice(0, 10) + "T23:59") : null;
     const cost = (r: Rate) => (bill === "fbs" ? r.price : r.cost);
-    const list = (rates || []).map((r) => { const at = arrival(r); return { r, at, late: !!(need && at && at > need), tags: [] as string[] }; })
-      .sort((a, b) => (a.at ? +a.at : 9e15) - (b.at ? +b.at : 9e15) || cost(a.r) - cost(b.r));
-    if (!list.length) return { options: list, best: null };
-    const cheapest = list.reduce((m, o) => (cost(o.r) < cost(m.r) ? o : m));
-    const fastest = list.find((o) => o.at) || list[0];
-    const onTime = list.filter((o) => !o.late);
-    // best value: the cheapest that makes the in-hands date; with no date, the cheapest unless paying a little more is much faster
-    let pickO = onTime.length ? onTime.reduce((m, o) => (cost(o.r) < cost(m.r) ? o : m)) : fastest;
-    let why = need ? (onTime.length ? `Cheapest option that arrives by the in-hands date (${dayName(need)}).` : `In-hands date is ${dayName(need)}. Consider calling the customer.`) : "Cheapest option.";
-    if (!need && fastest !== cheapest && fastest.at && cheapest.at) {
-      const daysSaved = Math.round((+cheapest.at - +fastest.at) / 86400000), extra = cost(fastest.r) - cost(cheapest.r);
-      if (daysSaved >= 2 && extra <= Math.max(5, cost(cheapest.r) * 0.15)) { pickO = fastest; why = `Arrives ${daysSaved} days sooner for only ${money(extra)} more.`; }
+    type Opt = { k: string; r: Rate; at: Date | null; by: { rank: number; label: string }; late: boolean; beatenBy: Opt | null };
+    const all: Opt[] = (rates || []).map((r) => { const at = arrival(r); return { k: `${r.carrier}|${r.service}`, r, at, by: deliveredBy(r.service), late: !!(need && at && at > need), beatenBy: null }; });
+    const when = (o: Opt) => (o.at ? +new Date(o.at.getFullYear(), o.at.getMonth(), o.at.getDate()) : 9e15) + o.by.rank; // day, then time of day
+    for (const o of all) {
+      o.beatenBy = all.filter((x) => x !== o && cost(x.r) <= cost(o.r) && when(x) <= when(o) && (cost(x.r) < cost(o.r) || when(x) < when(o)))
+        .sort((x, y) => cost(x.r) - cost(y.r))[0] || null;
     }
-    cheapest.tags.push("Cheapest"); fastest.tags.push("Fastest"); if (!pickO.tags.includes("Recommended")) pickO.tags.unshift("Recommended");
-    list.forEach((o) => { if (o.late) o.tags.push("Late"); });
-    return { options: list, best: { ...pickO, why } };
+    const good = all.filter((o) => !o.beatenBy).sort((x, y) => when(x) - when(y) || cost(x.r) - cost(y.r));
+    const beaten = all.filter((o) => o.beatenBy).sort((x, y) => cost(x.r) - cost(y.r));
+    if (!good.length) return null;
+    const cheapest = good.reduce((m, o) => (cost(o.r) < cost(m.r) ? o : m));
+    // fastest: the soonest day, and the cheapest way to get there that day (earlier-in-the-day options are listed under it)
+    const fastest = good.filter((o) => dayKey(o.at) === dayKey(good[0].at)).reduce((m, o) => (cost(o.r) < cost(m.r) ? o : m));
+    const onTime = need ? good.filter((o) => !o.late) : good;
+    const cheapestOnTime = onTime.length ? onTime.reduce((m, o) => (cost(o.r) < cost(m.r) ? o : m)) : null;
+    const days: { key: string; at: Date | null; late: boolean; opts: Opt[] }[] = [];
+    for (const o of good) { const k = dayKey(o.at); let d = days.find((x) => x.key === k); if (!d) days.push(d = { key: k, at: o.at, late: o.late, opts: [] }); d.opts.push(o); }
+    return { cost, need, cheapest, fastest, cheapestOnTime, days, beaten, pickDefault: (need ? cheapestOnTime : null) || cheapest };
   }, [rates, bill, t.due]);
 
   // rates pop up by themselves once every box and the address are filled in (and again after a change)
@@ -112,7 +133,8 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     const h = setTimeout(() => { tried.current = rateKey; getRates(); }, 900);
     return () => clearTimeout(h);
   }, [rateKey, canRate, rates, busy]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (best && !rates?.some((r) => `${r.carrier}|${r.service}` === pick)) setPick(`${best.r.carrier}|${best.r.service}`); }, [best]); // eslint-disable-line react-hooks/exhaustive-deps
+  // start on the best choice (a saved pick stays unless it's one of the "no gain" options)
+  useEffect(() => { if (plan && (!pick || !plan.days.some((d) => d.opts.some((o) => o.k === pick)))) setPick(plan.pickDefault.k); }, [plan]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** A scanned box label ("34317-2") jumps to that box; the order number alone jumps to the next box without a weight. */
   function onScan(v: string) {
@@ -230,33 +252,65 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
                 <button type="button" className="btn sm" tabIndex={-1} disabled={!canRate || busy !== ""} onClick={getRates}>{busy === "rates" ? "Checking UPS, FedEx, USPS…" : rates ? "Check again" : "Compare rates"}</button>
               </div>
               {busy === "rates" && !rates && <div className="faint" style={{ fontSize: 13 }}>Comparing UPS, FedEx and USPS from {settings.from.zip || "our ZIP"}…</div>}
-              {rates ? (options.length ? (
+              {rates ? (plan ? (
                 <>
-                  {best && (
-                    <div className={"sw-rec" + (best.late ? " late" : "")}>
-                      <div className="sw-rec-t">{best.late ? "Nothing arrives by the in-hands date. Fastest:" : "Recommended"}</div>
-                      <div className="sw-rec-b"><b>{best.r.carrier} {niceService(best.r.service)}</b> arrives <b>{best.at ? dayName(best.at) : "(no estimate)"}</b>{bill === "fbs" ? <> for <b>{money(best.r.price)}</b></> : " on their account"}</div>
-                      <div className="sw-rec-w">{best.why}</div>
-                    </div>
-                  )}
-                  <div className="sw-rate-list">{options.map((o) => {
-                    const k = `${o.r.carrier}|${o.r.service}`;
-                    return (
-                      <label key={k} className={"sw-rate" + (pick === k ? " on" : "") + (o.late ? " late" : "")}>
-                        <input type="radio" name="rate" checked={pick === k} onChange={() => setPick(k)} />
-                        <span className="sw-rate-n">
-                          <b>{o.at ? o.at.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "No estimate"}</b>
-                          <small>{o.r.carrier} {niceService(o.r.service)}{o.r.days ? ` · ${o.r.days} business day${o.r.days === 1 ? "" : "s"}` : ""}</small>
-                        </span>
-                        <span className="sw-tags">
-                          {o.tags.map((tg) => <span key={tg} className={"sw-tag " + tg.toLowerCase().replace(/\W+/g, "")}>{tg}</span>)}
-                        </span>
-                        {bill === "fbs"
-                          ? <span className="sw-rate-p"><b>{money(o.r.price)}</b><small>we pay {money(o.r.cost)}</small></span>
-                          : <span className="sw-rate-p"><b>Their account</b><small>{o.r.price ? `+ ${money(o.r.price)} handling` : `about ${money(o.r.cost)} list`}</small></span>}
-                      </label>
-                    );
-                  })}</div>
+                  {/* the two quick picks */}
+                  <div className="sw-picks">
+                    {[
+                      { o: plan.cheapest, t: "Cheapest" },
+                      { o: plan.fastest, t: "Fastest" },
+                      ...(plan.need && plan.cheapestOnTime && plan.cheapestOnTime !== plan.cheapest && plan.cheapestOnTime !== plan.fastest ? [{ o: plan.cheapestOnTime, t: "Cheapest on time" }] : []),
+                    ].map(({ o, t: title }) => (
+                      <button key={title} type="button" tabIndex={-1} className={"sw-pick" + (pick === o.k ? " on" : "") + (o.late ? " late" : "")} onClick={() => setPick(o.k)}>
+                        <span className="sw-pick-t">{title}{o.late ? " · late" : ""}</span>
+                        <b>{o.at ? o.at.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "No estimate"}</b>
+                        <span className="sw-pick-s">{o.r.carrier} {niceService(o.r.service)}{o.by.rank < 4 ? ` · ${o.by.label}` : ""}</span>
+                        <span className="sw-pick-p">{bill === "fbs" ? money(o.r.price) : "Their account"}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {plan.need && !plan.cheapestOnTime && <div className="sw-warn">Nothing arrives by the in-hands date ({dayName(plan.need)}). Consider calling the customer.</div>}
+
+                  {/* every useful option, by arrival day */}
+                  <div className="sw-rate-list">
+                    {plan.days.map((d) => (
+                      <div key={d.key} className="sw-day">
+                        <div className={"sw-day-h" + (d.late ? " late" : "")}>Arrives {d.at ? dayName(d.at) : "(no estimate)"}{d.late ? " · after the in-hands date" : ""}</div>
+                        {d.opts.map((o, i) => (
+                          <label key={o.k} className={"sw-rate" + (pick === o.k ? " on" : "") + (o.late ? " late" : "")}>
+                            <input type="radio" name="rate" checked={pick === o.k} onChange={() => setPick(o.k)} />
+                            <span className="sw-rate-n">
+                              <b>{o.r.carrier} {niceService(o.r.service)}</b>
+                              <small>{o.by.label}{o.r.deliveryDate ? "" : " (estimate)"}{i === d.opts.length - 1 && d.opts.length > 1 ? " · cheapest that day" : i < d.opts.length - 1 ? ` · earlier in the day for ${money(plan.cost(o.r) - plan.cost(d.opts[d.opts.length - 1].r))} more` : ""}</small>
+                            </span>
+                            <span className="sw-tags">
+                              {o === plan.cheapest && <span className="sw-tag cheapest">Cheapest</span>}
+                              {o === plan.fastest && <span className="sw-tag fastest">Fastest</span>}
+                            </span>
+                            {bill === "fbs"
+                              ? <span className="sw-rate-p"><b>{money(o.r.price)}</b><small>we pay {money(o.r.cost)}</small></span>
+                              : <span className="sw-rate-p"><b>Their account</b><small>about {money(o.r.cost)} list</small></span>}
+                          </label>
+                        ))}
+                      </div>
+                    ))}
+                    {plan.beaten.length > 0 && (
+                      <details className="sw-beaten">
+                        <summary>{plan.beaten.length} more option{plan.beaten.length === 1 ? "" : "s"} that cost more and don&apos;t get there any sooner</summary>
+                        {plan.beaten.map((o) => (
+                          <label key={o.k} className={"sw-rate dim" + (pick === o.k ? " on" : "")}>
+                            <input type="radio" name="rate" checked={pick === o.k} onChange={() => setPick(o.k)} />
+                            <span className="sw-rate-n">
+                              <b>{o.r.carrier} {niceService(o.r.service)}</b>
+                              <small>{o.at ? o.at.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "?"} {o.by.label} · {o.beatenBy ? `${o.beatenBy.r.carrier} ${niceService(o.beatenBy.r.service)} gets there ${when2(o.beatenBy, o)} for ${money(plan.cost(o.r) - plan.cost(o.beatenBy.r))} less` : ""}</small>
+                            </span>
+                            <span />
+                            <span className="sw-rate-p"><b>{bill === "fbs" ? money(o.r.price) : "Their account"}</b></span>
+                          </label>
+                        ))}
+                      </details>
+                    )}
+                  </div>
                 </>
               ) : <div className="faint">No rates came back for this shipment. Check the address and box sizes.</div>)
                 : busy !== "rates" && <div className="faint" style={{ fontSize: 13 }}>{canRate ? "Getting rates…" : `Fill in every box and the ship-to address; rates from UPS, FedEx and USPS pop up here with arrival days${bill === "fbs" ? ` and what the customer pays (${settings.markupPct}% + ${money(settings.perBoxFee)}/box)` : ""}.`}</div>}
