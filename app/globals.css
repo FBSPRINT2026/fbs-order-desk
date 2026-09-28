@@ -2030,3 +2030,21 @@ a.as-ai{text-decoration:none}
 .rv-seg button{all:unset;cursor:pointer;padding:5px 12px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
 .rv-seg button.on{background:var(--accent);color:#fff}
 @media (max-width:700px){.rv-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rv-grid-wrap{overflow-x:auto;border:1px solid var(--line-2);border-radius:10px}
+.rv-grid{width:100%;border-collapse:collapse;font-size:13px}
+.rv-grid th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);text-align:left;padding:7px 10px;background:var(--surface-2);border-bottom:1px solid var(--line-2);white-space:nowrap;font-weight:700}
+.rv-grid td{padding:8px 10px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.rv-grid tr:last-child td{border-bottom:0}
+.rv-grid .r{text-align:right}
+.rv-grid td.co b{font-weight:600}
+.rv-grid td.co .rv-tag{margin-left:6px}
+.rv-grid td.trk>div{display:flex;flex-direction:column;gap:2px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.rv-grid td.trk a{text-decoration:none;color:var(--accent)}
+.rv-grid td.trk a.done{color:var(--ink-3)}
+.rv-grid td.trk a.noscan{background:var(--danger-soft);color:var(--danger);font-weight:700;border-radius:4px;padding:0 4px;outline:1px solid color-mix(in srgb,var(--danger) 45%,transparent)}
+.rv-grid td.act{white-space:nowrap}
+.rv-grid tr.prob td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+.rv-grid td.bad{color:var(--danger);font-weight:600}
+.rv-linked{font-weight:700;color:var(--accent);text-decoration:none}
+.rv-tag{font-size:10.5px;font-weight:700;padding:0 6px;border-radius:99px;background:var(--surface-2);color:var(--ink-3)}
+.rv-grid .rv-pill{font-weight:600}

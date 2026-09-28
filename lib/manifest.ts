@@ -630,7 +630,7 @@ async function applyBlanks(admin: SupabaseClient, supplier: string, g: Group, or
 }
 export const __test = { allocate, styleEq, colorEq };
 
-export type PrintavoGoods = { kind: "goods" | "blanks"; lineIds: string[]; ship_date: string | null; archivedId: string; number: number; nickname: string; customer: string; due_date: string | null; supplier: string; supplier_order: string; pcs: number; boxes: number; tracking: PendingShipment["tracking"]; delivered: boolean; eta: string | null };
+export type PrintavoGoods = { kind: "goods" | "blanks"; lineIds: string[]; ship_date: string | null; po: string; archivedId: string; number: number; nickname: string; customer: string; due_date: string | null; supplier: string; supplier_order: string; pcs: number; boxes: number; tracking: PendingShipment["tracking"]; delivered: boolean; eta: string | null };
 /** Goods linked to Printavo orders (until go-live), shipment by shipment, for Goods & receiving. Delivered ones for 10 days. */
 export async function printavoGoods(admin: SupabaseClient): Promise<PrintavoGoods[]> {
   // two links to archived_orders (linked + guessed): name the one we mean, or the query fails and returns nothing
@@ -646,7 +646,7 @@ export async function printavoGoods(admin: SupabaseClient): Promise<PrintavoGood
     const delivered = s.tracking.length > 0 && s.tracking.every((t) => t.delivered);
     const lastDelivered = ls.map((l) => l.delivered_at).filter(Boolean).sort().pop();
     if (delivered && lastDelivered && Date.now() - Date.parse(lastDelivered) > 10 * 86400000) continue;
-    out.push({ kind: (f as Row & { kind: string }).kind === "blanks" ? "blanks" : "goods", lineIds: ls.map((l) => l.id), ship_date: f.ship_date, archivedId: f.archived_order_id, number: +(a?.visual_id || 0), nickname: a?.nickname || "", customer: a?.customers?.company || a?.customers?.name || f.customer_name, due_date: a?.due_date || null, supplier: f.supplier, supplier_order: f.supplier_order, pcs: s.pcs, boxes: s.boxes, tracking: s.tracking, delivered, eta: s.tracking.map((t) => t.eta).filter(Boolean).sort().pop() || null });
+    out.push({ kind: (f as Row & { kind: string }).kind === "blanks" ? "blanks" : "goods", lineIds: ls.map((l) => l.id), ship_date: f.ship_date, po: f.customer_po, archivedId: f.archived_order_id, number: +(a?.visual_id || 0), nickname: a?.nickname || "", customer: a?.customers?.company || a?.customers?.name || f.customer_name, due_date: a?.due_date || null, supplier: f.supplier, supplier_order: f.supplier_order, pcs: s.pcs, boxes: s.boxes, tracking: s.tracking, delivered, eta: s.tracking.map((t) => t.eta).filter(Boolean).sort().pop() || null });
   }
   return out.sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"));
 }

@@ -22,7 +22,7 @@ const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
 ];
 type Focus = "arrived" | "today" | "tomorrow" | "way" | "problems";
 type GroupBy = "carrier" | "supplier";
-type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; boxes: number; pcs: number;
+type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; po: string; boxes: number; pcs: number;
   trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string }[]; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
 type Via = "ss" | "ups" | "fedex" | "other";
 const VIAS: { k: string; label: string }[] = [{ k: "ss", label: "S&S truck" }, { k: "ups", label: "UPS" }, { k: "fedex", label: "FedEx" }, { k: "other", label: "DHL / other (freight, USPS…)" }];
@@ -163,13 +163,13 @@ export default function GoodsReceiving() {
   };
   const rows: Row[] = [
     // our blanks ordered here
-    ...data.bships.filter((sh) => v.byId.has(sh.order_id)).map((sh) => { const o = v.byId.get(sh.order_id)!; return rowOf({ key: "b" + sh.id, side: "fbs", number: o.number, href: `/shop/orders/${o.id}`, who: v.who(o), what: "Our blanks", sub: sh.note || "", boxes: sh.boxes || 0, pcs: sh.pcs || 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status }], statuses: [sh.track_status], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at, need: v.needBy(o), unlinked: false, supplierRaw: sh.carrier + " " + (sh.note || ""), shipped: null }); }),
+    ...data.bships.filter((sh) => v.byId.has(sh.order_id)).map((sh) => { const o = v.byId.get(sh.order_id)!; return rowOf({ key: "b" + sh.id, side: "fbs", number: o.number, href: `/shop/orders/${o.id}`, who: v.who(o), what: "Our blanks", sub: sh.note || "", boxes: sh.boxes || 0, pcs: sh.pcs || 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status }], statuses: [sh.track_status], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at, need: v.needBy(o), unlinked: false, supplierRaw: sh.carrier + " " + (sh.note || ""), shipped: null, po: "" }); }),
     // customers' goods on orders here
-    ...data.goods.flatMap((it) => it.shipments.filter((sh) => sh.tracking || sh.eta).map((sh) => { const o = v.byId.get(it.order.id); return rowOf({ key: "g" + sh.id, side: "customer", number: it.order.number, href: `/shop/orders/${it.order.id}`, who: v.who(o), what: "Customer goods", sub: supplierLabel(it.goods.supplier) || "", boxes: sh.boxes || 0, pcs: 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status || "" }], statuses: [sh.track_status || ""], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at || null, need: v.needBy(o), unlinked: false, supplierRaw: it.goods.supplier || "", shipped: sh.created_at ? sh.created_at.slice(0, 10) : null }); })),
+    ...data.goods.flatMap((it) => it.shipments.filter((sh) => sh.tracking || sh.eta).map((sh) => { const o = v.byId.get(it.order.id); return rowOf({ key: "g" + sh.id, side: "customer", number: it.order.number, href: `/shop/orders/${it.order.id}`, who: v.who(o), what: "Customer goods", sub: supplierLabel(it.goods.supplier) || "", boxes: sh.boxes || 0, pcs: 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status || "" }], statuses: [sh.track_status || ""], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at || null, need: v.needBy(o), unlinked: false, supplierRaw: it.goods.supplier || "", shipped: sh.created_at ? sh.created_at.slice(0, 10) : null, po: it.goods.supplier_po || "" }); })),
     // tied to Printavo jobs (until go-live)
-    ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: `Printavo job · ${g.supplier === "sanmar" ? "SanMar" : "S&S"} order ${g.supplier_order}`, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
+    ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: `${g.supplier === "sanmar" ? "SanMar" : "S&S"} ${g.supplier_order}`, po: g.po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
     // on a manifest, not on any order yet: still coming in (or already here)
-    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : `${g.customer?.name || g.customer_name} goods`, sub: `${g.supplier === "sanmar" ? "SanMar" : "S&S"} order ${g.supplier_order} · PO ${g.customer_po || "none"}`, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date })),
+    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: `${g.supplier === "sanmar" ? "SanMar" : "S&S"} ${g.supplier_order}`, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail })), statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date })),
   ];
   const byAt = (a: Row, b: Row) => (a.at || "9999").localeCompare(b.at || "9999");
   const L = {
@@ -192,24 +192,24 @@ export default function GoodsReceiving() {
     : r.state === "problem" ? <span className="rv-pill bad">{r.noScan ? "Not scanned since label created" : TRACK[r.trks.map((k) => k.status).find((st) => PROBLEM.includes(st)) || ""] || "Problem"}</span>
     : r.late ? <span className="rv-pill bad">Arrives after it&apos;s needed</span>
     : <span className="rv-pill way">On the way</span>;
+  // a label made but never scanned by the next business day after it shipped
+  const unscanned = (r: Row, k: Row["trks"][number]) => !!k.tracking && !k.delivered && ["", "unknown", "pre_transit"].includes(k.status || "") && !!r.shipped && t0 >= nextBiz(r.shipped);
   const rowLine = (r: Row) => (
-    <li key={r.key} className="rv-row">
-      <div className="rv-row-t">
-        {r.unlinked ? <button type="button" className="rv-pill unl" onClick={() => setView("resolve")} title="Link it in the Resolution center">Unlinked order</button> : <Link href={r.href} className="num">#{r.number}</Link>}
-        <b>{r.unlinked ? r.what : r.who}</b>
-        {!r.unlinked && <span className="faint">{r.what}</span>}
-        {statusPill(r)}
-        <span className="spacer" />
-        {r.state !== "arrived" && r.at ? <span className={"rv-due" + (r.late ? " bad" : "")}>arrives {day(r.at)}</span> : null}
-      </div>
-      <div className="rv-row-m">
-        {[r.sub, r.boxes ? `${r.boxes} box${r.boxes === 1 ? "" : "es"}` : "", r.pcs ? `${r.pcs} pcs` : "", r.need ? `needed by ${day(r.need)}` : ""].filter(Boolean).join(" · ")}
-        {r.late ? <b className="bad"> · arrives after it&apos;s needed</b> : null}
-      </div>
-      <div className="rv-row-k">{r.trks.map((k, i) => k.tracking
-        ? <a key={k.tracking} href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" className={k.delivered ? "done" : ""}>{k.carrier} {k.tracking}</a>
-        : <span key={"l" + i}>{k.carrier} local truck{k.delivered ? " · received" : ""}</span>)}</div>
-    </li>
+    <tr key={r.key} className={r.state === "problem" || r.late ? "prob" : ""}>
+      <td className="co"><b>{r.who}</b>{r.what === "Our blanks" && <span className="rv-tag">our blanks</span>}</td>
+      <td>{r.sub || "—"}</td>
+      <td>{r.po || "—"}</td>
+      <td className="r">{r.boxes || "—"}</td>
+      <td className="r">{r.pcs || "—"}</td>
+      <td>{statusPill(r)}</td>
+      <td className={r.late ? "bad" : ""}>{r.state === "arrived" ? "" : r.at ? day(r.at) : "—"}{r.need && r.state !== "arrived" ? <div className="faint" style={{ fontSize: 11.5 }}>need by {day(r.need)}</div> : null}</td>
+      <td className="trk"><div>{r.trks.map((k, i) => k.tracking
+        ? <a key={k.tracking} href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" className={unscanned(r, k) ? "noscan" : k.delivered ? "done" : ""} title={unscanned(r, k) ? "Label created, never scanned by the carrier" : ""}>{k.tracking}</a>
+        : <span key={"l" + i} className="faint">{k.carrier === "S&S Activewear" ? "S&S truck" : k.carrier} · no tracking</span>)}</div></td>
+      <td className="act">{r.unlinked
+        ? <button type="button" className="btn sm" onClick={() => setView("resolve")}>Link order</button>
+        : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}</td>
+    </tr>
   );
   // every list: one block per carrier (S&S truck, UPS, FedEx, other) or per supplier (S&S, SanMar, other vendors)
   const grouped = (list: Row[], empty: string) => {
@@ -218,7 +218,11 @@ export default function GoodsReceiving() {
     const key = (r: Row) => (groupBy === "carrier" ? r.via : r.supplier);
     return (
       <div className="rv-vias">{groups.map((gr) => { const rs = list.filter((r) => key(r) === gr.k); return rs.length ? (
-        <div key={gr.k} className="rv-via"><div className="rv-via-h">{gr.label}<span>{rs.length} shipment{rs.length === 1 ? "" : "s"} · {rs.reduce((a, r) => a + (r.boxes || 0), 0)} boxes</span></div><ul className="rv-rows">{rs.map(rowLine)}</ul></div>
+        <div key={gr.k} className="rv-via"><div className="rv-via-h">{gr.label}<span>{rs.length} shipment{rs.length === 1 ? "" : "s"} · {rs.reduce((a, r) => a + (r.boxes || 0), 0)} boxes</span></div>
+          <div className="rv-grid-wrap"><table className="rv-grid">
+            <thead><tr><th>Company</th><th>From</th><th>PO</th><th className="r">Boxes</th><th className="r">Pcs</th><th>Status</th><th>Arrives</th><th>Tracking</th><th>Order</th></tr></thead>
+            <tbody>{rs.map(rowLine)}</tbody>
+          </table></div></div>
       ) : null; })}</div>
     );
   };
