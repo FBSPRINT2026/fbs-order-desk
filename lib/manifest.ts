@@ -730,6 +730,7 @@ export async function receiveFreight(admin: SupabaseClient, lineIds: string[], a
 export type ManifestHit = {
   key: string; supplier: string; supplier_order: string; who: string; po: string; ship_date: string | null; boxes: number; pcs: number; kind: string;
   order: { number: number; href: string } | null; styles: string; tracking: PendingShipment["tracking"];
+  lineIds: string[]; customer_id: string | null; customer_name: string; customer_account: string;
 };
 /**
  * Search every manifest line we've ever imported (PO, customer, supplier order, tracking/PRO, style, color), one hit per
@@ -757,7 +758,41 @@ export async function searchManifests(admin: SupabaseClient, q: string): Promise
     return {
       key, supplier: f.supplier, supplier_order: f.supplier_order, who: isUs(f.customer_name) && !c ? "FBS" : c?.company || c?.name || f.customer_name, po: f.customer_po, ship_date: f.ship_date,
       boxes: s.boxes, pcs: s.pcs, kind: f.kind, styles: s.styles, tracking: s.tracking,
+      lineIds: ls.map((l) => l.id), customer_id: (f as R & { customer_id: string | null }).customer_id, customer_name: f.customer_name, customer_account: f.customer_account,
       order: f.order_id && f.orders ? { number: f.orders.number, href: `/shop/orders/${f.order_id}` } : f.archived_order_id && f.archived_orders ? { number: +f.archived_orders.visual_id, href: `/shop/archive/${f.archived_order_id}` } : null,
     };
   });
+}
+
+export type OpenOrderPick = { id: string; number: number; nickname: string; po: string; due_date: string | null; status: string; printavo: boolean; items: string; pcs: number; match: boolean };
+/**
+ * A customer's open orders to link a shipment to: orders here and (until go-live) open Printavo jobs, with what's on
+ * them. `po` (the shipment's PO) floats matching orders to the top.
+ */
+export async function openOrdersFor(admin: SupabaseClient, customerId: string, po = ""): Promise<OpenOrderPick[]> {
+  const since = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
+  const [{ data: os }, { data: ar }] = await Promise.all([
+    admin.from("orders").select("id, number, nickname, po_number, due_date, status, submitted_at, groups, lines").eq("customer_id", customerId).not("status", "in", "(completed)").order("number", { ascending: false }).limit(80),
+    admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, status_name, qty, data").eq("customer_id", customerId).or(`due_date.gte.${since},due_date.is.null`).order("visual_id", { ascending: false }).limit(80),
+  ]);
+  const g = { customer_po: po, supplier_order: "" };
+  const itemsOf = (lines: { style: string; color: string; n: number }[]) => {
+    const m = new Map<string, number>();
+    for (const l of lines) { const k = `${l.style} ${l.color}`.trim(); if (k) m.set(k, (m.get(k) || 0) + l.n); }
+    return [...m.entries()].slice(0, 3).map(([k, n]) => `${k} (${n})`).join(", ") + (m.size > 3 ? ` +${m.size - 3} more` : "");
+  };
+  const out: OpenOrderPick[] = [];
+  for (const o of (os || []) as (Candidate & { due_date: string | null; submitted_at: string | null; groups: unknown; lines: unknown })[]) {
+    if (o.status === "request" && !o.submitted_at) continue;
+    const ls: { style: string; color: string; n: number }[] = [];
+    for (const gr of orderGroups(o as unknown as Order)) for (const l of gr.lines) ls.push({ style: [l.brand, l.style].filter(Boolean).join(" "), color: l.color || "", n: Object.values(l.sizes || {}).reduce((a: number, q) => a + (+(q || 0)), 0) });
+    out.push({ id: o.id, number: o.number, nickname: o.nickname || "", po: o.po_number || "", due_date: o.due_date, status: o.status, printavo: false, items: itemsOf(ls), pcs: ls.reduce((a, l) => a + l.n, 0), match: !!po && poHit(o, g) });
+  }
+  for (const o of (ar || []) as { id: string; visual_id: string | number; nickname: string; po_number: string; due_date: string | null; status_name: string; qty: number | null; data: { groups?: { lines?: { itemNumber?: string; color?: string; sizes?: Record<string, number> }[] }[] } }[]) {
+    if (PV_CLOSED.test(o.status_name || "")) continue;
+    const ls = (o.data?.groups || []).flatMap((gr) => (gr.lines || []).map((l) => ({ style: l.itemNumber || "", color: l.color || "", n: Object.values(l.sizes || {}).reduce((a, q) => a + (+q || 0), 0) })));
+    const c: Candidate = { id: PV + o.id, number: +o.visual_id || 0, nickname: o.nickname || "", po_number: o.po_number || "", customer_id: customerId, price_type: "", status: o.status_name };
+    out.push({ id: PV + o.id, number: c.number, nickname: c.nickname, po: c.po_number, due_date: o.due_date, status: o.status_name, printavo: true, items: itemsOf(ls), pcs: o.qty || ls.reduce((a, l) => a + l.n, 0), match: !!po && poHit(c, g) });
+  }
+  return out.sort((a, b) => Number(b.match) - Number(a.match) || (a.due_date || "9999").localeCompare(b.due_date || "9999"));
 }

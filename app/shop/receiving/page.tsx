@@ -23,7 +23,9 @@ const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
 type Focus = "arrived" | "today" | "way" | "past" | "problems";
 type GroupBy = "carrier" | "supplier";
 type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; po: string; so: string; boxes: number; pcs: number;
-  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean }[]; lineIds?: string[]; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
+  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean }[]; lineIds?: string[];
+  link?: LinkInfo; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
+type LinkInfo = { lineIds: string[]; customerId: string | null; customerName: string; us: boolean; supplier: string; name: string; account: string; suggest: string | null; styles: string };
 type Via = "ss" | "ups" | "fedex" | "freight" | "other";
 const VIAS: { k: string; label: string }[] = [{ k: "ss", label: "S&S truck" }, { k: "ups", label: "UPS" }, { k: "fedex", label: "FedEx" }, { k: "freight", label: "Freight (LTL pallets)" }, { k: "other", label: "DHL / other" }];
 const SUPPLIERS_G: { k: string; label: string }[] = [{ k: "ss", label: "S&S Activewear" }, { k: "sanmar", label: "SanMar" }, { k: "other", label: "Other vendors" }];
@@ -70,6 +72,7 @@ export default function GoodsReceiving() {
     return () => clearTimeout(id);
   }, [q]);
   const [freight, setFreight] = useState<Row | null>(null);
+  const [linking, setLinking] = useState<Row | null>(null);
   const [order, setOrder] = useState<O | null>(null);
   const [note, setNote] = useState("");
   const [view, setViewState] = useState<View>("today");
@@ -185,7 +188,8 @@ export default function GoodsReceiving() {
     // tied to Printavo jobs (until go-live)
     ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
     // on a manifest, not on any order yet: still coming in (or already here)
-    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date })),
+    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date,
+      link: { lineIds: g.lineIds, customerId: g.customer?.id || null, customerName: g.customer?.name || "", us: g.us, supplier: g.supplier, name: g.customer_name, account: g.customer_account, suggest: g.lines.find((l) => l.suggest)?.suggest || null, styles: g.styles } })),
   ];
   const byAt = (a: Row, b: Row) => (a.at || "9999").localeCompare(b.at || "9999");
   const L = {
@@ -230,7 +234,7 @@ export default function GoodsReceiving() {
         {r.trks.length > 1 && <button type="button" className="rv-more" onClick={() => setOpen({ ...open, [r.key]: !open[r.key] })} title={r.trks.map((k) => k.tracking).join("\n")}>{open[r.key] ? "show less" : `+${r.trks.length - 1} more`}</button>}</div></td>
       <td className="so">{r.so || "—"}</td>
       <td className="act">{r.unlinked
-        ? <button type="button" className="btn sm" onClick={() => setView("resolve")}>Link order</button>
+        ? <button type="button" className="btn sm" onClick={() => (r.link ? setLinking(r) : setView("resolve"))}>Link order</button>
         : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}</td>
     </tr>
   );
@@ -260,7 +264,8 @@ export default function GoodsReceiving() {
   // search results (every manifest, any age) as rows in the same grid
   const hitRows: Row[] = (hits || []).map((h) => rowOf({ key: "h" + h.key, side: h.kind === "blanks" || h.who === "FBS" ? "fbs" : "customer", number: h.order?.number || 0, href: h.order?.href || "", who: h.who, what: h.kind === "blanks" ? "Our blanks" : "Customer goods", sub: h.supplier === "sanmar" ? "SanMar" : "S&S", so: h.supplier_order, po: h.po, boxes: h.boxes, pcs: h.pcs,
     trks: h.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), statuses: h.tracking.map((k) => k.status),
-    at: h.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: h.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: !h.order, supplierRaw: h.supplier, shipped: h.ship_date }));
+    at: h.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: h.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: !h.order, supplierRaw: h.supplier, shipped: h.ship_date,
+    link: h.order ? undefined : { lineIds: h.lineIds, customerId: h.customer_id, customerName: h.customer_id ? h.who : "", us: h.who === "FBS", supplier: h.supplier, name: h.customer_name, account: h.customer_account, suggest: null, styles: h.styles } }));
   // first look: arriving today, and underneath it what already arrived
   const shown: Focus[] = focus ? [focus] : ["today", "arrived"];
 
@@ -271,11 +276,12 @@ export default function GoodsReceiving() {
     <>
       <div className="page-head">
         <div><div className="eyebrow">Receiving</div><h1>Goods &amp; receiving</h1></div>
-        <label className="rv-search"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
-        <div className="row" style={{ gap: 8 }}>
+
+        <div className="rv-head-r"><div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="btn primary" onClick={() => setTruck(true)}>Receive S&amp;S truck</button>
           <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import supplier manifest"}<input type="file" hidden accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) upload(f); }} /></label>
         </div>
+        <label className="rv-search rv-search-under"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label></div>
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
       {q.trim().length >= 2 && (
@@ -383,6 +389,7 @@ export default function GoodsReceiving() {
 
       </div>
       </>}
+      {linking && <LinkModal r={linking} onClose={() => setLinking(null)} onDone={(m) => { setLinking(null); setNote(m); load(); loadPending(); setRefreshKey((k) => k + 1); if (q.trim().length >= 2) setQ(q + " "); }} />}
       {freight && <FreightModal r={freight} onClose={() => setFreight(null)} onDone={(m) => { setFreight(null); setNote(m); loadPending(); }} />}
       {truck && <TruckModal onClose={() => setTruck(false)} onDone={(m) => { setTruck(false); setNote(m); load(); loadPending(); setRefreshKey((k) => k + 1); }} />}
       {order && <OrderBlanks o={order} who={v.who(order)} onClose={() => setOrder(null)} onDone={(m) => { setOrder(null); setNote(m); setTab("ordered"); load(); }} />}
@@ -610,6 +617,91 @@ function FreightModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onD
           </div>
           {err && <div className="pv-err">{err}</div>}
           <div className="row" style={{ gap: 8 }}><span className="spacer" /><button type="button" className="btn ghost" disabled={busy} onClick={onClose}>Cancel</button><button type="button" className="btn primary" disabled={busy || !by.trim()} onClick={save}>{busy ? "Saving…" : "Freight received"}</button></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Link a shipment to its order in a small pop-up: the customer's open orders (and open Printavo jobs) with the PO match
+ * on top; pick one and it's linked. Wrong or unknown customer (our blanks, an account name we don't know): type the
+ * customer and pick from their orders.
+ */
+function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone: (msg: string) => void }) {
+  const li = r.link!;
+  const [cust, setCust] = useState<{ id: string; name: string } | null>(li.customerId ? { id: li.customerId, name: li.customerName || r.who } : null);
+  const [custs, setCusts] = useState<{ id: string; label: string }[]>([]);
+  const [who, setWho] = useState("");
+  const [orders, setOrders] = useState<{ id: string; number: number; nickname: string; po: string; due_date: string | null; status: string; printavo: boolean; items: string; pcs: number; match: boolean }[] | null>(null);
+  const [pick, setPick] = useState("");
+  const [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const [remember, setRemember] = useState(true);
+  useEffect(() => {
+    createClient().from("customers").select("id, company, name").order("company").limit(4000)
+      .then(({ data }) => setCusts(((data || []) as { id: string; company: string; name: string }[]).map((c) => ({ id: c.id, label: c.company || c.name })).filter((c) => c.label)));
+  }, []);
+  useEffect(() => {
+    if (!cust) { setOrders(null); return; }
+    setOrders(null); setPick("");
+    fetch(`/api/goods/manifest?orders=${cust.id}&po=${encodeURIComponent(r.po || "")}`, { cache: "no-store" }).then((x) => x.json()).then((j) => {
+      const list = j.orders || [];
+      setOrders(list);
+      const pre = (li.suggest && list.find((o: { id: string }) => o.id === li.suggest)) || list.find((o: { match: boolean }) => o.match);
+      if (pre) setPick(pre.id);
+    }).catch(() => setErr("Couldn't load their orders."));
+  }, [cust, r.po, li.suggest]);
+  const typed = who.trim().toLowerCase();
+  const matches = typed.length >= 2 ? custs.filter((c) => c.label.toLowerCase().includes(typed)).slice(0, 8) : [];
+  const newAccount = !li.us && !!cust && cust.id !== li.customerId;
+  async function link() {
+    if (!pick) return;
+    setBusy(true); setErr("");
+    const post = (body: unknown) => fetch("/api/goods/manifest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(async (x) => { const j = await x.json().catch(() => ({})); if (!x.ok || j.error) throw new Error(j.error || "Couldn't link."); return j; });
+    try {
+      if (li.us) await post({ assign: { lineIds: li.lineIds, orderId: pick, kind: "blanks" } });
+      else await post({ link: li.lineIds.map((id) => ({ lineId: id, orderId: pick })) });
+      // an account name we didn't know (GUNPOWDER & WHISKEY → Cowboy Cool): remember it for next time
+      if (newAccount && remember && li.name) await post({ alias: { supplier: li.supplier, name: li.name, account: li.account, customerId: cust!.id } }).catch(() => null);
+      const o = orders?.find((x) => x.id === pick);
+      onDone(`Linked ${r.who === "FBS" ? "our blanks" : r.who} (${r.sub} ${r.so}) to ${o?.printavo ? "Printavo " : ""}#${o?.number}.`);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setBusy(false); }
+  }
+  return (
+    <div className="pp-modal" role="dialog" aria-modal="true" aria-label="Link order" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="pp-sheet lk-sheet">
+        <div className="pp-sheet-h"><div><b>Link order</b> <span className="faint" style={{ fontSize: 14 }}>· {r.sub} {r.so}{r.po ? ` · PO ${r.po}` : ""} · {r.boxes} box{r.boxes === 1 ? "" : "es"} · {r.pcs} pcs</span></div><button type="button" className="btn icon ghost" aria-label="Close" disabled={busy} onClick={onClose}>✕</button></div>
+        <div className="lk-body">
+          {li.styles && <div className="faint" style={{ fontSize: 13 }}>What shipped: {li.styles}</div>}
+          <div className="lk-cust">
+            {cust ? (
+              <><span className="faint">Customer</span><b>{cust.name}</b><button type="button" className="linkbtn" onClick={() => { setCust(null); setWho(""); }}>Change</button></>
+            ) : (
+              <div className="lk-find">
+                <label className="faint" htmlFor="lk-who">{li.us ? "Which customer are these blanks for?" : `Who is “${li.name}” in our system?`}</label>
+                <input id="lk-who" type="text" value={who} onChange={(e) => setWho(e.target.value)} placeholder="Start typing the customer…" autoFocus />
+                {matches.length > 0 && <ul className="lk-sug">{matches.map((c) => <li key={c.id}><button type="button" onClick={() => { setCust({ id: c.id, name: c.label }); setWho(""); }}>{c.label}</button></li>)}</ul>}
+              </div>
+            )}
+          </div>
+          {cust && (
+            !orders ? <div className="faint">Loading {cust.name}&apos;s open orders…</div> : !orders.length ? <div className="gb-empty">{cust.name} has no open orders or open Printavo jobs.</div> : (
+              <div className="lk-list" role="radiogroup" aria-label="Open orders">
+                <div className="faint" style={{ fontSize: 12.5, marginBottom: 2 }}>Select the order these goods are for:</div>
+                {orders.map((o) => (
+                  <label key={o.id} className={"lk-o" + (pick === o.id ? " on" : "")}>
+                    <input type="radio" name="lk" checked={pick === o.id} onChange={() => setPick(o.id)} />
+                    <span className="lk-n">#{o.number}</span>
+                    <span className="lk-m"><b>{o.nickname || o.po || "Order"}</b>{o.po && o.po !== o.nickname ? <span className="faint"> · PO {o.po}</span> : null}<br /><span className="faint">{o.items || "—"}{o.pcs ? ` · ${o.pcs} pcs` : ""}</span></span>
+                    <span className="lk-r">{o.match && <span className="rv-tag lk-match">PO match</span>}{li.suggest === o.id && !o.match && <span className="rv-tag lk-match">our guess</span>}{o.printavo && <span className="rv-tag">Printavo</span>}<span className="faint">{o.due_date ? `due ${new Date(o.due_date + "T12:00").toLocaleDateString([], { month: "numeric", day: "numeric" })}` : ""}</span></span>
+                  </label>
+                ))}
+              </div>
+            )
+          )}
+          {newAccount && li.name && <label className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ width: "auto" }} />Remember: {li.name}{li.account ? ` (account ${li.account})` : ""} is {cust!.name}</label>}
+          {err && <div className="pv-err">{err}</div>}
+          <div className="row" style={{ gap: 8 }}><span className="spacer" /><button type="button" className="btn ghost" disabled={busy} onClick={onClose}>Cancel</button><button type="button" className="btn primary" disabled={busy || !pick} onClick={link}>{busy ? "Linking…" : "Link order"}</button></div>
         </div>
       </div>
     </div>
