@@ -17,13 +17,15 @@ import Timeline from "@/components/Timeline";
 import { splitCustomer } from "@/lib/crm/private";
 import { fmtStamp } from "@/lib/format";
 import { orderSearchText } from "@/lib/search";
+import ShopMessages from "@/components/ShopMessages";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const isNew = useSearchParams().get("new") === "1";
-  const { orders, customers, loading } = useShopData();
+  const searchParams = useSearchParams();
+  const isNew = searchParams.get("new") === "1";
+  const { orders, customers, settings, loading } = useShopData();
   const [c, setC] = useState<Customer | null>(null);
   const [state, setState] = useState("");
   const [armed, setArmed] = useState(false);
@@ -140,7 +142,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           <button className={"btn danger" + (armed ? " armed" : "")} type="button" onClick={del} disabled={os.length > 0 || archive.length > 0} title={os.length ? "Delete this customer's orders first" : archive.length ? "This customer has archived Printavo orders" : ""}>{armed ? "Confirm delete" : "Delete"}</button>
         </div>
       </div>
-      <AccountAreas mode="shop" attention={os.flatMap((o): AAttn[] => {
+      <AccountAreas mode="shop" messagesPanel={<ShopMessages customerId={id} customerName={c.name || c.company || "Customer"} shopName={settings?.shop?.name || "FBS Print"}
+          orders={os.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", href: `/shop/orders/${o.id}` }))} start={searchParams.get("c")} />} attention={os.flatMap((o): AAttn[] => {
           const out: AAttn[] = [];
           const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "");
           if (o.status === "request") out.push({ kind: "request", order_id: o.id, number: o.number, date: d(o.submitted_at || o.created_at) });

@@ -49,8 +49,12 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ mode, messagesPanel, greeting, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
+  /** the Messages hub (the dashboard's centerpiece in the portal, and the Messages area) */
+  messagesPanel?: ReactNode;
+  /** portal: "Hi Jordan" line over the dashboard */
+  greeting?: string;
   orders: AOrder[]; payments: APayment[]; designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
   attention: AAttn[];
   /** shown at the top of the dashboard (portal: Start an order / Make a mockup) */
@@ -82,7 +86,7 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   const area = (sp.get("area") as Area) || "home";
   const go = (a: Area) => { const p = new URLSearchParams(sp.toString()); if (a === "home") p.delete("area"); else p.set("area", a); router.replace(`${path}${p.size ? "?" + p : ""}`, { scroll: false }); };
   const [q, setQ] = useState("");
-  const [homeTab, setHomeTab] = useState<"quotes" | "orders">("orders");
+  const [homeTab, setHomeTab] = useState<"quotes" | "orders" | "current" | "past">("orders");
   const [stars, setStars] = useState<Record<string, boolean>>({});
   const [starErr, setStarErr] = useState("");
   const [gone, setGone] = useState<Record<string, boolean>>({});
@@ -165,7 +169,79 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
   const tableHead = (title: ReactNode, ph: string) => <div className="aa-bar"><div className="aa-bar-l">{title}</div>{search(ph)}</div>;
 
   let body: ReactNode = null;
-  if (area === "home") {
+  if (area === "home" && mode === "portal" && messagesPanel) {
+    const current = orders.filter((o) => !o.archived && (o.type === "invoice" ? (IN_WORK.includes(o.status) || o.balance > 0.004) : o.status === "request"));
+    const past = orders.filter((o) => o.type === "invoice" && !current.includes(o));
+    const openQ = quotes.filter((o) => !o.archived && o.status === "quote_sent");
+    const lists: Record<string, AOrder[]> = { current, quotes: openQ, past };
+    const tab = (homeTab as string) in lists ? (homeTab as string) : current.length ? "current" : openQ.length ? "quotes" : "past";
+    const rows = lists[tab].slice(0, 6);
+    const favs = [...ds.filter((d) => d.starred && !d.archived_at), ...ds.filter((d) => !d.starred && !d.archived_at)].filter((d) => designUrls[d.id]).slice(0, 6);
+    const artCount = ds.filter((d) => !d.archived_at).length + mockups.length;
+    body = (
+      <div className="pd">
+        <div className="pd-top">
+          <div className="pd-hello">{greeting && <h2>{greeting}</h2>}<span>Everything about your account in one place. Message us any time.</span></div>
+          <div className="pd-actions">
+            {homeTop}
+            {due > 0.004 && (
+              <button type="button" className="pd-act pay" onClick={() => go("payments")}>
+                <span className="ic"><Ico d={I.dollar} size={20} /></span><span><b>Pay {money(due)}</b><small>{overdue > 0.004 ? `${money(overdue)} past due` : "Balance on your orders"}</small></span>
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="pd-grid">
+          <div className="pd-main">{messagesPanel}</div>
+          <aside className="pd-side">
+            {attention.length > 0 && (
+              <div className="pd-card pd-attn">
+                <div className="pd-card-h"><h3>Needs your attention</h3><span className="aa-n">{attention.length}</span></div>
+                {attention.slice(0, 6).map((a, i) => (
+                  <Link key={a.kind + a.order_id + i} href={orderHref(a.order_id, a.hash)} className="pd-attn-i">
+                    <span className="k">{a.kind === "quote" ? "Approve quote" : a.kind === "art" ? "Approve artwork" : a.kind === "pay" ? "Payment due" : a.kind === "draft" ? "Finish your order" : a.kind === "receive" ? "Send us garments" : "Order"}</span>
+                    <span className="v">#{a.number}{a.kind === "pay" ? ` · ${a.date}` : ""}</span>
+                    <Ico d={I.arrow} size={16} />
+                  </Link>
+                ))}
+              </div>
+            )}
+            <div className="pd-card pd-glance">
+              <button type="button" onClick={() => go("orders")}><b>{inWork.length}</b><span>In progress</span></button>
+              <button type="button" onClick={() => go("quotes")}><b>{openQ.length}</b><span>Quotes to review</span></button>
+              <button type="button" className={overdue > 0.004 ? "late" : ""} onClick={() => go("payments")}><b>{money(due)}</b><span>{overdue > 0.004 ? "Due (some late)" : "Balance due"}</span></button>
+            </div>
+            <div className="pd-card">
+              <div className="pd-card-h"><h3>Your orders</h3><button type="button" className="pd-link" onClick={() => go("orders")}>See all</button></div>
+              <div className="pd-tabs" role="tablist">
+                {([["current", "Current", current.length], ["quotes", "Quotes", openQ.length], ["past", "Past", past.length]] as const).map(([k, l, n]) => (
+                  <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setHomeTab(k as never)}>{l}{n ? <span>{n}</span> : null}</button>
+                ))}
+              </div>
+              <div className="pd-orders">
+                {rows.map((o) => (
+                  <Link key={o.id} href={orderHref(o.id)} className="pd-o">
+                    <span className="n">#{o.number}</span>
+                    <span className="t"><b>{o.nickname || (o.type === "quote" ? "Quote" : "Order")}</b><small>{o.archived ? "Archived · " : ""}{o.type === "quote" ? money(o.total) : o.balance > 0.004 && !o.archived ? `${money(o.balance)} due` : when(o.due_date || o.created_at) || `${o.qty} pcs`}</small></span>
+                    {pill(o)}
+                  </Link>
+                ))}
+                {!rows.length && <div className="pd-none">{tab === "current" ? "No orders in progress right now." : tab === "quotes" ? "No quotes waiting on you." : "No past orders yet."}</div>}
+              </div>
+            </div>
+            <div className="pd-card">
+              <div className="pd-card-h"><h3>Your artwork</h3><button type="button" className="pd-link" onClick={() => go("artwork")}>{artCount ? `All ${artCount}` : "Open"}</button></div>
+              {favs.length ? (
+                <div className="pd-art">{favs.map((d) => (
+                  <button key={d.id} type="button" title={d.name} onClick={() => go("artwork")}><img src={designUrls[d.id]} alt={d.name} loading="lazy" />{d.starred && <span className="st" aria-label="Favorite">★</span>}</button>
+                ))}</div>
+              ) : <div className="pd-none">Logos you upload and mockups you make show up here. Star your favorites to keep them on top.</div>}
+            </div>
+          </aside>
+        </div>
+      </div>
+    );
+  } else if (area === "home") {
     const groups: { kind: AAttn["kind"]; title: string; label: string }[] = [
       { kind: "request", title: "New order requests to price", label: "Request" },
       { kind: "draft", title: "Orders you haven't sent yet", label: "Order" },
@@ -429,6 +505,8 @@ export default function AccountAreas({ mode, orders, payments, designs, designUr
       </aside>
       </div>
     </>;
+  } else if (area === "messages" && messagesPanel) {
+    body = messagesPanel;
   } else if (area === "messages") {
     const rows = messages.filter((m) => has(q, m.body, m.author_name, m.number)).slice().reverse();
     body = <>

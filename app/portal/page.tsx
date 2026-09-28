@@ -7,10 +7,12 @@ import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, typ
 import { customerGeneralMessage, starMyDesign, starMyMockup } from "@/app/portal/actions";
 import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
 import { orderSearchText } from "@/lib/search";
+import { withFiles, type HubMsg } from "@/lib/messages";
+import PortalMessages from "@/components/PortalMessages";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 
-export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string }> }) {
-  const { as } = await searchParams;
+export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string; c?: string }> }) {
+  const { as, c: startConvo } = await searchParams;
   const ctx = await getPortalCtx(as);
   const qs = ctx.preview ? `?as=${ctx.preview.id}` : "";
   const admin = createAdminClient();
@@ -18,6 +20,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   let orders: Order[] = [];
   const paid: Record<string, number> = {};
   const pendingProofs: Record<string, number> = {};
+  let hubMsgs: HubMsg[] = [];
   let payments: APayment[] = [], designs: Design[] = [], mockups: AMockup[] = [], messages: AMessage[] = [];
   const usedIds: string[] = [];
   const designUrls: Record<string, string> = {};
@@ -54,6 +57,10 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       mockups = ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), created_at: x.created_at, url: sg?.[i * 2]?.signedUrl || "", thumb: sg?.[i * 2 + 1]?.signedUrl || sg?.[i * 2]?.signedUrl || "" }));
     }
     messages = ((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) }));
+    hubMsgs = await withFiles((msg.data || []) as never[], async (paths) => {
+      const { data: sg } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
+      return (sg || []).map((x) => x.signedUrl || null);
+    });
   }
   const bal = (o: Order) => Math.round(((+o.total || 0) - (paid[o.id] || 0)) * 100) / 100;
   const aOrders: AOrder[] = orders.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type, search: orderSearchText(o),
@@ -73,6 +80,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) attention.push({ kind: "receive", order_id: o.id, number: o.number, date: short(o.approved_at || o.updated_at) });
   });
   const acct = ctx.customers[0];
+  const firstName = (acct?.name || "").trim().split(/\s+/)[0];
+  const hubOrders = orders.filter((o) => o.status !== "request" || o.submitted_at).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", href: `/portal/orders/${o.id}${qs}` }));
   const company = acct?.company || acct?.name || "";
 
   return (
@@ -89,8 +98,10 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             <p className="muted" style={{ marginBottom: 0 }}>If you were expecting a quote, it may be under a different email address. Contact {ctx.settings.shop.name}{ctx.settings.shop.email ? ` at ${ctx.settings.shop.email}` : ""}{ctx.settings.shop.phone ? ` or ${ctx.settings.shop.phone}` : ""}.</p>
           </div></div>
         ) : (
-          <AccountAreas mode="portal" orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
-            attention={attention} homeTop={<StartPanel preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
+          <AccountAreas mode="portal" greeting={firstName ? `Hi, ${firstName}` : undefined}
+            messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
+            orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
+            attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
             onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup}
             terms={PAY_TERMS[acct?.payment_terms || "receipt"]}
             payCfg={{ ...ctx.settings.pay, staxToken: process.env.STAX_WEB_PAYMENTS_TOKEN || "", depositPct: ctx.settings.depositPct }} />

@@ -4,6 +4,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { mergeSettings, ST } from "@/lib/pricing";
+import { attachNote, cleanAttachments, withFiles, type Attachment, type HubMsg } from "@/lib/messages";
 
 async function requireStaff() {
   const v = await getViewer();
@@ -71,12 +72,13 @@ export async function requestProofApproval(orderId: string) {
 }
 
 /** Post a shop message on an order and email the customer. */
-export async function staffMessage(orderId: string, body: string) {
+export async function staffMessage(orderId: string, body: string, files: Attachment[] = []) {
   const { email: staffEmail } = await requireStaff();
   const text = body.trim().slice(0, 5000);
-  if (!text) return { ok: false, error: "Write a message first." };
   const { admin, order, customer, settings } = await loadOrderAndCustomer(orderId);
-  const { error } = await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text });
+  const attachments = customer ? cleanAttachments(files, customer.id) : [];
+  if (!text && !attachments.length) return { ok: false, error: "Write a message first." };
+  const { error } = await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text, attachments });
   if (error) return { ok: false, error: error.message };
   let emailed = false;
   if (customer?.email && order.status !== "quote") {
@@ -84,17 +86,18 @@ export async function staffMessage(orderId: string, body: string) {
       to: customer.email,
       replyTo: SHOP_NOTIFY_EMAIL,
       subject: `New message about order #${order.number}`,
-      html: emailLayout(settings.shop.name, `Message about #${order.number}`, text, "Reply in your portal", `${siteUrl()}/portal/orders/${orderId}#messages`),
+      html: emailLayout(settings.shop.name, `Message about #${order.number}`, (text || "") + attachNote(attachments), "Reply in your portal", `${siteUrl()}/portal?area=messages&c=${orderId}`),
     });
   }
   return { ok: true, emailed };
 }
 
 /** A general message to a customer (not about one order): shows in their portal's Messages area and emails them. */
-export async function staffCustomerMessage(customerId: string, body: string) {
+export async function staffCustomerMessage(customerId: string, body: string, files: Attachment[] = []) {
   const { email: staffEmail } = await requireStaff();
   const text = body.trim().slice(0, 5000);
-  if (!text) return { ok: false, error: "Write a message first." };
+  const attachments = cleanAttachments(files, customerId);
+  if (!text && !attachments.length) return { ok: false, error: "Write a message first." };
   const admin = createAdminClient();
   const [{ data: customer }, { data: s }] = await Promise.all([
     admin.from("customers").select("id,name,company,email").eq("id", customerId).maybeSingle(),
@@ -102,7 +105,7 @@ export async function staffCustomerMessage(customerId: string, body: string) {
   ]);
   if (!customer) return { ok: false, error: "Customer not found." };
   const settings = mergeSettings(s?.data);
-  const { error } = await admin.from("messages").insert({ customer_id: customerId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text });
+  const { error } = await admin.from("messages").insert({ customer_id: customerId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text, attachments });
   if (error) return { ok: false, error: error.message };
   let emailed = false;
   if (customer.email) {
@@ -110,8 +113,35 @@ export async function staffCustomerMessage(customerId: string, body: string) {
       to: customer.email,
       replyTo: SHOP_NOTIFY_EMAIL,
       subject: `New message from ${settings.shop.name}`,
-      html: emailLayout(settings.shop.name, `A message from ${settings.shop.name}`, text, "Reply in your portal", `${siteUrl()}/portal?area=messages`),
+      html: emailLayout(settings.shop.name, `A message from ${settings.shop.name}`, (text || "") + attachNote(attachments), "Reply in your portal", `${siteUrl()}/portal?area=messages`),
     });
   }
   return { ok: true, emailed };
+}
+
+/** All of a customer's messages (general and on their orders), oldest first, with links to their files. */
+export async function shopMessages(customerId: string): Promise<{ ok: boolean; error?: string; messages?: HubMsg[] }> {
+  try {
+    await requireStaff();
+    const admin = createAdminClient();
+    const { data: os } = await admin.from("orders").select("id").eq("customer_id", customerId);
+    const oids = (os || []).map((o) => o.id);
+    const { data } = await admin.from("messages").select("id, order_id, author_type, author_name, body, created_at, read_at, attachments")
+      .or(`customer_id.eq.${customerId}${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").limit(2000);
+    const messages = await withFiles(data || [], async (paths) => {
+      const { data: s } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
+      return (s || []).map((x) => x.signedUrl || null);
+    });
+    return { ok: true, messages };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/** Staff opened a conversation: the customer's messages in it are now read. */
+export async function shopMarkRead(customerId: string, orderId: string | null) {
+  await requireStaff();
+  const admin = createAdminClient();
+  let q = admin.from("messages").update({ read_at: new Date().toISOString() }).eq("author_type", "customer").is("read_at", null);
+  q = orderId ? q.eq("order_id", orderId) : q.is("order_id", null).eq("customer_id", customerId);
+  await q;
+  return { ok: true };
 }

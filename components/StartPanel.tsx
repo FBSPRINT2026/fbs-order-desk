@@ -5,10 +5,23 @@ import { useState } from "react";
 import { startRequest } from "@/app/portal/request-actions";
 
 /** Portal dashboard: the two things customers can start on their own. */
-export default function StartPanel({ preview, mockupHref }: { preview: boolean; mockupHref: string }) {
+export default function StartPanel({ preview, mockupHref, compact = false }: { preview: boolean; mockupHref: string; /** small action tiles for the dashboard's top bar */ compact?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const start = async () => { setBusy(true); setErr(""); const r = await startRequest(); if (r.ok && r.id) router.push(`/portal/request/${r.id}`); else { setBusy(false); setErr(r.error || "Couldn't start an order."); } };
+  if (compact) return (
+    <>
+      <button type="button" className="pd-act main" disabled={preview || busy} onClick={start}>
+        <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg></span>
+        <span><b>{busy ? "Starting…" : "Start an order"}</b><small>{err || "We price it and send it back"}</small></span>
+      </button>
+      <Link className="pd-act" href={mockupHref}>
+        <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.7-2 3-4 3S8.5 4.7 8 3z" /></svg></span>
+        <span><b>Mockup Creator</b><small>Your logo on a shirt</small></span>
+      </Link>
+    </>
+  );
   return (
     <div className="start-panel">
       <div className="sp-card">
