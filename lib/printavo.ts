@@ -184,7 +184,8 @@ export async function listOrders(after: string | null, active = false): Promise<
       id: s(o.id), visualId: s(o.visualId), kind: o.__typename === "Quote" ? "quote" : "invoice", createdAt: s(o.createdAt), total: n(o.total),
       customerId: s(o.contact?.customer?.id), company: s(o.contact?.customer?.companyName), updatedAt: s(o.timestamps?.updatedAt),
       // anything here changing means the order changed in Printavo
-      fingerprint: [s(o.timestamps?.updatedAt), n(o.total).toFixed(2), n(o.amountOutstanding).toFixed(2), s(o.status?.name), s(o.customerDueAt), s(o.contact?.customer?.id)].join("|"),
+      // (Printavo writes the same moment in different time zones from one request to the next, so times are compared as instants)
+      fingerprint: [instant(o.timestamps?.updatedAt), n(o.total).toFixed(2), n(o.amountOutstanding).toFixed(2), s(o.status?.name), instant(o.customerDueAt), s(o.contact?.customer?.id)].join("|"),
     })),
     next: c?.pageInfo?.hasNextPage ? c.pageInfo.endCursor : null,
     totalNodes: null,
@@ -223,6 +224,7 @@ export async function remoteSize(url: string): Promise<number | null> {
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (x: unknown) => (x == null ? "" : String(x));
 const n = (x: unknown) => (typeof x === "number" && isFinite(x) ? x : +s(x) || 0);
+const instant = (x: unknown) => { const t = Date.parse(s(x)); return isNaN(t) ? s(x) : new Date(t).toISOString(); };
 const file = (m: Raw): PvFile => ({ id: s(m.id), full: s(m.fullImageUrl || m.fileUrl), thumb: s(m.thumbnailUrl), mime: s(m.mimeType), name: m.name ? s(m.name) : undefined });
 
 /** Reads one invoice or quote with everything on it. Parts that fail are listed in `warnings` instead of stopping the import. */

@@ -74,12 +74,13 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     const sweepDue = !!sync.sweep_cursor || !sync.sweep_done_at || Date.now() - new Date(sync.sweep_done_at).getTime() > 30 * 60000;
     if (sweepDue && (!pending || turn % 6 === 0)) { await sweepPage(admin, sync, did); continue; }
 
-    if (pending) { await importOne(admin, pending.printavo_id, pending.attempts, did); continue; }
+    // a big order can take 15+ seconds to read at our pace: don't start one near the end of the run
+    if (pending) { if (Date.now() > deadline - 17000) break; await importOne(admin, pending.printavo_id, pending.attempts, did); continue; }
 
     // 3. nothing waiting: a full re-read of a recent order (new messages, files, approvals), once a day each
     const since = new Date(Date.now() - 90 * 86400000).toISOString(), stale = new Date(Date.now() - 86400000).toISOString();
     const { data: deep } = await admin.from("printavo_index").select("printavo_id").eq("status", "done").gte("created_at", since).or(`deep_at.is.null,deep_at.lt.${stale}`).order("created_at", { ascending: false }).limit(1);
-    if (deep?.[0]) { await importOne(admin, deep[0].printavo_id, 0, did, true); continue; }
+    if (deep?.[0]) { if (Date.now() > deadline - 17000) break; await importOne(admin, deep[0].printavo_id, 0, did, true); continue; }
 
     // 4. once a day: customers who have no orders yet (new ones in Printavo)
     if (!sync.customers_done_at || Date.now() - new Date(sync.customers_done_at).getTime() > 86400000 || sync.customers_cursor) { await customersPage(admin, sync, did, deadline); continue; }
