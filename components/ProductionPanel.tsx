@@ -11,9 +11,9 @@ const ext = (n: string) => (n.split("?")[0].split(".").pop() || "file").slice(0,
  * the notes on top, then the files as a grid of thumbnails you can drop more files onto.
  * Without the edit handlers it's read-only (archived orders).
  */
-export default function ProductionPanel({ note, files, onNote, onUpload, onRemove, uploading = false }: {
+export default function ProductionPanel({ note, files, onNote, onUpload, onRemove, uploading = false, compact = false }: {
   note: string; files: ProdFile[];
-  onNote?: (v: string) => void; onUpload?: (files: FileList) => void; onRemove?: (f: ProdFile) => void; uploading?: boolean;
+  onNote?: (v: string) => void; onUpload?: (files: FileList) => void; onRemove?: (f: ProdFile) => void; uploading?: boolean; /** narrow side column */ compact?: boolean;
 }) {
   const [over, setOver] = useState(false);
   const [armed, setArmed] = useState("");
@@ -21,7 +21,7 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
   const input = useRef<HTMLInputElement>(null);
   const edit = !!onNote;
   return (
-    <section className="panel prod">
+    <section className={"panel prod" + (compact ? " prod-compact" : "")}>
       <div className="panel-h"><h2>Production notes &amp; files</h2><span className="prod-lock" title="Only your team sees these. They never show on the customer's quote, invoice or portal.">Shop only</span></div>
       <div className="panel-b stack" style={{ gap: 14 }}>
         <div className="field">

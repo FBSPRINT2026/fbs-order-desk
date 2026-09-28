@@ -35,134 +35,135 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
   const feeTotal = o.fees.reduce((a, f) => a + f.amount, 0);
   const bill = addressLines(o.billingAddress), ship = addressLines(o.shippingAddress);
   const label = o.kind === "quote" ? "Quote" : "Invoice";
-  const paidTx = o.transactions.filter((t) => t.kind === "Payment");
 
   return (
     <div className="pv">
       <div className="pv-note">
         <span className="pv-arch">Archived order</span>
-        <span>{audience === "shop" ? <>Read-only, kept exactly as it was in Printavo (imported {stamp(importedAt)}). Everything here, including the artwork, is stored on our own servers.</> : <>This is a past order from our records.</>}</span>
+        <span>{audience === "shop" ? <>Read-only, as it was in Printavo. Stored on our own servers (imported {stamp(importedAt)}).</> : <>This is a past order from our records.</>}</span>
         <span className="spacer" />
         <button type="button" className="btn sm" onClick={() => window.print()}>Print</button>
       </div>
 
-      <header className="pv-head">
-        <div>
-          <div className="pv-kind">{label} <span>#{o.visualId}</span></div>
-          {o.nickname && <div className="pv-nick">{o.nickname}</div>}
-          {o.tags.length > 0 && <div className="pv-tags">{o.tags.map((t) => <span key={t}>{t}</span>)}</div>}
-        </div>
-        <div className="pv-head-r">
-          {o.status.name && <span className="pv-status" style={{ background: o.status.color || "#888", color: inkOn(o.status.color || "#888") }}>{o.status.name}</span>}
-          <div className="pv-bal"><span>Total</span><b>{money(o.total)}</b></div>
-          <div className="pv-bal"><span>Balance</span><b className={o.amountOutstanding > 0.004 ? "due" : ""}>{money(o.amountOutstanding)}</b></div>
-        </div>
-      </header>
+      <div className="ed-grid pva-grid">
+        <div className="pv-main">
+        <header className="pv-head">
+          <div>
+            <div className="pv-kind">{label} <span>#{o.visualId}</span></div>
+            {o.nickname && <div className="pv-nick">{o.nickname}</div>}
+            {o.tags.length > 0 && <div className="pv-tags">{o.tags.map((t) => <span key={t}>{t}</span>)}</div>}
+          </div>
+          <div className="pv-head-r">
+            {o.status.name && <span className="pv-status" style={{ background: o.status.color || "#888", color: inkOn(o.status.color || "#888") }}>{o.status.name}</span>}
+            <div className="pv-bal"><span>Total</span><b>{money(o.total)}</b></div>
+            <div className="pv-bal"><span>Balance</span><b className={o.amountOutstanding > 0.004 ? "due" : ""}>{money(o.amountOutstanding)}</b></div>
+          </div>
+        </header>
 
-      <section className="pv-info">
-        <div>
-          <h4>Customer</h4>
-          {customerHref ? <a className="pv-strong" href={customerHref}>{o.customer.companyName || o.contact.fullName}</a> : <div className="pv-strong">{o.customer.companyName || o.contact.fullName}</div>}
-          {o.customer.companyName && o.contact.fullName && <div>{o.contact.fullName}</div>}
-          {o.contact.email && <div><a href={`mailto:${o.contact.email}`}>{o.contact.email}</a></div>}
-          {o.contact.phone && <div>{o.contact.phone}</div>}
-        </div>
-        <div><h4>Billing address</h4>{bill.length ? bill.map((l, i) => <div key={i}>{l}</div>) : <div className="faint">—</div>}</div>
-        <div><h4>Shipping address</h4>{ship.length ? ship.map((l, i) => <div key={i}>{l}</div>) : <div className="faint">—</div>}</div>
-        <dl className="pv-dates">
-          <dt>Created</dt><dd>{d(o.createdAt)}</dd>
-          {o.kind === "invoice" && o.invoiceAt && <><dt>Invoice date</dt><dd>{d(o.invoiceAt)}</dd></>}
-          <dt>Production due</dt><dd>{d(o.dueAt)}</dd>
-          <dt>Customer due</dt><dd>{d(o.customerDueAt)}</dd>
-          <dt>Payment due</dt><dd>{d(o.paymentDueAt)}</dd>
-          {o.poNumber && <><dt>PO #</dt><dd>{o.poNumber}</dd></>}
-          {o.deliveryMethod && <><dt>Delivery</dt><dd>{o.deliveryMethod}</dd></>}
-          {o.paymentTerm && <><dt>Terms</dt><dd>{o.paymentTerm}</dd></>}
-          {o.owner && <><dt>Owner</dt><dd>{o.owner}</dd></>}
-        </dl>
-      </section>
+        <section className="pv-info">
+          <div>
+            <h4>Customer</h4>
+            {customerHref ? <a className="pv-strong" href={customerHref}>{o.customer.companyName || o.contact.fullName}</a> : <div className="pv-strong">{o.customer.companyName || o.contact.fullName}</div>}
+            {o.customer.companyName && o.contact.fullName && <div>{o.contact.fullName}</div>}
+            {o.contact.email && <div><a href={`mailto:${o.contact.email}`}>{o.contact.email}</a></div>}
+            {o.contact.phone && <div>{o.contact.phone}</div>}
+          </div>
+          <div><h4>Billing address</h4>{bill.length ? bill.map((l, i) => <div key={i}>{l}</div>) : <div className="faint">—</div>}</div>
+          <div><h4>Shipping address</h4>{ship.length ? ship.map((l, i) => <div key={i}>{l}</div>) : <div className="faint">—</div>}</div>
+          <dl className="pv-dates">
+            <dt>Created</dt><dd>{d(o.createdAt)}</dd>
+            {o.kind === "invoice" && o.invoiceAt && <><dt>Invoice date</dt><dd>{d(o.invoiceAt)}</dd></>}
+            <dt>Production due</dt><dd>{d(o.dueAt)}</dd>
+            <dt>Customer due</dt><dd>{d(o.customerDueAt)}</dd>
+            <dt>Payment due</dt><dd>{d(o.paymentDueAt)}</dd>
+            {o.poNumber && <><dt>PO #</dt><dd>{o.poNumber}</dd></>}
+            {o.deliveryMethod && <><dt>Delivery</dt><dd>{o.deliveryMethod}</dd></>}
+            {o.paymentTerm && <><dt>Terms</dt><dd>{o.paymentTerm}</dd></>}
+            {o.owner && <><dt>Owner</dt><dd>{o.owner}</dd></>}
+          </dl>
+        </section>
 
-      {o.groups.map((g, gi) => group(g, gi + 1))}
-      {!o.groups.length && <div className="pv-card faint" style={{ padding: 18 }}>No line items on this {label.toLowerCase()}.</div>}
+        {o.groups.map((g, gi) => group(g, gi + 1))}
+        {!o.groups.length && <div className="pv-card faint" style={{ padding: 18 }}>No line items on this {label.toLowerCase()}.</div>}
 
-      <div className="pv-bottom">
-        <div className="pv-stack">
-          {plain(o.customerNote) && (
-            <div className="pv-card"><h3>{audience === "shop" ? "Customer note" : "Note"}</h3><p className="pv-pre">{plain(o.customerNote)}</p></div>
-          )}
-          {audience === "shop" && (
-            <ProductionPanel note={plain(o.productionNote)}
-              files={o.files.map((f) => ({ id: f.id, name: f.name || (f.full.split("?")[0].split("/").pop() || "File"), url: fileUrl(f.full) || undefined, thumb: (f.thumb && fileUrl(f.thumb)) || undefined, mime: f.mime }))} />
-          )}
+        <div className="pv-bottom">
+          <div className="pv-stack">
+            {plain(o.customerNote) && (
+              <div className="pv-card"><h3>{audience === "shop" ? "Customer note" : "Note"}</h3><p className="pv-pre">{plain(o.customerNote)}</p></div>
+            )}
+          </div>
+          <div className="pv-card pv-totals">
+            <div><span>Item total</span><b>{money(itemTotal)}</b></div>
+            {o.fees.map((f) => <div key={f.id}><span>{plain(f.description) || "Fee"}{f.quantity && f.quantity !== 1 && f.unitPrice != null && !f.pct ? ` (${f.quantity} × ${money(f.unitPrice)})` : f.pct && f.unitPrice != null ? ` (${f.unitPrice}%)` : ""}</span><b>{money(f.amount)}</b></div>)}
+            {o.fees.length > 1 && <div className="pvt-sub"><span>Fees</span><b>{money(feeTotal)}</b></div>}
+            <div className="pvt-line"><span>Subtotal</span><b>{money(o.subtotal)}</b></div>
+            {o.discountAmount > 0.004 && <div><span>Discount{o.discountAsPercentage && o.discount ? ` (${o.discount}%)` : ""}</span><b>−{money(o.discountAmount)}</b></div>}
+            <div><span>Sales tax{o.salesTax ? ` (${o.salesTax}%)` : ""}</span><b>{money(o.salesTaxAmount)}</b></div>
+            <div className="pvt-big"><span>Total</span><b>{money(o.total)}</b></div>
+            <div><span>Amount paid</span><b>{money(o.amountPaid)}</b></div>
+            <div className={"pvt-big" + (o.amountOutstanding > 0.004 ? " pvt-due" : "")}><span>Amount outstanding</span><b>{money(o.amountOutstanding)}</b></div>
+            <div className="faint" style={{ fontSize: 12 }}>{o.totalQuantity} item{o.totalQuantity === 1 ? "" : "s"}{o.paidInFull ? " · Paid in full" : ""}</div>
+          </div>
         </div>
-        <div className="pv-card pv-totals">
-          <div><span>Item total</span><b>{money(itemTotal)}</b></div>
-          {o.fees.map((f) => <div key={f.id}><span>{plain(f.description) || "Fee"}{f.quantity && f.quantity !== 1 && f.unitPrice != null && !f.pct ? ` (${f.quantity} × ${money(f.unitPrice)})` : f.pct && f.unitPrice != null ? ` (${f.unitPrice}%)` : ""}</span><b>{money(f.amount)}</b></div>)}
-          {o.fees.length > 1 && <div className="pvt-sub"><span>Fees</span><b>{money(feeTotal)}</b></div>}
-          <div className="pvt-line"><span>Subtotal</span><b>{money(o.subtotal)}</b></div>
-          {o.discountAmount > 0.004 && <div><span>Discount{o.discountAsPercentage && o.discount ? ` (${o.discount}%)` : ""}</span><b>−{money(o.discountAmount)}</b></div>}
-          <div><span>Sales tax{o.salesTax ? ` (${o.salesTax}%)` : ""}</span><b>{money(o.salesTaxAmount)}</b></div>
-          <div className="pvt-big"><span>Total</span><b>{money(o.total)}</b></div>
-          <div><span>Amount paid</span><b>{money(o.amountPaid)}</b></div>
-          <div className={"pvt-big" + (o.amountOutstanding > 0.004 ? " pvt-due" : "")}><span>Amount outstanding</span><b>{money(o.amountOutstanding)}</b></div>
-          <div className="faint" style={{ fontSize: 12 }}>{o.totalQuantity} item{o.totalQuantity === 1 ? "" : "s"}{o.paidInFull ? " · Paid in full" : ""}</div>
         </div>
-      </div>
-
-      {o.transactions.length > 0 && (
-        <div className="pv-card">
-          <h3>Payments</h3>
-          <div className="pv-scroll"><table className="pv-tbl">
-            <thead><tr><th>Date</th><th>Type</th><th>Method</th><th>Description</th><th className="r">Amount</th></tr></thead>
-            <tbody>{o.transactions.map((t) => (
-              <tr key={t.id}><td>{d(t.date)}</td><td>{t.kind === "PaymentDispute" ? "Dispute" : t.kind}{t.processing ? " (processing)" : ""}{t.status ? ` · ${t.status}` : ""}</td><td>{METHOD[t.category] || t.category || "—"}{t.source === "PROCESSOR" ? " (online)" : ""}</td><td>{t.description || ""}</td>
-                <td className="r num">{t.kind === "Payment" ? money(t.amount) : `−${money(Math.abs(t.amount))}`}</td></tr>
-            ))}</tbody>
-            {paidTx.length > 1 && <tfoot><tr><td colSpan={4}>Payments</td><td className="r num">{money(paidTx.reduce((a, t) => a + t.amount, 0))}</td></tr></tfoot>}
-          </table></div>
-        </div>
-      )}
-
-      {o.approvals.length > 0 && (
-        <div className="pv-card">
-          <h3>Approvals</h3>
-          <ul className="pv-list">{o.approvals.map((a) => (
-            <li key={a.id}><b>{a.name}</b> <span className={"pv-chip " + a.status}>{a.status}</span> <span className="faint">requested {stamp(a.at)}{a.requester ? ` by ${a.requester}` : ""}</span>
-              {a.response && <div className="faint">{a.response.name}{a.response.email ? ` (${a.response.email})` : ""} · {stamp(a.response.at)}{a.response.reason ? ` · “${a.response.reason}”` : ""}</div>}</li>
-          ))}</ul>
-        </div>
-      )}
-
-      {o.tasks.length > 0 && (
-        <div className="pv-card">
-          <h3>Tasks</h3>
-          <ul className="pv-list">{o.tasks.map((t) => (
-            <li key={t.id} className={t.completed ? "done" : ""}><span className="pv-box">{t.completed ? "✓" : ""}</span> {t.name} <span className="faint">{t.assignee ? `· ${t.assignee} ` : ""}{t.completed ? `· done ${d(t.completedAt)}` : t.dueAt ? `· due ${d(t.dueAt)}` : ""}</span></li>
-          ))}</ul>
-        </div>
-      )}
-
-      {o.expenses.length > 0 && (
-        <div className="pv-card">
-          <h3>Expenses</h3>
-          <table className="pv-tbl"><tbody>{o.expenses.map((x) => <tr key={x.id}><td>{d(x.at)}</td><td>{x.name}</td><td className="r num">{money(x.amount)}</td></tr>)}</tbody></table>
-        </div>
-      )}
-
-      {o.messages.length > 0 && (
-        <div className="pv-card">
-          <h3>Messages</h3>
-          <div className="pv-msgs">{o.messages.map((m) => (
-            <div key={m.id} className={"pv-msg" + (m.incoming ? " in" : "")}>
-              <div className="pv-msg-h"><b>{m.incoming ? m.from : `To ${m.to}`}</b>{m.kind === "text" && <span className="pv-chip">Text</span>}<span className="faint">{stamp(m.at)}</span></div>
-              {m.subject && <div className="pv-msg-s">{m.subject}</div>}
-              <div className="pv-pre">{plain(m.text)}</div>
+        <aside className="ed-aside pv-aside">
+        {audience === "shop" && (
+          <ProductionPanel compact note={plain(o.productionNote)}
+            files={o.files.map((f) => ({ id: f.id, name: f.name || (f.full.split("?")[0].split("/").pop() || "File"), url: fileUrl(f.full) || undefined, thumb: (f.thumb && fileUrl(f.thumb)) || undefined, mime: f.mime }))} />
+        )}
+        {o.transactions.length > 0 && (
+          <section className="panel">
+            <div className="panel-h"><h2>Payments</h2><span className="faint" style={{ fontSize: 12 }}>{money(o.amountPaid)} paid</span></div>
+            <div className="panel-b pv-pays">
+              {o.transactions.map((t) => (
+                <div key={t.id} className="pv-pay">
+                  <div><b>{t.kind === "Payment" ? money(t.amount) : `−${money(Math.abs(t.amount))}`}</b><span className="faint">{d(t.date)}</span></div>
+                  <div className="faint">{[t.kind === "Payment" ? "" : t.kind === "PaymentDispute" ? "Dispute" : t.kind, METHOD[t.category] || t.category, t.source === "PROCESSOR" ? "online" : "", t.processing ? "processing" : "", t.status || ""].filter(Boolean).join(" · ") || "Payment"}</div>
+                  {t.description && <div className="pv-pay-d">{t.description}</div>}
+                </div>
+              ))}
+              <div className="pv-pay-bal"><span>Balance due</span><b className={o.amountOutstanding > 0.004 ? "due" : ""}>{money(o.amountOutstanding)}</b></div>
             </div>
-          ))}</div>
-        </div>
-      )}
+          </section>
+        )}
+        {o.approvals.length > 0 && (
+          <section className="panel"><div className="panel-h"><h2>Approvals</h2></div><div className="panel-b">
+            <ul className="pv-list">{o.approvals.map((a) => (
+              <li key={a.id}><b>{a.name}</b> <span className={"pv-chip " + a.status}>{a.status}</span> <span className="faint">requested {stamp(a.at)}{a.requester ? ` by ${a.requester}` : ""}</span>
+                {a.response && <div className="faint">{a.response.name}{a.response.email ? ` (${a.response.email})` : ""} · {stamp(a.response.at)}{a.response.reason ? ` · “${a.response.reason}”` : ""}</div>}</li>
+            ))}</ul>
+          </div></section>
+        )}
 
-      {audience === "shop" && o.warnings?.length ? <div className="pv-card faint" style={{ fontSize: 12.5 }}>Some parts couldn&apos;t be read from Printavo: {o.warnings.join(" · ")}</div> : null}
+        {o.tasks.length > 0 && (
+          <section className="panel"><div className="panel-h"><h2>Tasks</h2></div><div className="panel-b">
+            <ul className="pv-list">{o.tasks.map((t) => (
+              <li key={t.id} className={t.completed ? "done" : ""}><span className="pv-box">{t.completed ? "✓" : ""}</span> {t.name} <span className="faint">{t.assignee ? `· ${t.assignee} ` : ""}{t.completed ? `· done ${d(t.completedAt)}` : t.dueAt ? `· due ${d(t.dueAt)}` : ""}</span></li>
+            ))}</ul>
+          </div></section>
+        )}
+
+        {o.expenses.length > 0 && (
+          <section className="panel"><div className="panel-h"><h2>Expenses</h2></div><div className="panel-b">
+            <table className="pv-tbl"><tbody>{o.expenses.map((x) => <tr key={x.id}><td>{d(x.at)}</td><td>{x.name}</td><td className="r num">{money(x.amount)}</td></tr>)}</tbody></table>
+          </div></section>
+        )}
+
+        {o.messages.length > 0 && (
+          <section className="panel"><div className="panel-h"><h2>Messages</h2><span className="faint" style={{ fontSize: 12 }}>from Printavo</span></div><div className="panel-b">
+            <div className="pv-msgs">{o.messages.map((m) => (
+              <div key={m.id} className={"pv-msg" + (m.incoming ? " in" : "")}>
+                <div className="pv-msg-h"><b>{m.incoming ? m.from : `To ${m.to}`}</b>{m.kind === "text" && <span className="pv-chip">Text</span>}<span className="faint">{stamp(m.at)}</span></div>
+                {m.subject && <div className="pv-msg-s">{m.subject}</div>}
+                <div className="pv-pre">{plain(m.text)}</div>
+              </div>
+            ))}</div>
+          </div></section>
+        )}
+
+        {audience === "shop" && o.warnings?.length ? <div className="pv-card faint" style={{ fontSize: 12.5 }}>Some parts couldn&apos;t be read from Printavo: {o.warnings.join(" · ")}</div> : null}
+        </aside>
+      </div>
 
       {zoom && (
         <div className="pv-zoom" role="dialog" aria-label="Mockup" onClick={() => setZoom(null)}>
@@ -178,7 +179,8 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
 
   function group(g: PvGroup, n: number) {
     const used = [...new Set(g.lines.flatMap((l) => Object.keys(l.sizes)))];
-    const sizes = [...new Set([...(g.columns?.sizes || []), ...used])].sort(sizeOrder);
+    // only the sizes ordered (Printavo also showed empty size columns; they crowd the narrower page)
+    const sizes = used.sort(sizeOrder);
     const show = { category: g.columns ? g.columns.category : g.lines.some((l) => l.category), itemNumber: g.columns ? g.columns.itemNumber : true, color: g.columns ? g.columns.color : true, markup: !!g.columns?.markup && g.lines.some((l) => l.markup != null) };
     const qty = g.lines.reduce((a, l) => a + l.items, 0), tot = g.lines.reduce((a, l) => a + l.items * l.price, 0);
     return (

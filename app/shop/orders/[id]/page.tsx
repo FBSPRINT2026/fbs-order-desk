@@ -601,9 +601,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </section>
           </div>
-          <ProductionPanel note={prodNotes} onNote={onProdNotes} uploading={artUploading}
-            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type }))}
-            onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }} />
         </div>
 
         <aside className="ed-aside">
@@ -661,6 +658,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               )}
             </div>
           </section>
+          <ProductionPanel compact note={prodNotes} onNote={onProdNotes} uploading={artUploading}
+            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type }))}
+            onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }} />
 
           <ChecksPanel checks={checks} orderId={o.id} save={save} />
 
