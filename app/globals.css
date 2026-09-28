@@ -1769,3 +1769,57 @@ a.as-ai{text-decoration:none}
 .cc-tag{font-size:11px;font-weight:700;color:var(--ink-3);text-align:center}
 .cc .btn.sm{align-self:flex-start}
 @media (max-width:700px){.cc-row{grid-template-columns:1fr 1fr}.cc-row input[type=email]{grid-column:span 2}}
+
+/* shipping center */
+.sc-scan{width:280px;max-width:60vw;font-size:15px;padding:9px 12px;border:2px solid var(--accent);border-radius:10px}
+.sc-set{margin-bottom:14px}
+.sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.sc-nums{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}
+.sc-nums label,.sw-addr label,.sw-acct label,.sw-note{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--ink-2);font-weight:600}
+.sc-box{display:grid;grid-template-columns:1.3fr repeat(3,70px) 30px;gap:6px;margin-bottom:6px}
+.sc-box input{min-width:0}
+@media (max-width:860px){.sc-grid{grid-template-columns:1fr}}
+.pp-sheet.sw{width:min(1180px,100%)}
+.sw-scan{width:170px;font-size:13px;padding:6px 10px}
+.sw-cols{display:grid;grid-template-columns:minmax(0,1fr) 330px}
+.sw-main{padding:16px 22px;border-right:1px solid var(--line);min-width:0}
+.sw-side{padding:16px 18px;display:flex;flex-direction:column;gap:8px;background:var(--surface-2)}
+.sw-side select,.sw-side input[type=text],.sw-side textarea{width:100%}
+.sw-h{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-top:6px}
+.sw-addr{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px}
+.sw-addr .wide{grid-column:span 2}
+.sw-st{display:grid;grid-template-columns:70px 1fr;gap:8px}
+.sw-warn{font-size:12.5px;color:var(--warn);font-weight:600}
+.sw-bill{display:flex;flex-direction:column;gap:4px}
+.sw-billopt{display:flex;gap:8px;align-items:center;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:13.5px;cursor:pointer}
+.sw-billopt.on{border-color:var(--accent);background:var(--accent-soft)}
+.sw-acct{display:grid;grid-template-columns:1.4fr 1fr;gap:8px}
+.sw-est{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;font-size:14px}
+.sw-presets{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 10px;font-size:12.5px;cursor:pointer;color:var(--ink-2)}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.sw-boxes{width:100%;border-collapse:collapse;font-size:14px}
+.sw-boxes th{text-align:left;font-size:12px;color:var(--ink-3);font-weight:700;padding:6px 6px;border-bottom:1px solid var(--line)}
+.sw-boxes td{padding:6px;border-bottom:1px solid var(--line-2,var(--line));vertical-align:middle}
+.sw-boxes tr.ok .sw-n{color:var(--ok)}
+.sw-n{font-weight:700;white-space:nowrap}
+.sw-n small{display:block;font-weight:500;color:var(--ink-3);font-size:11.5px}
+.sw-in{display:flex;align-items:center;gap:4px}
+.sw-in input{width:64px;text-align:right}
+.sw-in.w input{width:78px;font-weight:700}
+.sw-in span{font-size:12px;color:var(--ink-3)}
+.sw-trk{width:190px;font-family:var(--mono);font-size:12.5px}
+.sw-act{white-space:nowrap;text-align:right}
+.sw-foot{display:flex;align-items:center;gap:12px;margin:10px 0 16px;font-size:13px}
+.sw-rates{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.sw-rate-list{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto}
+.sw-rate{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.sw-rate.on{border-color:var(--accent);background:var(--accent-soft)}
+.sw-rate-n,.sw-rate-p{display:flex;flex-direction:column}
+.sw-rate-p{text-align:right}
+.sw-rate small{font-size:12px;color:var(--ink-3)}
+.sw-bar{display:flex;align-items:center;gap:8px;padding:12px 22px;border-top:1px solid var(--line);flex-wrap:wrap}
+@media (max-width:900px){.sw-cols{grid-template-columns:1fr}.sw-main{border-right:0;border-bottom:1px solid var(--line)}.sw-boxes{font-size:13px}.sw-in input{width:52px}}
+.pp-sheet.sw .pp-sheet-h{gap:12px}
+.pp-sheet.sw .pp-sheet-h>.row{flex-wrap:nowrap;flex:none}
+.pp-sheet.sw .sw-scan{width:170px;flex:none}

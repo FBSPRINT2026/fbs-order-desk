@@ -97,7 +97,8 @@ export type Garment = { id: string; style: string; brand: string; description: s
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string; fee?: number; processor_id?: string | null; note?: string | null };
 export type Customer = { id: string; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType; payment_terms?: PayTerms;
-  /** CRM */ tags?: string[]; next_follow_up?: string | null; owner_email?: string; last_contact_at?: string | null };
+  /** CRM */ tags?: string[]; next_follow_up?: string | null; owner_email?: string; last_contact_at?: string | null;
+  /** shipping: whose carrier account pays (fbs = ours, with markup) */ ship_bill?: "fbs" | "ups" | "fedex"; ship_ups_account?: string; ship_fedex_account?: string; ship_bill_zip?: string };
 /** One entry on a customer's timeline: an email, call, note, meeting or task. */
 export type Activity = { id: string; customer_id: string | null; order_id: string | null; kind: "note" | "call" | "email" | "meeting" | "task" | "sms"; direction: "in" | "out" | "none"; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; ai_processed_at: string | null; meta: Record<string, unknown>; created_by: string; created_at: string };
 /** One item in the Assistant inbox. */
@@ -137,6 +138,20 @@ export type Settings = PriceList & {
   finishing: Finishing[];
   /** Follow-up rules and the (optional) AI assistant. */
   assistant: AssistantSettings;
+  /** Shipping center: pieces per box, where we ship from, saved box sizes, and the markup on our own account. */
+  ship: ShipSettings;
+};
+
+export type ShipAddress = { name: string; company: string; street1: string; street2: string; city: string; state: string; zip: string; country: string; phone: string; email: string };
+export type BoxSize = { name: string; length: number; width: number; height: number };
+export type ShipSettings = {
+  perBox: number;          // pieces that fit in one box (for the box estimate)
+  from: ShipAddress;       // our return / pickup address
+  boxes: BoxSize[];        // box sizes we keep on hand
+  markupPct: number;       // on our account: what we paid + this %
+  perBoxFee: number;       // + this per box
+  minCharge: number;       // at least this
+  thirdPartyFee: number;   // per box, when it ships on the customer's own account (0 = free)
 };
 
 /** When the Assistant flags things, and what the AI is allowed to do. AI stays off until an API key is set AND ai.enabled is on. */
@@ -222,6 +237,17 @@ export const DEFAULT_SETTINGS: Settings = {
       voice: "Friendly, short and plain-spoken, like a local print shop owner. Sign off as the FBS Print team.",
     },
   },
+  ship: {
+    perBox: 72,
+    from: { name: "Shipping", company: "FBS Print", street1: "", street2: "", city: "", state: "TX", zip: "", country: "US", phone: "9724877858", email: "" },
+    boxes: [
+      { name: "Small", length: 14, width: 10, height: 8 },
+      { name: "Medium", length: 18, width: 14, height: 10 },
+      { name: "Large", length: 20, width: 16, height: 12 },
+      { name: "XL", length: 24, width: 18, height: 12 },
+    ],
+    markupPct: 15, perBoxFee: 2, minCharge: 0, thirdPartyFee: 0,
+  },
 };
 
 /** Fill any missing keys in stored settings with defaults. */
@@ -236,6 +262,7 @@ export function mergeSettings(data: unknown): Settings {
     wholesale: { ...DEFAULT_SETTINGS.wholesale, ...(d.wholesale || {}), upcharges: { ...DEFAULT_SETTINGS.wholesale.upcharges, ...(d.wholesale?.upcharges || {}) } },
     finishing: Array.isArray(d.finishing) ? d.finishing : DEFAULT_SETTINGS.finishing,
     assistant: { ...DEFAULT_SETTINGS.assistant, ...(d.assistant || {}), ai: { ...DEFAULT_SETTINGS.assistant.ai, ...(d.assistant?.ai || {}) } },
+    ship: { ...DEFAULT_SETTINGS.ship, ...(d.ship || {}), from: { ...DEFAULT_SETTINGS.ship.from, ...(d.ship?.from || {}) }, boxes: Array.isArray(d.ship?.boxes) && d.ship.boxes.length ? d.ship.boxes : DEFAULT_SETTINGS.ship.boxes },
   };
 }
 

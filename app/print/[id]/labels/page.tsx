@@ -40,12 +40,12 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   };
   const bands = [bandOf("YOUTH", YOUTH_SIZES), bandOf("ADULT", ADULT_SIZES), bandOf("ONE SIZE", [ONE_SIZE])].filter((b) => b.rows.length);
   const totalPcs = c.qty;
-  // Shipping barcode: the order number, used as the lookup key for WorldShip Keyed Import / FedEx Ship Manager.
-  const shipKey = String(o.number);
-  const bcOut = code128Svg(shipKey, 30, { quietRight: 0 }); // the label margin is the quiet zone on the right, so the bars line up with the edge
-  const bc = bcOut.svg;
-  // 4 printer dots per bar module at 203 dpi (Zebra) so bars print crisp; wider on letter printers
-  const bcWidthIn = (bcOut.width * (size === "letter" ? 5 : 4)) / 203;
+  // Shipping barcode: order number and box number ("1004-2"). The Shipping center scans it to open the order at that box.
+  const barcodeFor = (box: number) => {
+    const out = code128Svg(`${o.number}-${box}`, 30, { quietRight: 0 }); // the label margin is the quiet zone on the right, so the bars line up with the edge
+    // 4 printer dots per bar module at 203 dpi (Zebra) so bars print crisp; wider on letter printers
+    return { svg: out.svg, widthIn: (out.width * (size === "letter" ? 5 : 4)) / 203 };
+  };
   // Wholesale jobs ship blind: the customer's name replaces ours so their end customer never sees FBS Print.
   const blind = o.price_type === "wholesale";
   const brand = blind ? (cust.company || cust.name || "") : settings.shop.name;
@@ -158,7 +158,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           </div>
           <div className="lb-info">
             <div className="lb-infotext"><div className="lb-job">{o.nickname || "Untitled job"}</div>{o.po_number && <div className="lb-meta">PO {o.po_number}</div>}</div>
-            <div className="lb-bc"><div className="bars" style={{ width: `${bcWidthIn}in` }} dangerouslySetInnerHTML={{ __html: bc }} /></div>
+            <div className="lb-bc"><div className="bars" style={{ width: `${barcodeFor(bi + 1).widthIn}in` }} dangerouslySetInnerHTML={{ __html: barcodeFor(bi + 1).svg }} /></div>
           </div>
           <div className="lb-shiprow">
             {shipBlock ? (
