@@ -107,7 +107,6 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             <div className="faint" style={{ fontSize: 12 }}>{o.totalQuantity} item{o.totalQuantity === 1 ? "" : "s"}{o.paidInFull ? " · Paid in full" : ""}</div>
           </div>
         </div>
-        {(o.messages.length > 0 || o.approvals.length > 0) && <History o={o} fileUrl={fileUrl} audience={audience} />}
         </div>
         <aside className="ed-aside pv-aside">
         {audience === "shop" && (
@@ -129,6 +128,8 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             </div>
           </section>
         )}
+        <History o={o} fileUrl={fileUrl} audience={audience} />
+
         {o.tasks.length > 0 && (
           <section className="panel"><div className="panel-h"><h2>Tasks</h2></div><div className="panel-b">
             <ul className="pv-list">{o.tasks.map((t) => (
@@ -251,7 +252,7 @@ function History({ o, fileUrl, audience }: { o: PvOrder; fileUrl: (u: string) =>
     }
   }
   for (const m of o.messages) {
-    const long = plain(m.text).length > 700 || plain(m.text).split("\n").length > 8;
+    const long = plain(m.text).length > 320 || plain(m.text).split("\n").length > 8;
     const shown = open[m.id] || !long;
     const who = m.incoming ? (m.sender || m.from || "Customer") : (m.sender || "FBS Print");
     evs.push({ at: m.at, key: m.id, kind: "msg", node: (
@@ -278,8 +279,8 @@ function History({ o, fileUrl, audience }: { o: PvOrder; fileUrl: (u: string) =>
   evs.sort((a, b) => a.at.localeCompare(b.at));
   const nMsg = o.messages.length, nAppr = o.approvals.length;
   return (
-    <section className="panel"><div className="panel-h"><h2>Messages &amp; approvals</h2><span className="faint" style={{ fontSize: 12 }}>{[nMsg ? `${nMsg} message${nMsg === 1 ? "" : "s"}` : "", nAppr ? `${nAppr} approval${nAppr === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")}</span></div>
-      <div className="panel-b"><div className="pvh">{evs.map((e) => <div key={e.key} className={"pvh-ev " + e.kind}>{e.node}</div>)}</div></div>
+    <section className="panel pvh-panel"><div className="panel-h"><h2>Messages &amp; approvals</h2><span className="faint" style={{ fontSize: 12 }}>{[nMsg ? `${nMsg} message${nMsg === 1 ? "" : "s"}` : "", nAppr ? `${nAppr} approval${nAppr === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ")}</span></div>
+      <div className="panel-b">{evs.length ? <div className="pvh">{evs.map((e) => <div key={e.key} className={"pvh-ev pvh-" + e.kind}>{e.node}</div>)}</div> : <div className="faint" style={{ fontSize: 13 }}>No messages or approvals on this order in Printavo.</div>}</div>
     </section>
   );
 }
