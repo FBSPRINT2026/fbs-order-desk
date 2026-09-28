@@ -21,13 +21,28 @@ const EP_CARRIER: Record<string, string> = { UPS: "UPS", FedEx: "FedEx", USPS: "
 
 type EpTracker = { id: string; status: string; status_detail?: string; est_delivery_date: string | null; carrier: string; tracking_details?: { message: string; status: string; datetime: string; tracking_location?: { city?: string | null; state?: string | null } }[] };
 
+/**
+ * Carriers report scan times as the local clock where the scan happened, and EasyPost labels them UTC ("10:01Z" for a
+ * 10:01 am delivery in Richardson). Everything we track is coming to our shop, so read the clock as shop time (Central).
+ */
+const SHOP_TZ = "America/Chicago";
+function shopClockToUtc(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const wall = new Date(iso);
+  if (isNaN(wall.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: SHOP_TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(wall);
+  const g = (k: string) => +(parts.find((p) => p.type === k)?.value || 0);
+  const offset = Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second")) - wall.getTime(); // e.g. −5 h in CDT
+  return new Date(wall.getTime() - offset).toISOString();
+}
+
 function fromTracker(t: EpTracker) {
   const last = (t.tracking_details || [])[(t.tracking_details || []).length - 1];
   const where = [last?.tracking_location?.city, last?.tracking_location?.state].filter(Boolean).join(", ");
-  const delivered = t.status === "delivered" ? (t.tracking_details || []).filter((d) => d.status === "delivered").pop()?.datetime || new Date().toISOString() : null;
+  const delivered = t.status === "delivered" ? shopClockToUtc((t.tracking_details || []).filter((d) => d.status === "delivered").pop()?.datetime) || new Date().toISOString() : null;
   return {
     tracker_id: t.id, track_status: t.status || "unknown", track_detail: [last?.message, where].filter(Boolean).join(" · ").slice(0, 200),
-    est_delivery: t.est_delivery_date || null, delivered_at: delivered, track_updated_at: new Date().toISOString(),
+    est_delivery: shopClockToUtc(t.est_delivery_date), delivered_at: delivered, track_updated_at: new Date().toISOString(),
   };
 }
 
