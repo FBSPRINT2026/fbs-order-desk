@@ -305,8 +305,8 @@ export async function applyGroup(admin: SupabaseClient, supplier: string, g: Gro
 
 /** Save a manifest's lines (skipping ones we already have), then match and apply every shipment we can. */
 export async function importManifest(admin: SupabaseClient, supplier: "ss" | "sanmar", lines: ManifestLine[], fileName: string) {
-  const rows = lines.map((l) => ({ ...l, supplier, file_name: fileName.slice(0, 200) }));
-  const { data: saved, error } = await admin.from("supplier_manifest_lines").upsert(rows, { onConflict: "supplier,supplier_order,sku,box,tracking,style,color,size", ignoreDuplicates: true }).select("*");
+  const rows = lines.map((l) => ({ ...l, supplier, part: 0, file_name: fileName.slice(0, 200) }));
+  const { data: saved, error } = await admin.from("supplier_manifest_lines").upsert(rows, { onConflict: "supplier,supplier_order,sku,box,tracking,style,color,size,part", ignoreDuplicates: true }).select("*");
   if (error) throw new Error(error.message);
   const fresh = (saved || []) as (ManifestLine & { id: string; kind: string })[];
   const groups = new Map<string, Group>();
