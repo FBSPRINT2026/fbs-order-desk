@@ -308,11 +308,11 @@ export default function GoodsReceiving() {
     );
   };
   const LISTS: Record<Focus, { title: string; tone?: string; n: number; empty: string; rows: Row[] }> = {
-    today: { title: "Arriving today", n: L.today.length, rows: L.today, empty: "Nothing else due today." },
-    arrived: { title: "Arrived today", n: L.arrived.length, rows: L.arrived, empty: "Nothing has arrived yet today." },
-    past: { title: "Already arrived · the last 7 days", n: L.past.length, rows: L.past, empty: "Nothing arrived in the last week." },
-    way: { title: "In transit", n: L.way.length, rows: L.way, empty: "Nothing on the way." },
-    problems: { title: "Delayed / problems", tone: "bad", n: L.problems.length, rows: L.problems, empty: "No problems." },
+    today: { title: "Arriving Today", n: L.today.length, rows: L.today, empty: "Nothing else due today." },
+    arrived: { title: "Arrived Today", n: L.arrived.length, rows: L.arrived, empty: "Nothing has arrived yet today." },
+    past: { title: "Already Arrived · Last 7 Days", n: L.past.length, rows: L.past, empty: "Nothing arrived in the last week." },
+    way: { title: "In Transit", n: L.way.length, rows: L.way, empty: "Nothing on the way." },
+    problems: { title: "Delayed / Problems", tone: "bad", n: L.problems.length, rows: L.problems, empty: "No problems." },
   };
   // first look: arriving today, and underneath it what already arrived
   const shown: Focus[] = focus ? [focus] : ["today", "arrived"];
@@ -323,20 +323,20 @@ export default function GoodsReceiving() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">Receiving</div><h1>Goods &amp; receiving</h1></div>
+        <div><div className="eyebrow">Receiving</div><h1>Goods &amp; Receiving</h1></div>
 
         <div className="rv-head-r"><div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" className="btn primary" onClick={() => setTruck(true)}>Receive S&amp;S truck</button>
-          <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import supplier manifests"}<input type="file" hidden accept=".xlsx,.csv" multiple onChange={(e) => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ""; upload(fs); }} /></label>
+          <button type="button" className="btn primary" onClick={() => setTruck(true)}>Receive S&amp;S Truck</button>
+          <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import Supplier Manifests"}<input type="file" hidden accept=".xlsx,.csv" multiple onChange={(e) => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ""; upload(fs); }} /></label>
         </div>
 </div>
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
       <div className="rv-tabrow">
       <div className="aa-sub rv-views" role="tablist">
-        <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; overview</button>
-        <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS orders<span className="aa-n">{searched.filter((r) => r.side === "fbs" && r.state !== "arrived").length}</span></button>
-        <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer supplied goods<span className="aa-n">{searched.filter((r) => r.side === "customer" && r.state !== "arrived").length}</span></button>
+        <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; Overview</button>
+        <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS Orders<span className="aa-n">{searched.filter((r) => r.side === "fbs" && r.state !== "arrived").length}</span></button>
+        <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer Supplied Goods<span className="aa-n">{searched.filter((r) => r.side === "customer" && r.state !== "arrived").length}</span></button>
         {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
       </div>
         <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
@@ -362,7 +362,7 @@ export default function GoodsReceiving() {
       {/* today's update: arriving today, then what already arrived; the boxes open the other lists */}
       <section className="rv-day">
         <div className="rv-day-h">
-          <b>Today&apos;s update</b>{term.length >= 2 && <span className="rv-filter">Showing “{q.trim()}”{searching ? " …" : ""} <button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></span>}<span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} · tracking checks every 20 minutes</span>
+          <b>Today&apos;s Update</b>{term.length >= 2 && <span className="rv-filter">Showing “{q.trim()}”{searching ? " …" : ""} <button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></span>}<span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} · tracking checks every 20 minutes</span>
           <span className="spacer" />
           <div className="rv-seg" role="group" aria-label="Group by">
             <button type="button" className={groupBy === "carrier" ? "on" : ""} onClick={() => setGroupBy("carrier")}>By carrier</button>

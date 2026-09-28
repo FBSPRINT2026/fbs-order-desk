@@ -157,7 +157,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
             </div>
           </div>
           <div className="lb-info">
-            <div className="lb-infotext"><div className="lb-job">{o.nickname || "Untitled job"}</div>{o.po_number && <div className="lb-meta">PO {o.po_number}</div>}</div>
+            <div className="lb-infotext"><div className="lb-job">{o.nickname || "Untitled Job"}</div>{o.po_number && <div className="lb-meta">PO {o.po_number}</div>}</div>
             <div className="lb-bc"><div className="bars" style={{ width: `${barcodeFor(bi + 1).widthIn}in` }} dangerouslySetInnerHTML={{ __html: barcodeFor(bi + 1).svg }} /></div>
           </div>
           <div className="lb-shiprow">

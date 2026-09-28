@@ -127,7 +127,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       <main className="p-main">
         <div>
           <div className="eyebrow">{ctx.settings.shop.name} customer portal</div>
-          <h1>{company || "Your account"}</h1>
+          <h1>{company || "Your Account"}</h1>
         </div>
         {!ctx.customerIds.length ? (
           <div className="panel"><div className="panel-b">

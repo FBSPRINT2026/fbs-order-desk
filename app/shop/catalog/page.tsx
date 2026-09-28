@@ -120,7 +120,7 @@ export default function CatalogPage() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">{items.length} styles</div><h1>Garment catalog</h1></div>
+        <div><div className="eyebrow">{items.length} styles</div><h1>Garment Catalog</h1></div>
         <button className="btn" type="button" onClick={() => setShowBulk(!showBulk)}>{showBulk ? "Close import" : "Paste a list"}</button>
       </div>
       <SettingsTabs />

@@ -117,7 +117,7 @@ export default function OrdersPage() {
               return (
                 <tr key={o.id} tabIndex={0} onClick={() => router.push(`/shop/orders/${o.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/orders/${o.id}`)}>
                   <td><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{o.unread > 0 && <span className="unread" title="Unread customer message" />}</td>
-                  <td><div>{o.nickname || "Untitled job"}{o.rush && <span className="tag" style={{ marginLeft: 6, background: "var(--danger)", color: "#fff" }}>Rush</span>}</div><div className="sub">{summaryLine(o)}{o.po_number ? ` · PO ${o.po_number}` : ""}</div></td>
+                  <td><div>{o.nickname || "Untitled Job"}{o.rush && <span className="tag" style={{ marginLeft: 6, background: "var(--danger)", color: "#fff" }}>Rush</span>}</div><div className="sub">{summaryLine(o)}{o.po_number ? ` · PO ${o.po_number}` : ""}</div></td>
                   <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
                   <td><Pill status={o.status} /></td>
                   <td><Due date={o.due_date} status={o.status} /></td>
@@ -134,7 +134,7 @@ export default function OrdersPage() {
               return (
                 <tr key={a.id} tabIndex={0} onClick={() => router.push(`/shop/archive/${a.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/archive/${a.id}`)}>
                   <td><span className="ordno">{a.visual_id}</span> <span className={"tag " + (a.kind === "quote" ? "q" : "i")}>{a.kind === "quote" ? "Quote" : "Inv"}</span></td>
-                  <td><div>{a.nickname || "Untitled job"}<span className="aa-arch">Archived</span></div><div className="sub">{a.order_date ? fmtDateLong(a.order_date) : ""}</div></td>
+                  <td><div>{a.nickname || "Untitled Job"}<span className="aa-arch">Archived</span></div><div className="sub">{a.order_date ? fmtDateLong(a.order_date) : ""}</div></td>
                   <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
                   <td><span className="pv-dot" style={{ ["--sc" as string]: a.status_color || "#888" }}>{a.status_name}</span></td>
                   <td>{a.due_date ? fmtDateLong(a.due_date) : "—"}</td>

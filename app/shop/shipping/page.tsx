@@ -107,7 +107,7 @@ export default function ShippingCenter() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">Shipping</div><h1>Shipping center</h1></div>
+        <div><div className="eyebrow">Shipping</div><h1>Shipping Center</h1></div>
         <div className="row" style={{ gap: 8 }}>
           <input ref={scanRef} className="sc-scan" type="text" autoFocus placeholder="Scan a box label or type an order #" value={scan} onChange={(e) => setScan(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onScan(scan); } }} aria-label="Scan a box label" />
           <button type="button" className="btn" onClick={() => setShowSettings((x) => !x)}>Settings</button>

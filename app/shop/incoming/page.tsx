@@ -16,7 +16,7 @@ export default function Incoming() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">From the customer portal</div><h1>Incoming orders</h1></div>
+        <div><div className="eyebrow">From the customer portal</div><h1>Incoming Orders</h1></div>
         <label className="aa-search"><input type="search" placeholder="Search by number, customer or name" value={q} onChange={(e) => setQ(e.target.value)} /></label>
       </div>
       <p className="muted" style={{ marginTop: -8 }}>Customers build these without prices. Open one to check it, answer their questions, adjust the suggested pricing and send it back for their final approval.</p>

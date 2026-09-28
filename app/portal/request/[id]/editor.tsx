@@ -148,7 +148,7 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
         <div>
           <Link href={backHref} className="back">← Dashboard</Link>
           <div className="eyebrow" style={{ marginTop: 6 }}>Order request #{o.number}</div>
-          <h1 style={{ margin: 0 }}>Build your order</h1>
+          <h1 style={{ margin: 0 }}>Build Your Order</h1>
         </div>
         <div className="row"><span className="save-state">{state}</span>
           <button type="button" className={"btn ghost danger" + (armed === "discard" ? " armed" : "")} disabled={preview} onClick={async () => { if (armed !== "discard") return arm("discard"); const r = await discardRequest(o.id); if (r.ok) router.push(backHref); else setErr(r.error || ""); }}>{armed === "discard" ? "Delete this order?" : "Delete"}</button>

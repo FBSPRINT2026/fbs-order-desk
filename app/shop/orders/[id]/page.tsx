@@ -435,7 +435,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
           <div className="eyebrow">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
-          <h1><span className="mono">#{o.number}</span> {o.nickname || "Untitled job"}{o.rush && <span className="rush">RUSH</span>}</h1>
+          <h1><span className="mono">#{o.number}</span> {o.nickname || "Untitled Job"}{o.rush && <span className="rush">RUSH</span>}</h1>
         </div>
         <div className="ed-actions">
           <span className="save-state">{saveState}</span>

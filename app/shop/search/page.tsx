@@ -49,7 +49,7 @@ function SearchInner() {
   const total = res ? SECTIONS.reduce((n, [k]) => n + res[k].length, 0) : 0;
   return (
     <>
-      <div className="page-head"><div><div className="eyebrow">Search</div><h1>{q0 ? `“${q0}”` : "Search everything"}</h1></div></div>
+      <div className="page-head"><div><div className="eyebrow">Search</div><h1>{q0 ? `“${q0}”` : "Search Everything"}</h1></div></div>
       <form className="srch-box" onSubmit={(e) => { e.preventDefault(); router.replace(`/shop/search?q=${encodeURIComponent(q.trim())}`); }}>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Order #, customer, PO, job name, artwork, tracking…" autoFocus aria-label="Search" />
         <button type="submit" className="btn primary">Search</button>

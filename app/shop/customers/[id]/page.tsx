@@ -144,7 +144,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     <>
       <Link className="back" href="/shop/customers">← Customers</Link>
       <div className="page-head" style={{ marginTop: 8 }}>
-        <div><div className="eyebrow">Customer</div><h1>{c.company || c.name || "New customer"}</h1></div>
+        <div><div className="eyebrow">Customer</div><h1>{c.company || c.name || "New Customer"}</h1></div>
         <div className="row">
           <Link className="btn" href={`/shop/customers/${id}?area=details`} scroll={false}>Customer details</Link>
           <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">View their portal</a>
@@ -248,10 +248,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                 <thead><tr><th>#</th><th>Job</th><th>Status</th><th>Due</th><th className="r">Total</th></tr></thead>
                 <tbody>
                   {os.map((o) => (
-                    <tr key={o.id} onClick={() => router.push(`/shop/orders/${o.id}`)}><td><span className="ordno">{o.number}</span></td><td>{o.nickname || "Untitled job"}</td><td><Pill status={o.status} /></td><td><Due date={o.due_date} status={o.status} /></td><td className="r">{money(o.total)}</td></tr>
+                    <tr key={o.id} onClick={() => router.push(`/shop/orders/${o.id}`)}><td><span className="ordno">{o.number}</span></td><td>{o.nickname || "Untitled Job"}</td><td><Pill status={o.status} /></td><td><Due date={o.due_date} status={o.status} /></td><td className="r">{money(o.total)}</td></tr>
                   ))}
                   {archive.map((a) => (
-                    <tr key={a.id} onClick={() => router.push(`/shop/archive/${a.id}`)}><td><span className="ordno">{a.visual_id}</span></td><td>{a.nickname || "Untitled job"}<span className="aa-arch">Archived</span></td><td><span className="pv-dot" style={{ ["--sc" as string]: a.status_color || "#888" }}>{a.status_name}</span></td><td>{a.due_date ? fmtDateLong(a.due_date) : "—"}</td><td className="r">{money(a.total)}</td></tr>
+                    <tr key={a.id} onClick={() => router.push(`/shop/archive/${a.id}`)}><td><span className="ordno">{a.visual_id}</span></td><td>{a.nickname || "Untitled Job"}<span className="aa-arch">Archived</span></td><td><span className="pv-dot" style={{ ["--sc" as string]: a.status_color || "#888" }}>{a.status_name}</span></td><td>{a.due_date ? fmtDateLong(a.due_date) : "—"}</td><td className="r">{money(a.total)}</td></tr>
                   ))}
                   {!os.length && !archive.length && <tr><td colSpan={5}><div className="empty">No orders for this customer yet.</div></td></tr>}
                 </tbody>

@@ -2,8 +2,8 @@
 :root{
   --bg:#F2F4F7; --surface:#FFFFFF; --surface-2:#E9EDF2; --surface-3:#DDE3EA;
   --ink:#141D2B; --ink-2:#4A566B; --ink-3:#7A8599; --line:#D5DBE3; --line-2:#E4E8EE;
-  --accent:#0A7BA6; --accent-hover:#08698E; --accent-ink:#FFFFFF; --accent-soft:#DDEFF6;
-  --side:#141D2B; --side-ink:#C9D3E0; --side-ink-strong:#FFFFFF; --side-hover:#1F2B3E; --side-active:#0A7BA6;
+  --accent:#0E9BD8; --accent-hover:#0B84B8; --accent-ink:#FFFFFF; --accent-soft:#DCF1FB;
+  --side:#141D2B; --side-ink:#C9D3E0; --side-ink-strong:#FFFFFF; --side-hover:#1F2B3E; --side-active:#0E9BD8;
   --danger:#B8392A; --danger-soft:#F8E3E0; --ok:#2B7F50; --ok-soft:#DFF1E6; --warn:#A8690A; --warn-soft:#F8ECD6;
   --shadow:0 1px 2px rgba(20,29,43,.06),0 4px 14px rgba(20,29,43,.06);
   --display:"Archivo","Arial Narrow",system-ui,sans-serif;
@@ -17,7 +17,7 @@
     --bg:#0D131C; --surface:#141C28; --surface-2:#1B2533; --surface-3:#243041;
     --ink:#E5EAF1; --ink-2:#A3AFC1; --ink-3:#77849A; --line:#2A3648; --line-2:#212C3B;
     --accent:#38AFDA; --accent-hover:#5BC0E4; --accent-ink:#04202C; --accent-soft:#123447;
-    --side:#090E15; --side-ink:#9FACBF; --side-ink-strong:#FFFFFF; --side-hover:#152031; --side-active:#1E6F8F;
+    --side:#090E15; --side-ink:#9FACBF; --side-ink-strong:#FFFFFF; --side-hover:#152031; --side-active:#0E9BD8;
     --danger:#EB7766; --danger-soft:#3A1E1B; --ok:#5CC48A; --ok-soft:#16301F; --warn:#E5A74A; --warn-soft:#352813;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25);
   }
@@ -27,7 +27,7 @@
   --bg:#0D131C; --surface:#141C28; --surface-2:#1B2533; --surface-3:#243041;
   --ink:#E5EAF1; --ink-2:#A3AFC1; --ink-3:#77849A; --line:#2A3648; --line-2:#212C3B;
   --accent:#38AFDA; --accent-hover:#5BC0E4; --accent-ink:#04202C; --accent-soft:#123447;
-  --side:#090E15; --side-ink:#9FACBF; --side-ink-strong:#FFFFFF; --side-hover:#152031; --side-active:#1E6F8F;
+  --side:#090E15; --side-ink:#9FACBF; --side-ink-strong:#FFFFFF; --side-hover:#152031; --side-active:#0E9BD8;
   --danger:#EB7766; --danger-soft:#3A1E1B; --ok:#5CC48A; --ok-soft:#16301F; --warn:#E5A74A; --warn-soft:#352813;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25);
 }
@@ -2229,3 +2229,13 @@ a.as-ai{text-decoration:none}
 /* the thin line under the menu logo */
 .brand.brand-logo{border-bottom:0;position:relative}
 .side-hello{position:relative;padding-top:2px}
+
+/* the FBS blue is the site's blue; group headers take the three logo colors */
+.nav-h-sales{color:var(--fbs-blue)}
+.nav-h-production{color:var(--fbs-salmon)}
+.nav-h-shoptools{color:var(--fbs-orange)}
+/* page titles: the color bars run the full width of the title and a little past */
+.page-head h1{display:inline-block}
+.page-head h1::after{width:calc(100% + 28px);min-width:84px;height:5px}
+/* two- and more-word headings and buttons: Every Word Capitalized */
+.nav .lbl-t,.panel-h h2,.rv-sec span,.rv-kpis span,.rv-views button,.rv-via-h,.pp-sheet-h b,.btn:not(.icon){text-transform:capitalize}

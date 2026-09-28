@@ -47,7 +47,7 @@ export default function LoginForm({ shopName, logoUrl, next, linkError }: { shop
       {stage === "email" ? (
         <form onSubmit={sendCode} className="stack">
           <div>
-            <h1>Sign in</h1>
+            <h1>Sign In</h1>
             <p className="muted" style={{ margin: "6px 0 0" }}>Enter the email we have on file for you. We&apos;ll send a sign-in link and a 6-digit code. No password needed.</p>
           </div>
           <div className="field">
@@ -60,7 +60,7 @@ export default function LoginForm({ shopName, logoUrl, next, linkError }: { shop
       ) : (
         <form onSubmit={verify} className="stack">
           <div>
-            <h1>Check your email</h1>
+            <h1>Check Your Email</h1>
             <p className="muted" style={{ margin: "6px 0 0" }}>We sent a code to <b>{email}</b>. Click the link in the email, or type the code here.</p>
           </div>
           <div className="field">

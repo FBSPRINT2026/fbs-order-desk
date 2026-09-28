@@ -77,9 +77,9 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
 
   // the menu, in groups
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
-    { title: "Sales", items: [["/shop", "orders", "Orders"], ["/shop/incoming", "incoming", "Incoming orders"], ["/shop/projects", "projects", "Projects"], ["/shop/customers", "customers", "Customers"]] },
-    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/board", "board", "Production"], ["/shop/calendar", "calendar", "Production calendar"]] },
-    { title: "Shop tools", items: [["/shop/shipping", "shipping", "Shipping center"], ["/shop/receiving", "goods", "Goods & receiving"]] },
+    { title: "Sales", items: [["/shop", "orders", "Orders"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/projects", "projects", "Projects"], ["/shop/customers", "customers", "Customers"]] },
+    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/board", "board", "Production"], ["/shop/calendar", "calendar", "Production Calendar"]] },
+    { title: "Shop Tools", items: [["/shop/shipping", "shipping", "Shipping Center"], ["/shop/receiving", "goods", "Goods & Receiving"]] },
   ];
   const active = (href: string) => (href === "/shop" ? path === "/shop" || path.startsWith("/shop/orders") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
@@ -102,20 +102,20 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
       <div className="side-hello">{hello}{firstName ? `, ${firstName}` : ""}</div>
       <form className="side-search" role="search" onSubmit={(e) => { e.preventDefault(); const t = q.trim(); if (t) router.push(`/shop/search?q=${encodeURIComponent(t)}`); }}>
         <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search everything…" aria-label="Search orders, customers, artwork, shipments" />
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Everything…" aria-label="Search orders, customers, artwork, shipments" />
       </form>
       <nav className="nav">
         {link(["/shop/assistant", "assistant", "Assistant"])}
         {GROUPS.map((g) => (
           <div key={g.title} className="nav-g">
-            <div className="nav-h">{g.title}</div>
+            <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>
             {g.items.map(link)}
           </div>
         ))}
       </nav>
       {/* my shortcuts: each admin's own quick links (customers, reports, dashboards, outside sites) */}
       <div className="nav-g nav-mine">
-        <div className="nav-h">My shortcuts</div>
+        <div className="nav-h">My Shortcuts</div>
         <nav className="nav">
           {mine.map((m, i) => (
             <div key={i} className="nav-mine-i">

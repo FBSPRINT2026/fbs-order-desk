@@ -62,7 +62,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
         <div className="page-head" style={{ margin: 0 }}>
           <div>
             <div className="eyebrow">{o.type === "quote" ? "Quote" : "Order"} #{o.number}</div>
-            <h1>{o.nickname || "Your order"}</h1>
+            <h1>{o.nickname || "Your Order"}</h1>
             <div className="muted" style={{ marginTop: 6 }}>{c.qty} pieces{o.due_date ? ` · in hands ${fmtDateLong(o.due_date)}` : ""}{o.po_number ? ` · PO ${o.po_number}` : ""}{o.delivery_method === "ship" ? " · shipping" : o.delivery_method === "deliver" ? " · delivery" : ""}{o.tracking ? ` · tracking ${o.tracking}` : ""}</div>
           </div>
           <div className="row">

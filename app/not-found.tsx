@@ -4,7 +4,7 @@ export default function NotFound() {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <h1>Page not found</h1>
+        <h1>Page Not Found</h1>
         <p className="muted" style={{ margin: 0 }}>This order may have been removed, or it belongs to a different email address.</p>
         <Link className="btn primary" href="/">Go to your orders</Link>
       </div>
