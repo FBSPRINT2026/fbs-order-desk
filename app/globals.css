@@ -1987,3 +1987,10 @@ a.as-ai{text-decoration:none}
 .in-a select{width:auto;max-width:340px}
 .in-sugg{font-size:13.5px;padding:7px 10px;background:var(--accent-soft);border-radius:8px}
 @media (max-width:900px){.rv-panes{grid-template-columns:1fr}.rv-stages{grid-template-columns:repeat(2,minmax(0,1fr))}.rv-other{grid-template-columns:1fr}.rv-other label.wide{grid-column:auto}}
+.rv-grp{display:flex;flex-direction:column;gap:8px}
+.rv-grp+.rv-grp{margin-top:6px}
+.rv-grp-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);padding:2px 2px 0}
+.rv-grp-h span{font-weight:700;background:var(--surface-2);border-radius:99px;padding:0 7px}
+.rv-grp-h.today{color:var(--accent)}
+.rv-grp-h.today span{background:var(--accent);color:#fff}
+.rv-grp-h.past{color:var(--danger)}

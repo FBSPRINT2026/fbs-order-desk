@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readXlsx } from "@/lib/xlsx";
-import { applyGroup, importManifest, linkByHand, parseManifest, printavoGoods, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
+import { applyGroup, importManifest, linkByHand, markReceived, parseManifest, printavoGoods, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +43,11 @@ export async function POST(req: Request) {
         const v = await staff();
         const n = await linkByHand(admin, (b.link as { lineId: string; orderId: string }[]).filter((x) => x.lineId && x.orderId), v?.email || "staff");
         return NextResponse.json({ ok: true, orders: n });
+      }
+      if (b.received?.lineIds?.length) {
+        const v = await staff();
+        await markReceived(admin, b.received.lineIds as string[], !!b.received.yes, v?.email || "staff");
+        return NextResponse.json({ ok: true });
       }
       if (b.retry) return NextResponse.json({ ok: true, ...(await resolvePending(admin, Date.now() + 45000)) });
       if (Array.isArray(b.ignore)) { await admin.from("supplier_manifest_lines").update({ kind: "ignored", match_how: "ignored by staff" }).in("id", b.ignore); return NextResponse.json({ ok: true }); }

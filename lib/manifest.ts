@@ -488,7 +488,9 @@ function summarize(g: Group<Waiting>, customer: { id: string; name: string } | n
   const trk = new Map<string, PendingShipment["tracking"][number]>();
   for (const l of g.lines) if (l.tracking && !trk.has(l.tracking)) trk.set(l.tracking, { carrier: carrierOf(l.tracking) || (/ups/i.test(l.method) ? "UPS" : /fedex/i.test(l.method) ? "FedEx" : ""), tracking: l.tracking, status: l.track_status, detail: l.track_detail, eta: l.est_delivery || (l.ship_date ? null : null), delivered: l.track_status === "delivered" });
   const noTrk = g.lines.find((l) => !l.tracking);
-  if (noTrk) trk.set("", { carrier: SUPPLIER_NAME[g.supplier] || g.supplier, tracking: "", status: "", detail: noTrk.method || "local truck", eta: noTrk.ship_date ? nextBusinessDay(noTrk.ship_date) : null, delivered: false });
+  // no tracking (the supplier's local truck): due the next business day; "delivered" only when someone marks it received
+  const here = !!noTrk && g.lines.filter((l) => !l.tracking).every((l) => l.track_status === "delivered");
+  if (noTrk) trk.set("", { carrier: SUPPLIER_NAME[g.supplier] || g.supplier, tracking: "", status: here ? "delivered" : "", detail: noTrk.method || "local truck", eta: noTrk.ship_date ? nextBusinessDay(noTrk.ship_date) : null, delivered: here });
   return {
     key: g.key, supplier: g.supplier, customer_name: g.customer_name, customer_account: g.customer_account, customer_po: g.customer_po, supplier_order: g.supplier_order,
     ship_date: g.lines[0].ship_date, boxes: new Set(g.lines.map((l) => `${l.tracking}|${l.box}`)).size, pcs: g.lines.reduce((a, l) => a + l.qty_shipped, 0),
@@ -624,7 +626,7 @@ async function applyBlanks(admin: SupabaseClient, supplier: string, g: Group, or
 }
 export const __test = { allocate, styleEq, colorEq };
 
-export type PrintavoGoods = { kind: "goods" | "blanks"; archivedId: string; number: number; nickname: string; customer: string; due_date: string | null; supplier: string; supplier_order: string; pcs: number; boxes: number; tracking: PendingShipment["tracking"]; delivered: boolean; eta: string | null };
+export type PrintavoGoods = { kind: "goods" | "blanks"; lineIds: string[]; archivedId: string; number: number; nickname: string; customer: string; due_date: string | null; supplier: string; supplier_order: string; pcs: number; boxes: number; tracking: PendingShipment["tracking"]; delivered: boolean; eta: string | null };
 /** Goods linked to Printavo orders (until go-live), shipment by shipment, for Goods & receiving. Delivered ones for 10 days. */
 export async function printavoGoods(admin: SupabaseClient): Promise<PrintavoGoods[]> {
   const { data } = await admin.from("supplier_manifest_lines").select("*, archived_orders(visual_id, nickname, due_date, customers(company, name))").in("kind", ["goods", "blanks"]).not("archived_order_id", "is", null).order("created_at", { ascending: false }).limit(2000);
@@ -638,7 +640,15 @@ export async function printavoGoods(admin: SupabaseClient): Promise<PrintavoGood
     const delivered = s.tracking.length > 0 && s.tracking.every((t) => t.delivered);
     const lastDelivered = ls.map((l) => l.delivered_at).filter(Boolean).sort().pop();
     if (delivered && lastDelivered && Date.now() - Date.parse(lastDelivered) > 10 * 86400000) continue;
-    out.push({ kind: (f as Row & { kind: string }).kind === "blanks" ? "blanks" : "goods", archivedId: f.archived_order_id, number: +(a?.visual_id || 0), nickname: a?.nickname || "", customer: a?.customers?.company || a?.customers?.name || f.customer_name, due_date: a?.due_date || null, supplier: f.supplier, supplier_order: f.supplier_order, pcs: s.pcs, boxes: s.boxes, tracking: s.tracking, delivered, eta: s.tracking.map((t) => t.eta).filter(Boolean).sort().pop() || null });
+    out.push({ kind: (f as Row & { kind: string }).kind === "blanks" ? "blanks" : "goods", lineIds: ls.map((l) => l.id), archivedId: f.archived_order_id, number: +(a?.visual_id || 0), nickname: a?.nickname || "", customer: a?.customers?.company || a?.customers?.name || f.customer_name, due_date: a?.due_date || null, supplier: f.supplier, supplier_order: f.supplier_order, pcs: s.pcs, boxes: s.boxes, tracking: s.tracking, delivered, eta: s.tracking.map((t) => t.eta).filter(Boolean).sort().pop() || null });
   }
   return out.sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"));
+}
+
+/** Received & counted (or undo) for manifest lines tied to a Printavo job: local trucks never report delivery themselves. */
+export async function markReceived(admin: SupabaseClient, lineIds: string[], yes: boolean, by: string) {
+  if (!lineIds.length) return;
+  await admin.from("supplier_manifest_lines").update(yes
+    ? { track_status: "delivered", delivered_at: new Date().toISOString(), track_detail: `Received & counted by ${by}` }
+    : { track_status: "", delivered_at: null, track_detail: "" }).in("id", lineIds).is("order_id", null);
 }
