@@ -59,14 +59,22 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const refs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // start in Box 1's length (or the scanned box): type, Tab, type, Tab… Enter after a weight goes to the next box
-  useEffect(() => { const b = focusBox && boxes[focusBox - 1] ? focusBox : 1; setTimeout(() => refs.current[`l${b}`]?.focus(), 60); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // start where the typing is: a box whose size is already filled in starts at its weight, otherwise at its length
+  const sized = (b?: Box) => !!b && [b.length, b.width, b.height].every((x) => typeof x === "number" && x > 0);
+  const focusBoxAt = (n: number, list = boxes) => { const b = list[n - 1]; setTimeout(() => refs.current[`${sized(b) ? "w" : "l"}${n}`]?.focus(), 40); };
+  useEffect(() => { focusBoxAt(focusBox && boxes[focusBox - 1] ? focusBox : 1); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) onClose(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [busy, onClose]);
 
   const setBox = (i: number, patch: Partial<Box>) => { setBoxes((bs) => bs.map((b, j) => (j === i ? { ...b, ...patch } : b))); setRates(null); };
   const renumber = (bs: Box[]) => bs.map((b, i) => ({ ...b, n: i + 1 }));
-  const addBox = () => { setBoxes((bs) => { const last = bs[bs.length - 1]; return renumber([...bs, { n: bs.length + 1, length: last?.length ?? "", width: last?.width ?? "", height: last?.height ?? "", weight: "" }]); }); setRates(null); setTimeout(() => refs.current[`l${boxes.length + 1}`]?.focus(), 30); };
+  const addBox = () => { setBoxes((bs) => { const last = bs[bs.length - 1]; return renumber([...bs, { n: bs.length + 1, length: last?.length ?? "", width: last?.width ?? "", height: last?.height ?? "", weight: "" }]); }); setRates(null); const last = boxes[boxes.length - 1]; setTimeout(() => refs.current[`${sized(last) ? "w" : "l"}${boxes.length + 1}`]?.focus(), 30); };
   const removeBox = (i: number) => { setBoxes((bs) => renumber(bs.filter((_, j) => j !== i))); setRates(null); };
-  const sizeAll = (s: { length: number; width: number; height: number }) => { setBoxes((bs) => bs.map((b) => ({ ...b, length: s.length, width: s.width, height: s.height }))); setRates(null); };
+  const sizeAll = (s: { length: number; width: number; height: number }) => {
+    const next = boxes.map((b) => ({ ...b, length: s.length, width: s.width, height: s.height }));
+    setBoxes(next); setRates(null);
+    const firstEmpty = next.findIndex((b) => !b.weight);
+    setTimeout(() => refs.current[`w${firstEmpty >= 0 ? firstEmpty + 1 : 1}`]?.focus(), 40); // straight to the weights
+  };
 
   const totalWeight = boxes.reduce((a, b) => a + (+b.weight || 0), 0);
   const ready = boxes.length > 0 && boxes.every(boxReady);
@@ -193,7 +201,15 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
                     <td><div className="sw-in w"><input ref={(el) => { refs.current[`w${b.n}`] = el; }} type="number" inputMode="decimal" min={0} step="0.1" value={b.weight}
                       onFocus={(e) => e.target.select()} onChange={(e) => setBox(i, { weight: num(e.target.value) })}
                       onBlur={() => rememberSize(b)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); rememberSize(b); const nx = refs.current[`l${b.n + 1}`]; if (nx) nx.focus(); else (e.currentTarget as HTMLInputElement).blur(); } }} aria-label={`Box ${b.n} weight`} /><span>lb</span></div></td>
+                      onKeyDown={(e) => {
+                        // Tab or Enter after a weight goes to the next box: its weight when its size is filled in (22 Tab 23 Tab 24…), else its length
+                        if ((e.key === "Tab" && !e.shiftKey) || e.key === "Enter") {
+                          rememberSize(b);
+                          const nb = boxes[b.n];
+                          if (nb) { e.preventDefault(); refs.current[`${sized(nb) ? "w" : "l"}${b.n + 1}`]?.focus(); }
+                          else if (e.key === "Enter") { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur(); }
+                        }
+                      }} aria-label={`Box ${b.n} weight`} /><span>lb</span></div></td>
                     {tracking && <td><input type="text" className="sw-trk" value={b.tracking || ""} placeholder="1Z… / 7…" onChange={(e) => setBox(i, { tracking: e.target.value.trim() })} aria-label={`Box ${b.n} tracking`} />{b.tracking && carrierOf(b.tracking) && <small className="faint"> {carrierOf(b.tracking)}</small>}</td>}
                     <td className="sw-act">
                       {i > 0 && <button type="button" tabIndex={-1} className="btn sm ghost" title="Same size as the box above" onClick={() => setBox(i, { length: boxes[i - 1].length, width: boxes[i - 1].width, height: boxes[i - 1].height })}>Same ↑</button>}
