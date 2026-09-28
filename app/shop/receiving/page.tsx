@@ -284,12 +284,13 @@ export default function GoodsReceiving() {
 </div>
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
+      <div className="rv-tabrow">
       <div className="aa-sub rv-views" role="tablist">
         <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; overview</button>
         <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS orders<span className={"aa-n" + (v.need.length ? " hot" : "")}>{v.need.length + arriving.length}</span></button>
         <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer supplied goods<span className="aa-n">{data.goods.filter((it) => it.goods.status !== "received").length + unlinked.length}</span></button>
         <button type="button" className={view === "resolve" ? "on" : ""} onClick={() => setView("resolve")}>Resolution center<span className={"aa-n" + (pending?.length ? " hot" : "")}>{pending ? pending.length : "…"}</span></button>
-        <span className="spacer" />
+      </div>
         <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
       </div>
       {q.trim().length >= 2 && (

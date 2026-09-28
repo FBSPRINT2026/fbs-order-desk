@@ -2154,3 +2154,6 @@ a.as-ai{text-decoration:none}
 .rv-search.rv-search-tabs{margin:0 0 4px;width:420px;max-width:100%;flex:none;padding:0 10px}
 .rv-search.rv-search-tabs input{padding:7px 0;font-size:13.5px}
 @media (max-width:900px){.rv-search.rv-search-tabs{width:100%}}
+.rv-tabrow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.rv-tabrow .aa-sub{margin-bottom:0}
+.rv-search.rv-search-tabs{margin:0}
