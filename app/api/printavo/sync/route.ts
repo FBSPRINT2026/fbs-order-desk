@@ -96,8 +96,7 @@ async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typ
   const known = new Map(((have || []) as Idx[]).map((r) => [r.printavo_id, r]));
   const rows = orders.flatMap((o) => {
     const k = known.get(o.id);
-    const row = { printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "pending", ...(pass ? { seen_sweep: pass } : {}) };
-    if (!k && !pass) Object.assign(row, { seen_sweep: currentPass }); // new order spotted by the quick check counts as seen
+    const row = { printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "pending", seen_sweep: pass || currentPass }; // (every row sends the same columns; an order seen by the quick check counts as seen)
     if (!k) return [row];
     if (k.fingerprint !== o.fingerprint || k.status === "gone") { did.changed++; return [row]; }
     return [];
