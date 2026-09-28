@@ -205,7 +205,7 @@ export default function AccountAreas({ mode, assistant, onPaySelect, statementHr
     const artCount = ds.filter((d) => !d.archived_at).length + mockups.length;
     body = (
       <div className="pd">
-        <div className="pd-top">
+        <div className={"pd-top" + (assistant ? " with-pa" : "")}>
           {assistant || <div className="pd-hello">{greeting && <h2>{greeting}</h2>}<span>Everything about your account in one place. Message us any time.</span></div>}
           <div className="pd-actions">
             {homeTop}
