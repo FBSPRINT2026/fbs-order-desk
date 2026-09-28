@@ -658,3 +658,47 @@ export async function markReceived(admin: SupabaseClient, lineIds: string[], yes
     ? { track_status: "delivered", delivered_at: new Date().toISOString(), track_detail: `Received & counted by ${by}` }
     : { track_status: "", delivered_at: null, track_detail: "" }).in("id", lineIds).is("order_id", null);
 }
+
+/* ---------- the S&S local truck (Fort Worth): no tracking, so receiving signs for it ---------- */
+
+export type TruckStop = { key: string; supplier_order: string; who: string; po: string; order: { number: number; href: string } | null; unlinked: boolean; ours: boolean; boxes: number; pcs: number; ship_date: string | null; lineIds: string[] };
+
+/** Everything on S&S's local truck (no tracking number) that nobody has signed for yet. */
+export async function truckPending(admin: SupabaseClient): Promise<TruckStop[]> {
+  const { data } = await admin.from("supplier_manifest_lines").select("id, supplier_order, customer_name, customer_po, box, qty_shipped, ship_date, kind, order_id, archived_order_id, customer_id, orders!supplier_manifest_lines_order_id_fkey(number, customers(company, name)), archived_orders!supplier_manifest_lines_archived_order_id_fkey(visual_id, customers(company, name)), customers(company, name)")
+    .eq("supplier", "ss").eq("tracking", "").neq("kind", "ignored").neq("track_status", "delivered").order("ship_date", { ascending: false }).limit(3000);
+  type R = { id: string; supplier_order: string; customer_name: string; customer_po: string; box: string; qty_shipped: number; ship_date: string | null; kind: string; order_id: string | null; archived_order_id: string | null;
+    orders: { number: number; customers: { company: string; name: string } | null } | null; archived_orders: { visual_id: string | number; customers: { company: string; name: string } | null } | null; customers: { company: string; name: string } | null };
+  const m = new Map<string, R[]>();
+  for (const l of (data || []) as unknown as R[]) { const k = `${l.supplier_order}|${l.order_id || l.archived_order_id || ""}`; m.set(k, [...(m.get(k) || []), l]); }
+  return [...m.entries()].map(([key, ls]) => {
+    const f = ls[0], c = f.orders?.customers || f.archived_orders?.customers || f.customers;
+    return {
+      key, supplier_order: f.supplier_order, po: f.customer_po, ship_date: f.ship_date, ours: isUs(f.customer_name), unlinked: !f.order_id && !f.archived_order_id,
+      who: isUs(f.customer_name) && !c ? "FBS (our blanks)" : c?.company || c?.name || f.customer_name,
+      order: f.order_id && f.orders ? { number: f.orders.number, href: `/shop/orders/${f.order_id}` } : f.archived_order_id && f.archived_orders ? { number: +f.archived_orders.visual_id, href: `/shop/archive/${f.archived_order_id}` } : null,
+      boxes: new Set(ls.map((l) => l.box)).size, pcs: ls.reduce((a, l) => a + l.qty_shipped, 0), lineIds: ls.map((l) => l.id),
+    };
+  }).sort((a, b) => a.who.localeCompare(b.who));
+}
+
+/**
+ * The S&S truck is here: everything checked is delivered at `at`, signed by `by`. Lines on orders here also mark their
+ * goods / blanks shipment delivered (and customer goods move to "Arrived, checking in").
+ */
+export async function receiveTruck(admin: SupabaseClient, lineIds: string[], at: string, by: string) {
+  if (!lineIds.length) throw new Error("Check what came on the truck.");
+  const who = by.trim().slice(0, 80);
+  if (!who) throw new Error("Who signed for it?");
+  const when = isNaN(Date.parse(at)) ? new Date().toISOString() : new Date(at).toISOString();
+  const detail = `Delivered by S&S truck · signed by ${who}`;
+  const { data } = await admin.from("supplier_manifest_lines").update({ track_status: "delivered", delivered_at: when, track_detail: detail, track_updated_at: new Date().toISOString() })
+    .in("id", lineIds).eq("tracking", "").select("order_id, kind, supplier_order");
+  const rows = (data || []) as { order_id: string | null; kind: string; supplier_order: string }[];
+  for (const r of rows.filter((x) => x.order_id)) {
+    const table = r.kind === "blanks" ? "blank_shipments" : "goods_shipments";
+    await admin.from(table).update({ track_status: "delivered", delivered_at: when, track_detail: detail }).eq("order_id", r.order_id!).eq("tracking", "").ilike("note", `%${r.supplier_order}%`);
+    if (r.kind === "goods") await admin.from("order_goods").update({ status: "arrived", updated_by: who, updated_at: new Date().toISOString() }).eq("order_id", r.order_id!).in("status", ["waiting", "on_way"]);
+  }
+  return { lines: rows.length };
+}

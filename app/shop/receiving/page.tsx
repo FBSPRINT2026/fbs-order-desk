@@ -47,6 +47,7 @@ export default function GoodsReceiving() {
   const [data, setData] = useState<{ orders: O[]; cust: Record<string, Customer>; blanks: BO[]; bships: BS[]; goods: GoodsItem[]; lead: number } | null>(null);
   const [tab, setTab] = useState<"arriving" | "need" | "ordered" | "received">("arriving");
   const [focus, setFocus] = useState<Focus | null>(null);
+  const [truck, setTruck] = useState(false);
   const [order, setOrder] = useState<O | null>(null);
   const [note, setNote] = useState("");
   const [view, setViewState] = useState<View>("today");
@@ -227,7 +228,8 @@ export default function GoodsReceiving() {
       <div className="page-head">
         <div><div className="eyebrow">Receiving</div><h1>Goods &amp; receiving</h1></div>
         <div className="row" style={{ gap: 8 }}>
-          <label className="btn primary" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import supplier manifest"}<input type="file" hidden accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) upload(f); }} /></label>
+          <button type="button" className="btn primary" onClick={() => setTruck(true)}>Receive S&amp;S truck</button>
+          <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import supplier manifest"}<input type="file" hidden accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) upload(f); }} /></label>
         </div>
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
@@ -348,6 +350,7 @@ export default function GoodsReceiving() {
       </div>
 
       </>}
+      {truck && <TruckModal onClose={() => setTruck(false)} onDone={(m) => { setTruck(false); setNote(m); load(); loadPending(); setRefreshKey((k) => k + 1); }} />}
       {order && <OrderBlanks o={order} who={v.who(order)} onClose={() => setOrder(null)} onDone={(m) => { setOrder(null); setNote(m); setTab("ordered"); load(); }} />}
     </>
   );
@@ -462,6 +465,78 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
                   <button type="button" className="btn primary sm" disabled={!!busy} onClick={record}>{busy === "rec" ? "Saving…" : "Save"}</button>
                 </div>
               )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The S&S local truck (Fort Worth) is here. It has no tracking, so receiving signs for it: tick what came off the truck,
+ * when it came, and who signed. Everything ticked shows delivered (linked to an order or not).
+ */
+function TruckModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
+  type Stop = { key: string; supplier_order: string; who: string; po: string; order: { number: number; href: string } | null; unlinked: boolean; ours: boolean; boxes: number; pcs: number; ship_date: string | null; lineIds: string[] };
+  const [stops, setStops] = useState<Stop[] | null>(null);
+  const [on, setOn] = useState<Record<string, boolean>>({});
+  const now = new Date();
+  const [time, setTime] = useState(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
+  const [date, setDate] = useState(today());
+  const [by, setBy] = useState("");
+  const [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  useEffect(() => {
+    fetch("/api/goods/manifest?truck=1", { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      if (j.error) return setErr(j.error);
+      const list = (j.stops || []) as Stop[];
+      setStops(list);
+      // what should be on today's truck: shipped before today (it comes the next business day)
+      setOn(Object.fromEntries(list.map((x) => [x.key, !x.ship_date || x.ship_date < today()])));
+    }).catch(() => setErr("Couldn't load the truck list."));
+  }, []);
+  const picked = (stops || []).filter((x) => on[x.key]);
+  async function save() {
+    if (!picked.length) return setErr("Tick what came off the truck.");
+    if (!by.trim()) return setErr("Who signed for it?");
+    setBusy(true); setErr("");
+    const at = new Date(`${date}T${time || "12:00"}`).toISOString();
+    const r = await fetch("/api/goods/manifest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ truck: { lineIds: picked.flatMap((x) => x.lineIds), at, signedBy: by.trim() } }) });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok || j.error) return setErr(j.error || "Couldn't save.");
+    onDone(`S&S truck received at ${new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}, signed by ${by.trim()}: ${picked.length} shipment${picked.length === 1 ? "" : "s"}, ${picked.reduce((a, x) => a + x.boxes, 0)} boxes, ${picked.reduce((a, x) => a + x.pcs, 0)} pcs.`);
+  }
+  return (
+    <div className="pp-modal" role="dialog" aria-modal="true" aria-label="Receive the S&S truck" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="pp-sheet">
+        <div className="pp-sheet-h"><div><b>Receive S&amp;S truck</b> <span className="faint" style={{ fontSize: 14 }}>· Fort Worth local delivery</span></div><button type="button" className="btn icon ghost" aria-label="Close" disabled={busy} onClick={onClose}>✕</button></div>
+        <div style={{ padding: "14px 22px" }} className="stack">
+          {!stops ? <div className="faint">{err || "Loading what's on the truck…"}</div> : !stops.length ? <div className="gb-empty">Nothing is waiting on the S&amp;S truck. Import today&apos;s S&amp;S manifest first.</div> : (
+            <>
+              <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                <b>What came off the truck?</b><span className="faint">{picked.length} of {stops.length} ticked</span><span className="spacer" />
+                <button type="button" className="linkbtn" onClick={() => setOn(Object.fromEntries(stops.map((x) => [x.key, true])))}>Tick all</button>
+                <button type="button" className="linkbtn" onClick={() => setOn({})}>Clear</button>
+              </div>
+              <div style={{ overflowX: "auto", maxHeight: "45vh" }}><table className="rv-tbl">
+                <thead><tr><th></th><th>For</th><th>Order</th><th>S&amp;S order</th><th>PO</th><th className="r">Boxes</th><th className="r">Pcs</th><th>Shipped</th></tr></thead>
+                <tbody>{stops.map((x) => (
+                  <tr key={x.key} onClick={() => setOn({ ...on, [x.key]: !on[x.key] })} style={{ cursor: "pointer" }}>
+                    <td><input type="checkbox" checked={!!on[x.key]} onChange={() => setOn({ ...on, [x.key]: !on[x.key] })} onClick={(e) => e.stopPropagation()} aria-label={`${x.who} ${x.supplier_order}`} /></td>
+                    <td><b>{x.who}</b></td>
+                    <td>{x.order ? `#${x.order.number}` : <span className="rv-pill unl">Unlinked order</span>}</td>
+                    <td>{x.supplier_order}</td><td>{x.po || "—"}</td><td className="r">{x.boxes}</td><td className="r">{x.pcs}</td><td>{day(x.ship_date)}</td>
+                  </tr>
+                ))}</tbody>
+              </table></div>
+              <div className="rv-other" style={{ gridTemplateColumns: "auto auto 1fr auto" }}>
+                <label>Delivered on<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+                <label>What time?<input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>
+                <label>Signed by<input type="text" value={by} onChange={(e) => setBy(e.target.value)} placeholder="Name of who signed" autoFocus /></label>
+                <button type="button" className="btn primary" disabled={busy || !picked.length || !by.trim()} onClick={save}>{busy ? "Saving…" : `Received ${picked.reduce((a, x) => a + x.boxes, 0)} boxes`}</button>
+              </div>
+              {err && <div className="pv-err">{err}</div>}
             </>
           )}
         </div>

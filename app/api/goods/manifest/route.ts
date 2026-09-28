@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readXlsx } from "@/lib/xlsx";
-import { applyGroup, importManifest, linkByHand, markReceived, parseManifest, printavoGoods, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
+import { applyGroup, importManifest, linkByHand, markReceived, receiveTruck, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,9 +14,13 @@ async function staff() {
 }
 
 /** Manifest shipments waiting to be matched to an order. */
-export async function GET() {
+export async function GET(req: Request) {
   if (!(await staff())) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const admin = createAdminClient();
+  if (new URL(req.url).searchParams.get("truck")) {
+    try { return NextResponse.json({ stops: await truckPending(admin) }); }
+    catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
+  }
   // one list failing must not blank the other (show the problem instead of an empty page)
   const [groups, printavo] = await Promise.all([
     unmatchedGroups(admin).catch((e) => ({ error: e instanceof Error ? e.message : String(e) })),
@@ -53,6 +57,11 @@ export async function POST(req: Request) {
         const v = await staff();
         await markReceived(admin, b.received.lineIds as string[], !!b.received.yes, v?.email || "staff");
         return NextResponse.json({ ok: true });
+      }
+      if (b.truck) {
+        // the S&S local truck is here: sign for what came
+        const t = b.truck as { lineIds: string[]; at: string; signedBy: string };
+        return NextResponse.json({ ok: true, ...(await receiveTruck(admin, t.lineIds || [], t.at, t.signedBy || "")) });
       }
       if (b.retry) return NextResponse.json({ ok: true, ...(await resolvePending(admin, Date.now() + 45000)) });
       if (Array.isArray(b.ignore)) { await admin.from("supplier_manifest_lines").update({ kind: "ignored", match_how: "ignored by staff" }).in("id", b.ignore); return NextResponse.json({ ok: true }); }
