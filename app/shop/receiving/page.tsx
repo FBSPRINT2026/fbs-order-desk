@@ -191,16 +191,27 @@ export default function GoodsReceiving() {
     ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date,
       link: { lineIds: g.lineIds, customerId: g.customer?.id || null, customerName: g.customer?.name || "", us: g.us, supplier: g.supplier, name: g.customer_name, account: g.customer_account, suggest: g.lines.find((l) => l.suggest)?.suggest || null, styles: g.styles } })),
   ];
+  // search results (every manifest, any age) as rows in the same grid
+  const hitRows: Row[] = (hits || []).map((h) => rowOf({ key: "h" + h.key, side: h.kind === "blanks" || h.who === "FBS" ? "fbs" : "customer", number: h.order?.number || 0, href: h.order?.href || "", who: h.who, what: h.kind === "blanks" ? "Our blanks" : "Customer goods", sub: h.supplier === "sanmar" ? "SanMar" : "S&S", so: h.supplier_order, po: h.po, boxes: h.boxes, pcs: h.pcs,
+    trks: h.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), statuses: h.tracking.map((k) => k.status),
+    at: h.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: h.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: !h.order, supplierRaw: h.supplier, shipped: h.ship_date,
+    link: h.order ? undefined : { lineIds: h.lineIds, customerId: h.customer_id, customerName: h.customer_id ? h.who : "", us: h.who === "FBS", supplier: h.supplier, name: h.customer_name, account: h.customer_account, suggest: null, styles: h.styles } }));
+  // searching filters the whole update (Cowboy Cool → only Cowboy Cool), and adds matches from older manifests
+  const term = q.trim().toLowerCase();
+  const hay = (r: Row) => [r.who, r.po, r.so, r.sub, r.number ? `#${r.number} ${r.number}` : "", ...r.trks.map((k) => `${k.tracking} ${k.carrier}`)].join(" ").toLowerCase();
+  const view_rows: Row[] = term.length >= 2
+    ? [...rows.filter((r) => hay(r).includes(term)), ...hitRows.filter((h) => !rows.some((r) => r.so && r.so === h.so && r.sub === h.sub && r.who === h.who) && !rows.some((r) => r.key === h.key))]
+    : rows;
   const byAt = (a: Row, b: Row) => (a.at || "9999").localeCompare(b.at || "9999");
   const L = {
-    arrived: rows.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
+    arrived: view_rows.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
     // due today, plus S&S truck / freight still not signed for (they never report delivery on their own)
-    today: rows.filter((r) => r.state !== "arrived" && (localDay(r.at) === t0 || (!!r.at && localDay(r.at) < t0 && r.trks.some((k) => !k.tracking || k.freight)))),
+    today: view_rows.filter((r) => r.state !== "arrived" && (localDay(r.at) === t0 || (!!r.at && localDay(r.at) < t0 && r.trks.some((k) => !k.tracking || k.freight)))),
     // the last week before today
-    past: rows.filter((r) => r.state === "arrived" && !!r.deliveredAt && localDay(r.deliveredAt) < t0 && localDay(r.deliveredAt) >= addDays(t0, -7)).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
-    way: rows.filter((r) => r.state !== "arrived").sort(byAt),
+    past: view_rows.filter((r) => r.state === "arrived" && !!r.deliveredAt && localDay(r.deliveredAt) < t0 && localDay(r.deliveredAt) >= addDays(t0, -7)).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
+    way: view_rows.filter((r) => r.state !== "arrived").sort(byAt),
     // delivery problems, labels never scanned by the next business day, and anything arriving after it's needed
-    problems: rows.filter((r) => r.state === "problem" || r.late).sort(byAt),
+    problems: view_rows.filter((r) => r.state === "problem" || r.late).sort(byAt),
   };
   // one "today" box: arriving today / arrived today (the home view)
   const KPIS: { k: Focus; label: string; n: React.ReactNode; tone?: string }[] = [
@@ -261,11 +272,6 @@ export default function GoodsReceiving() {
     way: { title: "In transit", n: L.way.length, rows: L.way, empty: "Nothing on the way." },
     problems: { title: "Delayed / problems", tone: "bad", n: L.problems.length, rows: L.problems, empty: "No problems." },
   };
-  // search results (every manifest, any age) as rows in the same grid
-  const hitRows: Row[] = (hits || []).map((h) => rowOf({ key: "h" + h.key, side: h.kind === "blanks" || h.who === "FBS" ? "fbs" : "customer", number: h.order?.number || 0, href: h.order?.href || "", who: h.who, what: h.kind === "blanks" ? "Our blanks" : "Customer goods", sub: h.supplier === "sanmar" ? "SanMar" : "S&S", so: h.supplier_order, po: h.po, boxes: h.boxes, pcs: h.pcs,
-    trks: h.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), statuses: h.tracking.map((k) => k.status),
-    at: h.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: h.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: !h.order, supplierRaw: h.supplier, shipped: h.ship_date,
-    link: h.order ? undefined : { lineIds: h.lineIds, customerId: h.customer_id, customerName: h.customer_id ? h.who : "", us: h.who === "FBS", supplier: h.supplier, name: h.customer_name, account: h.customer_account, suggest: null, styles: h.styles } }));
   // first look: arriving today, and underneath it what already arrived
   const shown: Focus[] = focus ? [focus] : ["today", "arrived"];
 
@@ -291,14 +297,8 @@ export default function GoodsReceiving() {
         <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer supplied goods<span className="aa-n">{data.goods.filter((it) => it.goods.status !== "received").length + unlinked.length}</span></button>
         <button type="button" className={view === "resolve" ? "on" : ""} onClick={() => setView("resolve")}>Resolution center<span className={"aa-n" + (pending?.length ? " hot" : "")}>{pending ? pending.length : "…"}</span></button>
       </div>
-        <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
+        <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><input type="search" value={q} onChange={(e) => { setQ(e.target.value); if (view !== "today") setView("today"); }} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
       </div>
-      {q.trim().length >= 2 && (
-        <section className="rv-day rv-results">
-          <div className="rv-day-h"><b>Search: “{q.trim()}”</b><span className="faint">{searching ? "Searching…" : `${hitRows.length} shipment${hitRows.length === 1 ? "" : "s"} on the manifests`}</span><span className="spacer" /><button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></div>
-          {!searching && grouped(hitRows, "Nothing on any manifest matches that. It may not have shipped yet.")}
-        </section>
-      )}
 
       {view === "customer" && <>
         {pvCust.length > 0 && (
@@ -320,7 +320,7 @@ export default function GoodsReceiving() {
       {/* today's update: arriving today, then what already arrived; the boxes open the other lists */}
       <section className="rv-day">
         <div className="rv-day-h">
-          <b>Today&apos;s update</b><span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} · tracking checks every 20 minutes</span>
+          <b>Today&apos;s update</b>{term.length >= 2 && <span className="rv-filter">Showing “{q.trim()}”{searching ? " …" : ""} <button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></span>}<span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} · tracking checks every 20 minutes</span>
           <span className="spacer" />
           <div className="rv-seg" role="group" aria-label="Group by">
             <button type="button" className={groupBy === "carrier" ? "on" : ""} onClick={() => setGroupBy("carrier")}>By carrier</button>
