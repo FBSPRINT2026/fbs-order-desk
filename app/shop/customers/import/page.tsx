@@ -109,7 +109,7 @@ export default function ImportPage() {
                   <td>{h.contact}<div className="faint" style={{ fontSize: 12.5 }}>{[h.email, h.phone].filter(Boolean).join(" · ")}</div></td>
                   <td className="r">{h.orderCount}</td>
                   <td className="r" style={{ whiteSpace: "nowrap" }}>
-                    {h.customerId && <Link className="btn ghost" href={`/shop/customers/${h.customerId}?area=archive`}>Open</Link>}{" "}
+                    {h.customerId && <Link className="btn ghost" href={`/shop/customers/${h.customerId}?area=orders`}>Open</Link>}{" "}
                     <button className="btn primary" type="button" disabled={!!running} onClick={() => run(h)}>{h.customerId ? "Import again" : "Import"}</button>
                   </td>
                 </tr>
@@ -123,7 +123,7 @@ export default function ImportPage() {
       {(running || log.length > 0) && (
         <section className="panel" style={{ marginTop: 16 }}>
           <div className="panel-h"><h2>{running ? `Importing ${running.companyName || running.contact}…` : done ? `Imported ${done.company}` : "Import"}</h2>
-            {running ? <button className="btn" type="button" onClick={() => { stop.current = true; }}>Stop</button> : done && <Link className="btn primary" href={`/shop/customers/${done.customerId}?area=archive`}>Open customer →</Link>}
+            {running ? <button className="btn" type="button" onClick={() => { stop.current = true; }}>Stop</button> : done && <Link className="btn primary" href={`/shop/customers/${done.customerId}?area=orders`}>Open customer →</Link>}
           </div>
           <div className="panel-b stack" style={{ gap: 10 }}>
             <div className="pv-prog"><span>Orders {prog.orders} / {prog.ordersTotal}</span><i style={{ ["--p" as string]: pct(prog.orders, prog.ordersTotal) + "%" }} /></div>

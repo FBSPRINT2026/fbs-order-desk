@@ -11,6 +11,7 @@ import {
 import GroupEditor from "@/components/GroupEditor";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
+import ProductionPanel from "@/components/ProductionPanel";
 import { Pill } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import { checkOrder } from "@/lib/orderChecks";
@@ -297,7 +298,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     loadSide();
   }
   async function delArt(a: ArtFile) {
-    if (armed !== "art" + a.id) return arm("art" + a.id);
     await sb.storage.from("proofs").remove([a.file_path]);
     await sb.from("art_files").delete().eq("id", a.id);
     loadSide();
@@ -598,14 +598,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <div className="panel-h"><h2>Notes</h2></div>
               <div className="panel-b stack">
                 <div className="field"><label htmlFor="o-notes">Customer notes (shown on quote/invoice)</label><textarea id="o-notes" rows={4} value={o.notes} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
-                <div className="field"><label htmlFor="o-pnotes">Production notes (shop only)</label><textarea id="o-pnotes" rows={4} placeholder="Ink colors, PMS matches, mesh counts, placement…" value={prodNotes} onChange={(e) => onProdNotes(e.target.value)} /></div>
               </div>
             </section>
           </div>
-
-
-
-
+          <ProductionPanel note={prodNotes} onNote={onProdNotes} uploading={artUploading}
+            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type }))}
+            onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }} />
         </div>
 
         <aside className="ed-aside">

@@ -58,3 +58,42 @@ export function fileUrls(o: PvOrder): string[] {
 }
 
 export const addressLines = (a: PvAddress) => !a ? [] : [a.companyName, a.customerName, a.address1, a.address2, [[a.city, a.state].filter(Boolean).join(", "), a.zipCode].filter(Boolean).join(" "), a.country && !/^(us|usa|united states)$/i.test(a.country) ? a.country : ""].map((x) => (x || "").trim()).filter(Boolean);
+
+/** Printavo stores notes as HTML ("<div>1/0 Screen Print<br>Customer shipping in shirts</div>"); show them as the plain lines Printavo showed. */
+export function plain(s?: string | null): string {
+  if (!s) return "";
+  if (!/[<&]/.test(s)) return s;
+  return s
+    .replace(/\r/g, "")
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\s*li[^>]*>/gi, "\n• ")
+    .replace(/<\s*\/\s*(div|p|li|h[1-6]|tr|ul|ol|blockquote)\s*>/gi, "\n")
+    .replace(/<\s*(div|p|h[1-6]|tr|ul|ol|blockquote)[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** What a customer may see of an archived order: no production notes, internal tasks, expenses, shop emails or owner. */
+export function forCustomer(o: PvOrder): PvOrder {
+  return { ...o, groups: o.groups.map((g) => ({ ...g, lines: g.lines.map((l) => ({ ...l, status: "" })) })), productionNote: "", tasks: [], expenses: [], messages: [], files: [], owner: "", tags: [], warnings: undefined,
+    urls: { url: "", publicUrl: "", publicPdf: "", workorderUrl: "", packingSlipUrl: "" },
+    transactions: o.transactions.filter((t) => !t.processing) };
+}
+
+/** The summary columns lists need (not the whole record). */
+export const ARCHIVE_LIST_COLS = "id, kind, visual_id, customer_id, nickname, status_name, status_color, order_date, due_date, total, paid, balance, qty";
+export type ArchiveSummary = Pick<ArchivedRow, "id" | "kind" | "visual_id" | "customer_id" | "nickname" | "status_name" | "status_color" | "order_date" | "due_date" | "total" | "paid" | "balance" | "qty">;
+
+const METHOD_NAMES: Record<string, string> = { BANK_TRANSFER: "Bank transfer", CASH: "Cash", CHECK: "Check", CREDIT_CARD: "Credit card", ECHECK: "eCheck", OTHER: "Other" };
+/** An archived order as a row in the customer's order lists (same shape as new orders, marked archived). */
+export function archiveAsOrder(r: ArchiveSummary, href: string) {
+  return { id: r.id, number: +r.visual_id || 0, nickname: r.nickname || "", status: "archived", type: r.kind, total: +r.total || 0, paid: +r.paid || 0, balance: +r.balance || 0,
+    due_date: r.due_date, created_at: r.order_date || "", qty: r.qty || 0, pay_due: null, archived: true, href, statusLabel: r.status_name, statusColor: r.status_color };
+}
+/** An archived order's payments as rows in the payment history. */
+export function archivePayments(r: ArchiveSummary & { transactions?: PvTransaction[] | null }, href: string) {
+  return (r.transactions || []).filter((t) => t.kind === "Payment" && !t.processing).map((t) => ({
+    id: `pv-${t.id}`, order_id: r.id, number: +r.visual_id || 0, amount: +t.amount || 0, method: METHOD_NAMES[t.category] || t.category || "", paid_on: t.date || null, created_at: t.date || "", href }));
+}

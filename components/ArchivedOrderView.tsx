@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { addressLines, sizeLabel, sizeOrder, type PvFile, type PvGroup, type PvOrder } from "@/lib/archive";
+import { addressLines, plain, sizeLabel, sizeOrder, type PvFile, type PvGroup, type PvOrder } from "@/lib/archive";
 import { fmtDateLong, money } from "@/lib/format";
+import ProductionPanel from "@/components/ProductionPanel";
 
 const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "—");
 const stamp = (x?: string | null) => (x ? new Date(x).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
@@ -16,16 +17,20 @@ const inkOn = (hex: string) => { const m = hex.replace("#", "").match(/^([0-9a-f
  * header with status, customer and dates, line item groups with size columns and their imprints and mockups,
  * then totals, payments, notes, files, tasks and messages.
  */
-export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref }: { o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string }) {
+export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref, audience = "shop" }: { o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string; /** "customer": the portal view (no internal details) */ audience?: "shop" | "customer" }) {
   const [zoom, setZoom] = useState<PvFile | null>(null);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(null); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, []);
 
   const open = (f: PvFile) => { if (isImg(f)) setZoom(f); else window.open(fileUrl(f.full), "_blank", "noopener"); };
-  const thumb = (f: PvFile, cls = "pv-thumb") => (
-    <button key={f.id + f.full} type="button" className={cls} onClick={() => open(f)} title={f.name || "Open"}>
-      {f.thumb || isImg(f) ? <img src={fileUrl(f.thumb || f.full)} alt={f.name || "Mockup"} loading="lazy" /> : <span className="pv-doc">{(f.name || f.full).split(".").pop()?.slice(0, 4).toUpperCase() || "FILE"}</span>}
-    </button>
-  );
+  const thumb = (f: PvFile, cls = "pv-thumb") => {
+    const full = fileUrl(f.full), src = (f.thumb && fileUrl(f.thumb)) || (isImg(f) ? full : "");
+    if (!full && !src) return null;
+    return (
+      <button key={f.id + f.full} type="button" className={cls} onClick={() => open(f)} title={f.name || "Open"}>
+        {src ? <img src={src} alt={f.name || "Mockup"} loading="lazy" /> : <span className="pv-doc">{(f.name || f.full).split("?")[0].split(".").pop()?.slice(0, 4).toUpperCase() || "FILE"}</span>}
+      </button>
+    );
+  };
   const itemTotal = o.groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + l.items * l.price, 0), 0);
   const feeTotal = o.fees.reduce((a, f) => a + f.amount, 0);
   const bill = addressLines(o.billingAddress), ship = addressLines(o.shippingAddress);
@@ -35,10 +40,10 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
   return (
     <div className="pv">
       <div className="pv-note">
-        <span><b>Archived from Printavo.</b> Read-only, kept exactly as it was in Printavo. Imported {stamp(importedAt)}.</span>
+        <span className="pv-arch">Archived order</span>
+        <span>{audience === "shop" ? <>Read-only, kept exactly as it was in Printavo (imported {stamp(importedAt)}). Everything here, including the artwork, is stored on our own servers.</> : <>This is a past order from our records.</>}</span>
         <span className="spacer" />
-        {o.urls.publicPdf && <a href={o.urls.publicPdf} target="_blank" rel="noreferrer">Printavo PDF</a>}
-        {o.urls.url && <a href={o.urls.url} target="_blank" rel="noreferrer">Open in Printavo ↗</a>}
+        <button type="button" className="btn sm" onClick={() => window.print()}>Print</button>
       </div>
 
       <header className="pv-head">
@@ -82,24 +87,17 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
 
       <div className="pv-bottom">
         <div className="pv-stack">
-          {(o.customerNote || o.productionNote) && (
-            <div className="pv-card">
-              {o.customerNote && <><h3>Customer note</h3><p className="pv-pre">{o.customerNote}</p></>}
-              {o.productionNote && <><h3>Production note</h3><p className="pv-pre">{o.productionNote}</p></>}
-            </div>
+          {plain(o.customerNote) && (
+            <div className="pv-card"><h3>{audience === "shop" ? "Customer note" : "Note"}</h3><p className="pv-pre">{plain(o.customerNote)}</p></div>
           )}
-          {o.files.length > 0 && (
-            <div className="pv-card">
-              <h3>Production files</h3>
-              <div className="pv-files">{o.files.map((f) => (
-                <div key={f.id} className="pv-file">{thumb(f)}<a href={fileUrl(f.full)} target="_blank" rel="noreferrer">{f.name || "File"}</a></div>
-              ))}</div>
-            </div>
+          {audience === "shop" && (
+            <ProductionPanel note={plain(o.productionNote)}
+              files={o.files.map((f) => ({ id: f.id, name: f.name || (f.full.split("?")[0].split("/").pop() || "File"), url: fileUrl(f.full) || undefined, thumb: (f.thumb && fileUrl(f.thumb)) || undefined, mime: f.mime }))} />
           )}
         </div>
         <div className="pv-card pv-totals">
           <div><span>Item total</span><b>{money(itemTotal)}</b></div>
-          {o.fees.map((f) => <div key={f.id}><span>{f.description || "Fee"}{f.quantity && f.quantity !== 1 && f.unitPrice != null && !f.pct ? ` (${f.quantity} × ${money(f.unitPrice)})` : f.pct && f.unitPrice != null ? ` (${f.unitPrice}%)` : ""}</span><b>{money(f.amount)}</b></div>)}
+          {o.fees.map((f) => <div key={f.id}><span>{plain(f.description) || "Fee"}{f.quantity && f.quantity !== 1 && f.unitPrice != null && !f.pct ? ` (${f.quantity} × ${money(f.unitPrice)})` : f.pct && f.unitPrice != null ? ` (${f.unitPrice}%)` : ""}</span><b>{money(f.amount)}</b></div>)}
           {o.fees.length > 1 && <div className="pvt-sub"><span>Fees</span><b>{money(feeTotal)}</b></div>}
           <div className="pvt-line"><span>Subtotal</span><b>{money(o.subtotal)}</b></div>
           {o.discountAmount > 0.004 && <div><span>Discount{o.discountAsPercentage && o.discount ? ` (${o.discount}%)` : ""}</span><b>−{money(o.discountAmount)}</b></div>}
@@ -158,13 +156,13 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             <div key={m.id} className={"pv-msg" + (m.incoming ? " in" : "")}>
               <div className="pv-msg-h"><b>{m.incoming ? m.from : `To ${m.to}`}</b>{m.kind === "text" && <span className="pv-chip">Text</span>}<span className="faint">{stamp(m.at)}</span></div>
               {m.subject && <div className="pv-msg-s">{m.subject}</div>}
-              <div className="pv-pre">{m.text}</div>
+              <div className="pv-pre">{plain(m.text)}</div>
             </div>
           ))}</div>
         </div>
       )}
 
-      {o.warnings?.length ? <div className="pv-card faint" style={{ fontSize: 12.5 }}>Some parts couldn&apos;t be read from Printavo: {o.warnings.join(" · ")}</div> : null}
+      {audience === "shop" && o.warnings?.length ? <div className="pv-card faint" style={{ fontSize: 12.5 }}>Some parts couldn&apos;t be read from Printavo: {o.warnings.join(" · ")}</div> : null}
 
       {zoom && (
         <div className="pv-zoom" role="dialog" aria-label="Mockup" onClick={() => setZoom(null)}>
@@ -197,7 +195,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
               <tr key={l.id}>
                 {show.category && <td>{l.category}</td>}{show.itemNumber && <td className="nowrap">{l.itemNumber}</td>}{show.color && <td>{l.color}</td>}
                 <td className="desc">
-                  <div className="pv-desc">{l.mockups.slice(0, 2).map((m) => thumb(m, "pv-thumb sm"))}<div>{l.brand && !l.description.toLowerCase().includes(l.brand.toLowerCase()) && <span className="faint">{l.brand} </span>}<span className="pv-pre">{l.description}</span>
+                  <div className="pv-desc">{l.mockups.slice(0, 2).map((m) => thumb(m, "pv-thumb sm"))}<div>{l.brand && !l.description.toLowerCase().includes(l.brand.toLowerCase()) && <span className="faint">{l.brand} </span>}<span className="pv-pre">{plain(l.description)}</span>
                     {l.status && <div><span className="pv-chip">{TASK_STATUS[l.status] || l.status}</span></div>}
                     {l.personalizations.length > 0 && <div className="pv-pers">{l.personalizations.map((p, i) => <span key={i}>{[p.name, p.value].filter(Boolean).join(": ")}</span>)}</div>}</div></div>
                 </td>
@@ -213,7 +211,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
           <div key={im.id} className="pv-imprint">
             <div className="pv-imp-t"><span className="pv-imp-k">Imprint</span>{im.typeOfWork && <b>{im.typeOfWork}</b>}{im.column && <span className="pv-chip">{im.column}</span>}</div>
             <div className="pv-imp-b">
-              {im.details ? <div className="pv-pre">{im.details}</div> : <div className="faint">No imprint details.</div>}
+              {plain(im.details) ? <div className="pv-pre">{plain(im.details)}</div> : <div className="faint">No imprint details.</div>}
               {im.mockups.length > 0 && <div className="pv-mocks">{im.mockups.map((m) => thumb(m))}</div>}
             </div>
           </div>

@@ -7,13 +7,14 @@ import { fmtDateLong, money } from "@/lib/format";
 import { designMatches } from "@/components/DesignSearch";
 import PayPanel, { type PayItem } from "@/components/PayPanel";
 
-export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null };
-export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string };
+export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
+  /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string };
+export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
 export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string };
-export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "receive" | "details" | "archive";
+export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "receive" | "details";
 
 const IN_WORK = ["approved", "art", "blanks", "production", "ready"];
 const WAITING = ["approved", "art", "blanks"];
@@ -46,10 +47,8 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, archive, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ mode, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
-  /** staff only: the customer's archived Printavo orders */
-  archive?: { count: number; node: ReactNode };
   orders: AOrder[]; payments: APayment[]; designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
   attention: AAttn[];
   /** shown at the top of the dashboard (portal: Start an order / Make a mockup) */
@@ -73,7 +72,11 @@ export default function AccountAreas({ mode, archive, orders, payments, designs,
   canAct?: boolean;
 }) {
   const router = useRouter(), path = usePathname(), sp = useSearchParams();
-  const orderHref = (id: string, hash?: string) => `${hrefBase}${id}${hrefQuery}${hash ? "#" + hash : ""}`;
+  const hrefs = useMemo(() => Object.fromEntries(orders.filter((o) => o.href).map((o) => [o.id, o.href as string])), [orders]);
+  const orderHref = (id: string, hash?: string) => hrefs[id] || `${hrefBase}${id}${hrefQuery}${hash ? "#" + hash : ""}`;
+  const pill = (o: AOrder) => o.archived
+    ? <span className="aa-pill" style={{ ["--sc" as string]: o.statusColor || "var(--ink-3)" }}>{o.statusLabel || "Archived"}</span>
+    : <span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span>;
   const area = (sp.get("area") as Area) || "home";
   const go = (a: Area) => { const p = new URLSearchParams(sp.toString()); if (a === "home") p.delete("area"); else p.set("area", a); router.replace(`${path}${p.size ? "?" + p : ""}`, { scroll: false }); };
   const [q, setQ] = useState("");
@@ -110,12 +113,14 @@ export default function AccountAreas({ mode, archive, orders, payments, designs,
   const quotes = orders.filter((o) => o.type === "quote" && (mode === "shop" || o.status !== "quote"));
   const inWork = orders.filter((o) => o.type === "invoice" && IN_WORK.includes(o.status));
   const invoices = orders.filter((o) => o.type === "invoice");
+  // old archived orders are listed with the rest but aren't paid or tracked here
+  const liveInvoices = invoices.filter((o) => !o.archived);
   const receive = orders.filter((o) => o.price_type === "wholesale" && o.type === "invoice" && WAITING.includes(o.status));
-  const due = invoices.reduce((a, o) => a + Math.max(0, o.balance), 0);
+  const due = liveInvoices.reduce((a, o) => a + Math.max(0, o.balance), 0);
   // payment due date under the customer's terms (null = not due yet, e.g. still being made)
   const payDue = (o: AOrder) => o.pay_due || null;
-  const overdue = invoices.filter((o) => { const d = payDue(o); return d && d < today(); }).reduce((a, o) => a + Math.max(0, o.balance), 0);
-  const openQuotes = quotes.filter((o) => o.status === "quote_sent").reduce((a, o) => a + o.total, 0);
+  const overdue = liveInvoices.filter((o) => { const d = payDue(o); return d && d < today(); }).reduce((a, o) => a + Math.max(0, o.balance), 0);
+  const openQuotes = quotes.filter((o) => !o.archived && o.status === "quote_sent").reduce((a, o) => a + o.total, 0);
 
   const AREAS: { id: Area; label: string; icon: string; n?: number; show?: boolean }[] = [
     { id: "home", label: "Dashboard", icon: I.home },
@@ -125,7 +130,6 @@ export default function AccountAreas({ mode, archive, orders, payments, designs,
     { id: "artwork", label: "Artwork", icon: I.artwork },
     { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
     { id: "receive", label: mode === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: receive.length, show: receive.length > 0 },
-    { id: "archive", label: "Printavo archive", icon: I.archive, n: archive?.count, show: !!archive?.count },
     // staff reach Details from the "Customer details" button in the page header
   ];
 
@@ -133,20 +137,20 @@ export default function AccountAreas({ mode, archive, orders, payments, designs,
     <label className="aa-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={ph} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
   );
   const orderTable = (list: AOrder[], cols: "quote" | "work" | "invoice") => {
-    const rows = list.filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, ST[o.status]?.portal));
+    const rows = list.filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, ST[o.status]?.portal, o.statusLabel, o.archived ? "archived" : ""));
     return (
       <div className="aa-card aa-tblcard">
         <table className="aa-tbl">
           <thead><tr><th>#</th><th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th></tr></thead>
           <tbody>
             {rows.map((o) => (
-              <tr key={o.id} className={o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
+              <tr key={o.id} className={!o.archived && o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
                 <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-                <td><div className="aa-t">{o.nickname || (cols === "quote" ? "Quote" : "Order")}</div><div className="aa-s">{o.qty} pcs</div></td>
-                <td><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span></td>
+                <td><div className="aa-t">{o.nickname || (cols === "quote" ? "Quote" : "Order")}{o.archived && <span className="aa-arch" title="A past order from our records (read-only)">Archived</span>}</div><div className="aa-s">{o.qty} pcs</div></td>
+                <td>{pill(o)}</td>
                 <td>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
                 {cols !== "quote" && <td className="r num">{money(o.paid)}</td>}
-                {cols !== "quote" && <td className={"r num" + (o.balance > 0.004 ? " aa-due" : "")}>{money(Math.max(0, o.balance))}</td>}
+                {cols !== "quote" && <td className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{money(Math.max(0, o.balance))}</td>}
                 <td className="r num b">{money(o.total)}</td>
               </tr>
             ))}
@@ -217,8 +221,8 @@ export default function AccountAreas({ mode, archive, orders, payments, designs,
     {orderTable(invoices, "invoice")}</>;
   else if (area === "payments") {
     const rows = payments.filter((p) => has(q, p.number, p.method, money(p.amount), p.paid_on));
-    const open = invoices.filter((o) => o.balance > 0.004 && has(q, o.number, o.nickname));
-    const waitingQuotes = quotes.filter((o) => o.status === "quote_sent" && has(q, o.number, o.nickname));
+    const open = liveInvoices.filter((o) => o.balance > 0.004 && has(q, o.number, o.nickname));
+    const waitingQuotes = quotes.filter((o) => !o.archived && o.status === "quote_sent" && has(q, o.number, o.nickname));
     const canPay = mode === "portal" && !!payCfg;
     const item = (o: AOrder): PayItem => ({ id: o.id, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, quote: o.type === "quote", deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
     const sel = [...open, ...waitingQuotes].filter((o) => paySel.includes(o.id));
@@ -232,7 +236,7 @@ export default function AccountAreas({ mode, archive, orders, payments, designs,
       { k: "61–90 days", test: (d: number | null) => d !== null && d >= 61 && d <= 90 },
       { k: "Over 90 days", test: (d: number | null) => d !== null && d > 90 },
     ].map((b) => {
-      const list = invoices.filter((o) => { const d = payDue(o); return o.balance > 0.004 && b.test(d ? Math.floor((Date.parse(today()) - Date.parse(d)) / 86400000) : null); });
+      const list = liveInvoices.filter((o) => { const d = payDue(o); return o.balance > 0.004 && b.test(d ? Math.floor((Date.parse(today()) - Date.parse(d)) / 86400000) : null); });
       return { ...b, n: list.length, amt: list.reduce((a, o) => a + o.balance, 0) };
     });
     const payTable = (list: AOrder[], isQuote: boolean) => (
@@ -244,7 +248,7 @@ export default function AccountAreas({ mode, archive, orders, payments, designs,
               {canPay && <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${isQuote ? "quote" : "order"} ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} /></td>}
               <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
               <td><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{isQuote ? (o.due_date ? `In hands ${when(o.due_date)}` : "") : payDue(o) ? `Payment due ${when(payDue(o))}` : "Due when the order is done"}</div></td>
-              <td><span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span></td>
+              <td>{pill(o)}</td>
               <td className="r num">{money(o.total)}</td>
               {!isQuote && <td className="r num">{money(o.paid)}</td>}
               <td className="r num aa-due">{money(o.balance)}</td>
@@ -281,7 +285,7 @@ export default function AccountAreas({ mode, archive, orders, payments, designs,
         <table className="aa-tbl">
           <thead><tr><th>Date</th><th>Order</th><th>Method</th><th className="r">Amount</th></tr></thead>
           <tbody>
-            {rows.map((p) => <tr key={p.id} onClick={() => router.push(orderHref(p.order_id))}><td>{when(p.paid_on || p.created_at)}</td><td className="num"><Link href={orderHref(p.order_id)} onClick={(e) => e.stopPropagation()}>{p.number}</Link></td><td>{p.method || "—"}</td><td className="r num b">{money(p.amount)}</td></tr>)}
+            {rows.map((p) => <tr key={p.id} onClick={() => router.push(p.href || orderHref(p.order_id))}><td>{when(p.paid_on || p.created_at)}</td><td className="num"><Link href={p.href || orderHref(p.order_id)} onClick={(e) => e.stopPropagation()}>{p.number}</Link></td><td>{p.method || "—"}</td><td className="r num b">{money(p.amount)}</td></tr>)}
             {!rows.length && <tr><td colSpan={4}><div className="aa-empty">{payments.length ? `No matches for “${q}”.` : "No payments yet."}</div></td></tr>}
           </tbody>
         </table>
@@ -443,7 +447,6 @@ export default function AccountAreas({ mode, archive, orders, payments, designs,
       {tableHead(<><h2>{mode === "shop" ? "Waiting to receive" : "Garments to send us"}</h2><span className="aa-sum">{mode === "shop" ? "Customer-supplied garments we need before these jobs can print" : "These orders print on garments you supply"}</span></>, "Search by order number or name")}
       {orderTable(receive, "work")}</>;
   } else if (area === "details") body = details;
-  else if (area === "archive") body = archive?.node || null;
 
   return (
     <div className="aa">

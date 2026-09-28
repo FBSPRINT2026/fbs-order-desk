@@ -34,7 +34,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
   if (!row) return <><Link className="back" href="/shop/customers">← Customers</Link><div className="empty">This archived order doesn&apos;t exist.</div></>;
   return (
     <>
-      <Link className="back" href={`/shop/customers/${row.customer_id}?area=archive`}>← {company || "Customer"} · Printavo archive</Link>
+      <Link className="back" href={`/shop/customers/${row.customer_id}?area=orders`}>← {company || "Customer"} · Orders</Link>
       <div style={{ marginTop: 10 }}>
         <ArchivedOrderView o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} />
       </div>

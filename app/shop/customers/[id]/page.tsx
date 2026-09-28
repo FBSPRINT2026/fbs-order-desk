@@ -16,7 +16,7 @@ import { PAY_TERMS, payDueDate, type Design, type PayTerms } from "@/lib/pricing
 import Timeline from "@/components/Timeline";
 import { splitCustomer } from "@/lib/crm/private";
 import { fmtStamp } from "@/lib/format";
-import ArchiveList, { type ArchiveItem } from "@/components/ArchiveList";
+import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -40,10 +40,11 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [pendingArt, setPendingArt] = useState<Record<string, string>>({});
   const [reload, setReload] = useState(0);
   const [usedIds, setUsedIds] = useState<string[]>([]);
-  const [archive, setArchive] = useState<ArchiveItem[]>([]);
+  // old orders brought over from Printavo: listed with the rest, marked "Archived"
+  const [archive, setArchive] = useState<(ArchiveSummary & { transactions: PvTransaction[] | null })[]>([]);
   useEffect(() => {
-    createClient().from("archived_orders").select("id, kind, visual_id, nickname, status_name, status_color, order_date, due_date, total, paid, balance, qty, files_total, files_copied")
-      .eq("customer_id", id).order("order_date", { ascending: false }).then(({ data }) => setArchive((data || []) as ArchiveItem[]));
+    createClient().from("archived_orders").select(`${ARCHIVE_LIST_COLS}, transactions:data->transactions`)
+      .eq("customer_id", id).order("order_date", { ascending: false }).then(({ data }) => setArchive((data || []) as never));
   }, [id]);
   const orderIds = orders.filter((o) => o.customer_id === id).map((o) => o.id).join(",");
   useEffect(() => {
@@ -112,7 +113,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [tagDraft, setTagDraft] = useState("");
   const addTag = (raw: string) => { const t = raw.trim().replace(/,$/, "").slice(0, 40); if (!t || !c) return; if (!(c.tags || []).some((x) => x.toLowerCase() === t.toLowerCase())) set("tags", [...(c.tags || []), t]); setTagDraft(""); };
   const os = orders.filter((o) => o.customer_id === id);
-  const spent = os.filter((o) => o.type === "invoice").reduce((a, o) => a + o.total, 0);
+  const spent = os.filter((o) => o.type === "invoice").reduce((a, o) => a + o.total, 0) + archive.filter((a) => a.kind === "invoice").reduce((s, a) => s + (+a.total || 0), 0);
   const owed = os.filter((o) => o.type === "invoice").reduce((a, o) => a + Math.max(0, o.balance), 0);
 
   async function del() {
@@ -138,7 +139,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           <button className={"btn danger" + (armed ? " armed" : "")} type="button" onClick={del} disabled={os.length > 0 || archive.length > 0} title={os.length ? "Delete this customer's orders first" : archive.length ? "This customer has archived Printavo orders" : ""}>{armed ? "Confirm delete" : "Delete"}</button>
         </div>
       </div>
-      <AccountAreas mode="shop" archive={{ count: archive.length, node: <ArchiveList items={archive} /> }} attention={os.flatMap((o): AAttn[] => {
+      <AccountAreas mode="shop" attention={os.flatMap((o): AAttn[] => {
           const out: AAttn[] = [];
           const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "");
           if (o.status === "request") out.push({ kind: "request", order_id: o.id, number: o.number, date: d(o.submitted_at || o.created_at) });
@@ -147,7 +148,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           if (o.type === "invoice" && o.balance > 0.004) out.push({ kind: "pay", order_id: o.id, number: o.number, date: money(o.balance) });
           if (o.price_type === "wholesale" && o.type === "invoice" && ["approved", "art", "blanks"].includes(o.status)) out.push({ kind: "receive", order_id: o.id, number: o.number, date: d(o.due_date) || "—" });
           return out;
-        })} orders={os.map((o) => ({ ...o, nickname: o.nickname || "", price_type: o.price_type, pay_due: o.type === "invoice" ? payDueDate(o, c.payment_terms) : null }))} terms={PAY_TERMS[c.payment_terms || "receipt"]} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
+        })} orders={[...os.map((o) => ({ ...o, nickname: o.nickname || "", price_type: o.price_type, pay_due: o.type === "invoice" ? payDueDate(o, c.payment_terms) : null })),
+          ...archive.map((a) => archiveAsOrder(a, `/shop/archive/${a.id}`))]} terms={PAY_TERMS[c.payment_terms || "receipt"]} payments={[...payments, ...archive.flatMap((a) => archivePayments(a, `/shop/archive/${a.id}`))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at))} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
         hrefBase="/shop/orders/"
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
         usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign}
@@ -216,7 +218,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               <div className="panel-b"><Timeline customerId={id} orderNumbers={Object.fromEntries(os.map((o) => [o.id, o.number]))} /></div>
             </section>
             <div className="stats" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))", margin: 0 }}>
-              <div className="stat" style={{ cursor: "default" }}><span className="v">{os.length}</span><span className="k">Orders</span></div>
+              <div className="stat" style={{ cursor: "default" }}><span className="v">{os.length + archive.length}</span><span className="k">Orders</span></div>
               <div className="stat" style={{ cursor: "default" }}><span className="v">{money(spent)}</span><span className="k">Invoiced</span></div>
               <div className="stat" style={{ cursor: "default" }}><span className={"v" + (owed > 0.004 ? " alert" : "")}>{money(owed)}</span><span className="k">Balance owed</span></div>
             </div>
@@ -224,9 +226,13 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               <table className="tbl" style={{ minWidth: 520 }}>
                 <thead><tr><th>#</th><th>Job</th><th>Status</th><th>Due</th><th className="r">Total</th></tr></thead>
                 <tbody>
-                  {os.length ? os.map((o) => (
+                  {os.map((o) => (
                     <tr key={o.id} onClick={() => router.push(`/shop/orders/${o.id}`)}><td><span className="ordno">{o.number}</span></td><td>{o.nickname || "Untitled job"}</td><td><Pill status={o.status} /></td><td><Due date={o.due_date} status={o.status} /></td><td className="r">{money(o.total)}</td></tr>
-                  )) : <tr><td colSpan={5}><div className="empty">No orders for this customer yet.</div></td></tr>}
+                  ))}
+                  {archive.map((a) => (
+                    <tr key={a.id} onClick={() => router.push(`/shop/archive/${a.id}`)}><td><span className="ordno">{a.visual_id}</span></td><td>{a.nickname || "Untitled job"}<span className="aa-arch">Archived</span></td><td><span className="pv-dot" style={{ ["--sc" as string]: a.status_color || "#888" }}>{a.status_name}</span></td><td>{a.due_date ? fmtDateLong(a.due_date) : "—"}</td><td className="r">{money(a.total)}</td></tr>
+                  ))}
+                  {!os.length && !archive.length && <tr><td colSpan={5}><div className="empty">No orders for this customer yet.</div></td></tr>}
                 </tbody>
               </table>
             </div>

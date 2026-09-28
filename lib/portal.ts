@@ -29,8 +29,8 @@ export async function getPortalCtx(as?: string, next = "/portal"): Promise<Porta
 
   if (isStaff) {
     if (!as) {
-      const m = next.match(/^\/portal\/orders\/([\w-]+)/);
-      redirect(m ? `/shop/orders/${m[1]}` : "/shop");
+      const m = next.match(/^\/portal\/(orders|archive)\/([\w-]+)/);
+      redirect(m ? `/shop/${m[1]}/${m[2]}` : "/shop");
     }
     const { data: c } = await admin.from("customers").select("*").eq("id", as).maybeSingle();
     if (!c) redirect("/shop/customers");
