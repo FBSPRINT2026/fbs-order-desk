@@ -15,6 +15,7 @@ type F = "all" | "quotes" | "invoices" | "open" | "unpaid" | "messages";
 
 export default function OrdersPage() {
   const router = useRouter();
+  const [creating, setCreating] = useState(false);
   const { orders, customers, loading, error } = useShopData();
   const [type, setType] = useState<F>("all");
   const [status, setStatus] = useState("");
@@ -79,6 +80,12 @@ export default function OrdersPage() {
           <div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
           <h1>Orders</h1>
         </div>
+        <button className="btn primary" type="button" disabled={creating} onClick={async () => {
+          setCreating(true);
+          const { data, error } = await createClient().from("orders").insert({ lines: [], status: "quote", type: "quote" }).select("id").single();
+          setCreating(false);
+          if (!error && data) router.push(`/shop/orders/${data.id}?new=1`); else alert("Couldn't create the quote: " + (error?.message || ""));
+        }}>{creating ? "Creating…" : "+ New quote"}</button>
       </div>
       {error && <div className="banner">Couldn&apos;t load orders: {error}</div>}
       <div className="stats">

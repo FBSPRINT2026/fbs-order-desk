@@ -11,7 +11,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   if (!isStaff) redirect("/portal");
   // the greeting uses the first name (staff name, else the sign-in name, else the email)
   const [{ data: me }, { data: st }] = await Promise.all([
-    supabase.from("staff").select("name").eq("email", email).maybeSingle(),
+    supabase.from("staff").select("name, shortcuts").eq("email", email).maybeSingle(),
     supabase.from("settings").select("data").eq("id", 1).maybeSingle(),
   ]);
   const meta = (user.user_metadata || {}) as { full_name?: string; name?: string };
@@ -20,7 +20,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const firstName = first ? first[0].toUpperCase() + first.slice(1) : "";
   return (
     <div className="app">
-      <ShopNav email={email} firstName={firstName} brand={mergeSettings(st?.data).brand} />
+      <ShopNav email={email} firstName={firstName} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} />
       <main className="main">{children}</main>
     </div>
   );

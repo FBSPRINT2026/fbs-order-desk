@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mergeSettings } from "@/lib/pricing";
+import { saveShortcuts, type Shortcut } from "@/app/shop/shortcut-actions";
 import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -23,15 +24,23 @@ const ICONS: Record<string, React.ReactNode> = {
 
 const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 
-export default function ShopNav({ email, firstName, brand }: { email: string; firstName: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string } }) {
+export default function ShopNav({ email, firstName, brand, shortcuts }: { email: string; firstName: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string }; shortcuts: Shortcut[] }) {
   const path = usePathname();
   const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [incoming, setIncoming] = useState(0);
-  const [creating, setCreating] = useState(false);
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
   const [hello, setHello] = useState("Hello");
   const [q, setQ] = useState("");
+  const [mine, setMine] = useState<Shortcut[]>(shortcuts || []);
+  const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState<Shortcut | null>(null);
+  async function store(next: Shortcut[]) { setMine(next); await saveShortcuts(next); }
+  // "Pin this page": the page you're on, named by its heading
+  function pinHere() {
+    const h1 = (document.querySelector("main h1")?.textContent || document.title || "Page").trim().slice(0, 40);
+    setAdding({ label: h1, href: window.location.pathname + window.location.search });
+  }
   useEffect(() => { setHello(greet()); const t = setInterval(() => setHello(greet()), 10 * 60 * 1000); return () => clearInterval(t); }, []);
 
   // Assistant badge: follow-ups due now (refreshed every few minutes, not on every click)
@@ -74,14 +83,6 @@ export default function ShopNav({ email, firstName, brand }: { email: string; fi
   ];
   const active = (href: string) => (href === "/shop" ? path === "/shop" || path.startsWith("/shop/orders") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
-  async function newQuote() {
-    setCreating(true);
-    const sb = createClient();
-    const { data, error } = await sb.from("orders").insert({ lines: [], status: "quote", type: "quote" }).select("id").single();
-    setCreating(false);
-    if (!error && data) router.push(`/shop/orders/${data.id}?new=1`);
-    else alert("Couldn't create the quote: " + (error?.message || ""));
-  }
 
   const link = ([href, icon, label]: [string, string, string]) => (
     <Link key={href} href={href} className={active(href) ? "on" : ""} title={label}>
@@ -112,7 +113,34 @@ export default function ShopNav({ email, firstName, brand }: { email: string; fi
           </div>
         ))}
       </nav>
-      <button className="btn primary btn-new btn-side" type="button" onClick={newQuote} disabled={creating}>{creating ? "Creating…" : "+ New quote"}</button>
+      {/* my shortcuts: each admin's own quick links (customers, reports, dashboards, outside sites) */}
+      <div className="nav-g nav-mine">
+        <div className="nav-h">My shortcuts<span className="spacer" /><button type="button" className="nav-hb" onClick={() => setEditing((x) => !x)} title="Edit my shortcuts">{editing ? "Done" : "Edit"}</button></div>
+        <nav className="nav">
+          {mine.map((m, i) => (
+            <div key={i} className="nav-mine-i">
+              {/^https?:/i.test(m.href)
+                ? <a href={m.href} target="_blank" rel="noreferrer" title={m.href}><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6" /></svg><span className="lbl-t">{m.label}</span></a>
+                : <Link href={m.href} className={path === m.href.split("?")[0] ? "on" : ""} title={m.href}><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /></svg><span className="lbl-t">{m.label}</span></Link>}
+              {editing && <span className="nav-mine-x">
+                <button type="button" title="Move up" disabled={!i} onClick={() => { const n = [...mine]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; store(n); }}>↑</button>
+                <button type="button" title="Rename" onClick={() => { const l = prompt("Name for this shortcut", m.label); if (l && l.trim()) store(mine.map((x, j) => (j === i ? { ...x, label: l.trim() } : x))); }}>✎</button>
+                <button type="button" title="Remove" onClick={() => store(mine.filter((_, j) => j !== i))}>✕</button>
+              </span>}
+            </div>
+          ))}
+          {!mine.length && !adding && <div className="nav-mine-empty">Your own quick links: customers, reports, anything you open all the time.</div>}
+        </nav>
+        {adding ? (
+          <form className="nav-add" onSubmit={(e) => { e.preventDefault(); if (adding.label.trim() && adding.href.trim()) { store([...mine, { label: adding.label.trim(), href: adding.href.trim() }]); setAdding(null); } }}>
+            <input value={adding.label} onChange={(e) => setAdding({ ...adding, label: e.target.value })} placeholder="Name" aria-label="Shortcut name" autoFocus />
+            <input value={adding.href} onChange={(e) => setAdding({ ...adding, href: e.target.value })} placeholder="/shop/customers/… or https://…" aria-label="Shortcut link" />
+            <div className="row" style={{ gap: 6 }}><button type="submit" className="btn primary sm">Add</button><button type="button" className="btn ghost sm" style={{ color: "inherit" }} onClick={() => setAdding(null)}>Cancel</button></div>
+          </form>
+        ) : (
+          <div className="nav-add-btns"><button type="button" onClick={pinHere}>+ Pin this page</button><button type="button" onClick={() => setAdding({ label: "", href: "" })}>+ Add a link</button></div>
+        )}
+      </div>
       <nav className="nav nav-foot">{link(["/shop/settings", "settings", "Settings"])}</nav>
       <div className="side-user">
         <span>{email}</span>
