@@ -7,8 +7,8 @@ import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricin
 
 /**
  * The production calendar, on the shop's real hours.
- * Week view (default): this week with next week right under it. One row per machine, each day a 6 AM – 6 PM
- * timeline; every job is a labeled bar as long as it runs. Jobs run back to back inside each machine's shift, so a
+ * 2 Days + 2 Weeks (default): the next two days hour by hour (5 AM – 8 PM shown, shifts default 7 AM – 6 PM) on the
+ * left, the rest of two weeks as a machine x day list on the right. Timeline: two weeks of bars. Jobs run back to back inside each machine's shift, so a
  * 30-hour job fills that press for several days (shift hours only, never "overnight").
  * Day view: machines across, the clock down. Jobs not marked Done by the end of their day roll forward to today.
  * Ready To Schedule suggests a machine and day from colors, quantity, garments and stitches; drag a job to another
@@ -260,7 +260,9 @@ export default function MachineSchedule() {
   async function unbook(sl: Slot) { await createClient().from("production_slots").delete().eq("id", sl.id); setOpen(null); load(); }
 
   if (!s || !jobs) return <div className="empty">Loading the schedule…</div>;
-  const machines = s.machines.filter((x) => x.active && (!typeF || x.type === typeF));
+  // presses in number order (Press 1, 2, 3, 4); other machines keep their Settings order
+  const machines = s.machines.filter((x) => x.active && (!typeF || x.type === typeF))
+    .map((x, i) => ({ x, i })).sort((a, b) => a.x.type === "screen" && b.x.type === "screen" ? a.x.name.localeCompare(b.x.name, undefined, { numeric: true }) : a.i - b.i).map((o) => o.x);
 
   // weeks shown: this week and the next, with or without weekends
   const weekDays = (w: string) => Array.from({ length: 7 }, (_, i) => addDay(w, i));
@@ -269,9 +271,9 @@ export default function MachineSchedule() {
   const showWknd = wknd ?? weekendUsed;
   const visible = (d: string) => showWknd || (dow(d) !== 0 && dow(d) !== 6);
 
-  // the clock window: 6 AM – 6 PM, wider if a shift or job starts earlier / ends later
-  const vStart = Math.max(0, Math.floor(Math.min(360, ...machines.map((m) => m.startMin ?? 420), ...[...segs.by.values()].flat().map((g) => g.start)) / 60) * 60);
-  const vEnd = Math.min(1440, Math.ceil(Math.max(1080, ...machines.map((m) => (m.startMin ?? 420) + m.hoursPerDay * 60), ...[...segs.by.values()].flat().map((g) => g.end)) / 60) * 60);
+  // the clock window: 5 AM – 8 PM (every hour a machine could run), wider if a shift or job starts earlier / ends later
+  const vStart = Math.max(0, Math.floor(Math.min(300, ...machines.map((m) => m.startMin ?? 420), ...[...segs.by.values()].flat().map((g) => g.start)) / 60) * 60);
+  const vEnd = Math.min(1440, Math.ceil(Math.max(1200, ...machines.map((m) => (m.startMin ?? 420) + m.hoursPerDay * 60), ...[...segs.by.values()].flat().map((g) => g.end)) / 60) * 60);
   const range = vEnd - vStart;
   const hours = Array.from({ length: range / 60 }, (_, i) => vStart + i * 60);
   const pct = (min: number) => `${((min - vStart) / range) * 100}%`;

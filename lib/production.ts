@@ -60,13 +60,13 @@ export type ProductionSettings = {
 };
 
 const WEEKDAYS = [1, 2, 3, 4, 5];
-const m = (id: string, name: string, type: MachineType, colors: number, heads: number, pvMatch: string): Machine => ({ id, name, type, colors, heads, startMin: 420, hoursPerDay: 8, days: WEEKDAYS, pvMatch, active: true, speed: 1 });
+const m = (id: string, name: string, type: MachineType, colors: number, heads: number, pvMatch: string): Machine => ({ id, name, type, colors, heads, startMin: 420, hoursPerDay: 11, days: WEEKDAYS, pvMatch, active: true, speed: 1 });
 export const DEFAULT_PRODUCTION: ProductionSettings = {
   machines: [
     m("p1", "Press 1 · 12C Gauntlet III", "screen", 12, 1, "Press 1"),
-    m("p4", "Press 4 · 10 Color", "screen", 10, 1, "Press 4"),
     m("p2", "Press 2 · 8C Sportsman", "screen", 8, 1, "Press 2"),
     m("p3", "Press 3 · 8C Sportsman", "screen", 8, 1, "Press 3"),
+    m("p4", "Press 4 · 10 Color", "screen", 10, 1, "Press 4"),
     m("e12", "Embroidery · 12 Head", "embroidery", 15, 12, "12 Head"),
     m("e6", "Embroidery · 6 Head", "embroidery", 15, 6, "6 Head"),
     m("e4", "Embroidery · 4 Head", "embroidery", 15, 4, "4 Head"),
