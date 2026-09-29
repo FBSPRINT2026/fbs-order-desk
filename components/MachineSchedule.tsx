@@ -145,7 +145,8 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Map<string, [
       if (g === 0 && w && w[1] - m < 10 && left / w[2] > w[1] - m) { t = norm(dd * 1440 + w[1]); dd = Math.floor(t / 1440); m = t - dd * 1440; w = wins(fromOrd(dd)).find(([, y]) => m < y); }
       // a slow stretch (operator out, 50%) takes twice the clock time for the same work
       const rate = w ? w[2] : 1;
-      const end = Math.min(m + left / rate, Math.max(w ? w[1] : hrs(fromOrd(dd))[1], m + 15));
+      // never past the end of the window it's in (that would run into lunch, warm-up or downtime)
+      const end = Math.min(m + left / rate, w ? w[1] : Math.max(hrs(fromOrd(dd))[1], m + 15));
       const day = fromOrd(dd), work = (end - m) * rate, prev = pieces[pieces.length - 1];
       if (prev && prev.day === day && Math.abs(prev.end - m) < 0.5) { prev.end = end; prev.work += work; prev.slow = Math.min(prev.slow, rate); }
       else pieces.push({ day, start: m, end, work, slow: rate });
@@ -159,7 +160,7 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Map<string, [
     // this job would stop for lunch partway through: take lunch as it starts instead (if that's 11:00 or later)
     if (c.slot?.status !== "running" && r.pieces.length > 1) {
       const p0 = r.pieces[0], d0 = p0.day, L = lunch.has(d0) ? null : lunchStart(mach, hrs(d0));
-      if (L != null && works(d0) && p0.end === L && r.pieces[1].day === d0 && p0.start >= LUNCH_EARLIEST && p0.start < L && !(d0 === fromOrd(Math.floor(nowAbs / 1440)) && p0.start < nowAbs - ord(d0) * 1440)) {
+      if (L != null && works(d0) && Math.abs(p0.end - L) < 1 && r.pieces[1].day === d0 && p0.start >= LUNCH_EARLIEST && p0.start < L && !(d0 === fromOrd(Math.floor(nowAbs / 1440)) && p0.start < nowAbs - ord(d0) * 1440)) {
         lunch.set(d0, p0.start);
         t = norm(ord(d0) * 1440 + p0.start); r = lay(t);
       }
