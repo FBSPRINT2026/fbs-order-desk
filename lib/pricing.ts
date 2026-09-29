@@ -91,7 +91,7 @@ export type Order = {
   due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; discount_amt?: number; discount_type?: "pct" | "amt"; tax_exempt: boolean; tax_rate: number | null;
   waive_setup: boolean; notes: string; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;
-  price_type: PriceType; submitted_at?: string | null; completed_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
+  price_type: PriceType; submitted_at?: string | null; completed_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; /** firm in-hands (can't slip), and the time it's needed that day (minutes; null = end of day) */ firm?: boolean; due_time?: number | null; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
 };
 export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; size_costs?: Record<string, number>; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string }>; /** "ss" or "sanmar" */ supplier?: string | null; supplier_style?: string | null };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };

@@ -194,7 +194,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setSaveState("Saving…");
     const { error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
-      price_type: d.price_type || "retail", po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, delivery_method: d.delivery_method || "pickup",
+      price_type: d.price_type || "retail", po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
       ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "",
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, total: c.total, qty: c.qty,
@@ -436,7 +436,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
           <div className="eyebrow">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
-          <h1><span className="mono">#{o.number}</span> {o.nickname || "Untitled Job"}{o.rush && <span className="rush">RUSH</span>}</h1>
+          <h1><span className="mono">#{o.number}</span> {o.nickname || "Untitled Job"}{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
         </div>
         <div className="ed-actions">
           <span className="save-state">{saveState}</span>
@@ -528,7 +528,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
             <section className="panel">
               <div className="panel-h"><h2>Job details</h2>
-                <label className="check" style={{ fontSize: 13, color: o.rush ? "var(--danger)" : undefined, fontWeight: o.rush ? 700 : 400 }}><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} /> Rush</label>
+                <span className="row" style={{ gap: 14 }}>
+                  <label className="check" style={{ fontSize: 13, color: o.rush ? "var(--danger)" : undefined, fontWeight: o.rush ? 700 : 400 }} title="Rush job: 🔥 on the production calendar"><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} /> 🔥 Rush</label>
+                  <label className="check" style={{ fontSize: 13, color: o.firm ? "#8a4b00" : undefined, fontWeight: o.firm ? 700 : 400 }} title="Firm in-hands date: it can't move. 🔨 on the production calendar"><input type="checkbox" checked={!!o.firm} onChange={(e) => patch((d) => { d.firm = e.target.checked; })} /> 🔨 Firm date</label>
+                </span>
               </div>
               <div className="panel-b stack">
                 <div className="grid g2">
@@ -536,7 +539,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   <div className="field"><label htmlFor="o-po">Customer PO #</label><input id="o-po" type="text" value={o.po_number || ""} onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
                   <ProjectPicker orderId={o.id} customerId={o.customer_id} value={(o as { project_id?: string | null }).project_id || null} />
                   <div className="field"><label htmlFor="o-prod">Production date</label><input id="o-prod" type="date" value={o.production_date || ""} onChange={(e) => patch((d) => { d.production_date = e.target.value || null; })} /></div>
-                  <div className="field"><label htmlFor="o-due">In-hands date</label><input id="o-due" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} /></div>
+                  <div className="field"><label htmlFor="o-due">In-hands date{o.firm ? " (firm)" : ""}</label>
+                    <div className="row" style={{ gap: 6 }}>
+                      <input id="o-due" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} style={{ flex: 1, minWidth: 0 }} />
+                      <select aria-label="Needed by" value={o.due_time ?? ""} onChange={(e) => patch((d) => { d.due_time = e.target.value === "" ? null : +e.target.value; if (e.target.value !== "") d.firm = true; })} style={{ width: 118 }} title="Needed by a set time that day (makes the date firm)">
+                        <option value="">Any time</option>
+                        {Array.from({ length: 29 }, (_, i) => 360 + i * 30).map((t) => <option key={t} value={t}>by {`${((Math.floor(t / 60) + 11) % 12) + 1}:${String(t % 60).padStart(2, "0")} ${t >= 720 ? "PM" : "AM"}`}</option>)}
+                      </select>
+                    </div>
+                  </div>
                   <div className="field"><label htmlFor="o-del">Pickup, ship or delivery</label>
                     <select id="o-del" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Delivery; if (d.delivery_method !== "pickup" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (d.delivery_method === "ship" && !d.ship_method) d.ship_method = "UPS Ground"; })}>
                       <option value="pickup">Pickup</option><option value="ship">Ship</option><option value="deliver">Delivery</option>

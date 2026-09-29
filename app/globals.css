@@ -4017,3 +4017,15 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-acts{grid-template-columns:repeat(6,minmax(0,1fr))}
 @media (max-width:1500px){.ms-acts{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width: 700px){.ms-acts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* rush 🔥 / firm 🔨 / overtime on the calendar */
+.ms-flags{font-style:normal;font-size:11px;margin-left:3px;flex:none;letter-spacing:-1px}
+.ms-firm{display:inline-block;margin-right:5px;padding:0 5px;border-radius:4px;background:#8a4b00;color:#fff;font-size:10px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;vertical-align:1px}
+.ms-blk.is-firm,.ms-chip.is-firm{box-shadow:inset 0 0 0 1.5px #8a4b00}
+.ms-blk.ot,.ms-chip.ot{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--warn) 22%,var(--surface)) 0 6px,color-mix(in srgb,var(--warn) 12%,var(--surface)) 6px 12px)!important;border-left-color:var(--warn)!important}
+.ms-dl{position:absolute;left:0;right:0;height:0;border-top:2.5px solid #8a4b00;z-index:4;pointer-events:auto}
+.ms-dl span{position:absolute;right:2px;top:-15px;font-size:9.5px;font-weight:800;color:#fff;background:#8a4b00;border-radius:4px;padding:0 4px;white-space:nowrap;max-width:calc(100% - 4px);overflow:hidden;text-overflow:ellipsis}
+.ms-flagrow{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:6px 8px;border-radius:8px;background:var(--surface-2);font-size:13px}
+.ms-flagrow .check.on.f-rush{color:var(--danger);font-weight:700}
+.ms-flagrow .check.on.f-firm{color:#8a4b00;font-weight:700}
+.ms-flagrow select{font-size:12.5px;padding:3px 6px}
+.rush.firm{background:#8a4b00}
