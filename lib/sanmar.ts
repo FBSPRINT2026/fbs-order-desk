@@ -52,11 +52,16 @@ const num = (s: string) => { const n = parseFloat(s); return isFinite(n) ? n : 0
 
 export type SanMarSku = { color: string; catalogColor: string; size: string; rawSize: string; piecePrice: number; casePrice: number; myPrice: number; image: string; front: string; back: string; swatch: string; brand: string; title: string; description: string; status: string };
 
+/** Every SKU block SanMar has for a style (product info only, no pricing call). */
+async function sanmarInfoRows(style: string): Promise<string[]> {
+  const info = await soap("/SanMarWebService/SanMarProductInfoServicePort", "getProductInfoByStyleColorSize", `<arg0><style>${esc(style.trim())}</style><color></color><size></size></arg0>${auth()}`, 40000);
+  return blocks(info, "listResponse");
+}
+
 /** Every color/size of a style: names, photos and SanMar's prices (list + ours). */
 export async function sanmarSkus(style: string): Promise<SanMarSku[]> {
   const st = style.trim();
-  const info = await soap("/SanMarWebService/SanMarProductInfoServicePort", "getProductInfoByStyleColorSize", `<arg0><style>${esc(st)}</style><color></color><size></size></arg0>${auth()}`);
-  const rows = blocks(info, "listResponse");
+  const rows = await sanmarInfoRows(st);
   if (!rows.length) return [];
   // our prices (customer-specific "myPrice"); pricing failing shouldn't stop the lookup
   const mine = new Map<string, number>();
@@ -104,4 +109,75 @@ export async function sanmarPing(): Promise<string> {
   const x = await soap("/SanMarWebService/SanMarPricingServicePort", "getPricing", `<arg0><style>PC61</style><color>White</color><size>M</size></arg0>${auth()}`, 10000);
   const p = blocks(x, "listResponse")[0] || "";
   return p ? `answered (PC61 White M: $${num(tag(p, "myPrice")) || num(tag(p, "piecePrice"))})` : "answered";
+}
+
+/* ---------- the whole catalog (for search) ---------- */
+
+export type SanMarStyleSummary = { style: string; brand: string; title: string; category: string; image: string; colors: string[]; sizes: string[]; status: string };
+const orderSizes = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
+
+/** One style's name, brand, category, photo, colors and sizes (null = SanMar has nothing for it). */
+export async function sanmarStyleSummary(style: string): Promise<SanMarStyleSummary | null> {
+  const rows = await sanmarInfoRows(style);
+  if (!rows.length) return null;
+  const basic = (b: string) => blocks(b, "productBasicInfo")[0] || b;
+  const img = (b: string) => blocks(b, "productImageInfo")[0] || b;
+  const b0 = basic(rows[0]), i0 = img(rows[0]);
+  return {
+    style: style.trim().toUpperCase(),
+    brand: tag(b0, "brandName"), title: tag(b0, "productTitle") || tag(b0, "productDescription").replace(/<[^>]+>/g, " ").slice(0, 160),
+    category: tag(b0, "category"), status: tag(b0, "productStatus"),
+    image: tag(i0, "thumbnailImage") || tag(i0, "productImage") || tag(i0, "frontModel") || tag(i0, "frontFlat"),
+    colors: [...new Set(rows.map((r) => { const b = basic(r); return tag(b, "catalogColor") || tag(b, "color"); }).filter(Boolean))],
+    sizes: orderSizes(rows.map((r) => { const raw = tag(basic(r), "size"); return SIZE_MAP[raw.toUpperCase()] || raw.toUpperCase(); })),
+  };
+}
+
+/** PromoStandards Product Data (SanMar's standard-format service; same SanMar.com web services login). */
+async function psProduct(version: "2.0.0" | "1.0.0", op: string, inner: string, timeoutMs = 50000): Promise<string> {
+  const c = cred();
+  const path = version === "2.0.0" ? "/promostandards/ProductDataServiceBindingV2" : "/promostandards/ProductDataServiceBinding";
+  const ns = `http://www.promostandards.org/WSDL/ProductDataService/${version}/`;
+  const body = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns="${ns}" xmlns:shar="${ns}SharedObjects/"><soapenv:Header/><soapenv:Body><ns:${op}Request><shar:wsVersion>${version}</shar:wsVersion><shar:id>${esc(c.user)}</shar:id><shar:password>${esc(c.pass)}</shar:password>${inner}</ns:${op}Request></soapenv:Body></soapenv:Envelope>`;
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const r = await fetch(host() + path, { method: "POST", headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: op.charAt(0).toLowerCase() + op.slice(1) }, body, cache: "no-store", signal: ctl.signal });
+    const x = await r.text();
+    const fault = tag(x, "faultstring");
+    if (fault) throw new Error("SanMar: " + fault);
+    if (!r.ok) throw new Error(`SanMar returned ${r.status}`);
+    return x;
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw new Error("SanMar didn't answer in time.");
+    throw e;
+  } finally { clearTimeout(t); }
+}
+
+/** Every style SanMar sells right now (style numbers only). */
+export async function sanmarSellableStyles(): Promise<{ styles: string[]; version: string; parts: number }> {
+  let last: unknown = null;
+  for (const v of ["2.0.0", "1.0.0"] as const) {
+    try {
+      const x = await psProduct(v, "GetProductSellable", `<shar:isSellable>true</shar:isSellable>`);
+      const items = blocks(x, "ProductSellable");
+      if (!items.length) {
+        const msg = tag(x, "description") || tag(x, "ServiceMessage") || tag(x, "ErrorMessage");
+        last = new Error(msg ? `SanMar (${v}): ${msg}` : `SanMar (${v}) sent an empty list`);
+        continue;
+      }
+      const styles = [...new Set(items.map((b) => tag(b, "productId").trim().toUpperCase()).filter(Boolean))];
+      return { styles, version: v, parts: items.length };
+    } catch (e) { last = e; }
+  }
+  throw last instanceof Error ? last : new Error("SanMar's style list isn't available");
+}
+
+/** Raw first bytes of a PromoStandards answer (for checking the connection). */
+export async function sanmarProbe(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const v of ["2.0.0", "1.0.0"] as const) {
+    try { const x = await psProduct(v, "GetProductSellable", `<shar:productId>PC61</shar:productId><shar:isSellable>true</shar:isSellable>`, 20000); out[v] = x.slice(0, 1500); }
+    catch (e) { out[v] = "ERR " + (e instanceof Error ? e.message : String(e)); }
+  }
+  return out;
 }
