@@ -45,9 +45,9 @@ export default function ProductionSettingsPage() {
       <SettingsTabs />
       <div className="stack">
         <section className="panel">
-          <div className="panel-h"><h2>Machines</h2><button type="button" className="btn sm" onClick={() => upd((d) => { d.machines.push({ id: "m" + Date.now().toString(36), name: "New machine", type: "screen", colors: 6, heads: 1, hoursPerDay: 8, days: [1, 2, 3, 4, 5], pvMatch: "", active: true, speed: 1 }); })}>+ Add Machine</button></div>
+          <div className="panel-h"><h2>Machines</h2><button type="button" className="btn sm" onClick={() => upd((d) => { d.machines.push({ id: "m" + Date.now().toString(36), name: "New machine", type: "screen", colors: 6, heads: 1, startMin: 420, hoursPerDay: 8, days: [1, 2, 3, 4, 5], pvMatch: "", active: true, speed: 1 }); })}>+ Add Machine</button></div>
           <div className="panel-b">
-            <table className="rv-tbl ps-mach"><thead><tr><th>Name</th><th>Type</th><th className="r">Colors / heads</th><th className="r">Hours / day</th><th>Days</th><th className="r">Speed</th><th>Printavo status has</th><th>On</th></tr></thead>
+            <table className="rv-tbl ps-mach"><thead><tr><th>Name</th><th>Type</th><th className="r">Colors / heads</th><th>Starts</th><th className="r">Hours / day</th><th>Days</th><th className="r">Speed</th><th>Printavo status has</th><th>On</th></tr></thead>
               <tbody>{s.machines.map((m, i) => {
                 const set = (fn: (x: Machine) => void) => upd((d) => fn(d.machines[i]));
                 return (
@@ -55,6 +55,7 @@ export default function ProductionSettingsPage() {
                     <td><input type="text" value={m.name} onChange={(e) => set((x) => { x.name = e.target.value; })} /></td>
                     <td><select value={m.type} onChange={(e) => set((x) => { x.type = e.target.value as MachineType; })}>{TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
                     <td className="r">{m.type === "screen" ? <input type="number" min={1} max={20} value={m.colors} onChange={(e) => set((x) => { x.colors = n(e.target.value); })} title="Colors (print heads)" /> : m.type === "embroidery" ? <input type="number" min={1} max={30} value={m.heads} onChange={(e) => set((x) => { x.heads = n(e.target.value); })} title="Heads" /> : <span className="faint">—</span>}</td>
+                    <td><input type="time" step={900} value={`${String(Math.floor((m.startMin ?? 420) / 60)).padStart(2, "0")}:${String((m.startMin ?? 420) % 60).padStart(2, "0")}`} onChange={(e) => set((x) => { const [h, mm] = e.target.value.split(":").map(Number); if (!isNaN(h)) x.startMin = h * 60 + (mm || 0); })} /></td>
                     <td className="r"><input type="number" min={0} max={24} step={0.5} value={m.hoursPerDay} onChange={(e) => set((x) => { x.hoursPerDay = n(e.target.value); })} /></td>
                     <td><div className="ps-days">{DAYS.map((dl, di) => <button key={di} type="button" className={m.days.includes(di) ? "on" : ""} onClick={() => set((x) => { x.days = x.days.includes(di) ? x.days.filter((y) => y !== di) : [...x.days, di].sort(); })}>{dl[0]}</button>)}</div></td>
                     <td className="r"><input type="number" min={0.2} max={3} step={0.05} value={m.speed} onChange={(e) => set((x) => { x.speed = n(e.target.value) || 1; })} title="1 = standard; 1.2 = 20% faster" /></td>

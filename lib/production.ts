@@ -10,8 +10,8 @@ export type Machine = {
   id: string; name: string; type: MachineType;
   /** screen: print heads / colors it can run; embroidery: heads (pieces sewn at once) */
   colors: number; heads: number;
-  /** hours it runs a day, and which days (0 = Sunday) */
-  hoursPerDay: number; days: number[];
+  /** when its day starts (minutes after midnight, 420 = 7:00 AM), hours it runs a day, and which days (0 = Sunday) */
+  startMin: number; hoursPerDay: number; days: number[];
   /** Printavo status text that puts a job on this machine (until go-live), e.g. "Press 1" */
   pvMatch: string;
   active: boolean;
@@ -60,7 +60,7 @@ export type ProductionSettings = {
 };
 
 const WEEKDAYS = [1, 2, 3, 4, 5];
-const m = (id: string, name: string, type: MachineType, colors: number, heads: number, pvMatch: string): Machine => ({ id, name, type, colors, heads, hoursPerDay: 8, days: WEEKDAYS, pvMatch, active: true, speed: 1 });
+const m = (id: string, name: string, type: MachineType, colors: number, heads: number, pvMatch: string): Machine => ({ id, name, type, colors, heads, startMin: 420, hoursPerDay: 8, days: WEEKDAYS, pvMatch, active: true, speed: 1 });
 export const DEFAULT_PRODUCTION: ProductionSettings = {
   machines: [
     m("p1", "Press 1 · 12C Gauntlet III", "screen", 12, 1, "Press 1"),
