@@ -248,14 +248,35 @@ export function needsForPrintavo(s: ProductionSettings, row: { qty: number | nul
 
 /** "Print 1c + Print 1c + Back 2c" → "Print 1c ×2 + Back 2c" */
 const collapse = (ls: string[]) => [...new Set(ls)].map((l) => { const n = ls.filter((x) => x === l).length; return n > 1 ? `${l} ×${n}` : l; }).join(" + ");
+function needOf(type: MachineType, st: Step[]): Need {
+  return { type, steps: st, needColors: type === "screen" ? Math.max(...st.map((x) => x.screens)) : 0, qty: Math.max(...st.map((x) => x.qty)), label: collapse(st.map((x) => (type === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}` : type === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k${x.garment === "cap" ? " cap" : ""}` : x.location))) };
+}
 function groupNeeds(steps: Step[]): Need[] {
   const out: Need[] = [];
   for (const type of ["screen", "embroidery", "heat"] as MachineType[]) {
     const st = steps.filter((x) => x.method === type);
-    if (!st.length) continue;
-    out.push({ type, steps: st, needColors: type === "screen" ? Math.max(...st.map((x) => x.screens)) : 0, qty: Math.max(...st.map((x) => x.qty)), label: collapse(st.map((x) => (type === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}` : type === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k${x.garment === "cap" ? " cap" : ""}` : x.location))) });
+    if (st.length) out.push(needOf(type, st));
   }
   return out;
+}
+
+/* ---------- splitting a job by print location (fronts one day / press, backs another) ---------- */
+
+/** A print location's key: every "Full Front" on the job is one run, every "Full Back" another. */
+export const locKey = (st: Step) => (st.location || "").trim().toLowerCase() || "print";
+/** The print locations a need has, in order. */
+export const locsOf = (need: Need) => [...new Set(need.steps.map(locKey))];
+/** Just some of a need's locations (null / empty = all of it). */
+export function subNeed(need: Need, locs: string[] | null | undefined): Need {
+  if (!locs || !locs.length) return need;
+  const st = need.steps.filter((x) => locs.includes(locKey(x)));
+  return st.length ? needOf(need.type, st) : need;
+}
+/** What's left of a need once some locations are booked (null = nothing left). */
+export function restNeed(need: Need, booked: string[] | "all"): Need | null {
+  if (booked === "all") return null;
+  const st = need.steps.filter((x) => !booked.includes(locKey(x)));
+  return st.length ? needOf(need.type, st) : null;
 }
 
 /* ---------- how long it takes ---------- */
