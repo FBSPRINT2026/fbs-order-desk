@@ -301,7 +301,9 @@ export function suggest(s: ProductionSettings, need: Need, due: string | null, t
       // room left today, or an empty day for a job bigger than a day
       if (used + est <= cap || (used === 0 && est > cap)) {
         const waste = need.type === "screen" ? (mach.colors - need.needColors) * 2 : need.type === "embroidery" ? Math.abs(mach.heads - Math.max(1, Math.round(need.qty / 12))) * 3 : 0;
-        options.push({ machine: mach, day, minutes: est, score: i * 100 + waste + est / 60 });
+        // a job longer than a shift runs into the next working days: judge it by the day it finishes
+        const spill = Math.max(0, Math.ceil(est / Math.max(1, capacityMin(s, mach))) - 1);
+        options.push({ machine: mach, day, minutes: est, score: (i + spill) * 100 + waste + est / 60 });
         break;
       }
     }
@@ -309,7 +311,9 @@ export function suggest(s: ProductionSettings, need: Need, due: string | null, t
   if (!options.length) return null;
   options.sort((a, b) => a.score - b.score);
   const best = options[0];
-  const late = !!latest && best.day > latest;
+  let finish = best.day;
+  for (let k = Math.max(0, Math.ceil(best.minutes / Math.max(1, capacityMin(s, best.machine))) - 1), g = 0; k > 0 && g < 60; g++) { finish = addDay(finish, 1); if (best.machine.days.includes(dow(finish))) k--; }
+  const late = !!latest && finish > latest;
   const needTxt = need.type === "screen" ? `${need.needColors} screens → needs a ${need.needColors}+ color press` : need.type === "embroidery" ? `${need.qty} pcs, ${need.label}` : `${need.qty} pcs heat press`;
   const reason = `${needTxt}. ${best.machine.name} is open ${best.day === today ? "today" : best.day}${due ? `; in-hands ${due}${late ? " — too late, needs attention" : " ✓"}` : ""}. About ${fmtMin(best.minutes)}.`;
   return { machine: best.machine, day: best.day, minutes: best.minutes, late, reason, alternatives: options.slice(1, 4).map(({ machine, day, minutes }) => ({ machine, day, minutes })) };

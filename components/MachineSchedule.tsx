@@ -6,20 +6,23 @@ import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, sugge
 import type { Group } from "@/lib/pricing";
 
 /**
- * The production calendar, on a real clock. Day view: machines across, the shop day down (7 AM → 7 PM), each job a
- * block as tall as it takes. Week view: machines down, days across, each job a bar as wide as it takes.
- * Jobs ready to run land in "Ready To Schedule" with a suggested machine and day (worked out from colors, quantity,
- * garments and stitches); one click books it at the next open time. Drag a job to another machine, day or time (a job
- * only drops on a machine that can run it), or tap it to move it. Printavo jobs in a machine status
- * ("SP - Press 1 - 12C Gauntlet III") show on that machine at their Printavo start/end times until go-live
+ * The production calendar, on the shop's real hours.
+ * Week view (default): this week with next week right under it. One row per machine, each day a 6 AM – 6 PM
+ * timeline; every job is a labeled bar as long as it runs. Jobs run back to back inside each machine's shift, so a
+ * 30-hour job fills that press for several days (shift hours only, never "overnight").
+ * Day view: machines across, the clock down. Jobs not marked Done by the end of their day roll forward to today.
+ * Ready To Schedule suggests a machine and day from colors, quantity, garments and stitches; drag a job to another
+ * machine, day or time (a job only drops on a machine that can run it), or tap it to move it. Printavo jobs in a
+ * machine status ("SP - Press 1 - 12C Gauntlet III") show on that machine at their Printavo time until go-live
  * (read-only toward Printavo: moving one here books it in our schedule only).
  */
 type Job = { key: string; kind: "o" | "a"; id: string; number: string; customer: string; name: string; due: string | null; qty: number; status: string; needs: Need[]; href: string };
-type Slot = { id: string; order_id: string | null; archived_order_id: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "done"; source: string; note: string };
-/** a job on the calendar; startMin = pinned start (minutes after midnight), null = next open time */
-type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; carried?: string };
-type Placed = { c: Card; start: number; end: number; overlap: boolean };
-type View = "day" | "week" | "2wk";
+type Slot = { id: string; order_id: string | null; archived_order_id: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "done"; source: string; note: string; rolled_from: string | null };
+/** a job on the calendar; startMin = asked-for start (minutes after midnight), null = right after the job before it */
+type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; carried?: string | null };
+/** one day's piece of a job (a long job is several pieces, one per working day) */
+type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean };
+type View = "week" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number };
 
 const TZ = "America/Chicago";
@@ -35,7 +38,11 @@ function shopTime(d: Date | string | null): { day: string; min: number } | null 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const addDay = (d: string, n: number) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() + n); return ymd(x); };
 const dow = (d: string) => new Date(d + "T12:00:00").getDay();
+const ord = (d: string) => Math.round(Date.parse(d + "T00:00:00Z") / 86400000);
+const fromOrd = (n: number) => new Date(n * 86400000).toISOString().slice(0, 10);
+const monday = (d: string) => addDay(d, -((dow(d) + 6) % 7));
 const dayLbl = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+const dayShort = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" });
 /** 420 → "7a", 510 → "8:30a" */
 const clock = (min: number) => { const h = Math.floor(min / 60) % 24, m = Math.round(min % 60); const hh = h % 12 || 12, ap = h >= 12 ? "p" : "a"; return m ? `${hh}:${String(m).padStart(2, "0")}${ap}` : `${hh}${ap}`; };
 const clockLong = (min: number) => { const h = Math.floor(min / 60) % 24, m = Math.round(min % 60); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
@@ -44,23 +51,48 @@ const TYPE_LBL = { screen: "Screen Print", embroidery: "Embroidery", heat: "Heat
 /** "Embroidery · 12 Head" → "12 Head", "Press 3 · 8C Sportsman" → "Press 3" */
 const shortName = (m: Machine) => { const p = m.name.split(" · "); return p.length < 2 ? m.name : m.type === "embroidery" ? p[1] : p[0]; };
 const PV_DONE = /job\s*completed|quote|cancel|ship|fulfillment|issue/i;
-const HOUR_PX = 60;
+const HOUR_PX = 56;
+const LANE = 22;
 
-/** Lay a machine's day out on the clock: pinned jobs at their times, the rest in order at the next open time. */
-function layout(cs: Card[], mach: Machine): Placed[] {
-  const out: Placed[] = [];
-  for (const c of cs.filter((x) => x.startMin != null).sort((a, b) => a.startMin! - b.startMin!)) {
-    const st = c.startMin!, en = st + c.minutes;
-    const hits = out.filter((p) => st < p.end && en > p.start);
-    hits.forEach((p) => { p.overlap = true; });
-    out.push({ c, start: st, end: en, overlap: hits.length > 0 });
+/**
+ * Lay a machine's work out on its real hours. Jobs go in day order (asked-for start times first within a day, then
+ * the booking order); each starts when the job before it ends, only inside the shift, and a job that doesn't fit in
+ * what's left of the day carries into the next working day. So a 30-hour job fills ~4 shifts, never "overnight".
+ */
+function flow(cs: Card[], mach: Machine): Seg[] {
+  const s0 = mach.startMin ?? 420, s1 = s0 + Math.max(1, mach.hoursPerDay) * 60;
+  const booked = new Set(cs.map((c) => c.day));
+  const works = (d: string) => mach.days.includes(dow(d)) || booked.has(d);
+  const sorted = [...cs].sort((a, b) => a.day.localeCompare(b.day) || (a.startMin ?? s0) - (b.startMin ?? s0) || (a.slot?.position ?? 99) - (b.slot?.position ?? 99));
+  const out: Seg[] = [];
+  let cursor = -Infinity;
+  // the next moment this machine is running, at or after `t` (absolute minutes)
+  const norm = (t: number, allowEarly = false) => {
+    for (let g = 0; g < 400; g++) {
+      const dd = Math.floor(t / 1440), m = t - dd * 1440, day = fromOrd(dd);
+      if (!works(day) || m >= s1) { t = (dd + 1) * 1440 + s0; continue; }
+      if (m < s0 && !allowEarly) t = dd * 1440 + s0;
+      return t;
+    }
+    return t;
+  };
+  for (const c of sorted) {
+    const asked = ord(c.day) * 1440 + (c.startMin ?? s0);
+    let t = norm(Math.max(cursor, asked), cursor < asked && c.startMin != null);
+    const pushed = t > asked + 1;
+    let left = Math.max(1, c.minutes);
+    const pieces: { day: string; start: number; end: number }[] = [];
+    for (let g = 0; g < 120 && left > 0; g++) {
+      const dd = Math.floor(t / 1440), m = t - dd * 1440;
+      const end = Math.min(m + left, Math.max(s1, m + 15));
+      pieces.push({ day: fromOrd(dd), start: m, end });
+      left -= end - m;
+      t = left > 0 ? norm((dd + 1) * 1440 + s0) : dd * 1440 + end;
+    }
+    cursor = t;
+    pieces.forEach((p, i) => out.push({ c, day: p.day, start: p.start, end: p.end, part: i + 1, parts: pieces.length, pushed: pushed && i === 0 }));
   }
-  for (const c of cs.filter((x) => x.startMin == null).sort((a, b) => (a.slot?.position ?? 99) - (b.slot?.position ?? 99))) {
-    let t = mach.startMin ?? 420;
-    for (let guard = 0; guard < 200; guard++) { const hit = out.find((p) => t < p.end && t + c.minutes > p.start); if (!hit) break; t = hit.end; }
-    out.push({ c, start: t, end: t + c.minutes, overlap: false });
-  }
-  return out.sort((a, b) => a.start - b.start);
+  return out;
 }
 
 export default function MachineSchedule() {
@@ -68,8 +100,10 @@ export default function MachineSchedule() {
   useEffect(() => { const t = setInterval(() => setNow(shopTime(new Date())!), 60000); return () => clearInterval(t); }, []);
   const today = now.day;
   const [s, setS] = useState<ProductionSettings | null>(null);
-  const [view, setView] = useState<View>("day");
-  const [start, setStart] = useState(() => { let d = shopTime(new Date())!.day; while (dow(d) === 0 || dow(d) === 6) d = addDay(d, 1); return d; });
+  const [view, setView] = useState<View>("week");
+  const [week, setWeek] = useState(() => monday(shopTime(new Date())!.day));
+  const [day, setDay] = useState(() => shopTime(new Date())!.day);
+  const [wknd, setWknd] = useState<boolean | null>(null);
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [pvLane, setPvLane] = useState<{ job: Job; machine: Machine; day: string; startMin: number | null; minutes: number | null; carried?: string }[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -79,24 +113,25 @@ export default function MachineSchedule() {
   const [msg, setMsg] = useState("");
   const [typeF, setTypeF] = useState<"" | "screen" | "embroidery" | "heat">("");
   const [trayAll, setTrayAll] = useState(false);
-  const [trayOpen, setTrayOpen] = useState(true);
-
-  // working days only (any active machine runs that weekday): a Saturday shows up only if a machine works Saturdays
-  const workDays = useMemo(() => { const w = new Set((s?.machines || []).filter((x) => x.active).flatMap((x) => x.days)); if (!w.size) [1, 2, 3, 4, 5].forEach((x) => w.add(x)); return w; }, [s]);
-  const days = useMemo(() => { const n = view === "2wk" ? 12 : 6; const out: string[] = []; let d = start; for (let i = 0; out.length < n && i < 60; i++) { if (workDays.has(dow(d))) out.push(d); d = addDay(d, 1); } return out; }, [start, view, workDays]);
-  const stepDay = (dir: 1 | -1) => { let d = addDay(start, dir); for (let i = 0; i < 7 && !workDays.has(dow(d)); i++) d = addDay(d, dir); setStart(d); };
-  const step = (dir: 1 | -1) => { if (view !== "day") setStart(addDay(start, 7 * dir)); else stepDay(dir); };
+  const [trayOpen, setTrayOpen] = useState(false);
 
   const load = useCallback(async () => {
     const sb = createClient();
-    const [{ data: st }, { data: o }, { data: a }, { data: sl }] = await Promise.all([
+    const [{ data: st }, { data: o }, { data: a }, { data: sl0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id, groups, lines").in("status", ["approved", "art", "blanks", "production"]).limit(300),
       sb.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, customer_id, start:data->>startAt, pend:data->>dueAt, pvgroups:data->groups").eq("kind", "invoice").gte("due_date", addDay(today, -45)).not("status_name", "ilike", "%complete%").limit(600),
-      sb.from("production_slots").select("*").gte("day", addDay(today, -14)).lte("day", addDay(today, 60)),
+      sb.from("production_slots").select("*").gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
     ]);
+    let sl = (sl0 || []) as Slot[];
+    // not marked done by the end of its day → it moves forward to today (first in line), remembering where it started
+    const stale = sl.filter((x) => x.day < today && x.status !== "done");
+    if (stale.length) {
+      await Promise.all(stale.map((x) => sb.from("production_slots").update({ day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day, updated_at: new Date().toISOString() }).eq("id", x.id)));
+      sl = sl.map((x) => (stale.includes(x) ? { ...x, day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day } : x));
+    }
     const ps = mergeProduction((st?.data as { production?: unknown } | null)?.production);
-    setS(ps); setSlots((sl || []) as Slot[]);
+    setS(ps); setSlots(sl);
     const pv = ((a || []) as { id: string; visual_id: string; nickname: string; due_date: string | null; qty: number; status_name: string; customer_id: string | null; start: string | null; pend: string | null; pvgroups: unknown }[]).filter((x) => !PV_DONE.test(x.status_name || "") || PV_READY.test(x.status_name || ""));
     const ids = [...new Set([...((o || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...pv.map((x) => x.customer_id)].filter(Boolean))] as string[];
     const cn = new Map<string, string>();
@@ -106,17 +141,16 @@ export default function MachineSchedule() {
       ...pv.map((x) => ({ key: "a:" + x.id, kind: "a" as const, id: x.id, number: x.visual_id, customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status_name, needs: needsForPrintavo(ps, { qty: x.qty, status_name: x.status_name, nickname: x.nickname, data: { groups: x.pvgroups as never } }), href: `/shop/archive/${x.id}` })),
     ];
     setJobs(js);
-    // Printavo jobs in a machine status sit on that machine at their Printavo production times (start → end);
-    // ones whose day has passed but are still in the status carry over to the start of today
+    // Printavo jobs in a machine status sit on that machine at their Printavo times; past ones still in the status carry to today
     setPvLane(pv.map((x) => {
       const mach = machineForStatus(ps, x.status_name); if (!mach) return null;
       const job = js.find((j) => j.key === "a:" + x.id)!;
-      const st = shopTime(x.start), en = shopTime(x.pend);
-      const d0 = st?.day || (x.due_date ? addDay(x.due_date, -1) : today);
-      const block = st && en && en.day === st.day && en.min > st.min ? en.min - st.min : null;
-      const sane = st && st.min >= 300 && st.min <= 1320; // ignore midnight placeholders
+      const st0 = shopTime(x.start), en = shopTime(x.pend);
+      const d0 = st0?.day || (x.due_date ? addDay(x.due_date, -1) : today);
+      const block = st0 && en && en.day === st0.day && en.min > st0.min ? en.min - st0.min : null;
+      const sane = st0 && st0.min >= 300 && st0.min <= 1320; // ignore midnight placeholders
       if (d0 < today) return { job, machine: mach, day: today, startMin: null, minutes: block, carried: d0 };
-      return { job, machine: mach, day: d0, startMin: sane ? st!.min : null, minutes: block };
+      return { job, machine: mach, day: d0, startMin: sane ? st0!.min : null, minutes: block };
     }).filter(Boolean) as typeof pvLane);
   }, [today]);
   useEffect(() => { load(); }, [load]);
@@ -134,7 +168,7 @@ export default function MachineSchedule() {
       if (!job || !mach) continue;
       const need = job.needs.find((n) => n.type === sl.kind) || job.needs[0];
       if (!need) continue;
-      out.push({ key: sl.id, job, need, machine: mach, day: sl.day, minutes: sl.minutes || estimate(s, need, mach).minutes, startMin: sl.start_min, slot: sl, fromPv: false });
+      out.push({ key: sl.id, job, need, machine: mach, day: sl.day, minutes: sl.minutes || estimate(s, need, mach).minutes, startMin: sl.start_min, slot: sl, fromPv: false, carried: sl.rolled_from });
     }
     for (const p of pvLane) {
       const need = p.job.needs.find((n) => n.type === p.machine.type) || p.job.needs[0];
@@ -143,24 +177,30 @@ export default function MachineSchedule() {
     }
     return out;
   }, [s, jobs, slots, pvLane, byKey]);
-  const load2 = useMemo(() => { const m: Record<string, Record<string, number>> = {}; for (const c of cards) { if (c.slot?.status === "done") continue; (m[c.machine.id] ||= {})[c.day] = (m[c.machine.id]?.[c.day] || 0) + c.minutes; } return m; }, [cards]);
-  // every machine-day laid out on the clock
-  const placed = useMemo(() => {
-    const m = new Map<string, Placed[]>();
-    if (!s) return m;
-    const groups = new Map<string, Card[]>();
-    for (const c of cards) { const k = c.machine.id + "|" + c.day; groups.set(k, [...(groups.get(k) || []), c]); }
-    for (const [k, cs] of groups) m.set(k, layout(cs, cs[0].machine));
-    return m;
+
+  // every machine's work laid out on its hours, split into per-day pieces
+  const segs = useMemo(() => {
+    const by = new Map<string, Seg[]>(), ofCard = new Map<string, Seg[]>();
+    if (!s) return { by, ofCard };
+    const per = new Map<string, Card[]>();
+    for (const c of cards) per.set(c.machine.id, [...(per.get(c.machine.id) || []), c]);
+    for (const [, cs] of per) for (const g of flow(cs, cs[0].machine)) {
+      const k = g.c.machine.id + "|" + g.day;
+      by.set(k, [...(by.get(k) || []), g]);
+      ofCard.set(g.c.key, [...(ofCard.get(g.c.key) || []), g]);
+    }
+    return { by, ofCard };
   }, [cards, s]);
-  const at = (mach: Machine, day: string) => placed.get(mach.id + "|" + day) || [];
+  const at = (m: Machine, d: string) => segs.by.get(m.id + "|" + d) || [];
+  const used = (m: Machine, d: string) => at(m, d).reduce((a, g) => a + (g.end - g.start), 0);
+  const loadMap = useMemo(() => { const m: Record<string, Record<string, number>> = {}; for (const [k, gs] of segs.by) { const [id, d] = k.split("|"); (m[id] ||= {})[d] = gs.filter((g) => g.c.slot?.status !== "done").reduce((a, g) => a + (g.end - g.start), 0); } return m; }, [segs]);
 
   // ready to schedule: in production (goods here, art done) or a Printavo "ready for production / scheduling" status, not booked yet
   const tray = useMemo(() => {
     if (!s || !jobs) return [];
     const onCal = new Set(cards.map((c) => c.job.key + ":" + c.need.type));
     const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "production" : PV_READY.test(j.status)));
-    const ld = JSON.parse(JSON.stringify(load2)) as Record<string, Record<string, number>>;
+    const ld = JSON.parse(JSON.stringify(loadMap)) as Record<string, Record<string, number>>;
     const out: { job: Job; need: Need; sug: Suggestion | null }[] = [];
     for (const j of [...ready].sort((a, b) => (a.due || "9").localeCompare(b.due || "9"))) for (const n of j.needs) {
       if (onCal.has(j.key + ":" + n.type)) continue;
@@ -169,20 +209,20 @@ export default function MachineSchedule() {
       out.push({ job: j, need: n, sug });
     }
     return out;
-  }, [s, jobs, cards, load2, today]);
+  }, [s, jobs, cards, loadMap, today]);
   const coming = (jobs || []).filter((j) => j.kind === "o" && ["approved", "art", "blanks"].includes(j.status));
 
-  async function book(job: Job, need: Need, machine: Machine, day: string, source = "manual", slot?: Slot | null, startMin: number | null = null) {
+  async function book(job: Job, need: Need, machine: Machine, d: string, source = "manual", slot?: Slot | null, startMin: number | null = null) {
     if (!s) return;
     if (!fits(need, machine)) { setMsg(`#${job.number} needs ${need.type === "screen" ? `${need.needColors} screens` : TYPE_LBL[need.type]}: ${machine.name} can't run it.`); return; }
     const minutes = estimate(s, need, machine).minutes;
     const sb = createClient();
-    const pos = cards.filter((c) => c.machine.id === machine.id && c.day === day).length;
+    const pos = cards.filter((c) => c.machine.id === machine.id && c.day === d).length;
     const r = slot
-      ? await sb.from("production_slots").update({ machine: machine.id, day, minutes, start_min: startMin, position: pos, updated_at: new Date().toISOString() }).eq("id", slot.id)
-      : await sb.from("production_slots").insert({ order_id: job.kind === "o" ? job.id : null, archived_order_id: job.kind === "a" ? job.id : null, machine: machine.id, day, minutes, start_min: startMin, position: pos, kind: need.type, label: need.label, source });
+      ? await sb.from("production_slots").update({ machine: machine.id, day: d, minutes, start_min: startMin, position: pos, updated_at: new Date().toISOString() }).eq("id", slot.id)
+      : await sb.from("production_slots").insert({ order_id: job.kind === "o" ? job.id : null, archived_order_id: job.kind === "a" ? job.id : null, machine: machine.id, day: d, minutes, start_min: startMin, position: pos, kind: need.type, label: need.label, source });
     if (r.error) { setMsg(r.error.message); return; }
-    setMsg(`#${job.number} → ${machine.name}, ${dayLbl(day)}${startMin != null ? ` at ${clockLong(startMin)}` : ""} (${fmtMin(minutes)})`);
+    setMsg(`#${job.number} → ${machine.name}, ${dayLbl(d)}${startMin != null ? ` at ${clockLong(startMin)}` : ""} (${fmtMin(minutes)})`);
     load();
   }
   async function acceptAll() {
@@ -193,7 +233,7 @@ export default function MachineSchedule() {
     });
     if (!rows.length) return;
     const r = await createClient().from("production_slots").insert(rows);
-    setMsg(r.error ? r.error.message : `Booked ${rows.length} job${rows.length === 1 ? "" : "s"}. Late ones stay in the tray for you to place.`);
+    setMsg(r.error ? r.error.message : `Booked ${rows.length} job${rows.length === 1 ? "" : "s"}. Late ones stay in the list for you to place.`);
     load();
   }
   async function setStatus(sl: Slot, status: Slot["status"]) { await createClient().from("production_slots").update({ status, updated_at: new Date().toISOString() }).eq("id", sl.id); setOpen(null); load(); }
@@ -202,59 +242,115 @@ export default function MachineSchedule() {
   if (!s || !jobs) return <div className="empty">Loading the schedule…</div>;
   const machines = s.machines.filter((x) => x.active && (!typeF || x.type === typeF));
 
-  // the clock window: from the earliest machine start, at least 12 hours, longer if a shift or a job runs later
-  const shownDays = view === "day" ? [start] : days;
-  const vStart = Math.max(0, Math.floor(Math.min(...machines.map((m) => m.startMin ?? 420), 420) / 60) * 60);
-  let vEnd = Math.max(vStart + 720, ...machines.map((m) => (m.startMin ?? 420) + m.hoursPerDay * 60));
-  for (const m of machines) for (const d of shownDays) for (const p of at(m, d)) vEnd = Math.max(vEnd, p.end);
-  vEnd = Math.min(1440, Math.ceil(vEnd / 60) * 60);
+  // weeks shown: this week and the next, with or without weekends
+  const weekDays = (w: string) => Array.from({ length: 7 }, (_, i) => addDay(w, i));
+  const allDays = [...weekDays(week), ...weekDays(addDay(week, 7))];
+  const weekendUsed = machines.some((m) => m.days.includes(0) || m.days.includes(6)) || allDays.some((d) => (dow(d) === 0 || dow(d) === 6) && machines.some((m) => at(m, d).length));
+  const showWknd = wknd ?? weekendUsed;
+  const visible = (d: string) => showWknd || (dow(d) !== 0 && dow(d) !== 6);
+
+  // the clock window: 6 AM – 6 PM, wider if a shift or job starts earlier / ends later
+  const vStart = Math.max(0, Math.floor(Math.min(360, ...machines.map((m) => m.startMin ?? 420), ...[...segs.by.values()].flat().map((g) => g.start)) / 60) * 60);
+  const vEnd = Math.min(1440, Math.ceil(Math.max(1080, ...machines.map((m) => (m.startMin ?? 420) + m.hoursPerDay * 60), ...[...segs.by.values()].flat().map((g) => g.end)) / 60) * 60);
   const range = vEnd - vStart;
   const hours = Array.from({ length: range / 60 }, (_, i) => vStart + i * 60);
+  const pct = (min: number) => `${((min - vStart) / range) * 100}%`;
 
   const dragNeed = drag?.card?.need || drag?.need;
   const canDrop = (mach: Machine) => !dragNeed || fits(dragNeed, mach);
   function startDrag(e: DragEvent, d: Drag) { e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", "job"); } catch { /* old browsers */ } setDrag(d); }
-  function drop(mach: Machine, day: string, minuteAtPointer: number) {
+  function drop(mach: Machine, d: string, minuteAtPointer: number) {
     setOver("");
     if (!drag) return;
     const st = Math.max(0, Math.min(1440 - 15, snap(minuteAtPointer - drag.grabMin)));
-    if (drag.card) book(drag.card.job, drag.card.need, mach, day, "manual", drag.card.slot, st);
-    else if (drag.job && drag.need) book(drag.job, drag.need, mach, day, "manual", null, st);
+    if (drag.card) book(drag.card.job, drag.card.need, mach, d, "manual", drag.card.slot, st);
+    else if (drag.job && drag.need) book(drag.job, drag.need, mach, d, "manual", null, st);
     setDrag(null);
   }
-  const cls = (p: Placed) => {
-    const c = p.c, late = !!c.job.due && c.day > c.job.due;
-    return "ms-blk " + c.need.type + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (p.overlap ? " clash" : "");
+  const cls = (g: Seg) => {
+    const c = g.c, late = !!c.job.due && g.day > c.job.due;
+    return "ms-blk " + c.need.type + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (g.part > 1 ? " cont-l" : "") + (g.part < g.parts ? " cont-r" : "");
   };
-  const tip = (p: Placed) => `#${p.c.job.number} ${p.c.job.customer}\n${clockLong(p.start)} – ${clockLong(p.end)} (${fmtMin(p.c.minutes)})\n${p.c.need.label}${p.c.job.due ? `\nIn-hands ${dayLbl(p.c.job.due)}` : ""}${p.c.fromPv ? "\nFrom its Printavo status" : ""}${p.c.carried ? `\nCarried over from ${dayLbl(p.c.carried)}` : ""}${p.overlap ? "\nOverlaps another job" : ""}`;
-  const offShade = (mach: Machine, day: string) => {
-    const a = mach.startMin ?? 420, b = a + mach.hoursPerDay * 60, works = mach.days.includes(dow(day));
+  const tip = (g: Seg) => `#${g.c.job.number} ${g.c.job.customer}\n${dayLbl(g.day)} ${clockLong(g.start)} – ${clockLong(g.end)}${g.parts > 1 ? ` (part ${g.part} of ${g.parts}; ${fmtMin(g.c.minutes)} in all)` : ` (${fmtMin(g.c.minutes)})`}\n${g.c.need.label}${g.c.job.due ? `\nIn-hands ${dayLbl(g.c.job.due)}` : ""}${g.c.slot?.status === "done" ? "\nDone" : g.c.slot?.status === "running" ? "\nRunning" : ""}${g.c.fromPv ? "\nFrom its Printavo status" : ""}${g.c.carried ? `\nRolled forward from ${dayLbl(g.c.carried)}` : ""}${g.pushed ? "\nStarts later than asked (the job before runs long)" : ""}`;
+  const offShade = (mach: Machine, d: string) => {
+    const a = mach.startMin ?? 420, b = a + mach.hoursPerDay * 60, works = mach.days.includes(dow(d)) || at(mach, d).length > 0;
     return works ? [[vStart, a], [b, vEnd]].filter(([x, y]) => y > x) : [[vStart, vEnd]];
+  };
+  const label = (g: Seg) => <><b>#{g.c.job.number}</b> {g.part > 1 ? <i className="ms-cont">cont.</i> : null}{g.c.job.customer || g.c.job.name}</>;
+
+  /* ---------- Week view: machines down, days across; each day a 6a–6p timeline, one lane per job ---------- */
+  const weekGrid = (w: string, title: string) => {
+    const ds = weekDays(w).filter(visible);
+    return (
+      <section className="ms-wk" key={w}>
+        <div className="ms-wk-h"><b>{title}</b><span className="faint">{dayLbl(ds[0])} – {dayLbl(ds[ds.length - 1])}</span></div>
+        <div className="ms-wg" style={{ gridTemplateColumns: `128px repeat(${ds.length}, minmax(0,1fr))` }}>
+          <div className="ms-wg-c" />
+          {ds.map((d) => (
+            <button type="button" key={d} className={"ms-wg-d" + (d === today ? " today" : d < today ? " past" : "")} onClick={() => { setDay(d); setView("day"); }} title="Open this day">
+              <b>{dayShort(d)}{d === today ? <em> · Today</em> : null}</b>
+              <span className="ms-ax">{hours.filter((h) => (h - vStart) % 180 === 0).map((h) => <i key={h} style={{ left: pct(h) }}>{clock(h)}</i>)}</span>
+            </button>
+          ))}
+          {machines.map((m) => {
+            const lanes = Math.max(1, ...ds.map((d) => at(m, d).length));
+            const wkUsed = ds.reduce((a, d) => a + used(m, d), 0), wkCap = ds.filter((d) => m.days.includes(dow(d))).length * capacityMin(s, m);
+            return [
+              <div key={m.id + w} className={"ms-wg-m " + m.type} title={`${m.name}: ${fmtMin(wkUsed)} of ${fmtMin(wkCap)} booked`}><b>{shortName(m)}</b><small>{m.type === "screen" ? `${m.colors}C` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat"} · <span className="ms-used">{Math.round(wkUsed / 60)}/{Math.round(wkCap / 60)}h</span></small>
+                <div className={"ms-cap" + (wkUsed > wkCap ? " full" : wkUsed > wkCap * s.fillTarget ? " warn" : "")}><i style={{ width: `${Math.min(100, wkCap ? (wkUsed / wkCap) * 100 : 0)}%` }} /></div></div>,
+              ...ds.map((d) => {
+                const gs = at(m, d).slice().sort((a, b) => a.start - b.start);
+                const u = used(m, d), cap = capacityMin(s, m);
+                return (
+                  <div key={m.id + d} className={"ms-wc" + (d === today ? " today" : d < today ? " past" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "") + (u >= cap ? " full" : "")} style={{ minHeight: lanes * LANE + 10, backgroundSize: `${(180 / range) * 100}% 100%` }}
+                    onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver("")}
+                    onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, d, vStart + ((e.clientX - r.left) / r.width) * range); }}>
+                    {offShade(m, d).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}
+                    {d === today && now.min > vStart && <div className="ms-past" style={{ width: pct(Math.min(now.min, vEnd)) }} />}
+                    {d === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now v" style={{ left: pct(now.min) }} />}
+                    {gs.map((g, i) => {
+                      const right = (g.start - vStart) / range > 0.55;
+                      return (
+                        <div key={g.c.key + g.part} className="ms-lane" style={{ top: 5 + i * LANE }}>
+                          <button type="button" draggable className={cls(g) + " bar"} title={tip(g)} style={{ left: pct(g.start), width: `calc(${((g.end - g.start) / range) * 100}% - 1px)` }}
+                            onDragStart={(e) => { const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect(), pr = el.parentElement!.getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientX - r.left) / pr.width) * range }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)} aria-label={tip(g)} />
+                          <span className={"ms-lbl" + (right ? " r" : "")} style={right ? { right: `calc(${100 - ((g.start - vStart) / range) * 100}% + 3px)`, maxWidth: `calc(${((g.start - vStart) / range) * 100}% - 4px)` } : { left: `calc(${pct(g.start)} + 5px)`, maxWidth: `calc(${100 - ((g.start - vStart) / range) * 100}% - 8px)` }}>{label(g)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }),
+            ];
+          })}
+        </div>
+      </section>
+    );
   };
 
   /* ---------- Day view: machines across, the clock down ---------- */
   const dayView = () => (
     <div className="ms-dv">
-      <div className="ms-dv-grid" style={{ gridTemplateColumns: `52px repeat(${machines.length}, minmax(118px,1fr))`, minWidth: 52 + machines.length * 118 }}>
+      <div className="ms-dv-grid" style={{ gridTemplateColumns: `52px repeat(${machines.length}, minmax(112px,1fr))`, minWidth: 52 + machines.length * 112 }}>
         <div className="ms-dv-corner" />
-        {machines.map((m) => { const used = load2[m.id]?.[start] || 0, cap = capacityMin(s, m); return (
+        {machines.map((m) => { const u = used(m, day), cap = capacityMin(s, m); return (
           <div key={m.id} className={"ms-dv-h " + m.type}><b>{shortName(m)}</b><small>{m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat press"}</small>
-            <div className={"ms-cap" + (used > cap ? " full" : used > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(used)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (used / cap) * 100)}%` }} /></div>
-            <small className="ms-used">{fmtMin(used)} / {fmtMin(cap)}</small></div>
+            <div className={"ms-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /></div>
+            <small className="ms-used">{fmtMin(u)} / {fmtMin(cap)}</small></div>
         ); })}
         <div className="ms-dv-gut" style={{ height: (range / 60) * HOUR_PX }}>{hours.map((h) => <span key={h} style={{ top: ((h - vStart) / 60) * HOUR_PX }}>{clock(h)}</span>)}</div>
         {machines.map((m) => (
-          <div key={m.id} className={"ms-dv-col" + (over === m.id + start ? (canDrop(m) ? " over" : " no") : "")} style={{ height: (range / 60) * HOUR_PX, backgroundSize: `100% ${HOUR_PX}px` }}
-            onDragOver={(e) => { e.preventDefault(); setOver(m.id + start); }} onDragLeave={() => setOver("")}
-            onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, start, vStart + ((e.clientY - r.top) / HOUR_PX) * 60); }}>
-            {offShade(m, start).map(([a, b]) => <div key={a} className="ms-off" style={{ top: ((a - vStart) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} />)}
-            {start === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now" style={{ top: ((now.min - vStart) / 60) * HOUR_PX }} />}
-            {at(m, start).map((p) => { const h = Math.max(20, (p.c.minutes / 60) * HOUR_PX - 2); return (
-              <button key={p.c.key} type="button" draggable className={cls(p) + (h < 44 ? " tiny" : "")} style={{ top: ((p.start - vStart) / 60) * HOUR_PX + 1, height: h }} title={tip(p)}
-                onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: p.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(p.c)}>
-                <span className="ms-b1"><b>#{p.c.job.number}</b> {p.c.job.customer || p.c.job.name}</span>
-                <span className="ms-b2">{clock(p.start)}–{clock(p.end)} · {fmtMin(p.c.minutes)}</span>
-                <span className="ms-b3">{p.c.need.label}</span>
+          <div key={m.id} className={"ms-dv-col" + (over === m.id + day ? (canDrop(m) ? " over" : " no") : "")} style={{ height: (range / 60) * HOUR_PX, backgroundSize: `100% ${HOUR_PX}px` }}
+            onDragOver={(e) => { e.preventDefault(); setOver(m.id + day); }} onDragLeave={() => setOver("")}
+            onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, day, vStart + ((e.clientY - r.top) / HOUR_PX) * 60); }}>
+            {offShade(m, day).map(([a, b]) => <div key={a} className="ms-off" style={{ top: ((a - vStart) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} />)}
+            {day === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now" style={{ top: ((now.min - vStart) / 60) * HOUR_PX }} />}
+            {at(m, day).map((g) => { const h = Math.max(20, ((g.end - g.start) / 60) * HOUR_PX - 2); return (
+              <button key={g.c.key + g.part} type="button" draggable className={cls(g) + (h < 44 ? " tiny" : "")} style={{ top: ((g.start - vStart) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
+                onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
+                <span className="ms-b1">{label(g)}</span>
+                <span className="ms-b2">{clock(g.start)}–{clock(g.end)}{g.parts > 1 ? ` · part ${g.part} of ${g.parts}` : ` · ${fmtMin(g.c.minutes)}`}</span>
+                <span className="ms-b3">{g.c.need.label}</span>
               </button>
             ); })}
           </div>
@@ -263,55 +359,18 @@ export default function MachineSchedule() {
     </div>
   );
 
-  /* ---------- Week view: machines down, days across, jobs as bars on each day's clock ---------- */
-  const strip = (m: Machine, d: string, tall?: boolean) => {
-    const ps = at(m, d);
-    return (
-      <div className={"ms-gt" + (tall ? " tall" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")} style={{ backgroundSize: `${(60 / range) * 100 * 2}% 100%` }}
-        onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver("")}
-        onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, d, vStart + ((e.clientX - r.left) / r.width) * range); }}>
-        {offShade(m, d).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: `${((a - vStart) / range) * 100}%`, width: `${((b - a) / range) * 100}%` }} />)}
-        {d === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now v" style={{ left: `${((now.min - vStart) / range) * 100}%` }} />}
-        {ps.map((p) => (
-          <button key={p.c.key} type="button" draggable className={cls(p) + " bar"} title={tip(p)}
-            style={{ left: `${((p.start - vStart) / range) * 100}%`, width: `calc(${(Math.min(p.end, vEnd) - p.start) / range * 100}% - 2px)` }}
-            onDragStart={(e) => { const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect(), pr = el.parentElement!.getBoundingClientRect(); startDrag(e, { card: p.c, grabMin: ((e.clientX - r.left) / pr.width) * range }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(p.c)}>
-            <b>#{p.c.job.number}</b><span>{p.c.job.customer}</span>
-          </button>
-        ))}
-      </div>
-    );
-  };
-  const axis = () => <div className="ms-ax">{hours.filter((_, i) => i % 3 === 0).map((h) => <span key={h} style={{ left: `${((h - vStart) / range) * 100}%` }}>{clock(h)}</span>)}</div>;
-  const weekView = () => (
-    <div className="ms-grid-wrap">
-      <div className="ms-grid" style={{ gridTemplateColumns: `150px repeat(${days.length}, minmax(${view === "2wk" ? 96 : 130}px,1fr))`, minWidth: 150 + days.length * (view === "2wk" ? 96 : 130) }}>
-        <div className="ms-h" />
-        {days.map((d) => <button type="button" key={d} className={"ms-h" + (d === today ? " today" : "")} onClick={() => { setStart(d); setView("day"); }} title="Open this day">{dayLbl(d)}{axis()}</button>)}
-        {machines.map((m) => [
-          <div key={m.id} className={"ms-m " + m.type}><b>{m.name}</b><small>{m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat press"} · {clock(m.startMin ?? 420)}, {m.hoursPerDay}h</small></div>,
-          ...days.map((d) => { const used = load2[m.id]?.[d] || 0, cap = capacityMin(s, m); return (
-            <div key={m.id + d} className={"ms-cell" + (d === today ? " today" : "")}>
-              <div className={"ms-cap" + (used > cap ? " full" : used > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(used)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (used / cap) * 100)}%` }} /></div>
-              {strip(m, d)}
-            </div>
-          ); }),
-        ])}
-      </div>
-    </div>
-  );
-
-  /* ---------- Phones: one day, each machine a clock strip + its jobs in time order ---------- */
+  /* ---------- Phones: one day, each machine its jobs in time order with a small timeline ---------- */
   const phoneView = () => (
     <div className="ms-phone">
-      <div className="ms-pnav"><button type="button" className="btn sm" onClick={() => stepDay(-1)} aria-label="Previous day">←</button><b>{new Date(start + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</b><button type="button" className="btn sm" onClick={() => stepDay(1)} aria-label="Next day">→</button></div>
-      {machines.map((m) => { const ps = at(m, start); const used = load2[m.id]?.[start] || 0, cap = capacityMin(s, m); return (
+      <div className="ms-pnav"><button type="button" className="btn sm" onClick={() => setDay(addDay(day, -1))} aria-label="Previous day">←</button><b>{new Date(day + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</b><button type="button" className="btn sm" onClick={() => setDay(addDay(day, 1))} aria-label="Next day">→</button></div>
+      {machines.map((m) => { const gs = at(m, day).slice().sort((a, b) => a.start - b.start); const u = used(m, day), cap = capacityMin(s, m); return (
         <section key={m.id} className={"ms-pm " + m.type}>
-          <div className="ms-pm-h"><b>{m.name}</b><span className="faint">{fmtMin(used)} / {fmtMin(cap)}</span></div>
-          {strip(m, start, true)}{axis()}
-          {ps.length ? <ul className="ms-agenda">{ps.map((p) => (
-            <li key={p.c.key}><button type="button" className={cls(p) + " row-blk"} onClick={() => setOpen(p.c)}>
-              <span className="ms-t1">{clock(p.start)}–{clock(p.end)}</span><span className="ms-b1"><b>#{p.c.job.number}</b> {p.c.job.customer || p.c.job.name}</span><span className="ms-b3">{p.c.need.label} · {fmtMin(p.c.minutes)}</span>
+          <div className="ms-pm-h"><b>{m.name}</b><span className="faint">{fmtMin(u)} / {fmtMin(cap)}</span></div>
+          <div className="ms-pstrip">{offShade(m, day).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}{gs.map((g) => <i key={g.c.key + g.part} className={cls(g) + " bar"} style={{ left: pct(g.start), width: `${((g.end - g.start) / range) * 100}%` }} />)}{day === today && <div className="ms-now v" style={{ left: pct(Math.max(vStart, Math.min(vEnd, now.min))) }} />}</div>
+          <div className="ms-ax ph">{hours.filter((h) => (h - vStart) % 180 === 0).map((h) => <i key={h} style={{ left: pct(h) }}>{clock(h)}</i>)}</div>
+          {gs.length ? <ul className="ms-agenda">{gs.map((g) => (
+            <li key={g.c.key + g.part}><button type="button" className={cls(g) + " row-blk"} onClick={() => setOpen(g.c)}>
+              <span className="ms-t1">{clock(g.start)}–{clock(g.end)}</span><span className="ms-b1">{label(g)}</span><span className="ms-b3">{g.c.need.label}{g.parts > 1 ? ` · part ${g.part} of ${g.parts}` : ` · ${fmtMin(g.c.minutes)}`}</span>
             </button></li>
           ))}</ul> : <div className="faint" style={{ fontSize: 12.5 }}>Open all day</div>}
         </section>
@@ -325,13 +384,13 @@ export default function MachineSchedule() {
         <h2 className="ms-title">Production Calendar</h2>
         <div className="rv-seg">{([["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const).map(([k, l]) => <button key={k} type="button" className={typeF === k ? "on" : ""} onClick={() => setTypeF(k)}>{l}</button>)}</div>
         <span className="spacer" />
-        <div className="rv-seg ms-span">{([["day", "Day"], ["week", "Week"], ["2wk", "2 Weeks"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
-        <button type="button" className="btn sm" onClick={() => step(-1)} aria-label="Earlier">←</button>
-        <button type="button" className="btn sm" onClick={() => { let d = today; while (!workDays.has(dow(d))) d = addDay(d, 1); setStart(d); }}>Today</button>
-        <button type="button" className="btn sm" onClick={() => step(1)} aria-label="Later">→</button>
+        <label className="ms-wknd"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Weekends</label>
+        <div className="rv-seg ms-span">{([["week", "Week"], ["day", "Day"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
+        <button type="button" className="btn sm" onClick={() => (view === "week" ? setWeek(addDay(week, -7)) : setDay(addDay(day, -1)))} aria-label="Earlier">←</button>
+        <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "week" ? "This Week" : "Today"}</button>
+        <button type="button" className="btn sm" onClick={() => (view === "week" ? setWeek(addDay(week, 7)) : setDay(addDay(day, 1)))} aria-label="Later">→</button>
         <Link className="linkbtn" href="/shop/settings/production">Machines &amp; times</Link>
       </div>
-      <div className="ms-date">{view === "day" ? new Date(start + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : `${dayLbl(days[0])} – ${dayLbl(days[days.length - 1])}`}{start === today && view === "day" ? <span className="ms-today-tag">Today</span> : null}</div>
       {msg && <div className="banner" style={{ marginBottom: 8 }} onClick={() => setMsg("")}>{msg}</div>}
 
       <div className={"ms-wrap" + (trayOpen ? "" : " closed")}>
@@ -359,18 +418,19 @@ export default function MachineSchedule() {
         )}
 
         <div className="ms-main">
-          {view === "day" ? dayView() : weekView()}
+          {view === "week" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayView()}
           {phoneView()}
+          <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k pv" />From Printavo</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span><span><i className="k off" />Off shift</span></div>
         </div>
       </div>
 
-      {open && <CardPanel s={s} c={open} days={days} placedStart={(at(open.machine, open.day).find((p) => p.c.key === open.key) || { start: open.startMin ?? 420 }).start} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} />}
+      {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={allDays.filter(visible)} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} />}
     </div>
   );
 }
 
-/** A job on the calendar: the time breakdown, move it (machine / day / start time), mark it running or done, or take it off. */
-function CardPanel({ s, c, days, placedStart, win, onClose, onMove, onStatus, onUnbook }: { s: ProductionSettings; c: Card; days: string[]; placedStart: number; win: [number, number]; onClose: () => void; onMove: (m: Machine, d: string, startMin: number | null) => void; onStatus: (sl: Slot, st: Slot["status"]) => void; onUnbook: (sl: Slot) => void }) {
+/** A job on the calendar: when it runs (every day it spans), the time breakdown, move it, mark it running or done, or take it off. */
+function CardPanel({ s, c, segs, days, win, onClose, onMove, onStatus, onUnbook }: { s: ProductionSettings; c: Card; segs: Seg[]; days: string[]; win: [number, number]; onClose: () => void; onMove: (m: Machine, d: string, startMin: number | null) => void; onStatus: (sl: Slot, st: Slot["status"]) => void; onUnbook: (sl: Slot) => void }) {
   const [mach, setMach] = useState(c.machine.id), [day, setDay] = useState(c.day);
   const [st, setSt] = useState<string>(c.startMin != null ? String(c.startMin) : "auto");
   const m = s.machines.find((x) => x.id === mach) || c.machine;
@@ -385,19 +445,22 @@ function CardPanel({ s, c, days, placedStart, win, onClose, onMove, onStatus, on
         <div className="pp-sheet-h"><b>#{c.job.number} {c.job.customer}</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
         <div className="tmx-ed-b">
           <div className="faint">{c.job.name}{c.job.due ? ` · in-hands ${dayLbl(c.job.due)}` : ""} · {c.job.status}</div>
-          <div className="ms-when"><b>{dayLbl(c.day)}, {clockLong(placedStart)} – {clockLong(placedStart + c.minutes)}</b> on {c.machine.name}{c.fromPv ? <span className="faint"> · from its Printavo schedule{c.carried ? ` (was ${dayLbl(c.carried)}, carried over)` : ""}</span> : c.startMin == null ? <span className="faint"> · next open time</span> : null}</div>
+          <div className="ms-when"><b>{c.machine.name}</b>{segs.length > 1 ? <span className="faint"> · {fmtMin(c.minutes)} over {segs.length} days</span> : null}
+            <ul>{segs.map((g) => <li key={g.part}>{dayLbl(g.day)}, {clockLong(g.start)} – {clockLong(g.end)}</li>)}</ul>
+            {c.fromPv ? <span className="faint">From its Printavo schedule{c.carried ? ` (was ${dayLbl(c.carried)}, still in the machine status)` : ""}.</span> : c.carried ? <span className="faint">Rolled forward from {dayLbl(c.carried)} (not marked Done).</span> : null}
+          </div>
           <div><b>{TYPE_LBL[c.need.type]}:</b> {c.need.label} · {c.need.qty} pcs{c.need.steps.some((x) => x.note) ? <span className="faint"> ({c.need.steps.find((x) => x.note)?.note})</span> : null}</div>
           <ul className="ms-parts">{est.parts.map((p, i) => <li key={i}><span>{p.label}</span><b>{fmtMin(p.minutes)}</b></li>)}<li className="tot"><span>Setup {fmtMin(est.setup)} · run {fmtMin(est.run)}{est.teardown ? ` · teardown ${fmtMin(est.teardown)}` : ""}</span><b>{fmtMin(est.minutes)}</b></li></ul>
           {c.fromPv && c.minutes !== est.minutes && <div className="faint" style={{ fontSize: 12.5 }}>Printavo has it blocked for {fmtMin(c.minutes)}; our estimate is {fmtMin(est.minutes)}. Booking it here uses our estimate.</div>}
           <div className="tmx-2 ms-3">
             <label>Machine<select value={mach} onChange={(e) => setMach(e.target.value)}>{options.map((x) => <option key={x.id} value={x.id} disabled={!fits(c.need, x)}>{x.name}{!fits(c.need, x) ? " (not enough colors)" : ""}</option>)}</select></label>
             <label>Day<select value={day} onChange={(e) => setDay(e.target.value)}>{[...new Set([c.day, ...days])].sort().map((d) => <option key={d} value={d}>{dayLbl(d)}</option>)}</select></label>
-            <label>Start<select value={st} onChange={(e) => setSt(e.target.value)}><option value="auto">Next open time</option>{times.map((t) => <option key={t} value={t}>{clockLong(t)}</option>)}</select></label>
+            <label>Start<select value={st} onChange={(e) => setSt(e.target.value)}><option value="auto">After the job before it</option>{times.map((t) => <option key={t} value={t}>{clockLong(t)}</option>)}</select></label>
           </div>
           <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <Link className="btn" href={c.job.href}>Open Job</Link>
             {c.slot && c.slot.status !== "running" && <button type="button" className="btn" onClick={() => onStatus(c.slot!, "running")}>Running</button>}
-            {c.slot && c.slot.status !== "done" && <button type="button" className="btn" onClick={() => onStatus(c.slot!, "done")}>Done</button>}
+            {c.slot && c.slot.status !== "done" && <button type="button" className="btn" onClick={() => onStatus(c.slot!, "done")}>Mark Done</button>}
             {c.slot && <button type="button" className="btn danger" onClick={() => onUnbook(c.slot!)}>Take Off Schedule</button>}
             <button type="button" className="btn primary" disabled={same} onClick={() => onMove(m, day, newStart)}>{c.fromPv ? "Book Here" : "Move"}</button>
           </div>
