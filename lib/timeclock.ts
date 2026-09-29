@@ -34,7 +34,7 @@ export type TimeSettings = {
 };
 export const DEFAULT_TIME: TimeSettings = {
   period: "weekly", anchor: "2026-09-28", otWeekly: 40, rounding: 0, graceMin: 5, photo: true, phone: true,
-  geo: { lat: null, lng: null, radiusM: 200 }, longShiftHours: 12, departments: ["Production", "Embroidery", "Shipping & Receiving", "Office"],
+  geo: { lat: null, lng: null, radiusM: 200 }, longShiftHours: 12, departments: ["Screen Printing", "Embroidery", "Fulfillment", "Shipping & Receiving", "Office"],
   tasks: ["Setup", "Printing", "Embroidery", "DTF / Heat Press", "Screen Prep", "Folding & Bagging", "Quality Check", "Packing & Shipping", "Cleanup"],
   stations: ["Press 1", "Press 2", "Press 3", "Embroidery", "Heat Press", "Packing Table"],
 };

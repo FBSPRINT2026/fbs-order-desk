@@ -36,7 +36,10 @@ export type Down = [number, number, string, number];
 /** [start, end] in minutes after midnight (300 = 5:00 AM, 900 = 3:00 PM) */
 export type Shift = [number, number] | null;
 /** A press crew and its leader's schedule (hours for each weekday, 0 = Sunday; null = off that day). */
-export type Crew = { id: string; leader: string; week: Shift[]; /** lunch start (minutes after midnight), default the shop's */ lunchAt?: number };
+/** Who's on a press crew (employee ids): the press operator runs it, an assistant, and a catcher at the dryer. */
+export type CrewMembers = { operator?: string | null; assistant?: string | null; catcher?: string | null };
+export const CREW_ROLES: [keyof CrewMembers, string][] = [["operator", "Press Operator"], ["assistant", "Assistant"], ["catcher", "Catcher"]];
+export type Crew = { id: string; leader: string; week: Shift[]; /** lunch start (minutes after midnight), default the shop's */ lunchAt?: number; members?: CrewMembers };
 /** Built into every shift: press warm-up at the start, and a lunch break on long shifts. */
 export type Breaks = { warmupMin: number; lunchMin: number; lunchAfterHours: number; lunchAt: number; /** warming the press back up after lunch */ rewarmMin: number };
 /** What an hour of press time costs in labor, for weighing overtime / weekend shifts when the schedule is tight. */
@@ -123,7 +126,7 @@ export const DEFAULT_PRODUCTION: ProductionSettings = {
 };
 export function mergeProduction(d: unknown): ProductionSettings {
   const p = (d && typeof d === "object" ? d : {}) as Partial<ProductionSettings>;
-  const crews: Crew[] = (Array.isArray(p.crews) ? p.crews : DEFAULT_PRODUCTION.crews).map((c) => ({ id: c.id, leader: c.leader || "", week: Array.from({ length: 7 }, (_, i) => normShift(c.week?.[i])), lunchAt: c.lunchAt }));
+  const crews: Crew[] = (Array.isArray(p.crews) ? p.crews : DEFAULT_PRODUCTION.crews).map((c) => ({ id: c.id, leader: c.leader || "", week: Array.from({ length: 7 }, (_, i) => normShift(c.week?.[i])), lunchAt: c.lunchAt, members: c.members || {} }));
   const breaks: Breaks = { ...DEFAULT_BREAKS, ...(p.breaks || {}) };
   const machines = (Array.isArray(p.machines) && p.machines.length ? p.machines.map((x) => ({ ...m(x.id, x.name, x.type, x.colors, x.heads, x.pvMatch || ""), ...x })) : DEFAULT_PRODUCTION.machines)
     .map((x) => { const c = x.crew ? crews.find((k) => k.id === x.crew) : undefined; return { ...x, crew: c ? c.id : undefined, week: c ? c.week : ownWeek(x), brk: { ...breaks, lunchAt: c?.lunchAt ?? breaks.lunchAt } }; });

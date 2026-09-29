@@ -8,19 +8,20 @@ import TeamFloor from "@/components/team/TeamFloor";
 import TeamTimes from "@/components/team/TeamTimes";
 import TeamEfficiency from "@/components/team/TeamEfficiency";
 import TeamApp from "@/components/team/TeamApp";
+import TeamPeople from "@/components/team/TeamPeople";
 import type { TeamData } from "@/components/team/types";
 
 /**
- * Production → Employees: job efficiency. Plan who works which jobs each day, see who's on what right now,
+ * Production → Employees: people and teams (press crews), and job efficiency. Plan who works which jobs each day, see who's on what right now,
  * every job's logged time (fixable), and efficiency by job, person and task. Time is logged in the employee app
  * (portal.fbsprint.com/work): scan the job ticket, pick Front / Back / Setup…, Start, Finish. Separate from pay time.
  */
-const TABS = [["plan", "Today's Plan"], ["floor", "On The Floor"], ["times", "Job Times"], ["eff", "Efficiency"], ["app", "Employee App"]] as const;
+const TABS = [["people", "People & Teams"], ["plan", "Today's Plan"], ["floor", "On The Floor"], ["times", "Job Times"], ["eff", "Efficiency"], ["app", "Employee App"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 export default function EmployeesPage() {
   const sp = useSearchParams(), router = useRouter();
-  const tab = (sp.get("tab") as Tab) || "plan";
+  const tab = (sp.get("tab") as Tab) || "people";
   const [d, setD] = useState<TeamData | null>(null);
   const reload = useCallback(async () => {
     const sb = createClient();
@@ -34,11 +35,11 @@ export default function EmployeesPage() {
     setD({ me: email, boss: ["owner", "admin"].includes((st?.role as string) || ""), employees: (emps || []) as Employee[], settings: mergeTime((s?.data as { time?: unknown } | null)?.time), reload });
   }, []);
   useEffect(() => { reload(); }, [reload]);
-  const go = (t: Tab) => { const p = new URLSearchParams(sp.toString()); if (t === "plan") p.delete("tab"); else p.set("tab", t); router.replace(`/shop/employees${p.size ? "?" + p : ""}`, { scroll: false }); };
+  const go = (t: Tab) => { const p = new URLSearchParams(sp.toString()); if (t === "people") p.delete("tab"); else p.set("tab", t); router.replace(`/shop/employees${p.size ? "?" + p : ""}`, { scroll: false }); };
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">Job time &amp; efficiency</div><h1>Employees</h1></div>
+        <div><div className="eyebrow">People, teams, job time &amp; efficiency</div><h1>Employees</h1></div>
         <div className="row" style={{ gap: 8 }}><a className="btn" href="/work" target="_blank" rel="noreferrer">Open Employee App</a></div>
       </div>
       <div className="aa-sub tm-tabs" role="tablist">{TABS.map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => go(k)}>{l}</button>)}</div>
@@ -47,7 +48,8 @@ export default function EmployeesPage() {
         : tab === "times" ? <TeamTimes d={d} />
         : tab === "eff" ? <TeamEfficiency d={d} />
         : tab === "app" ? <TeamApp d={d} />
-        : <TeamPlan d={d} />}
+        : tab === "plan" ? <TeamPlan d={d} />
+        : <TeamPeople d={d} />}
     </>
   );
 }

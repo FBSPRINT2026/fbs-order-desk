@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 
@@ -246,6 +246,8 @@ export default function MachineSchedule() {
   // whose jobs: everyone's, or the accounts the signed-in person owns (others fade on the calendar)
   const [mine, setMine] = useSticky("cal.mine", false);
   const [me, setMe] = useState<{ email: string; name: string }>({ email: "", name: "" });
+  // crew pay (owners/admins only): what an hour on each press costs, for job labor cost
+  const [pay, setPay] = useState<{ rates: Record<string, number>; names: Record<string, string> } | null>(null);
   const [owners, setOwners] = useState<AccountOwner[]>([]);
   const [trayAll, setTrayAll] = useState(false);
   const [trayOpen, setTrayOpen] = useSticky("cal.trayOpen", true);
@@ -344,7 +346,13 @@ export default function MachineSchedule() {
     }
     setOwners(mergeSettings(st?.data).accountOwners || []);
     const { data: { user } } = await sb.auth.getUser();
-    if (user?.email) { const { data: sf } = await sb.from("staff").select("name").eq("email", user.email.toLowerCase()).maybeSingle(); setMe({ email: user.email.toLowerCase(), name: (sf?.name as string) || "" }); }
+    if (user?.email) {
+      const { data: sf } = await sb.from("staff").select("name, role").eq("email", user.email.toLowerCase()).maybeSingle(); setMe({ email: user.email.toLowerCase(), name: (sf?.name as string) || "" });
+      if (["owner", "admin"].includes((sf?.role as string) || "")) {
+        const [{ data: pr }, { data: em }] = await Promise.all([sb.from("employee_pay").select("employee_id, rate"), sb.from("employees").select("id, first_name, last_name")]);
+        setPay({ rates: Object.fromEntries(((pr || []) as { employee_id: string; rate: number | null }[]).filter((x) => x.rate != null).map((x) => [x.employee_id, +x.rate!])), names: Object.fromEntries(((em || []) as { id: string; first_name: string; last_name: string }[]).map((x) => [x.id, `${x.first_name} ${x.last_name}`.trim()])) });
+      }
+    }
     const js: Job[] = [
       ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[] }[]).map((x) => ({ key: "o:" + x.id, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status, needs: needsForOrder(ps, x as never), href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" })),
       ...pv.map((x) => ({ key: "a:" + x.id, kind: "a" as const, id: x.id, number: x.visual_id, customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status_name, needs: needsForPrintavo(ps, { qty: x.qty, status_name: x.status_name, nickname: x.nickname, data: { groups: x.pvgroups as never } }), href: `/shop/archive/${x.id}`, owner: "" })),
@@ -995,6 +1003,15 @@ export default function MachineSchedule() {
    * working night until the last late job's in-hands date; a Saturday shift (4 or 8 hours); and the cheap combos.
    * Only the machines that run the late work get the extra time. Labor = extra hours × crew × wage × overtime rate.
    */
+  /** What an hour on this machine costs: its crew's rates added up (press operator + assistant + catcher). */
+  const crewCost = (m: Machine): { perHour: number; who: string[] } | null => {
+    if (!pay) return null;
+    const c = m.crew ? s.crews.find((k) => k.id === m.crew) : undefined;
+    if (!c?.members) return null;
+    const who: string[] = []; let perHour = 0;
+    for (const [k, l] of CREW_ROLES) { const id = c.members[k]; if (id && pay.rates[id] != null) { perHour += pay.rates[id]; who.push(`${(pay.names[id] || "").split(" ")[0] || l} $${pay.rates[id]}`); } }
+    return perHour ? { perHour, who } : null;
+  };
   const whatIfs = (): WhatIf[] => {
     const lab = s.labor, lateTypes = new Set<string>();
     for (const t of tray) if (!t.sug || t.sug.late) lateTypes.add(t.need.type);
@@ -1019,7 +1036,8 @@ export default function MachineSchedule() {
     const sat = days.find((d) => dow(d) === 6 && d > today) || (() => { let d = addDay(today, 1); while (dow(d) !== 6) d = addDay(d, 1); return d; })();
     const satShift = (a: number, b: number) => withExtra(() => [{ day: sat, a, b }]);
     const hoursOf = (sh: WhatIf["shifts"]) => sh.reduce((t, x) => t + (x.end_min - x.start_min) / 60, 0);
-    const costOf = (sh: WhatIf["shifts"], splits: number) => sh.reduce((t, x) => { const m = machines.find((y) => y.id === x.machine)!; return t + ((x.end_min - x.start_min) / 60) * people(m) * lab.wage * lab.otMultiplier; }, 0) + splits * 0.25 * lab.crewSize * lab.wage;
+    const perHr = (m: Machine) => crewCost(m)?.perHour ?? people(m) * lab.wage;
+    const costOf = (sh: WhatIf["shifts"], splits: number) => sh.reduce((t, x) => { const m = machines.find((y) => y.id === x.machine)!; return t + ((x.end_min - x.start_min) / 60) * perHr(m) * lab.otMultiplier; }, 0) + splits * 0.25 * lab.crewSize * lab.wage;
     const names = cand.map((m) => (crewOf(m) ? crewOf(m)!.leader : shortName(m))).join(", ");
     const lastWork = days.filter((d) => ![0, 6].includes(dow(d)));
     const span = lastWork.length ? `${dayLbl(lastWork[0]).split(",")[0]}–${dayLbl(lastWork[lastWork.length - 1])}` : "";
@@ -1175,13 +1193,13 @@ export default function MachineSchedule() {
         </div>
       ); })()}
       {downEdit && <DownPanel machines={machines} crews={s.crews} init={downEdit} offs={offs} today={today} win={[vStart, vEnd]} me={me.email} onClose={() => setDownEdit(null)} onSaved={(m) => { setDownEdit(null); setMsg(m); load(); }} />}
-      {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, ...hourly.map((h) => h.d), ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} onLog={(a, p) => open.slot && logAction(open.slot, a, p)} onSplit={(off) => splitByLocation(open, off)} />}
+      {open && <CardPanel s={s} c={open} cost={crewCost} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, ...hourly.map((h) => h.d), ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} onLog={(a, p) => open.slot && logAction(open.slot, a, p)} onSplit={(off) => splitByLocation(open, off)} />}
     </div>
   );
 }
 
 /** A job on the calendar: when it runs (every day it spans), the time breakdown, move it, mark it running or done, or take it off. */
-function CardPanel({ s, c, segs, days, win, onClose, onMove, onStatus, onUnbook, onLog, onSplit }: { s: ProductionSettings; c: Card; segs: Seg[]; days: string[]; win: [number, number]; onClose: () => void; onMove: (m: Machine, d: string, startMin: number | null) => void; onStatus: (sl: Slot, st: Slot["status"]) => void; onUnbook: (sl: Slot) => void; onLog: (a: "start" | "pause" | "resume" | "progress" | "done" | "not_started" | "reopen", p?: number) => void; onSplit: (off: string[]) => void }) {
+function CardPanel({ s, c, cost, segs, days, win, onClose, onMove, onStatus, onUnbook, onLog, onSplit }: { s: ProductionSettings; c: Card; cost: (m: Machine) => { perHour: number; who: string[] } | null; segs: Seg[]; days: string[]; win: [number, number]; onClose: () => void; onMove: (m: Machine, d: string, startMin: number | null) => void; onStatus: (sl: Slot, st: Slot["status"]) => void; onUnbook: (sl: Slot) => void; onLog: (a: "start" | "pause" | "resume" | "progress" | "done" | "not_started" | "reopen", p?: number) => void; onSplit: (off: string[]) => void }) {
   const [splitting, setSplitting] = useState<string[] | null>(null);
   const [log, setLog] = useState<{ id: string; action: string; progress: number | null; note: string; at: string; by: string }[]>([]);
   const [prog, setProg] = useState(Math.round(+(c.slot?.progress || 0) * 10) * 10);
@@ -1209,6 +1227,7 @@ function CardPanel({ s, c, segs, days, win, onClose, onMove, onStatus, onUnbook,
           </div>
           <div><b>{TYPE_LBL[c.need.type]}:</b> {c.need.label} · {c.need.qty} pcs{c.need.steps.some((x) => x.note) ? <span className="faint"> ({c.need.steps.find((x) => x.note)?.note})</span> : null}</div>
           <ul className="ms-parts">{est.parts.map((p, i) => <li key={i}><span>{p.label}</span><b>{fmtMin(p.minutes)}</b></li>)}<li className="tot"><span>Setup {fmtMin(est.setup)} · run {fmtMin(est.run)}{est.teardown ? ` · teardown ${fmtMin(est.teardown)}` : ""}</span><b>{fmtMin(est.minutes)}</b></li></ul>
+          {(() => { const k = cost(m); return k ? <div className="ms-cost"><b>Labor ${Math.round((est.minutes / 60) * k.perHour).toLocaleString()}</b><span>{fmtMin(est.minutes)} × ${k.perHour.toFixed(2).replace(/\.00$/, "")}/hr crew ({k.who.join(" + ")}) · ${(((est.minutes / 60) * k.perHour) / Math.max(1, glance(c.need, est.minutes).units)).toFixed(2)} a piece</span></div> : null; })()}
           {c.fromPv && c.minutes !== est.minutes && <div className="faint" style={{ fontSize: 12.5 }}>Printavo has it blocked for {fmtMin(c.minutes)}; our estimate is {fmtMin(est.minutes)}. Booking it here uses our estimate.</div>}
           {splitting && <div className="ms-ask">
             <b>Which part would you like to split off?</b>

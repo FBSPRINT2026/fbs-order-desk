@@ -3969,3 +3969,27 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-adv-n b{font-size:13.5px}
 .ms-adv-n b.good{color:var(--ok)}.ms-adv-n b.bad{color:var(--danger)}
 @media (max-width:640px){.ms-adv-r{grid-template-columns:1fr 1fr;}.ms-adv-t{grid-column:1/-1}.ms-adv-r .btn{grid-column:1/-1}}
+/* Employees → People & Teams */
+.tp-crews{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.tp-crew{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.tp-crew-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.tp-crew-h b{font-size:14px}
+.tp-crew-h .tmx-tag{margin-left:auto}
+.tp-role{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.tp-role select{min-width:0;width:100%;font-size:13px}
+.tp-depts{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start}
+.tp-dept{border:1px solid var(--line-2);border-radius:10px;padding:8px;background:var(--surface)}
+.tp-dept-h{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:13.5px}
+.tp-dept ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.tp-dept li{display:grid;grid-template-columns:minmax(0,1fr) 128px;gap:6px;align-items:center}
+.tp-dept li.old{opacity:.55}
+.tp-dept li select{font-size:12px;padding:3px 6px;min-width:0}
+.tp-p{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:8px;min-width:0;padding:4px;border-radius:8px}
+.tp-p:hover{background:var(--surface-2)}
+.tp-p-n{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.tp-p-n b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tp-p-n small{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tmx-av.sm{width:28px;height:28px;font-size:11px}
+.ms-cost{display:flex;flex-direction:column;gap:1px;padding:7px 10px;border-radius:8px;background:var(--ok-soft);font-size:12.5px}
+.ms-cost b{color:var(--ok);font-size:14px}
+.ms-cost span{color:var(--ink-2)}

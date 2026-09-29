@@ -36,7 +36,7 @@ export default function TimeEmployees({ d }: { d: TimeData }) {
   );
 }
 
-function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Partial<Employee>; onClose: () => void; onSaved: () => void }) {
+export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Partial<Employee>; onClose: () => void; onSaved: () => void }) {
   const [v, setV] = useState<Partial<Employee>>(e);
   const [staff, setStaff] = useState<{ email: string; name: string }[]>([]);
   const [pin, setPin] = useState(""), [rate, setRate] = useState(""), [salary, setSalary] = useState("");
@@ -65,6 +65,15 @@ function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Partial<Em
     }
     if (boss && (rate !== "" || salary !== "")) await sb.from("employee_pay").upsert({ employee_id: id, rate: rate === "" ? null : +rate, salary: salary === "" ? null : +salary, updated_at: new Date().toISOString() });
     setBusy(false); onSaved();
+  }
+  // removing someone keeps their punches and job time on record: they move to former employees and drop off the clock
+  async function remove() {
+    if (!v.id) return;
+    setBusy(true);
+    const r = await createClient().from("employees").update({ active: false, end_date: new Date().toISOString().slice(0, 10), updated_at: new Date().toISOString() }).eq("id", v.id);
+    setBusy(false);
+    if (r.error) return setErr(r.error.message);
+    onSaved();
   }
   async function clearPin() {
     if (!v.id) return;
@@ -102,7 +111,11 @@ function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Partial<Em
           {v.id && <label className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={v.active === false} onChange={(ev) => set("active", !ev.target.checked)} /> No longer works here (keeps their hours on record)</label>}
           {note && <div className="faint">{note}</div>}
           {err && <div className="pv-err">{err}</div>}
-          <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}><button type="button" className="btn primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save"}</button></div>
+          <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+            {v.id && v.active !== false && <button type="button" className="btn danger" style={{ marginRight: "auto" }} disabled={busy} onClick={remove}>Remove Employee</button>}
+            {v.id && v.active === false && <button type="button" className="btn" style={{ marginRight: "auto" }} disabled={busy} onClick={() => set("active", true)}>Bring Back</button>}
+            <button type="button" className="btn primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save"}</button>
+          </div>
         </div>
       </div>
     </div>
