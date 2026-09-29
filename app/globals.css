@@ -3685,3 +3685,16 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-l1>b{white-space:nowrap}
 .ms-l1>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:100%}
 .ms-blk.card.tiny .ms-l1{flex-wrap:nowrap}
+/* two days as one continuous hourly schedule: one header, then the second day joined on under a slim day bar */
+.ms-2d{display:flex;flex-direction:column}
+.ms-2d>.ms-dv:first-child{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.ms-2d>.ms-dv.cont{border-top:0;border-top-left-radius:0;border-top-right-radius:0}
+.ms-dv-sub0{display:flex;flex-direction:column;justify-content:center;padding:4px 6px;background:var(--accent-soft);border-top:2px solid var(--accent);border-bottom:1px solid var(--line);font-size:11px;line-height:1.2;position:sticky;left:0}
+.ms-dv-sub0 b{font-size:12.5px;color:var(--accent)}.ms-dv-sub0 span{display:block}.ms-dv-sub0 small{display:none}
+.ms-dv-sub{display:flex;flex-direction:column;gap:1px;padding:4px 6px;background:var(--accent-soft);border-top:2px solid var(--accent);border-bottom:1px solid var(--line);border-left:1px solid var(--line);min-width:0}
+.ms-dv-sub.off{background:color-mix(in srgb,var(--danger) 8%,var(--surface-2))}
+.ms-dv-sub .ms-used{font-size:10.5px;color:var(--ink-3)}
+.ms-dv-bar{display:flex;align-items:baseline;gap:8px;padding:6px 10px;background:var(--accent-soft);border-top:2px solid var(--accent);position:sticky;left:0}
+.ms-dv-bar b{font-size:14px;color:var(--accent)}.ms-dv-bar span{color:var(--ink-2);font-size:12.5px}.ms-dv-bar small{margin-left:auto;color:var(--ink-3);font-size:11.5px}
+.ms-dv-sub0{background:var(--accent-soft);border-bottom:1px solid var(--line)}
+.ms-dv-sub{border-top:0}

@@ -593,33 +593,47 @@ export default function MachineSchedule() {
   };
 
   /* ---------- Day view: machines across, the clock down ---------- */
-  const dayGrid = (day: string, o: { title?: ReactNode; colMin?: number; hourPx?: number } = {}) => {
+  const dayGrid = (day: string, o: { title?: ReactNode; colMin?: number; hourPx?: number; win?: [number, number]; sub?: ReactNode } = {}) => {
     const HOUR_PX = o.hourPx ?? HOUR_PX0, colMin = o.colMin ?? 112, gut = o.colMin ? 42 : 52;
+    // this grid's own clock window (the two-day view trims each day to its crews' hours ± 1 hour)
+    const [vS, vE] = o.win ?? [vStart, vEnd], rng = vE - vS;
+    const hrsL = Array.from({ length: Math.round(rng / 60) }, (_, i) => vS + i * 60);
+    const shade = (m: Machine) => offShade(m, day).map(([x, y]) => [Math.max(x, vS), Math.min(y, vE)]).filter(([x, y]) => y > x);
     return (
-    <div className="ms-dv" key={"dv" + day}>
+    <div className={"ms-dv" + (o.sub ? " cont" : "")} key={"dv" + day}>
       {o.title ? <div className="ms-dv-t">{o.title}</div> : null}
       <div className="ms-dv-grid" style={{ gridTemplateColumns: `${gut}px repeat(${machines.length}, minmax(${colMin}px,1fr))`, minWidth: gut + machines.length * colMin }}>
+        {o.sub ? <>
+          <div className="ms-dv-bar" style={{ gridColumn: "1 / -1" }}>{o.sub}</div>
+          <div className="ms-dv-sub0" />
+          {machines.map((m) => { const u = used(m, day), cap = capacityMin(s, m, shiftOn(m, day) ? day : undefined); return (
+            <div key={m.id} className={"ms-dv-sub " + m.type + (isOffDay(m, day) ? " off" : "")}>
+              <button type="button" className={"ms-crew" + (isOffDay(m, day) ? " off" : "")} onClick={() => setDownEdit({ machine: m.id, day, allDay: true })} title={isOffDay(m, day) ? "Off this day: tap to change" : "Mark this press (or its crew) off"}>{crewLine(m, day)}</button>
+              <small className="ms-used">{+(u / 60).toFixed(1)} / {+(cap / 60).toFixed(1)}h</small>
+            </div>
+          ); })}
+        </> : <>
         <div className="ms-dv-corner" />
         {machines.map((m) => { const u = used(m, day), cap = capacityMin(s, m, shiftOn(m, day) ? day : undefined); return (
           <div key={m.id} className={"ms-dv-h " + m.type + (isOffDay(m, day) ? " off" : "")}><b>{shortName(m)}</b><small title={crewOf(m) ? `${crewOf(m)!.leader}'s crew` : undefined}>{crewOf(m) ? <b className="ms-lead">{crewOf(m)!.leader}</b> : m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat press"}</small>
             <button type="button" className={"ms-crew" + (isOffDay(m, day) ? " off" : "")} onClick={() => setDownEdit({ machine: m.id, day, allDay: true })} title={isOffDay(m, day) ? "Off this day: tap to change" : "Mark this press (or its crew) off"}>{crewLine(m, day)}</button>
             <div className={"ms-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /></div>
             <small className="ms-used">{o.colMin ? `${+(u / 60).toFixed(1)} / ${+(cap / 60).toFixed(1)}h` : `${fmtMin(u)} / ${fmtMin(cap)}`}</small></div>
-        ); })}
-        <div className="ms-dv-gut" style={{ height: (range / 60) * HOUR_PX }}>{hours.map((h) => <span key={h} style={{ top: ((h - vStart) / 60) * HOUR_PX }}>{clock(h)}</span>)}</div>
+        ); })}</>}
+        <div className="ms-dv-gut" style={{ height: (rng / 60) * HOUR_PX }}>{hrsL.map((h) => <span key={h} style={{ top: ((h - vS) / 60) * HOUR_PX }}>{clock(h)}</span>)}</div>
         {machines.map((m) => (
-          <div key={m.id} className={"ms-dv-col" + (over === m.id + day ? (canDrop(m) ? " over" : " no") : "")} style={{ height: (range / 60) * HOUR_PX, backgroundSize: `100% ${HOUR_PX}px` }}
+          <div key={m.id} className={"ms-dv-col" + (over === m.id + day ? (canDrop(m) ? " over" : " no") : "")} style={{ height: (rng / 60) * HOUR_PX, backgroundSize: `100% ${HOUR_PX}px` }}
             onDragOver={(e) => { e.preventDefault(); setOver(m.id + day); }} onDragLeave={() => setOver("")}
-            onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, day, vStart + ((e.clientY - r.top) / HOUR_PX) * 60); }}
-            onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button")) return; const r = e.currentTarget.getBoundingClientRect(); setDownEdit({ machine: m.id, day, start: Math.floor((vStart + ((e.clientY - r.top) / HOUR_PX) * 60) / 30) * 30 }); }}
+            onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, day, vS + ((e.clientY - r.top) / HOUR_PX) * 60); }}
+            onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button")) return; const r = e.currentTarget.getBoundingClientRect(); setDownEdit({ machine: m.id, day, start: Math.floor((vS + ((e.clientY - r.top) / HOUR_PX) * 60) / 30) * 30 }); }}
             title="Click an open time to add downtime here">
-            {offShade(m, day).map(([a, b]) => <div key={a} className="ms-off" style={{ top: ((a - vStart) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} />)}
-            {(m.down?.[day] || []).map(([a0, b0, why, rate]) => { const [sa, sb] = shiftOn(m, day) || typicalShift(m), a = Math.max(a0, rate ? sa : a0), b = Math.min(b0, rate ? sb : b0); if (b <= a) return null; return rate
-              ? <div key={"sl" + a} className="ms-slow" style={{ top: ((a - vStart) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }}><button type="button" onClick={() => setDownEdit({ machine: m.id, day })} title={`${why}: ${m.name} runs at ${Math.round(rate * 100)}% ${clockLong(a)} – ${clockLong(b)} (jobs take ${+(1 / rate).toFixed(1)}× as long)`}>{why} · {Math.round(rate * 100)}%</button></div>
-              : <button type="button" key={"dn" + a} className="ms-down" style={{ top: ((a - vStart) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
-            {day === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now" style={{ top: ((now.min - vStart) / 60) * HOUR_PX }} />}
+            {shade(m).map(([a, b]) => <div key={a} className="ms-off" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} />)}
+            {(m.down?.[day] || []).map(([a0, b0, why, rate]) => { const [sa, sb] = shiftOn(m, day) || typicalShift(m), a = Math.max(a0, rate ? sa : a0, vS), b = Math.min(b0, rate ? sb : b0, vE); if (b <= a) return null; return rate
+              ? <div key={"sl" + a} className="ms-slow" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }}><button type="button" onClick={() => setDownEdit({ machine: m.id, day })} title={`${why}: ${m.name} runs at ${Math.round(rate * 100)}% ${clockLong(a)} – ${clockLong(b)} (jobs take ${+(1 / rate).toFixed(1)}× as long)`}>{why} · {Math.round(rate * 100)}%</button></div>
+              : <button type="button" key={"dn" + a} className="ms-down" style={{ top: ((a - vS) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
+            {day === today && now.min >= vS && now.min <= vE && <div className="ms-now" style={{ top: ((now.min - vS) / 60) * HOUR_PX }} />}
             {at(m, day).map((g) => { const h = Math.max(22, ((g.end - g.start) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes); return (
-              <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "")} style={{ top: ((g.start - vStart) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
+              <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "")} style={{ top: ((g.start - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
                 onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
                 <span className="ms-l1"><b>#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b><span>{g.c.job.customer}</span></span>
                 <span className="ms-l2">{g.c.job.name || g.c.need.label}</span>
@@ -752,12 +766,21 @@ export default function MachineSchedule() {
   // the five working days after the two hour-by-hour days
   const restDays = Array.from({ length: 21 }, (_, i) => addDay(d1, i + 1)).filter(visible).slice(0, 5);
   const dayTitle = (d: string) => { const u = machines.reduce((a, m) => a + used(m, d), 0); return <><b>{d === today ? "Today" : d === addDay(today, 1) ? "Tomorrow" : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}</b><span>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: d === today || d === addDay(today, 1) ? "short" : undefined, month: "short", day: "numeric" })}</span><small>{fmtMin(u)} booked</small></>; };
+  // a day's clock: an hour before the first crew starts to an hour after the last one leaves (and any work outside that)
+  const dayWin = (d: string): [number, number] => {
+    const sh = machines.map((m) => shiftOn(m, d)).filter(Boolean) as [number, number][];
+    const gs = machines.flatMap((m) => at(m, d));
+    const a0 = Math.min(...(sh.length ? sh.map((x) => x[0]) : [420]), ...gs.map((g) => g.start)), b0 = Math.max(...(sh.length ? sh.map((x) => x[1]) : [1080]), ...gs.map((g) => g.end));
+    return [Math.max(0, Math.floor((a0 - 60) / 60) * 60), Math.min(1440, Math.ceil((b0 + 60) / 60) * 60)];
+  };
   const split = () => (
     <div className="ms-split">
       <div className="ms-split-col">
         <div className="ms-split-h">Next two days · hour by hour</div>
-        {dayGrid(d0, { title: dayTitle(d0), colMin: 70, hourPx: 40 })}
-        {dayGrid(d1, { title: dayTitle(d1), colMin: 70, hourPx: 40 })}
+        <div className="ms-2d">
+          {dayGrid(d0, { title: dayTitle(d0), colMin: 70, hourPx: 40, win: dayWin(d0) })}
+          {dayGrid(d1, { sub: dayTitle(d1), colMin: 70, hourPx: 40, win: dayWin(d1) })}
+        </div>
       </div>
       <div className="ms-split-col r">
         <div className="ms-split-h">Next five days</div>
