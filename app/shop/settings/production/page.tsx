@@ -82,6 +82,7 @@ export default function ProductionSettingsPage() {
               <b>Every shift</b>
               {num("Press warm-up (minutes)", s.breaks.warmupMin, (x) => upd((d) => { d.breaks.warmupMin = Math.max(0, Math.min(120, x)); }), 5, "Blocked at the start of each shift, shown in red")}
               {num("Lunch (minutes)", s.breaks.lunchMin, (x) => upd((d) => { d.breaks.lunchMin = Math.max(0, Math.min(90, x)); }), 5, "0 = no lunch block")}
+              {num("Warm-up after lunch (minutes)", s.breaks.rewarmMin, (x) => upd((d) => { d.breaks.rewarmMin = Math.max(0, Math.min(60, x)); }), 5, "Warming the press back up")}
               {num("Lunch when a shift is over (hours)", s.breaks.lunchAfterHours, (x) => upd((d) => { d.breaks.lunchAfterHours = Math.max(0, Math.min(16, x)); }), 0.5)}
               <div className="field"><label>Lunch usually starts</label><select value={s.breaks.lunchAt} onChange={(e) => upd((d) => { d.breaks.lunchAt = +e.target.value; })}>{LUNCH_STARTS.map((t) => <option key={t} value={t}>{clock12(t)}</option>)}</select><small className="faint">Each crew can move it above</small></div>
             </div>

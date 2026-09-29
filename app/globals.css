@@ -3712,7 +3712,7 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-warm.h,.ms-lunch.h{top:0;bottom:0;right:auto;border:0}
 .ms-warm.h{background:color-mix(in srgb,var(--danger) 28%,transparent)}
 .ms-lunch.h{background:color-mix(in srgb,var(--ink) 10%,transparent)}
-.ps-brk{display:grid;grid-template-columns:auto repeat(4,minmax(150px,1fr));gap:10px 14px;align-items:end;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-2)}
+.ps-brk{display:grid;grid-template-columns:auto repeat(5,minmax(140px,1fr));gap:10px 14px;align-items:end;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-2)}
 .ps-brk>b{align-self:center;font-size:12.5px}
 @media (max-width:760px){.ps-brk{grid-template-columns:1fr 1fr}.ps-brk>b{grid-column:1/-1}}
 

@@ -38,8 +38,8 @@ export type Shift = [number, number] | null;
 /** A press crew and its leader's schedule (hours for each weekday, 0 = Sunday; null = off that day). */
 export type Crew = { id: string; leader: string; week: Shift[]; /** lunch start (minutes after midnight), default the shop's */ lunchAt?: number };
 /** Built into every shift: press warm-up at the start, and a lunch break on long shifts. */
-export type Breaks = { warmupMin: number; lunchMin: number; lunchAfterHours: number; lunchAt: number };
-export const DEFAULT_BREAKS: Breaks = { warmupMin: 30, lunchMin: 30, lunchAfterHours: 8, lunchAt: 720 };
+export type Breaks = { warmupMin: number; lunchMin: number; lunchAfterHours: number; lunchAt: number; /** warming the press back up after lunch */ rewarmMin: number };
+export const DEFAULT_BREAKS: Breaks = { warmupMin: 30, lunchMin: 30, lunchAfterHours: 8, lunchAt: 720, rewarmMin: 10 };
 export type ProductionSettings = {
   machines: Machine[];
   crews: Crew[];
@@ -368,12 +368,17 @@ export function lunchStart(mach: Machine, sh: [number, number], at?: number): nu
   if (!(b.lunchMin > 0 && sh[1] - sh[0] > b.lunchAfterHours * 60)) return null;
   return Math.max(sh[0] + b.warmupMin, Math.min(at ?? b.lunchAt, sh[1] - b.lunchMin));
 }
-/** Press warm-up at the start of every shift, and lunch on a shift over 8 hours (noon unless `lunchAt` moves it). */
+/** Press warm-up at the start of every shift, and lunch on a shift over 8 hours (noon unless `lunchAt` moves it) followed by a short warm-up. */
 export function breakDowns(mach: Machine, sh: [number, number], lunchAt?: number): Down[] {
   const b = mach.brk || DEFAULT_BREAKS, out: Down[] = [];
   if (b.warmupMin > 0) out.push([sh[0], Math.min(sh[1], sh[0] + b.warmupMin), "Warm-up", 0]);
   const at = lunchStart(mach, sh, lunchAt);
-  if (at != null) out.push([at, at + b.lunchMin, "Lunch", 0]);
+  if (at != null) {
+    out.push([at, at + b.lunchMin, "Lunch", 0]);
+    // then the press warms back up (10 minutes) before printing again
+    const rw = b.rewarmMin ?? DEFAULT_BREAKS.rewarmMin;
+    if (rw > 0) out.push([at + b.lunchMin, Math.min(sh[1], at + b.lunchMin + rw), "Warm-up", 0]);
+  }
   return out;
 }
 /** Everything that takes time out of a day: warm-up, lunch, downtime and slow stretches. */
