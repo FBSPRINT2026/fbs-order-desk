@@ -530,7 +530,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <div className="panel-h"><h2>Job details</h2>
                 <span className="row" style={{ gap: 14 }}>
                   <label className="check" style={{ fontSize: 13, color: o.rush ? "var(--danger)" : undefined, fontWeight: o.rush ? 700 : 400 }} title="Rush job: 🔥 on the production calendar"><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} /> 🔥 Rush</label>
-                  <label className="check" style={{ fontSize: 13, color: o.firm ? "#8a4b00" : undefined, fontWeight: o.firm ? 700 : 400 }} title="Firm in-hands date: it can't move. 🔨 on the production calendar"><input type="checkbox" checked={!!o.firm} onChange={(e) => patch((d) => { d.firm = e.target.checked; })} /> 🔨 Firm date</label>
+                  <label className="check" style={{ fontSize: 13, color: o.firm ? "#8a4b00" : undefined, fontWeight: o.firm ? 700 : 400 }} title="Firm in-hands date: it can't move. ⛰️ on the production calendar"><input type="checkbox" checked={!!o.firm} onChange={(e) => patch((d) => { d.firm = e.target.checked; })} /> ⛰️ Firm date</label>
                 </span>
               </div>
               <div className="panel-b stack">
@@ -540,13 +540,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   <ProjectPicker orderId={o.id} customerId={o.customer_id} value={(o as { project_id?: string | null }).project_id || null} />
                   <div className="field"><label htmlFor="o-prod">Production date</label><input id="o-prod" type="date" value={o.production_date || ""} onChange={(e) => patch((d) => { d.production_date = e.target.value || null; })} /></div>
                   <div className="field"><label htmlFor="o-due">In-hands date{o.firm ? " (firm)" : ""}</label>
-                    <div className="row" style={{ gap: 6 }}>
-                      <input id="o-due" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} style={{ flex: 1, minWidth: 0 }} />
-                      <select aria-label="Needed by" value={o.due_time ?? ""} onChange={(e) => patch((d) => { d.due_time = e.target.value === "" ? null : +e.target.value; if (e.target.value !== "") d.firm = true; })} style={{ width: 118 }} title="Needed by a set time that day (makes the date firm)">
-                        <option value="">Any time</option>
-                        {Array.from({ length: 29 }, (_, i) => 360 + i * 30).map((t) => <option key={t} value={t}>by {`${((Math.floor(t / 60) + 11) % 12) + 1}:${String(t % 60).padStart(2, "0")} ${t >= 720 ? "PM" : "AM"}`}</option>)}
-                      </select>
+                    <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                      <input id="o-due" type="date" value={o.due_date || ""} onChange={(e) => patch((d) => { d.due_date = e.target.value || null; })} style={{ flex: "1 1 140px", minWidth: 0 }} />
+                      {o.due_time != null && <input type="time" step={900} aria-label="Due by" value={`${String(Math.floor(o.due_time / 60)).padStart(2, "0")}:${String(o.due_time % 60).padStart(2, "0")}`} onChange={(e) => { const [h, m] = e.target.value.split(":").map(Number); if (!isNaN(h)) patch((d) => { d.due_time = h * 60 + (m || 0); d.firm = true; }); }} style={{ flex: "0 1 130px" }} />}
                     </div>
+                    <label className="check" style={{ fontSize: 12.5, marginTop: 4 }} title="Needed by a set time that day. Makes the date firm (⛰️) on the production calendar."><input type="checkbox" checked={o.due_time != null} onChange={(e) => patch((d) => { d.due_time = e.target.checked ? 600 : null; if (e.target.checked) d.firm = true; })} /> Specific time</label>
                   </div>
                   <div className="field"><label htmlFor="o-del">Pickup, ship or delivery</label>
                     <select id="o-del" value={o.delivery_method || "pickup"} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Delivery; if (d.delivery_method !== "pickup" && !d.ship_to && cust) d.ship_to = cust.ship_address || cust.address || ""; if (d.delivery_method === "ship" && !d.ship_method) d.ship_method = "UPS Ground"; })}>
