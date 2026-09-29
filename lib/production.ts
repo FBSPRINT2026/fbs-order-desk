@@ -76,10 +76,10 @@ const m = (id: string, name: string, type: MachineType, colors: number, heads: n
 const crew = (id: string, leader: string, start: number, end: number): Crew => ({ id, leader, week: [0, 1, 2, 3, 4, 5, 6].map((d): Shift => (d >= 1 && d <= 5 ? [start, end] : null)) });
 export const DEFAULT_PRODUCTION: ProductionSettings = {
   crews: [
-    crew("c-miguel", "Miguel", 480, 1080), // 8 AM – 6 PM
-    crew("c-ana", "Ana", 300, 900), // 5 AM – 3 PM
-    crew("c-kelsey", "Kelsey", 420, 1080),
-    crew("c-juan", "Juan", 420, 1080),
+    crew("c-miguel", "Miguel", 390, 960), // 6:30 AM – 4 PM
+    crew("c-ana", "Ana", 360, 900), // 6 AM – 3 PM
+    crew("c-kelsey", "Kelsey", 360, 870), // 6 AM – 2:30 PM
+    crew("c-juan", "Juan", 420, 930), // 7 AM – 3:30 PM
   ],
   machines: [
     { ...m("p1", "Press 1 · 12C Gauntlet III", "screen", 12, 1, "Press 1"), crew: "c-miguel" },

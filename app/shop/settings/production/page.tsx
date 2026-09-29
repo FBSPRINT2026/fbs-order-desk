@@ -52,27 +52,23 @@ export default function ProductionSettingsPage() {
         <section className="panel">
           <div className="panel-h"><h2>Crews</h2><button type="button" className="btn sm" onClick={() => upd((d) => { d.crews.push({ id: "c" + Date.now().toString(36), leader: "", week: [null, [420, 1080], [420, 1080], [420, 1080], [420, 1080], [420, 1080], null] }); })}>+ Add Crew</button></div>
           <div className="panel-b">
-            <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Each crew leader&apos;s hours. A press with a crew (pick it in Machines below) runs on that crew&apos;s hours on the production calendar. Leave a day blank when the crew doesn&apos;t work it. Vacations and days out are marked on the calendar (tap a press&apos;s crew line, or &quot;off?&quot; on a day).</p>
-            <div className="tbl-wrap"><table className="rv-tbl ps-crews"><thead><tr><th>Crew leader</th>{WEEK_ORDER.map((di) => <th key={di}>{DAYS[di]}</th>)}<th /></tr></thead>
+            <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Each crew&apos;s regular schedule. A press with a crew (pick it in Machines below) runs on that crew&apos;s hours on the production calendar. Vacations and days a crew is out are marked on the calendar itself (tap a press&apos;s hours, or &quot;off?&quot; on a day).</p>
+            <div className="tbl-wrap"><table className="rv-tbl ps-crews"><thead><tr><th>Crew leader</th><th>Starts</th><th>Ends</th><th>Days</th><th className="r">Hours</th><th>Runs</th><th /></tr></thead>
               <tbody>{s.crews.map((c, i) => {
                 const set = (fn: (x: Crew) => void) => upd((d) => fn(d.crews[i]));
+                const gen = (c.week.find(Boolean) || [420, 1080]) as [number, number];
+                // one schedule for every day the crew works
+                const setHours = (a: number, b: number) => set((x) => { const on = x.week.some(Boolean) ? x.week.map(Boolean) : [false, true, true, true, true, true, false]; x.week = on.map((w) => (w ? [a, Math.max(a + 15, b)] as [number, number] : null)); });
                 const presses = s.machines.filter((m) => m.crew === c.id).map((m) => m.name.split(" · ")[0]);
                 return (
                   <tr key={c.id}>
-                    <td><input type="text" value={c.leader} placeholder="Name" onChange={(e) => set((x) => { x.leader = e.target.value; })} /><div className="faint" style={{ fontSize: 11.5 }}>{presses.length ? presses.join(", ") : "No press yet"}</div></td>
-                    {WEEK_ORDER.map((di) => { const sh = c.week[di]; return (
-                      <td key={di} className={"ps-shift" + (sh ? "" : " off")}>
-                        {sh ? <>
-                          <input type="time" step={900} value={toTime(sh[0])} aria-label={`${DAYS[di]} start`} onChange={(e) => set((x) => { const v = fromTime(e.target.value); if (v != null && x.week[di]) x.week[di] = [v, Math.max(v + 15, x.week[di]![1])]; })} />
-                          <input type="time" step={900} value={toTime(sh[1] % 1440)} aria-label={`${DAYS[di]} end`} onChange={(e) => set((x) => { const v = fromTime(e.target.value); if (v != null && x.week[di]) x.week[di] = [x.week[di]![0], Math.max(x.week[di]![0] + 15, v)]; })} />
-                          <span className="ps-shift-f"><small className="faint">{hrs(sh)}h</small><button type="button" className="linkbtn" onClick={() => set((x) => { x.week[di] = null; })}>off</button></span>
-                        </> : <button type="button" className="linkbtn" onClick={() => set((x) => { x.week[di] = x.week[1] || [420, 1080]; })}>+ works</button>}
-                      </td>
-                    ); })}
-                    <td><div className="stack" style={{ gap: 4 }}>
-                      <button type="button" className="linkbtn" title="Use Monday's hours on Tuesday–Friday" onClick={() => set((x) => { const mon = x.week[1]; if (mon) for (const d of [2, 3, 4, 5]) x.week[d] = [...mon] as [number, number]; })}>Mon → weekdays</button>
-                      <button type="button" className="linkbtn danger" onClick={() => upd((d) => { d.crews.splice(i, 1); d.machines.forEach((m) => { if (m.crew === c.id) m.crew = undefined; }); })}>Remove</button>
-                    </div></td>
+                    <td><input type="text" value={c.leader} placeholder="Name" onChange={(e) => set((x) => { x.leader = e.target.value; })} /></td>
+                    <td><input type="time" step={900} value={toTime(gen[0])} aria-label="Starts" onChange={(e) => { const v = fromTime(e.target.value); if (v != null) setHours(v, gen[1]); }} /></td>
+                    <td><input type="time" step={900} value={toTime(gen[1] % 1440)} aria-label="Ends" onChange={(e) => { const v = fromTime(e.target.value); if (v != null) setHours(gen[0], v); }} /></td>
+                    <td><div className="ps-days">{WEEK_ORDER.map((di) => <button key={di} type="button" className={c.week[di] ? "on" : ""} onClick={() => set((x) => { x.week[di] = x.week[di] ? null : [...gen] as [number, number]; })}>{DAYS[di][0]}</button>)}</div></td>
+                    <td className="r">{hrs(gen)}</td>
+                    <td className="faint" style={{ fontSize: 12.5 }}>{presses.length ? presses.join(", ") : "No press yet"}</td>
+                    <td><button type="button" className="linkbtn danger" onClick={() => upd((d) => { d.crews.splice(i, 1); d.machines.forEach((m) => { if (m.crew === c.id) m.crew = undefined; }); })}>Remove</button></td>
                   </tr>
                 );
               })}</tbody></table></div>
