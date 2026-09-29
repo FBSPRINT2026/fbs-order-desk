@@ -186,12 +186,12 @@ export default function AccountAreas({ mode, projectsPanel, projectsCount, progr
             {rows.map((o) => (
               <tr key={o.id} className={!o.archived && o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
                 <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-                <td><div className="aa-t">{o.nickname || (cols === "quote" ? "Quote" : "Order")}{o.archived && <span className="aa-arch" title="A past order from our records (read-only)">Archived</span>}</div><div className="aa-s">{o.qty} pcs</div></td>
+                <td className="m"><div className="aa-t">{o.nickname || (cols === "quote" ? "Quote" : "Order")}{o.archived && <span className="aa-arch" title="A past order from our records (read-only)">Archived</span>}</div><div className="aa-s">{o.qty} pcs</div></td>
                 <td>{pill(o)}</td>
-                <td>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
-                {cols !== "quote" && <td className="r num">{money(o.paid)}</td>}
-                {cols !== "quote" && <td className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{money(Math.max(0, o.balance))}</td>}
-                <td className="r num b">{money(o.total)}</td>
+                <td className="dt" data-l={cols === "quote" ? "Created" : "In hands"}>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
+                {cols !== "quote" && <td className="r num" data-l="Paid">{money(o.paid)}</td>}
+                {cols !== "quote" && <td data-l="Balance" className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{money(Math.max(0, o.balance))}</td>}
+                <td className="r num b" data-l="Total">{money(o.total)}</td>
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={7}><div className="aa-empty">{list.length ? `No matches for “${q}”.` : "Nothing here yet."}</div></td></tr>}
@@ -375,14 +375,14 @@ export default function AccountAreas({ mode, projectsPanel, projectsCount, progr
         <tbody>
           {list.map((o) => (
             <tr key={o.id} className={paySel.includes(o.id) ? "sel" : ""} onClick={() => (canPay ? toggle(o.id) : router.push(orderHref(o.id)))}>
-              {canPay && <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${isQuote ? "quote" : "order"} ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} /></td>}
+              {canPay && <td className="ck" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${isQuote ? "quote" : "order"} ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} /></td>}
               <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-              <td><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{isQuote ? (o.due_date ? `In hands ${when(o.due_date)}` : "") : payDue(o) ? `Payment due ${when(payDue(o))}` : "Due when the order is done"}</div></td>
+              <td className="m"><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{isQuote ? (o.due_date ? `In hands ${when(o.due_date)}` : "") : payDue(o) ? `Payment due ${when(payDue(o))}` : "Due when the order is done"}</div></td>
               <td>{pill(o)}</td>
-              <td className="r num">{money(o.total)}</td>
-              {!isQuote && <td className="r num">{money(o.paid)}</td>}
-              <td className="r num aa-due">{money(o.balance)}</td>
-              {canPay && <td className="r" onClick={(e) => e.stopPropagation()}><button type="button" className="btn sm" onClick={() => { setPayAmt(undefined); setPayNow([item(o)]); }}>Pay</button></td>}
+              <td className="r num" data-l="Total">{money(o.total)}</td>
+              {!isQuote && <td className="r num" data-l="Paid">{money(o.paid)}</td>}
+              <td className="r num aa-due" data-l="Balance">{money(o.balance)}</td>
+              {canPay && <td className="r pay" onClick={(e) => e.stopPropagation()}><button type="button" className="btn sm" onClick={() => { setPayAmt(undefined); setPayNow([item(o)]); }}>Pay</button></td>}
             </tr>
           ))}
           {!list.length && <tr><td colSpan={8}><div className="aa-empty">{isQuote ? "No quotes waiting." : "Nothing due right now. Thank you!"}</div></td></tr>}
@@ -445,11 +445,11 @@ export default function AccountAreas({ mode, projectsPanel, projectsCount, progr
                   const many = g.lines.length > 1, open = openPay === g.key;
                   return [
                     <tr key={g.key} className={many ? "ph-g" + (open ? " open" : "") : ""} onClick={() => (many ? setOpenPay(open ? null : g.key) : router.push(g.lines[0].href || orderHref(g.lines[0].order_id)))}>
-                      <td>{when(g.date)}</td>
-                      <td>{many ? <button type="button" className="ph-toggle" aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpenPay(open ? null : g.key); }}>{g.lines.length} invoices <span aria-hidden="true">{open ? "▴" : "▾"}</span></button>
+                      <td className="dt">{when(g.date)}</td>
+                      <td className="m">{many ? <button type="button" className="ph-toggle" aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpenPay(open ? null : g.key); }}>{g.lines.length} invoices <span aria-hidden="true">{open ? "▴" : "▾"}</span></button>
                         : <Link className="num" href={g.lines[0].href || orderHref(g.lines[0].order_id)} onClick={(e) => e.stopPropagation()}>#{g.lines[0].number}</Link>}</td>
-                      <td>{g.method || "—"}{g.fee > 0.004 ? <small className="faint"> (+{money(g.fee)} card fee)</small> : null}</td>
-                      <td className="r num b">{money(g.total + g.fee)}</td>
+                      <td className="mt">{g.method || "—"}{g.fee > 0.004 ? <small className="faint"> (+{money(g.fee)} card fee)</small> : null}</td>
+                      <td className="r num b amt">{money(g.total + g.fee)}</td>
                     </tr>,
                     many && open ? (
                       <tr key={g.key + "-d"} className="ph-d"><td colSpan={4}>

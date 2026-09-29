@@ -2587,7 +2587,6 @@ a.as-ai{text-decoration:none}
 .pd-due.bad{color:var(--danger);font-weight:700}
 .pd-foot{display:flex;justify-content:flex-end;padding-top:10px}
 @media (max-width: 1100px){.dash-cols,.dash-2{grid-template-columns:1fr}}
-@media (max-width: 640px){.pd-tbl th:nth-child(3),.pd-tbl td:nth-child(3){display:none}}
 
 /* search boxes: microphone on the right (components/SearchInput) */
 .sx{position:relative;display:flex;align-items:center;flex:1 1 auto;min-width:0}
@@ -2614,3 +2613,104 @@ a.as-ai{text-decoration:none}
 .db-msg-empty .dme-bg{fill:var(--accent-soft,#E3F3FB)}
 .db-msg-empty b{font-size:17px;color:var(--ink)}
 .db-msg-empty span{font-size:14px;color:var(--ink-3);max-width:380px;line-height:1.45}
+
+/* dashboard: ask-AI bar under the date, with Everyone / Mine beside it */
+.dash-top{display:flex;align-items:center;gap:12px;margin:-4px 0 16px}
+.ai-bar{flex:1;display:flex;align-items:center;gap:8px;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:5px 5px 5px 12px;box-shadow:0 1px 3px rgba(20,29,43,.05)}
+.ai-bar:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.ai-bar-i{width:18px;height:18px;flex:none;fill:var(--fbs-orange)}
+.ai-bar input{border:0!important;box-shadow:none!important;background:transparent!important;font-size:15px;padding:8px 34px 8px 2px}
+.ai-bar-go{flex:none}
+.dash-who{flex:none}
+.dash-who button{padding:6px 12px}
+
+/* every grid on the dashboard can shrink to the screen */
+.dash-2-1,.dash-2,.dash-3,.dash-cols{min-width:0}
+.dash-row>*,.dash-col>*{min-width:0}
+.db-main b{overflow-wrap:anywhere}
+
+@media (max-width: 1100px){.dash-2-1,.dash-3,.dash-2,.dash-cols{grid-template-columns:minmax(0,1fr)}}
+@media (max-width: 700px){
+  .main{padding-inline:14px}
+  .dash-top{flex-wrap:wrap;gap:8px}
+  .ai-bar{flex:1 1 100%}
+  .ai-bar-go{display:none}
+  .dash-who{margin-left:auto}
+  .dash-who button{padding:5px 10px;font-size:12.5px}
+  .db-card{padding:12px}
+  .db-card-h{flex-wrap:wrap;row-gap:4px}
+  .db-card-h .db-h-note{display:none}
+  .db-tabs{margin:6px 0 0;width:100%}
+  .db-tabs button{flex:1;justify-content:center;padding:7px 8px}
+  /* production: tabs in a tidy grid, each job a two-line card instead of a wide table */
+  .pd-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
+  .pd-tabs button{justify-content:center;padding:7px 4px;font-size:12px;white-space:nowrap}
+  .pd-legend{gap:6px 12px}
+  .pd-lg{font-size:12px}
+  .pd-tbl thead{display:none}
+  .pd-tbl,.pd-tbl tbody{display:block}
+  .pd-tbl tr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"o c d" "o n s";column-gap:10px;row-gap:2px;padding:9px 2px;border-bottom:1px solid var(--line-2)}
+  .pd-tbl td{display:block;padding:0;border:0;min-width:0}
+  .pd-tbl td.pd-o{grid-area:o;align-self:start}
+  .pd-tbl td.pd-c{grid-area:c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pd-tbl td.pd-n{grid-area:n;max-width:none;font-size:12.5px}
+  .pd-tbl td.pd-s{grid-area:s;justify-self:end}
+  .pd-tbl td.pd-due{grid-area:d;font-size:12.5px}
+  .pd-tbl .db-num{min-width:0}
+  /* list rows: amounts and buttons stay on the right, names wrap */
+  .db-row{gap:8px;align-items:flex-start}
+  .db-num{min-width:0}
+  .db-side{flex-direction:column;align-items:flex-end;gap:4px}
+  .db-msg-empty{min-height:220px;padding:18px 8px}
+  .db-msg-empty svg{width:130px}
+  .an-side-k b{font-size:21px}
+}
+.pd-tabs .t-short{display:none}
+@media (max-width: 700px){.pd-tabs{grid-template-columns:repeat(5,minmax(0,1fr));gap:2px}.pd-tabs .t-full{display:none}.pd-tabs .t-short{display:inline}.pd-tabs button{flex-direction:column;gap:2px;padding:6px 2px}}
+.pd-tabs button{white-space:nowrap}
+.pd-tbl td.pd-c{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* customer portal on phones: nothing wider than the screen */
+@media (max-width: 640px){
+  .portal .p-main{padding-inline:12px}
+  .portal .p-top-in{padding-inline:14px}
+  .p-hero{padding:18px 18px 16px;border-radius:14px}
+  .p-hero h1{font-size:25px;line-height:1.15}
+  .p-hero h1::after{width:100%;min-width:0}
+  .p-hero-sub{font-size:13.5px}
+  /* the area tabs: a tidy grid of icon tiles instead of a strip that scrolls sideways */
+  .aa-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;overflow:visible;padding:6px}
+  .aa-tab{flex-direction:column;gap:3px;padding:8px 2px;font-size:10.5px;letter-spacing:.02em;min-width:0;position:relative}
+  .aa-tab span:not(.aa-n){max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .aa-tab .aa-n{position:absolute;top:3px;right:6px;min-width:16px;padding:0 4px;font-size:10px}
+  .pd-top.with-pa .pa-ideas{flex-wrap:wrap;overflow:visible}
+  .pd-top.with-pa .pa-ideas button{flex:0 1 auto}
+  /* tables become stacked cards */
+  .aa-tblcard{overflow:visible}
+  .aa-tbl{min-width:0;font-size:14px}
+  .aa-tbl thead{display:none}
+  .aa-tbl,.aa-tbl tbody{display:block}
+  .aa-tbl tr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;padding:12px 14px;border-bottom:1px solid var(--line-2,var(--line))}
+  .aa-tbl tbody tr:last-child{border-bottom:0}
+  .aa-tbl td{display:block;padding:0;border:0;min-width:0}
+  .aa-tbl td.r{text-align:left}
+  .aa-tbl tr::after{content:"";flex-basis:100%;height:0;order:5}
+  .aa-tbl td.m{flex:1 1 0;min-width:0}
+  .aa-tbl td.m .aa-t{overflow-wrap:anywhere}
+  .aa-tbl td[data-l]{font-size:13px;order:6}
+  .aa-tbl td[data-l]::before{content:attr(data-l) ": ";color:var(--ink-3);font-weight:600;font-size:12px}
+  .aa-tbl td.pay{order:7;margin-left:auto}
+  .aa-tbl.ph td.dt{order:0;font-weight:700}
+  .aa-tbl.ph td.amt{order:1;margin-left:auto}
+  .aa-tbl.ph td.m{order:6;flex:1 1 auto}
+  .aa-tbl.ph td.mt{order:7;color:var(--ink-3);font-size:13px}
+  .aa-tbl tr.ph-d td,.aa-tbl td[colspan]{flex:1 1 100%}
+}
+/* Printavo sync: orders by year (a year with none found is a hole) */
+.psy-years{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.psy-y{display:flex;flex-direction:column;gap:1px;padding:7px 9px;border-radius:9px;background:var(--surface-2);border-left:4px solid var(--ok)}
+.psy-y span{font-size:12px;color:var(--ink-3);font-weight:700}
+.psy-y b{font-size:16px;font-variant-numeric:tabular-nums}
+.psy-y small{font-size:11px;color:var(--ink-3)}
+.psy-y.part{border-left-color:var(--fbs-orange)}
+.psy-y.hole{border-left-color:var(--danger);background:var(--danger-soft)}

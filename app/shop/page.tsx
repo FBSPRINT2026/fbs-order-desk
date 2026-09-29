@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import AssistantStrip from "@/components/AssistantStrip";
+import AiSearch from "@/components/AiSearch";
 import SalesAnalytics from "@/components/SalesAnalytics";
 import { Pill } from "@/components/bits";
 import { money } from "@/lib/format";
@@ -152,7 +153,7 @@ export default function Dashboard() {
     { k: "blanks", label: "Blanks", match: (j) => j.status === "blanks" },
     { k: "production", label: "In Production", match: (j) => j.status === "production" },
     { k: "issue", label: "Issues", match: (j) => j.status === "issue" },
-    { k: "ship", label: "Ready To Ship", match: (j) => j.ship || j.status === "ready" },
+    { k: "ship", label: "Ready To Ship", short: "Ship", match: (j) => j.ship || j.status === "ready" },
   ];
   const mineJobs = (jobs || []).filter((j) => isMine(j.customer_id, j.owner));
   const stageN = stages.map((st) => ({ ...st, n: mineJobs.filter(st.match).length }));
@@ -161,11 +162,11 @@ export default function Dashboard() {
   const work = mineJobs.filter((j) => !["quote", "quote_sent", "request"].includes(j.status));
   const byDue = (a: Job, b: Job) => (a.due || "").localeCompare(b.due || "") || a.number - b.number;
   const buckets = [
-    { k: "late", label: "Late", jobs: v ? v.late : [], empty: "Nothing late." },
-    { k: "today", label: "Due Today", jobs: work.filter((j) => j.due === t0 && !j.ship), empty: "Nothing else due today." },
-    { k: "tomorrow", label: "Tomorrow", jobs: work.filter((j) => j.due === t1 && !j.ship), empty: "Nothing due tomorrow." },
-    { k: "week", label: "Next 7 Days", jobs: work.filter((j) => j.due && j.due > t1 && j.due <= t7 && !j.ship).sort(byDue), empty: "Nothing else due this week." },
-    { k: "ship", label: "Ready To Ship", jobs: mineJobs.filter((j) => j.ship).sort(byDue), empty: "Nothing waiting to ship." },
+    { k: "late", label: "Late", short: "Late", jobs: v ? v.late : [], empty: "Nothing late." },
+    { k: "today", label: "Due Today", short: "Today", jobs: work.filter((j) => j.due === t0 && !j.ship), empty: "Nothing else due today." },
+    { k: "tomorrow", label: "Tomorrow", short: "Tmrw", jobs: work.filter((j) => j.due === t1 && !j.ship), empty: "Nothing due tomorrow." },
+    { k: "week", label: "Next 7 Days", short: "7 Days", jobs: work.filter((j) => j.due && j.due > t1 && j.due <= t7 && !j.ship).sort(byDue), empty: "Nothing else due this week." },
+    { k: "ship", label: "Ready To Ship", short: "Ship", jobs: mineJobs.filter((j) => j.ship).sort(byDue), empty: "Nothing waiting to ship." },
   ];
   const pk = prodTab || (buckets.find((b2) => b2.k !== "ship" && b2.jobs.length)?.k ?? "today");
   const cur = buckets.find((b2) => b2.k === pk) || buckets[1];
@@ -176,9 +177,14 @@ export default function Dashboard() {
     <>
       <div className="page-head">
         <div><div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div><h1>Dashboard</h1></div>
-        <div className="rv-seg" role="group" aria-label="Whose accounts">
-          <button type="button" className={!mine ? "on" : ""} onClick={() => setMine(false)}>Everyone</button>
-          <button type="button" className={mine ? "on" : ""} onClick={() => setMine(true)}>My accounts</button>
+      </div>
+
+      {/* ask AI / search everything, with whose accounts the page shows beside it */}
+      <div className="dash-top">
+        <AiSearch />
+        <div className="rv-seg dash-who" role="group" aria-label="Whose accounts to show">
+          <button type="button" className={!mine ? "on" : ""} onClick={() => setMine(false)} title="Show every account">Everyone</button>
+          <button type="button" className={mine ? "on" : ""} onClick={() => setMine(true)} title="Only the customers you own">Mine</button>
         </div>
       </div>
 
@@ -239,17 +245,17 @@ export default function Dashboard() {
                 <Link key={s2.k} href="/shop/board" className={"pd-lg" + (s2.n ? "" : " zero") + (s2.k === "issue" && s2.n ? " bad" : "")}><i className={"pd-" + s2.k} />{s2.label}<b>{s2.n}</b></Link>
               ))}</div>
               <div className="aa-sub pd-tabs" role="tablist">{buckets.map((b2) => (
-                <button key={b2.k} type="button" role="tab" aria-selected={pk === b2.k} className={(pk === b2.k ? "on" : "") + (b2.k === "late" && b2.jobs.length ? " bad" : "")} onClick={() => setProdTab(b2.k)}>{b2.label}<span className="aa-n">{b2.jobs.length}</span></button>
+                <button key={b2.k} type="button" role="tab" aria-selected={pk === b2.k} className={(pk === b2.k ? "on" : "") + (b2.k === "late" && b2.jobs.length ? " bad" : "")} onClick={() => setProdTab(b2.k)}><span className="t-full">{b2.label}</span><span className="t-short">{b2.short}</span><span className="aa-n">{b2.jobs.length}</span></button>
               ))}</div>
               <div className="db-scroll pd-scroll">{list(cur.jobs.length, (
                 <table className="rv-tbl pd-tbl">
                   <thead><tr><th>Order</th><th>Customer</th><th>Job</th><th>Stage</th><th className="r">Due</th></tr></thead>
                   <tbody>{cur.jobs.slice(0, 80).map((j) => (
                     <tr key={(j.printavo ? "p" : "o") + j.id}>
-                      <td><Link href={j.href} className="db-num">#{j.number}</Link></td>
+                      <td className="pd-o"><Link href={j.href} className="db-num">#{j.number}</Link></td>
                       <td className="pd-c"><b>{who(j.customer_id) || "—"}</b></td>
                       <td className="pd-n faint">{j.nickname || "Untitled Job"}</td>
-                      <td>{stageOf(j)}</td>
+                      <td className="pd-s">{stageOf(j)}</td>
                       <td className={"r pd-due" + (j.due && j.due < t0 && !j.ship ? " bad" : "")}>{day(j.due)}</td>
                     </tr>
                   ))}</tbody>

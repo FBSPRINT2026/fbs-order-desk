@@ -8,6 +8,11 @@ type Status = {
   orders: number; pending: number; files_waiting: number; done: number; errors: number; gone: number; customers: number;
   files_total: number; files_copied: number; storage_bytes: number; oldest_done: string | null; last_hour: number;
   recent_errors: { visual_id: string; error: string }[];
+  /** orders Printavo says it has (each customer's order count added up) */
+  expected: number; have: number; new_waiting: number;
+  /** the full pass (customer by customer): how many customers are done, null when no pass is running */
+  pass_customer: number | null;
+  by_year: { year: number; found: number; imported: number }[];
 };
 
 const size = (b: number) => { const u = ["bytes", "KB", "MB", "GB", "TB"]; let i = 0, x = b; while (x >= 1024 && i < u.length - 1) { x /= 1024; i++; } return `${x >= 100 || i === 0 ? Math.round(x) : x.toFixed(1)} ${u[i]}`; };
@@ -36,13 +41,21 @@ export default function PrintavoSync() {
   }
 
   if (!s) return <section className="panel" style={{ marginTop: 14 }}><div className="panel-b faint">{err || "Loading…"}</div></section>;
-  const imported = s.done + s.files_waiting;
+  const imported = s.have ?? s.done + s.files_waiting;
+  const total = Math.max(s.expected || 0, s.orders);
+  const passing = s.pass_customer != null;
   const eta = s.last_hour > 0 && s.pending > 0 ? s.pending / s.last_hour : null;
   const phase = !s.enabled ? (s.orders ? "Paused" : "Off")
     : s.listing ? "Step 1 of 2: listing every order in Printavo"
-    : s.pending > 0 ? "Step 2 of 2: importing orders, newest first"
+    : passing && s.new_waiting > 0 ? "Finding every order (customer by customer) and importing them, newest first"
+    : passing ? "Checking every Printavo customer for new or changed orders"
+    : s.pending > 0 ? "Importing orders, newest first"
     : s.files_waiting > 0 ? "Copying the last files"
     : "Up to date · watching Printavo for changes";
+  // years with orders: a year missing in the middle is a hole
+  const years = (s.by_year || []).filter((y) => y.year > 2000);
+  const yMin = years.length ? years[0].year : 0, yMax = new Date().getFullYear();
+  const allYears = years.length ? Array.from({ length: yMax - yMin + 1 }, (_, i) => years.find((y) => y.year === yMin + i) || { year: yMin + i, found: 0, imported: 0 }) : [];
   const stale = s.enabled && s.last_run_at && Date.now() - new Date(s.last_run_at).getTime() > 5 * 60000;
 
   return (
@@ -62,19 +75,28 @@ export default function PrintavoSync() {
           <>
             {s.listing
               ? <div style={{ fontSize: 13.5 }}>Found <b>{s.orders.toLocaleString()}</b> orders so far…</div>
-              : <div className="pv-prog"><span>Orders {imported.toLocaleString()} / {s.orders.toLocaleString()}</span><i style={{ ["--p" as string]: pct(imported, s.orders) + "%" }} /></div>}
-            <div className="pv-prog"><span>Files {s.files_copied.toLocaleString()} / {s.files_total.toLocaleString()}</span><i style={{ ["--p" as string]: pct(s.files_copied, s.files_total) + "%" }} /></div>
+              : <div className="pv-prog"><span>Orders imported {imported.toLocaleString()} of {total.toLocaleString()}{s.expected > s.orders ? " (Printavo's count)" : ""}</span><i style={{ ["--p" as string]: pct(imported, total) + "%" }} /></div>}
+            {passing && <div className="pv-prog"><span>Checking customers {s.pass_customer!.toLocaleString()} of {s.customers.toLocaleString()} · {s.orders.toLocaleString()} orders found</span><i style={{ ["--p" as string]: pct(s.pass_customer!, s.customers) + "%" }} /></div>}
             <div className="pvc-kpis">
-              <div><span>Customers</span><b>{s.customers.toLocaleString()}</b><small>imported</small></div>
+              <div><span>In Printavo</span><b>{total.toLocaleString()}</b><small>orders · {s.customers.toLocaleString()} customers</small></div>
               <div><span>Last hour</span><b>{s.last_hour.toLocaleString()}</b><small>orders imported</small></div>
-              <div><span>Time left</span><b>{eta == null ? "—" : eta < 1 ? `${Math.max(1, Math.round(eta * 60))} min` : `${eta.toFixed(eta < 10 ? 1 : 0)} h`}</b><small>{s.pending.toLocaleString()} orders to go</small></div>
+              <div><span>Time left</span><b>{eta == null ? "—" : eta < 1 ? `${Math.max(1, Math.round(eta * 60))} min` : `${eta.toFixed(eta < 10 ? 1 : 0)} h`}</b><small>{s.pending.toLocaleString()} orders to go{passing ? ", more being found" : ""}</small></div>
               <div><span>Storage used</span><b>{size(s.storage_bytes)}</b><small>{s.oldest_done ? `back to ${new Date(s.oldest_done).toLocaleDateString([], { month: "short", year: "numeric" })}` : "files copied"}</small></div>
             </div>
+            {allYears.length > 0 && (
+              <div className="psy-years" aria-label="Orders by year">
+                {allYears.map((y) => (
+                  <div key={y.year} className={"psy-y" + (!y.found ? " hole" : y.imported < y.found ? " part" : " full")} title={`${y.year}: ${y.imported.toLocaleString()} imported of ${y.found.toLocaleString()} found`}>
+                    <span>{y.year}</span><b>{y.imported.toLocaleString()}</b><small>{!y.found ? "none found yet" : y.imported < y.found ? `of ${y.found.toLocaleString()}` : "all in"}</small>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
         <div className="faint" style={{ fontSize: 12.5 }}>
           {s.sweep_no > 0 && <>Last full check of Printavo {ago(s.sweep_done_at)}. </>}
-          Runs on our server every minute, so this page doesn&apos;t need to stay open. Active jobs are checked for changes every 5 minutes (status, payments, due dates, edits, new orders) and every order about every half hour; recent orders are re-read in full once a day for new messages and files.
+          Runs on our server every minute, so this page doesn&apos;t need to stay open. Active jobs are checked for changes every 5 minutes (status, payments, due dates, edits, new orders). The full check goes customer by customer through every Printavo customer&apos;s orders (Printavo&apos;s all-orders list stops at 10,000, so that&apos;s the only way to see them all); recent orders are re-read in full once a day for new messages and files.
           {s.gone > 0 && <> {s.gone} order{s.gone === 1 ? " was" : "s were"} removed in Printavo (our copies are kept).</>}
         </div>
         {stale && <div className="banner">The sync hasn&apos;t run in a few minutes. It usually picks up again by itself; if it stays like this, let us know.</div>}

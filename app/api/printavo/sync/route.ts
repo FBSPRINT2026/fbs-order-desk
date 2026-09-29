@@ -23,7 +23,7 @@ export const maxDuration = 60;
 const RUN_MS = 47000;
 const QUICK_EVERY = 5 * 60000, QUICK_PAGES = 20; // active jobs: 20 pages x 25 = the 500 orders with the latest due dates
 type Sync = { enabled: boolean; token: string; pause_until: string | null; quick_cursor: string | null; quick_pages: number; quick_done_at: string | null; sweep_cursor: string | null; sweep_no: number; sweep_started_at: string | null; sweep_done_at: string | null; customers_cursor: string | null; customers_done_at: string | null };
-type Idx = { printavo_id: string; fingerprint: string; status: string };
+type Idx = { printavo_id: string; fingerprint: string; status: string; imported_fingerprint: string | null; archived_id: string | null };
 
 export async function GET(req: Request) {
   const admin = createAdminClient();
@@ -95,15 +95,19 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
 async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typeof listOrders>>["orders"], did: Record<string, number>, pass: number | null, currentPass = 0) {
   if (!orders.length) return;
   const ids = orders.map((o) => o.id);
-  const { data: have } = await admin.from("printavo_index").select("printavo_id, fingerprint, status").in("printavo_id", ids);
+  const { data: have } = await admin.from("printavo_index").select("printavo_id, fingerprint, status, imported_fingerprint, archived_id").in("printavo_id", ids);
   const known = new Map(((have || []) as Idx[]).map((r) => [r.printavo_id, r]));
+  const back: string[] = [];
   const rows = orders.flatMap((o) => {
     const k = known.get(o.id);
     const row = { printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "pending", seen_sweep: pass || currentPass }; // (every row sends the same columns; an order seen by the quick check counts as seen)
     if (!k) return [row];
+    // back after being marked removed, and nothing changed since we imported it: no need to read it all again
+    if (k.status === "gone" && k.archived_id && k.imported_fingerprint === o.fingerprint) { back.push(o.id); return []; }
     if (k.fingerprint !== o.fingerprint || k.status === "gone") { did.changed++; return [row]; }
     return [];
   });
+  if (back.length) await admin.from("printavo_index").update({ status: "files", seen_sweep: pass || currentPass }).in("printavo_id", back); // the file copier finishes it (right away if nothing is missing);
   if (rows.length) { const { error } = await admin.from("printavo_index").upsert(rows, { onConflict: "printavo_id" }); if (error) throw new Error(error.message); }
   if (pass) {
     const unchanged = ids.filter((id) => !rows.some((r) => r.printavo_id === id));
