@@ -3851,3 +3851,22 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 /* the hour-by-hour side is one continuous list: a day cut off at the 24-hour mark clips its last jobs instead of scrolling inside */
 .ms-2d>.ms-dv{overflow-y:hidden}
 .ms-2d .ms-dv-col{overflow:hidden}
+/* narrower than a full screen (about 75% of a 1920 monitor, or half screen): just the next 24 press hours, bigger */
+@media (max-width:1500px){.ms-split{grid-template-columns:minmax(0,1fr)}.ms-split-col.r{display:none}}
+/* Update Progress: as-of time, part done, the day's hours */
+.ms-ci-when{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ms-ci-when>b{font-size:13.5px}
+.ms-ci-at{display:inline-flex;gap:6px}
+.ms-ci-r.part{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.ms-ci-part{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:4px 0 2px 2px;font-size:12.5px}
+.ms-ci-part .ms-pick{display:flex;flex-wrap:wrap;gap:4px}
+.ms-ci-rest{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px}
+.ms-ci-rest select,.ms-ci-at select,.ms-ci-h select{font-size:12.5px;padding:3px 6px}
+.ms-ci-hrs{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:6px}
+.ms-ci-hrs .ms-band-t{gap:8px}
+.ms-ci-hl{display:flex;flex-direction:column;gap:4px}
+.ms-ci-h{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto 44px;gap:8px;align-items:center;padding:4px 6px;border-radius:7px;font-size:12.5px}
+.ms-ci-h>span:first-child{display:flex;flex-direction:column;min-width:0}
+.ms-ci-h.on{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.ms-ci-r{grid-template-columns:minmax(0,1fr) auto 104px}
+@media (max-width:640px){.ms-ci-r{grid-template-columns:1fr}.ms-ci-h{grid-template-columns:1fr auto auto auto}.ms-ci-h>span:first-child{grid-column:1/-1}}

@@ -381,8 +381,14 @@ export function breakDowns(mach: Machine, sh: [number, number], lunchAt?: number
   }
   return out;
 }
-/** Everything that takes time out of a day: warm-up, lunch, downtime and slow stretches. */
-export const downsOn = (mach: Machine, day: string, sh: [number, number], lunchAt?: number): Down[] => [...breakDowns(mach, sh, lunchAt), ...(mach.down?.[day] || [])];
+/** The day's warm-ups and lunch. A crew starting late (downtime over the start of the shift) warms up when they get in. */
+export const breaksOn = (mach: Machine, day: string, sh: [number, number], lunchAt?: number): Down[] => {
+  let a = sh[0];
+  for (const d of [...(mach.down?.[day] || [])].filter((x) => !(x[3] > 0)).sort((x, y) => x[0] - y[0])) if (d[0] <= a && d[1] > a) a = d[1];
+  return a < sh[1] ? breakDowns(mach, [a, sh[1]], lunchAt) : [];
+};
+/** Everything that takes time out of a day: warm-ups, lunch, downtime and slow stretches. */
+export const downsOn = (mach: Machine, day: string, sh: [number, number], lunchAt?: number): Down[] => [...breaksOn(mach, day, sh, lunchAt), ...(mach.down?.[day] || [])];
 export const windowsOn = (mach: Machine, day: string): [number, number, number][] => { const sh = shiftOn(mach, day); return sh ? windowsIn(sh, downsOn(mach, day, sh)) : []; };
 /** Work minutes it has on that day (0 when off; downtime out, slow stretches counted at their speed), or on a usual day. */
 export const capacityMin = (s: ProductionSettings, mach: Machine, day?: string) => { if (day) return windowsOn(mach, day).reduce((a, [x, y, r]) => a + (y - x) * r, 0); const t = typicalShift(mach); return t[1] - t[0]; };
