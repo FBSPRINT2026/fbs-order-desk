@@ -303,7 +303,7 @@ export function suggest(s: ProductionSettings, need: Need, due: string | null, t
         const waste = need.type === "screen" ? (mach.colors - need.needColors) * 2 : need.type === "embroidery" ? Math.abs(mach.heads - Math.max(1, Math.round(need.qty / 12))) * 3 : 0;
         // a job longer than a shift runs into the next working days: judge it by the day it finishes
         const spill = Math.max(0, Math.ceil(est / Math.max(1, capacityMin(s, mach))) - 1);
-        options.push({ machine: mach, day, minutes: est, score: (i + spill) * 100 + waste + est / 60 });
+        options.push({ machine: mach, day, minutes: est, score: (i + spill) * 100 + waste + est / 60 + used / 30 }); // same day: the emptier machine
         break;
       }
     }
