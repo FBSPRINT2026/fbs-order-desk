@@ -1,4 +1,5 @@
 "use client";
+import OrderBoard from "@/components/OrderBoard";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type React from "react";
@@ -237,10 +238,16 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* 3. production (2/3) · open balances (1/3) */}
+          {/* 3. the order pipeline: every job by stage (follows Everyone / Mine) */}
+          <section className="db-card db-blue db-pipe">
+            <div className="db-card-h"><h2>{mine ? "My Order Pipeline" : "Order Pipeline"}</h2><span className="faint db-h-note">every job by stage · drag a card or use → to move it along</span></div>
+            <OrderBoard mine={mine} />
+          </section>
+
+          {/* 4. production (2/3) · open balances (1/3) */}
           <div className="dash-row dash-2-1">
             <section className="db-card db-salmon db-prod" id="dash-prod">
-              <div className="db-card-h"><h2>Production</h2><span className="faint db-h-note">{openN} open jobs</span><span className="spacer" /><Link href="/shop/board" className="linkbtn">Production board →</Link></div>
+              <div className="db-card-h"><h2>Production</h2><span className="faint db-h-note">{openN} open jobs</span><span className="spacer" /><Link href="/shop/board" className="linkbtn">Production calendar →</Link></div>
               {openN > 0 && <div className="pd-stack" role="img" aria-label={stageN.map((s2) => `${s2.label} ${s2.n}`).join(", ")}>{stageN.filter((s2) => s2.n).map((s2) => (
                 <Link key={s2.k} href="/shop/board" className={"pd-seg pd-" + s2.k} style={{ flexGrow: s2.n }} title={`${s2.label}: ${s2.n}`} />
               ))}</div>}
