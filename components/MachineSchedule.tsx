@@ -77,6 +77,13 @@ function flow(cs: Card[], mach: Machine): Seg[] {
     return t;
   };
   for (const c of sorted) {
+    // finished work stays on the day it was done (it never spills into later days or pushes today's jobs)
+    if (c.slot?.status === "done") {
+      const prior = out.filter((g) => g.day === c.day).reduce((m, g) => Math.max(m, g.end), s0);
+      const st = Math.min(prior, s1 - 15);
+      out.push({ c, day: c.day, start: st, end: Math.min(s1, st + Math.max(15, c.minutes)), part: 1, parts: 1, pushed: false });
+      continue;
+    }
     const asked = ord(c.day) * 1440 + (c.startMin ?? s0);
     let t = norm(Math.max(cursor, asked), cursor < asked && c.startMin != null);
     const pushed = t > asked + 1;
