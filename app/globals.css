@@ -3598,3 +3598,11 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-op{font-weight:600;color:var(--ink-2)}
 .ms-chip.two .ms-cl{order:6;flex-basis:100%;font-size:9.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ms-chip.two{padding-top:3px;padding-bottom:3px}
+/* schedule too tight + weekend shifts */
+.ms-tight{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin-bottom:8px;border-radius:10px;background:var(--danger-soft);color:var(--danger);font-size:13.5px;border:1px solid color-mix(in srgb,var(--danger) 30%,transparent)}
+.ms-tight b{color:var(--danger)}
+.ms-pick{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.ms-pick button{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;min-width:74px;padding:6px 8px;border-radius:8px;border:1.5px solid var(--line);font-size:12.5px;font-weight:700;text-align:center}
+.ms-pick button small{font-weight:500;color:var(--ink-3);font-size:11px}
+.ms-pick button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.ms-pick button.on small{color:var(--accent)}

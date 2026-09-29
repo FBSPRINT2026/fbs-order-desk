@@ -26,6 +26,8 @@ export type Machine = {
   /** downtime or reduced capacity for part of a day: date → [start, end, why, rate][], rate 0 = stopped,
    *  0.5 = running at half speed (operator out: jobs take twice as long). Attached by the calendar. */
   down?: Record<string, Down[]>;
+  /** extra shifts outside the regular schedule (a Saturday 10–2): date → [start, end], attached by the calendar */
+  extra?: Record<string, [number, number]>;
 };
 /** [start, end, why, rate]: minutes after midnight; rate = the share of normal speed (0 = stopped) */
 export type Down = [number, number, string, number];
@@ -304,7 +306,12 @@ export const fits = (need: Need, mach: Machine) => mach.active && mach.type === 
 export const ownWeek = (x: Pick<Machine, "startMin" | "hoursPerDay" | "days">): Shift[] => Array.from({ length: 7 }, (_, i) => (x.days || []).includes(i) ? [x.startMin ?? 420, (x.startMin ?? 420) + Math.max(0.25, x.hoursPerDay || 0) * 60] : null);
 function normShift(v: unknown): Shift { if (!Array.isArray(v) || v.length < 2) return null; const a = Math.max(0, Math.min(1439, +v[0] || 0)), b = Math.max(a + 15, Math.min(1440, +v[1] || 0)); return [a, b]; }
 /** This machine's shift on a given day (its crew's hours when it has a crew), or null if it's off that day. */
-export const shiftOn = (mach: Machine, day: string): Shift => (mach.off && day in mach.off ? null : (mach.week || ownWeek(mach))[dow(day)] || null);
+export const shiftOn = (mach: Machine, day: string): Shift => {
+  if (mach.off && day in mach.off) return null;
+  const reg = (mach.week || ownWeek(mach))[dow(day)] || null, ex = mach.extra?.[day];
+  // an extra shift (weekend or overtime) adds to the regular day, or is the whole day when it isn't a regular one
+  return ex ? (reg ? [Math.min(reg[0], ex[0]), Math.max(reg[1], ex[1])] : [ex[0], ex[1]]) : reg;
+};
 export const isOffDay = (mach: Machine, day: string) => !!mach.off && day in mach.off;
 /** Its usual shift: the longest working day of its week (for days it doesn't normally run but has work booked). */
 export const typicalShift = (mach: Machine): [number, number] => ((mach.week || ownWeek(mach)).filter(Boolean) as [number, number][]).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0] || [mach.startMin ?? 420, (mach.startMin ?? 420) + (mach.hoursPerDay || 11) * 60];

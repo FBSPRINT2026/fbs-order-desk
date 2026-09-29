@@ -25,6 +25,7 @@ type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; 
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean; work: number; slow?: number };
 type View = "split" | "timeline" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number };
+type Extra = { id: string; machine: string; crew_id: string | null; day: string; start_min: number; end_min: number; note: string };
 type DayOff = { id: string; crew_id: string | null; machine: string | null; day: string; note: string; start_min: number | null; end_min: number | null; capacity: number | null; employee: string };
 
 const TZ = "America/Chicago";
@@ -142,17 +143,24 @@ export default function MachineSchedule() {
   const [showPast, setShowPast] = useState(false);
   const [offs, setOffs] = useState<DayOff[]>([]);
   const [downEdit, setDownEdit] = useState<{ machine?: string; day?: string; start?: number; allDay?: boolean } | null>(null);
+  const [extras, setExtras] = useState<Extra[]>([]);
+  const [shiftEdit, setShiftEdit] = useState(false);
+  // the "schedule too tight" prompt shows once a day (again if more jobs go late)
+  const [tightSeen, setTightSeen] = useSticky("cal.tightSeen", "");
 
   const load = useCallback(async () => {
     const sb = createClient();
-    const [{ data: st }, { data: o }, { data: a }, { data: sl0 }, { data: off0 }] = await Promise.all([
+    const [{ data: st }, { data: o }, { data: a }, { data: sl0 }, { data: off0 }, { data: ex0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id, groups, lines").in("status", ["approved", "art", "blanks", "production"]).limit(300),
       // Printavo jobs are left off the calendar (it plans our own orders only); nothing in Printavo is read or changed here
       Promise.resolve({ data: [] as unknown[] }),
       sb.from("production_slots").select("*").not("order_id", "is", null).gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
       sb.from("production_days_off").select("id, crew_id, machine, day, note, start_min, end_min, capacity, employee").gte("day", addDay(today, -21)).lte("day", addDay(today, 120)),
+      sb.from("production_extra_shifts").select("id, machine, crew_id, day, start_min, end_min, note").gte("day", addDay(today, -21)).lte("day", addDay(today, 120)),
     ]);
+    const exList = (ex0 || []) as Extra[];
+    setExtras(exList);
     const offList = (off0 || []) as DayOff[];
     setOffs(offList);
     let sl = (sl0 || []) as Slot[];
@@ -173,7 +181,9 @@ export default function MachineSchedule() {
         if ((x.start_min == null || x.end_min == null) && rate === 0) off[x.day] = why;
         else (down[x.day] ||= []).push([x.start_min ?? 0, x.end_min ?? 1440, why, rate]);
       }
-      return { ...m, off, down };
+      const extra: Record<string, [number, number]> = {};
+      for (const x of exList) if (x.machine === m.id) { const e = extra[x.day]; extra[x.day] = e ? [Math.min(e[0], x.start_min), Math.max(e[1], x.end_min)] : [x.start_min, x.end_min]; }
+      return { ...m, off, down, extra };
     }) };
     setS(ps); setSlots(sl);
     const pv = ((a || []) as { id: string; visual_id: string; nickname: string; due_date: string | null; qty: number; status_name: string; customer_id: string | null; start: string | null; pend: string | null; pvgroups: unknown }[]).filter((x) => !PV_DONE.test(x.status_name || "") || PV_READY.test(x.status_name || ""));
@@ -262,6 +272,17 @@ export default function MachineSchedule() {
     return out;
   }, [s, jobs, cards, loadMap, today, mine, owners, me]);
   const coming = (jobs || []).filter((j) => j.kind === "o" && ["approved", "art", "blanks"].includes(j.status));
+  // too tight: waiting jobs with no room before in-hands, and booked jobs that finish after their in-hands date
+  const tight = useMemo(() => {
+    const out: { job: Job; why: string }[] = [], seen = new Set<string>();
+    for (const t of tray) if ((!t.sug || t.sug.late) && !seen.has(t.job.key)) { seen.add(t.job.key); out.push({ job: t.job, why: t.sug ? `no room before in-hands ${t.job.due ? dayLbl(t.job.due) : ""}` : "no machine free" }); }
+    for (const c of cards) {
+      if (!c.job.due || c.slot?.status === "done" || seen.has(c.job.key)) continue;
+      const last = (segs.ofCard.get(c.key) || []).reduce((d, g) => (g.day > d ? g.day : d), "");
+      if (last > c.job.due && c.job.due >= today) { seen.add(c.job.key); out.push({ job: c.job, why: `finishes ${dayLbl(last)}, in-hands ${dayLbl(c.job.due)}` }); }
+    }
+    return out;
+  }, [tray, cards, segs, today]);
 
   async function book(job: Job, need: Need, machine: Machine, d: string, source = "manual", slot?: Slot | null, startMin: number | null = null) {
     if (!s) return;
@@ -298,7 +319,7 @@ export default function MachineSchedule() {
   // weeks shown: this week and the next, with or without weekends
   const weekDays = (w: string) => Array.from({ length: 7 }, (_, i) => addDay(w, i));
   const allDays = [...weekDays(week), ...weekDays(addDay(week, 7))];
-  const weekendUsed = machines.some((m) => !!m.week?.[0] || !!m.week?.[6]) || allDays.some((d) => (dow(d) === 0 || dow(d) === 6) && machines.some((m) => at(m, d).length));
+  const weekendUsed = machines.some((m) => !!m.week?.[0] || !!m.week?.[6] || Object.keys(m.extra || {}).some((d) => d >= addDay(today, -7) && (dow(d) === 0 || dow(d) === 6))) || allDays.some((d) => (dow(d) === 0 || dow(d) === 6) && machines.some((m) => at(m, d).length));
   const showWknd = wknd ?? weekendUsed;
   const visible = (d: string) => showWknd || (dow(d) !== 0 && dow(d) !== 6);
 
@@ -333,7 +354,7 @@ export default function MachineSchedule() {
   const crewOf = (m: Machine) => (m.crew ? s.crews.find((c) => c.id === m.crew) : undefined);
   const hrsTxt = (sh: [number, number]) => `${clock(sh[0])}–${clock(sh[1])}`;
   /** who runs it that day and when, or why it's off */
-  const crewLine = (m: Machine, d: string) => { const sh = shiftOn(m, d), slow = (m.down?.[d] || []).filter((x) => x[3] > 0).sort((x, y) => x[3] - y[3])[0]; return isOffDay(m, d) ? `Off · ${m.off![d]}` : sh ? `${hrsTxt(sh)}${slow ? ` · ${Math.round(slow[3] * 100)}%` : ""}` : "not running"; };
+  const crewLine = (m: Machine, d: string) => { const sh = shiftOn(m, d), slow = (m.down?.[d] || []).filter((x) => x[3] > 0).sort((x, y) => x[3] - y[3])[0]; return isOffDay(m, d) ? `Off · ${m.off![d]}` : sh ? `${hrsTxt(sh)}${m.extra?.[d] ? " · extra" : ""}${slow ? ` · ${Math.round(slow[3] * 100)}%` : ""}` : "not running"; };
   const label = (g: Seg) => <><b>#{g.c.job.number}</b> {g.part > 1 ? <i className="ms-cont">cont.</i> : null}{g.c.job.customer || g.c.job.name}</>;
 
   /* ---------- Week view: machines down, days across; each day a 6a–6p timeline, one lane per job ---------- */
@@ -564,6 +585,7 @@ export default function MachineSchedule() {
         <h2 className="ms-title">Production Calendar</h2>
         <span className="spacer" />
         <Link className="linkbtn" href="/shop/settings/production">Machines, crews &amp; times</Link>
+        <button type="button" className="btn ms-dn-btn" onClick={() => setShiftEdit(true)}>+ Add Weekend Shift</button>
         <button type="button" className="btn primary ms-dn-btn" onClick={() => setDownEdit({})}>+ Add Downtime / Maintenance</button>
       </div>
       <div className="ms-bar">
@@ -577,6 +599,24 @@ export default function MachineSchedule() {
         <button type="button" className="btn sm" onClick={() => shift(1)} aria-label="Later">→</button>
       </div>
       {msg && <div className="banner" style={{ marginBottom: 8 }} onClick={() => setMsg("")}>{msg}</div>}
+      {tight.length > 0 && <div className="ms-tight"><b>Schedule too tight:</b> {tight.length} job{tight.length === 1 ? " can't" : "s can't"} fit before {tight.length === 1 ? "its" : "their"} in-hands date.<span className="spacer" /><button type="button" className="btn sm primary" onClick={() => setShiftEdit(true)}>Add Weekend Shift</button></div>}
+      {tight.length > 0 && tightSeen !== `${today}:${tight.length}` && !shiftEdit && (
+        <div className="pp-modal" onClick={() => setTightSeen(`${today}:${tight.length}`)}>
+          <div className="pp-sheet tmx-ed" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Schedule too tight">
+            <div className="pp-sheet-h"><b>Schedule too tight, can&apos;t fit</b><button type="button" className="btn icon ghost" onClick={() => setTightSeen(`${today}:${tight.length}`)} aria-label="Close">✕</button></div>
+            <div className="tmx-ed-b">
+              <div>{tight.length} job{tight.length === 1 ? "" : "s"} won&apos;t make {tight.length === 1 ? "its" : "their"} in-hands date on the regular schedule:</div>
+              <ul className="ms-offs">{tight.slice(0, 8).map((t) => <li key={t.job.key}><span>#{t.job.number}</span><span className="faint">{t.job.customer || t.job.name} · {t.why}</span><span /></li>)}</ul>
+              {tight.length > 8 && <div className="faint">and {tight.length - 8} more</div>}
+              <b>Add a weekend shift?</b>
+              <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                <button type="button" className="btn" onClick={() => setTightSeen(`${today}:${tight.length}`)}>Not Now</button>
+                <button type="button" className="btn primary" onClick={() => { setTightSeen(`${today}:${tight.length}`); setShiftEdit(true); }}>Yes, Add Weekend Shift</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className={"ms-band" + (trayOpen ? "" : " closed")}>
         <div className="ms-band-h">
@@ -607,6 +647,7 @@ export default function MachineSchedule() {
         <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
+      {shiftEdit && <ShiftPanel machines={machines} crews={s.crews} extras={extras} today={today} me={me.email} onClose={() => setShiftEdit(false)} onSaved={(m) => { setShiftEdit(false); setWknd(true); setMsg(m); load(); }} />}
       {downEdit && <DownPanel machines={machines} crews={s.crews} init={downEdit} offs={offs} today={today} win={[vStart, vEnd]} me={me.email} onClose={() => setDownEdit(null)} onSaved={(m) => { setDownEdit(null); setMsg(m); load(); }} />}
       {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, d0, d1, ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} />}
     </div>
@@ -703,7 +744,7 @@ function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSav
             {empOut
               ? <label>Employee<input type="text" list="dn-emp" value={emp} placeholder="Who's out" onChange={(e) => pickEmp(e.target.value)} /><datalist id="dn-emp">{crews.filter((c) => c.leader).map((c) => <option key={c.id} value={c.leader} />)}</datalist></label>
               : reason === "Other" ? <label>Reason<input type="text" value={other} placeholder="What's going on" onChange={(e) => setOther(e.target.value)} /></label> : <span />}
-            <label>Machine<select value={mach} onChange={(e) => setMach(e.target.value)}>{machines.map((x) => { const c = x.crew ? crews.find((k) => k.id === x.crew) : undefined; return <option key={x.id} value={x.id}>{x.name.split(" · ")[0]}{c ? ` · ${c.leader}` : ""}</option>; })}</select></label>
+            <label>Machine<select value={mach} onChange={(e) => setMach(e.target.value)}>{machines.map((x) => { const c = x.crew ? crews.find((k) => k.id === x.crew) : undefined; return <option key={x.id} value={x.id}>{shortName(x)}{c ? ` · ${c.leader}` : ""}</option>; })}</select></label>
           </div>
           {empOut && leadCrew && machines.filter((x) => x.crew === leadCrew.id).length > 1 && <label className="check"><input type="checkbox" checked={wholeCrew} onChange={(e) => setWholeCrew(e.target.checked)} /> Every press {leadCrew.leader} runs</label>}
           <div className="tmx-2 ms-3">
@@ -719,10 +760,57 @@ function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSav
             </>}
           </div>
           <div className="faint" style={{ fontSize: 12.5 }}>{cap ? `The press keeps running, just slower: work in that time counts ${cap}%, so jobs stretch out and later jobs slide back.` : "The press is blocked off: nothing is scheduled then, and a job running into it stops and picks up right after."}</div>
-          {existing.length > 0 && <div><b style={{ fontSize: 13 }}>Coming up on {m?.name.split(" · ")[0]}</b><ul className="ms-offs">{existing.slice(0, 40).map((x) => <li key={x.id}><span>{dayLbl(x.day)}</span><span className="faint">{x.start_min != null ? `${clockLong(x.start_min)} – ${clockLong(x.end_min!)}` : "All day"} · {x.employee ? `${x.employee} out` : x.note} · {x.capacity ? `${x.capacity}%` : "stopped"}{x.crew_id ? " · whole crew" : ""}</span><button type="button" className="linkbtn" disabled={busy} onClick={() => remove(x.id)}>Remove</button></li>)}</ul></div>}
+          {existing.length > 0 && <div><b style={{ fontSize: 13 }}>Coming up on {m ? shortName(m) : ""}</b><ul className="ms-offs">{existing.slice(0, 40).map((x) => <li key={x.id}><span>{dayLbl(x.day)}</span><span className="faint">{x.start_min != null ? `${clockLong(x.start_min)} – ${clockLong(x.end_min!)}` : "All day"} · {x.employee ? `${x.employee} out` : x.note} · {x.capacity ? `${x.capacity}%` : "stopped"}{x.crew_id ? " · whole crew" : ""}</span><button type="button" className="linkbtn" disabled={busy} onClick={() => remove(x.id)}>Remove</button></li>)}</ul></div>}
           <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
             <button type="button" className="btn" onClick={onClose}>Cancel</button>
             <button type="button" className="btn primary" disabled={busy || !ok} onClick={save}>{cap ? "Save" : "Block It Off"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Add an extra shift (usually Saturday or Sunday) for one or more presses and their crews, e.g. Saturday 10 AM – 2 PM. */
+function ShiftPanel({ machines, crews, extras, today, me, onClose, onSaved }: { machines: Machine[]; crews: Crew[]; extras: Extra[]; today: string; me: string; onClose: () => void; onSaved: (msg: string) => void }) {
+  // the next three weekends
+  const wkends: string[] = []; for (let i = 1; i <= 21 && wkends.length < 6; i++) { const d = addDay(today, i); if (dow(d) === 6 || dow(d) === 0) wkends.push(d); }
+  const [day, setDay] = useState(wkends[0] || today);
+  const [pick, setPick] = useState<string[]>([]);
+  const [a, setA] = useState(600), [b, setB] = useState(840);
+  const [busy, setBusy] = useState(false);
+  const times: number[] = []; for (let t = 240; t <= 1320; t += 15) times.push(t);
+  const crewOf = (m: Machine) => (m.crew ? crews.find((c) => c.id === m.crew) : undefined);
+  const list = [...machines].sort((x, y) => (x.type === "screen" ? 0 : 1) - (y.type === "screen" ? 0 : 1));
+  const upcoming = extras.filter((x) => x.day >= today).sort((x, y) => x.day.localeCompare(y.day) || x.machine.localeCompare(y.machine));
+  const nameOf = (id: string) => { const m = machines.find((x) => x.id === id); const c = m && crewOf(m); return `${m ? shortName(m) : id}${c ? ` · ${c.leader}` : ""}`; };
+  async function save() {
+    if (!pick.length || b <= a) return;
+    setBusy(true);
+    const r = await createClient().from("production_extra_shifts").insert(pick.map((id) => ({ machine: id, crew_id: machines.find((x) => x.id === id)?.crew || null, day, start_min: a, end_min: b, note: "Weekend shift", created_by: me })));
+    setBusy(false);
+    onSaved(r.error ? r.error.message : `Extra shift ${dayLbl(day)} ${clockLong(a)} – ${clockLong(b)}: ${pick.map(nameOf).join(", ")}. Jobs that were running late move into it.`);
+  }
+  async function remove(id: string) { setBusy(true); await createClient().from("production_extra_shifts").delete().eq("id", id); setBusy(false); onSaved("Extra shift removed."); }
+  return (
+    <div className="pp-modal" onClick={onClose}>
+      <div className="pp-sheet tmx-ed" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add weekend shift">
+        <div className="pp-sheet-h"><b>Add Weekend Shift</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="tmx-ed-b">
+          <div><b style={{ fontSize: 13 }}>Which crews?</b>
+            <div className="ms-pick">{list.map((m) => { const c = crewOf(m), on = pick.includes(m.id); return <button key={m.id} type="button" className={on ? "on" : ""} onClick={() => setPick(on ? pick.filter((x) => x !== m.id) : [...pick, m.id])}>{shortName(m)}{c ? <small>{c.leader}</small> : null}</button>; })}</div>
+          </div>
+          <div className="tmx-2 ms-3">
+            <label>Day<select value={wkends.includes(day) ? day : ""} onChange={(e) => e.target.value && setDay(e.target.value)}>{wkends.map((d) => <option key={d} value={d}>{dayLbl(d)}</option>)}<option value="">Another day…</option></select></label>
+            <label>From<select value={a} onChange={(e) => { const v = +e.target.value; setA(v); if (b <= v) setB(Math.min(1440, v + 240)); }}>{times.slice(0, -1).map((t) => <option key={t} value={t}>{clockLong(t)}</option>)}</select></label>
+            <label>Until<select value={b} onChange={(e) => setB(+e.target.value)}>{times.filter((t) => t > a).map((t) => <option key={t} value={t}>{clockLong(t)}</option>)}</select></label>
+          </div>
+          <label className="ms-inl faint" style={{ fontSize: 12.5 }}>Or pick any date <input type="date" value={day} min={today} onChange={(e) => e.target.value && setDay(e.target.value)} /></label>
+          <div className="faint" style={{ fontSize: 12.5 }}>{pick.length ? `${pick.length} press${pick.length === 1 ? "" : "es"}, ${dayLbl(day)} ${clockLong(a)} – ${clockLong(b)} (${fmtMin(b - a)} each). The calendar fills it with work that's running late.` : "Pick the presses (crews) that will come in."}</div>
+          {upcoming.length > 0 && <div><b style={{ fontSize: 13 }}>Extra shifts on the books</b><ul className="ms-offs">{upcoming.map((x) => <li key={x.id}><span>{dayLbl(x.day)}</span><span className="faint">{nameOf(x.machine)} · {clockLong(x.start_min)} – {clockLong(x.end_min)}</span><button type="button" className="linkbtn" disabled={busy} onClick={() => remove(x.id)}>Remove</button></li>)}</ul></div>}
+          <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="btn" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn primary" disabled={busy || !pick.length || b <= a} onClick={save}>Add Shift</button>
           </div>
         </div>
       </div>
