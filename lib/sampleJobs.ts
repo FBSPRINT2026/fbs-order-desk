@@ -1,7 +1,7 @@
 /**
  * Sample jobs for a test account (e.g. "ABC Test Company"), so the production calendar has realistic work to show:
- * screen print (1–10 colors, front/back/sleeve, light and dark garments, tees to hoodies and totes), embroidery
- * (left chests, caps, jacket backs), DTF transfers, and mixed jobs, due over the next few weeks, at different stages.
+ * screen print (1–10 colors, front/back/sleeve, light and dark garments, tees to hoodies and totes, some 1,500+ piece
+ * runs), embroidery (left chests, caps, jacket backs) and heat press (DTF transfers), due over the next 2–3 weeks, at different stages.
  * Totals are left at $0 so sample jobs never count toward sales.
  */
 import type { Group, GLine, Imprint, Method } from "@/lib/pricing";
@@ -38,8 +38,10 @@ const line = (g: G, color: string, qty: number): GLine => ({ id: uid(), style: g
 const imp = (method: Method, location: string, colors: number): Imprint => ({ id: uid(), method, location, colors, inks: "", size: "", notes: "" });
 
 /** One group of garments with its decorations; returns the group and its piece count. */
-function screenGroup(): Group {
-  const g = pick(SCREEN), dark = Math.random() < 0.55, qty = g.oneSize ? between(50, 300) : pick([24, 36, 48, 72, 96, 120, 144, 200, 250, 300, 450, 600]);
+function screenGroup(big = false): Group {
+  const g = big ? pick(SCREEN.filter((x) => !x.oneSize)) : pick(SCREEN), dark = Math.random() < 0.55;
+  // big runs: 1,500+ pieces (event shirts, uniforms, promo tees)
+  const qty = big ? pick([1500, 1800, 2000, 2400, 2500, 3000, 3600, 5000]) : g.oneSize ? between(50, 300) : pick([24, 36, 48, 72, 96, 120, 144, 200, 250, 300, 450, 600]);
   const colorsF = Math.random() < 0.15 ? between(6, 10) : between(1, 4);
   const imps = [imp("screen", g.garment === "Tote Bag" ? "Front" : pick(["Full Front", "Full Front", "Left Chest"]), colorsF)];
   if (g.garment !== "Tote Bag" && Math.random() < 0.5) imps.push(imp("screen", "Full Back", between(1, 4)));
@@ -65,15 +67,25 @@ function plusWorkdays(d: string, n: number) { const x = new Date(d + "T12:00:00Z
 
 export type SampleOrder = { customer_id: string; nickname: string; status: string; type: string; due_date: string; qty: number; total: number; groups: Group[]; lines: never[]; po_number: string; notes: string; source: string; approved_at: string | null; approved_name: string | null; delivery_method: string; price_type: string };
 
+const shuffle = <T,>(a: T[]) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+/**
+ * The mix: 70% screen print (about 1 in 5 of those 1,500+ pieces), 20% embroidery, 10% heat press (DTF transfers).
+ * In-hands dates spread evenly over the next 2–3 weeks (2 to 15 business days out; big runs get at least 8).
+ */
 export function sampleOrders(customerId: string, today: string, n = 25): SampleOrder[] {
   const out: SampleOrder[] = [];
+  const nEmb = Math.round(n * 0.2), nHeat = Math.round(n * 0.1), nScreen = n - nEmb - nHeat, nBig = Math.max(n >= 5 ? 1 : 0, Math.round(nScreen * 0.2));
+  const kinds = shuffle([...Array(nScreen).fill("screen"), ...Array(nEmb).fill("emb"), ...Array(nHeat).fill("heat")] as ("screen" | "emb" | "heat")[]);
+  const bigAt = new Set(shuffle(kinds.map((k, i) => (k === "screen" ? i : -1)).filter((i) => i >= 0)).slice(0, nBig));
+  const dues = shuffle(Array.from({ length: n }, (_, i) => 2 + Math.round((i * 13) / Math.max(1, n - 1))));
   for (let i = 0; i < n; i++) {
-    const r = Math.random();
-    const groups = r < 0.55 ? [screenGroup()] : r < 0.8 ? [embGroup()] : r < 0.92 ? [dtfGroup()] : [screenGroup(), embGroup()];
+    const big = bigAt.has(i);
+    const groups = kinds[i] === "screen" ? [screenGroup(big)] : kinds[i] === "emb" ? [embGroup()] : [dtfGroup()];
     const qty = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes).reduce((c, x) => c + (x || 0), 0), 0), 0);
     // stages: most ready to run (goods here, art approved), the rest still waiting on art or blanks
     const f = i / n, status = f < 0.6 ? "production" : f < 0.73 ? "blanks" : f < 0.87 ? "art" : "approved";
-    const due = plusWorkdays(today, f < 0.08 ? between(1, 2) : between(3, 15));
+    const due = plusWorkdays(today, big ? Math.max(8, dues[i]) : dues[i]);
     const what = groups.map((g) => g.lines[0].garment).join(" + ");
     out.push({
       customer_id: customerId, nickname: `${pick(NAMES)} · ${what}`, status, type: "invoice", due_date: due, qty, total: 0, groups, lines: [],
