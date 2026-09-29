@@ -22,7 +22,7 @@ type Slot = { id: string; order_id: string | null; archived_order_id: string | n
 type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; carried?: string | null };
 /** one day's piece of a job (a long job is several pieces, one per working day) */
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean };
-type View = "week" | "day";
+type View = "week" | "timeline" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number };
 
 const TZ = "America/Chicago";
@@ -113,7 +113,8 @@ export default function MachineSchedule() {
   const [msg, setMsg] = useState("");
   const [typeF, setTypeF] = useState<"" | "screen" | "embroidery" | "heat">("");
   const [trayAll, setTrayAll] = useState(false);
-  const [trayOpen, setTrayOpen] = useState(false);
+  const [trayOpen, setTrayOpen] = useState(true);
+  const [showPast, setShowPast] = useState(false);
 
   const load = useCallback(async () => {
     const sb = createClient();
@@ -378,6 +379,87 @@ export default function MachineSchedule() {
     </div>
   );
 
+  /* ---------- Week list (default): machines across, days down; each cell = that machine's jobs that day, in run order ---------- */
+  async function place(c: { card?: Card; job?: Job; need?: Need }, mach: Machine, d: string, beforeKey?: string) {
+    setOver(""); setDrag(null);
+    const job = c.card?.job || c.job, need = c.card?.need || c.need;
+    if (!s || !job || !need) return;
+    if (!fits(need, mach)) { setMsg(`#${job.number} needs ${need.type === "screen" ? `${need.needColors} screens` : TYPE_LBL[need.type]}: ${mach.name} can't run it.`); return; }
+    const sb = createClient();
+    // the bookings already in that cell (first pieces only), in run order, without the one being moved
+    const inCell = at(mach, d).filter((g) => g.part === 1 && g.c.slot && g.c.key !== c.card?.key).sort((x, y) => x.start - y.start).map((g) => g.c);
+    let idx = beforeKey ? inCell.findIndex((x) => x.key === beforeKey) : -1;
+    if (idx < 0) idx = inCell.length;
+    let id = c.card?.slot?.id;
+    const minutes = estimate(s, need, mach).minutes;
+    if (id) {
+      const r = await sb.from("production_slots").update({ machine: mach.id, day: d, minutes, start_min: null, position: idx, updated_at: new Date().toISOString() }).eq("id", id);
+      if (r.error) { setMsg(r.error.message); return; }
+    } else {
+      const r = await sb.from("production_slots").insert({ order_id: job.kind === "o" ? job.id : null, archived_order_id: job.kind === "a" ? job.id : null, machine: mach.id, day: d, minutes, start_min: null, position: idx, kind: need.type, label: need.label, source: "manual" }).select("id").single();
+      if (r.error) { setMsg(r.error.message); return; }
+      id = (r.data as { id: string }).id;
+    }
+    // renumber the cell so the moved job sits where it was dropped (pinned times give way to the running order)
+    await Promise.all(inCell.map((x, i) => sb.from("production_slots").update({ position: i < idx ? i : i + 1, start_min: null }).eq("id", x.slot!.id)));
+    setMsg(`#${job.number} → ${mach.name}, ${dayLbl(d)} (${fmtMin(minutes)})`);
+    load();
+  }
+  const listDays = [...weekDays(week).filter(visible), ...weekDays(addDay(week, 7)).filter(visible)];
+  const groups = (["screen", "embroidery", "heat"] as const).map((t) => ({ t, ms: machines.filter((m) => m.type === t) })).filter((g) => g.ms.length);
+  const chip = (g: Seg, d: string) => {
+    const c = g.c, when = d >= today;
+    return (
+      <button key={c.key + g.part} type="button" draggable className={"ms-chip " + c.need.type + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (!!c.job.due && g.day > c.job.due ? " late" : "") + (g.part > 1 ? " cont" : "")}
+        title={tip(g)} onClick={() => setOpen(c)}
+        onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver("k:" + c.key); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (drag && g.part === 1) place(drag, g.c.machine, d, c.key); else if (drag) place(drag, g.c.machine, d); }}>
+        {over === "k:" + c.key && <i className="ms-ins" />}
+        <span className="ms-c1"><b>#{c.job.number}</b>{c.slot?.status === "done" ? <em className="ok">✓</em> : c.slot?.status === "running" ? <em className="rn">●</em> : null}<small>{when ? clock(g.start) : fmtMin(g.end - g.start)}</small></span>
+        <span className="ms-c2">{g.part > 1 ? <em>cont. {g.part}/{g.parts} · </em> : g.parts > 1 ? <em>1 of {g.parts} · </em> : null}{c.job.customer || c.job.name}</span>
+      </button>
+    );
+  };
+  const listGrid = () => {
+    const past = listDays.filter((d) => d < today), rest = listDays.filter((d) => d >= today);
+    const rows = [...(showPast ? past : []), ...rest];
+    const nextMon = addDay(week, 7);
+    return (
+      <div className="ms-lw">
+        <div className="ms-lg" style={{ gridTemplateColumns: `92px repeat(${machines.length}, minmax(104px,1fr))`, minWidth: 92 + machines.length * 104 }}>
+          <div className="ms-lg-corner">{past.length > 0 && <button type="button" className="linkbtn" onClick={() => setShowPast(!showPast)}>{showPast ? "Hide" : "Show"} earlier this week</button>}</div>
+          {groups.map((g) => <div key={g.t} className={"ms-lg-grp " + g.t} style={{ gridColumn: `span ${g.ms.length}` }}>{TYPE_LBL[g.t]}</div>)}
+          <div className="ms-lg-corner2" />
+          {groups.flatMap((g) => g.ms).map((m) => {
+            const wkU = listDays.filter((d) => d >= week && d < nextMon).reduce((a, d) => a + used(m, d), 0);
+            return <div key={m.id} className={"ms-lg-m " + m.type} title={m.name}><b>{shortName(m)}</b><small>{m.type === "screen" ? `${m.colors} color` : m.type === "embroidery" ? `${m.heads} head` : "heat"} · {Math.round(wkU / 60)}h this wk</small></div>;
+          })}
+          {rows.map((d, ri) => {
+            const isToday = d === today;
+            const newWeek = d === nextMon || (ri > 0 && monday(d) !== monday(rows[ri - 1]));
+            const dayUsed = machines.reduce((a, m) => a + used(m, d), 0);
+            return [
+              newWeek ? <div key={"wk" + d} className="ms-lg-wk" style={{ gridColumn: `1 / span ${machines.length + 1}` }}>{d >= nextMon ? "Next Week" : "This Week"} · {dayLbl(monday(d))}</div> : null,
+              <div key={"d" + d} className={"ms-lg-d" + (isToday ? " today" : d < today ? " past" : "")}><b>{isToday ? "Today" : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}</b><span>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span><small>{Math.round(dayUsed / 60)}h booked</small></div>,
+              ...groups.flatMap((g) => g.ms).map((m) => {
+                const gs = at(m, d).slice().sort((x, y) => x.start - y.start);
+                const u = used(m, d), cap = capacityMin(s, m), works = m.days.includes(dow(d)) || gs.length > 0;
+                return (
+                  <div key={m.id + d} className={"ms-lc" + (isToday ? " today" : d < today ? " past" : "") + (!works ? " off" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")}
+                    onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver((o) => (o === m.id + d ? "" : o))} onDrop={(e) => { e.preventDefault(); if (drag) place(drag, m, d); }}>
+                    {works && <div className={"ms-lc-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /><span>{u ? `${(u / 60).toFixed(u % 60 ? 1 : 0)}/${Math.round(cap / 60)}h` : ""}</span></div>}
+                    {gs.map((g) => chip(g, d))}
+                    {!works && !gs.length ? <span className="ms-lc-off">off</span> : null}
+                  </div>
+                );
+              }),
+            ];
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="ms">
       <div className="ms-bar">
@@ -385,43 +467,46 @@ export default function MachineSchedule() {
         <div className="rv-seg">{([["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const).map(([k, l]) => <button key={k} type="button" className={typeF === k ? "on" : ""} onClick={() => setTypeF(k)}>{l}</button>)}</div>
         <span className="spacer" />
         <label className="ms-wknd"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Weekends</label>
-        <div className="rv-seg ms-span">{([["week", "Week"], ["day", "Day"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
-        <button type="button" className="btn sm" onClick={() => (view === "week" ? setWeek(addDay(week, -7)) : setDay(addDay(day, -1)))} aria-label="Earlier">←</button>
-        <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "week" ? "This Week" : "Today"}</button>
-        <button type="button" className="btn sm" onClick={() => (view === "week" ? setWeek(addDay(week, 7)) : setDay(addDay(day, 1)))} aria-label="Later">→</button>
+        <div className="rv-seg ms-span">{([["week", "Week"], ["timeline", "Timeline"], ["day", "Day"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
+        <button type="button" className="btn sm" onClick={() => (view !== "day" ? setWeek(addDay(week, -7)) : setDay(addDay(day, -1)))} aria-label="Earlier">←</button>
+        <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view !== "day" ? "This Week" : "Today"}</button>
+        <button type="button" className="btn sm" onClick={() => (view !== "day" ? setWeek(addDay(week, 7)) : setDay(addDay(day, 1)))} aria-label="Later">→</button>
         <Link className="linkbtn" href="/shop/settings/production">Machines &amp; times</Link>
       </div>
       {msg && <div className="banner" style={{ marginBottom: 8 }} onClick={() => setMsg("")}>{msg}</div>}
 
-      <div className={"ms-wrap" + (trayOpen ? "" : " closed")}>
-        {!trayOpen ? <button type="button" className="ms-tray-tab" onClick={() => setTrayOpen(true)} title="Show Ready To Schedule">Ready To Schedule <span className="aa-n">{tray.length}</span></button> : (
-        <aside className="ms-tray">
-          <div className="ms-tray-h"><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span>{tray.some((t) => t.sug && !t.sug.late) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All</button>}<button type="button" className="btn sm ghost ms-tray-x" onClick={() => setTrayOpen(false)} title="Hide to make the calendar wider" aria-label="Hide Ready To Schedule">«</button></div>
-          {!tray.length ? <div className="db-empty">Nothing waiting. Jobs land here when they go to In Production (goods here, art approved), or a Printavo &quot;Ready for Production / Scheduling&quot; status.</div> : (
-            <ul>{(trayAll ? tray : tray.slice(0, 5)).map((t) => (
+      <section className={"ms-band" + (trayOpen ? "" : " closed")}>
+        <div className="ms-band-h">
+          <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
+          <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art, blanks) · ` : ""}drag one onto a machine and day, or accept the suggestion</span>
+          <span className="spacer" />
+          {trayOpen && tray.some((t) => t.sug && !t.sug.late) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All Suggestions</button>}
+        </div>
+        {trayOpen && (!tray.length ? <div className="db-empty">Nothing waiting. Jobs land here when they go to In Production (goods here, art approved), or a Printavo &quot;Ready for Production / Scheduling&quot; status.</div> : (
+          <>
+            <ul className="ms-band-l">{(trayAll ? tray : tray.slice(0, 8)).map((t) => (
               <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-t " + t.need.type + (t.sug?.late ? " late" : "")}>
-                <div className="ms-t-h"><b>#{t.job.number}</b><span>{t.job.customer}</span>{t.job.due && <small>in-hands {dayLbl(t.job.due)}</small>}</div>
-                <div className="ms-t-n">{TYPE_LBL[t.need.type]} · {t.need.label} · {t.need.qty} pcs</div>
-                {t.sug ? (<>
-                  <div className="ms-t-s">→ <b>{t.sug.machine.name}</b>, {t.sug.day === today ? "today" : dayLbl(t.sug.day)} · {fmtMin(t.sug.minutes)}{t.sug.late ? <span className="ms-late"> · {t.job.due && t.sug.day > t.job.due ? "after in-hands date" : "no buffer before in-hands"}</span> : null}</div>
-                  <div className="row" style={{ gap: 6 }}><button type="button" className="btn sm primary" onClick={() => book(t.job, t.need, t.sug!.machine, t.sug!.day, "suggested")}>Accept</button>
-                    {t.sug.alternatives.slice(0, 2).map((x) => <button key={x.machine.id} type="button" className="btn sm" onClick={() => book(t.job, t.need, x.machine, x.day)} title={`${x.machine.name}, ${dayLbl(x.day)}, ${fmtMin(x.minutes)}`}>{shortName(x.machine)} {x.day === today ? "today" : dayLbl(x.day).split(",")[0]}</button>)}</div>
-                </>) : <div className="ms-late">No machine can run this (check colors / machines in settings).</div>}
-                <Link className="linkbtn" href={t.job.href} style={{ fontSize: 12 }}>Open job</Link>
+                <div className="ms-t-h"><b>#{t.job.number}</b><span>{t.job.customer || t.job.name}</span>{t.job.due && <small>due {dayShort(t.job.due)}</small>}</div>
+                <div className="ms-t-n">{t.need.label} · {t.need.qty} pcs</div>
+                {t.sug ? (
+                  <div className="ms-t-a">
+                    <button type="button" className="btn sm primary" onClick={() => book(t.job, t.need, t.sug!.machine, t.sug!.day, "suggested")} title={t.sug.reason}>{shortName(t.sug.machine)} {t.sug.day === today ? "today" : dayLbl(t.sug.day).split(",")[0]} · {fmtMin(t.sug.minutes)}</button>
+                    {t.sug.alternatives.slice(0, 1).map((x) => <button key={x.machine.id} type="button" className="btn sm" onClick={() => book(t.job, t.need, x.machine, x.day)} title={`${x.machine.name}, ${dayLbl(x.day)}, ${fmtMin(x.minutes)}`}>{shortName(x.machine)} {x.day === today ? "today" : dayLbl(x.day).split(",")[0]}</button>)}
+                    <Link className="linkbtn" href={t.job.href}>Open</Link>
+                  </div>
+                ) : <div className="ms-late">No machine can run this (check colors / machines in settings).</div>}
+                {t.sug?.late && <div className="ms-late ms-t-w">{t.job.due && t.sug.day > t.job.due ? "Suggested day is after in-hands" : "No buffer before in-hands"}</div>}
               </li>
             ))}</ul>
-          )}
-          {tray.length > 5 && <button type="button" className="btn sm" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${tray.length}`}</button>}
-          {coming.length > 0 && <div className="faint ms-coming">{coming.length} more coming (approved, art or blanks): they show here once they go to In Production.</div>}
-          <div className="faint ms-hint">Drag a job onto a machine at the time you want it to start, or tap a job to move it.</div>
-        </aside>
-        )}
+            {tray.length > 8 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${tray.length}`}</button>}
+          </>
+        ))}
+      </section>
 
-        <div className="ms-main">
-          {view === "week" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayView()}
-          {phoneView()}
-          <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k pv" />From Printavo</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span><span><i className="k off" />Off shift</span></div>
-        </div>
+      <div className="ms-main">
+        {view === "week" ? listGrid() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayView()}
+        {phoneView()}
+        <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k pv" />From Printavo</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
       {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={allDays.filter(visible)} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} />}
