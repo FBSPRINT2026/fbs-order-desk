@@ -6,13 +6,14 @@ import { createClient } from "@/lib/supabase/client";
 import { daysUntil, fmtDate, fmtStamp, money } from "@/lib/format";
 import { useShopData } from "@/lib/shopData";
 import SearchInput from "@/components/SearchInput";
+import { useSticky } from "@/lib/useSticky";
 
 export default function CustomersPage() {
   const router = useRouter();
   const { orders, customers, loading } = useShopData();
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
-  const [tag, setTag] = useState("");
+  const [tag, setTag] = useSticky("customers.filter", "");
   const allTags = useMemo(() => [...new Set(Object.values(customers).flatMap((c) => c.tags || []))].sort((a, b) => a.localeCompare(b)), [customers]);
 
   const stats = useMemo(() => {

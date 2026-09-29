@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
+import { useSticky } from "@/lib/useSticky";
 
 /**
  * The production calendar, on the shop's real hours.
@@ -120,10 +121,10 @@ export default function MachineSchedule() {
   useEffect(() => { const t = setInterval(() => setNow(shopTime(new Date())!), 60000); return () => clearInterval(t); }, []);
   const today = now.day;
   const [s, setS] = useState<ProductionSettings | null>(null);
-  const [view, setView] = useState<View>("split");
+  const [view, setView] = useSticky<View>("cal.view", "split");
   const [week, setWeek] = useState(() => monday(shopTime(new Date())!.day));
   const [day, setDay] = useState(() => shopTime(new Date())!.day);
-  const [wknd, setWknd] = useState<boolean | null>(null);
+  const [wknd, setWknd] = useSticky<boolean | null>("cal.weekends", null);
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [pvLane, setPvLane] = useState<{ job: Job; machine: Machine; day: string; startMin: number | null; minutes: number | null; carried?: string }[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -131,13 +132,13 @@ export default function MachineSchedule() {
   const [over, setOver] = useState("");
   const [open, setOpen] = useState<Card | null>(null);
   const [msg, setMsg] = useState("");
-  const [typeF, setTypeF] = useState<"" | "screen" | "embroidery" | "heat">("");
+  const [typeF, setTypeF] = useSticky<"" | "screen" | "embroidery" | "heat">("cal.type", "");
   // whose jobs: everyone's, or the accounts the signed-in person owns (others fade on the calendar)
-  const [mine, setMine] = useState(false);
+  const [mine, setMine] = useSticky("cal.mine", false);
   const [me, setMe] = useState<{ email: string; name: string }>({ email: "", name: "" });
   const [owners, setOwners] = useState<AccountOwner[]>([]);
   const [trayAll, setTrayAll] = useState(false);
-  const [trayOpen, setTrayOpen] = useState(true);
+  const [trayOpen, setTrayOpen] = useSticky("cal.trayOpen", true);
   const [showPast, setShowPast] = useState(false);
   const [offs, setOffs] = useState<DayOff[]>([]);
   const [downEdit, setDownEdit] = useState<{ machine?: string; day?: string; start?: number; allDay?: boolean } | null>(null);
@@ -485,6 +486,7 @@ export default function MachineSchedule() {
         <b>{c.job.number}</b>{c.slot?.status === "done" ? <em className="ok">✓</em> : c.slot?.status === "running" ? <em className="rn">●</em> : null}
         <span className="ms-cn">{g.part > 1 ? <em>cont. </em> : null}{c.job.customer || c.job.name}</span>
         <small>{g.parts > 1 ? `${g.part}/${g.parts}` : when ? clock(g.start) : fmtMin(g.end - g.start)}</small>
+        {two && <span className="ms-cl">{c.need.label}{c.need.qty ? ` · ${c.need.qty} pcs` : ""}{g.parts === 1 ? ` · ${fmtMin(g.end - g.start)}` : ""}</span>}
       </button>
     );
   };
@@ -538,7 +540,8 @@ export default function MachineSchedule() {
   /* ---------- Split (default): the next two days hour by hour on the left, the rest of the next two weeks on the right ---------- */
   const nextVis = (d: string, step = 1) => { let x = d; for (let i = 0; i < 7 && !visible(x); i++) x = addDay(x, step); return x; };
   const d0 = nextVis(day), d1 = nextVis(addDay(d0, 1));
-  const restDays = Array.from({ length: 14 }, (_, i) => addDay(d1, i + 1)).filter((d) => d <= addDay(d0, 14) && visible(d));
+  // the five working days after the two hour-by-hour days
+  const restDays = Array.from({ length: 21 }, (_, i) => addDay(d1, i + 1)).filter(visible).slice(0, 5);
   const dayTitle = (d: string) => { const u = machines.reduce((a, m) => a + used(m, d), 0); return <><b>{d === today ? "Today" : d === addDay(today, 1) ? "Tomorrow" : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}</b><span>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: d === today || d === addDay(today, 1) ? "short" : undefined, month: "short", day: "numeric" })}</span><small>{fmtMin(u)} booked</small></>; };
   const split = () => (
     <div className="ms-split">
@@ -548,7 +551,7 @@ export default function MachineSchedule() {
         {dayGrid(d1, { title: dayTitle(d1), colMin: 70, hourPx: 40 })}
       </div>
       <div className="ms-split-col r">
-        <div className="ms-split-h">Next two weeks</div>
+        <div className="ms-split-h">Next five days</div>
         <div className="ms-split-fill">{listGrid(restDays, { compact: true })}</div>
       </div>
     </div>
@@ -568,7 +571,7 @@ export default function MachineSchedule() {
         <div className="rv-seg ms-who" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
         <span className="spacer" />
         <label className="ms-wknd"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Weekends</label>
-        <div className="rv-seg ms-span">{([["split", "2 Days + 2 Weeks"], ["timeline", "Timeline"], ["day", "Day"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
+        <div className="rv-seg ms-span">{([["split", "2 Days + Next 5"], ["timeline", "Timeline"], ["day", "Day"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
         <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
         <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "timeline" ? "This Week" : "Today"}</button>
         <button type="button" className="btn sm" onClick={() => shift(1)} aria-label="Later">→</button>

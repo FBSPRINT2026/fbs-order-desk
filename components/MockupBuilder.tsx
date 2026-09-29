@@ -20,6 +20,7 @@ import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, closestPms, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot, basePlacement, maxWidthFor, sideMaxWidth, viewsFor, guessHex, measureGarment, printWidth, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { useSticky } from "@/lib/useSticky";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -102,7 +103,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    * stack = one photo, then Imprints, then close-ups (phones)
    */
   const mkRef = useRef<HTMLDivElement>(null);
-  const [mode, setMode] = useState<"wide" | "mid" | "one" | "stack">("wide");
+  const [mode, setMode] = useSticky<"wide" | "mid" | "one" | "stack">("mockup.layout", "wide");
   useEffect(() => {
     const el = mkRef.current; if (!el) return;
     const ro = new ResizeObserver(() => { const w = el.clientWidth; setMode(w >= 1190 ? "wide" : w >= 960 ? "mid" : w >= 700 ? "one" : "stack"); });

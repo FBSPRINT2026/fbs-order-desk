@@ -3596,3 +3596,5 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-lc-dn.slow{color:#8a5a00;background:color-mix(in srgb,var(--fbs-orange) 22%,var(--surface))}
 .ms-inl{display:flex;align-items:center;gap:6px;font-size:13px}
 .ms-op{font-weight:600;color:var(--ink-2)}
+.ms-chip.two .ms-cl{order:6;flex-basis:100%;font-size:9.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ms-chip.two{padding-top:3px;padding-bottom:3px}

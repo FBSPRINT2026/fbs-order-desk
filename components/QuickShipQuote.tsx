@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { mergeSettings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { serviceName } from "@/lib/transit";
+import { useSticky } from "@/lib/useSticky";
 
 type Rate = { carrier: string; service: string; cost: number; price: number; days: number | null; deliveryDate?: string | null };
 
@@ -26,7 +27,7 @@ export default function QuickShipQuote({ compact = false }: { compact?: boolean 
   const [box, setBox] = useState(""), [defBox, setDefBox] = useState("");
   const [from, setFrom] = useState(""), [zip, setZip] = useState(""), [lb, setLb] = useState(""), [n, setN] = useState("1");
   const [rates, setRates] = useState<Rate[] | null>(null);
-  const [only, setOnly] = useState<"all" | "UPS" | "FedEx">("all");
+  const [only, setOnly] = useSticky<"all" | "UPS" | "FedEx">("rates.carrier", "all");
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   useEffect(() => {
     createClient().from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => {

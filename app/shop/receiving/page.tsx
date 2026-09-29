@@ -12,6 +12,7 @@ import { ResolveList } from "@/components/IncomingShipments";
 import type { ManifestHit, PendingShipment, PrintavoGoods } from "@/lib/manifest";
 import { blanksPlan, blanksReceived, orderBlanksSS, recordBlanks, type BlankLine } from "@/app/shop/receiving-actions";
 import SearchInput from "@/components/SearchInput";
+import { useSticky } from "@/lib/useSticky";
 
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
@@ -86,9 +87,9 @@ const SS_METHODS: [string, string][] = [["1", "Ground (S&S picks)"], ["40", "UPS
 export default function GoodsReceiving() {
   const sb = createClient();
   const [data, setData] = useState<{ orders: O[]; cust: Record<string, Customer>; blanks: BO[]; bships: BS[]; goods: GoodsItem[]; lead: number } | null>(null);
-  const [tab, setTab] = useState<"arriving" | "need" | "ordered" | "received">("arriving");
+  const [tab, setTab] = useSticky<"arriving" | "need" | "ordered" | "received">("receiving.tab", "arriving");
   const [focus, setFocus] = useState<Focus | null>(null);
-  const [groupBy, setGroupBy] = useState<GroupBy>("carrier");
+  const [groupBy, setGroupBy] = useSticky<GroupBy>("receiving.groupBy", "carrier");
   const [truck, setTruck] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [q, setQ] = useState("");

@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { PROJECT_STATUS, countdown, daysTo, type ProjectSummary } from "@/lib/projects";
 import { fmtDateLong, money } from "@/lib/format";
+import { useSticky } from "@/lib/useSticky";
 
 type NewProject = { name: string; event_date: string | null; in_hands_date: string | null; requests: string; customer_id?: string };
 
@@ -17,7 +18,7 @@ export default function ProjectList({ mode, projects, hrefOf, onCreate, customer
   customers?: { id: string; label: string }[];
   canAct?: boolean; compact?: boolean;
 }) {
-  const [tab, setTab] = useState<"open" | "done">("open");
+  const [tab, setTab] = useSticky<"open" | "done">("projects.tab", "open");
   const [adding, setAdding] = useState(false);
   const [f, setF] = useState<NewProject>({ name: "", event_date: null, in_hands_date: null, requests: "", customer_id: customers?.length === 1 ? customers[0].id : "" });
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");

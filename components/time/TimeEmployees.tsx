@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fullName, type Employee } from "@/lib/timeclock";
 import { isBoss, type TimeData } from "./types";
+import { useSticky } from "@/lib/useSticky";
 
 const COLORS = ["#0E9BD8", "#F26660", "#FCB122", "#0F8C78", "#7C5CD6", "#D0487A", "#3F7F2E", "#B8621B"];
 const blank = (): Partial<Employee> => ({ first_name: "", last_name: "", email: "", phone: "", staff_email: null, department: "", title: "", pay_type: "hourly", color: "", active: true, hire_date: null, notes: "" });
@@ -10,7 +11,7 @@ const blank = (): Partial<Employee> => ({ first_name: "", last_name: "", email: 
 /** Everyone on the clock: name, department, their shop login (for phone punching), PIN, and pay (owners/admins). */
 export default function TimeEmployees({ d }: { d: TimeData }) {
   const [edit, setEdit] = useState<Partial<Employee> | null>(null);
-  const [showOld, setShowOld] = useState(false);
+  const [showOld, setShowOld] = useSticky("time.showOld", false);
   const list = d.employees.filter((e) => showOld || e.active);
   return (
     <div className="tmx">

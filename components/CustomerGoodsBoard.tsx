@@ -8,6 +8,7 @@ import { goodsNeedInfo, needsGoods, type GoodsItem } from "@/lib/goods";
 import { ResolveList } from "@/components/IncomingShipments";
 import type { PendingShipment } from "@/lib/manifest";
 import SearchInput from "@/components/SearchInput";
+import { useSticky } from "@/lib/useSticky";
 
 type Stage = "info" | "coming" | "counting" | "issue" | "received" | "match";
 const STAGES: { k: Stage; label: string; help: string }[] = [
@@ -24,7 +25,7 @@ const stageOf = (it: GoodsItem): Stage =>
 /** Every wholesale job's customer supplied goods, by stage (shop-wide). Lives in Goods & receiving. */
 export default function CustomerGoodsBoard({ pending, onPending, refreshKey }: { pending: PendingShipment[]; onPending: () => void; refreshKey: number }) {
   const [items, setItems] = useState<GoodsItem[] | null>(null);
-  const [tab, setTab] = useState<Stage>("counting");
+  const [tab, setTab] = useSticky<Stage>("goods.stage", "counting");
   const [q, setQ] = useState("");
   const [customers, setCustomers] = useState<Record<string, string>>({});
   const [orderCust, setOrderCust] = useState<Record<string, string>>({});

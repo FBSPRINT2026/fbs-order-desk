@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ST } from "@/lib/pricing";
 import { custLabel, todayISO } from "@/lib/format";
 import { useShopData } from "@/lib/shopData";
+import { useSticky } from "@/lib/useSticky";
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -14,7 +15,7 @@ export default function ProductionCalendar({ embedded = false }: { embedded?: bo
   const { orders, customers } = useShopData();
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
-  const [showQuotes, setShowQuotes] = useState(false);
+  const [showQuotes, setShowQuotes] = useSticky("prodcal.quotes", false);
   const first = new Date(ym.y, ym.m, 1);
   const start = new Date(ym.y, ym.m, 1 - first.getDay());
   const byDate: Record<string, typeof orders> = {};

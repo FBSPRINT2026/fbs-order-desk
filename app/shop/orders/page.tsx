@@ -11,6 +11,7 @@ import { summaryLine, useShopData } from "@/lib/shopData";
 import { Due, Pill } from "@/components/bits";
 import AssistantStrip from "@/components/AssistantStrip";
 import SearchInput from "@/components/SearchInput";
+import { useSticky } from "@/lib/useSticky";
 
 /** A Printavo status in our words, so the filters work on Printavo orders too. */
 function pvStatus(a: { kind: string; status_name: string }): string {
@@ -30,8 +31,8 @@ export default function OrdersPage() {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const { orders, customers, loading, error } = useShopData();
-  const [type, setType] = useState<F>("all");
-  const [status, setStatus] = useState("");
+  const [type, setType] = useSticky<F>("orders.type", "all");
+  const [status, setStatus] = useSticky("orders.status", "");
   const [q, setQ] = useState("");
 
   // Printavo orders (read-only copies) are listed with everything else: every open one + the most recent ones;

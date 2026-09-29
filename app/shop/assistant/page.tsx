@@ -8,6 +8,7 @@ import { applyDecisions, computeFollowUps, KIND_INFO, loadAssistantData, loadDec
 import { custLabel, fmtStamp } from "@/lib/format";
 import { staffCustomerMessage, staffMessage } from "@/app/shop/actions";
 import { addEmailToTimeline, aiRewriteDraft, getAiStatus, quoteFromSuggestion } from "@/app/shop/ai-actions";
+import { useSticky } from "@/lib/useSticky";
 
 type Group = "All" | "Reply" | "Quotes" | "Artwork" | "Money" | "Production" | "Relationships" | "AI & to-dos";
 const GROUPS: Group[] = ["All", "Reply", "Quotes", "Artwork", "Money", "Production", "Relationships", "AI & to-dos"];
@@ -26,10 +27,10 @@ export default function AssistantPage() {
   const [custNames, setCustNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [group, setGroup] = useState<Group>("All");
+  const [group, setGroup] = useSticky<Group>("assistant.group", "All");
   const [me, setMe] = useState("");
   const [ai, setAi] = useState<{ ready: boolean; reason: string }>({ ready: false, reason: "" });
-  const [showSnoozed, setShowSnoozed] = useState(false);
+  const [showSnoozed, setShowSnoozed] = useSticky("assistant.snoozed", false);
   const [flash, setFlash] = useState("");
   const say = (m: string) => { setFlash(m); setTimeout(() => setFlash(""), 4000); };
 

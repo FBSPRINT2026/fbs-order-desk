@@ -11,6 +11,7 @@ import QuickPay from "@/components/QuickPay";
 import RecordPayment from "@/components/RecordPayment";
 import type { PayFilter } from "@/lib/paySelect";
 import SearchInput from "@/components/SearchInput";
+import { useSticky } from "@/lib/useSticky";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
@@ -118,7 +119,7 @@ export default function AccountAreas({ mode, projectsPanel, projectsCount, progr
   const [mStars, setMStars] = useState<Record<string, boolean>>({});
   const [arch, setArch] = useState<Record<string, string | null>>({});
   const [armedDel, setArmedDel] = useState("");
-  const [showArch, setShowArch] = useState(false);
+  const [showArch, setShowArch] = useSticky("account.showArchived", false);
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
   // "Pay this statement" arrives with ?pay=all: everything open is checked

@@ -9,6 +9,7 @@ import AiSearch from "@/components/AiSearch";
 import SalesAnalytics from "@/components/SalesAnalytics";
 import { Pill } from "@/components/bits";
 import { money } from "@/lib/format";
+import { useSticky } from "@/lib/useSticky";
 
 /**
  * The daily dashboard: the first thing every admin sees. Everything that needs someone today, in one place:
@@ -37,7 +38,7 @@ export default function Dashboard() {
   const [msgTab, setMsgTab] = useState<"reply" | "email">("reply");
   const [prodTab, setProdTab] = useState<string | null>(null);
   const [owed, setOwed] = useState<{ id: string; number: string; nickname: string; customer_id: string | null; balance: number; due: string | null }[]>([]);
-  const [mine, setMine] = useState(false);
+  const [mine, setMine] = useSticky("dash.mine", false);
   const [custs, setCusts] = useState<Record<string, Cust>>({});
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);

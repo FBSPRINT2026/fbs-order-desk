@@ -6,6 +6,7 @@ import { designLabel, type Customer, type Design } from "@/lib/pricing";
 import { custLabel, fmtDateLong } from "@/lib/format";
 import { DESIGN_ACCEPT, PREVIEWABLE, previewUrls, uploadDesign } from "@/lib/designs";
 import SearchInput from "@/components/SearchInput";
+import { useSticky } from "@/lib/useSticky";
 
 type Mock = { id: string; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[] };
 type Show = "all" | "logos" | "mockups";
@@ -22,8 +23,8 @@ export default function ArtworkPage() {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [q, setQ] = useState("");
   const [cust, setCust] = useState("");
-  const [show, setShow] = useState<Show>("all");
-  const [archived, setArchived] = useState(false);
+  const [show, setShow] = useSticky<Show>("artwork.show", "all");
+  const [archived, setArchived] = useSticky("artwork.archived", false);
   const [nL, setNL] = useState(STEP);
   const [nM, setNM] = useState(STEP);
   const [msg, setMsg] = useState("");

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { PROJECT_STATUS, countdown, type Project, type ProjectOrder, type ProjectStatus, type ProjectTask } from "@/lib/projects";
 import { fmtDateLong, money } from "@/lib/format";
+import { useSticky } from "@/lib/useSticky";
 
 type R = Promise<{ ok: boolean; error?: string; id?: string }>;
 export type ProjectActs = {
@@ -44,7 +45,7 @@ export default function ProjectView({ mode, project, tasks, orders, linkable, me
   const [nt, setNt] = useState({ title: "", due: "", who: mode === "portal" ? "customer" : "shop", shopOnly: false });
   const open = tasks.filter((t) => !t.done_at).sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"));
   const doneT = tasks.filter((t) => t.done_at);
-  const [showDone, setShowDone] = useState(false);
+  const [showDone, setShowDone] = useSticky("project.showDone", false);
   const run = async (r: R) => { setErr(""); const x = await r; if (!x.ok) setErr(x.error || "Couldn't save."); else act.changed(); return x; };
 
   // key dates: event, needed-by, and tasks with due dates

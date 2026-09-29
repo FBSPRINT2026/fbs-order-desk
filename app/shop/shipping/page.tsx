@@ -12,6 +12,7 @@ import SearchInput from "@/components/SearchInput";
 import QuickShipQuote from "@/components/QuickShipQuote";
 import TransitMap from "@/components/TransitMap";
 import { money } from "@/lib/format";
+import { useSticky } from "@/lib/useSticky";
 
 type NewRow = { id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; ship_to: string; ship_method: string; po_number: string };
 type PvRow = { id: string; visual_id: string; nickname: string; qty: number; due_date: string | null; customer_id: string; po_number: string; status_name: string; ship: PvAddress; delivery: string | null; contact: { fullName?: string; email?: string; phone?: string } | null };
@@ -44,7 +45,7 @@ export default function ShippingCenter() {
   const [items, setItems] = useState<Item[] | null>(null);
   const [shipped, setShipped] = useState<(Shipment & { label: string; customer: string })[]>([]);
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
-  const [tab, setTab] = useState<"overview" | "ready" | "shipped" | "transit">("overview");
+  const [tab, setTab] = useSticky<"overview" | "ready" | "shipped" | "transit">("shipping.tab", "overview");
   const [open, setOpen] = useState<{ item: Item; box: number | null } | null>(null);
   const [q, setQ] = useState(""), [scan, setScan] = useState(""), [note, setNote] = useState("");
   const [showSettings, setShowSettings] = useState(false);

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ROLES, calcGroup, mergeSettings, newGLine, newImprint, uid, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { getAiStatus } from "@/app/shop/ai-actions";
+import { useSticky } from "@/lib/useSticky";
 
 export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
@@ -12,7 +13,7 @@ export default function SettingsPage() {
   const [staff, setStaff] = useState<{ email: string; name: string; role: string }[]>([]);
   const [newRole, setNewRole] = useState("admin");
   const [newStaff, setNewStaff] = useState("");
-  const [tab, setTab] = useState<"retail" | "wholesale">("retail");
+  const [tab, setTab] = useSticky<"retail" | "wholesale">("settings.priceTab", "retail");
   const [shade, setShade] = useState<"dark" | "light">("dark");
   const [aiKey, setAiKey] = useState<boolean | null>(null);
 

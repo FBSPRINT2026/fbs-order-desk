@@ -8,6 +8,7 @@ import { custLabel, money } from "@/lib/format";
 import { useShopData, type OrderRow } from "@/lib/shopData";
 import { Due } from "@/components/bits";
 import SearchInput from "@/components/SearchInput";
+import { useSticky } from "@/lib/useSticky";
 
 /**
  * Order pipeline (a sales tool, on the dashboard): one column per status, compact cards (order #, job, due,
@@ -21,7 +22,7 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).
 export default function OrderBoard({ mine: mineProp }: { mine?: boolean }) {
   const router = useRouter();
   const { orders, setOrders, customers, settings, loading } = useShopData();
-  const [showQuotes, setShowQuotes] = useState(false);
+  const [showQuotes, setShowQuotes] = useSticky("pipeline.quotes", false);
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
