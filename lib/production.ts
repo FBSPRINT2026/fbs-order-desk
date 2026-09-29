@@ -403,6 +403,44 @@ export const windowsOn = (mach: Machine, day: string): [number, number, number][
 export const capacityMin = (s: ProductionSettings, mach: Machine, day?: string) => { if (day) return windowsOn(mach, day).reduce((a, [x, y, r]) => a + (y - x) * r, 0); const t = typicalShift(mach); return t[1] - t[0]; };
 const addDay = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const dow = (d: string) => new Date(d + "T12:00:00Z").getUTCDay();
+
+/* ---------- overtime: the pay week runs Friday through Thursday; past 40 paid hours is overtime ---------- */
+export const OT_LIMIT_MIN = 40 * 60;
+/** The Friday that starts the pay week a day falls in. */
+export const payWeekStart = (d: string) => addDay(d, -((dow(d) + 2) % 7));
+/** The crew's paid time that day: the shift less unpaid lunch, and less any time they leave early / start late. */
+export function paidOn(mach: Machine, day: string): [number, number][] {
+  const sh = shiftOn(mach, day);
+  if (!sh) return [];
+  const cut = [
+    ...breaksOn(mach, day, sh).filter((x) => x[2] === "Lunch"),
+    ...(mach.down?.[day] || []).filter((x) => !(x[3] > 0) && /leav|start(ing)? late|no overtime/i.test(x[2])),
+  ].sort((a, b) => a[0] - b[0]);
+  let parts: [number, number][] = [[sh[0], sh[1]]];
+  for (const [a, b] of cut) parts = parts.flatMap(([x, y]): [number, number][] => (b <= x || a >= y ? [[x, y]] : [...(a > x ? [[x, a] as [number, number]] : []), ...(b < y ? [[b, y] as [number, number]] : [])]));
+  return parts.filter(([x, y]) => y > x);
+}
+export type WeekOT = { weekStart: string; paid: number; ot: number; days: Record<string, { paid: number; ot: number; otFrom: number | null }> };
+/** A press crew's paid minutes Friday → Thursday and where overtime starts (after 40 hours). Machines without a crew: null. */
+export function weekOvertime(mach: Machine, weekStart: string): WeekOT | null {
+  if (!mach.crew) return null;
+  let cum = 0, ot = 0;
+  const days: WeekOT["days"] = {};
+  for (let i = 0; i < 7; i++) {
+    const d = addDay(weekStart, i);
+    let dp = 0, dot = 0, from: number | null = null;
+    for (const [a, b] of paidOn(mach, d)) {
+      const len = b - a, room = Math.max(0, OT_LIMIT_MIN - cum);
+      if (len > room) { if (from == null) from = a + room; dot += len - room; }
+      cum += len; dp += len;
+    }
+    ot += dot;
+    days[d] = { paid: dp, ot: dot, otFrom: from };
+  }
+  return { weekStart, paid: cum, ot, days };
+}
+/** When overtime starts on a day for this machine's crew (minutes after midnight), or null. */
+export const otFromOn = (mach: Machine, day: string) => weekOvertime(mach, payWeekStart(day))?.days[day]?.otFrom ?? null;
 /** Business days back from a date on the shop's week (Mon–Fri). */
 export function minusWorkdays(d: string, n: number) { let x = d, k = n; while (k > 0) { x = addDay(x, -1); if (dow(x) !== 0 && dow(x) !== 6) k--; } return x; }
 

@@ -16,7 +16,7 @@ type Late = { job: string; customer: string; inHands: string; why: string; value
 export async function POST(req: Request) {
   const { user, isStaff } = await getViewer();
   if (!user || !isStaff) return NextResponse.json({ error: "Staff only." }, { status: 401 });
-  const body = await req.json().catch(() => ({})) as { now?: string; lateBefore?: number; late?: Late[]; options?: Opt[]; labor?: { crewSize: number; wage: number; otMultiplier: number }; machines?: string };
+  const body = await req.json().catch(() => ({})) as { now?: string; lateBefore?: number; late?: Late[]; options?: Opt[]; labor?: { crewSize: number; wage: number; otMultiplier: number }; machines?: string; overtime?: string };
   const opts = (body.options || []).slice(0, 14), late = (body.late || []).slice(0, 40);
   if (!opts.length) return NextResponse.json({ error: "Nothing to compare." }, { status: 400 });
   const admin = createAdminClient();
@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     `Jobs that won't make their in-hands date on the current plan: ${body.lateBefore ?? late.length}.`,
     ...late.map((l) => `- ${l.job} ${l.customer} · in-hands ${l.inHands} · ${l.why}${l.value ? ` · order $${Math.round(l.value)}` : ""}`),
     "",
+    body.overtime ? `Overtime already on the schedule this pay week (Friday–Thursday, past 40 paid hours): ${String(body.overtime).slice(0, 800)}. Extra hours for a crew already in overtime are all overtime; prefer adding time to crews that aren't.` : "No crew is in overtime yet this pay week (Friday–Thursday).",
     lb ? `Labor: crews of ${lb.crewSize} at about $${lb.wage}/hr; extra hours (overtime, Saturday) cost ${lb.otMultiplier}× that. A split job costs roughly 15 minutes of extra setup per extra run, done on regular time.` : "",
     "",
     "Options the planner simulated (each is a full re-plan with that change):",

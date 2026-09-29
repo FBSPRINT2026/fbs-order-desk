@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 
@@ -261,6 +261,7 @@ export default function MachineSchedule() {
   const [replanBusy, setReplanBusy] = useState(false);
   const [checkin, setCheckin] = useState(false);
   const [renorm, setRenorm] = useState(false);
+  const [otOpen, setOtOpen] = useState(false);
   const [advise, setAdvise] = useState<null | { opts: WhatIf[]; late: { job: string; customer: string; inHands: string; why: string }[]; lateBefore: number }>(null);
   // the "schedule too tight" prompt shows once a day (again if more jobs go late)
   const [toolsOpen, setToolsOpen] = useSticky("cal.toolsOpen", true);
@@ -554,10 +555,13 @@ export default function MachineSchedule() {
     const nowAbs = ord(today) * 1440 + now.min;
     const winsOf = (m: Machine, d: string) => { const sh = shiftOn(m, d); return sh ? windowsIn(sh, downsOn(m, d, sh)) : []; };
     const norm = (m: Machine, t: number) => { for (let g = 0; g < 120; g++) { const dd = Math.floor(t / 1440), mm = t - dd * 1440, w = winsOf(m, fromOrd(dd)).find(([, y]) => mm < y); if (!w) { t = (dd + 1) * 1440; continue; } return mm < w[0] ? dd * 1440 + w[0] : t; } return t; };
+    // when each crew goes into overtime (past 40 paid hours, Friday–Thursday), per machine copy and day
+    const otc = new WeakMap<Machine, Map<string, number | null>>();
+    const otAt = (m: Machine, d: string) => { let c = otc.get(m); if (!c) otc.set(m, (c = new Map())); if (!c.has(d)) c.set(d, otFromOn(m, d)); return c.get(d)!; };
     const sim = (m: Machine, t0: number, minutes: number) => {
-      let t = norm(m, t0); const start = t; let left = minutes;
-      for (let g = 0; g < 400 && left > 0.01; g++) { const dd = Math.floor(t / 1440), mm = t - dd * 1440, w = winsOf(m, fromOrd(dd)).find(([, y]) => mm < y)!; if (!w) { t = norm(m, t); continue; } const end = Math.min(mm + left / w[2], w[1]); left -= (end - mm) * w[2]; t = left > 0.01 ? norm(m, dd * 1440 + end) : dd * 1440 + end; }
-      return { start, end: t };
+      let t = norm(m, t0); const start = t; let left = minutes, ot = 0;
+      for (let g = 0; g < 400 && left > 0.01; g++) { const dd = Math.floor(t / 1440), mm = t - dd * 1440, w = winsOf(m, fromOrd(dd)).find(([, y]) => mm < y)!; if (!w) { t = norm(m, t); continue; } const end = Math.min(mm + left / w[2], w[1]); const oa = otAt(m, fromOrd(dd)); if (oa != null) ot += Math.max(0, end - Math.max(mm, oa)); left -= (end - mm) * w[2]; t = left > 0.01 ? norm(m, dd * 1440 + end) : dd * 1440 + end; }
+      return { start, end: t, ot };
     };
     // not started yet (or paused partway): free to move. Running and done work stays where it is.
     const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF));
@@ -574,20 +578,23 @@ export default function MachineSchedule() {
     const out: Out[] = [];
     const skipped: Item[] = [];
     const endDayOf = (t: number) => fromOrd(Math.floor((t - 1) / 1440));
-    // the machine that finishes this work earliest, given where each machine's day is up to
-    const bestFor = (need: Need, left: number, cur: Record<string, number>, prefer: string) => {
-      let best: { m: Machine; start: number; end: number; minutes: number } | null = null;
+    // the machine that finishes this work earliest, given where each machine's day is up to; among the ones that
+    // make the in-hands date, the one that runs the least of it on overtime (a crew past 40 hours this pay week)
+    const bestFor = (need: Need, left: number, cur: Record<string, number>, prefer: string, due?: string | null) => {
+      let best: { m: Machine; start: number; end: number; minutes: number; ot: number } | null = null;
+      const late = (t: number) => !!due && endDayOf(t) > due;
       for (const m of s.machines.filter((x) => x.active && fits(need, x))) {
         const mm = ms.find((x) => x.id === m.id) || m; // the calendar's copy carries days off, downtime and extra shifts
         const minutes = Math.max(15, estimate(s, need, mm).minutes * left), r = sim(mm, cur[mm.id] ?? nowAbs, minutes);
-        const better = !best || r.end < best.end - 30 || (Math.abs(r.end - best.end) <= 30 && (mm.id === prefer || (best.m.id !== prefer && (need.type === "screen" ? mm.colors < best.m.colors : false))));
-        if (better) best = { m: mm, start: r.start, end: r.end, minutes };
+        const sooner = !best || r.end < best.end - 30 || (Math.abs(r.end - best.end) <= 30 && (mm.id === prefer || (best.m.id !== prefer && (need.type === "screen" ? mm.colors < best.m.colors : false))));
+        const better = !best || (late(r.end) !== late(best.end) ? !late(r.end) : !late(r.end) && Math.abs(r.ot - best.ot) > 10 ? r.ot < best.ot : sooner);
+        if (better) best = { m: mm, start: r.start, end: r.end, minutes, ot: r.ot };
       }
       return best;
     };
     let splits = 0;
     for (const it of items) {
-      const best = bestFor(it.need, it.left, cursor, it.cur);
+      const best = bestFor(it.need, it.left, cursor, it.cur, it.job.due);
       if (!best) { skipped.push(it); continue; }
       const locs = locsOf(it.need);
       // won't make it in one piece: try the print locations separately (fronts on one press, backs on another / the next day)
@@ -600,7 +607,7 @@ export default function MachineSchedule() {
         for (const [i, l] of locs.entries()) {
           const sn = subNeed(it.need, [l]), after = Object.fromEntries(Object.entries(cur2).map(([k, v]) => [k, Math.max(v, prevEnd)]));
           for (const m of ms) if (!(m.id in after)) after[m.id] = Math.max(nowAbs, prevEnd);
-          const b = bestFor(sn, 1, after, it.cur); if (!b) { parts.length = 0; break; }
+          const b = bestFor(sn, 1, after, it.cur, it.job.due); if (!b) { parts.length = 0; break; }
           if (i > 0) { const r = sim(b.m, b.start, b.minutes + 15); b.end = r.end; b.minutes += 15; }
           cur2[b.m.id] = b.end; prevEnd = b.end; parts.push({ need: sn, b, l });
         }
@@ -764,6 +771,7 @@ export default function MachineSchedule() {
             onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button, .ms-warm, .ms-lunch")) return; const r = e.currentTarget.getBoundingClientRect(); setDownEdit({ machine: m.id, day, start: Math.floor((vS + ((e.clientY - r.top) / HOUR_PX) * 60) / 30) * 30 }); }}
             title="Click an open time to add downtime here">
             {shade(m).map(([a, b]) => <div key={a} className="ms-off" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} />)}
+            {(() => { const sh = shiftOn(m, day), oa = sh ? otFromOn(m, day) : null; if (!sh || oa == null) return null; const a = Math.max(oa, vS), b = Math.min(sh[1], vE); return b > a ? <div className="ms-ot" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} title={`${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "This crew"} is past 40 hours this pay week from ${clockLong(oa)}: overtime`}><span>Overtime</span></div> : null; })()}
             {(() => { const sh = shiftOn(m, day); return sh ? breaksOn(m, day, sh, segs.lunch.get(m.id + "|" + day)).map(([a0, b0, why]) => { const a = Math.max(a0, vS), b = Math.min(b0, vE); if (b <= a) return null; const warm = why === "Warm-up"; return (
               <div key={"bk" + a0} className={warm ? "ms-warm" : "ms-lunch"} style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} title={`${warm ? "Press warm-up" : `${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "Crew"} lunch`} ${clockLong(a0)} – ${clockLong(b0)}`}>{((b - a) / 60) * HOUR_PX >= 13 && <span>{warm ? "Warm-up" : "Lunch"}</span>}</div>
             ); }) : null; })()}
@@ -1003,6 +1011,33 @@ export default function MachineSchedule() {
    * working night until the last late job's in-hands date; a Saturday shift (4 or 8 hours); and the cheap combos.
    * Only the machines that run the late work get the extra time. Labor = extra hours × crew × wage × overtime rate.
    */
+  /**
+   * Overtime this pay week (Friday–Thursday) for each press crew in view: paid hours on the schedule (shifts, extra
+   * shifts, days off, leaving early; lunch unpaid), hours past 40, how much of that has jobs booked in it, and the pay.
+   */
+  const otReport = (ws: string) => machines.filter((m) => m.crew).map((m) => {
+    const w = weekOvertime(m, ws)!, days = Object.keys(w.days);
+    const used = days.reduce((t, d) => { const oa = w.days[d].otFrom; if (oa == null) return t; return t + at(m, d).reduce((u, g) => u + Math.max(0, g.end - Math.max(g.start, oa)), 0); }, 0);
+    const cc = crewCost(m), mult = s.labor.otMultiplier;
+    const first = days.find((d) => w.days[d].otFrom != null);
+    return { m, w, used: Math.min(used, w.ot), unused: Math.max(0, w.ot - used), perHour: cc?.perHour ?? null, who: cc?.who ?? [], pay: cc ? (w.ot / 60) * cc.perHour * mult : null, premium: cc ? (w.ot / 60) * cc.perHour * (mult - 1) : null, starts: first ? { day: first, min: w.days[first].otFrom! } : null };
+  });
+  // send a crew home at 40 hours: downtime ("Leaving early (no overtime)") from when overtime starts, or after the last booked job, to the end of the shift
+  async function cutOvertime(rows: ReturnType<typeof otReport>) {
+    const ins: Record<string, unknown>[] = [];
+    for (const r of rows) for (const [d, x] of Object.entries(r.w.days)) {
+      if (x.otFrom == null || d < today) continue;
+      const sh = shiftOn(r.m, d); if (!sh) continue;
+      const last = at(r.m, d).reduce((t, g) => Math.max(t, g.end), 0);
+      const from = Math.ceil(Math.max(x.otFrom, last, d === today ? now.min : 0) / 15) * 15;
+      if (from < sh[1]) ins.push({ machine: r.m.id, crew_id: null, day: d, start_min: from, end_min: sh[1], capacity: 0, employee: "", note: "Leaving early (no overtime)", created_by: me.email });
+    }
+    if (!ins.length) { setMsg("No unused overtime to cut: the overtime hours all have jobs booked."); return; }
+    const r = await createClient().from("production_days_off").insert(ins);
+    setMsg(r.error ? r.error.message : `Overtime cut: ${ins.length} early finish${ins.length === 1 ? "" : "es"} added (crews leave when their work is done instead of staying past 40 hours).`);
+    load();
+  }
+
   /** What an hour on this machine costs: its crew's rates added up (press operator + assistant + catcher). */
   const crewCost = (m: Machine): { perHour: number; who: string[] } | null => {
     if (!pay) return null;
@@ -1108,9 +1143,18 @@ export default function MachineSchedule() {
             <button type="button" className="ms-act" onClick={() => setReplan({ why: "" })}><b>Re-plan Schedule</b><small>Re-lay open work from now, soonest in-hands first</small></button>
             <button type="button" className="ms-act" onClick={() => setShiftEdit(true)}><b>+ Add Shift</b><small>A weekend or extra shift for a crew</small></button>
             <button type="button" className="ms-act" onClick={() => setDownEdit({})}><b>+ Add Downtime</b><small>Maintenance, repairs, an employee out</small></button>
+            <button type="button" className="ms-act" onClick={() => setOtOpen(true)}><b>Overtime</b><small>Who&apos;s past 40 hours this pay week</small></button>
             <button type="button" className="ms-act" onClick={() => setRenorm(true)}><b>Renormalize Schedule</b><small>Drop extra shifts, put split jobs back together</small></button>
           </div>
 
+          {(() => { const rows = otReport(payWeekStart(today)), ot = rows.reduce((t, r) => t + r.w.ot, 0); if (!rows.length) return null; const pay = rows.reduce((t, r) => t + (r.pay || 0), 0), unused = rows.reduce((t, r) => t + r.unused, 0), known = rows.every((r) => r.pay != null); return (
+            <div className={"ms-otline" + (ot ? " on" : "")}>
+              <span className="ms-ot-i" aria-hidden>⏱</span>
+              <span><b>{ot ? `${fmtMin(ot)} of overtime this pay week` : "No overtime this pay week"}</b>{ot ? <> · {rows.filter((r) => r.w.ot).map((r) => `${crewOf(r.m)?.leader || shortName(r.m)} ${fmtMin(r.w.ot)}`).join(", ")}{pay && known ? ` · ~$${Math.round(pay).toLocaleString()} overtime pay` : ""}{unused > 30 ? ` · ${fmtMin(unused)} of it has no jobs booked` : ""}</> : null}<small> · pay week {dayLbl(payWeekStart(today))} – {dayLbl(addDay(payWeekStart(today), 6))}</small></span>
+              <span className="spacer" />
+              <button type="button" className="linkbtn" onClick={() => setOtOpen(true)}>Details</button>
+            </div>
+          ); })()}
           {tight.length > 0 ? (
             <div className="ms-alert">
               <div className="ms-alert-h">
@@ -1161,7 +1205,8 @@ export default function MachineSchedule() {
         <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
-      {advise && <AdvisePanel options={advise.opts} late={advise.late} lateBefore={advise.lateBefore} labor={s.labor} machinesLabel={typeF ? TYPE_LBL[typeF] : "all machines"} nowLabel={`${dayLbl(today)} ${clockLong(now.min)}`} onClose={() => setAdvise(null)} onApply={applyWhatIf} />}
+      {otOpen && <OvertimePanel today={today} thisWeek={otReport(payWeekStart(today))} nextWeek={otReport(addDay(payWeekStart(today), 7))} mult={s.labor.otMultiplier} leader={(m) => crewOf(m)?.leader || shortName(m)} onClose={() => setOtOpen(false)} onCut={async (rows) => { await cutOvertime(rows); setOtOpen(false); }} />}
+      {advise && <AdvisePanel options={advise.opts} late={advise.late} lateBefore={advise.lateBefore} labor={s.labor} otNote={otReport(payWeekStart(today)).filter((r) => r.w.ot).map((r) => `${crewOf(r.m)?.leader || shortName(r.m)}'s crew (${shortName(r.m)}): ${fmtMin(r.w.ot)} overtime already on the schedule this pay week${r.starts ? `, from ${dayLbl(r.starts.day)} ${clock(r.starts.min)}` : ""}`).join("; ")} machinesLabel={typeF ? TYPE_LBL[typeF] : "all machines"} nowLabel={`${dayLbl(today)} ${clockLong(now.min)}`} onClose={() => setAdvise(null)} onApply={applyWhatIf} />}
       {renorm && <RenormPanel items={renormItems()} onClose={() => setRenorm(false)} onDone={(m) => { setRenorm(false); setMsg(m); load(); setReplan({ why: `${m} Re-plan now so the jobs fill the regular week?` }); }} />}
       {shiftEdit && <ShiftPanel machines={machines} crews={s.crews} extras={extras} today={today} me={me.email} onClose={() => setShiftEdit(false)} onSaved={(m) => { setShiftEdit(false); setWknd(true); setMsg(m); load(); setReplan({ why: "Weekend shift added. Re-plan so earlier jobs can move into it and make room during the week?" }); }} />}
       {checkin && <CheckIn s={s} cards={cards} segsOf={(c) => segs.ofCard.get(c.key) || []} machines={machines} crews={s.crews} today={today} nowMin={now.min} onClose={() => setCheckin(false)} onSave={saveProgress} />}
@@ -1343,9 +1388,58 @@ function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSav
 }
 
 /** Add an extra shift (usually Saturday or Sunday) for one or more presses and their crews, e.g. Saturday 10 AM – 2 PM. */
+/** Overtime: each press crew's paid hours this pay week (Friday–Thursday), what's past 40, and what it costs. */
+type OtRow = { m: Machine; w: WeekOT; used: number; unused: number; perHour: number | null; who: string[]; pay: number | null; premium: number | null; starts: { day: string; min: number } | null };
+function OvertimePanel({ today, thisWeek, nextWeek, mult, leader, onClose, onCut }: { today: string; thisWeek: OtRow[]; nextWeek: OtRow[]; mult: number; leader: (m: Machine) => string; onClose: () => void; onCut: (rows: OtRow[]) => Promise<void> }) {
+  const [wk, setWk] = useState<"this" | "next">("this");
+  const [busy, setBusy] = useState(false);
+  const rows = wk === "this" ? thisWeek : nextWeek, ws = rows[0]?.w.weekStart;
+  const tot = rows.reduce((t, r) => t + r.w.ot, 0), pay = rows.reduce((t, r) => t + (r.pay || 0), 0), prem = rows.reduce((t, r) => t + (r.premium || 0), 0), unused = rows.reduce((t, r) => t + r.unused, 0);
+  const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  const h = (min: number) => (min ? fmtMin(min) : "—");
+  return (
+    <div className="pp-modal" onClick={onClose}>
+      <div className="pp-sheet tmx-ed ms-otp" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Overtime">
+        <div className="pp-sheet-h"><b>Overtime</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="tmx-ed-b">
+          <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div className="rv-seg">{([["this", "This pay week"], ["next", "Next pay week"]] as const).map(([k, l]) => <button key={k} type="button" className={wk === k ? "on" : ""} onClick={() => setWk(k)}>{l}</button>)}</div>
+            {ws && <span className="faint" style={{ fontSize: 12.5 }}>{dayLbl(ws)} – {dayLbl(addDay(ws, 6))} · overtime is past 40 paid hours, lunch unpaid · {mult}× pay</span>}
+          </div>
+          <div className="ms-ot-sum">
+            <div><b>{tot ? fmtMin(tot) : "None"}</b><small>overtime on the schedule</small></div>
+            <div><b>{pay ? money(pay) : "—"}</b><small>overtime pay{prem ? ` (${money(prem)} over straight time)` : ""}</small></div>
+            <div><b>{unused ? fmtMin(unused) : "—"}</b><small>of it with no jobs booked</small></div>
+          </div>
+          {!rows.length ? <div className="empty">No press crews in view. Staff them on Employees → People &amp; Teams.</div> : (
+            <div className="ms-ot-t">
+              <div className="ms-ot-r h"><span>Crew</span><span>Paid hours</span><span>Overtime</span><span>Starts</span><span>Booked in OT</span><span>OT pay</span></div>
+              {rows.map((r) => (
+                <div key={r.m.id} className={"ms-ot-r" + (r.w.ot ? " on" : "")}>
+                  <span><b>{shortName(r.m)} · {leader(r.m)}</b><small>{r.who.length ? r.who.join(" + ") + "/hr" : r.perHour == null ? "no rates (owners see pay)" : ""}</small></span>
+                  <span>{fmtMin(r.w.paid)}</span>
+                  <span className={r.w.ot ? "bad" : ""}>{h(r.w.ot)}</span>
+                  <span>{r.starts ? `${r.starts.day === today ? "Today" : dayLbl(r.starts.day).split(",")[0]} ${clock(r.starts.min)}` : "—"}</span>
+                  <span>{r.w.ot ? `${r.used ? fmtMin(r.used) : "none"}${r.unused ? ` · ${fmtMin(r.unused)} free` : ""}` : "—"}</span>
+                  <span>{r.pay != null && r.w.ot ? `~${money(r.pay)}` : "—"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="faint" style={{ fontSize: 12.5 }}>From the schedule: crew hours, extra shifts, days off and early finishes (not the time clock yet). The planner and Re-plan steer work away from crews in overtime when another press can still make the date. Hours in overtime with no jobs booked can be cut: the crew leaves when their work is done.</div>
+          <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="btn" onClick={onClose}>Close</button>
+            {wk === "this" && unused > 0 && <button type="button" className="btn primary" disabled={busy} onClick={async () => { setBusy(true); await onCut(rows.filter((r) => r.unused > 0)); setBusy(false); }}>Cut {fmtMin(unused)} of Unused Overtime</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Get Recommendations: the simulated options side by side, and Claude's pick (or the cheapest full fix when AI is off). */
 type Advice = { headline: string; pick: string; why: string; runnersUp?: { id: string; why: string }[]; ideas?: string[] };
-function AdvisePanel({ options, late, lateBefore, labor, machinesLabel, nowLabel, onClose, onApply }: { options: WhatIf[]; late: { job: string; customer: string; inHands: string; why: string }[]; lateBefore: number; labor: { crewSize: number; wage: number; otMultiplier: number }; machinesLabel: string; nowLabel: string; onClose: () => void; onApply: (w: WhatIf) => Promise<void> }) {
+function AdvisePanel({ options, late, lateBefore, labor, otNote, machinesLabel, nowLabel, onClose, onApply }: { options: WhatIf[]; late: { job: string; customer: string; inHands: string; why: string }[]; lateBefore: number; labor: { crewSize: number; wage: number; otMultiplier: number }; otNote: string; machinesLabel: string; nowLabel: string; onClose: () => void; onApply: (w: WhatIf) => Promise<void> }) {
   const [opts] = useState(options);
   const [ai, setAi] = useState<Advice | null>(null);
   const [aiState, setAiState] = useState<"loading" | "done" | "off" | "error">("loading");
@@ -1353,7 +1447,7 @@ function AdvisePanel({ options, late, lateBefore, labor, machinesLabel, nowLabel
   const [busy, setBusy] = useState("");
   useEffect(() => {
     let dead = false;
-    fetch("/api/production/advise", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ now: nowLabel, lateBefore, late, labor, machines: machinesLabel, options: opts.map((o) => ({ id: o.id, title: o.title, detail: o.detail, lateAfter: o.lateAfter, stillLate: o.stillLate, addedHours: o.addedHours, cost: o.cost, splits: o.splits })) }) })
+    fetch("/api/production/advise", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ now: nowLabel, lateBefore, late, labor, overtime: otNote, machines: machinesLabel, options: opts.map((o) => ({ id: o.id, title: o.title, detail: o.detail, lateAfter: o.lateAfter, stillLate: o.stillLate, addedHours: o.addedHours, cost: o.cost, splits: o.splits })) }) })
       .then((r) => r.json()).then((j) => { if (dead) return; if (j.off) { setAiState("off"); setAiMsg(j.reason || ""); } else if (j.error) { setAiState("error"); setAiMsg(j.error); } else { setAi(j); setAiState("done"); } })
       .catch(() => { if (!dead) { setAiState("error"); setAiMsg("Couldn't reach the AI."); } });
     return () => { dead = true; };
