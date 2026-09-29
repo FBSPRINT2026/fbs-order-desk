@@ -48,6 +48,7 @@ export function ConnectionsPanel() {
     ["stax", "Stax payments", "STAX_API_KEY and STAX_WEB_PAYMENTS_TOKEN (Stax Pay → Apps → API Keys)"],
     ["claude", "Claude (AI)", "ANTHROPIC_API_KEY (console.anthropic.com → Settings → API Keys)"],
     ["sanmar", "SanMar (product data)", "SANMAR_CUSTOMER_NUMBER, SANMAR_USERNAME and SANMAR_PASSWORD (a SanMar.com user made for web services)"],
+    ["sanmar_ftp", "SanMar FTP (catalog files)", "SANMAR_SFTP_USERNAME and SANMAR_SFTP_PASSWORD (from SanMar's one-time link)"],
   ];
   return (
     <section className="panel" id="connections">

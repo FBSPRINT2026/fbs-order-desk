@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { sanmarConfigured, sanmarPing } from "@/lib/sanmar";
+import { sanmarSftpConfigured, sanmarSftpList } from "@/lib/sanmarSftp";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 40;
 
 type Check = { ok: boolean; detail: string };
 let cache: { at: number; body: Record<string, Check> } | null = null;
 
 const clip = (s: string) => s.replace(/\s+/g, " ").slice(0, 160);
-async function timed(p: Promise<Check>): Promise<Check> {
-  return Promise.race([p, new Promise<Check>((res) => setTimeout(() => res({ ok: false, detail: "no answer within 10 seconds" }), 10000))]);
+async function timed(p: Promise<Check>, ms = 10000): Promise<Check> {
+  return Promise.race([p, new Promise<Check>((res) => setTimeout(() => res({ ok: false, detail: `no answer within ${ms / 1000} seconds` }), ms))]);
 }
 
 /** Printavo: ask who the account is. */
@@ -60,14 +63,26 @@ async function sanmar(): Promise<Check> {
   try { return { ok: true, detail: await sanmarPing() }; } catch (e) { return { ok: false, detail: clip(e instanceof Error ? e.message : String(e)) }; }
 }
 
+/** SanMar FTP: log in and list the folders. */
+async function sanmarFtp(): Promise<Check> {
+  if (!sanmarSftpConfigured()) return { ok: false, detail: "SANMAR_SFTP_USERNAME or SANMAR_SFTP_PASSWORD is missing" };
+  try {
+    const list = await sanmarSftpList(4);
+    const files = list.filter((e) => !e.dir);
+    const dirs = list.filter((e) => e.dir && !e.path.includes("/")).map((e) => e.path);
+    const big = files.sort((a, b) => b.size - a.size)[0];
+    return { ok: true, detail: `logged in; ${dirs.length ? `folders ${dirs.join(", ")}; ` : ""}${files.length} files${big ? ` (largest ${big.path}, ${(big.size / 1048576).toFixed(0)} MB)` : ""}` };
+  } catch (e) { return { ok: false, detail: clip(e instanceof Error ? e.message : String(e)) }; }
+}
+
 /**
  * Live connection check for Printavo, Stax and Claude. Shows only ok / not ok and why — never keys.
  * Results are cached for 2 minutes so the page can't be used to hammer the services.
  */
 export async function GET() {
   if (cache && Date.now() - cache.at < 120000) return NextResponse.json({ cached: true, ...cache.body });
-  const [p, s, a, sm] = await Promise.all([timed(printavo()), timed(stax()), timed(anthropic()), timed(sanmar())]);
-  const body = { printavo: p, stax: s, claude: a, sanmar: sm };
+  const [p, s, a, sm, sf] = await Promise.all([timed(printavo()), timed(stax()), timed(anthropic()), timed(sanmar()), timed(sanmarFtp(), 28000)]);
+  const body = { printavo: p, stax: s, claude: a, sanmar: sm, sanmar_ftp: sf };
   cache = { at: Date.now(), body };
   return NextResponse.json(body);
 }
