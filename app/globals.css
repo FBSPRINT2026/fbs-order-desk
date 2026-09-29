@@ -3848,3 +3848,6 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-rn-l li.off b{text-decoration:line-through}
 .ms-rn-l li.no label{cursor:default;opacity:.7}
 .ms-rn-l li.no small{color:var(--danger)}
+/* the hour-by-hour side is one continuous list: a day cut off at the 24-hour mark clips its last jobs instead of scrolling inside */
+.ms-2d>.ms-dv{overflow-y:hidden}
+.ms-2d .ms-dv-col{overflow:hidden}
