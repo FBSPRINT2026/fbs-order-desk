@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, PV_READY, type Machine, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, PV_READY, type Machine, type Crew, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 
 /**
@@ -23,6 +23,7 @@ type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; 
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean };
 type View = "split" | "timeline" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number };
+type DayOff = { id: string; crew_id: string | null; machine: string | null; day: string; note: string };
 
 const TZ = "America/Chicago";
 const PARTS = new Intl.DateTimeFormat("en-US", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -60,17 +61,19 @@ const LANE = 22;
  * what's left of the day carries into the next working day. So a 30-hour job fills ~4 shifts, never "overnight".
  */
 function flow(cs: Card[], mach: Machine): Seg[] {
-  const s0 = mach.startMin ?? 420, s1 = s0 + Math.max(1, mach.hoursPerDay) * 60;
+  // each day's shift can differ (crew schedules); a day it normally doesn't run but has work booked uses its usual hours
+  const typ = typicalShift(mach);
+  const hrs = (d: string) => shiftOn(mach, d) || typ;
   const booked = new Set(cs.map((c) => c.day));
-  const works = (d: string) => mach.days.includes(dow(d)) || booked.has(d);
-  const sorted = [...cs].sort((a, b) => a.day.localeCompare(b.day) || (a.startMin ?? s0) - (b.startMin ?? s0) || (a.slot?.position ?? 99) - (b.slot?.position ?? 99));
+  const works = (d: string) => !!shiftOn(mach, d) || (booked.has(d) && !isOffDay(mach, d));
+  const sorted = [...cs].sort((a, b) => a.day.localeCompare(b.day) || (a.startMin ?? hrs(a.day)[0]) - (b.startMin ?? hrs(b.day)[0]) || (a.slot?.position ?? 99) - (b.slot?.position ?? 99));
   const out: Seg[] = [];
   let cursor = -Infinity;
   // the next moment this machine is running, at or after `t` (absolute minutes)
   const norm = (t: number, allowEarly = false) => {
     for (let g = 0; g < 400; g++) {
-      const dd = Math.floor(t / 1440), m = t - dd * 1440, day = fromOrd(dd);
-      if (!works(day) || m >= s1) { t = (dd + 1) * 1440 + s0; continue; }
+      const dd = Math.floor(t / 1440), m = t - dd * 1440, day = fromOrd(dd), [s0, s1] = hrs(day);
+      if (!works(day) || m >= s1) { t = (dd + 1) * 1440 + hrs(fromOrd(dd + 1))[0]; allowEarly = false; continue; }
       if (m < s0 && !allowEarly) t = dd * 1440 + s0;
       return t;
     }
@@ -79,22 +82,23 @@ function flow(cs: Card[], mach: Machine): Seg[] {
   for (const c of sorted) {
     // finished work stays on the day it was done (it never spills into later days or pushes today's jobs)
     if (c.slot?.status === "done") {
+      const [s0, s1] = hrs(c.day);
       const prior = out.filter((g) => g.day === c.day).reduce((m, g) => Math.max(m, g.end), s0);
       const st = Math.min(prior, s1 - 15);
       out.push({ c, day: c.day, start: st, end: Math.min(s1, st + Math.max(15, c.minutes)), part: 1, parts: 1, pushed: false });
       continue;
     }
-    const asked = ord(c.day) * 1440 + (c.startMin ?? s0);
+    const asked = ord(c.day) * 1440 + (c.startMin ?? hrs(c.day)[0]);
     let t = norm(Math.max(cursor, asked), cursor < asked && c.startMin != null);
     const pushed = t > asked + 1;
     let left = Math.max(1, c.minutes);
     const pieces: { day: string; start: number; end: number }[] = [];
     for (let g = 0; g < 120 && left > 0; g++) {
-      const dd = Math.floor(t / 1440), m = t - dd * 1440;
+      const dd = Math.floor(t / 1440), m = t - dd * 1440, s1 = hrs(fromOrd(dd))[1];
       const end = Math.min(m + left, Math.max(s1, m + 15));
       pieces.push({ day: fromOrd(dd), start: m, end });
       left -= end - m;
-      t = left > 0 ? norm((dd + 1) * 1440 + s0) : dd * 1440 + end;
+      t = left > 0 ? norm((dd + 1) * 1440 + hrs(fromOrd(dd + 1))[0]) : dd * 1440 + end;
     }
     cursor = t;
     pieces.forEach((p, i) => out.push({ c, day: p.day, start: p.start, end: p.end, part: i + 1, parts: pieces.length, pushed: pushed && i === 0 }));
@@ -126,16 +130,21 @@ export default function MachineSchedule() {
   const [trayAll, setTrayAll] = useState(false);
   const [trayOpen, setTrayOpen] = useState(true);
   const [showPast, setShowPast] = useState(false);
+  const [offs, setOffs] = useState<DayOff[]>([]);
+  const [offEdit, setOffEdit] = useState<{ machine: Machine; day: string } | null>(null);
 
   const load = useCallback(async () => {
     const sb = createClient();
-    const [{ data: st }, { data: o }, { data: a }, { data: sl0 }] = await Promise.all([
+    const [{ data: st }, { data: o }, { data: a }, { data: sl0 }, { data: off0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id, groups, lines").in("status", ["approved", "art", "blanks", "production"]).limit(300),
       // Printavo jobs are left off the calendar (it plans our own orders only); nothing in Printavo is read or changed here
       Promise.resolve({ data: [] as unknown[] }),
       sb.from("production_slots").select("*").not("order_id", "is", null).gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
+      sb.from("production_days_off").select("id, crew_id, machine, day, note").gte("day", addDay(today, -21)).lte("day", addDay(today, 120)),
     ]);
+    const offList = (off0 || []) as DayOff[];
+    setOffs(offList);
     let sl = (sl0 || []) as Slot[];
     // not marked done by the end of its day → it moves forward to today (first in line), remembering where it started
     const stale = sl.filter((x) => x.order_id && x.day < today && x.status !== "done");
@@ -143,7 +152,9 @@ export default function MachineSchedule() {
       await Promise.all(stale.map((x) => sb.from("production_slots").update({ day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day, updated_at: new Date().toISOString() }).eq("id", x.id)));
       sl = sl.map((x) => (stale.includes(x) ? { ...x, day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day } : x));
     }
-    const ps = mergeProduction((st?.data as { production?: unknown } | null)?.production);
+    const ps0 = mergeProduction((st?.data as { production?: unknown } | null)?.production);
+    // each machine carries its days off (its crew's and its own) so the calendar and suggestions skip them
+    const ps = { ...ps0, machines: ps0.machines.map((m) => { const off: Record<string, string> = {}; for (const x of offList) if (x.machine === m.id || (x.crew_id && x.crew_id === m.crew)) off[x.day] = x.note || "Off"; return { ...m, off }; }) };
     setS(ps); setSlots(sl);
     const pv = ((a || []) as { id: string; visual_id: string; nickname: string; due_date: string | null; qty: number; status_name: string; customer_id: string | null; start: string | null; pend: string | null; pvgroups: unknown }[]).filter((x) => !PV_DONE.test(x.status_name || "") || PV_READY.test(x.status_name || ""));
     const ids = [...new Set([...((o || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...pv.map((x) => x.customer_id)].filter(Boolean))] as string[];
@@ -267,13 +278,14 @@ export default function MachineSchedule() {
   // weeks shown: this week and the next, with or without weekends
   const weekDays = (w: string) => Array.from({ length: 7 }, (_, i) => addDay(w, i));
   const allDays = [...weekDays(week), ...weekDays(addDay(week, 7))];
-  const weekendUsed = machines.some((m) => m.days.includes(0) || m.days.includes(6)) || allDays.some((d) => (dow(d) === 0 || dow(d) === 6) && machines.some((m) => at(m, d).length));
+  const weekendUsed = machines.some((m) => !!m.week?.[0] || !!m.week?.[6]) || allDays.some((d) => (dow(d) === 0 || dow(d) === 6) && machines.some((m) => at(m, d).length));
   const showWknd = wknd ?? weekendUsed;
   const visible = (d: string) => showWknd || (dow(d) !== 0 && dow(d) !== 6);
 
   // the clock window: 5 AM – 8 PM (every hour a machine could run), wider if a shift or job starts earlier / ends later
-  const vStart = Math.max(0, Math.floor(Math.min(300, ...machines.map((m) => m.startMin ?? 420), ...[...segs.by.values()].flat().map((g) => g.start)) / 60) * 60);
-  const vEnd = Math.min(1440, Math.ceil(Math.max(1200, ...machines.map((m) => (m.startMin ?? 420) + m.hoursPerDay * 60), ...[...segs.by.values()].flat().map((g) => g.end)) / 60) * 60);
+  const shifts = machines.flatMap((m) => (m.week || []).filter(Boolean) as [number, number][]);
+  const vStart = Math.max(0, Math.floor(Math.min(300, ...shifts.map((x) => x[0]), ...[...segs.by.values()].flat().map((g) => g.start)) / 60) * 60);
+  const vEnd = Math.min(1440, Math.ceil(Math.max(1200, ...shifts.map((x) => x[1]), ...[...segs.by.values()].flat().map((g) => g.end)) / 60) * 60);
   const range = vEnd - vStart;
   const hours = Array.from({ length: range / 60 }, (_, i) => vStart + i * 60);
   const pct = (min: number) => `${((min - vStart) / range) * 100}%`;
@@ -295,9 +307,13 @@ export default function MachineSchedule() {
   };
   const tip = (g: Seg) => `#${g.c.job.number} ${g.c.job.customer}${g.c.job.owner ? ` (${g.c.job.owner})` : ""}\n${g.c.job.name}\n${dayLbl(g.day)} ${clockLong(g.start)} – ${clockLong(g.end)}${g.parts > 1 ? ` (part ${g.part} of ${g.parts}; ${fmtMin(g.c.minutes)} in all)` : ` (${fmtMin(g.c.minutes)})`}\n${g.c.need.label}${g.c.job.due ? `\nIn-hands ${dayLbl(g.c.job.due)}` : ""}${g.c.slot?.status === "done" ? "\nDone" : g.c.slot?.status === "running" ? "\nRunning" : ""}${g.c.fromPv ? "\nFrom its Printavo status" : ""}${g.c.carried ? `\nRolled forward from ${dayLbl(g.c.carried)}` : ""}${g.pushed ? "\nStarts later than asked (the job before runs long)" : ""}`;
   const offShade = (mach: Machine, d: string) => {
-    const a = mach.startMin ?? 420, b = a + mach.hoursPerDay * 60, works = mach.days.includes(dow(d)) || at(mach, d).length > 0;
+    const [a, b] = shiftOn(mach, d) || typicalShift(mach), works = !!shiftOn(mach, d) || at(mach, d).length > 0;
     return works ? [[vStart, a], [b, vEnd]].filter(([x, y]) => y > x) : [[vStart, vEnd]];
   };
+  const crewOf = (m: Machine) => (m.crew ? s.crews.find((c) => c.id === m.crew) : undefined);
+  const hrsTxt = (sh: [number, number]) => `${clock(sh[0])}–${clock(sh[1])}`;
+  /** who runs it that day and when, or why it's off */
+  const crewLine = (m: Machine, d: string) => { const sh = shiftOn(m, d); return isOffDay(m, d) ? `Off · ${m.off![d]}` : sh ? hrsTxt(sh) : "not running"; };
   const label = (g: Seg) => <><b>#{g.c.job.number}</b> {g.part > 1 ? <i className="ms-cont">cont.</i> : null}{g.c.job.customer || g.c.job.name}</>;
 
   /* ---------- Week view: machines down, days across; each day a 6a–6p timeline, one lane per job ---------- */
@@ -316,13 +332,13 @@ export default function MachineSchedule() {
           ))}
           {machines.map((m) => {
             const lanes = Math.max(1, ...ds.map((d) => at(m, d).length));
-            const wkUsed = ds.reduce((a, d) => a + used(m, d), 0), wkCap = ds.filter((d) => m.days.includes(dow(d))).length * capacityMin(s, m);
+            const wkUsed = ds.reduce((a, d) => a + used(m, d), 0), wkCap = ds.reduce((a, d) => a + capacityMin(s, m, d), 0);
             return [
               <div key={m.id + w} className={"ms-wg-m " + m.type} title={`${m.name}: ${fmtMin(wkUsed)} of ${fmtMin(wkCap)} booked`}><b>{shortName(m)}</b><small>{m.type === "screen" ? `${m.colors}C` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat"} · <span className="ms-used">{Math.round(wkUsed / 60)}/{Math.round(wkCap / 60)}h</span></small>
                 <div className={"ms-cap" + (wkUsed > wkCap ? " full" : wkUsed > wkCap * s.fillTarget ? " warn" : "")}><i style={{ width: `${Math.min(100, wkCap ? (wkUsed / wkCap) * 100 : 0)}%` }} /></div></div>,
               ...ds.map((d) => {
                 const gs = at(m, d).slice().sort((a, b) => a.start - b.start);
-                const u = used(m, d), cap = capacityMin(s, m);
+                const u = used(m, d), cap = capacityMin(s, m, shiftOn(m, d) ? d : undefined);
                 return (
                   <div key={m.id + d} className={"ms-wc" + (d === today ? " today" : d < today ? " past" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "") + (u >= cap ? " full" : "")} style={{ minHeight: lanes * LANE + 10, backgroundSize: `${(180 / range) * 100}% 100%` }}
                     onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver("")}
@@ -358,8 +374,9 @@ export default function MachineSchedule() {
       {o.title ? <div className="ms-dv-t">{o.title}</div> : null}
       <div className="ms-dv-grid" style={{ gridTemplateColumns: `${gut}px repeat(${machines.length}, minmax(${colMin}px,1fr))`, minWidth: gut + machines.length * colMin }}>
         <div className="ms-dv-corner" />
-        {machines.map((m) => { const u = used(m, day), cap = capacityMin(s, m); return (
-          <div key={m.id} className={"ms-dv-h " + m.type}><b>{shortName(m)}</b><small>{m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat press"}</small>
+        {machines.map((m) => { const u = used(m, day), cap = capacityMin(s, m, shiftOn(m, day) ? day : undefined); return (
+          <div key={m.id} className={"ms-dv-h " + m.type + (isOffDay(m, day) ? " off" : "")}><b>{shortName(m)}</b><small title={crewOf(m) ? `${crewOf(m)!.leader}'s crew` : undefined}>{crewOf(m) ? <b className="ms-lead">{crewOf(m)!.leader}</b> : m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat press"}</small>
+            <button type="button" className={"ms-crew" + (isOffDay(m, day) ? " off" : "")} onClick={() => setOffEdit({ machine: m, day })} title={isOffDay(m, day) ? "Off this day: tap to change" : "Mark this press (or its crew) off"}>{crewLine(m, day)}</button>
             <div className={"ms-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /></div>
             <small className="ms-used">{o.colMin ? `${+(u / 60).toFixed(1)} / ${+(cap / 60).toFixed(1)}h` : `${fmtMin(u)} / ${fmtMin(cap)}`}</small></div>
         ); })}
@@ -389,7 +406,7 @@ export default function MachineSchedule() {
   const phoneView = () => (
     <div className="ms-phone">
       <div className="ms-pnav"><button type="button" className="btn sm" onClick={() => setDay(addDay(day, -1))} aria-label="Previous day">←</button><b>{new Date(day + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</b><button type="button" className="btn sm" onClick={() => setDay(addDay(day, 1))} aria-label="Next day">→</button></div>
-      {machines.map((m) => { const gs = at(m, day).slice().sort((a, b) => a.start - b.start); const u = used(m, day), cap = capacityMin(s, m); return (
+      {machines.map((m) => { const gs = at(m, day).slice().sort((a, b) => a.start - b.start); const u = used(m, day), cap = capacityMin(s, m, shiftOn(m, day) ? day : undefined); return (
         <section key={m.id} className={"ms-pm " + m.type}>
           <div className="ms-pm-h"><b>{m.name}</b><span className="faint">{fmtMin(u)} / {fmtMin(cap)}</span></div>
           <div className="ms-pstrip">{offShade(m, day).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}{gs.map((g) => <i key={g.c.key + g.part} className={cls(g) + " bar"} style={{ left: pct(g.start), width: `${((g.end - g.start) / range) * 100}%` }} />)}{day === today && <div className="ms-now v" style={{ left: pct(Math.max(vStart, Math.min(vEnd, now.min))) }} />}</div>
@@ -460,8 +477,8 @@ export default function MachineSchedule() {
           <div className="ms-lg-corner2" />
           {groups.flatMap((g) => g.ms).map((m) => {
             const wkU = (o.compact ? rows : days.filter((d) => d >= week && d < nextMon)).reduce((a, d) => a + used(m, d), 0);
-            if (o.compact) return <div key={m.id} className={"ms-lg-m " + m.type} title={`${m.name}: ${fmtMin(wkU)} booked in these days`}><b>{shortName(m)}</b><small>{Math.round(wkU / 60)}h</small></div>;
-            return <div key={m.id} className={"ms-lg-m " + m.type} title={m.name}><b>{shortName(m)}</b><small>{o.compact ? `${Math.round(wkU / 60)}h booked` : <>{m.type === "screen" ? `${m.colors} color` : m.type === "embroidery" ? `${m.heads} head` : "heat"} · {Math.round(wkU / 60)}h this wk</>}</small></div>;
+            if (o.compact) return <div key={m.id} className={"ms-lg-m " + m.type} title={`${m.name}${crewOf(m) ? ` · ${crewOf(m)!.leader}'s crew` : ""}: ${fmtMin(wkU)} booked in these days`}><b>{shortName(m)}</b><small>{crewOf(m) ? `${crewOf(m)!.leader} · ` : ""}{Math.round(wkU / 60)}h</small></div>;
+            return <div key={m.id} className={"ms-lg-m " + m.type} title={m.name}><b>{shortName(m)}</b><small>{crewOf(m) ? `${crewOf(m)!.leader} · ` : m.type === "screen" ? `${m.colors} color · ` : m.type === "embroidery" ? `${m.heads} head · ` : "heat · "}{Math.round(wkU / 60)}h this wk</small></div>;
           })}
           {rows.map((d, ri) => {
             const isToday = d === today;
@@ -472,13 +489,14 @@ export default function MachineSchedule() {
               <div key={"d" + d} className={"ms-lg-d" + (isToday ? " today" : d < today ? " past" : "")}><b>{isToday ? "Today" : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}</b><span>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span><small>{Math.round(dayUsed / 60)}h{o.compact ? "" : " booked"}</small></div>,
               ...groups.flatMap((g) => g.ms).map((m) => {
                 const gs = at(m, d).slice().sort((x, y) => x.start - y.start);
-                const u = used(m, d), cap = capacityMin(s, m), works = m.days.includes(dow(d)) || gs.length > 0;
+                const u = used(m, d), works = !!shiftOn(m, d) || gs.length > 0, cap = capacityMin(s, m, works && !shiftOn(m, d) ? undefined : d);
                 return (
-                  <div key={m.id + d} className={"ms-lc" + (isToday ? " today" : d < today ? " past" : "") + (!works ? " off" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")}
+                  <div key={m.id + d} className={"ms-lc" + (isToday ? " today" : d < today ? " past" : "") + (!works || isOffDay(m, d) ? " off" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")}
                     onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver((o) => (o === m.id + d ? "" : o))} onDrop={(e) => { e.preventDefault(); if (drag) place(drag, m, d); }}>
                     {works && <div className={"ms-lc-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /><span>{u ? `${(u / 60).toFixed(u % 60 ? 1 : 0)}/${Math.round(cap / 60)}h` : ""}</span></div>}
                     {gs.map((g) => chip(g, d, o.compact))}
-                    {!works && !gs.length ? <span className="ms-lc-off">off</span> : null}
+                    {isOffDay(m, d) ? <button type="button" className="ms-lc-off x" onClick={() => setOffEdit({ machine: m, day: d })} title="Tap to change">Off · {m.off![d]}</button> : !works && !gs.length ? <span className="ms-lc-off">off</span> : null}
+                    {works && d >= today && <button type="button" className="ms-lc-mk" onClick={() => setOffEdit({ machine: m, day: d })} title={`Mark ${m.name}${crewOf(m) ? ` / ${crewOf(m)!.leader}'s crew` : ""} off this day`}>off?</button>}
                   </div>
                 );
               }),
@@ -554,6 +572,7 @@ export default function MachineSchedule() {
         <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
+      {offEdit && <OffPanel machine={offEdit.machine} day={offEdit.day} crew={crewOf(offEdit.machine)} offs={offs} me={me.email} onClose={() => setOffEdit(null)} onSaved={(m) => { setOffEdit(null); setMsg(m); load(); }} />}
       {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, d0, d1, ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} />}
     </div>
   );
@@ -566,7 +585,7 @@ function CardPanel({ s, c, segs, days, win, onClose, onMove, onStatus, onUnbook 
   const m = s.machines.find((x) => x.id === mach) || c.machine;
   const est = estimate(s, c.need, m);
   const options = s.machines.filter((x) => x.active && x.type === c.need.type);
-  const times: number[] = []; for (let t = Math.min(win[0], m.startMin ?? 420); t < win[1]; t += 15) times.push(t);
+  const times: number[] = []; for (let t = Math.min(win[0], (shiftOn(m, day) || typicalShift(m))[0]); t < win[1]; t += 15) times.push(t);
   const newStart = st === "auto" ? null : +st;
   const same = mach === c.machine.id && day === c.day && newStart === c.startMin && !c.fromPv;
   return (
@@ -593,6 +612,51 @@ function CardPanel({ s, c, segs, days, win, onClose, onMove, onStatus, onUnbook 
             {c.slot && c.slot.status !== "done" && <button type="button" className="btn" onClick={() => onStatus(c.slot!, "done")}>Mark Done</button>}
             {c.slot && <button type="button" className="btn danger" onClick={() => onUnbook(c.slot!)}>Take Off Schedule</button>}
             <button type="button" className="btn primary" disabled={same} onClick={() => onMove(m, day, newStart)}>{c.fromPv ? "Book Here" : "Move"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Mark a press (or its whole crew) off for a day or a stretch of days: vacation, no crew, maintenance. */
+function OffPanel({ machine, day, crew, offs, me, onClose, onSaved }: { machine: Machine; day: string; crew?: Crew; offs: DayOff[]; me: string; onClose: () => void; onSaved: (msg: string) => void }) {
+  const [from, setFrom] = useState(day), [to, setTo] = useState(day);
+  const [note, setNote] = useState("Vacation");
+  const [who, setWho] = useState<"crew" | "machine">(crew ? "crew" : "machine");
+  const [busy, setBusy] = useState(false);
+  const mine = offs.filter((x) => x.machine === machine.id || (crew && x.crew_id === crew.id)).sort((a, b) => a.day.localeCompare(b.day));
+  const upcoming = mine.filter((x) => x.day >= addDay(day, -7));
+  async function save() {
+    if (to < from) return;
+    setBusy(true);
+    const days: string[] = []; for (let d = from; d <= to && days.length < 120; d = addDay(d, 1)) days.push(d);
+    const rows = days.map((d) => ({ crew_id: who === "crew" && crew ? crew.id : null, machine: who === "machine" || !crew ? machine.id : null, day: d, note: note.trim() || "Off", created_by: me }));
+    const r = await createClient().from("production_days_off").insert(rows);
+    setBusy(false);
+    if (r.error) return onSaved(r.error.message);
+    onSaved(`${who === "crew" && crew ? `${crew.leader}'s crew` : machine.name} off ${from === to ? dayLbl(from) : `${dayLbl(from)} – ${dayLbl(to)}`}${note ? ` (${note})` : ""}. Work booked those days moves to the next day it runs.`);
+  }
+  async function remove(id: string) { setBusy(true); await createClient().from("production_days_off").delete().eq("id", id); setBusy(false); onSaved("Back on the schedule."); }
+  return (
+    <div className="pp-modal" onClick={onClose}>
+      <div className="pp-sheet tmx-ed" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Day off">
+        <div className="pp-sheet-h"><b>{machine.name}{crew ? ` · ${crew.leader}'s crew` : ""}</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="tmx-ed-b">
+          <div className="faint">Days off come off the calendar: nothing is scheduled on them, and work already booked there moves to the next day this press runs.</div>
+          <div className="tmx-2 ms-3">
+            <label>From<input type="date" value={from} onChange={(e) => { setFrom(e.target.value); if (e.target.value > to) setTo(e.target.value); }} /></label>
+            <label>To<input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label>
+            <label>Why<input type="text" list="off-why" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Vacation" /><datalist id="off-why"><option value="Vacation" /><option value="No crew" /><option value="Out sick" /><option value="Maintenance" /><option value="Holiday" /></datalist></label>
+          </div>
+          {crew && <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
+            <label className="check"><input type="radio" checked={who === "crew"} onChange={() => setWho("crew")} /> {crew.leader}&apos;s crew is out (every press they run)</label>
+            <label className="check"><input type="radio" checked={who === "machine"} onChange={() => setWho("machine")} /> Just {machine.name} is down</label>
+          </div>}
+          {upcoming.length > 0 && <div><b style={{ fontSize: 13 }}>Days off on the books</b><ul className="ms-offs">{upcoming.map((x) => <li key={x.id}><span>{dayLbl(x.day)}</span><span className="faint">{x.note}{x.crew_id ? " · whole crew" : ""}</span><button type="button" className="linkbtn" disabled={busy} onClick={() => remove(x.id)}>Back on</button></li>)}</ul></div>}
+          <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="btn" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn primary" disabled={busy || to < from} onClick={save}>Mark Off</button>
           </div>
         </div>
       </div>

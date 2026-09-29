@@ -17,9 +17,20 @@ export type Machine = {
   active: boolean;
   /** this machine's own speed vs the standard (1 = standard, 1.2 = 20% faster) */
   speed: number;
+  /** the crew that runs it (Settings → Production → Crews); its hours replace the machine's own */
+  crew?: string;
+  /** worked out when settings load: this machine's hours for each weekday (0 = Sunday), [start, end] minutes, null = off */
+  week?: Shift[];
+  /** dates it isn't running (its crew's or its own days off), attached by the calendar */
+  off?: Record<string, string>;
 };
+/** [start, end] in minutes after midnight (300 = 5:00 AM, 900 = 3:00 PM) */
+export type Shift = [number, number] | null;
+/** A press crew and its leader's schedule (hours for each weekday, 0 = Sunday; null = off that day). */
+export type Crew = { id: string; leader: string; week: Shift[] };
 export type ProductionSettings = {
   machines: Machine[];
+  crews: Crew[];
   screen: {
     /** minutes to set up (register) one screen, and to tear it down — industry rule of thumb 5 and 3 */
     setupPerScreen: number; teardownPerScreen: number;
@@ -61,12 +72,20 @@ export type ProductionSettings = {
 
 const WEEKDAYS = [1, 2, 3, 4, 5];
 const m = (id: string, name: string, type: MachineType, colors: number, heads: number, pvMatch: string): Machine => ({ id, name, type, colors, heads, startMin: 420, hoursPerDay: 11, days: WEEKDAYS, pvMatch, active: true, speed: 1 });
+/** a crew working the same hours Monday–Friday */
+const crew = (id: string, leader: string, start: number, end: number): Crew => ({ id, leader, week: [0, 1, 2, 3, 4, 5, 6].map((d): Shift => (d >= 1 && d <= 5 ? [start, end] : null)) });
 export const DEFAULT_PRODUCTION: ProductionSettings = {
+  crews: [
+    crew("c-miguel", "Miguel", 480, 1080), // 8 AM – 6 PM
+    crew("c-ana", "Ana", 300, 900), // 5 AM – 3 PM
+    crew("c-kelsey", "Kelsey", 420, 1080),
+    crew("c-juan", "Juan", 420, 1080),
+  ],
   machines: [
-    m("p1", "Press 1 · 12C Gauntlet III", "screen", 12, 1, "Press 1"),
-    m("p2", "Press 2 · 8C Sportsman", "screen", 8, 1, "Press 2"),
-    m("p3", "Press 3 · 8C Sportsman", "screen", 8, 1, "Press 3"),
-    m("p4", "Press 4 · 10 Color", "screen", 10, 1, "Press 4"),
+    { ...m("p1", "Press 1 · 12C Gauntlet III", "screen", 12, 1, "Press 1"), crew: "c-miguel" },
+    { ...m("p2", "Press 2 · 8C Sportsman", "screen", 8, 1, "Press 2"), crew: "c-ana" },
+    { ...m("p3", "Press 3 · 8C Sportsman", "screen", 8, 1, "Press 3"), crew: "c-kelsey" },
+    { ...m("p4", "Press 4 · 10 Color", "screen", 10, 1, "Press 4"), crew: "c-juan" },
     m("e12", "Embroidery · 12 Head", "embroidery", 15, 12, "12 Head"),
     m("e6", "Embroidery · 6 Head", "embroidery", 15, 6, "6 Head"),
     m("e4", "Embroidery · 4 Head", "embroidery", 15, 4, "4 Head"),
@@ -85,9 +104,12 @@ export const DEFAULT_PRODUCTION: ProductionSettings = {
 };
 export function mergeProduction(d: unknown): ProductionSettings {
   const p = (d && typeof d === "object" ? d : {}) as Partial<ProductionSettings>;
+  const crews: Crew[] = (Array.isArray(p.crews) ? p.crews : DEFAULT_PRODUCTION.crews).map((c) => ({ id: c.id, leader: c.leader || "", week: Array.from({ length: 7 }, (_, i) => normShift(c.week?.[i])) }));
+  const machines = (Array.isArray(p.machines) && p.machines.length ? p.machines.map((x) => ({ ...m(x.id, x.name, x.type, x.colors, x.heads, x.pvMatch || ""), ...x })) : DEFAULT_PRODUCTION.machines)
+    .map((x) => { const c = x.crew ? crews.find((k) => k.id === x.crew) : undefined; return { ...x, crew: c ? c.id : undefined, week: c ? c.week : ownWeek(x) }; });
   return {
     ...DEFAULT_PRODUCTION, ...p,
-    machines: Array.isArray(p.machines) && p.machines.length ? p.machines.map((x) => ({ ...m(x.id, x.name, x.type, x.colors, x.heads, x.pvMatch || ""), ...x })) : DEFAULT_PRODUCTION.machines,
+    crews, machines,
     screen: { ...DEFAULT_PRODUCTION.screen, ...(p.screen || {}) },
     embroidery: { ...DEFAULT_PRODUCTION.embroidery, ...(p.embroidery || {}), stitches: { ...DEFAULT_PRODUCTION.embroidery.stitches, ...(p.embroidery?.stitches || {}) } },
     heat: { ...DEFAULT_PRODUCTION.heat, ...(p.heat || {}) },
@@ -273,7 +295,16 @@ export const fits = (need: Need, mach: Machine) => mach.active && mach.type === 
 
 /* ---------- where it should go ---------- */
 
-export const capacityMin = (s: ProductionSettings, mach: Machine) => mach.hoursPerDay * 60;
+/** A machine's hours on its own settings (start time, hours a day, working days). */
+export const ownWeek = (x: Pick<Machine, "startMin" | "hoursPerDay" | "days">): Shift[] => Array.from({ length: 7 }, (_, i) => (x.days || []).includes(i) ? [x.startMin ?? 420, (x.startMin ?? 420) + Math.max(0.25, x.hoursPerDay || 0) * 60] : null);
+function normShift(v: unknown): Shift { if (!Array.isArray(v) || v.length < 2) return null; const a = Math.max(0, Math.min(1439, +v[0] || 0)), b = Math.max(a + 15, Math.min(1440, +v[1] || 0)); return [a, b]; }
+/** This machine's shift on a given day (its crew's hours when it has a crew), or null if it's off that day. */
+export const shiftOn = (mach: Machine, day: string): Shift => (mach.off && day in mach.off ? null : (mach.week || ownWeek(mach))[dow(day)] || null);
+export const isOffDay = (mach: Machine, day: string) => !!mach.off && day in mach.off;
+/** Its usual shift: the longest working day of its week (for days it doesn't normally run but has work booked). */
+export const typicalShift = (mach: Machine): [number, number] => ((mach.week || ownWeek(mach)).filter(Boolean) as [number, number][]).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0] || [mach.startMin ?? 420, (mach.startMin ?? 420) + (mach.hoursPerDay || 11) * 60];
+/** Minutes it runs on that day (0 when off), or on a usual day when no day is given. */
+export const capacityMin = (s: ProductionSettings, mach: Machine, day?: string) => { if (day) { const sh = shiftOn(mach, day); return sh ? sh[1] - sh[0] : 0; } const t = typicalShift(mach); return t[1] - t[0]; };
 const addDay = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const dow = (d: string) => new Date(d + "T12:00:00Z").getUTCDay();
 /** Business days back from a date on the shop's week (Mon–Fri). */
@@ -293,10 +324,10 @@ export function suggest(s: ProductionSettings, need: Need, due: string | null, t
   const options: { machine: Machine; day: string; minutes: number; score: number }[] = [];
   for (const mach of machines) {
     const est = estimate(s, need, mach).minutes;
-    const cap = capacityMin(s, mach) * s.fillTarget;
     for (let i = 0; i < horizon; i++) {
       const day = addDay(today, i);
-      if (!mach.days.includes(dow(day))) continue;
+      if (!shiftOn(mach, day)) continue;
+      const cap = capacityMin(s, mach, day) * s.fillTarget;
       const used = load[mach.id]?.[day] || 0;
       // room left today, or an empty day for a job bigger than a day
       if (used + est <= cap || (used === 0 && est > cap)) {
@@ -312,7 +343,7 @@ export function suggest(s: ProductionSettings, need: Need, due: string | null, t
   options.sort((a, b) => a.score - b.score);
   const best = options[0];
   let finish = best.day;
-  for (let k = Math.max(0, Math.ceil(best.minutes / Math.max(1, capacityMin(s, best.machine))) - 1), g = 0; k > 0 && g < 60; g++) { finish = addDay(finish, 1); if (best.machine.days.includes(dow(finish))) k--; }
+  for (let k = Math.max(0, Math.ceil(best.minutes / Math.max(1, capacityMin(s, best.machine))) - 1), g = 0; k > 0 && g < 60; g++) { finish = addDay(finish, 1); if (shiftOn(best.machine, finish)) k--; }
   const late = !!latest && finish > latest;
   const needTxt = need.type === "screen" ? `${need.needColors} screens → needs a ${need.needColors}+ color press` : need.type === "embroidery" ? `${need.qty} pcs, ${need.label}` : `${need.qty} pcs heat press`;
   const reason = `${needTxt}. ${best.machine.name} is open ${best.day === today ? "today" : best.day}${due ? `; in-hands ${due}${late ? " — too late, needs attention" : " ✓"}` : ""}. About ${fmtMin(best.minutes)}.`;

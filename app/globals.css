@@ -3554,3 +3554,22 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 @media (max-width: 1250px){.ms-split{grid-template-columns:minmax(0,1fr)}}
 @media (max-width: 700px){.ms-split{display:none}}
 @media (max-width: 700px){.ms-band-l{grid-template-columns:minmax(0,1fr)!important}.ms-r{grid-template-columns:40px minmax(0,1fr) 22px auto;gap:6px}.ms-r .ms-r-d{display:none}}
+/* crews and days off on the production calendar */
+.ms-crew{all:unset;cursor:pointer;font-size:10.5px;font-weight:700;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px;padding:1px 3px;margin:1px -3px 0}
+.ms-crew:hover{background:var(--surface);color:var(--accent)}
+.ms-crew.off{background:var(--danger-soft);color:var(--danger)}
+.ms-dv-h.off{background:color-mix(in srgb,var(--danger) 8%,var(--surface-2))}
+.ms-lc{position:relative}
+.ms-lc-off.x{all:unset;cursor:pointer;margin:auto;font-size:11px;font-weight:700;color:var(--danger);background:var(--danger-soft);border-radius:5px;padding:2px 6px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;box-sizing:border-box}
+.ms-lc-mk{all:unset;cursor:pointer;position:absolute;right:3px;bottom:2px;font-size:10px;color:var(--ink-3);opacity:0;padding:0 3px;border-radius:3px}
+.ms-lc:hover .ms-lc-mk{opacity:1}.ms-lc-mk:hover{color:var(--danger);background:var(--danger-soft)}
+.ms-offs{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:180px;overflow:auto}
+.ms-offs li{display:grid;grid-template-columns:120px 1fr auto;gap:8px;align-items:center;font-size:12.5px}
+.ps-crews td{vertical-align:top}
+.ps-shift{min-width:96px}
+.ps-shift input[type=time]{width:100%;min-width:0;padding:3px 4px;font-size:12px;margin-bottom:3px}
+.ps-shift-f{display:flex;justify-content:space-between;align-items:center;font-size:11px}
+.ps-shift.off{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 4%,transparent) 0 6px,transparent 6px 12px);text-align:center;vertical-align:middle}
+.linkbtn.danger{color:var(--danger)}
+.ms-dv-h small .ms-lead{font-size:11px;color:var(--ink);font-weight:700}
+.ps-mach td:nth-child(4) select{max-width:150px}.ps-mach td:first-child input{min-width:170px}

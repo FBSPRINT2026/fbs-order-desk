@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import SettingsTabs from "@/components/SettingsTabs";
 import { createClient } from "@/lib/supabase/client";
-import { DEFAULT_PRODUCTION, estimate, fmtMin, mergeProduction, needsForOrder, needsForPrintavo, type Machine, type MachineType, type ProductionSettings } from "@/lib/production";
+import { DEFAULT_PRODUCTION, estimate, fmtMin, mergeProduction, needsForOrder, needsForPrintavo, type Crew, type Machine, type MachineType, type ProductionSettings, type Shift } from "@/lib/production";
 import { jobKey, jobMinutes, type JobTime } from "@/lib/timeclock";
 import type { Group } from "@/lib/pricing";
 
@@ -13,6 +13,10 @@ import type { Group } from "@/lib/pricing";
  */
 const TYPES: [MachineType, string][] = [["screen", "Screen press"], ["embroidery", "Embroidery"], ["heat", "Heat press"]];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const toTime = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+const fromTime = (v: string) => { const [h, m] = v.split(":").map(Number); return isNaN(h) ? null : Math.min(1440, h * 60 + (m || 0)); };
+const hrs = (sh: Shift) => (sh ? ((sh[1] - sh[0]) / 60).toFixed((sh[1] - sh[0]) % 60 ? 1 : 0) : "");
 
 export default function ProductionSettingsPage() {
   const [s, setS] = useState<ProductionSettings | null>(null);
@@ -23,7 +27,8 @@ export default function ProductionSettingsPage() {
     setState("Saving…");
     const sb = createClient();
     const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle();
-    const { error } = await sb.from("settings").upsert({ id: 1, data: { ...(data?.data || {}), production: s }, updated_at: new Date().toISOString() });
+    const clean = { ...s!, machines: s!.machines.map(({ week: _w, off: _o, ...m }) => m) };
+    const { error } = await sb.from("settings").upsert({ id: 1, data: { ...(data?.data || {}), production: clean }, updated_at: new Date().toISOString() });
     setState(error ? `Couldn't save: ${error.message}` : "Saved");
   }
   if (!s) return <div className="empty">Loading…</div>;
@@ -45,9 +50,38 @@ export default function ProductionSettingsPage() {
       <SettingsTabs />
       <div className="stack">
         <section className="panel">
-          <div className="panel-h"><h2>Machines</h2><button type="button" className="btn sm" onClick={() => upd((d) => { d.machines.push({ id: "m" + Date.now().toString(36), name: "New machine", type: "screen", colors: 6, heads: 1, startMin: 420, hoursPerDay: 8, days: [1, 2, 3, 4, 5], pvMatch: "", active: true, speed: 1 }); })}>+ Add Machine</button></div>
+          <div className="panel-h"><h2>Crews</h2><button type="button" className="btn sm" onClick={() => upd((d) => { d.crews.push({ id: "c" + Date.now().toString(36), leader: "", week: [null, [420, 1080], [420, 1080], [420, 1080], [420, 1080], [420, 1080], null] }); })}>+ Add Crew</button></div>
           <div className="panel-b">
-            <table className="rv-tbl ps-mach"><thead><tr><th>Name</th><th>Type</th><th className="r">Colors / heads</th><th>Starts</th><th className="r">Hours / day</th><th>Days</th><th className="r">Speed</th><th>Printavo status has</th><th>On</th></tr></thead>
+            <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Each crew leader&apos;s hours. A press with a crew (pick it in Machines below) runs on that crew&apos;s hours on the production calendar. Leave a day blank when the crew doesn&apos;t work it. Vacations and days out are marked on the calendar (tap a press&apos;s crew line, or &quot;off?&quot; on a day).</p>
+            <div className="tbl-wrap"><table className="rv-tbl ps-crews"><thead><tr><th>Crew leader</th>{WEEK_ORDER.map((di) => <th key={di}>{DAYS[di]}</th>)}<th /></tr></thead>
+              <tbody>{s.crews.map((c, i) => {
+                const set = (fn: (x: Crew) => void) => upd((d) => fn(d.crews[i]));
+                const presses = s.machines.filter((m) => m.crew === c.id).map((m) => m.name.split(" · ")[0]);
+                return (
+                  <tr key={c.id}>
+                    <td><input type="text" value={c.leader} placeholder="Name" onChange={(e) => set((x) => { x.leader = e.target.value; })} /><div className="faint" style={{ fontSize: 11.5 }}>{presses.length ? presses.join(", ") : "No press yet"}</div></td>
+                    {WEEK_ORDER.map((di) => { const sh = c.week[di]; return (
+                      <td key={di} className={"ps-shift" + (sh ? "" : " off")}>
+                        {sh ? <>
+                          <input type="time" step={900} value={toTime(sh[0])} aria-label={`${DAYS[di]} start`} onChange={(e) => set((x) => { const v = fromTime(e.target.value); if (v != null && x.week[di]) x.week[di] = [v, Math.max(v + 15, x.week[di]![1])]; })} />
+                          <input type="time" step={900} value={toTime(sh[1] % 1440)} aria-label={`${DAYS[di]} end`} onChange={(e) => set((x) => { const v = fromTime(e.target.value); if (v != null && x.week[di]) x.week[di] = [x.week[di]![0], Math.max(x.week[di]![0] + 15, v)]; })} />
+                          <span className="ps-shift-f"><small className="faint">{hrs(sh)}h</small><button type="button" className="linkbtn" onClick={() => set((x) => { x.week[di] = null; })}>off</button></span>
+                        </> : <button type="button" className="linkbtn" onClick={() => set((x) => { x.week[di] = x.week[1] || [420, 1080]; })}>+ works</button>}
+                      </td>
+                    ); })}
+                    <td><div className="stack" style={{ gap: 4 }}>
+                      <button type="button" className="linkbtn" title="Use Monday's hours on Tuesday–Friday" onClick={() => set((x) => { const mon = x.week[1]; if (mon) for (const d of [2, 3, 4, 5]) x.week[d] = [...mon] as [number, number]; })}>Mon → weekdays</button>
+                      <button type="button" className="linkbtn danger" onClick={() => upd((d) => { d.crews.splice(i, 1); d.machines.forEach((m) => { if (m.crew === c.id) m.crew = undefined; }); })}>Remove</button>
+                    </div></td>
+                  </tr>
+                );
+              })}</tbody></table></div>
+          </div>
+        </section>
+        <section className="panel">
+          <div className="panel-h"><h2>Machines</h2><button type="button" className="btn sm" onClick={() => upd((d) => { d.machines.push({ id: "m" + Date.now().toString(36), name: "New machine", type: "screen", colors: 6, heads: 1, startMin: 420, hoursPerDay: 11, days: [1, 2, 3, 4, 5], pvMatch: "", active: true, speed: 1 }); })}>+ Add Machine</button></div>
+          <div className="panel-b">
+            <table className="rv-tbl ps-mach"><thead><tr><th>Name</th><th>Type</th><th className="r">Colors / heads</th><th>Crew</th><th>Starts</th><th className="r">Hours / day</th><th>Days</th><th className="r">Speed</th><th>Printavo status has</th><th>On</th></tr></thead>
               <tbody>{s.machines.map((m, i) => {
                 const set = (fn: (x: Machine) => void) => upd((d) => fn(d.machines[i]));
                 return (
@@ -55,9 +89,11 @@ export default function ProductionSettingsPage() {
                     <td><input type="text" value={m.name} onChange={(e) => set((x) => { x.name = e.target.value; })} /></td>
                     <td><select value={m.type} onChange={(e) => set((x) => { x.type = e.target.value as MachineType; })}>{TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
                     <td className="r">{m.type === "screen" ? <input type="number" min={1} max={20} value={m.colors} onChange={(e) => set((x) => { x.colors = n(e.target.value); })} title="Colors (print heads)" /> : m.type === "embroidery" ? <input type="number" min={1} max={30} value={m.heads} onChange={(e) => set((x) => { x.heads = n(e.target.value); })} title="Heads" /> : <span className="faint">—</span>}</td>
+                    <td><select value={m.crew || ""} onChange={(e) => set((x) => { x.crew = e.target.value || undefined; })}><option value="">No crew (own hours)</option>{s.crews.map((c) => <option key={c.id} value={c.id}>{c.leader || "Unnamed crew"}</option>)}</select></td>
+                    {m.crew && s.crews.some((c) => c.id === m.crew) ? <td colSpan={3} className="faint" style={{ fontSize: 12.5 }}>{s.crews.find((c) => c.id === m.crew)!.leader || "Crew"}&apos;s hours (Crews above)</td> : <>
                     <td><input type="time" step={900} value={`${String(Math.floor((m.startMin ?? 420) / 60)).padStart(2, "0")}:${String((m.startMin ?? 420) % 60).padStart(2, "0")}`} onChange={(e) => set((x) => { const [h, mm] = e.target.value.split(":").map(Number); if (!isNaN(h)) x.startMin = h * 60 + (mm || 0); })} /></td>
                     <td className="r"><input type="number" min={0} max={24} step={0.5} value={m.hoursPerDay} onChange={(e) => set((x) => { x.hoursPerDay = n(e.target.value); })} /></td>
-                    <td><div className="ps-days">{DAYS.map((dl, di) => <button key={di} type="button" className={m.days.includes(di) ? "on" : ""} onClick={() => set((x) => { x.days = x.days.includes(di) ? x.days.filter((y) => y !== di) : [...x.days, di].sort(); })}>{dl[0]}</button>)}</div></td>
+                    <td><div className="ps-days">{DAYS.map((dl, di) => <button key={di} type="button" className={m.days.includes(di) ? "on" : ""} onClick={() => set((x) => { x.days = x.days.includes(di) ? x.days.filter((y) => y !== di) : [...x.days, di].sort(); })}>{dl[0]}</button>)}</div></td></>}
                     <td className="r"><input type="number" min={0.2} max={3} step={0.05} value={m.speed} onChange={(e) => set((x) => { x.speed = n(e.target.value) || 1; })} title="1 = standard; 1.2 = 20% faster" /></td>
                     <td><input type="text" value={m.pvMatch} onChange={(e) => set((x) => { x.pvMatch = e.target.value; })} placeholder="e.g. Press 1" /></td>
                     <td><input type="checkbox" checked={m.active} onChange={(e) => set((x) => { x.active = e.target.checked; })} aria-label="In use" /></td>
