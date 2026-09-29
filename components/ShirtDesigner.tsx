@@ -7,6 +7,7 @@ import { CLIP_CATEGORIES, clipCredits, firstIcon, getClipIcons, searchClipart, s
 import { FONT_STYLES, boldOf, cssFamily, hasBold, loadFont, loadFontList, pickWeight, previewFont, type WebFont } from "@/lib/webfonts";
 import { WILFLEX_HEX, deltaE } from "@/lib/inkColors";
 import { knockOut, makePreview } from "@/lib/artPrep";
+import SearchInput from "@/components/SearchInput";
 
 const W = 600, H = 700; // 12" x 14" at 50 units per inch
 const uidOf = () => Math.random().toString(36).slice(2, 10);
@@ -188,7 +189,7 @@ function ClipArtPanel({ onAdd }: { onAdd: (ic: ClipIcon) => void }) {
     <div className="il-panel-b">
       <label className="il-search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-        <input type="search" placeholder="Search clip art: football, eagle, cross…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search clip art" />
+        <SearchInput placeholder="Search clip art: football, eagle, cross…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search clip art" />
       </label>
       <div className="il-seg" role="group" aria-label="Art style">
         {([["all", "All"], ["one", "One color"], ["full", "Full color"]] as const).map(([k, t]) => <button key={k} type="button" className={style === k ? "on" : ""} onClick={() => setStyle(k)}>{t}</button>)}
@@ -245,7 +246,7 @@ function FontPicker({ value, sample, onPick, onPeek }: { value: string; sample: 
     <div className="il-fonts" onMouseLeave={() => onPeek?.(null)}>
       <label className="il-search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-        <input type="search" placeholder={`Search ${list.length > 100 ? list.length.toLocaleString() + " " : ""}fonts`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search fonts" />
+        <SearchInput placeholder={`Search ${list.length > 100 ? list.length.toLocaleString() + " " : ""}fonts`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search fonts" />
       </label>
       {!q && (
         <div className="il-subs">

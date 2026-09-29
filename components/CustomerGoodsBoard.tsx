@@ -7,6 +7,7 @@ import { staffMessage } from "@/app/shop/actions";
 import { goodsNeedInfo, needsGoods, type GoodsItem } from "@/lib/goods";
 import { ResolveList } from "@/components/IncomingShipments";
 import type { PendingShipment } from "@/lib/manifest";
+import SearchInput from "@/components/SearchInput";
 
 type Stage = "info" | "coming" | "counting" | "issue" | "received" | "match";
 const STAGES: { k: Stage; label: string; help: string }[] = [
@@ -55,7 +56,7 @@ export default function CustomerGoodsBoard({ pending, onPending, refreshKey }: {
   return (
     <>
       <div className="row" style={{ gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-        <label className="aa-search"><input type="search" placeholder="Search order, customer or tracking #" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+        <label className="aa-search"><SearchInput placeholder="Search order, customer or tracking #" value={q} onChange={(e) => setQ(e.target.value)} /></label>
       </div>
       <div className="aa-sub" role="tablist" style={{ marginBottom: 8 }}>
         {STAGES.map((s) => <button key={s.k} type="button" className={tab === s.k ? "on" : ""} onClick={() => setTab(s.k)}>{s.label}<span className="aa-n">{s.k === "match" ? groups.length : items ? byStage[s.k].length : "…"}</span></button>)}

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useShopData, summaryLine } from "@/lib/shopData";
 import { custLabel } from "@/lib/format";
+import SearchInput from "@/components/SearchInput";
 
 /** Orders customers built in their portal and sent in, waiting for the shop to price and review. */
 export default function Incoming() {
@@ -17,7 +18,7 @@ export default function Incoming() {
     <>
       <div className="page-head">
         <div><div className="eyebrow">From the customer portal</div><h1>Incoming Orders</h1></div>
-        <label className="aa-search"><input type="search" placeholder="Search by number, customer or name" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+        <label className="aa-search"><SearchInput placeholder="Search by number, customer or name" value={q} onChange={(e) => setQ(e.target.value)} /></label>
       </div>
       <p className="muted" style={{ marginTop: -8 }}>Customers build these without prices. Open one to check it, answer their questions, adjust the suggested pricing and send it back for their final approval.</p>
       {loading ? <div className="empty">Loading…</div> : (

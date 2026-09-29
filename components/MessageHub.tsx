@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { MAX_ATTACH, type Attachment, type HubMsg, type HubOrder } from "@/lib/messages";
+import SearchInput from "@/components/SearchInput";
 
 type Convo = { key: string; orderId: string | null; projectId?: string | null; topic: string; title: string; sub: string; order?: HubOrder; msgs: HubMsg[]; last: HubMsg | null; unread: number };
 type Pending = { id: string; name: string; size: number; mime: string; done?: Attachment; error?: string };
@@ -165,7 +166,7 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
       <div className="mh-list">
         <div className="mh-list-h">
           <h2>Messages{totalUnread ? <span className="mh-badge">{totalUnread}</span> : null}</h2>
-          <input type="search" placeholder="Search messages" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search messages" />
+          <SearchInput placeholder="Search messages" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search messages" />
         </div>
         <div className="mh-convos">
           {shown.map((c) => (

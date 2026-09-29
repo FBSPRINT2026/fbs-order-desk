@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { designLabel, type Design } from "@/lib/pricing";
+import SearchInput from "@/components/SearchInput";
 
 /** Does a design match a search ("10004", "D-10004", "fedex", an ink name)? */
 export function designMatches(d: Design, q: string) {
@@ -48,7 +49,7 @@ export default function DesignSearch({ designs, urls, value, onPick, onStar, pla
       </button>
       {open && (
         <div className="ds-pop">
-          <input type="search" autoFocus placeholder={`Search ${designs.length} logo${designs.length === 1 ? "" : "s"} (number, name, ink)`} value={q} onChange={(e) => setQ(e.target.value)}
+          <SearchInput autoFocus placeholder={`Search ${designs.length} logo${designs.length === 1 ? "" : "s"} (number, name, ink)`} value={q} onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); if (e.key === "Enter" && list[0]) { onPick(list[0]); setOpen(false); } }} />
           <div className="ds-sub">{q.trim() ? `${list.length} match${list.length === 1 ? "" : "es"}` : starred.length ? "★ Starred logos · type to search all" : "No starred logos yet · newest shown · type to search all"}</div>
           <div className="ds-list" role="listbox">

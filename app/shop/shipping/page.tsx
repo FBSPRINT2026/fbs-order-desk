@@ -7,6 +7,7 @@ import { mergeSettings, type Customer, type Settings, type ShipAddress } from "@
 import { addressFromText, addressReady, emptyAddress, estimateBoxes, oneLine, trackingLink, BILL_LABEL, type BillTo, type Shipment } from "@/lib/shipping";
 import type { PvAddress } from "@/lib/archive";
 import ShipWindow, { type ShipTarget } from "@/components/ShipWindow";
+import SearchInput from "@/components/SearchInput";
 
 type NewRow = { id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; ship_to: string; ship_method: string; po_number: string };
 type PvRow = { id: string; visual_id: string; nickname: string; qty: number; due_date: string | null; customer_id: string; po_number: string; status_name: string; ship: PvAddress; delivery: string | null; contact: { fullName?: string; email?: string; phone?: string } | null };
@@ -121,7 +122,7 @@ export default function ShippingCenter() {
         <button type="button" className={tab === "ready" ? "on" : ""} onClick={() => setTab("ready")}>Ready to ship<span className="aa-n">{items?.length ?? "…"}</span></button>
         <button type="button" className={tab === "shipped" ? "on" : ""} onClick={() => setTab("shipped")}>Recently shipped<span className="aa-n">{shipped.length}</span></button>
         <span className="spacer" />
-        {tab === "ready" && <label className="aa-search"><input type="search" placeholder="Search order, customer, city" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
+        {tab === "ready" && <label className="aa-search"><SearchInput placeholder="Search order, customer, city" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
       </div>
 
       {tab === "ready" ? (

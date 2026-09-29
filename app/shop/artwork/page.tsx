@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { designLabel, type Customer, type Design } from "@/lib/pricing";
 import { custLabel, fmtDateLong } from "@/lib/format";
 import { DESIGN_ACCEPT, PREVIEWABLE, previewUrls, uploadDesign } from "@/lib/designs";
+import SearchInput from "@/components/SearchInput";
 
 type Mock = { id: string; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[] };
 type Show = "all" | "logos" | "mockups";
@@ -107,7 +108,7 @@ export default function ArtworkPage() {
       )}
 
       <div className="toolbar art-tools">
-        <label className="aa-search"><input type="search" placeholder="Search logos and mockups: name, D-number, ink, customer, order #" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+        <label className="aa-search"><SearchInput placeholder="Search logos and mockups: name, D-number, ink, customer, order #" value={q} onChange={(e) => setQ(e.target.value)} /></label>
         <select aria-label="Filter by customer" value={cust} onChange={(e) => setCust(e.target.value)} style={{ maxWidth: 240 }}><option value="">All customers</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select>
         <div className="chips">
           {(["all", "logos", "mockups"] as Show[]).map((k) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{k === "all" ? "All" : k === "logos" ? `Logos (${logos.length})` : `Mockups (${mocks.length})`}</button>)}

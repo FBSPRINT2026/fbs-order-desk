@@ -2588,3 +2588,29 @@ a.as-ai{text-decoration:none}
 .pd-foot{display:flex;justify-content:flex-end;padding-top:10px}
 @media (max-width: 1100px){.dash-cols,.dash-2{grid-template-columns:1fr}}
 @media (max-width: 640px){.pd-tbl th:nth-child(3),.pd-tbl td:nth-child(3){display:none}}
+
+/* search boxes: microphone on the right (components/SearchInput) */
+.sx{position:relative;display:flex;align-items:center;flex:1 1 auto;min-width:0}
+.sx>input{width:100%;max-width:none!important;padding-right:34px!important}
+.toolbar .sx{flex:0 1 260px;max-width:260px}
+.srch-box .sx,.mh-list-h .sx,.ds-pop .sx{flex:1 1 auto}
+.mic{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--ink-3);cursor:pointer;padding:0}
+.mic svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mic:hover{color:var(--fbs-blue);background:var(--surface-2)}
+.mic.on{color:#fff;background:var(--fbs-salmon);animation:micpulse 1.2s ease-in-out infinite}
+@keyframes micpulse{0%,100%{box-shadow:0 0 0 0 rgba(242,102,96,.45)}50%{box-shadow:0 0 0 6px rgba(242,102,96,0)}}
+.side-search .mic{color:var(--side-ink);right:-4px}
+.side-search .mic:hover{color:#fff;background:rgba(255,255,255,.12)}
+.side-search .mic svg{stroke:currentColor;width:15px;height:15px}
+.side-search svg.side-ai{stroke:none;fill:var(--fbs-orange);width:16px;height:16px}
+
+/* messages card fills its row (same height as Sales), with a friendly empty state */
+.dash-fill{align-items:stretch}
+.dash-fill>.db-card{display:flex;flex-direction:column}
+.dash-fill .db-msgs .db-scroll{flex:1;max-height:560px;display:flex;flex-direction:column}
+.dash-fill .db-msgs .db-list{flex:none}
+.db-msg-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;padding:28px 16px;min-height:300px}
+.db-msg-empty svg{width:170px;height:auto;margin-bottom:8px}
+.db-msg-empty .dme-bg{fill:var(--accent-soft,#E3F3FB)}
+.db-msg-empty b{font-size:17px;color:var(--ink)}
+.db-msg-empty span{font-size:14px;color:var(--ink-3);max-width:380px;line-height:1.45}

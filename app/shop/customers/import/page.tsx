@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import PrintavoSync from "@/components/PrintavoSync";
+import SearchInput from "@/components/SearchInput";
 
 type Hit = { id: string; companyName: string; contact: string; email: string; phone: string; orderCount: number; customerId: string | null };
 type Step = { at: string; text: string; bad?: boolean };
@@ -98,7 +99,7 @@ export default function ImportPage() {
       <h2 style={{ marginTop: 22, fontSize: 16 }}>Import one customer now</h2>
       <p className="faint" style={{ margin: "2px 0 0", fontSize: 13 }}>Jumps the line for a customer you need right away. The sync would bring them over anyway.</p>
       <form className="toolbar" onSubmit={search} style={{ marginTop: 8 }}>
-        <input type="search" placeholder="Search Printavo by company, contact name or email…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <SearchInput placeholder="Search Printavo by company, contact name or email…" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn primary" type="submit" disabled={searching || q.trim().length < 2}>{searching ? "Searching…" : "Search Printavo"}</button>
       </form>
       {err && <div className="pv-err">{err}</div>}

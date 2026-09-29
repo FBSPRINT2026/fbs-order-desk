@@ -10,6 +10,7 @@ import { matches } from "@/lib/search";
 import QuickPay from "@/components/QuickPay";
 import RecordPayment from "@/components/RecordPayment";
 import type { PayFilter } from "@/lib/paySelect";
+import SearchInput from "@/components/SearchInput";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
@@ -173,7 +174,7 @@ export default function AccountAreas({ mode, projectsPanel, projectsCount, progr
   ];
 
   const search = (ph: string) => (
-    <label className="aa-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={ph} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
+    <label className="aa-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><SearchInput placeholder={ph} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
   );
   const orderTable = (list: AOrder[], cols: "quote" | "work" | "invoice") => {
     const rows = list.filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, ST[o.status]?.portal, o.statusLabel, o.archived ? "archived" : "", o.search));
@@ -435,7 +436,7 @@ export default function AccountAreas({ mode, projectsPanel, projectsCount, progr
           const shown = list.slice(pg * PERH, pg * PERH + PERH);
           return (<>
             <div className="aa-sec-h ph-h"><h3>Payment history</h3>
-              <label className="aa-search ph-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={15} /><input type="search" placeholder="Amount, order # or method" value={hq} onChange={(e) => { setHq(e.target.value); setHp(0); }} aria-label="Search payment history" /></label>
+              <label className="aa-search ph-search"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={15} /><SearchInput placeholder="Amount, order # or method" value={hq} onChange={(e) => { setHq(e.target.value); setHp(0); }} aria-label="Search payment history" /></label>
             </div>
             <table className="aa-tbl ph">
               <thead><tr><th>Date</th><th>Paid for</th><th>Method</th><th className="r">Amount</th></tr></thead>

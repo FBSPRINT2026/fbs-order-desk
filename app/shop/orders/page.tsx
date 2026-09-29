@@ -10,6 +10,7 @@ import { custLabel, daysUntil, money } from "@/lib/format";
 import { summaryLine, useShopData } from "@/lib/shopData";
 import { Due, Pill } from "@/components/bits";
 import AssistantStrip from "@/components/AssistantStrip";
+import SearchInput from "@/components/SearchInput";
 
 /** A Printavo status in our words, so the filters work on Printavo orders too. */
 function pvStatus(a: { kind: string; status_name: string }): string {
@@ -152,7 +153,7 @@ export default function OrdersPage() {
           <option value="">Any status</option>
           {STATUSES.map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
         </select>
-        <input type="search" placeholder="Search #, customer, garment, color, print details… (includes Printavo orders)" value={q} onChange={(e) => setQ(e.target.value)} />
+        <SearchInput placeholder="Search #, customer, garment, color, print details… (includes Printavo orders)" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <div className="tbl-wrap">
         <table className="tbl">

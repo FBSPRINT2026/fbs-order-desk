@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { mergeSettings } from "@/lib/pricing";
 import { saveShortcuts, type Shortcut } from "@/app/shop/shortcut-actions";
 import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
+import SearchInput from "@/components/SearchInput";
 
 const ICONS: Record<string, React.ReactNode> = {
   home: <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>,
@@ -132,8 +133,9 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
       <div className={"side-drawer" + (open ? " open" : "")}>
       <div className="side-hello">{hello}{firstName ? `, ${firstName}` : ""}</div>
       <form className="side-search" role="search" onSubmit={(e) => { e.preventDefault(); const t = q.trim(); if (t) router.push(`/shop/search?q=${encodeURIComponent(t)}`); }}>
-        <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask or search anything…" aria-label="Search orders, customers, artwork, shipments" />
+        <svg className="side-ai" viewBox="0 0 24 24" aria-hidden><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M19 15.5l.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8z" /></svg>
+        <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask AI or search…" aria-label="Ask AI or search orders, customers, artwork, shipments"
+          onDictated={(t) => { const x = t.trim(); if (x) router.push(`/shop/search?q=${encodeURIComponent(x)}`); }} />
       </form>
       <nav className="nav">
         {link(["/shop", "home", "Dashboard"])}

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import SearchInput from "@/components/SearchInput";
 
 type Hit = { href: string; title: string; sub: string; tag?: string };
 type Results = { orders: Hit[]; printavo: Hit[]; customers: Hit[]; projects: Hit[]; artwork: Hit[]; shipments: Hit[] };
@@ -63,7 +64,7 @@ function SearchInner() {
     <>
       <div className="page-head"><div><div className="eyebrow">Search</div><h1>{q0 ? `“${q0}”` : "Search Everything"}</h1></div></div>
       <form className="srch-box" onSubmit={(e) => { e.preventDefault(); router.replace(`/shop/search?q=${encodeURIComponent(q.trim())}`); }}>
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask anything, or search an order #, customer, PO, tracking…" autoFocus aria-label="Search" />
+        <SearchInput value={q} onChange={(e) => setQ(e.target.value)} onDictated={(t) => { if (t.trim()) router.replace(`/shop/search?q=${encodeURIComponent(t.trim())}`); }} placeholder="Ask anything, or search an order #, customer, PO, tracking…" autoFocus aria-label="Search" />
         <button type="submit" className="btn primary">Search</button>
       </form>
       {ai && !ai.off && (

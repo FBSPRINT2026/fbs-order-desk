@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SIZES, type Garment } from "@/lib/pricing";
 import { money } from "@/lib/format";
+import SearchInput from "@/components/SearchInput";
 
 type Draft = { style: string; brand: string; description: string; colors: string; cost: string; sizes: string };
 const empty: Draft = { style: "", brand: "", description: "", colors: "", cost: "", sizes: "" };
@@ -159,7 +160,7 @@ export default function CatalogPage() {
           </div>
         )}
       </section>
-      <div className="toolbar"><input type="search" placeholder="Search style, brand, color…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+      <div className="toolbar"><SearchInput placeholder="Search style, brand, color…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
       <div className="tbl-wrap">
         <table className="tbl" style={{ minWidth: 860 }}>
           <thead><tr><th>Style #</th><th>Brand</th><th>Description</th><th>Colors</th><th>Sizes</th><th className="r">Your cost</th><th /></tr></thead>

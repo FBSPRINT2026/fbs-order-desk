@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { daysUntil, fmtDate, fmtStamp, money } from "@/lib/format";
 import { useShopData } from "@/lib/shopData";
+import SearchInput from "@/components/SearchInput";
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -46,7 +47,7 @@ export default function CustomersPage() {
         <button className="btn primary" type="button" onClick={add} disabled={busy}>+ New customer</button></div>
       </div>
       <div className="toolbar">
-        <input type="search" placeholder="Search name, company, email, tag…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <SearchInput placeholder="Search name, company, email, tag…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select aria-label="Filter" value={tag} onChange={(e) => setTag(e.target.value)}>
           <option value="">All customers</option>
           <option value="__fu">Follow-up due</option>
