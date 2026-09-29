@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mergeSettings } from "@/lib/pricing";
 import { saveShortcuts, type Shortcut } from "@/app/shop/shortcut-actions";
@@ -38,6 +38,29 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
   const [mine, setMine] = useState<Shortcut[]>(shortcuts || []);
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState<Shortcut | null>(null);
+  // desktop: the whole menu always fits the window height (it scales down on shorter screens instead of scrolling)
+  const sideRef = useRef<HTMLElement>(null), inRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ z: number; h: number }>({ z: 1, h: 0 });
+  useLayoutEffect(() => {
+    const run = () => {
+      const side = sideRef.current, el = inRef.current;
+      if (!side || !el) return;
+      if (window.innerWidth <= 820) { setFit({ z: 1, h: 0 }); return; }
+      const cs = getComputedStyle(side);
+      const avail = side.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      const prevZ = el.style.zoom, prevH = el.style.minHeight;
+      el.style.zoom = "1"; el.style.minHeight = "0";
+      const need = el.scrollHeight;
+      el.style.zoom = prevZ; el.style.minHeight = prevH;
+      const z = need > avail ? Math.max(0.6, avail / need) : 1;
+      setFit((f) => (Math.abs(f.z - z) < 0.005 && Math.abs(f.h - avail) < 1 ? f : { z, h: avail }));
+    };
+    run();
+    window.addEventListener("resize", run);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(run) : null;
+    if (ro && inRef.current) Array.from(inRef.current.children).forEach((c) => ro.observe(c));
+    return () => { window.removeEventListener("resize", run); ro?.disconnect(); };
+  }, [mine.length, editing, adding]);
   async function store(next: Shortcut[]) { setMine(next); await saveShortcuts(next); }
   // "Pin this page": the page you're on, named by its heading
   function pinHere() {
@@ -97,7 +120,8 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
   );
 
   return (
-    <aside className="side">
+    <aside className="side" ref={sideRef}>
+      <div className="side-in" ref={inRef} style={fit.h ? { zoom: fit.z, minHeight: fit.h / fit.z } : undefined}>
       <Link href="/shop" className="brand brand-logo" title="Home">
         {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}
         {brand.sideTagline && <span>{brand.sideTagline}</span>}
@@ -153,6 +177,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
       <div className="side-user">
         <span>{email}</span>
         <form action="/auth/signout" method="post"><button className="btn ghost sm" style={{ color: "inherit", padding: 0 }} type="submit">Sign out</button></form>
+      </div>
       </div>
       </div>
     </aside>

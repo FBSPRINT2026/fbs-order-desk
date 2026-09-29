@@ -2499,3 +2499,7 @@ a.as-ai{text-decoration:none}
   .nav-add-btns,.nav-mine-empty{font-size:clamp(11px,1.4vh,12px)}
   .side-user{font-size:clamp(10.5px,1.3vh,11.5px)}
 }
+/* the menu's content box: scaled as a whole to fit the window (see ShopNav) */
+.side-in{display:flex;flex-direction:column;gap:inherit;min-height:100%}
+.side{overflow:hidden}
+@media (max-width: 820px){.side-in{display:contents}.side{overflow:visible}}
