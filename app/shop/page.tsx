@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import AssistantStrip from "@/components/AssistantStrip";
+import SalesAnalytics from "@/components/SalesAnalytics";
 import { Pill } from "@/components/bits";
 import { money } from "@/lib/format";
 
@@ -29,6 +30,7 @@ const pvKind = (s: string) => /ship|delivery/i.test(s) ? "ship" : /^quote/i.test
 
 export default function Dashboard() {
   const [me, setMe] = useState("");
+  const [boss, setBoss] = useState(false); // owners / admins see the sales numbers
   const [mine, setMine] = useState(false);
   const [custs, setCusts] = useState<Record<string, Cust>>({});
   const [jobs, setJobs] = useState<Job[] | null>(null);
@@ -42,7 +44,7 @@ export default function Dashboard() {
     const sb = createClient();
     (async () => {
       const { data: { user } } = await sb.auth.getUser();
-      if (user?.email) { const { data: st } = await sb.from("staff").select("name").eq("email", user.email.toLowerCase()).maybeSingle(); setMe(((st?.name as string) || user.email.split("@")[0]).split(/[\s._-]+/)[0].toLowerCase()); }
+      if (user?.email) { const { data: st } = await sb.from("staff").select("name, role").eq("email", user.email.toLowerCase()).maybeSingle(); setBoss(["owner", "admin"].includes((st?.role as string) || "")); setMe(((st?.name as string) || user.email.split("@")[0]).split(/[\s._-]+/)[0].toLowerCase()); }
       const lastYearFrom = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); d.setDate(d.getDate() - 7); return iso(d); })();
       const lastYearTo = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); d.setDate(d.getDate() + 21); return iso(d); })();
       const [o, a, m, e, ly, recent, sml] = await Promise.all([
@@ -158,6 +160,7 @@ export default function Dashboard() {
             <a href="#db-reorder"><span>Reorder reminders</span><b>{myReorders.length}</b></a>
           </div>
 
+          {boss && <SalesAnalytics />}
           <div className="db-grid">
             <div className="db-col">
               <div id="db-msgs">{card("Customer messages to answer", "blue", myMsgs.length, (
