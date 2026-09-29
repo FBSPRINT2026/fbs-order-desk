@@ -153,7 +153,7 @@ export default function Dashboard() {
     { k: "blanks", label: "Blanks", match: (j) => j.status === "blanks" },
     { k: "production", label: "In Production", match: (j) => j.status === "production" },
     { k: "issue", label: "Issues", match: (j) => j.status === "issue" },
-    { k: "ship", label: "Ready To Ship", short: "Ship", match: (j) => j.ship || j.status === "ready" },
+    { k: "ship", label: "Ready To Ship", match: (j) => j.ship || j.status === "ready" },
   ];
   const mineJobs = (jobs || []).filter((j) => isMine(j.customer_id, j.owner));
   const stageN = stages.map((st) => ({ ...st, n: mineJobs.filter(st.match).length }));
