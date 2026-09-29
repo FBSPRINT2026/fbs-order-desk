@@ -79,7 +79,8 @@ export async function sanmarSkus(style: string): Promise<SanMarSku[]> {
     return {
       color, catalogColor: tag(basic, "catalogColor") || color, rawSize: raw, size: sizeFor(raw, isYouth(basic)),
       piecePrice: num(tag(price, "piecePrice")), casePrice: num(tag(price, "casePrice")), myPrice: mine.get(`${color}|${raw}`.toLowerCase()) || 0,
-      image: tag(img, "productImage"), front: tag(img, "frontModel") || tag(img, "frontFlat") || tag(img, "colorProductImage"), back: tag(img, "backModel") || tag(img, "backFlat"), swatch: tag(img, "colorSwatchImage"),
+      image: tag(img, "productImage"), // flat product shots first (like S&S), photos on a model only when there's no flat
+      front: tag(img, "frontFlat") || tag(img, "colorProductImage") || tag(img, "frontModel"), back: tag(img, "backFlat") || tag(img, "backModel"), swatch: tag(img, "colorSwatchImage"),
       brand: tag(basic, "brandName"), title: tag(basic, "productTitle"), description: tag(basic, "productDescription"), status: tag(basic, "productStatus"),
     };
   });
@@ -104,7 +105,7 @@ export async function sanmarLookup(style: string): Promise<SanMarGarment | null>
   const first = skus[0];
   return {
     style: t, brand: first.brand || "SanMar", description: first.title || first.description.replace(/<[^>]+>/g, " ").slice(0, 200),
-    colors, cost: isFinite(base) ? base : 0, sizes, size_costs, image: first.image || first.front, color_images, supplier: "sanmar", supplier_style: t,
+    colors, cost: isFinite(base) ? base : 0, sizes, size_costs, image: first.front || first.image, color_images, supplier: "sanmar", supplier_style: t,
   };
 }
 
@@ -131,7 +132,7 @@ export async function sanmarStyleSummary(style: string): Promise<SanMarStyleSumm
     style: style.trim().toUpperCase(),
     brand: tag(b0, "brandName"), title: tag(b0, "productTitle") || tag(b0, "productDescription").replace(/<[^>]+>/g, " ").slice(0, 160),
     category: tag(b0, "category"), status: tag(b0, "productStatus"),
-    image: tag(i0, "thumbnailImage") || tag(i0, "productImage") || tag(i0, "frontModel") || tag(i0, "frontFlat"),
+    image: tag(i0, "frontFlat") || tag(i0, "colorProductImage") || tag(i0, "thumbnailImage") || tag(i0, "productImage") || tag(i0, "frontModel"),
     colors: [...new Set(rows.map((r) => { const b = basic(r); return tag(b, "catalogColor") || tag(b, "color"); }).filter(Boolean))],
     sizes: orderSizes(rows.map((r) => sizeFor(tag(basic(r), "size"), isYouth(b0)))),
   };
