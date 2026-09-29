@@ -92,7 +92,11 @@ const LANE = 22;
  * the booking order); each starts when the job before it ends, only inside the shift, and a job that doesn't fit in
  * what's left of the day carries into the next working day. So a 30-hour job fills ~4 shifts, never "overnight".
  */
-function flow(cs: Card[], mach: Machine, nowAbs = -Infinity): Seg[] {
+/**
+ * `busy`: when each job is already on a machine (absolute minutes), shared across machines. The same garments can't be
+ * on two presses at once, so a split job's other part (the sleeves on another press) waits until this part is off.
+ */
+function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Map<string, [number, number][]> = new Map()): Seg[] {
   // each day's shift can differ (crew schedules); a day it normally doesn't run but has work booked uses its usual hours
   const typ = typicalShift(mach);
   const hrs = (d: string) => shiftOn(mach, d) || typ;
@@ -124,6 +128,7 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity): Seg[] {
       const st = Math.min(prior, s1 - 15);
       const en = Math.min(s1, st + Math.max(15, c.minutes));
       out.push({ c, day: c.day, start: st, end: en, part: 1, parts: 1, pushed: false, work: en - st });
+      busy.set(c.job.key, [...(busy.get(c.job.key) || []), [ord(c.day) * 1440 + st, ord(c.day) * 1440 + en]]);
       continue;
     }
     // work that hasn't started can't happen in the past: it starts from now at the earliest (the late crew, the
@@ -132,9 +137,12 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity): Seg[] {
     const planned = ord(c.day) * 1440 + (c.startMin ?? hrs(c.day)[0]);
     const asked = Math.max(planned, notStarted ? nowAbs : -Infinity);
     let t = norm(Math.max(cursor, asked), cursor < asked && c.startMin != null && asked === planned);
-    const pushed = t > planned + 1;
-    let left = Math.max(1, c.minutes);
-    const pieces: { day: string; start: number; end: number; work: number; slow: number }[] = [];
+    type Piece = { day: string; start: number; end: number; work: number; slow: number };
+    let pieces: Piece[] = [];
+    // lay it out from t; if another part of this job is on another machine then, start after that part is done
+    const lay = (t0: number) => {
+    let t = t0, left = Math.max(1, c.minutes);
+    const pieces: Piece[] = [];
     for (let g = 0; g < 400 && left > 0.01; g++) {
       let dd = Math.floor(t / 1440), m = t - dd * 1440, w = wins(fromOrd(dd)).find(([, y]) => m < y);
       // don't start a longer job in the last few minutes of a window: start it in the next one
@@ -148,7 +156,19 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity): Seg[] {
       left -= work;
       t = left > 0.01 ? norm(dd * 1440 + end) : dd * 1440 + end;
     }
-    cursor = t;
+    return { pieces, end: t };
+    };
+    const jb = busy.get(c.job.key) || [];
+    let r = lay(t);
+    for (let k = 0; k < 30 && c.slot?.status !== "running"; k++) {
+      const hit = jb.find(([a, b]) => r.pieces.some((p) => ord(p.day) * 1440 + p.start < b && ord(p.day) * 1440 + p.end > a));
+      if (!hit) break;
+      t = norm(hit[1]); r = lay(t);
+    }
+    pieces = r.pieces;
+    const pushed = t > planned + 1;
+    cursor = r.end;
+    busy.set(c.job.key, [...jb, ...pieces.map((p): [number, number] => [ord(p.day) * 1440 + p.start, ord(p.day) * 1440 + p.end])]);
     pieces.forEach((p, i) => out.push({ c, day: p.day, start: p.start, end: p.end, part: i + 1, parts: pieces.length, pushed: pushed && i === 0, work: p.work, slow: p.slow < 1 ? p.slow : undefined }));
   }
   return out;
@@ -326,7 +346,8 @@ export default function MachineSchedule() {
     const per = new Map<string, Card[]>();
     for (const c of cards) per.set(c.machine.id, [...(per.get(c.machine.id) || []), c]);
     const nowAbs = ord(now.day) * 1440 + now.min;
-    for (const [, cs] of per) for (const g of flow(cs, cs[0].machine, nowAbs)) {
+    const busy = new Map<string, [number, number][]>();
+    for (const [, cs] of per) for (const g of flow(cs, cs[0].machine, nowAbs, busy)) {
       const k = g.c.machine.id + "|" + g.day;
       by.set(k, [...(by.get(k) || []), g]);
       ofCard.set(g.c.key, [...(ofCard.get(g.c.key) || []), g]);
@@ -409,15 +430,16 @@ export default function MachineSchedule() {
     if (reload) { setOpen(null); load(); }
   }
   async function setStatus(sl: Slot, status: Slot["status"]) { await logAction(sl, status === "done" ? "done" : status === "running" ? (sl.status === "paused" ? "resume" : "start") : status === "paused" ? "pause" : "not_started"); }
-  /** Break a booking into one per print location (same press and day), so the backs can go to another day or press. */
-  async function splitByLocation(c: Card) {
+  /** Split the chosen print locations (say the 1-color sleeve) off into their own run; the rest stay together. */
+  async function splitByLocation(c: Card, off: string[]) {
     if (!c.slot) return;
-    const locs = locsOf(c.need); if (locs.length < 2) return;
+    const locs = locsOf(c.need), keep = locs.filter((l) => !off.includes(l));
+    if (!off.length || !keep.length) return;
     const sb = createClient(), mach = c.machine;
-    const parts = locs.map((l) => subNeed(c.need, [l]));
-    await sb.from("production_slots").update({ locations: [locs[0]], label: parts[0].label, minutes: estimate(s!, parts[0], mach).minutes, updated_at: new Date().toISOString() }).eq("id", c.slot.id);
-    await sb.from("production_slots").insert(parts.slice(1).map((pn, i) => ({ order_id: c.slot!.order_id, archived_order_id: c.slot!.archived_order_id, machine: mach.id, day: c.day, minutes: estimate(s!, pn, mach).minutes, start_min: null, position: c.slot!.position + i + 1, kind: c.need.type, label: pn.label, source: "split", status: "scheduled", locations: [locs[i + 1]] })));
-    setMsg(`#${c.job.number} split into ${locs.length}: ${parts.map((x) => x.label).join(" · ")}. Drag any of them to another day or press.`);
+    const a = subNeed(c.need, keep), b = subNeed(c.need, off);
+    await sb.from("production_slots").update({ locations: keep, label: a.label, minutes: estimate(s!, a, mach).minutes, updated_at: new Date().toISOString() }).eq("id", c.slot.id);
+    await sb.from("production_slots").insert({ order_id: c.slot.order_id, archived_order_id: c.slot.archived_order_id, machine: mach.id, day: c.day, minutes: estimate(s!, b, mach).minutes, start_min: null, position: c.slot.position + 1, kind: c.need.type, label: b.label, source: "split", status: "scheduled", locations: off });
+    setMsg(`#${c.job.number} split: ${a.label} | ${b.label}. Drag the ${b.label} run to another day or press; the two never run at the same time.`);
     setOpen(null); load();
   }
   async function unbook(sl: Slot) { await createClient().from("production_slots").delete().eq("id", sl.id); setOpen(null); load(); }
@@ -475,7 +497,15 @@ export default function MachineSchedule() {
       if (allowSplit && it.job.due && endDayOf(best.end) > it.job.due && locs.length > 1 && it.left >= 0.999) {
         const cur2 = { ...cursor }, parts: { need: Need; b: NonNullable<ReturnType<typeof bestFor>>; l: string }[] = [];
         // each extra run costs another setup: re-registering and ink changes, about 15 minutes
-        for (const [i, l] of locs.entries()) { const sn = subNeed(it.need, [l]), b = bestFor(sn, 1, cur2, it.cur); if (!b) { parts.length = 0; break; } if (i > 0) { const r = sim(b.m, b.start, b.minutes + 15); b.end = r.end; b.minutes += 15; } cur2[b.m.id] = b.end; parts.push({ need: sn, b, l }); }
+        // one part after another: the same shirts can't be on two presses at once
+        let prevEnd = -Infinity;
+        for (const [i, l] of locs.entries()) {
+          const sn = subNeed(it.need, [l]), after = Object.fromEntries(Object.entries(cur2).map(([k, v]) => [k, Math.max(v, prevEnd)]));
+          for (const m of machines) if (!(m.id in after)) after[m.id] = Math.max(nowAbs, prevEnd);
+          const b = bestFor(sn, 1, after, it.cur); if (!b) { parts.length = 0; break; }
+          if (i > 0) { const r = sim(b.m, b.start, b.minutes + 15); b.end = r.end; b.minutes += 15; }
+          cur2[b.m.id] = b.end; prevEnd = b.end; parts.push({ need: sn, b, l });
+        }
         const splitEnd = Math.max(...parts.map((p) => p.b.end));
         if (parts.length > 1 && splitEnd < best.end - 30) {
           Object.assign(cursor, cur2); splits++;
@@ -905,13 +935,14 @@ export default function MachineSchedule() {
         </div>
       ); })()}
       {downEdit && <DownPanel machines={machines} crews={s.crews} init={downEdit} offs={offs} today={today} win={[vStart, vEnd]} me={me.email} onClose={() => setDownEdit(null)} onSaved={(m) => { setDownEdit(null); setMsg(m); load(); }} />}
-      {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, d0, d1, ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} onLog={(a, p) => open.slot && logAction(open.slot, a, p)} onSplit={() => splitByLocation(open)} />}
+      {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, d0, d1, ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} onLog={(a, p) => open.slot && logAction(open.slot, a, p)} onSplit={(off) => splitByLocation(open, off)} />}
     </div>
   );
 }
 
 /** A job on the calendar: when it runs (every day it spans), the time breakdown, move it, mark it running or done, or take it off. */
-function CardPanel({ s, c, segs, days, win, onClose, onMove, onStatus, onUnbook, onLog, onSplit }: { s: ProductionSettings; c: Card; segs: Seg[]; days: string[]; win: [number, number]; onClose: () => void; onMove: (m: Machine, d: string, startMin: number | null) => void; onStatus: (sl: Slot, st: Slot["status"]) => void; onUnbook: (sl: Slot) => void; onLog: (a: "start" | "pause" | "resume" | "progress" | "done" | "not_started" | "reopen", p?: number) => void; onSplit: () => void }) {
+function CardPanel({ s, c, segs, days, win, onClose, onMove, onStatus, onUnbook, onLog, onSplit }: { s: ProductionSettings; c: Card; segs: Seg[]; days: string[]; win: [number, number]; onClose: () => void; onMove: (m: Machine, d: string, startMin: number | null) => void; onStatus: (sl: Slot, st: Slot["status"]) => void; onUnbook: (sl: Slot) => void; onLog: (a: "start" | "pause" | "resume" | "progress" | "done" | "not_started" | "reopen", p?: number) => void; onSplit: (off: string[]) => void }) {
+  const [splitting, setSplitting] = useState<string[] | null>(null);
   const [log, setLog] = useState<{ id: string; action: string; progress: number | null; note: string; at: string; by: string }[]>([]);
   const [prog, setProg] = useState(Math.round(+(c.slot?.progress || 0) * 10) * 10);
   useEffect(() => { if (c.slot) createClient().from("production_slot_log").select("id, action, progress, note, at, by").eq("slot_id", c.slot.id).order("at", { ascending: false }).limit(30).then(({ data }) => setLog((data || []) as typeof log)); }, [c.slot]);
@@ -939,6 +970,12 @@ function CardPanel({ s, c, segs, days, win, onClose, onMove, onStatus, onUnbook,
           <div><b>{TYPE_LBL[c.need.type]}:</b> {c.need.label} · {c.need.qty} pcs{c.need.steps.some((x) => x.note) ? <span className="faint"> ({c.need.steps.find((x) => x.note)?.note})</span> : null}</div>
           <ul className="ms-parts">{est.parts.map((p, i) => <li key={i}><span>{p.label}</span><b>{fmtMin(p.minutes)}</b></li>)}<li className="tot"><span>Setup {fmtMin(est.setup)} · run {fmtMin(est.run)}{est.teardown ? ` · teardown ${fmtMin(est.teardown)}` : ""}</span><b>{fmtMin(est.minutes)}</b></li></ul>
           {c.fromPv && c.minutes !== est.minutes && <div className="faint" style={{ fontSize: 12.5 }}>Printavo has it blocked for {fmtMin(c.minutes)}; our estimate is {fmtMin(est.minutes)}. Booking it here uses our estimate.</div>}
+          {splitting && <div className="ms-ask">
+            <b>Which part would you like to split off?</b>
+            <span>Tick what should run separately. The rest stays together on this press. The two parts never run at the same time.</span>
+            <div className="ms-pick">{locsOf(c.need).map((l) => { const on = splitting.includes(l); return <button key={l} type="button" className={on ? "on" : ""} onClick={() => setSplitting(on ? splitting.filter((x) => x !== l) : [...splitting, l])}>{subNeed(c.need, [l]).label}<small>{on ? "split off" : "stays"}</small></button>; })}</div>
+            <div className="row" style={{ gap: 8 }}><button type="button" className="btn sm primary" disabled={!splitting.length || splitting.length >= locsOf(c.need).length} onClick={() => onSplit(splitting)}>Split</button><button type="button" className="btn sm" onClick={() => setSplitting(null)}>Cancel</button></div>
+          </div>}
           {sl && <div className="ms-job">
             <div className="ms-job-h"><span className={"ms-st " + stt}>{stt === "scheduled" ? "Not started" : stt === "running" ? "Running" : stt === "paused" ? "Paused" : "Done"}</span>
               <span className="faint">{sl.started_at ? `Started ${when(sl.started_at)}` : ""}{sl.finished_at ? ` · Finished ${when(sl.finished_at)}` : ""}{(stt === "running" || stt === "paused") && +(sl.progress || 0) > 0 ? ` · ${Math.round(+(sl.progress || 0) * 100)}% done` : ""}</span></div>
@@ -960,7 +997,7 @@ function CardPanel({ s, c, segs, days, win, onClose, onMove, onStatus, onUnbook,
           </div>
           <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <Link className="btn" href={c.job.href}>Open Job</Link>
-            {c.slot && locsOf(c.need).length > 1 && stt !== "done" && <button type="button" className="btn" onClick={onSplit} title="One booking per print location, so the backs can go to another day or press">Split By Location</button>}
+            {c.slot && locsOf(c.need).length > 1 && stt !== "done" && <button type="button" className="btn" onClick={() => setSplitting([])} title="Run some print locations (like a sleeve) separately, on another day or press">Split Job…</button>}
             {c.slot && <button type="button" className="btn danger" onClick={() => onUnbook(c.slot!)}>Take Off Schedule</button>}
             <button type="button" className="btn primary" disabled={same} onClick={() => onMove(m, day, newStart)}>{c.fromPv ? "Book Here" : "Move"}</button>
           </div>
