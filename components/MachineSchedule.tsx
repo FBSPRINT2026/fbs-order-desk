@@ -24,6 +24,19 @@ type Slot = { id: string; order_id: string | null; archived_order_id: string | n
 type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; carried?: string | null };
 /** the locations a booking covers when it's only part of the job's work on that kind of machine (null = all of it) */
 const locsFor = (job: { needs: Need[] }, need: Need) => { const full = job.needs.find((n) => n.type === need.type); return full && locsOf(need).length < locsOf(full).length ? locsOf(need) : null; };
+/** A job's print at a glance: units, colors per location ("7/1/2" = front 7, back 1, sleeve 2), run time. */
+function glance(need: Need, minutes: number) {
+  const byLoc = new Map<string, { colors: number; qty: number; k: number }>();
+  for (const st of need.steps) {
+    const k = (st.location || "").trim().toLowerCase() || "print", cur = byLoc.get(k) || { colors: 0, qty: 0, k: byLoc.size };
+    cur.colors = Math.max(cur.colors, need.type === "embroidery" ? Math.round((st.stitches || 0) / 1000) : st.colors || 0); cur.qty += st.qty || 0; byLoc.set(k, cur);
+  }
+  const locs = [...byLoc.values()].sort((a, b) => a.k - b.k);
+  const units = Math.max(0, ...locs.map((x) => x.qty));
+  const colors = need.type === "screen" ? locs.map((x) => x.colors || 1).join("/") : need.type === "embroidery" ? locs.map((x) => `${x.colors || 8}k`).join("/") : locs.length > 1 ? `${locs.length} loc` : "heat";
+  const h = Math.floor(minutes / 60), m = Math.round(minutes % 60);
+  return { units, colors, run: h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m` };
+}
 /** one day's piece of a job (a long job is several pieces, one per working day) */
 /** one day's piece of a job: clock start/end, and the work minutes it covers (less than the clock time when the press runs slow) */
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean; work: number; slow?: number };
@@ -605,12 +618,15 @@ export default function MachineSchedule() {
               ? <div key={"sl" + a} className="ms-slow" style={{ top: ((a - vStart) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }}><button type="button" onClick={() => setDownEdit({ machine: m.id, day })} title={`${why}: ${m.name} runs at ${Math.round(rate * 100)}% ${clockLong(a)} – ${clockLong(b)} (jobs take ${+(1 / rate).toFixed(1)}× as long)`}>{why} · {Math.round(rate * 100)}%</button></div>
               : <button type="button" key={"dn" + a} className="ms-down" style={{ top: ((a - vStart) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
             {day === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now" style={{ top: ((now.min - vStart) / 60) * HOUR_PX }} />}
-            {at(m, day).map((g) => { const h = Math.max(20, ((g.end - g.start) / 60) * HOUR_PX - 2); return (
-              <button key={g.c.key + g.part} type="button" draggable className={cls(g) + (h < 44 ? " tiny" : "")} style={{ top: ((g.start - vStart) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
+            {at(m, day).map((g) => { const h = Math.max(22, ((g.end - g.start) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes); return (
+              <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "")} style={{ top: ((g.start - vStart) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
                 onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
-                <span className="ms-b1">{label(g)}</span>
-                <span className="ms-b2">{clock(g.start)}–{clock(g.end)}{g.parts > 1 ? ` · part ${g.part} of ${g.parts}` : ` · ${fmtMin(g.c.minutes)}`}</span>
-                <span className="ms-b3">{g.c.need.label}</span>
+                <span className="ms-kw">
+                  <b className="ms-kn">#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b>
+                  <span className="ms-col">{gl.colors}</span>
+                  <span className="ms-ku"><b>{gl.units.toLocaleString()}</b> pcs</span>
+                  <span className="ms-kr">{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</span>
+                </span>
               </button>
             ); })}
           </div>
@@ -675,10 +691,17 @@ export default function MachineSchedule() {
         onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver("k:" + c.key); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (drag && g.part === 1) place(drag, g.c.machine, d, c.key); else if (drag) place(drag, g.c.machine, d); }}>
         {over === "k:" + c.key && <i className="ms-ins" />}
+        {two ? (() => { const gl = glance(c.need, c.minutes); return <>
+          <span className="ms-kw">
+            <b className="ms-kn">#{c.job.number}{c.slot?.status === "done" ? <em className="ok"> ✓</em> : c.slot?.status === "running" ? <em className="rn"> ●</em> : null}</b>
+            <span className="ms-col">{gl.colors}</span>
+            <span className="ms-ku"><b>{gl.units.toLocaleString()}</b> pcs</span>
+            <span className="ms-kr">{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</span>
+          </span>
+        </>; })() : <>
         <b>{c.job.number}</b>{c.slot?.status === "done" ? <em className="ok">✓</em> : c.slot?.status === "running" ? <em className="rn">●</em> : null}
         <span className="ms-cn">{g.part > 1 ? <em>cont. </em> : null}{c.job.customer || c.job.name}</span>
-        <small>{g.parts > 1 ? `${g.part}/${g.parts}` : when ? clock(g.start) : fmtMin(g.end - g.start)}</small>
-        {two && <span className="ms-cl">{c.need.label}{c.need.qty ? ` · ${c.need.qty} pcs` : ""}{g.parts === 1 ? ` · ${fmtMin(g.end - g.start)}` : ""}</span>}
+        <small>{g.parts > 1 ? `${g.part}/${g.parts}` : when ? clock(g.start) : fmtMin(g.end - g.start)}</small></>}
       </button>
     );
   };

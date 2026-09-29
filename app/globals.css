@@ -3634,3 +3634,34 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-inl{white-space:nowrap}
 .ms-ask{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--fbs-orange) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--fbs-orange) 40%,transparent);font-size:13px}
 .ms-ask.ok{background:var(--accent-soft);border-color:transparent;flex-direction:row;flex-wrap:wrap;gap:8px}
+/* job cards at a glance: #job + colors, units + run time, customer (drops away when short) */
+.ms-blk.card{gap:1px;padding:3px 5px}
+.ms-blk.card .ms-k1,.ms-chip.two .ms-k1{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap}
+.ms-blk.card .ms-k1 b,.ms-chip.two .ms-k1 b{font-size:13px;font-weight:800;color:var(--ink)}
+.ms-col{font-size:11.5px;font-weight:800;padding:0 5px;border-radius:4px;background:color-mix(in srgb,currentColor 0%,var(--surface));color:var(--ink);border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);font-variant-numeric:tabular-nums;line-height:16px;overflow:hidden;text-overflow:ellipsis}
+.ms-blk.card .ms-k2,.ms-chip.two .ms-k2{font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.ms-blk.card .ms-k2 b,.ms-chip.two .ms-k2 b{color:var(--ink);font-size:12px}
+.ms-blk.card .ms-k2 i{font-style:normal;color:var(--ink-3)}
+.ms-blk.card .ms-k3{font-size:10.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-blk.card.short .ms-k3{display:none}
+.ms-blk.card.tiny{flex-direction:row;align-items:center;gap:6px;padding:1px 5px}
+.ms-blk.card.tiny .ms-k3{display:none}
+.ms-blk.card.tiny .ms-k1 b{font-size:12px}
+.ms-blk.card.tiny .ms-col{line-height:14px;font-size:10.5px}
+.ms-blk.card.tiny .ms-k2{font-size:10.5px}
+.ms-blk.card.tiny .ms-k2 b{font-size:11px}
+.ms-chip.two{flex-direction:column;align-items:stretch;gap:1px;padding:3px 5px}
+.ms-chip.two .ms-k1 em{font-style:normal;font-size:10.5px}
+/* the four facts wrap to fit: wide cards read on one or two lines, narrow ones stack */
+.ms-kw{display:flex;flex-wrap:wrap;align-items:center;gap:1px 6px;min-width:0;overflow:hidden}
+.ms-kw>*{white-space:nowrap;min-width:0}
+.ms-kn{font-size:13px;font-weight:800;color:var(--ink)}
+.ms-kn em{font-style:normal;font-size:10.5px}
+.ms-kw .ms-col{font-size:12px;line-height:16px}
+.ms-ku{font-size:11.5px;color:var(--ink-2)}.ms-ku b{font-size:12.5px;color:var(--ink)}
+.ms-kr{font-size:11.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.ms-blk.card{justify-content:flex-start}
+.ms-blk.card.tiny .ms-kw{flex-wrap:nowrap}
+.ms-blk.card.tiny .ms-kn{font-size:12px}
+.ms-blk.card.tiny .ms-ku,.ms-blk.card.tiny .ms-kr{display:none}
+.ms-chip.two .ms-kw{gap:0 5px}
