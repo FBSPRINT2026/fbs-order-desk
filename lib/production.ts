@@ -39,6 +39,9 @@ export type Shift = [number, number] | null;
 export type Crew = { id: string; leader: string; week: Shift[]; /** lunch start (minutes after midnight), default the shop's */ lunchAt?: number };
 /** Built into every shift: press warm-up at the start, and a lunch break on long shifts. */
 export type Breaks = { warmupMin: number; lunchMin: number; lunchAfterHours: number; lunchAt: number; /** warming the press back up after lunch */ rewarmMin: number };
+/** What an hour of press time costs in labor, for weighing overtime / weekend shifts when the schedule is tight. */
+export type Labor = { crewSize: number; wage: number; otMultiplier: number };
+export const DEFAULT_LABOR: Labor = { crewSize: 3, wage: 17, otMultiplier: 1.5 };
 export const DEFAULT_BREAKS: Breaks = { warmupMin: 30, lunchMin: 30, lunchAfterHours: 8, lunchAt: 720, rewarmMin: 10 };
 export type ProductionSettings = {
   machines: Machine[];
@@ -77,6 +80,7 @@ export type ProductionSettings = {
   /** plan this many business days before the in-hands date (packing, shipping) */
   bufferDays: number;
   breaks: Breaks;
+  labor: Labor;
   /** fill a machine's day to this share before suggesting the next day (85% keeps room for surprises) */
   fillTarget: number;
   /** the shop's measured speed vs these standards (from job-time logs): minutes × factor */
@@ -113,6 +117,7 @@ export const DEFAULT_PRODUCTION: ProductionSettings = {
   heat: { secsPerPiece: 45, setupMin: 10 },
   bufferDays: 1,
   breaks: DEFAULT_BREAKS,
+  labor: DEFAULT_LABOR,
   fillTarget: 0.85,
   factor: { screen: 1, embroidery: 1, heat: 1 },
 };
@@ -125,6 +130,7 @@ export function mergeProduction(d: unknown): ProductionSettings {
   return {
     ...DEFAULT_PRODUCTION, ...p,
     crews, machines, breaks,
+    labor: { ...DEFAULT_LABOR, ...(p.labor || {}) },
     screen: { ...DEFAULT_PRODUCTION.screen, ...(p.screen || {}) },
     embroidery: { ...DEFAULT_PRODUCTION.embroidery, ...(p.embroidery || {}), stitches: { ...DEFAULT_PRODUCTION.embroidery.stitches, ...(p.embroidery?.stitches || {}) } },
     heat: { ...DEFAULT_PRODUCTION.heat, ...(p.heat || {}) },

@@ -54,6 +54,7 @@ function glance(need: Need, minutes: number) {
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean; work: number; slow?: number };
 type View = "split" | "timeline" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number };
+type WhatIf = { id: string; kind: "split" | "ot" | "sat" | "combo"; title: string; detail: string; split: boolean; shifts: { machine: string; crew_id: string | null; day: string; start_min: number; end_min: number }[]; splits: number; lateAfter: number; stillLate: string[]; addedHours: number; cost: number };
 type Extra = { id: string; machine: string; crew_id: string | null; day: string; start_min: number; end_min: number; note: string };
 type DayOff = { id: string; crew_id: string | null; machine: string | null; day: string; note: string; start_min: number | null; end_min: number | null; capacity: number | null; employee: string };
 
@@ -258,6 +259,7 @@ export default function MachineSchedule() {
   const [replanBusy, setReplanBusy] = useState(false);
   const [checkin, setCheckin] = useState(false);
   const [renorm, setRenorm] = useState(false);
+  const [advise, setAdvise] = useState<null | { opts: WhatIf[]; late: { job: string; customer: string; inHands: string; why: string }[]; lateBefore: number }>(null);
   // the "schedule too tight" prompt shows once a day (again if more jobs go late)
   const [toolsOpen, setToolsOpen] = useSticky("cal.toolsOpen", true);
   const [tightOpen, setTightOpen] = useSticky("cal.tightOpen", false);
@@ -539,7 +541,8 @@ export default function MachineSchedule() {
    * available: crew shifts, weekend/extra shifts, around downtime, slower where someone's out. Running and done work
    * stays put. Returns the moves so they can be looked at before anything changes.
    */
-  const planIt = (allowSplit = false) => {
+  // ms: the machines with their hours; a what-if (an hour of overtime, a Saturday shift) passes changed copies
+  const planIt = (allowSplit = false, ms: Machine[] = machines) => {
     const nowAbs = ord(today) * 1440 + now.min;
     const winsOf = (m: Machine, d: string) => { const sh = shiftOn(m, d); return sh ? windowsIn(sh, downsOn(m, d, sh)) : []; };
     const norm = (m: Machine, t: number) => { for (let g = 0; g < 120; g++) { const dd = Math.floor(t / 1440), mm = t - dd * 1440, w = winsOf(m, fromOrd(dd)).find(([, y]) => mm < y); if (!w) { t = (dd + 1) * 1440; continue; } return mm < w[0] ? dd * 1440 + w[0] : t; } return t; };
@@ -551,7 +554,7 @@ export default function MachineSchedule() {
     // not started yet (or paused partway): free to move. Running and done work stays where it is.
     const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF));
     const cursor: Record<string, number> = {};
-    for (const m of machines) cursor[m.id] = nowAbs;
+    for (const m of ms) cursor[m.id] = nowAbs;
     for (const c of cards) if (!movable.includes(c)) for (const g of segs.ofCard.get(c.key) || []) if (g.day >= today) cursor[c.machine.id] = Math.max(cursor[c.machine.id] ?? nowAbs, ord(g.day) * 1440 + g.end);
     type Item = { key: string; job: Job; need: Need; slot: Slot | null; cur: string; curDay: string; left: number };
     const items: Item[] = [
@@ -567,7 +570,7 @@ export default function MachineSchedule() {
     const bestFor = (need: Need, left: number, cur: Record<string, number>, prefer: string) => {
       let best: { m: Machine; start: number; end: number; minutes: number } | null = null;
       for (const m of s.machines.filter((x) => x.active && fits(need, x))) {
-        const mm = machines.find((x) => x.id === m.id) || m; // the calendar's copy carries days off, downtime and extra shifts
+        const mm = ms.find((x) => x.id === m.id) || m; // the calendar's copy carries days off, downtime and extra shifts
         const minutes = Math.max(15, estimate(s, need, mm).minutes * left), r = sim(mm, cur[mm.id] ?? nowAbs, minutes);
         const better = !best || r.end < best.end - 30 || (Math.abs(r.end - best.end) <= 30 && (mm.id === prefer || (best.m.id !== prefer && (need.type === "screen" ? mm.colors < best.m.colors : false))));
         if (better) best = { m: mm, start: r.start, end: r.end, minutes };
@@ -588,7 +591,7 @@ export default function MachineSchedule() {
         let prevEnd = -Infinity;
         for (const [i, l] of locs.entries()) {
           const sn = subNeed(it.need, [l]), after = Object.fromEntries(Object.entries(cur2).map(([k, v]) => [k, Math.max(v, prevEnd)]));
-          for (const m of machines) if (!(m.id in after)) after[m.id] = Math.max(nowAbs, prevEnd);
+          for (const m of ms) if (!(m.id in after)) after[m.id] = Math.max(nowAbs, prevEnd);
           const b = bestFor(sn, 1, after, it.cur); if (!b) { parts.length = 0; break; }
           if (i > 0) { const r = sim(b.m, b.start, b.minutes + 15); b.end = r.end; b.minutes += 15; }
           cur2[b.m.id] = b.end; prevEnd = b.end; parts.push({ need: sn, b, l });
@@ -605,7 +608,7 @@ export default function MachineSchedule() {
     }
     const moves = out.filter((o) => !o.it.slot || o.parts > 1 || o.mach.id !== o.it.cur || o.day !== o.it.curDay);
     const lateJobs = new Set([...out.filter((o) => o.late).map((o) => o.it.job.key), ...skipped.map((x) => x.job.key)]);
-    return { out, moves, skipped, splits, lateBefore: lateOld.size, lateAfter: lateJobs.size, added: out.filter((o) => !o.it.slot && o.part === 1).length };
+    return { out, moves, skipped, splits, lateBefore: lateOld.size, lateAfter: lateJobs.size, lateKeys: lateJobs, added: out.filter((o) => !o.it.slot && o.part === 1).length };
   };
   async function applyPlan(p: ReturnType<typeof planIt>) {
     setReplanBusy(true);
@@ -987,6 +990,65 @@ export default function MachineSchedule() {
     }
     return out;
   };
+  /**
+   * When the schedule is too tight: what-ifs, each a full re-plan. Split jobs; an hour or two of overtime every
+   * working night until the last late job's in-hands date; a Saturday shift (4 or 8 hours); and the cheap combos.
+   * Only the machines that run the late work get the extra time. Labor = extra hours × crew × wage × overtime rate.
+   */
+  const whatIfs = (): WhatIf[] => {
+    const lab = s.labor, lateTypes = new Set<string>();
+    for (const t of tray) if (!t.sug || t.sug.late) lateTypes.add(t.need.type);
+    for (const c of cards) if (tight.some((x) => x.job.key === c.job.key)) lateTypes.add(c.need.type);
+    const cand = machines.filter((m) => lateTypes.has(m.type));
+    const lastDue = tight.reduce((d, t) => (t.job.due && t.job.due > d ? t.job.due : d), addDay(today, 5));
+    const until = lastDue < addDay(today, 21) ? lastDue : addDay(today, 21);
+    const days: string[] = []; for (let d = today; d <= until; d = addDay(d, 1)) days.push(d);
+    const people = (m: Machine) => (m.crew ? lab.crewSize : 1);
+    const withExtra = (add: (m: Machine) => { day: string; a: number; b: number }[]) => {
+      const shifts: WhatIf["shifts"] = [];
+      const ms = machines.map((m) => {
+        if (!cand.includes(m)) return m;
+        const adds = add(m); if (!adds.length) return m;
+        const extra = { ...(m.extra || {}) };
+        for (const x of adds) { const e = extra[x.day]; extra[x.day] = e ? [Math.min(e[0], x.a), Math.max(e[1], x.b)] : [x.a, x.b]; shifts.push({ machine: m.id, crew_id: m.crew || null, day: x.day, start_min: x.a, end_min: x.b }); }
+        return { ...m, extra };
+      });
+      return { ms, shifts };
+    };
+    const ot = (h: number) => withExtra((m) => days.flatMap((d) => { const sh = shiftOn(m, d); if (!sh || [0, 6].includes(dow(d))) return []; const a = sh[1]; if (d === today && now.min > a) return []; return [{ day: d, a, b: Math.min(1440, a + h * 60) }]; }));
+    const sat = days.find((d) => dow(d) === 6 && d > today) || (() => { let d = addDay(today, 1); while (dow(d) !== 6) d = addDay(d, 1); return d; })();
+    const satShift = (a: number, b: number) => withExtra(() => [{ day: sat, a, b }]);
+    const hoursOf = (sh: WhatIf["shifts"]) => sh.reduce((t, x) => t + (x.end_min - x.start_min) / 60, 0);
+    const costOf = (sh: WhatIf["shifts"], splits: number) => sh.reduce((t, x) => { const m = machines.find((y) => y.id === x.machine)!; return t + ((x.end_min - x.start_min) / 60) * people(m) * lab.wage * lab.otMultiplier; }, 0) + splits * 0.25 * lab.crewSize * lab.wage;
+    const names = cand.map((m) => (crewOf(m) ? crewOf(m)!.leader : shortName(m))).join(", ");
+    const lastWork = days.filter((d) => ![0, 6].includes(dow(d)));
+    const span = lastWork.length ? `${dayLbl(lastWork[0]).split(",")[0]}–${dayLbl(lastWork[lastWork.length - 1])}` : "";
+    const defs: { id: string; kind: WhatIf["kind"]; title: string; detail: string; split: boolean; x: { ms: Machine[]; shifts: WhatIf["shifts"] } }[] = [
+      { id: "replan", kind: "split", title: "Just re-plan", detail: "Move the open work around, no extra hours, no splitting", split: false, x: { ms: machines, shifts: [] } },
+      { id: "split", kind: "split", title: "Split jobs as needed", detail: "Fronts and backs as separate runs where that makes a date", split: true, x: { ms: machines, shifts: [] } },
+      { id: "ot1", kind: "ot", title: "1 hour of overtime a night", detail: `${names} stay an hour late, ${span}`, split: false, x: ot(1) },
+      { id: "ot2", kind: "ot", title: "2 hours of overtime a night", detail: `${names} stay two hours late, ${span}`, split: false, x: ot(2) },
+      { id: "sat4", kind: "sat", title: `Saturday morning (${dayLbl(sat)})`, detail: `${names}, 8 AM – 12 PM`, split: false, x: satShift(480, 720) },
+      { id: "sat8", kind: "sat", title: `Full Saturday (${dayLbl(sat)})`, detail: `${names}, 7 AM – 3:30 PM`, split: false, x: satShift(420, 930) },
+      { id: "ot1s", kind: "combo", title: "1 hour of overtime a night + split jobs", detail: `${names} an hour late, ${span}; fronts and backs split where it helps`, split: true, x: ot(1) },
+      { id: "sat4s", kind: "combo", title: "Saturday morning + split jobs", detail: `${names} 8 AM – 12 PM ${dayLbl(sat)}; split where it helps`, split: true, x: satShift(480, 720) },
+    ];
+    return defs.map((d) => {
+      const p = planIt(d.split, d.x.ms);
+      const stillLate = [...p.lateKeys].map((k) => byKey.get(k)).filter(Boolean).map((j) => "#" + j!.number);
+      return { id: d.id, kind: d.kind, title: d.title, detail: d.detail, split: d.split, shifts: d.x.shifts, splits: p.splits, lateAfter: p.lateAfter, stillLate, addedHours: Math.round(hoursOf(d.x.shifts) * 10) / 10, cost: Math.round(costOf(d.x.shifts, p.splits)) };
+    }).sort((a, b) => a.lateAfter - b.lateAfter || a.cost - b.cost);
+  };
+  async function applyWhatIf(w: WhatIf) {
+    const note = w.kind === "sat" || w.id === "sat4s" ? "Saturday shift" : "Overtime";
+    if (w.shifts.length) {
+      const r = await createClient().from("production_extra_shifts").insert(w.shifts.map((x) => ({ ...x, note, created_by: me.email })));
+      if (r.error) { setMsg(r.error.message); return; }
+    }
+    setAdvise(null); setWknd(w.kind === "sat" || w.id === "sat4s" ? true : showWknd); load();
+    setReplan({ why: `${w.title}${w.shifts.length ? " added" : ""}. Re-plan now to move the jobs into it?`, split: w.split });
+  }
+
   const shift = (dir: 1 | -1) => (view === "timeline" ? setWeek(addDay(week, 7 * dir)) : setDay(nextVis(addDay(view === "split" ? d0 : day, dir), dir)));
 
   return (
@@ -1038,6 +1100,7 @@ export default function MachineSchedule() {
                 <div className="ms-alert-t"><b>Schedule too tight</b><span>{tight.length} job{tight.length === 1 ? " won't" : "s won't"} make {tight.length === 1 ? "its" : "their"} in-hands date on the regular schedule.</span></div>
                 <span className="spacer" />
                 <button type="button" className="linkbtn" onClick={() => setTightOpen(!tightOpen)}>{tightOpen ? "Hide jobs" : "Which jobs?"}</button>
+                <button type="button" className="btn sm ms-ai-b" onClick={() => setAdvise({ opts: whatIfs(), late: tight.map((t) => ({ job: "#" + t.job.number, customer: t.job.customer || t.job.name, inHands: t.job.due ? dayLbl(t.job.due) : "none", why: t.why })), lateBefore: tight.length })}>✦ Get Recommendations</button>
                 <button type="button" className="btn sm" onClick={() => setReplan({ why: "OK to split jobs (fronts and backs as separate runs) where that makes an in-hands date?", split: true })}>Split Jobs As Needed</button>
                 <button type="button" className="btn sm" onClick={() => setReplan({ why: "" })}>Re-plan</button>
                 <button type="button" className="btn sm primary" onClick={() => setShiftEdit(true)}>Add Weekend Shift</button>
@@ -1080,6 +1143,7 @@ export default function MachineSchedule() {
         <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
+      {advise && <AdvisePanel options={advise.opts} late={advise.late} lateBefore={advise.lateBefore} labor={s.labor} machinesLabel={typeF ? TYPE_LBL[typeF] : "all machines"} nowLabel={`${dayLbl(today)} ${clockLong(now.min)}`} onClose={() => setAdvise(null)} onApply={applyWhatIf} />}
       {renorm && <RenormPanel items={renormItems()} onClose={() => setRenorm(false)} onDone={(m) => { setRenorm(false); setMsg(m); load(); setReplan({ why: `${m} Re-plan now so the jobs fill the regular week?` }); }} />}
       {shiftEdit && <ShiftPanel machines={machines} crews={s.crews} extras={extras} today={today} me={me.email} onClose={() => setShiftEdit(false)} onSaved={(m) => { setShiftEdit(false); setWknd(true); setMsg(m); load(); setReplan({ why: "Weekend shift added. Re-plan so earlier jobs can move into it and make room during the week?" }); }} />}
       {checkin && <CheckIn s={s} cards={cards} segsOf={(c) => segs.ofCard.get(c.key) || []} machines={machines} crews={s.crews} today={today} nowMin={now.min} onClose={() => setCheckin(false)} onSave={saveProgress} />}
@@ -1260,6 +1324,64 @@ function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSav
 }
 
 /** Add an extra shift (usually Saturday or Sunday) for one or more presses and their crews, e.g. Saturday 10 AM – 2 PM. */
+/** Get Recommendations: the simulated options side by side, and Claude's pick (or the cheapest full fix when AI is off). */
+type Advice = { headline: string; pick: string; why: string; runnersUp?: { id: string; why: string }[]; ideas?: string[] };
+function AdvisePanel({ options, late, lateBefore, labor, machinesLabel, nowLabel, onClose, onApply }: { options: WhatIf[]; late: { job: string; customer: string; inHands: string; why: string }[]; lateBefore: number; labor: { crewSize: number; wage: number; otMultiplier: number }; machinesLabel: string; nowLabel: string; onClose: () => void; onApply: (w: WhatIf) => Promise<void> }) {
+  const [opts] = useState(options);
+  const [ai, setAi] = useState<Advice | null>(null);
+  const [aiState, setAiState] = useState<"loading" | "done" | "off" | "error">("loading");
+  const [aiMsg, setAiMsg] = useState("");
+  const [busy, setBusy] = useState("");
+  useEffect(() => {
+    let dead = false;
+    fetch("/api/production/advise", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ now: nowLabel, lateBefore, late, labor, machines: machinesLabel, options: opts.map((o) => ({ id: o.id, title: o.title, detail: o.detail, lateAfter: o.lateAfter, stillLate: o.stillLate, addedHours: o.addedHours, cost: o.cost, splits: o.splits })) }) })
+      .then((r) => r.json()).then((j) => { if (dead) return; if (j.off) { setAiState("off"); setAiMsg(j.reason || ""); } else if (j.error) { setAiState("error"); setAiMsg(j.error); } else { setAi(j); setAiState("done"); } })
+      .catch(() => { if (!dead) { setAiState("error"); setAiMsg("Couldn't reach the AI."); } });
+    return () => { dead = true; };
+    // once, when it opens (the inputs are a snapshot)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // without AI: the cheapest option that gets everything on time, else the one that saves the most
+  const fallback = opts.find((o) => o.lateAfter === 0) || opts[0];
+  const pickId = ai?.pick && opts.some((o) => o.id === ai.pick) ? ai.pick : fallback?.id;
+  const money = (n: number) => `$${n.toLocaleString()}`;
+  const byId = (id: string) => opts.find((o) => o.id === id);
+  return (
+    <div className="pp-modal" onClick={onClose}>
+      <div className="pp-sheet tmx-ed ms-adv" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Recommendations">
+        <div className="pp-sheet-h"><b>Get Back On Track</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="tmx-ed-b">
+          <div className="faint" style={{ fontSize: 12.5 }}>{lateBefore} job{lateBefore === 1 ? "" : "s"} won&apos;t make {lateBefore === 1 ? "its" : "their"} in-hands date as planned. Each option below is a full re-plan with that change. Labor figured at crews of {labor.crewSize}, ${labor.wage}/hr, {labor.otMultiplier}× for extra hours (Settings → Production).</div>
+          <div className={"ms-adv-ai " + aiState}>
+            <span className="ms-adv-i" aria-hidden>✦</span>
+            {aiState === "loading" && <div><b>Thinking it over…</b><span>Comparing the options.</span></div>}
+            {aiState === "done" && ai && <div>
+              <b>{ai.headline}</b><span>{ai.why}</span>
+              {!!ai.runnersUp?.length && <ul>{ai.runnersUp.map((r) => byId(r.id) ? <li key={r.id}><b>{byId(r.id)!.title}:</b> {r.why}</li> : null)}</ul>}
+              {!!ai.ideas?.length && <ul className="ideas">{ai.ideas.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+            </div>}
+            {(aiState === "off" || aiState === "error") && fallback && <div>
+              <b>{fallback.lateAfter === 0 ? `Cheapest fix: ${fallback.title}${fallback.cost ? ` (~${money(fallback.cost)})` : ""}. Everything makes its date.` : `Best available: ${fallback.title}. ${fallback.lateAfter} still late (${fallback.stillLate.join(", ")}).`}</b>
+              <span>{aiState === "off" ? `AI advice is off${aiMsg ? `: ${aiMsg}` : ""}.` : `AI advice didn't come back (${aiMsg}).`} This is the planner&apos;s own pick.</span>
+            </div>}
+          </div>
+          <div className="ms-adv-l">
+            {opts.map((o) => (
+              <div key={o.id} className={"ms-adv-r" + (o.id === pickId ? " pick" : "") + (o.lateAfter === 0 ? " ok" : "")}>
+                <div className="ms-adv-t"><b>{o.title}{o.id === pickId ? <em>Recommended</em> : null}</b><small>{o.detail}{o.splits ? ` · ${o.splits} job${o.splits === 1 ? "" : "s"} split` : ""}</small></div>
+                <div className="ms-adv-n"><b className={o.lateAfter ? "bad" : "good"}>{o.lateAfter ? `${o.lateAfter} late` : "All on time"}</b><small>{o.lateAfter ? o.stillLate.slice(0, 4).join(", ") + (o.stillLate.length > 4 ? "…" : "") : `was ${lateBefore}`}</small></div>
+                <div className="ms-adv-n"><b>{o.cost ? `~${money(o.cost)}` : "$0"}</b><small>{o.addedHours ? `${o.addedHours} press-hrs extra` : "no extra hours"}</small></div>
+                <button type="button" className={"btn sm" + (o.id === pickId ? " primary" : "")} disabled={!!busy} onClick={async () => { setBusy(o.id); await onApply(o); setBusy(""); }}>{busy === o.id ? "…" : "Apply"}</button>
+              </div>
+            ))}
+          </div>
+          <div className="faint" style={{ fontSize: 12 }}>Apply adds the shifts (and allows splitting where the option says so), then opens Re-plan to preview the moves before anything else changes.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Renormalize Schedule: back to the regular week. Lists what it would do (drop the weekend / extra shifts still ahead,
  * put split jobs back together as one run) with every line ticked; untick anything to keep it, then apply.

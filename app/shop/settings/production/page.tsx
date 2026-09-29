@@ -86,6 +86,12 @@ export default function ProductionSettingsPage() {
               {num("Lunch when a shift is over (hours)", s.breaks.lunchAfterHours, (x) => upd((d) => { d.breaks.lunchAfterHours = Math.max(0, Math.min(16, x)); }), 0.5)}
               <div className="field"><label>Lunch usually starts</label><select value={s.breaks.lunchAt} onChange={(e) => upd((d) => { d.breaks.lunchAt = +e.target.value; })}>{LUNCH_STARTS.map((t) => <option key={t} value={t}>{clock12(t)}</option>)}</select><small className="faint">Each crew can move it above</small></div>
             </div>
+            <div className="ps-brk">
+              <b>Labor cost</b>
+              {num("People per crew", s.labor.crewSize, (x) => upd((d) => { d.labor.crewSize = Math.max(1, Math.min(20, x)); }), 1)}
+              {num("Average wage ($/hr)", s.labor.wage, (x) => upd((d) => { d.labor.wage = Math.max(0, x); }), 0.5)}
+              {num("Overtime / Saturday rate (×)", s.labor.otMultiplier, (x) => upd((d) => { d.labor.otMultiplier = Math.max(1, Math.min(3, x)); }), 0.25, "Used to price overtime and Saturday shifts when the schedule is too tight")}
+            </div>
           </div>
         </section>
         <section className="panel">
