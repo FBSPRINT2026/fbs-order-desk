@@ -3510,3 +3510,23 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .tbl tr.cu-grp td{background:var(--surface-2);font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2);padding:6px 12px;cursor:default}
 .tbl tr.cu-grp td .faint{text-transform:none;letter-spacing:0;font-weight:500}
 .tbl tr.cu-test td{background:color-mix(in srgb,#7C5CD6 5%,var(--surface))}
+/* production board: compact, manageable cards */
+.bd-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.bd-bar .sx{flex:1;min-width:200px;max-width:380px}
+.bd-count{font-size:12.5px}
+.bd-compact .col-b{gap:4px;padding:2px 6px 8px}
+.card-job.cj{padding:5px 8px;gap:2px;border-radius:6px;border-left:3px solid var(--sc)}
+.cj-1,.cj-2{display:flex;align-items:center;gap:6px;min-width:0}
+.cj-1 .ordno{font-size:12px;flex:none}
+.cj-t{flex:1;min-width:0;font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cj-due{flex:none;font-size:11px;white-space:nowrap}
+.cj-rush{flex:none;font-size:9.5px;font-weight:800;background:var(--danger);color:#fff;border-radius:4px;padding:0 4px}
+.cj-c{flex:1;min-width:0;font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cj-owe{color:var(--danger);font-weight:700}
+.cj-own{flex:none;width:18px;height:18px;border-radius:50%;background:var(--ink-2);color:#fff;font-size:8.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.cj-adv{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:5px;font:inherit;font-size:12px;line-height:1;padding:2px 6px;cursor:pointer;color:var(--ink-2)}
+.cj-adv:hover{background:var(--sc);color:#fff;border-color:var(--sc)}
+.bd-more{border:1px dashed var(--line);background:transparent;border-radius:6px;font:inherit;font-size:12px;font-weight:600;color:var(--ink-2);padding:5px;cursor:pointer}
+.bd-more:hover{background:var(--surface)}
+.bd-compact .col{min-height:120px}
+.board.bd-compact{grid-auto-columns:minmax(178px,1fr)}
