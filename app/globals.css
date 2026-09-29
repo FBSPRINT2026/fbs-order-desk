@@ -3573,3 +3573,9 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .linkbtn.danger{color:var(--danger)}
 .ms-dv-h small .ms-lead{font-size:11px;color:var(--ink);font-weight:700}
 .ps-mach td:nth-child(4) select{max-width:150px}.ps-mach td:first-child input{min-width:170px}
+/* the two-week list is exactly as tall as the two days beside it (scrolls inside if it's longer) */
+.ms-split{align-items:stretch}
+.ms-split-col.r .ms-split-fill{flex:1;position:relative;min-height:320px}
+.ms-split-col.r .ms-lw.compact{position:absolute;inset:0;overflow:auto}
+.ms-split-col.r .ms-lw.compact .ms-lg{min-height:100%}
+@media (max-width: 1250px){.ms-split-col.r .ms-split-fill{position:static;min-height:0}.ms-split-col.r .ms-lw.compact{position:static}}

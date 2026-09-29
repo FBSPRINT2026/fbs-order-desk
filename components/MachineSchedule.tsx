@@ -471,7 +471,9 @@ export default function MachineSchedule() {
     const colMin = o.compact ? 62 : 104, dayCol = o.compact ? 58 : 92;
     return (
       <div className={"ms-lw" + (o.compact ? " compact" : "")}>
-        <div className="ms-lg" style={{ gridTemplateColumns: `${dayCol}px repeat(${machines.length}, minmax(${colMin}px,1fr))`, minWidth: dayCol + machines.length * colMin }}>
+        <div className="ms-lg" style={{ gridTemplateColumns: `${dayCol}px repeat(${machines.length}, minmax(${colMin}px,1fr))`, minWidth: dayCol + machines.length * colMin,
+          // compact (next to the hour-by-hour days): day rows share any spare height so the list is as tall as the left side
+          ...(o.compact ? { gridTemplateRows: ["auto", "auto", ...rows.flatMap((d, ri) => (ri === 0 || monday(d) !== monday(rows[ri - 1]) ? ["auto", "minmax(min-content,1fr)"] : ["minmax(min-content,1fr)"]))].join(" ") } : {}) }}>
           <div className="ms-lg-corner">{past.length > 0 && <button type="button" className="linkbtn" onClick={() => setShowPast(!showPast)}>{showPast ? "Hide" : "Show"} earlier this week</button>}</div>
           {groups.map((g) => <div key={g.t} className={"ms-lg-grp " + g.t} style={{ gridColumn: `span ${g.ms.length}` }}>{TYPE_LBL[g.t]}</div>)}
           <div className="ms-lg-corner2" />
@@ -519,9 +521,9 @@ export default function MachineSchedule() {
         {dayGrid(d0, { title: dayTitle(d0), colMin: 70, hourPx: 40 })}
         {dayGrid(d1, { title: dayTitle(d1), colMin: 70, hourPx: 40 })}
       </div>
-      <div className="ms-split-col">
-        <div className="ms-split-h">The rest of the next two weeks</div>
-        {listGrid(restDays, { compact: true })}
+      <div className="ms-split-col r">
+        <div className="ms-split-h">Next two weeks</div>
+        <div className="ms-split-fill">{listGrid(restDays, { compact: true })}</div>
       </div>
     </div>
   );
