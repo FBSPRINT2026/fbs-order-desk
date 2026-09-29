@@ -67,13 +67,15 @@ const LANE = 22;
  * the booking order); each starts when the job before it ends, only inside the shift, and a job that doesn't fit in
  * what's left of the day carries into the next working day. So a 30-hour job fills ~4 shifts, never "overnight".
  */
-function flow(cs: Card[], mach: Machine): Seg[] {
+function flow(cs: Card[], mach: Machine, nowAbs = -Infinity): Seg[] {
   // each day's shift can differ (crew schedules); a day it normally doesn't run but has work booked uses its usual hours
   const typ = typicalShift(mach);
   const hrs = (d: string) => shiftOn(mach, d) || typ;
   const booked = new Set(cs.map((c) => c.day));
   const works = (d: string) => !!shiftOn(mach, d) || (booked.has(d) && !isOffDay(mach, d));
-  const sorted = [...cs].sort((a, b) => a.day.localeCompare(b.day) || (a.startMin ?? hrs(a.day)[0]) - (b.startMin ?? hrs(b.day)[0]) || (a.slot?.position ?? 99) - (b.slot?.position ?? 99));
+  // within a day: finished work, then what's running (where it really started), then the rest in booking order
+  const rank = (c: Card) => (c.slot?.status === "done" ? 0 : c.slot?.status === "running" ? 1 : 2);
+  const sorted = [...cs].sort((a, b) => a.day.localeCompare(b.day) || rank(a) - rank(b) || (a.startMin ?? hrs(a.day)[0]) - (b.startMin ?? hrs(b.day)[0]) || (a.slot?.position ?? 99) - (b.slot?.position ?? 99));
   const out: Seg[] = [];
   let cursor = -Infinity;
   // the next moment this machine is running, at or after `t` (absolute minutes)
@@ -99,13 +101,19 @@ function flow(cs: Card[], mach: Machine): Seg[] {
       out.push({ c, day: c.day, start: st, end: en, part: 1, parts: 1, pushed: false, work: en - st });
       continue;
     }
-    const asked = ord(c.day) * 1440 + (c.startMin ?? hrs(c.day)[0]);
-    let t = norm(Math.max(cursor, asked), cursor < asked && c.startMin != null);
-    const pushed = t > asked + 1;
+    // work that hasn't started can't happen in the past: it starts from now at the earliest (the late crew, the
+    // morning breakdown…), so everything after it slides forward, into tomorrow if today's shift is used up
+    const notStarted = !c.slot || c.slot.status === "scheduled" || c.slot.status === "paused";
+    const planned = ord(c.day) * 1440 + (c.startMin ?? hrs(c.day)[0]);
+    const asked = Math.max(planned, notStarted ? nowAbs : -Infinity);
+    let t = norm(Math.max(cursor, asked), cursor < asked && c.startMin != null && asked === planned);
+    const pushed = t > planned + 1;
     let left = Math.max(1, c.minutes);
     const pieces: { day: string; start: number; end: number; work: number; slow: number }[] = [];
     for (let g = 0; g < 400 && left > 0.01; g++) {
-      const dd = Math.floor(t / 1440), m = t - dd * 1440, w = wins(fromOrd(dd)).find(([, y]) => m < y);
+      let dd = Math.floor(t / 1440), m = t - dd * 1440, w = wins(fromOrd(dd)).find(([, y]) => m < y);
+      // don't start a longer job in the last few minutes of a window: start it in the next one
+      if (g === 0 && w && w[1] - m < 10 && left / w[2] > w[1] - m) { t = norm(dd * 1440 + w[1]); dd = Math.floor(t / 1440); m = t - dd * 1440; w = wins(fromOrd(dd)).find(([, y]) => m < y); }
       // a slow stretch (operator out, 50%) takes twice the clock time for the same work
       const rate = w ? w[2] : 1;
       const end = Math.min(m + left / rate, Math.max(w ? w[1] : hrs(fromOrd(dd))[1], m + 15));
@@ -292,13 +300,14 @@ export default function MachineSchedule() {
     if (!s) return { by, ofCard };
     const per = new Map<string, Card[]>();
     for (const c of cards) per.set(c.machine.id, [...(per.get(c.machine.id) || []), c]);
-    for (const [, cs] of per) for (const g of flow(cs, cs[0].machine)) {
+    const nowAbs = ord(now.day) * 1440 + now.min;
+    for (const [, cs] of per) for (const g of flow(cs, cs[0].machine, nowAbs)) {
       const k = g.c.machine.id + "|" + g.day;
       by.set(k, [...(by.get(k) || []), g]);
       ofCard.set(g.c.key, [...(ofCard.get(g.c.key) || []), g]);
     }
     return { by, ofCard };
-  }, [cards, s]);
+  }, [cards, s, now]);
   const at = (m: Machine, d: string) => segs.by.get(m.id + "|" + d) || [];
   const used = (m: Machine, d: string) => at(m, d).reduce((a, g) => a + g.work, 0);
   const loadMap = useMemo(() => { const m: Record<string, Record<string, number>> = {}; for (const [k, gs] of segs.by) { const [id, d] = k.split("|"); (m[id] ||= {})[d] = gs.filter((g) => g.c.slot?.status !== "done").reduce((a, g) => a + g.work, 0); } return m; }, [segs]);
@@ -815,7 +824,7 @@ export default function MachineSchedule() {
       {shiftEdit && <ShiftPanel machines={machines} crews={s.crews} extras={extras} today={today} me={me.email} onClose={() => setShiftEdit(false)} onSaved={(m) => { setShiftEdit(false); setWknd(true); setMsg(m); load(); setReplan({ why: "Weekend shift added. Re-plan so earlier jobs can move into it and make room during the week?" }); }} />}
       {checkin && <CheckIn rows={cards.filter((c) => c.slot && !c.fromPv && (c.day === today || c.slot.status === "running" || c.slot.status === "paused")).map((c) => ({ c, first: (segs.ofCard.get(c.key) || []).filter((g) => g.day === today)[0] })).sort((a, b) => a.c.machine.id.localeCompare(b.c.machine.id) || (a.first?.start ?? 9999) - (b.first?.start ?? 9999))}
         machines={machines} crews={s.crews} now={now.min} onClose={() => setCheckin(false)}
-        onSave={async (changes) => { for (const ch of changes) await logAction(ch.slot, ch.action, ch.progress, false); setCheckin(false); load(); setReplan({ why: `Progress saved (${changes.length} update${changes.length === 1 ? "" : "s"}). Re-plan the rest of the day and the week around it?` }); }} />}
+        onSave={async (changes) => { for (const ch of changes) await logAction(ch.slot, ch.action, ch.progress, false); setCheckin(false); load(); setReplan({ why: changes.length ? `Progress saved (${changes.length} update${changes.length === 1 ? "" : "s"}). Anything not started now runs from ${clockLong(now.min)} on. Re-plan the rest of the week around it?` : `Anything not started runs from ${clockLong(now.min)} on. Re-plan the rest of the week around it?` }); }} />}
       {replan && (() => {
         const whole = planIt(false), splitP = whole.lateAfter > 0 ? planIt(true) : null;
         const splitHelps = !!splitP && splitP.splits > 0 && splitP.lateAfter < whole.lateAfter;
@@ -1070,7 +1079,7 @@ function CheckIn({ rows, machines, crews, now, onClose, onSave }: { rows: { c: C
           ))}
           <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
             <button type="button" className="btn" onClick={onClose}>Cancel</button>
-            <button type="button" className="btn primary" disabled={busy || !changes.length} onClick={async () => { setBusy(true); await onSave(changes); setBusy(false); }}>{changes.length ? `Save ${changes.length} & Re-plan` : "Nothing changed"}</button>
+            <button type="button" className="btn primary" disabled={busy} onClick={async () => { setBusy(true); await onSave(changes); setBusy(false); }}>{changes.length ? `Save ${changes.length} & Re-plan` : "Re-plan From Now"}</button>
           </div>
         </div>
       </div>
