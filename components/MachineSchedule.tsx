@@ -92,6 +92,8 @@ const shortName = (m: Machine) => { const p = m.name.split(" · "); return p.len
 const abbrCo = (n: string) => n.replace(/[,.]?\s+(company|co|inc|llc|l\.l\.c|corp|corporation|ltd|limited)\.?$/i, "").replace(/\s+(and|&)\s+/gi, " & ").trim() || n;
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 const PV_DONE = /job\s*completed|quote|cancel|ship|fulfillment|issue/i;
+const TYPE_OPTS = [["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const;
+const VIEW_OPTS = [["split", "24 Hours + Next 5"], ["timeline", "Timeline"], ["day", "Day"]] as const;
 const HOUR_PX0 = 56;
 const LANE = 22;
 
@@ -775,23 +777,36 @@ export default function MachineSchedule() {
   };
 
   /* ---------- Phones: one day, each machine its jobs in time order with a small timeline ---------- */
-  const phoneView = () => (
-    <div className="ms-phone">
-      <div className="ms-pnav"><button type="button" className="btn sm" onClick={() => setDay(addDay(day, -1))} aria-label="Previous day">←</button><b>{new Date(day + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</b><button type="button" className="btn sm" onClick={() => setDay(addDay(day, 1))} aria-label="Next day">→</button></div>
-      {machines.map((m) => { const gs = at(m, day).slice().sort((a, b) => a.start - b.start); const u = used(m, day), cap = capacityMin(s, m, shiftOn(m, day) ? day : undefined); return (
-        <section key={m.id} className={"ms-pm " + m.type}>
-          <div className="ms-pm-h"><b>{m.name}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""}</b><span className="faint">{fmtMin(u)} / {fmtMin(cap)}</span></div>
-          <div className="ms-pstrip">{offShade(m, day).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}{(m.down?.[day] || []).map(([a0, b0, , rate]) => { const a = Math.max(a0, vStart), b = Math.min(b0, vEnd); return <div key={"dn" + a} className={"ms-down h" + (rate ? " slow" : "")} style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />; })}{gs.map((g) => <i key={g.c.key + g.part} className={cls(g) + " bar"} style={{ left: pct(g.start), width: `${((g.end - g.start) / range) * 100}%` }} />)}{day === today && <div className="ms-now v" style={{ left: pct(Math.max(vStart, Math.min(vEnd, now.min))) }} />}</div>
-          <div className="ms-ax ph">{hours.filter((h) => (h - vStart) % 180 === 0).map((h) => <i key={h} style={{ left: pct(h) }}>{clock(h)}</i>)}</div>
-          {gs.length ? <ul className="ms-agenda">{gs.map((g) => (
-            <li key={g.c.key + g.part}><button type="button" className={cls(g) + " row-blk"} onClick={() => setOpen(g.c)}>
-              <span className="ms-t1">{clock(g.start)}–{clock(g.end)}</span><span className="ms-b1">{label(g)}</span><span className="ms-b3">{g.c.need.label}{g.parts > 1 ? ` · part ${g.part} of ${g.parts}` : ` · ${fmtMin(g.c.minutes)}`}</span>
-            </button></li>
-          ))}</ul> : <div className="faint" style={{ fontSize: 12.5 }}>Open all day</div>}
+  /* ---------- Phones: today and the next working day, press by press, as a simple run list ---------- */
+  const phoneView = () => {
+    const next = Array.from({ length: 7 }, (_, i) => addDay(today, i + 1)).find((d) => machines.some((m) => shiftOn(m, d) || at(m, d).length)) || addDay(today, 1);
+    const dayBlock = (d: string) => {
+      const rows = machines.map((m) => ({ m, gs: at(m, d).slice().sort((a, b) => a.start - b.start), sh: shiftOn(m, d) }));
+      const gone = (r: { sh: [number, number] | null }) => d === today && !!r.sh && r.sh[1] <= now.min;
+      const busy = rows.filter((r) => r.gs.length), open = rows.filter((r) => !r.gs.length && r.sh && !gone(r)), done = rows.filter((r) => !r.gs.length && gone(r)), off = rows.filter((r) => !r.gs.length && !r.sh);
+      const booked = rows.reduce((t, r) => t + used(r.m, d), 0);
+      return (
+        <section key={d} className="ms-pd">
+          <div className="ms-pd-h"><b>{d === today ? "Today" : d === addDay(today, 1) ? "Tomorrow" : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}</b><span>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span><small>{fmtMin(booked)} booked</small></div>
+          {busy.map(({ m, gs, sh }) => (
+            <div key={m.id} className={"ms-pm " + m.type}>
+              <div className="ms-pm-h"><b>{shortName(m)}{crewOf(m) ? <span> · {crewOf(m)!.leader}</span> : null}</b><span className="faint">{isOffDay(m, d) ? `Off · ${m.off![d]}` : sh ? hrsTxt(sh) : "extra"} · {fmtMin(used(m, d))}</span></div>
+              <ul className="ms-pl">{gs.map((g) => { const gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, past = d === today && g.end <= now.min && st !== "running"; return (
+                <li key={g.c.key + g.part}><button type="button" className={"ms-pj " + g.c.need.type + (st === "done" ? " done" : st === "running" ? " run" : "") + (past ? " past" : "") + (mine && !isMe(g.c.job.owner, owners, me) ? " other" : "") + (!!g.c.job.due && g.day > g.c.job.due ? " late" : "")} onClick={() => setOpen(g.c)}>
+                  <span className="ms-pj-t">{clock(g.start)}<small>{clock(g.end)}</small></span>
+                  <span className="ms-pj-b"><span className="ms-pj-1"><b>#{g.c.job.number}</b>{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null} {abbrCo(g.c.job.customer || "")}</span><span className="ms-pj-2">{g.c.job.name || g.c.need.label}</span><span className="ms-pj-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</span></span>
+                </button></li>
+              ); })}</ul>
+            </div>
+          ))}
+          {open.length > 0 && <div className="ms-pd-x"><b>Open:</b> {open.map((r) => `${shortName(r.m)}${crewOf(r.m) ? ` (${crewOf(r.m)!.leader})` : ""}`).join(", ")}</div>}
+          {done.length > 0 && <div className="ms-pd-x faint"><b>Done for the day:</b> {done.map((r) => shortName(r.m)).join(", ")}</div>}
+          {off.length > 0 && <div className="ms-pd-x faint"><b>Not running:</b> {off.map((r) => shortName(r.m)).join(", ")}</div>}
         </section>
-      ); })}
-    </div>
-  );
+      );
+    };
+    return <div className="ms-phone">{dayBlock(today)}{dayBlock(next)}</div>;
+  };
 
   /* ---------- Week list (default): machines across, days down; each cell = that machine's jobs that day, in run order ---------- */
   async function place(c: { card?: Card; job?: Job; need?: Need }, mach: Machine, d: string, beforeKey?: string) {
@@ -977,19 +992,24 @@ export default function MachineSchedule() {
   return (
     <div className="ms">
       {/* the calendar's own controls on one line: what's shown on the left, how it's shown on the right */}
+      {/* one line that never wraps: when it gets tight each control turns into a compact dropdown of the same choices */}
+      <div className="ms-head-w">
       <div className="ms-head">
-        <h2 className="ms-title">Production Calendar</h2>
-        <div className="rv-seg">{([["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const).map(([k, l]) => <button key={k} type="button" className={typeF === k ? "on" : ""} onClick={() => setTypeF(k)}>{l}</button>)}</div>
-        <div className="rv-seg ms-who" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
-        <div className="ms-head-r">
-        <label className="ms-wknd"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Weekends</label>
-        <div className="rv-seg ms-span">{([["split", "24 Hours + Next 5"], ["timeline", "Timeline"], ["day", "Day"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
-        <div className="ms-nav">
+        <h2 className="ms-title"><span className="ms-full">Production Calendar</span><span className="ms-cmp">Production</span></h2>
+        <div className="rv-seg ms-full">{TYPE_OPTS.map(([k, l]) => <button key={k} type="button" className={typeF === k ? "on" : ""} onClick={() => setTypeF(k)}>{l}</button>)}</div>
+        <select className="ms-cmp ms-sel" value={typeF} aria-label="Machines" onChange={(e) => setTypeF(e.target.value as typeof typeF)}>{TYPE_OPTS.map(([k, l]) => <option key={k} value={k}>{k ? l : "All machines"}</option>)}</select>
+        <div className="rv-seg ms-who ms-full" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
+        <select className="ms-cmp ms-sel" value={mine ? "mine" : "all"} aria-label="Whose jobs" onChange={(e) => setMine(e.target.value === "mine")}><option value="all">Everyone</option><option value="mine">My accounts</option></select>
+        <span className="spacer" />
+        <label className="ms-wknd ms-desk" title="Show Saturday and Sunday"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> <span className="ms-full">Weekends</span><span className="ms-cmp">Sat/Sun</span></label>
+        <div className="rv-seg ms-span ms-full ms-desk">{VIEW_OPTS.map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
+        <select className="ms-cmp ms-sel ms-desk" value={view} aria-label="View" onChange={(e) => setView(e.target.value as View)}>{VIEW_OPTS.map(([k, l]) => <option key={k} value={k}>{k === "split" ? "24 hrs + 5 days" : l}</option>)}</select>
+        <div className="ms-nav ms-desk">
           <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
           <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "timeline" ? "This Week" : "Today"}</button>
           <button type="button" className="btn sm" onClick={() => shift(1)} aria-label="Later">→</button>
         </div>
-        </div>
+      </div>
       </div>
       {msg && <div className="banner" style={{ marginBottom: 8 }} onClick={() => setMsg("")}>{msg}</div>}
 

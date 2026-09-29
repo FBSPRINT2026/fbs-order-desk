@@ -3873,3 +3873,75 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 /* My accounts: other reps' jobs fade back in the hour-by-hour view too */
 .ms-blk.other{opacity:.28;filter:grayscale(1)}
 .ms-blk.other:hover{opacity:.8;filter:none}
+
+/* ---------- Production calendar header: one line; tight → compact dropdowns (never wraps under) ---------- */
+.ms-head-w{container-type:inline-size;margin-bottom:12px}
+.ms-head{flex-wrap:nowrap;margin-bottom:0;min-width:0}
+.ms-head .ms-cmp{display:none}
+.ms-head .ms-sel{font:inherit;font-size:13px;font-weight:700;color:var(--ink);padding:6px 28px 6px 10px;border:1px solid var(--line);border-radius:999px;background-color:var(--surface);min-width:0;max-width:220px;width:auto}
+.ms-head .ms-wknd{white-space:nowrap}
+@container (max-width: 1180px){
+  .ms-head .ms-full{display:none}
+  .ms-head .ms-cmp{display:inline-block}
+  .ms-head{gap:8px}
+  .ms-head .ms-title{font-size:18px}
+}
+@container (max-width: 700px){
+  .ms-head{gap:6px}
+  .ms-head .ms-sel{font-size:12.5px;padding-left:8px;padding-right:24px}
+  .ms-head .ms-title{font-size:16px;margin-right:0}
+}
+@container (max-width: 760px){ .ms-head .ms-title{display:none} }
+.ms-head .ms-sel,.ms-head .ms-nav,.ms-head .ms-wknd{flex:none}
+.ms-head .ms-title{white-space:nowrap}
+/* phones show today and tomorrow only: no view, weekends or date arrows */
+@media (max-width: 700px){
+  .ms-head .ms-desk{display:none}
+  .ms-head .ms-title{display:none}
+  .ms-head .ms-sel{max-width:none;flex:1 1 0}
+  .ms-head .spacer{display:none}
+}
+
+/* ---------- Phones: today + the next working day, and Scheduling Tools ---------- */
+@media (max-width: 700px){
+  .ms-main{order:0}
+  .ms-key{display:none}
+  .ms-phone{gap:14px}
+  .ms-pd{display:flex;flex-direction:column;gap:8px}
+  .ms-pd-h{display:flex;align-items:baseline;gap:8px;padding:2px 2px 0}
+  .ms-pd-h b{font-family:var(--display);font-size:19px;font-weight:800}
+  .ms-pd-h span{color:var(--ink-2);font-size:13px}
+  .ms-pd-h small{margin-left:auto;color:var(--ink-3);font-size:12px}
+  .ms-pm{padding:8px 8px 6px;gap:6px}
+  .ms-pm-h{align-items:baseline}
+  .ms-pm-h b span{font-weight:600;color:var(--ink-2)}
+  .ms-pm-h .faint{font-size:12px;white-space:nowrap}
+  .ms-pl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+  .ms-pj{all:unset;box-sizing:border-box;width:100%;cursor:pointer;display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;align-items:start;padding:6px 8px;border-radius:8px;background:color-mix(in srgb,var(--fbs-blue) 9%,var(--surface));border-left:3px solid var(--fbs-blue)}
+  .ms-pj.embroidery{background:color-mix(in srgb,#7C5CD6 9%,var(--surface));border-left-color:#7C5CD6}
+  .ms-pj.heat{background:color-mix(in srgb,var(--fbs-orange) 12%,var(--surface));border-left-color:var(--fbs-orange)}
+  .ms-pj.run{box-shadow:inset 0 0 0 1.5px var(--ok)}
+  .ms-pj.done,.ms-pj.past{opacity:.55}
+  .ms-pj.late{box-shadow:inset 0 0 0 1.5px var(--danger)}
+  .ms-pj.other{opacity:.3;filter:grayscale(1)}
+  .ms-pj-t{display:flex;flex-direction:column;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;line-height:1.2}
+  .ms-pj-t small{font-weight:500;color:var(--ink-3);font-size:11.5px}
+  .ms-pj-b{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+  .ms-pj-1,.ms-pj-2,.ms-pj-3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ms-pj-1{font-size:13.5px}
+  .ms-pj-1 em{font-style:normal;font-size:11px}.ms-pj-1 em.rn,.ms-pj-1 em.ok{color:var(--ok)}
+  .ms-pj-2{font-size:12.5px;color:var(--ink-2)}
+  .ms-pj-3{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+  .ms-pd-x{font-size:12.5px;color:var(--ink-2);padding:0 2px}
+  .ms-tools{margin-bottom:12px}
+}
+.ms-head .ms-sel{field-sizing:content;padding-right:26px}
+@container (max-width: 660px){ .ms-head .ms-wknd{display:none} }
+@media (max-width: 700px){
+  .ms-act b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ms-act{padding:9px 10px}
+  .ms-alert-h .btn{flex:1 1 auto}
+}
+.ms-act{min-width:0}
+@media (max-width: 700px){.ms-acts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width: 700px){.ms-acts .ms-act:last-child:nth-child(odd){grid-column:1/-1}}
