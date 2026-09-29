@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings } from "@/lib/pricing";
+import MobileTables from "@/components/MobileTables";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
       </header>
       {children}
+      <MobileTables />
       <footer className="p-foot">
         <div className="p-foot-in">
           {s.brand.sideLogoUrl && <img src={s.brand.sideLogoUrl} alt="" className="p-foot-logo" />}

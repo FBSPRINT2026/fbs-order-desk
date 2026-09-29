@@ -48,7 +48,7 @@ export default function ProductionCalendar({ embedded = false }: { embedded?: bo
             const list = (byDate[k] || []).sort((a, b) => a.number - b.number);
             return (
               <div key={k} className={"day" + (d.getMonth() !== ym.m ? " out" : "") + (k === today ? " today" : "")}>
-                <span className="d">{d.getDate()}</span>
+                <span className="d">{d.getDate()}</span><span className="d-long">{d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })}</span>
                 {list.map((o) => (
                   <button key={o.id} type="button" className="cal-chip" style={{ ["--sc" as string]: ST[o.status].c }} title={`#${o.number} ${o.nickname} · ${ST[o.status].label}`} onClick={() => router.push(`/shop/orders/${o.id}`)}>
                     #{o.number} {o.nickname || custLabel(customers[o.customer_id || ""])}

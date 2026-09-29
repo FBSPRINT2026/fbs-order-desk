@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { mergeSettings } from "@/lib/pricing";
 import ShopNav from "@/components/ShopNav";
+import MobileTables from "@/components/MobileTables";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
     <div className="app">
       <ShopNav email={email} firstName={firstName} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} />
       <main className="main">{children}</main>
+      <MobileTables />
     </div>
   );
 }

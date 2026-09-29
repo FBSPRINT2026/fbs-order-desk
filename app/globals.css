@@ -2824,3 +2824,101 @@ a.as-ai{text-decoration:none}
 @media (max-width: 700px){.sc-tabs button{min-width:0;overflow:hidden;gap:3px}.sc-tabs .aa-n{padding:1px 4px;min-width:0}}
 .tm:not(.tm-compact) .tm-map{max-width:620px}
 .portal .p-foot-logo{height:26px;width:auto;max-width:none}
+
+/* phones: tables too wide for the screen become stacked cards (components/MobileTables adds .m-card and the labels) */
+@media (max-width: 700px){
+  table.m-card{min-width:0!important;width:100%!important;table-layout:auto}
+  table.m-card thead{display:none}
+  table.m-card,table.m-card tbody,table.m-card tfoot{display:block}
+  table.m-card tr{display:flex;flex-wrap:wrap;align-items:center;gap:3px 14px;padding:10px 12px;border-bottom:1px solid var(--line-2,var(--line))}
+  table.m-card tbody tr:last-child{border-bottom:0}
+  table.m-card td,table.m-card th{display:block;border:0!important;padding:0!important;min-width:0;max-width:100%;text-align:left!important;white-space:normal!important;background:transparent}
+  table.m-card td:nth-child(2){flex:1 1 55%}
+  table.m-card td[data-wide]{flex:1 1 100%}
+  table.m-card td[data-label]:not(:first-child):not(:nth-child(2))::before{content:attr(data-label) ": ";color:var(--ink-3);font-size:12px;font-weight:600}
+  table.m-card td:empty{display:none}
+  table.m-card input,table.m-card select{max-width:100%}
+}
+
+/* ---------- phones: nothing wider than the screen (all staff pages) ---------- */
+@media (max-width: 700px){
+  .ed-grid,.top2,.two,.g2,.g3,.g4,.sc-grid,.grid{grid-template-columns:minmax(0,1fr)}
+  .ed-grid>*,.top2>*,.stack>*,.two>*{min-width:0}
+  .ed-actions{margin-left:0}
+}
+@media (max-width: 700px){
+  .page-head h1{max-width:100%;overflow-wrap:anywhere}
+  .page-head h1::after{width:100%;min-width:0;max-width:100%}
+}
+.cal .d-long{display:none}
+@media (max-width: 700px){
+  /* production board: columns stack instead of scrolling sideways */
+  .board{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:minmax(0,1fr);overflow-x:visible}
+  .col{min-height:0}
+  .col-b{min-height:40px}
+  /* calendar: a list of the days that have jobs (and today) */
+  .cal-wrap{overflow-x:visible}
+  .cal{grid-template-columns:minmax(0,1fr);min-width:0;gap:0}
+  .cal .dow{display:none}
+  .cal .day{min-height:0;padding:8px 10px;border-bottom:1px solid var(--line)}
+  .cal .day.out,.cal .day:not(:has(.cal-chip)):not(.today){display:none}
+  .cal .d{display:none}
+  .cal .d-long{display:block;font-size:12.5px;font-weight:700;color:var(--ink-2)}
+  .cal .day.today .d-long{color:var(--accent)}
+  .cal-chip{font-size:13px;padding:6px 8px}
+}
+
+/* order editor on phones: each garment is a small card (style + color, brand + description, then cost / qty / each / total) */
+@container (max-width: 480px){
+  .gl-row{grid-template-columns:repeat(4,minmax(0,1fr));grid-template-areas:"st st co co" "br de de x" "cs qt ea to"}
+  .gl-list.ws .gl-row{grid-template-columns:repeat(4,minmax(0,1fr));grid-template-areas:"st st co co" "br de de x" "qt ea to to"}
+  .gl-row>.a-x{justify-self:end}
+  .gl-head.gl-row{display:none}
+  .gl-row>.a-cs::before,.gl-row>.a-qt::before,.gl-row>.a-ea::before,.gl-row>.a-to::before{display:block;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
+  .gl-row>.a-cs::before{content:"Cost"}.gl-row>.a-qt::before{content:"Qty"}.gl-row>.a-ea::before{content:"Each"}.gl-row>.a-to::before{content:"Total"}
+  .gl-row .a-to{padding-top:0}
+  .gl-row.grp-total{grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"de qt to"}
+  .gl-row.grp-total>.a-de{grid-area:de}
+  .gl-row.grp-total>.a-qt::before,.gl-row.grp-total>.a-to::before{content:none}
+  .gl{padding:8px 0;border-bottom:1px solid var(--line-2)}
+}
+@media (max-width: 700px){
+  /* imprints: one card per imprint */
+  table.imp-table,table.imp-table tbody{display:block;table-layout:auto;min-width:0!important;width:100%}
+  table.imp-table thead{display:none}
+  table.imp-table tr.imp-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:10px 0 4px;border-top:1px solid var(--line-2)}
+  table.imp-table tr.imp-main td{display:block;padding:0!important;min-width:0}
+  table.imp-table tr.imp-main td[data-label]::before{content:attr(data-label);display:block;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
+  table.imp-table tr.imp-main td:nth-child(4),table.imp-table tr.imp-main td:nth-child(7){grid-column:1/-1}
+  table.imp-table tr.imp-main td:last-child{grid-column:1/-1;justify-self:end}
+  table.imp-table tr.imp-design{display:block}
+  table.imp-table tr.imp-design td{display:block;padding:0 0 8px!important}
+  /* settings price grids: small cells so a row fits the screen */
+  .matrix-wrap{overflow-x:visible}
+  table.matrix{min-width:0!important;width:100%;table-layout:fixed}
+  .matrix th{font-size:9px;letter-spacing:0;padding:3px 1px}
+  .matrix td{padding:1px}
+  .matrix input{padding:5px 1px;font-size:11px;text-align:center;min-width:0;width:100%}
+  table.sizes{min-width:0!important}
+}
+@media (max-width: 700px){
+  .toolbar .sx{flex:1 1 100%;max-width:none}
+  /* ship window */
+  .sw-cols{grid-template-columns:minmax(0,1fr)}
+  .sw-main{border-right:0;padding:12px}
+  .sw-side{padding:12px}
+  table.sw-boxes,table.sw-boxes tbody{display:block}
+  table.sw-boxes thead{display:none}
+  table.sw-boxes tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:8px 0;border-bottom:1px solid var(--line-2,var(--line))}
+  table.sw-boxes td{display:block;padding:0!important;border:0!important;min-width:0}
+  table.sw-boxes td.sw-n{grid-column:1/-1}
+  table.sw-boxes td:nth-child(n+6){grid-column:1/-1}
+  table.sw-boxes td[data-label]:not(.sw-n)::before{content:attr(data-label);display:block;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
+  table.sw-boxes .sw-in input{min-width:0;width:100%}
+}
+@media (max-width: 700px){
+  .rv-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rv-kpis>.rv-kpi-today{grid-column:1/-1}
+  .rv-kpi2{gap:14px;flex-wrap:wrap}
+  .rv-kpis>div,.rv-kpis>button{min-width:0}
+}
