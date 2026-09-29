@@ -47,6 +47,10 @@ const auth = () => { const c = cred(); return `<arg1><sanMarCustomerNumber>${esc
 // SanMar size names -> our size codes
 const SIZE_MAP: Record<string, string> = { XS: "XS", S: "S", M: "M", L: "L", XL: "XL", "2XL": "2XL", XXL: "2XL", "3XL": "3XL", XXXL: "3XL", "4XL": "4XL", "5XL": "5XL", "6XL": "5XL",
   YXS: "YXS", YS: "YS", YM: "YM", YL: "YL", YXL: "YXL", OSFA: "OS", OS: "OS", "ONE SIZE": "OS", ADJ: "OS", "S/M": "M", "M/L": "L", "L/XL": "XL" };
+// youth styles label sizes XS-XL; ours are YXS-YXL (same rule as S&S)
+const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
+const isYouth = (basic: string) => /youth|toddler|kids|infant/i.test(`${tag(basic, "productTitle")} ${tag(basic, "category")}`);
+const sizeFor = (raw: string, youth: boolean) => { const z = SIZE_MAP[raw.toUpperCase()] || raw.toUpperCase(); return youth && YOUTH[z] ? YOUTH[z] : z; };
 const ORDER = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
 const num = (s: string) => { const n = parseFloat(s); return isFinite(n) ? n : 0; };
 
@@ -73,7 +77,7 @@ export async function sanmarSkus(style: string): Promise<SanMarSku[]> {
     const basic = blocks(b, "productBasicInfo")[0] || b, img = blocks(b, "productImageInfo")[0] || b, price = blocks(b, "productPriceInfo")[0] || b;
     const color = tag(basic, "color"), raw = tag(basic, "size");
     return {
-      color, catalogColor: tag(basic, "catalogColor") || color, rawSize: raw, size: SIZE_MAP[raw.toUpperCase()] || raw.toUpperCase(),
+      color, catalogColor: tag(basic, "catalogColor") || color, rawSize: raw, size: sizeFor(raw, isYouth(basic)),
       piecePrice: num(tag(price, "piecePrice")), casePrice: num(tag(price, "casePrice")), myPrice: mine.get(`${color}|${raw}`.toLowerCase()) || 0,
       image: tag(img, "productImage"), front: tag(img, "frontModel") || tag(img, "frontFlat") || tag(img, "colorProductImage"), back: tag(img, "backModel") || tag(img, "backFlat"), swatch: tag(img, "colorSwatchImage"),
       brand: tag(basic, "brandName"), title: tag(basic, "productTitle"), description: tag(basic, "productDescription"), status: tag(basic, "productStatus"),
@@ -129,7 +133,7 @@ export async function sanmarStyleSummary(style: string): Promise<SanMarStyleSumm
     category: tag(b0, "category"), status: tag(b0, "productStatus"),
     image: tag(i0, "thumbnailImage") || tag(i0, "productImage") || tag(i0, "frontModel") || tag(i0, "frontFlat"),
     colors: [...new Set(rows.map((r) => { const b = basic(r); return tag(b, "catalogColor") || tag(b, "color"); }).filter(Boolean))],
-    sizes: orderSizes(rows.map((r) => { const raw = tag(basic(r), "size"); return SIZE_MAP[raw.toUpperCase()] || raw.toUpperCase(); })),
+    sizes: orderSizes(rows.map((r) => sizeFor(tag(basic(r), "size"), isYouth(b0)))),
   };
 }
 
