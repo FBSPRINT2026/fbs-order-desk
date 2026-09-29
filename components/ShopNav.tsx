@@ -133,15 +133,10 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
       <div className="side-hello">{hello}{firstName ? `, ${firstName}` : ""}</div>
       <form className="side-search" role="search" onSubmit={(e) => { e.preventDefault(); const t = q.trim(); if (t) router.push(`/shop/search?q=${encodeURIComponent(t)}`); }}>
         <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Everything…" aria-label="Search orders, customers, artwork, shipments" />
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask or search anything…" aria-label="Search orders, customers, artwork, shipments" />
       </form>
       <nav className="nav">
-        <div className="nav-dash">
-          {link(["/shop", "home", "Dashboard"])}
-          <Link href="/shop/assistant" className={"nav-ai" + (path.startsWith("/shop/assistant") ? " on" : "")} title={`AI Assistant${todo.all ? ` · ${todo.all} follow-up${todo.all === 1 ? "" : "s"}` : ""}`} aria-label="AI Assistant">
-            {ICONS.assistant}{todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")}>{todo.urgent || todo.all}</span>}
-          </Link>
-        </div>
+        {link(["/shop", "home", "Dashboard"])}
         {GROUPS.map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>

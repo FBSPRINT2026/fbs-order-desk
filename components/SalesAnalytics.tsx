@@ -42,7 +42,7 @@ function loadSales(y: number) {
 }
 
 /** part: the numbers, the month chart, the top customers, or all three together. */
-export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis" | "chart" | "top" }) {
+export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis" | "chart" | "top" | "side" }) {
   const [rows, setRows] = useState<M[] | null>(null);
   const [top, setTop] = useState<Top[]>([]);
   const [hover, setHover] = useState<number | null>(null);
@@ -149,6 +149,22 @@ export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis"
             ))}</ol>
           )}
         </div>
+  );
+  if (part === "side") return (
+    <div className="an-side">
+      <div className="an-side-k"><span>Sales this month</span><b>{money0(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
+      <div className="an-side-k"><span>Sales this year</span><b>{money0(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
+      <div className="an-ch-h" style={{ marginTop: 6 }}><b>Top 10 customers</b><span className="faint">last 12 months</span></div>
+      {!top.length ? <div className="db-empty">No sales yet.</div> : (
+        <ol className="an-toplist an-toplist-sm">{top.slice(0, 10).map((t, i) => (
+          <li key={t.customer_id}>
+            <span className="an-rank">{i + 1}</span>
+            <span className="an-tn"><Link href={`/shop/customers/${t.customer_id}`}>{t.name}</Link><span className="an-bar"><span style={{ width: `${(t.sales / topMax) * 100}%` }} /></span></span>
+            <span className="an-tv"><b>{short(t.sales)}</b></span>
+          </li>
+        ))}</ol>
+      )}
+    </div>
   );
   if (part === "kpis") return K;
   if (part === "chart") return C;

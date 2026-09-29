@@ -16,6 +16,18 @@ function SearchInner() {
   const q0 = sp.get("q") || "";
   const [q, setQ] = useState(q0);
   const [res, setRes] = useState<Results | null>(null);
+  const [ai, setAi] = useState<{ answer?: string; refs?: { label: string; href: string }[]; off?: boolean; reason?: string; error?: string; busy?: boolean } | null>(null);
+  // the AI answer: asked once the keyword results are in (it reads them too)
+  useEffect(() => {
+    const t = q0.trim();
+    if (!res || t.length < 3) { setAi(null); return; }
+    const found = (["orders", "printavo", "customers", "shipments"] as (keyof Results)[]).flatMap((k) => res[k].slice(0, 15).map((h) => ({ ref: h.href.replace("/shop/orders/", "o:").replace("/shop/archive/", "a:").replace("/shop/customers/", "c:"), text: `${h.title} · ${h.sub}` })));
+    let live = true;
+    setAi({ busy: true });
+    fetch("/api/ai/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q: t, found }) })
+      .then((r) => r.json()).then((j) => { if (live) setAi(j.skip ? null : j); }).catch(() => { if (live) setAi({ error: "The AI couldn't answer right now." }); });
+    return () => { live = false; };
+  }, [res, q0]);
   useEffect(() => { setQ(q0); }, [q0]);
   useEffect(() => {
     const t = q0.trim().replace(/[%,()*]/g, " ").trim();
@@ -51,9 +63,21 @@ function SearchInner() {
     <>
       <div className="page-head"><div><div className="eyebrow">Search</div><h1>{q0 ? `“${q0}”` : "Search Everything"}</h1></div></div>
       <form className="srch-box" onSubmit={(e) => { e.preventDefault(); router.replace(`/shop/search?q=${encodeURIComponent(q.trim())}`); }}>
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Order #, customer, PO, job name, artwork, tracking…" autoFocus aria-label="Search" />
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask anything, or search an order #, customer, PO, tracking…" autoFocus aria-label="Search" />
         <button type="submit" className="btn primary">Search</button>
       </form>
+      {ai && !ai.off && (
+        <section className="ai-ans">
+          <div className="ai-ans-h"><svg viewBox="0 0 24 24" aria-hidden><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg><b>AI answer</b></div>
+          {ai.busy ? <div className="ai-ans-b faint">Thinking…</div> : ai.error ? <div className="ai-ans-b bad">{ai.error}</div> : (
+            <>
+              <div className="ai-ans-b">{ai.answer}</div>
+              {!!ai.refs?.length && <div className="ai-refs">{ai.refs.map((r, i) => <Link key={i} href={r.href} className="ai-ref">{r.label}</Link>)}</div>}
+            </>
+          )}
+        </section>
+      )}
+      {ai?.off && <div className="faint" style={{ fontSize: 12.5, marginBottom: 10 }}>AI answers are off: {ai.reason}</div>}
       {!res ? <div className="empty">Searching…</div> : q0.trim().length < 2 ? <div className="empty">Type at least 2 characters.</div> : !total ? <div className="empty">Nothing found for “{q0}”.</div> : (
         <div className="srch-grid">
           {SECTIONS.filter(([k]) => res[k].length).map(([k, label]) => (
