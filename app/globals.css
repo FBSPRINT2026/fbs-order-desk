@@ -2719,7 +2719,7 @@ a.as-ai{text-decoration:none}
 @media (max-width: 640px){
   .portal .p-main{overflow-wrap:anywhere}
   .portal .two,.portal .grid.g3,.portal .grid.g2{grid-template-columns:minmax(0,1fr)}
-  .portal img,.portal video{max-width:100%;height:auto}
+  .portal .p-main img,.portal .p-main video{max-width:100%}
   .portal .items{min-width:0}
   .portal .items th,.portal .items td{padding:9px 6px}
   .portal .items th{font-size:10px;letter-spacing:.04em}
@@ -2823,3 +2823,4 @@ a.as-ai{text-decoration:none}
 .qs-f input,.qs-f select{width:100%;min-width:0}
 @media (max-width: 700px){.sc-tabs button{min-width:0;overflow:hidden;gap:3px}.sc-tabs .aa-n{padding:1px 4px;min-width:0}}
 .tm:not(.tm-compact) .tm-map{max-width:620px}
+.portal .p-foot-logo{height:26px;width:auto;max-width:none}
