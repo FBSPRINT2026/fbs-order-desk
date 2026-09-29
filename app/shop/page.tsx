@@ -254,12 +254,13 @@ export default function Dashboard() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div><h1>Today</h1></div>
+        <div><div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div><h1>Dashboard</h1></div>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           <div className="rv-seg" role="group" aria-label="Whose accounts">
             <button type="button" className={!mine ? "on" : ""} onClick={() => setMine(false)}>Everyone</button>
             <button type="button" className={mine ? "on" : ""} onClick={() => setMine(true)}>My accounts</button>
           </div>
+          <Link href="/shop/assistant" className="btn db-ai" title="AI Assistant: follow-ups and suggestions"><svg viewBox="0 0 24 24" aria-hidden><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg>Assistant</Link>
           {editing && <button type="button" className="btn" onClick={() => setMenu(true)}>+ Widgets</button>}
           <button type="button" className={"btn" + (editing ? " primary" : "")} onClick={() => { setEditing((x) => !x); setMenu(false); }}>{editing ? "Done" : "Customize"}</button>
         </div>

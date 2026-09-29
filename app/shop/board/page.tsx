@@ -1,4 +1,5 @@
 "use client";
+import ProductionCalendar from "@/components/ProductionCalendar";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -60,6 +61,8 @@ export default function BoardPage() {
           })}
         </div>
       )}
+      {/* the calendar lives under the board: one Production page */}
+      <section className="board-cal"><ProductionCalendar embedded /></section>
     </>
   );
 }

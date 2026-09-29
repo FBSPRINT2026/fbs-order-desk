@@ -104,10 +104,10 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
   // the menu, in groups
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
     { title: "Sales", items: [["/shop/orders", "orders", "Orders"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/projects", "projects", "Projects"], ["/shop/customers", "customers", "Customers"]] },
-    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/board", "board", "Production"], ["/shop/calendar", "calendar", "Production Calendar"]] },
+    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/board", "board", "Production"]] },
     { title: "Shop Tools", items: [["/shop/shipping", "shipping", "Shipping Center"], ["/shop/receiving", "goods", "Goods & Receiving"]] },
   ];
-  const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
+  const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
 
   const link = ([href, icon, label]: [string, string, string]) => (
@@ -136,8 +136,12 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Everything…" aria-label="Search orders, customers, artwork, shipments" />
       </form>
       <nav className="nav">
-        {link(["/shop", "home", "Today"])}
-        {link(["/shop/assistant", "assistant", "Assistant"])}
+        <div className="nav-dash">
+          {link(["/shop", "home", "Dashboard"])}
+          <Link href="/shop/assistant" className={"nav-ai" + (path.startsWith("/shop/assistant") ? " on" : "")} title={`AI Assistant${todo.all ? ` · ${todo.all} follow-up${todo.all === 1 ? "" : "s"}` : ""}`} aria-label="AI Assistant">
+            {ICONS.assistant}{todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")}>{todo.urgent || todo.all}</span>}
+          </Link>
+        </div>
         {GROUPS.map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>
