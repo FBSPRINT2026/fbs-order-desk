@@ -3606,3 +3606,9 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-pick button small{font-weight:500;color:var(--ink-3);font-size:11px}
 .ms-pick button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
 .ms-pick button.on small{color:var(--accent)}
+.ms-rp-sum{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;padding:8px 10px;border-radius:8px;background:var(--surface-2)}
+.ms-rp-sum .good{color:var(--ok)}.ms-rp-sum .bad{color:var(--danger)}
+/* the five-day list fits the height of the two days beside it: no scrolling inside it */
+.ms-split-col.r .ms-lw.compact{overflow-x:auto;overflow-y:hidden}
+.ms-split-col.r .ms-lw.compact .ms-lg{height:100%;min-height:0}
+.ms-split-col.r .ms-lw.compact .ms-lc{overflow:hidden;min-height:0}
