@@ -62,3 +62,6 @@ begin
   perform net.http_get(url := 'https://portal.fbsprint.com/api/sanmar/sync', headers := jsonb_build_object('x-sync-token', t::text), timeout_milliseconds := 65000);
 end $$;
 revoke all on function public.sanmar_sync_tick() from public, anon, authenticated;
+
+select cron.unschedule(jobname) from cron.job where jobname = 'sanmar-sync';
+select cron.schedule('sanmar-sync', '* * * * *', $$select public.sanmar_sync_tick()$$);
