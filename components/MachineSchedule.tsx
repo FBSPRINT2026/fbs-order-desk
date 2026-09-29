@@ -617,13 +617,6 @@ export default function MachineSchedule() {
       <div className="ms-dv-grid" style={{ gridTemplateColumns: `${gut}px repeat(${machines.length}, minmax(${colMin}px,1fr))`, minWidth: gut + machines.length * colMin }}>
         {o.sub ? <>
           <div className="ms-dv-bar" style={{ gridColumn: "1 / -1" }}>{o.sub}</div>
-          <div className="ms-dv-sub0" />
-          {machines.map((m) => { const u = used(m, day), cap = capacityMin(s, m, shiftOn(m, day) ? day : undefined); return (
-            <div key={m.id} className={"ms-dv-sub " + m.type + (isOffDay(m, day) ? " off" : "")}>
-              <button type="button" className={"ms-crew" + (isOffDay(m, day) ? " off" : "")} onClick={() => setDownEdit({ machine: m.id, day, allDay: true })} title={isOffDay(m, day) ? "Off this day: tap to change" : "Mark this press (or its crew) off"}>{crewLine(m, day)}</button>
-              <small className="ms-used">{+(u / 60).toFixed(1)} / {+(cap / 60).toFixed(1)}h</small>
-            </div>
-          ); })}
         </> : <>
         <div className="ms-dv-corner" />
         {machines.map((m) => { const u = used(m, day), cap = capacityMin(s, m, shiftOn(m, day) ? day : undefined); return (
@@ -643,6 +636,7 @@ export default function MachineSchedule() {
             {(m.down?.[day] || []).map(([a0, b0, why, rate]) => { const [sa, sb] = shiftOn(m, day) || typicalShift(m), a = Math.max(a0, rate ? sa : a0, vS), b = Math.min(b0, rate ? sb : b0, vE); if (b <= a) return null; return rate
               ? <div key={"sl" + a} className="ms-slow" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }}><button type="button" onClick={() => setDownEdit({ machine: m.id, day })} title={`${why}: ${m.name} runs at ${Math.round(rate * 100)}% ${clockLong(a)} – ${clockLong(b)} (jobs take ${+(1 / rate).toFixed(1)}× as long)`}>{why} · {Math.round(rate * 100)}%</button></div>
               : <button type="button" key={"dn" + a} className="ms-down" style={{ top: ((a - vS) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
+            {(day < today || (day === today && now.min > vS)) && <div className="ms-pastv" style={{ height: ((Math.min(day < today ? vE : now.min, vE) - vS) / 60) * HOUR_PX }} />}
             {day === today && now.min >= vS && now.min <= vE && <div className="ms-now" style={{ top: ((now.min - vS) / 60) * HOUR_PX }} />}
             {at(m, day).map((g) => { const h = Math.max(22, ((g.end - g.start) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes); return (
               <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "")} style={{ top: ((g.start - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
@@ -785,13 +779,19 @@ export default function MachineSchedule() {
     const a0 = Math.min(...(sh.length ? sh.map((x) => x[0]) : [420]), ...gs.map((g) => g.start)), b0 = Math.max(...(sh.length ? sh.map((x) => x[1]) : [1080]), ...gs.map((g) => g.end));
     return [Math.max(0, Math.floor((a0 - 60) / 60) * 60), Math.min(1440, Math.ceil((b0 + 60) / 60) * 60)];
   };
+  // today scrolls forward with the clock: it starts two hours before now (shown greyed as what's already happened)
+  const todayWin = (d: string): [number, number] => {
+    const w = dayWin(d);
+    if (d !== today) return w;
+    return [Math.max(w[0], Math.min(Math.floor(now.min / 60) * 60 - 120, w[1] - 60)), w[1]];
+  };
   const split = () => (
     <div className="ms-split">
       <div className="ms-split-col">
         <div className="ms-split-h">Next two days · hour by hour</div>
         <div className="ms-2d">
-          {dayGrid(d0, { title: dayTitle(d0), colMin: 70, hourPx: 40, win: dayWin(d0) })}
-          {dayGrid(d1, { sub: dayTitle(d1), colMin: 70, hourPx: 40, win: dayWin(d1) })}
+          {dayGrid(d0, { title: dayTitle(d0), colMin: 70, hourPx: 40, win: todayWin(d0) })}
+          {dayGrid(d1, { sub: <><b>{d1 === addDay(today, 1) ? "Tomorrow" : new Date(d1 + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}</b><span>{new Date(d1 + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span></>, colMin: 70, hourPx: 40, win: dayWin(d1) })}
         </div>
       </div>
       <div className="ms-split-col r">

@@ -3698,3 +3698,6 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-dv-bar b{font-size:14px;color:var(--accent)}.ms-dv-bar span{color:var(--ink-2);font-size:12.5px}.ms-dv-bar small{margin-left:auto;color:var(--ink-3);font-size:11.5px}
 .ms-dv-sub0{background:var(--accent-soft);border-bottom:1px solid var(--line)}
 .ms-dv-sub{border-top:0}
+/* hours already gone today: greyed */
+.ms-pastv{position:absolute;left:0;right:0;top:0;z-index:3;pointer-events:none;background:color-mix(in srgb,var(--ink) 10%,transparent)}
+.ms-dv-bar{border-bottom:1px solid var(--line)}
