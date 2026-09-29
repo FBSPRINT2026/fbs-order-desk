@@ -156,7 +156,11 @@ export type ShipSettings = {
   minCharge: number;       // at least this
   thirdPartyFee: number;   // per box, when it ships on the customer's own account (0 = free)
   goodsLeadDays: number;   // customer supplied goods must arrive this many business days before the in-hands date
+  /** the box the transit map prices (and from which ZIP; blank = our ship-from ZIP) */
+  transitBox?: TransitBox;
 };
+export type TransitBox = { length: number; width: number; height: number; weightLb: number; fromZip: string };
+export const DEFAULT_TRANSIT_BOX: TransitBox = { length: 12, width: 10, height: 8, weightLb: 10, fromZip: "" };
 
 /** When the Assistant flags things, and what the AI is allowed to do. AI stays off until an API key is set AND ai.enabled is on. */
 export type AssistantSettings = {
