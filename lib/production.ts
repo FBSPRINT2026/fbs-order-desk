@@ -23,9 +23,12 @@ export type Machine = {
   week?: Shift[];
   /** dates it isn't running (its crew's or its own days off), attached by the calendar */
   off?: Record<string, string>;
-  /** downtime for part of a day (maintenance, repair): date → [start, end, why][], attached by the calendar */
-  down?: Record<string, [number, number, string][]>;
+  /** downtime or reduced capacity for part of a day: date → [start, end, why, rate][], rate 0 = stopped,
+   *  0.5 = running at half speed (operator out: jobs take twice as long). Attached by the calendar. */
+  down?: Record<string, Down[]>;
 };
+/** [start, end, why, rate]: minutes after midnight; rate = the share of normal speed (0 = stopped) */
+export type Down = [number, number, string, number];
 /** [start, end] in minutes after midnight (300 = 5:00 AM, 900 = 3:00 PM) */
 export type Shift = [number, number] | null;
 /** A press crew and its leader's schedule (hours for each weekday, 0 = Sunday; null = off that day). */
@@ -305,15 +308,25 @@ export const shiftOn = (mach: Machine, day: string): Shift => (mach.off && day i
 export const isOffDay = (mach: Machine, day: string) => !!mach.off && day in mach.off;
 /** Its usual shift: the longest working day of its week (for days it doesn't normally run but has work booked). */
 export const typicalShift = (mach: Machine): [number, number] => ((mach.week || ownWeek(mach)).filter(Boolean) as [number, number][]).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0] || [mach.startMin ?? 420, (mach.startMin ?? 420) + (mach.hoursPerDay || 11) * 60];
-/** The stretches of a shift it can actually run: the shift minus any downtime that day. */
-export function windowsIn(sh: [number, number], down: [number, number, string][] = []): [number, number][] {
-  let ws: [number, number][] = [[sh[0], sh[1]]];
-  for (const [a, b] of down) ws = ws.flatMap(([x, y]): [number, number][] => (b <= x || a >= y ? [[x, y]] : [...(a > x ? [[x, a] as [number, number]] : []), ...(b < y ? [[b, y] as [number, number]] : [])]));
-  return ws.filter(([x, y]) => y - x >= 5);
+/**
+ * The stretches of a shift it can actually run, each with its speed: the shift minus downtime (rate 0), and slowed
+ * where it runs short-handed (rate 0.5 = half speed). [start, end, rate][]
+ */
+export function windowsIn(sh: [number, number], down: Down[] = []): [number, number, number][] {
+  const cuts = [...new Set([sh[0], sh[1], ...down.flatMap(([a, b]) => [a, b]).filter((t) => t > sh[0] && t < sh[1])])].sort((a, b) => a - b);
+  const out: [number, number, number][] = [];
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const x = cuts[i], y = cuts[i + 1];
+    const rate = down.filter(([a, b]) => a < y && b > x).reduce((r, d) => Math.min(r, Math.max(0, d[3])), 1);
+    if (rate <= 0 || y - x < 5) continue;
+    const last = out[out.length - 1];
+    if (last && last[1] === x && last[2] === rate) last[1] = y; else out.push([x, y, rate]);
+  }
+  return out;
 }
-export const windowsOn = (mach: Machine, day: string): [number, number][] => { const sh = shiftOn(mach, day); return sh ? windowsIn(sh, mach.down?.[day]) : []; };
-/** Minutes it runs on that day (0 when off; downtime taken out), or on a usual day when no day is given. */
-export const capacityMin = (s: ProductionSettings, mach: Machine, day?: string) => { if (day) return windowsOn(mach, day).reduce((a, [x, y]) => a + (y - x), 0); const t = typicalShift(mach); return t[1] - t[0]; };
+export const windowsOn = (mach: Machine, day: string): [number, number, number][] => { const sh = shiftOn(mach, day); return sh ? windowsIn(sh, mach.down?.[day]) : []; };
+/** Work minutes it has on that day (0 when off; downtime out, slow stretches counted at their speed), or on a usual day. */
+export const capacityMin = (s: ProductionSettings, mach: Machine, day?: string) => { if (day) return windowsOn(mach, day).reduce((a, [x, y, r]) => a + (y - x) * r, 0); const t = typicalShift(mach); return t[1] - t[0]; };
 const addDay = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const dow = (d: string) => new Date(d + "T12:00:00Z").getUTCDay();
 /** Business days back from a date on the shop's week (Mon–Fri). */

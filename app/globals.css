@@ -3589,3 +3589,10 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .ms-top .ms-title{margin:0}
 .ms-down{white-space:normal}
+/* short-handed / reduced capacity stretches */
+.ms-slow{position:absolute;left:0;right:0;z-index:1;pointer-events:none;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--fbs-orange) 16%,transparent) 0 6px,transparent 6px 12px);border-left:3px solid var(--fbs-orange)}
+.ms-slow button{all:unset;pointer-events:auto;cursor:pointer;position:absolute;top:2px;right:2px;font-size:9.5px;font-weight:800;color:#8a5a00;background:color-mix(in srgb,var(--fbs-orange) 30%,var(--surface));border-radius:4px;padding:1px 4px;white-space:nowrap;max-width:calc(100% - 4px);overflow:hidden;text-overflow:ellipsis;z-index:3}
+.ms-down.h.slow{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--fbs-orange) 30%,transparent) 0 5px,transparent 5px 10px);border:0}
+.ms-lc-dn.slow{color:#8a5a00;background:color-mix(in srgb,var(--fbs-orange) 22%,var(--surface))}
+.ms-inl{display:flex;align-items:center;gap:6px;font-size:13px}
+.ms-op{font-weight:600;color:var(--ink-2)}
