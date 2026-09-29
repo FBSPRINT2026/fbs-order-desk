@@ -3579,3 +3579,13 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-split-col.r .ms-lw.compact{position:absolute;inset:0;overflow:auto}
 .ms-split-col.r .ms-lw.compact .ms-lg{min-height:100%}
 @media (max-width: 1250px){.ms-split-col.r .ms-split-fill{position:static;min-height:0}.ms-split-col.r .ms-lw.compact{position:static}}
+/* downtime / maintenance blocks */
+.ms-down{all:unset;box-sizing:border-box;position:absolute;left:2px;right:2px;z-index:2;cursor:pointer;border-radius:6px;padding:2px 5px;font-size:10.5px;line-height:1.25;color:var(--danger);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;border:1.5px dashed var(--danger);background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--danger) 14%,var(--surface)) 0 6px,color-mix(in srgb,var(--danger) 6%,var(--surface)) 6px 12px)}
+.ms-down b{font-weight:800}
+.ms-down.h{top:2px;bottom:2px;right:auto;left:auto;padding:0;pointer-events:auto;cursor:default}
+.ms-dv-col{cursor:cell}
+.ms-lc-dn{all:unset;cursor:pointer;font-size:10px;font-weight:700;color:var(--danger);background:var(--danger-soft);border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-dn-btn{white-space:nowrap}
+.ms-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.ms-top .ms-title{margin:0}
+.ms-down{white-space:normal}

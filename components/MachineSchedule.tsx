@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, PV_READY, type Machine, type Crew, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, PV_READY, type Machine, type Crew, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 
 /**
@@ -23,7 +23,7 @@ type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; 
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean };
 type View = "split" | "timeline" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number };
-type DayOff = { id: string; crew_id: string | null; machine: string | null; day: string; note: string };
+type DayOff = { id: string; crew_id: string | null; machine: string | null; day: string; note: string; start_min: number | null; end_min: number | null };
 
 const TZ = "America/Chicago";
 const PARTS = new Intl.DateTimeFormat("en-US", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -70,11 +70,14 @@ function flow(cs: Card[], mach: Machine): Seg[] {
   const out: Seg[] = [];
   let cursor = -Infinity;
   // the next moment this machine is running, at or after `t` (absolute minutes)
+  // the stretches it can run each day: the shift minus any downtime (maintenance at noon splits the day in two)
+  const wins = (d: string): [number, number][] => (works(d) ? windowsIn(hrs(d), mach.down?.[d]) : []);
   const norm = (t: number, allowEarly = false) => {
     for (let g = 0; g < 400; g++) {
-      const dd = Math.floor(t / 1440), m = t - dd * 1440, day = fromOrd(dd), [s0, s1] = hrs(day);
-      if (!works(day) || m >= s1) { t = (dd + 1) * 1440 + hrs(fromOrd(dd + 1))[0]; allowEarly = false; continue; }
-      if (m < s0 && !allowEarly) t = dd * 1440 + s0;
+      const dd = Math.floor(t / 1440), m = t - dd * 1440, ws = wins(fromOrd(dd));
+      const w = ws.find(([, y]) => m < y);
+      if (!w) { t = (dd + 1) * 1440; allowEarly = false; continue; }
+      if (m < w[0] && !(allowEarly && w === ws[0])) return dd * 1440 + w[0];
       return t;
     }
     return t;
@@ -94,11 +97,11 @@ function flow(cs: Card[], mach: Machine): Seg[] {
     let left = Math.max(1, c.minutes);
     const pieces: { day: string; start: number; end: number }[] = [];
     for (let g = 0; g < 120 && left > 0; g++) {
-      const dd = Math.floor(t / 1440), m = t - dd * 1440, s1 = hrs(fromOrd(dd))[1];
-      const end = Math.min(m + left, Math.max(s1, m + 15));
+      const dd = Math.floor(t / 1440), m = t - dd * 1440, w = wins(fromOrd(dd)).find(([, y]) => m < y);
+      const end = Math.min(m + left, Math.max(w ? w[1] : hrs(fromOrd(dd))[1], m + 15));
       pieces.push({ day: fromOrd(dd), start: m, end });
       left -= end - m;
-      t = left > 0 ? norm((dd + 1) * 1440 + hrs(fromOrd(dd + 1))[0]) : dd * 1440 + end;
+      t = left > 0 ? norm(dd * 1440 + end) : dd * 1440 + end;
     }
     cursor = t;
     pieces.forEach((p, i) => out.push({ c, day: p.day, start: p.start, end: p.end, part: i + 1, parts: pieces.length, pushed: pushed && i === 0 }));
@@ -132,6 +135,7 @@ export default function MachineSchedule() {
   const [showPast, setShowPast] = useState(false);
   const [offs, setOffs] = useState<DayOff[]>([]);
   const [offEdit, setOffEdit] = useState<{ machine: Machine; day: string } | null>(null);
+  const [downEdit, setDownEdit] = useState<{ machine?: string; day?: string; start?: number } | null>(null);
 
   const load = useCallback(async () => {
     const sb = createClient();
@@ -141,7 +145,7 @@ export default function MachineSchedule() {
       // Printavo jobs are left off the calendar (it plans our own orders only); nothing in Printavo is read or changed here
       Promise.resolve({ data: [] as unknown[] }),
       sb.from("production_slots").select("*").not("order_id", "is", null).gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
-      sb.from("production_days_off").select("id, crew_id, machine, day, note").gte("day", addDay(today, -21)).lte("day", addDay(today, 120)),
+      sb.from("production_days_off").select("id, crew_id, machine, day, note, start_min, end_min").gte("day", addDay(today, -21)).lte("day", addDay(today, 120)),
     ]);
     const offList = (off0 || []) as DayOff[];
     setOffs(offList);
@@ -154,7 +158,15 @@ export default function MachineSchedule() {
     }
     const ps0 = mergeProduction((st?.data as { production?: unknown } | null)?.production);
     // each machine carries its days off (its crew's and its own) so the calendar and suggestions skip them
-    const ps = { ...ps0, machines: ps0.machines.map((m) => { const off: Record<string, string> = {}; for (const x of offList) if (x.machine === m.id || (x.crew_id && x.crew_id === m.crew)) off[x.day] = x.note || "Off"; return { ...m, off }; }) };
+    // whole days off vs downtime for part of a day (maintenance at noon)
+    const ps = { ...ps0, machines: ps0.machines.map((m) => {
+      const off: Record<string, string> = {}, down: Record<string, [number, number, string][]> = {};
+      for (const x of offList) if (x.machine === m.id || (x.crew_id && x.crew_id === m.crew)) {
+        if (x.start_min == null || x.end_min == null) off[x.day] = x.note || "Off";
+        else (down[x.day] ||= []).push([x.start_min, x.end_min, x.note || "Down"]);
+      }
+      return { ...m, off, down };
+    }) };
     setS(ps); setSlots(sl);
     const pv = ((a || []) as { id: string; visual_id: string; nickname: string; due_date: string | null; qty: number; status_name: string; customer_id: string | null; start: string | null; pend: string | null; pvgroups: unknown }[]).filter((x) => !PV_DONE.test(x.status_name || "") || PV_READY.test(x.status_name || ""));
     const ids = [...new Set([...((o || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...pv.map((x) => x.customer_id)].filter(Boolean))] as string[];
@@ -344,6 +356,7 @@ export default function MachineSchedule() {
                     onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver("")}
                     onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, d, vStart + ((e.clientX - r.left) / r.width) * range); }}>
                     {offShade(m, d).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}
+                    {(m.down?.[d] || []).map(([a, b, why]) => <div key={"dn" + a} className="ms-down h" title={`Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}
                     {d === today && now.min > vStart && <div className="ms-past" style={{ width: pct(Math.min(now.min, vEnd)) }} />}
                     {d === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now v" style={{ left: pct(now.min) }} />}
                     {gs.map((g, i) => {
@@ -384,8 +397,11 @@ export default function MachineSchedule() {
         {machines.map((m) => (
           <div key={m.id} className={"ms-dv-col" + (over === m.id + day ? (canDrop(m) ? " over" : " no") : "")} style={{ height: (range / 60) * HOUR_PX, backgroundSize: `100% ${HOUR_PX}px` }}
             onDragOver={(e) => { e.preventDefault(); setOver(m.id + day); }} onDragLeave={() => setOver("")}
-            onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, day, vStart + ((e.clientY - r.top) / HOUR_PX) * 60); }}>
+            onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, day, vStart + ((e.clientY - r.top) / HOUR_PX) * 60); }}
+            onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down")) return; const r = e.currentTarget.getBoundingClientRect(); setDownEdit({ machine: m.id, day, start: Math.floor((vStart + ((e.clientY - r.top) / HOUR_PX) * 60) / 30) * 30 }); }}
+            title="Click an open time to add downtime here">
             {offShade(m, day).map(([a, b]) => <div key={a} className="ms-off" style={{ top: ((a - vStart) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} />)}
+            {(m.down?.[day] || []).map(([a, b, why]) => <button type="button" key={"dn" + a} className="ms-down" style={{ top: ((a - vStart) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>)}
             {day === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now" style={{ top: ((now.min - vStart) / 60) * HOUR_PX }} />}
             {at(m, day).map((g) => { const h = Math.max(20, ((g.end - g.start) / 60) * HOUR_PX - 2); return (
               <button key={g.c.key + g.part} type="button" draggable className={cls(g) + (h < 44 ? " tiny" : "")} style={{ top: ((g.start - vStart) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
@@ -409,7 +425,7 @@ export default function MachineSchedule() {
       {machines.map((m) => { const gs = at(m, day).slice().sort((a, b) => a.start - b.start); const u = used(m, day), cap = capacityMin(s, m, shiftOn(m, day) ? day : undefined); return (
         <section key={m.id} className={"ms-pm " + m.type}>
           <div className="ms-pm-h"><b>{m.name}</b><span className="faint">{fmtMin(u)} / {fmtMin(cap)}</span></div>
-          <div className="ms-pstrip">{offShade(m, day).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}{gs.map((g) => <i key={g.c.key + g.part} className={cls(g) + " bar"} style={{ left: pct(g.start), width: `${((g.end - g.start) / range) * 100}%` }} />)}{day === today && <div className="ms-now v" style={{ left: pct(Math.max(vStart, Math.min(vEnd, now.min))) }} />}</div>
+          <div className="ms-pstrip">{offShade(m, day).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}{(m.down?.[day] || []).map(([a, b]) => <div key={"dn" + a} className="ms-down h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}{gs.map((g) => <i key={g.c.key + g.part} className={cls(g) + " bar"} style={{ left: pct(g.start), width: `${((g.end - g.start) / range) * 100}%` }} />)}{day === today && <div className="ms-now v" style={{ left: pct(Math.max(vStart, Math.min(vEnd, now.min))) }} />}</div>
           <div className="ms-ax ph">{hours.filter((h) => (h - vStart) % 180 === 0).map((h) => <i key={h} style={{ left: pct(h) }}>{clock(h)}</i>)}</div>
           {gs.length ? <ul className="ms-agenda">{gs.map((g) => (
             <li key={g.c.key + g.part}><button type="button" className={cls(g) + " row-blk"} onClick={() => setOpen(g.c)}>
@@ -496,6 +512,7 @@ export default function MachineSchedule() {
                   <div key={m.id + d} className={"ms-lc" + (isToday ? " today" : d < today ? " past" : "") + (!works || isOffDay(m, d) ? " off" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")}
                     onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver((o) => (o === m.id + d ? "" : o))} onDrop={(e) => { e.preventDefault(); if (drag) place(drag, m, d); }}>
                     {works && <div className={"ms-lc-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /><span>{u ? `${(u / 60).toFixed(u % 60 ? 1 : 0)}/${Math.round(cap / 60)}h` : ""}</span></div>}
+                    {(m.down?.[d] || []).map(([a, b, why]) => <button type="button" key={"dn" + a} className="ms-lc-dn" title={`Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: d, start: a })}>Down {clock(a)}–{clock(b)}</button>)}
                     {gs.map((g) => chip(g, d, o.compact))}
                     {isOffDay(m, d) ? <button type="button" className="ms-lc-off x" onClick={() => setOffEdit({ machine: m, day: d })} title="Tap to change">Off · {m.off![d]}</button> : !works && !gs.length ? <span className="ms-lc-off">off</span> : null}
                     {works && d >= today && <button type="button" className="ms-lc-mk" onClick={() => setOffEdit({ machine: m, day: d })} title={`Mark ${m.name}${crewOf(m) ? ` / ${crewOf(m)!.leader}'s crew` : ""} off this day`}>off?</button>}
@@ -531,8 +548,13 @@ export default function MachineSchedule() {
 
   return (
     <div className="ms">
-      <div className="ms-bar">
+      <div className="ms-top">
         <h2 className="ms-title">Production Calendar</h2>
+        <span className="spacer" />
+        <Link className="linkbtn" href="/shop/settings/production">Machines, crews &amp; times</Link>
+        <button type="button" className="btn primary ms-dn-btn" onClick={() => setDownEdit({})}>+ Add Downtime / Maintenance</button>
+      </div>
+      <div className="ms-bar">
         <div className="rv-seg">{([["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const).map(([k, l]) => <button key={k} type="button" className={typeF === k ? "on" : ""} onClick={() => setTypeF(k)}>{l}</button>)}</div>
         <div className="rv-seg ms-who" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
         <span className="spacer" />
@@ -541,7 +563,6 @@ export default function MachineSchedule() {
         <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
         <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "timeline" ? "This Week" : "Today"}</button>
         <button type="button" className="btn sm" onClick={() => shift(1)} aria-label="Later">→</button>
-        <Link className="linkbtn" href="/shop/settings/production">Machines &amp; times</Link>
       </div>
       {msg && <div className="banner" style={{ marginBottom: 8 }} onClick={() => setMsg("")}>{msg}</div>}
 
@@ -574,6 +595,7 @@ export default function MachineSchedule() {
         <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
+      {downEdit && <DownPanel machines={machines} init={downEdit} offs={offs} today={today} win={[vStart, vEnd]} me={me.email} onClose={() => setDownEdit(null)} onSaved={(m) => { setDownEdit(null); setMsg(m); load(); }} />}
       {offEdit && <OffPanel machine={offEdit.machine} day={offEdit.day} crew={crewOf(offEdit.machine)} offs={offs} me={me.email} onClose={() => setOffEdit(null)} onSaved={(m) => { setOffEdit(null); setMsg(m); load(); }} />}
       {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, d0, d1, ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} />}
     </div>
@@ -659,6 +681,54 @@ function OffPanel({ machine, day, crew, offs, me, onClose, onSaved }: { machine:
           <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
             <button type="button" className="btn" onClick={onClose}>Cancel</button>
             <button type="button" className="btn primary" disabled={busy || to < from} onClick={save}>Mark Off</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Downtime or maintenance on one machine: a date and a time window (or the whole day). The calendar blocks it off and
+ *  work flows around it (a job running into it pauses and picks up after). */
+function DownPanel({ machines, init, offs, today, win, me, onClose, onSaved }: { machines: Machine[]; init: { machine?: string; day?: string; start?: number }; offs: DayOff[]; today: string; win: [number, number]; me: string; onClose: () => void; onSaved: (msg: string) => void }) {
+  const [mach, setMach] = useState(init.machine || machines[0]?.id || "");
+  const [day, setDay] = useState(init.day || today);
+  const [allDay, setAllDay] = useState(false);
+  const start0 = init.start ?? 720;
+  const [a, setA] = useState(start0), [b, setB] = useState(Math.min(win[1], start0 + 60));
+  const [why, setWhy] = useState("Maintenance");
+  const [busy, setBusy] = useState(false);
+  const m = machines.find((x) => x.id === mach);
+  const times: number[] = []; for (let t = win[0]; t <= win[1]; t += 15) times.push(t);
+  const existing = offs.filter((x) => x.machine === mach && x.start_min != null && x.day >= today).sort((x, y) => x.day.localeCompare(y.day) || (x.start_min! - y.start_min!));
+  async function save() {
+    if (!m || (!allDay && b <= a)) return;
+    setBusy(true);
+    const r = await createClient().from("production_days_off").insert({ machine: mach, crew_id: null, day, start_min: allDay ? null : a, end_min: allDay ? null : b, note: why.trim() || "Maintenance", created_by: me });
+    setBusy(false);
+    onSaved(r.error ? r.error.message : `${m.name} down ${dayLbl(day)}${allDay ? " all day" : ` ${clockLong(a)} – ${clockLong(b)}`} (${why || "Maintenance"}). Jobs move around it.`);
+  }
+  async function remove(id: string) { setBusy(true); await createClient().from("production_days_off").delete().eq("id", id); setBusy(false); onSaved("Downtime removed."); }
+  return (
+    <div className="pp-modal" onClick={onClose}>
+      <div className="pp-sheet tmx-ed" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add downtime or maintenance">
+        <div className="pp-sheet-h"><b>Add Downtime / Maintenance</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="tmx-ed-b">
+          <div className="faint">The machine is blocked off for that time. Nothing is scheduled in it, and a job running into it stops and picks up right after.</div>
+          <div className="tmx-2 ms-3">
+            <label>Machine<select value={mach} onChange={(e) => setMach(e.target.value)}>{machines.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+            <label>Date<input type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label>
+            <label>Why<input type="text" list="dn-why" value={why} onChange={(e) => setWhy(e.target.value)} /><datalist id="dn-why"><option value="Maintenance" /><option value="Repair" /><option value="Cleaning" /><option value="Training" /><option value="Meeting" /><option value="Press closed" /></datalist></label>
+          </div>
+          <label className="check"><input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} /> All day</label>
+          {!allDay && <div className="tmx-2">
+            <label>From<select value={a} onChange={(e) => { const v = +e.target.value; setA(v); if (b <= v) setB(Math.min(win[1], v + 60)); }}>{times.slice(0, -1).map((t) => <option key={t} value={t}>{clockLong(t)}</option>)}</select></label>
+            <label>Until<select value={b} onChange={(e) => setB(+e.target.value)}>{times.filter((t) => t > a).map((t) => <option key={t} value={t}>{clockLong(t)}</option>)}</select></label>
+          </div>}
+          {existing.length > 0 && <div><b style={{ fontSize: 13 }}>Coming up on {m?.name.split(" · ")[0]}</b><ul className="ms-offs">{existing.map((x) => <li key={x.id}><span>{dayLbl(x.day)}</span><span className="faint">{clockLong(x.start_min!)} – {clockLong(x.end_min!)} · {x.note}</span><button type="button" className="linkbtn" disabled={busy} onClick={() => remove(x.id)}>Remove</button></li>)}</ul></div>}
+          <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="btn" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn primary" disabled={busy || !m || (!allDay && b <= a)} onClick={save}>Block It Off</button>
           </div>
         </div>
       </div>

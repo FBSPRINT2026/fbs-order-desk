@@ -23,6 +23,8 @@ export type Machine = {
   week?: Shift[];
   /** dates it isn't running (its crew's or its own days off), attached by the calendar */
   off?: Record<string, string>;
+  /** downtime for part of a day (maintenance, repair): date → [start, end, why][], attached by the calendar */
+  down?: Record<string, [number, number, string][]>;
 };
 /** [start, end] in minutes after midnight (300 = 5:00 AM, 900 = 3:00 PM) */
 export type Shift = [number, number] | null;
@@ -303,8 +305,15 @@ export const shiftOn = (mach: Machine, day: string): Shift => (mach.off && day i
 export const isOffDay = (mach: Machine, day: string) => !!mach.off && day in mach.off;
 /** Its usual shift: the longest working day of its week (for days it doesn't normally run but has work booked). */
 export const typicalShift = (mach: Machine): [number, number] => ((mach.week || ownWeek(mach)).filter(Boolean) as [number, number][]).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0] || [mach.startMin ?? 420, (mach.startMin ?? 420) + (mach.hoursPerDay || 11) * 60];
-/** Minutes it runs on that day (0 when off), or on a usual day when no day is given. */
-export const capacityMin = (s: ProductionSettings, mach: Machine, day?: string) => { if (day) { const sh = shiftOn(mach, day); return sh ? sh[1] - sh[0] : 0; } const t = typicalShift(mach); return t[1] - t[0]; };
+/** The stretches of a shift it can actually run: the shift minus any downtime that day. */
+export function windowsIn(sh: [number, number], down: [number, number, string][] = []): [number, number][] {
+  let ws: [number, number][] = [[sh[0], sh[1]]];
+  for (const [a, b] of down) ws = ws.flatMap(([x, y]): [number, number][] => (b <= x || a >= y ? [[x, y]] : [...(a > x ? [[x, a] as [number, number]] : []), ...(b < y ? [[b, y] as [number, number]] : [])]));
+  return ws.filter(([x, y]) => y - x >= 5);
+}
+export const windowsOn = (mach: Machine, day: string): [number, number][] => { const sh = shiftOn(mach, day); return sh ? windowsIn(sh, mach.down?.[day]) : []; };
+/** Minutes it runs on that day (0 when off; downtime taken out), or on a usual day when no day is given. */
+export const capacityMin = (s: ProductionSettings, mach: Machine, day?: string) => { if (day) return windowsOn(mach, day).reduce((a, [x, y]) => a + (y - x), 0); const t = typicalShift(mach); return t[1] - t[0]; };
 const addDay = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const dow = (d: string) => new Date(d + "T12:00:00Z").getUTCDay();
 /** Business days back from a date on the shop's week (Mon–Fri). */
