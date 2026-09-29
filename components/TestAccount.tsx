@@ -18,7 +18,7 @@ export default function TestAccount({ customerId, isTest, jobs, onChange }: { cu
     return j;
   }
   async function flag(v: boolean) { const j = await call({ action: "flag", on: v }, "flag"); if (j) { setOn(v); onChange(v); } }
-  async function generate() { const j = await call({ action: "generate", count: 75 }, "gen"); if (j) { setMsg(`Added ${j.created} sample jobs; ${j.booked} booked on the production calendar.`); onChange(); } }
+  async function generate() { const j = await call({ action: "generate", count: 25 }, "gen"); if (j) { setMsg(`Added ${j.created} sample jobs; ${j.booked} booked on the production calendar.`); onChange(); } }
   async function clear() { if (!armed) { setArmed(true); setTimeout(() => setArmed(false), 4000); return; } setArmed(false); const j = await call({ action: "clear" }, "clear"); if (j) { setMsg(`Cleared ${j.cleared} job${j.cleared === 1 ? "" : "s"}.`); onChange(); } }
   return (
     <div className={"ta-bar" + (on ? " on" : "")}>
@@ -26,7 +26,7 @@ export default function TestAccount({ customerId, isTest, jobs, onChange }: { cu
       {on ? (<>
         <span className="ta-note">Fake company for trying things out. Sample jobs show on the production calendar and can be cleared any time.</span>
         <span className="spacer" />
-        <button type="button" className="btn sm" disabled={!!busy} onClick={generate}>{busy === "gen" ? "Adding…" : "+ Add 75 sample jobs"}</button>
+        <button type="button" className="btn sm" disabled={!!busy} onClick={generate}>{busy === "gen" ? "Adding…" : "+ Add 25 sample jobs"}</button>
         <button type="button" className={"btn sm danger" + (armed ? " armed" : "")} disabled={!!busy || !jobs} onClick={clear}>{busy === "clear" ? "Clearing…" : armed ? `Yes, clear all ${jobs}` : `Clear all jobs (${jobs})`}</button>
       </>) : <span className="ta-note faint">Turn on for a fake account used to try out the calendar and other tools.</span>}
       {msg && <span className="ta-msg">{msg}</span>}

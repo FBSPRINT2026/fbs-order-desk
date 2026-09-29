@@ -65,15 +65,15 @@ function plusWorkdays(d: string, n: number) { const x = new Date(d + "T12:00:00Z
 
 export type SampleOrder = { customer_id: string; nickname: string; status: string; type: string; due_date: string; qty: number; total: number; groups: Group[]; lines: never[]; po_number: string; notes: string; source: string; approved_at: string | null; approved_name: string | null; delivery_method: string; price_type: string };
 
-export function sampleOrders(customerId: string, today: string, n = 75): SampleOrder[] {
+export function sampleOrders(customerId: string, today: string, n = 25): SampleOrder[] {
   const out: SampleOrder[] = [];
   for (let i = 0; i < n; i++) {
     const r = Math.random();
     const groups = r < 0.55 ? [screenGroup()] : r < 0.8 ? [embGroup()] : r < 0.92 ? [dtfGroup()] : [screenGroup(), embGroup()];
     const qty = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes).reduce((c, x) => c + (x || 0), 0), 0), 0);
     // stages: most ready to run (goods here, art approved), the rest still waiting on art or blanks
-    const status = i < 45 ? "production" : i < 55 ? "blanks" : i < 65 ? "art" : "approved";
-    const due = plusWorkdays(today, i < 6 ? between(1, 2) : between(3, 22));
+    const f = i / n, status = f < 0.6 ? "production" : f < 0.73 ? "blanks" : f < 0.87 ? "art" : "approved";
+    const due = plusWorkdays(today, f < 0.08 ? between(1, 2) : between(3, 15));
     const what = groups.map((g) => g.lines[0].garment).join(" + ");
     out.push({
       customer_id: customerId, nickname: `${pick(NAMES)} · ${what}`, status, type: "invoice", due_date: due, qty, total: 0, groups, lines: [],

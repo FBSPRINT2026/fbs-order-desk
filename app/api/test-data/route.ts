@@ -11,7 +11,7 @@ export const maxDuration = 60;
 /**
  * Test accounts (owner / admin only).
  * POST {customerId, action: "flag", on}: mark a customer as a test account (or not).
- * POST {customerId, action: "generate", count?}: add sample jobs to a test account, and book about half of the ready
+ * POST {customerId, action: "generate", count? (25)}: add sample jobs to a test account, and book about half of the ready
  *      ones onto the production calendar (a few earlier this week already done, one running).
  * POST {customerId, action: "clear"}: remove every job on a test account (only ever a test account).
  */
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 
   if (b.action === "generate") {
     const today = shopToday();
-    const n = Math.max(1, Math.min(150, Math.round(+b.count || 75)));
+    const n = Math.max(1, Math.min(150, Math.round(+b.count || 25)));
     const rows = sampleOrders(id, today, n);
     const { data: made, error } = await admin.from("orders").insert(rows).select("id, number, due_date, status, groups, lines, nickname");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
