@@ -2558,3 +2558,33 @@ a.as-ai{text-decoration:none}
 .ai-refs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .ai-ref{font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--accent-soft);color:var(--accent);text-decoration:none}
 .ai-ref:hover{background:var(--accent);color:#fff}
+
+/* dashboard: two columns (2/3 · 1/3) and the production card */
+.dash-cols{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px;align-items:start}
+.dash-col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.dash-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pd-stack{display:flex;height:12px;border-radius:999px;overflow:hidden;gap:2px;margin:6px 0 10px;background:var(--surface-2)}
+.pd-seg{display:block;min-width:6px;flex-basis:0}
+.pd-seg:hover{filter:brightness(1.1)}
+.pd-queue{background:var(--fbs-blue)}.pd-art{background:#7FCBEB}.pd-blanks{background:var(--fbs-orange)}
+.pd-production{background:var(--fbs-salmon)}.pd-issue{background:var(--danger)}.pd-ship{background:var(--ok)}
+.pd-legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:14px}
+.pd-lg{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);text-decoration:none;font-weight:600}
+.pd-lg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.pd-lg b{color:var(--ink);font-variant-numeric:tabular-nums}
+.pd-lg:hover{color:var(--ink)}
+.pd-lg.zero{opacity:.45}
+.pd-lg.bad b{color:var(--danger)}
+.pd-tabs{margin-bottom:8px;flex-wrap:wrap}
+.pd-tabs button{padding:6px 12px;font-size:13px}
+.pd-tabs button.bad .aa-n{background:var(--danger);color:#fff}
+.pd-scroll{max-height:380px}
+.pd-tbl td{padding:8px}
+.pd-tbl tbody tr:hover td{background:var(--surface-2)}
+.pd-c b{font-weight:700}
+.pd-n{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pd-due{white-space:nowrap;font-variant-numeric:tabular-nums}
+.pd-due.bad{color:var(--danger);font-weight:700}
+.pd-foot{display:flex;justify-content:flex-end;padding-top:10px}
+@media (max-width: 1100px){.dash-cols,.dash-2{grid-template-columns:1fr}}
+@media (max-width: 640px){.pd-tbl th:nth-child(3),.pd-tbl td:nth-child(3){display:none}}
