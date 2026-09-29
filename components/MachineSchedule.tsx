@@ -249,6 +249,7 @@ export default function MachineSchedule() {
   const [replanTray, setReplanTray] = useSticky("cal.replanTray", true);
   const [replanBusy, setReplanBusy] = useState(false);
   const [checkin, setCheckin] = useState(false);
+  const [renorm, setRenorm] = useState(false);
   // the "schedule too tight" prompt shows once a day (again if more jobs go late)
   const [toolsOpen, setToolsOpen] = useSticky("cal.toolsOpen", true);
   const [tightOpen, setTightOpen] = useSticky("cal.tightOpen", false);
@@ -901,6 +902,34 @@ export default function MachineSchedule() {
       </div>
     </div>
   );
+  // what Renormalize Schedule would do: extra shifts from today on, and split jobs whose parts haven't started
+  const renormItems = (): RenormItem[] => {
+    const out: RenormItem[] = [], sb = createClient();
+    const nameOf = (id: string) => { const m = s.machines.find((x) => x.id === id); if (!m) return id; const c = crewOf(m); return shortName(m) + (c ? ` (${c.leader})` : ""); };
+    for (const x of extras.filter((e) => e.day >= today).sort((a, b) => a.day.localeCompare(b.day) || a.machine.localeCompare(b.machine))) {
+      const booked = cards.filter((c) => c.machine.id === x.machine && c.day === x.day && c.slot).length;
+      out.push({ key: "sh:" + x.id, kind: "shift", title: `${nameOf(x.machine)} · ${dayLbl(x.day)} ${clock(x.start_min)}–${clock(x.end_min)}`, detail: `${x.note || "Extra shift"}${booked ? ` · ${booked} job${booked === 1 ? "" : "s"} booked that day move back into the week` : ""}`, run: () => Promise.resolve(sb.from("production_extra_shifts").delete().eq("id", x.id)) });
+    }
+    const groups = new Map<string, Card[]>();
+    for (const c of cards) if (c.slot && !c.fromPv) { const k = c.job.key + ":" + c.slot.kind; groups.set(k, [...(groups.get(k) || []), c]); }
+    for (const [k, cs] of groups) {
+      if (cs.length < 2 || !cs.some((c) => c.slot!.locations?.length)) continue;
+      const parts = cs.slice().sort((a, b) => a.day.localeCompare(b.day) || a.slot!.position - b.slot!.position);
+      const job = parts[0].job, need0 = job.needs.find((n) => n.type === parts[0].slot!.kind) || parts[0].need;
+      const where = parts.map((c) => `${c.need.label} on ${shortName(c.machine)} ${dayLbl(c.day)}`).join(" + ");
+      const started = parts.find((c) => c.slot!.status === "running" || c.slot!.status === "done");
+      // the whole job goes where the first part is, or the first part's press that can print every color
+      const keep = parts.find((c) => fits(need0, c.machine));
+      const title = `#${job.number} ${job.customer || job.name}`;
+      if (started) { out.push({ key: "un:" + k, kind: "unsplit", title, detail: where, blocked: `${where} · can't join: the ${started.need.label} run already ${started.slot!.status === "done" ? "finished" : "started"}`, run: async () => {} }); continue; }
+      if (!keep) { out.push({ key: "un:" + k, kind: "unsplit", title, detail: where, blocked: `${where} · can't join: no press it's on can print all ${need0.needColors} screens`, run: async () => {} }); continue; }
+      out.push({ key: "un:" + k, kind: "unsplit", title, detail: `${where} → one run: ${need0.label} on ${shortName(keep.machine)} ${dayLbl(keep.day)} (${fmtMin(estimate(s, need0, keep.machine).minutes)})`, run: async () => {
+        await sb.from("production_slots").update({ locations: null, label: need0.label, minutes: estimate(s, need0, keep.machine).minutes, start_min: null, source: "renormalize", updated_at: new Date().toISOString() }).eq("id", keep.slot!.id);
+        for (const c of parts) if (c !== keep) await sb.from("production_slots").delete().eq("id", c.slot!.id);
+      } });
+    }
+    return out;
+  };
   const shift = (dir: 1 | -1) => (view === "timeline" ? setWeek(addDay(week, 7 * dir)) : setDay(nextVis(addDay(view === "split" ? d0 : day, dir), dir)));
 
   return (
@@ -937,6 +966,7 @@ export default function MachineSchedule() {
             <button type="button" className="ms-act" onClick={() => setReplan({ why: "" })}><b>Re-plan Schedule</b><small>Re-lay open work from now, soonest in-hands first</small></button>
             <button type="button" className="ms-act" onClick={() => setShiftEdit(true)}><b>+ Add Shift</b><small>A weekend or extra shift for a crew</small></button>
             <button type="button" className="ms-act" onClick={() => setDownEdit({})}><b>+ Add Downtime</b><small>Maintenance, repairs, an employee out</small></button>
+            <button type="button" className="ms-act" onClick={() => setRenorm(true)}><b>Renormalize Schedule</b><small>Drop extra shifts, put split jobs back together</small></button>
           </div>
 
           {tight.length > 0 ? (
@@ -988,6 +1018,7 @@ export default function MachineSchedule() {
         <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
+      {renorm && <RenormPanel items={renormItems()} onClose={() => setRenorm(false)} onDone={(m) => { setRenorm(false); setMsg(m); load(); setReplan({ why: `${m} Re-plan now so the jobs fill the regular week?` }); }} />}
       {shiftEdit && <ShiftPanel machines={machines} crews={s.crews} extras={extras} today={today} me={me.email} onClose={() => setShiftEdit(false)} onSaved={(m) => { setShiftEdit(false); setWknd(true); setMsg(m); load(); setReplan({ why: "Weekend shift added. Re-plan so earlier jobs can move into it and make room during the week?" }); }} />}
       {checkin && <CheckIn rows={cards.filter((c) => c.slot && !c.fromPv && (c.day === today || c.slot.status === "running" || c.slot.status === "paused")).map((c) => ({ c, first: (segs.ofCard.get(c.key) || []).filter((g) => g.day === today)[0] })).sort((a, b) => a.c.machine.id.localeCompare(b.c.machine.id) || (a.first?.start ?? 9999) - (b.first?.start ?? 9999))}
         machines={machines} crews={s.crews} now={now.min} onClose={() => setCheckin(false)}
@@ -1169,6 +1200,49 @@ function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSav
 }
 
 /** Add an extra shift (usually Saturday or Sunday) for one or more presses and their crews, e.g. Saturday 10 AM – 2 PM. */
+/**
+ * Renormalize Schedule: back to the regular week. Lists what it would do (drop the weekend / extra shifts still ahead,
+ * put split jobs back together as one run) with every line ticked; untick anything to keep it, then apply.
+ */
+type RenormItem = { key: string; kind: "shift" | "unsplit"; title: string; detail: string; blocked?: string; run: () => Promise<unknown> };
+function RenormPanel({ items, onClose, onDone }: { items: RenormItem[]; onClose: () => void; onDone: (msg: string) => void }) {
+  const [skip, setSkip] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const doable = items.filter((x) => !x.blocked), chosen = doable.filter((x) => !skip.includes(x.key));
+  const shifts = items.filter((x) => x.kind === "shift"), splits = items.filter((x) => x.kind === "unsplit");
+  async function apply() {
+    setBusy(true);
+    for (const x of chosen) await x.run();
+    setBusy(false);
+    const ns = chosen.filter((x) => x.kind === "shift").length, nj = chosen.filter((x) => x.kind === "unsplit").length;
+    onDone(`Schedule renormalized: ${[ns ? `${ns} extra shift${ns === 1 ? "" : "s"} removed` : "", nj ? `${nj} job${nj === 1 ? "" : "s"} put back together` : ""].filter(Boolean).join(", ")}.`);
+  }
+  const row = (x: RenormItem) => (
+    <li key={x.key} className={x.blocked ? "no" : skip.includes(x.key) ? "off" : ""}>
+      <label><input type="checkbox" disabled={!!x.blocked} checked={!x.blocked && !skip.includes(x.key)} onChange={(e) => setSkip(e.target.checked ? skip.filter((k) => k !== x.key) : [...skip, x.key])} />
+        <span><b>{x.title}</b><small>{x.blocked || x.detail}</small></span></label>
+    </li>
+  );
+  return (
+    <div className="pp-modal" onClick={onClose}>
+      <div className="pp-sheet tmx-ed ms-rn" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Renormalize schedule">
+        <div className="pp-sheet-h"><b>Renormalize Schedule</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="tmx-ed-b">
+          {!items.length ? <div>The schedule is already normal: no extra shifts ahead and no split jobs.</div> : <>
+            <div className="faint" style={{ fontSize: 12.5 }}>Back to the regular week. Everything below is ticked; untick anything you want to keep as it is.</div>
+            {shifts.length > 0 && <div><div className="ms-rn-h">Remove extra shifts <span className="aa-n">{shifts.length}</span></div><ul className="ms-rn-l">{shifts.map(row)}</ul></div>}
+            {splits.length > 0 && <div><div className="ms-rn-h">Put split jobs back together <span className="aa-n">{splits.length}</span></div><ul className="ms-rn-l">{splits.map(row)}</ul></div>}
+          </>}
+          <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="btn" onClick={onClose}>{items.length ? "Cancel" : "Close"}</button>
+            {items.length > 0 && <button type="button" className="btn primary" disabled={busy || !chosen.length} onClick={apply}>{busy ? "Working…" : `Make ${chosen.length} Change${chosen.length === 1 ? "" : "s"}`}</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ShiftPanel({ machines, crews, extras, today, me, onClose, onSaved }: { machines: Machine[]; crews: Crew[]; extras: Extra[]; today: string; me: string; onClose: () => void; onSaved: (msg: string) => void }) {
   // the next three weekends
   const wkends: string[] = []; for (let i = 1; i <= 21 && wkends.length < 6; i++) { const d = addDay(today, i); if (dow(d) === 6 || dow(d) === 0) wkends.push(d); }
