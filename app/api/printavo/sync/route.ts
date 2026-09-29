@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { listCustomers, listOrders, PrintavoError, PrintavoThrottled } from "@/lib/printavo";
+import { listCustomerOrders, listCustomers, listOrders, PrintavoError, PrintavoThrottled } from "@/lib/printavo";
 import { copyFiles, importCustomer, importOrder } from "@/lib/printavoImport";
 
 export const runtime = "nodejs";
@@ -12,6 +12,7 @@ export const maxDuration = 60;
  * The Printavo sync, run every minute by the database's schedule (see migration 029). READ-ONLY toward Printavo.
  *   job=api      talks to Printavo (about 2 requests a second, Printavo's limit):
  *                1. lists every order once, 2. imports what's new or changed (newest first),
+ *                   (the full pass goes customer by customer: Printavo's all-orders list stops after 10,000 orders)
  *                3. every 5 minutes checks the active jobs (the ~500 orders with the latest due dates) for changes, and
  *                   keeps walking Printavo's whole order list the same way (a full pass about every half hour): each order's
  *                   fingerprint (changed time, total, balance, status, due date, customer) is compared, so edits, payments,
@@ -72,7 +73,8 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     // 2. keep noticing changes even during the big import: every 6th turn reads one page of the order list
     // the full pass over every order: during the import it keeps going alongside; once caught up, a new pass starts 30 minutes after the last
     const sweepDue = !!sync.sweep_cursor || !sync.sweep_done_at || Date.now() - new Date(sync.sweep_done_at).getTime() > 30 * 60000;
-    if (sweepDue && (!pending || turn % 6 === 0)) { await sweepPage(admin, sync, did); continue; }
+    // a pass that's under way gets most turns (it only reads lists, and it's how new orders are found); otherwise every 6th
+    if (sweepDue && (!pending || (sync.sweep_cursor ? turn % 3 !== 0 : turn % 6 === 0))) { await sweepPage(admin, sync, did); continue; }
 
     // a big order can take 15+ seconds to read at our pace: don't start one near the end of the run
     if (pending) { if (Date.now() > deadline - 17000) break; await importOne(admin, pending.printavo_id, pending.attempts, did); continue; }
@@ -124,24 +126,43 @@ async function quickPage(admin: SupabaseClient, sync: Sync, did: Record<string, 
   }
 }
 
-/** One page (25 orders) of Printavo's order list: new orders are queued; changed ones (different fingerprint) are queued again. */
+/**
+ * One page of the full pass. Printavo's all-orders list stops after 10,000 orders, so the pass walks every customer
+ * and reads each one's orders (25 a page). Cursor: "c:<customer id>|<page cursor>".
+ * New orders are queued; changed ones (different fingerprint) are queued again. When a customer is finished, their
+ * orders we didn't see this pass were removed in Printavo (we keep our copy, just mark it).
+ */
 async function sweepPage(admin: SupabaseClient, sync: Sync, did: Record<string, number>) {
   const pass = sync.sweep_no + 1;
   if (!sync.sweep_cursor && !sync.sweep_started_at) {
     sync.sweep_started_at = new Date().toISOString();
     await admin.from("printavo_sync").update({ sweep_started_at: sync.sweep_started_at }).eq("id", 1);
   }
-  const page = await listOrders(sync.sweep_cursor);
-  await comparePage(admin, page.orders, did, pass);
-  sync.sweep_cursor = page.next;
-  if (!page.next) {
-    // a full pass is done: orders we didn't see anymore were removed in Printavo (we keep our copy, just mark it)
-    await admin.from("printavo_index").update({ status: "gone" }).lt("seen_sweep", pass).neq("status", "gone");
-    sync.sweep_no = pass; sync.sweep_started_at = null; sync.sweep_done_at = new Date().toISOString();
-    await admin.from("printavo_sync").update({ sweep_cursor: null, sweep_no: pass, sweep_started_at: null, sweep_done_at: sync.sweep_done_at }).eq("id", 1);
-  } else {
-    await admin.from("printavo_sync").update({ sweep_cursor: page.next }).eq("id", 1);
+  const m = /^c:([^|]*)\|(.*)$/.exec(sync.sweep_cursor || "");
+  let cust = m ? m[1] : "", after: string | null = m && m[2] ? m[2] : null;
+  if (!cust) {
+    const { data } = await admin.from("printavo_customers").select("printavo_id").order("printavo_id").limit(1);
+    cust = (data?.[0] as { printavo_id: string } | undefined)?.printavo_id || "";
+    if (!cust) return finishPass(admin, sync, pass);
   }
+  const page = await listCustomerOrders(cust, after);
+  if (page) await comparePage(admin, page.orders, did, pass);
+  let next: string | null = null;
+  if (page?.next) next = `c:${cust}|${page.next}`;
+  else {
+    // this customer is done
+    if (page) await admin.from("printavo_index").update({ status: "gone" }).eq("customer_pid", cust).lt("seen_sweep", pass).neq("status", "gone");
+    const { data } = await admin.from("printavo_customers").select("printavo_id").gt("printavo_id", cust).order("printavo_id").limit(1);
+    const nc = (data?.[0] as { printavo_id: string } | undefined)?.printavo_id;
+    if (nc) next = `c:${nc}|`;
+  }
+  if (!next) return finishPass(admin, sync, pass);
+  sync.sweep_cursor = next;
+  await admin.from("printavo_sync").update({ sweep_cursor: next }).eq("id", 1);
+}
+async function finishPass(admin: SupabaseClient, sync: Sync, pass: number) {
+  sync.sweep_cursor = null; sync.sweep_no = pass; sync.sweep_started_at = null; sync.sweep_done_at = new Date().toISOString();
+  await admin.from("printavo_sync").update({ sweep_cursor: null, sweep_no: pass, sweep_started_at: null, sweep_done_at: sync.sweep_done_at }).eq("id", 1);
 }
 
 /** Imports (or refreshes) one order with everything on it. */

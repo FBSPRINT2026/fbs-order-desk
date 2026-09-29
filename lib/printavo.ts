@@ -155,6 +155,8 @@ export const Q = {
   // every order in the account (25 at a time, oldest first) with what changes when an order changes, and just the file links on one order
   list: `query($after:String){ orders(first:25, after:$after){ nodes{ __typename ${typed("id visualId createdAt total amountOutstanding customerDueAt status{ name } timestamps{ updatedAt } contact{ customer{ id companyName } }")} } pageInfo{ hasNextPage endCursor } } }`,
   // the orders with the latest due dates first: that is where the active jobs are
+  // one customer's orders, with the same fields as the full list (Printavo's all-orders list stops at 10,000, so the full pass goes customer by customer)
+  listByCustomer: `query($id:ID!,$after:String){ customer(id:$id){ orders(first:25, after:$after){ nodes{ __typename ${typed("id visualId createdAt total amountOutstanding customerDueAt status{ name } timestamps{ updatedAt } contact{ customer{ id companyName } }")} } pageInfo{ hasNextPage endCursor } } } }`,
   listActive: `query($after:String){ orders(first:25, after:$after, sortOn:CUSTOMER_DUE_AT, sortDescending:true){ nodes{ __typename ${typed("id visualId createdAt total amountOutstanding customerDueAt status{ name } timestamps{ updatedAt } contact{ customer{ id companyName } }")} } pageInfo{ hasNextPage endCursor } } }`,
   fileList: `query($id:ID!){ order(id:$id){ ${typed("productionFiles(first:50){ nodes{ fileUrl } } lineItemGroups(first:50){ nodes{ id } }")} } }`,
   groupFiles: `query($id:ID!){ lineItemGroup(id:$id){ imprints(first:25){ nodes{ mockups(first:20){ nodes{ fullImageUrl } } } } lineItems(first:100){ nodes{ mockups(first:10){ nodes{ fullImageUrl } } } } } }`,
@@ -179,6 +181,15 @@ export async function listOrders(after: string | null, active = false): Promise<
   const d = await pv<{ orders: { nodes: Raw[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(active ? Q.listActive : Q.list, { after });
   const c = d.orders;
   if (!c) throw new PrintavoError("Printavo didn't return the order list.");
+  return listed(c);
+}
+/** One page (25) of one customer's orders. null = Printavo doesn't know the customer anymore. */
+export async function listCustomerOrders(customerId: string, after: string | null): Promise<{ orders: PvListed[]; next: string | null; totalNodes: number | null } | null> {
+  const d = await pv<{ customer: { orders: { nodes: Raw[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } | null } | null }>(Q.listByCustomer, { id: customerId, after });
+  if (!d.customer) return null;
+  return listed(d.customer.orders || { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } });
+}
+function listed(c: { nodes: Raw[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } }): { orders: PvListed[]; next: string | null; totalNodes: number | null } {
   return {
     orders: (c?.nodes || []).filter((o) => o?.id).map((o) => ({
       id: s(o.id), visualId: s(o.visualId), kind: o.__typename === "Quote" ? "quote" : "invoice", createdAt: s(o.createdAt), total: n(o.total),
