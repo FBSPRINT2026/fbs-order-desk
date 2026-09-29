@@ -47,6 +47,7 @@ export function ConnectionsPanel() {
     ["printavo", "Printavo", "PRINTAVO_EMAIL and PRINTAVO_TOKEN (Printavo → My Account → API token; Premium plan)"],
     ["stax", "Stax payments", "STAX_API_KEY and STAX_WEB_PAYMENTS_TOKEN (Stax Pay → Apps → API Keys)"],
     ["claude", "Claude (AI)", "ANTHROPIC_API_KEY (console.anthropic.com → Settings → API Keys)"],
+    ["sanmar", "SanMar (product data)", "SANMAR_CUSTOMER_NUMBER, SANMAR_USERNAME and SANMAR_PASSWORD (a SanMar.com user made for web services)"],
   ];
   return (
     <section className="panel" id="connections">

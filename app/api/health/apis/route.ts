@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sanmarConfigured, sanmarPing } from "@/lib/sanmar";
 
 export const dynamic = "force-dynamic";
 
@@ -53,14 +54,20 @@ async function anthropic(): Promise<Check> {
   } catch (e) { return { ok: false, detail: clip(e instanceof Error ? e.message : String(e)) }; }
 }
 
+/** SanMar: one small price lookup with our web services login. */
+async function sanmar(): Promise<Check> {
+  if (!sanmarConfigured()) return { ok: false, detail: "SANMAR_CUSTOMER_NUMBER, SANMAR_USERNAME or SANMAR_PASSWORD is missing" };
+  try { return { ok: true, detail: await sanmarPing() }; } catch (e) { return { ok: false, detail: clip(e instanceof Error ? e.message : String(e)) }; }
+}
+
 /**
  * Live connection check for Printavo, Stax and Claude. Shows only ok / not ok and why — never keys.
  * Results are cached for 2 minutes so the page can't be used to hammer the services.
  */
 export async function GET() {
   if (cache && Date.now() - cache.at < 120000) return NextResponse.json({ cached: true, ...cache.body });
-  const [p, s, a] = await Promise.all([timed(printavo()), timed(stax()), timed(anthropic())]);
-  const body = { printavo: p, stax: s, claude: a };
+  const [p, s, a, sm] = await Promise.all([timed(printavo()), timed(stax()), timed(anthropic()), timed(sanmar())]);
+  const body = { printavo: p, stax: s, claude: a, sanmar: sm };
   cache = { at: Date.now(), body };
   return NextResponse.json(body);
 }
