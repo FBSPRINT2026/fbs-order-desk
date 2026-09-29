@@ -94,7 +94,6 @@ export default function PrintavoSync() {
                     {est > 0 && y.imported < est && <i className="psy-bar"><em style={{ width: `${Math.min(100, (y.imported / est) * 100)}%` }} /></i>}
                   </div>
                 ); })}
-                ))}
               </div>
             )}
           </>
