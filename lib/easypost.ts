@@ -26,7 +26,7 @@ async function ep<T>(path: string, body: unknown): Promise<T> {
   return j;
 }
 
-const addr = (a: ShipAddress) => ({ name: a.name || undefined, company: a.company || undefined, street1: a.street1 || undefined, street2: a.street2 || undefined, city: a.city, state: a.state, zip: a.zip, country: a.country || "US", phone: a.phone || undefined, email: a.email || undefined });
+const addr = (a: ShipAddress) => ({ name: a.name || undefined, company: a.company || undefined, street1: a.street1 || undefined, street2: a.street2 || undefined, city: a.city || undefined, state: a.state || undefined, zip: a.zip, country: a.country || "US", phone: a.phone || undefined, email: a.email || undefined });
 
 type EpRate = { id: string; carrier: string; service: string; rate: string; delivery_days: number | null; delivery_date: string | null };
 

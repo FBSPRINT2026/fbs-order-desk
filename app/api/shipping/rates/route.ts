@@ -16,7 +16,12 @@ export async function POST(req: Request) {
   const boxes = (Array.isArray(b.boxes) ? b.boxes : []) as Box[];
   const bill = (["fbs", "ups", "fedex"].includes(b.bill) ? b.bill : "fbs") as BillTo;
   if (!boxes.length || !boxes.every(boxReady)) return NextResponse.json({ error: "Every box needs its size and weight." }, { status: 400 });
-  if (!addressReady(b.to || {})) return NextResponse.json({ error: "The ship-to address isn't complete." }, { status: 400 });
+  // quick quote (dashboard widget): just a ZIP is enough to price it
+  if (b.quick) {
+    const zip = String(b.to?.zip || "").trim();
+    if (!/^\d{5}(-\d{4})?$/.test(zip)) return NextResponse.json({ error: "Enter a 5-digit ZIP." }, { status: 400 });
+    b.to = { name: "Quote", company: "", street1: "", street2: "", city: "", state: "", zip, country: "US", phone: "", email: "" };
+  } else if (!addressReady(b.to || {})) return NextResponse.json({ error: "The ship-to address isn't complete." }, { status: 400 });
   if (bill !== "fbs" && (!String(b.account || "").trim() || !String(b.zip || "").trim())) return NextResponse.json({ error: "Enter the customer's account number and its billing ZIP." }, { status: 400 });
   const { data: st } = await v.supabase.from("settings").select("data").eq("id", 1).maybeSingle();
   const s = mergeSettings(st?.data).ship;

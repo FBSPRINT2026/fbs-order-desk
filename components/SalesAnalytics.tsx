@@ -22,27 +22,34 @@ function Delta({ now, then, label }: { now: number; then: number; label: string 
   return <span className={"an-d " + (p >= 0 ? "up" : "down")}>{p >= 0 ? "▲" : "▼"} {Math.abs(p)}% <span>vs {label}</span></span>;
 }
 
-export default function SalesAnalytics() {
+/** One load shared by every sales widget on the page. */
+let cache: { at: number; p: Promise<{ rows: M[]; top: Top[] }> } | null = null;
+function loadSales(y: number) {
+  if (cache && Date.now() - cache.at < 5 * 60000) return cache.p;
+  const sb = createClient();
+  const yearAgo = new Date(); yearAgo.setFullYear(y - 1);
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  const d = (x: Date) => x.toISOString().slice(0, 10);
+  const p = Promise.all([
+    sb.rpc("shop_sales_monthly", { p_from: `${y - 1}-01-01` }),
+    sb.rpc("shop_top_customers", { p_from: d(yearAgo), p_to: d(tomorrow), p_limit: 10 }),
+  ]).then(([a, b]) => ({
+    rows: ((a.data || []) as { month: string; sales: number; orders: number }[]).map((r) => ({ month: r.month.slice(0, 7), sales: +r.sales || 0, orders: +r.orders || 0 })),
+    top: ((b.data || []) as Top[]).map((t) => ({ ...t, sales: +t.sales || 0, orders: +t.orders || 0 })),
+  }));
+  cache = { at: Date.now(), p };
+  return p;
+}
+
+/** part: the numbers, the month chart, the top customers, or all three together. */
+export default function SalesAnalytics({ part = "all" }: { part?: "all" | "kpis" | "chart" | "top" }) {
   const [rows, setRows] = useState<M[] | null>(null);
   const [top, setTop] = useState<Top[]>([]);
   const [hover, setHover] = useState<number | null>(null);
   const [table, setTable] = useState(false);
   const now = new Date(), y = now.getFullYear(), m = now.getMonth();
 
-  useEffect(() => {
-    const sb = createClient();
-    const from = `${y - 1}-01-01`;
-    const yearAgo = new Date(); yearAgo.setFullYear(y - 1);
-    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-    const d = (x: Date) => x.toISOString().slice(0, 10);
-    Promise.all([
-      sb.rpc("shop_sales_monthly", { p_from: from }),
-      sb.rpc("shop_top_customers", { p_from: d(yearAgo), p_to: d(tomorrow), p_limit: 8 }),
-    ]).then(([a, b]) => {
-      setRows(((a.data || []) as { month: string; sales: number; orders: number }[]).map((r) => ({ month: r.month.slice(0, 7), sales: +r.sales || 0, orders: +r.orders || 0 })));
-      setTop(((b.data || []) as Top[]).map((t) => ({ ...t, sales: +t.sales || 0, orders: +t.orders || 0 })));
-    });
-  }, [y]);
+  useEffect(() => { loadSales(y).then((r) => { setRows(r.rows); setTop(r.top); }); }, [y]);
 
   const v = useMemo(() => {
     if (!rows) return null;
@@ -63,7 +70,7 @@ export default function SalesAnalytics() {
     };
   }, [rows, y, m]);
 
-  if (!v) return <section className="an"><div className="db-empty">Loading sales…</div></section>;
+  if (!v) return <div className="db-empty">Loading sales…</div>;
   // chart geometry
   const W = 720, H = 220, padL = 46, padB = 24, padT = 8;
   const cw = (W - padL) / 12, bw = Math.min(16, (cw - 10) / 2);
@@ -71,9 +78,7 @@ export default function SalesAnalytics() {
   const ticks = [0, 0.5, 1].map((f) => v.max * f);
   const topMax = Math.max(1, ...top.map((t) => t.sales));
 
-  return (
-    <section className="an">
-      <div className="an-h"><h2>Sales</h2><span className="faint">invoices, by order date · Printavo + this system</span></div>
+  const K = (
       <div className="an-kpis">
         <div><span>Sales this month</span><b>{money0(v.month)}</b><Delta now={v.month} then={v.monthLY} label={`${MONTHS[m]} ${y - 1}`} /></div>
         <div><span>Sales this year</span><b>{money0(v.ytd)}</b><Delta now={v.ytd} then={v.ytdLY} label={`Jan–${MONTHS[m]} ${y - 1}`} /></div>
@@ -81,7 +86,8 @@ export default function SalesAnalytics() {
         <div><span>Average order · 12 months</span><b>{money0(v.aov)}</b><span className="an-d">{money0(v.s12)} in the last 12 months</span></div>
       </div>
 
-      <div className="an-grid">
+  );
+  const C = (
         <div className="an-chart">
           <div className="an-ch-h">
             <b>Sales by month</b>
@@ -129,6 +135,8 @@ export default function SalesAnalytics() {
           {v.lyEmpty > 0 && <p className="an-note">Some of {y - 1} is still coming in from Printavo (the import is filling in older orders), so the comparison will fill in as it finishes.</p>}
         </div>
 
+  );
+  const T = (
         <div className="an-top">
           <div className="an-ch-h"><b>Top customers</b><span className="faint">last 12 months</span></div>
           {!top.length ? <div className="db-empty">No sales yet.</div> : (
@@ -141,7 +149,15 @@ export default function SalesAnalytics() {
             ))}</ol>
           )}
         </div>
-      </div>
+  );
+  if (part === "kpis") return K;
+  if (part === "chart") return C;
+  if (part === "top") return T;
+  return (
+    <section className="an">
+      <div className="an-h"><h2>Sales</h2><span className="faint">invoices, by order date · Printavo + this system</span></div>
+      {K}
+      <div className="an-grid">{C}{T}</div>
     </section>
   );
 }
