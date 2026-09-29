@@ -21,6 +21,8 @@ export type Machine = {
   crew?: string;
   /** worked out when settings load: this machine's hours for each weekday (0 = Sunday), [start, end] minutes, null = off */
   week?: Shift[];
+  /** warm-up / lunch for this machine (its crew's lunch time), worked out when settings load */
+  brk?: Breaks;
   /** dates it isn't running (its crew's or its own days off), attached by the calendar */
   off?: Record<string, string>;
   /** downtime or reduced capacity for part of a day: date → [start, end, why, rate][], rate 0 = stopped,
@@ -34,7 +36,10 @@ export type Down = [number, number, string, number];
 /** [start, end] in minutes after midnight (300 = 5:00 AM, 900 = 3:00 PM) */
 export type Shift = [number, number] | null;
 /** A press crew and its leader's schedule (hours for each weekday, 0 = Sunday; null = off that day). */
-export type Crew = { id: string; leader: string; week: Shift[] };
+export type Crew = { id: string; leader: string; week: Shift[]; /** lunch start (minutes after midnight), default the shop's */ lunchAt?: number };
+/** Built into every shift: press warm-up at the start, and a lunch break on long shifts. */
+export type Breaks = { warmupMin: number; lunchMin: number; lunchAfterHours: number; lunchAt: number };
+export const DEFAULT_BREAKS: Breaks = { warmupMin: 30, lunchMin: 30, lunchAfterHours: 8, lunchAt: 720 };
 export type ProductionSettings = {
   machines: Machine[];
   crews: Crew[];
@@ -71,6 +76,7 @@ export type ProductionSettings = {
   heat: { secsPerPiece: number; setupMin: number };
   /** plan this many business days before the in-hands date (packing, shipping) */
   bufferDays: number;
+  breaks: Breaks;
   /** fill a machine's day to this share before suggesting the next day (85% keeps room for surprises) */
   fillTarget: number;
   /** the shop's measured speed vs these standards (from job-time logs): minutes × factor */
@@ -106,17 +112,19 @@ export const DEFAULT_PRODUCTION: ProductionSettings = {
   },
   heat: { secsPerPiece: 45, setupMin: 10 },
   bufferDays: 1,
+  breaks: DEFAULT_BREAKS,
   fillTarget: 0.85,
   factor: { screen: 1, embroidery: 1, heat: 1 },
 };
 export function mergeProduction(d: unknown): ProductionSettings {
   const p = (d && typeof d === "object" ? d : {}) as Partial<ProductionSettings>;
-  const crews: Crew[] = (Array.isArray(p.crews) ? p.crews : DEFAULT_PRODUCTION.crews).map((c) => ({ id: c.id, leader: c.leader || "", week: Array.from({ length: 7 }, (_, i) => normShift(c.week?.[i])) }));
+  const crews: Crew[] = (Array.isArray(p.crews) ? p.crews : DEFAULT_PRODUCTION.crews).map((c) => ({ id: c.id, leader: c.leader || "", week: Array.from({ length: 7 }, (_, i) => normShift(c.week?.[i])), lunchAt: c.lunchAt }));
+  const breaks: Breaks = { ...DEFAULT_BREAKS, ...(p.breaks || {}) };
   const machines = (Array.isArray(p.machines) && p.machines.length ? p.machines.map((x) => ({ ...m(x.id, x.name, x.type, x.colors, x.heads, x.pvMatch || ""), ...x })) : DEFAULT_PRODUCTION.machines)
-    .map((x) => { const c = x.crew ? crews.find((k) => k.id === x.crew) : undefined; return { ...x, crew: c ? c.id : undefined, week: c ? c.week : ownWeek(x) }; });
+    .map((x) => { const c = x.crew ? crews.find((k) => k.id === x.crew) : undefined; return { ...x, crew: c ? c.id : undefined, week: c ? c.week : ownWeek(x), brk: { ...breaks, lunchAt: c?.lunchAt ?? breaks.lunchAt } }; });
   return {
     ...DEFAULT_PRODUCTION, ...p,
-    crews, machines,
+    crews, machines, breaks,
     screen: { ...DEFAULT_PRODUCTION.screen, ...(p.screen || {}) },
     embroidery: { ...DEFAULT_PRODUCTION.embroidery, ...(p.embroidery || {}), stitches: { ...DEFAULT_PRODUCTION.embroidery.stitches, ...(p.embroidery?.stitches || {}) } },
     heat: { ...DEFAULT_PRODUCTION.heat, ...(p.heat || {}) },
@@ -352,7 +360,25 @@ export function windowsIn(sh: [number, number], down: Down[] = []): [number, num
   }
   return out;
 }
-export const windowsOn = (mach: Machine, day: string): [number, number, number][] => { const sh = shiftOn(mach, day); return sh ? windowsIn(sh, mach.down?.[day]) : []; };
+/** Lunch can move as early as 11:00 (so it's over by 12:30) to fall between jobs instead of in the middle of one. */
+export const LUNCH_EARLIEST = 660;
+/** When lunch starts on a shift, or null when the shift is too short for one. `at` moves it (kept inside the shift). */
+export function lunchStart(mach: Machine, sh: [number, number], at?: number): number | null {
+  const b = mach.brk || DEFAULT_BREAKS;
+  if (!(b.lunchMin > 0 && sh[1] - sh[0] > b.lunchAfterHours * 60)) return null;
+  return Math.max(sh[0] + b.warmupMin, Math.min(at ?? b.lunchAt, sh[1] - b.lunchMin));
+}
+/** Press warm-up at the start of every shift, and lunch on a shift over 8 hours (noon unless `lunchAt` moves it). */
+export function breakDowns(mach: Machine, sh: [number, number], lunchAt?: number): Down[] {
+  const b = mach.brk || DEFAULT_BREAKS, out: Down[] = [];
+  if (b.warmupMin > 0) out.push([sh[0], Math.min(sh[1], sh[0] + b.warmupMin), "Warm-up", 0]);
+  const at = lunchStart(mach, sh, lunchAt);
+  if (at != null) out.push([at, at + b.lunchMin, "Lunch", 0]);
+  return out;
+}
+/** Everything that takes time out of a day: warm-up, lunch, downtime and slow stretches. */
+export const downsOn = (mach: Machine, day: string, sh: [number, number], lunchAt?: number): Down[] => [...breakDowns(mach, sh, lunchAt), ...(mach.down?.[day] || [])];
+export const windowsOn = (mach: Machine, day: string): [number, number, number][] => { const sh = shiftOn(mach, day); return sh ? windowsIn(sh, downsOn(mach, day, sh)) : []; };
 /** Work minutes it has on that day (0 when off; downtime out, slow stretches counted at their speed), or on a usual day. */
 export const capacityMin = (s: ProductionSettings, mach: Machine, day?: string) => { if (day) return windowsOn(mach, day).reduce((a, [x, y, r]) => a + (y - x) * r, 0); const t = typicalShift(mach); return t[1] - t[0]; };
 const addDay = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };

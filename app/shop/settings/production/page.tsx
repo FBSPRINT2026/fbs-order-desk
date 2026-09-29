@@ -16,6 +16,9 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const toTime = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 const fromTime = (v: string) => { const [h, m] = v.split(":").map(Number); return isNaN(h) ? null : Math.min(1440, h * 60 + (m || 0)); };
+// lunch can start any quarter hour from 11:00 to 12:00 (so it's over by 12:30); noon unless it needs to move
+const LUNCH_STARTS = [660, 675, 690, 705, 720];
+const clock12 = (min: number) => `${((Math.floor(min / 60) + 11) % 12) + 1}:${String(min % 60).padStart(2, "0")}`;
 const hrs = (sh: Shift) => (sh ? ((sh[1] - sh[0]) / 60).toFixed((sh[1] - sh[0]) % 60 ? 1 : 0) : "");
 
 export default function ProductionSettingsPage() {
@@ -27,7 +30,7 @@ export default function ProductionSettingsPage() {
     setState("Saving…");
     const sb = createClient();
     const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle();
-    const clean = { ...s!, machines: s!.machines.map(({ week: _w, off: _o, ...m }) => m) };
+    const clean = { ...s!, machines: s!.machines.map(({ week: _w, off: _o, brk: _b, ...m }) => m) };
     const { error } = await sb.from("settings").upsert({ id: 1, data: { ...(data?.data || {}), production: clean }, updated_at: new Date().toISOString() });
     setState(error ? `Couldn't save: ${error.message}` : "Saved");
   }
@@ -53,7 +56,7 @@ export default function ProductionSettingsPage() {
           <div className="panel-h"><h2>Crews</h2><button type="button" className="btn sm" onClick={() => upd((d) => { d.crews.push({ id: "c" + Date.now().toString(36), leader: "", week: [null, [420, 1080], [420, 1080], [420, 1080], [420, 1080], [420, 1080], null] }); })}>+ Add Crew</button></div>
           <div className="panel-b">
             <p className="faint" style={{ fontSize: 12.5, margin: "0 0 8px" }}>Each crew&apos;s regular schedule. A press with a crew (pick it in Machines below) runs on that crew&apos;s hours on the production calendar. Vacations and days a crew is out are marked on the calendar itself (tap a press&apos;s hours, or &quot;off?&quot; on a day).</p>
-            <div className="tbl-wrap"><table className="rv-tbl ps-crews"><thead><tr><th>Crew leader</th><th>Starts</th><th>Ends</th><th>Days</th><th className="r">Hours</th><th>Runs</th><th /></tr></thead>
+            <div className="tbl-wrap"><table className="rv-tbl ps-crews"><thead><tr><th>Crew leader</th><th>Starts</th><th>Ends</th><th>Days</th><th className="r">Hours</th><th>Lunch</th><th>Runs</th><th /></tr></thead>
               <tbody>{s.crews.map((c, i) => {
                 const set = (fn: (x: Crew) => void) => upd((d) => fn(d.crews[i]));
                 const gen = (c.week.find(Boolean) || [420, 1080]) as [number, number];
@@ -67,11 +70,21 @@ export default function ProductionSettingsPage() {
                     <td><input type="time" step={900} value={toTime(gen[1] % 1440)} aria-label="Ends" onChange={(e) => { const v = fromTime(e.target.value); if (v != null) setHours(gen[0], v); }} /></td>
                     <td><div className="ps-days">{WEEK_ORDER.map((di) => <button key={di} type="button" className={c.week[di] ? "on" : ""} onClick={() => set((x) => { x.week[di] = x.week[di] ? null : [...gen] as [number, number]; })}>{DAYS[di][0]}</button>)}</div></td>
                     <td className="r">{hrs(gen)}</td>
+                    <td>{gen[1] - gen[0] > s.breaks.lunchAfterHours * 60 && s.breaks.lunchMin > 0
+                      ? <select value={c.lunchAt ?? s.breaks.lunchAt} aria-label="Lunch starts" onChange={(e) => set((x) => { x.lunchAt = +e.target.value; })}>{LUNCH_STARTS.map((t) => <option key={t} value={t}>{clock12(t)} – {clock12(t + s.breaks.lunchMin)}</option>)}</select>
+                      : <span className="faint" style={{ fontSize: 12.5 }} title={`Lunch is only scheduled on shifts over ${s.breaks.lunchAfterHours} hours`}>None</span>}</td>
                     <td className="faint" style={{ fontSize: 12.5 }}>{presses.length ? presses.join(", ") : "No press yet"}</td>
                     <td><button type="button" className="linkbtn danger" onClick={() => upd((d) => { d.crews.splice(i, 1); d.machines.forEach((m) => { if (m.crew === c.id) m.crew = undefined; }); })}>Remove</button></td>
                   </tr>
                 );
               })}</tbody></table></div>
+            <div className="ps-brk">
+              <b>Every shift</b>
+              {num("Press warm-up (minutes)", s.breaks.warmupMin, (x) => upd((d) => { d.breaks.warmupMin = Math.max(0, Math.min(120, x)); }), 5, "Blocked at the start of each shift, shown in red")}
+              {num("Lunch (minutes)", s.breaks.lunchMin, (x) => upd((d) => { d.breaks.lunchMin = Math.max(0, Math.min(90, x)); }), 5, "0 = no lunch block")}
+              {num("Lunch when a shift is over (hours)", s.breaks.lunchAfterHours, (x) => upd((d) => { d.breaks.lunchAfterHours = Math.max(0, Math.min(16, x)); }), 0.5)}
+              <div className="field"><label>Lunch usually starts</label><select value={s.breaks.lunchAt} onChange={(e) => upd((d) => { d.breaks.lunchAt = +e.target.value; })}>{LUNCH_STARTS.map((t) => <option key={t} value={t}>{clock12(t)}</option>)}</select><small className="faint">Each crew can move it above</small></div>
+            </div>
           </div>
         </section>
         <section className="panel">

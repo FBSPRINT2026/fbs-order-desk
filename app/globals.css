@@ -3701,3 +3701,17 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 /* hours already gone today: greyed */
 .ms-pastv{position:absolute;left:0;right:0;top:0;z-index:3;pointer-events:none;background:color-mix(in srgb,var(--ink) 10%,transparent)}
 .ms-dv-bar{border-bottom:1px solid var(--line)}
+
+/* press warm-up (red) and crew lunch blocks in the production calendar */
+.ms-warm,.ms-lunch{position:absolute;left:0;right:0;z-index:1;overflow:hidden;cursor:default}
+.ms-warm{background:color-mix(in srgb,var(--danger) 22%,var(--surface));border-top:2px solid var(--danger);border-bottom:1px solid color-mix(in srgb,var(--danger) 40%,transparent)}
+.ms-lunch{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 9%,var(--surface)) 0 5px,color-mix(in srgb,var(--ink) 4%,var(--surface)) 5px 10px);border-top:1px dashed color-mix(in srgb,var(--ink) 30%,transparent);border-bottom:1px dashed color-mix(in srgb,var(--ink) 30%,transparent)}
+.ms-warm span,.ms-lunch span{position:absolute;top:1px;left:4px;font-size:9.5px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;white-space:nowrap}
+.ms-warm span{color:var(--danger)}
+.ms-lunch span{color:var(--ink-3)}
+.ms-warm.h,.ms-lunch.h{top:0;bottom:0;right:auto;border:0}
+.ms-warm.h{background:color-mix(in srgb,var(--danger) 28%,transparent)}
+.ms-lunch.h{background:color-mix(in srgb,var(--ink) 10%,transparent)}
+.ps-brk{display:grid;grid-template-columns:auto repeat(4,minmax(150px,1fr));gap:10px 14px;align-items:end;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-2)}
+.ps-brk>b{align-self:center;font-size:12.5px}
+@media (max-width:760px){.ps-brk{grid-template-columns:1fr 1fr}.ps-brk>b{grid-column:1/-1}}
