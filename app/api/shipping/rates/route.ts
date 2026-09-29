@@ -28,7 +28,10 @@ export async function POST(req: Request) {
   // rates and transit times are figured from our ZIP (75081); the street is only needed for labels
   if (!s.from.zip) return NextResponse.json({ error: "Set our ship-from ZIP first (Shipping center → Settings)." }, { status: 400 });
   try {
-    const r = await rateShipment({ from: s.from, to: b.to, boxes, bill, account: String(b.account || "").trim(), zip: String(b.zip || "").trim(), reference: String(b.reference || "") });
+    // the rate calculator can price from another ZIP too (a drop-ship from a supplier, a second location)
+    const fromZip = String(b.fromZip || "").trim();
+    const from = b.quick && /^\d{5}$/.test(fromZip) && fromZip !== s.from.zip ? { ...s.from, street1: "", street2: "", city: "", state: "", zip: fromZip } : s.from;
+    const r = await rateShipment({ from, to: b.to, boxes, bill, account: String(b.account || "").trim(), zip: String(b.zip || "").trim(), reference: String(b.reference || "") });
     return NextResponse.json({ easypostOrder: r.orderId, rates: r.rates.map((x) => ({ ...x, price: shippingPrice(x.cost, boxes.length, bill, s) })) });
   } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); }
 }

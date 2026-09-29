@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { custLabel } from "@/lib/format";
 import { mergeSettings, type Customer, type Settings, type ShipAddress } from "@/lib/pricing";
@@ -8,6 +9,9 @@ import { addressFromText, addressReady, emptyAddress, estimateBoxes, oneLine, tr
 import type { PvAddress } from "@/lib/archive";
 import ShipWindow, { type ShipTarget } from "@/components/ShipWindow";
 import SearchInput from "@/components/SearchInput";
+import QuickShipQuote from "@/components/QuickShipQuote";
+import TransitMap from "@/components/TransitMap";
+import { money } from "@/lib/format";
 
 type NewRow = { id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; ship_to: string; ship_method: string; po_number: string };
 type PvRow = { id: string; visual_id: string; nickname: string; qty: number; due_date: string | null; customer_id: string; po_number: string; status_name: string; ship: PvAddress; delivery: string | null; contact: { fullName?: string; email?: string; phone?: string } | null };
@@ -40,7 +44,7 @@ export default function ShippingCenter() {
   const [items, setItems] = useState<Item[] | null>(null);
   const [shipped, setShipped] = useState<(Shipment & { label: string; customer: string })[]>([]);
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
-  const [tab, setTab] = useState<"ready" | "shipped">("ready");
+  const [tab, setTab] = useState<"overview" | "ready" | "shipped" | "transit">("overview");
   const [open, setOpen] = useState<{ item: Item; box: number | null } | null>(null);
   const [q, setQ] = useState(""), [scan, setScan] = useState(""), [note, setNote] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -118,14 +122,24 @@ export default function ShippingCenter() {
       {showSettings && <ShipSettingsPanel s={settings} onSaved={(s) => { setSettings(s); setShowSettings(false); }} />}
       {!addressReady(settings.ship.from) && !showSettings && <div className="banner" style={{ marginBottom: 10 }}>Rates and transit times are figured from ZIP {settings.ship.from.zip || "(not set)"}. Add our street address in <button type="button" className="linkbtn" style={{ fontSize: "inherit" }} onClick={() => setShowSettings(true)}>Settings</button> before labels can be printed.</div>}
 
-      <div className="aa-sub" role="tablist" style={{ marginBottom: 10 }}>
-        <button type="button" className={tab === "ready" ? "on" : ""} onClick={() => setTab("ready")}>Ready to ship<span className="aa-n">{items?.length ?? "…"}</span></button>
-        <button type="button" className={tab === "shipped" ? "on" : ""} onClick={() => setTab("shipped")}>Recently shipped<span className="aa-n">{shipped.length}</span></button>
-        <span className="spacer" />
+      <div className="sc-tabrow">
+        <div className="aa-sub sc-tabs" role="tablist">
+          <button type="button" className={tab === "overview" ? "on" : ""} onClick={() => setTab("overview")}>Overview</button>
+          <button type="button" className={tab === "ready" ? "on" : ""} onClick={() => setTab("ready")}>Ready To Ship<span className="aa-n">{items?.length ?? "…"}</span></button>
+          <button type="button" className={tab === "shipped" ? "on" : ""} onClick={() => setTab("shipped")}>Shipped<span className="aa-n">{shipped.length}</span></button>
+          <button type="button" className={tab === "transit" ? "on" : ""} onClick={() => setTab("transit")}>Transit Map</button>
+        </div>
         {tab === "ready" && <label className="aa-search"><SearchInput placeholder="Search order, customer, city" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
       </div>
 
-      {tab === "ready" ? (
+      {tab === "overview" ? (
+        <Overview items={items} shipped={shipped} perBox={settings.ship.perBox} onOpen={(x) => setOpen({ item: x, box: null })} go={setTab} />
+      ) : tab === "transit" ? (
+        <div className="sc-transit">
+          <section className="db-card db-blue"><div className="db-card-h"><h2>Transit Time Map</h2><span className="faint db-h-note">business days from our shop</span></div><TransitMap /></section>
+          <section className="db-card db-orange"><div className="db-card-h"><h2>Rate &amp; Transit Calculator</h2></div><QuickShipQuote /></section>
+        </div>
+      ) : tab === "ready" ? (
         items === null ? <div className="empty">Loading…</div> : (
           <div className="sc-panes">
             <section className="sc-pane">
@@ -170,6 +184,65 @@ export default function ShippingCenter() {
         onClose={() => { setOpen(null); setTimeout(() => scanRef.current?.focus(), 50); }}
         onDone={(m) => { setOpen(null); setNote(m); load(); setTimeout(() => scanRef.current?.focus(), 50); }} />}
     </>
+  );
+}
+
+/** The shipping dashboard: what to ship next, what went out, and the rate / transit tools. */
+function Overview({ items, shipped, perBox, onOpen, go }: { items: Item[] | null; shipped: (Shipment & { label: string; customer: string })[]; perBox: number; onOpen: (x: Item) => void; go: (t: "overview" | "ready" | "shipped" | "transit") => void }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const all = items || [];
+  const missing = all.filter((x) => missingOf(x).length);
+  const late = all.filter((x) => x.due && x.due.slice(0, 10) < today);
+  const next = [...all].sort((a, b) => (a.due || "9").localeCompare(b.due || "9")).slice(0, 8);
+  const weekAgo = Date.now() - 7 * 86400000, monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+  const week = shipped.filter((x) => x.shipped_at && Date.parse(x.shipped_at) >= weekAgo);
+  const month = shipped.filter((x) => x.shipped_at && Date.parse(x.shipped_at) >= monthStart);
+  const billed = month.reduce((a, x) => a + (+(x.price || 0)), 0), cost = month.reduce((a, x) => a + (+(x.cost || 0)), 0);
+  const kpi = (label: string, value: React.ReactNode, sub: string, tone = "", onClick?: () => void) => (
+    <button type="button" className={"sc-kpi " + tone} onClick={onClick} disabled={!onClick}><span>{label}</span><b>{value}</b><small>{sub}</small></button>
+  );
+  return (
+    <div className="sc-ov">
+      <div className="sc-kpis">
+        {kpi("Ready To Ship", items ? all.length - missing.length : "…", "everything filled in", "blue", () => go("ready"))}
+        {kpi("Missing Info", items ? missing.length : "…", "address, account or pieces", missing.length ? "warn" : "", () => go("ready"))}
+        {kpi("Late", items ? late.length : "…", "past the in-hands date", late.length ? "bad" : "", () => go("ready"))}
+        {kpi("Shipped This Week", week.length, `${week.reduce((a, x) => a + (x.boxes?.length || 0), 0)} boxes`, "teal", () => go("shipped"))}
+        {kpi("Shipping This Month", money(billed), cost ? `our cost ${money(cost)}` : "billed to customers", "orange")}
+      </div>
+      <div className="dash-row dash-2-1">
+        <div className="dash-col">
+          <section className="db-card db-blue">
+            <div className="db-card-h"><h2>Ship Next</h2><span className="faint db-h-note">soonest in-hands date first</span><span className="spacer" /><button type="button" className="linkbtn" onClick={() => go("ready")}>All ready to ship →</button></div>
+            {items === null ? <div className="db-empty">Loading…</div> : !next.length ? <div className="db-empty">Nothing waiting to ship. When an order is marked Ready with delivery by shipping, it shows up here.</div> : (
+              <ul className="db-list">{next.map((x) => { const m = missingOf(x); const lt = x.due && x.due.slice(0, 10) < today; const bx = x.shipment?.boxes?.length || estimateBoxes(x.pieces, perBox); return (
+                <li key={x.kind + x.id} className="db-row sc-next">
+                  <span className="db-num">#{x.number}</span>
+                  <span className="db-main"><b>{x.customer}</b><span className="faint">{[addressReady(x.to) ? `${x.to.city}, ${x.to.state}` : "", `${x.pieces || "?"} pcs · ${bx} box${bx === 1 ? "" : "es"}`].filter(Boolean).join(" · ")}</span>{m.length ? <span className="sc-miss-s">Missing: {m.join(", ")}</span> : null}</span>
+                  <span className="db-side"><span className={"sc-due" + (lt ? " late" : "")}>{lt ? "Late · " : ""}{day(x.due)}</span><button type="button" className={"btn sm" + (m.length ? "" : " primary")} onClick={() => onOpen(x)}>{m.length ? "Fill In" : "Ship"}</button></span>
+                </li>
+              ); })}</ul>
+            )}
+          </section>
+          <section className="db-card db-teal">
+            <div className="db-card-h"><h2>Recently Shipped</h2><span className="spacer" /><button type="button" className="linkbtn" onClick={() => go("shipped")}>All shipments →</button></div>
+            {!shipped.length ? <div className="db-empty">Nothing shipped from here yet.</div> : (
+              <ul className="db-list">{shipped.slice(0, 6).map((x) => (
+                <li key={x.id} className="db-row">
+                  <span className="db-num">#{x.label}</span>
+                  <span className="db-main"><b>{x.customer}</b><span className="faint">{[x.carrier, x.service].filter(Boolean).join(" ") || "—"} · {x.boxes.length} box{x.boxes.length === 1 ? "" : "es"} · {x.ship_to?.city ? `${x.ship_to.city}, ${x.ship_to.state}` : ""}</span></span>
+                  <span className="db-side"><span className="faint">{x.shipped_at ? new Date(x.shipped_at).toLocaleDateString([], { month: "short", day: "numeric" }) : ""}</span>{x.boxes.find((b) => b.tracking) && <a className="btn sm" href={trackingLink(x.boxes.find((b) => b.tracking)!.tracking!)} target="_blank" rel="noreferrer">Track</a>}</span>
+                </li>
+              ))}</ul>
+            )}
+          </section>
+        </div>
+        <div className="dash-col">
+          <section className="db-card db-orange"><div className="db-card-h"><h2>Rate &amp; Transit Calculator</h2></div><QuickShipQuote compact /></section>
+          <section className="db-card db-salmon"><div className="db-card-h"><h2>Transit Map</h2><span className="spacer" /><button type="button" className="linkbtn" onClick={() => go("transit")}>Full map →</button></div><TransitMap compact /></section>
+        </div>
+      </div>
+    </div>
   );
 }
 

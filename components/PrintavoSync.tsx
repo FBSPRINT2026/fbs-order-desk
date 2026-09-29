@@ -78,7 +78,7 @@ export default function PrintavoSync() {
           <>
             {s.listing
               ? <div style={{ fontSize: 13.5 }}>Found <b>{s.orders.toLocaleString()}</b> orders so far…</div>
-              : <div className="pv-prog"><span>Orders imported {imported.toLocaleString()} of {total.toLocaleString()}{s.expected > s.orders ? " (Printavo's count)" : ""}</span><i style={{ ["--p" as string]: pct(imported, total) + "%" }} /></div>}
+              : <div className="pv-prog"><span>Orders imported {imported.toLocaleString()} of {total > s.orders ? "about " : ""}{total.toLocaleString()} in Printavo</span><i style={{ ["--p" as string]: pct(imported, total) + "%" }} /></div>}
             {passing && <div className="pv-prog"><span>Checking customers {s.pass_customer!.toLocaleString()} of {s.customers.toLocaleString()} · {s.orders.toLocaleString()} orders found</span><i style={{ ["--p" as string]: pct(s.pass_customer!, s.customers) + "%" }} /></div>}
             <div className="pvc-kpis">
               <div><span>In Printavo</span><b>{total.toLocaleString()}</b><small>orders · {s.customers.toLocaleString()} customers</small></div>

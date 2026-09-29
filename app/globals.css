@@ -2733,3 +2733,93 @@ a.as-ai{text-decoration:none}
 }
 .psy-bar{display:block;height:4px;border-radius:3px;background:var(--line);margin-top:4px;overflow:hidden}
 .psy-bar em{display:block;height:100%;background:var(--fbs-orange)}
+
+/* ---------- Shipping Center: overview, calculator, transit map ---------- */
+.sc-tabrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.sc-tabs{margin:0}
+.sc-ov{display:flex;flex-direction:column;gap:16px}
+.sc-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.sc-kpi{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);border-top:4px solid var(--line);font:inherit;color:var(--ink);cursor:pointer;box-shadow:0 1px 3px rgba(20,29,43,.05)}
+.sc-kpi:disabled{cursor:default}
+.sc-kpi:not(:disabled):hover{border-color:var(--accent)}
+.sc-kpi span{font-size:12px;font-weight:700;color:var(--ink-3)}
+.sc-kpi b{font-size:24px;line-height:1.15;font-variant-numeric:tabular-nums}
+.sc-kpi small{font-size:12px;color:var(--ink-3)}
+.sc-kpi.blue{border-top-color:var(--fbs-blue)}.sc-kpi.teal{border-top-color:var(--ok)}.sc-kpi.orange{border-top-color:var(--fbs-orange)}
+.sc-kpi.warn{border-top-color:var(--fbs-orange)}.sc-kpi.warn b{color:var(--warn)}
+.sc-kpi.bad{border-top-color:var(--danger)}.sc-kpi.bad b{color:var(--danger)}
+.sc-next .db-side{gap:10px}
+.sc-miss-s{font-size:12px;color:var(--warn);font-weight:600}
+.sc-transit{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
+
+/* rate & transit calculator */
+.qs-f{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.qs-f .qs-size{grid-column:span 2}
+.qs-f button{grid-column:span 2;align-self:end}
+.qs-compact .qs-f{grid-template-columns:repeat(2,minmax(0,1fr))}
+.qs-compact .qs-f .qs-size,.qs-compact .qs-f button{grid-column:1/-1}
+.qs-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.qs-sum>div{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border-radius:10px;background:var(--surface-2);min-width:0}
+.qs-sum span{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em}
+.qs-sum b{font-size:17px;font-variant-numeric:tabular-nums}
+.qs-sum small{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qs-only{align-self:flex-start}
+.qs-r li{grid-template-columns:minmax(0,1fr) auto auto}
+.qs-svc{min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.qs-c{font-style:normal;font-size:10.5px;font-weight:800;border-radius:5px;padding:1px 6px;color:#fff}
+.qs-c.ups{background:#5A3A1E}.qs-c.fedex{background:#4D148C}
+.qs-days{display:flex;flex-direction:column;align-items:flex-end;font-weight:600;white-space:nowrap}.qs-days small{font-size:11px;color:var(--ink-3);font-weight:500}
+
+/* transit map (tile grid, one square per state; darker = more business days, the number is always on the tile) */
+.tm{display:flex;flex-direction:column;gap:10px}
+.tm-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tm-bar select{width:auto;padding:5px 8px;font-size:13px}
+.tm-svc{font-size:12.5px}
+.tm-map{display:grid;gap:3px}
+.tm-t{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;border:0;border-radius:6px;font:inherit;cursor:pointer;padding:0;min-width:0;outline-offset:1px}
+.tm-t b{font-size:11px;font-weight:800;letter-spacing:.02em;line-height:1.1}
+.tm-t span{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.tm-t:hover,.tm-t.on{outline:2px solid var(--ink)}
+.tm-d1{background:#D3EEFA;color:#0B3B53}.tm-d2{background:#94D3F0;color:#0B3B53}.tm-d3{background:#3FADE0;color:#fff}
+.tm-d4{background:#0B7EB3;color:#fff}.tm-d5{background:#0A4E70;color:#fff}.tm-na{background:var(--surface-2);color:var(--ink-3)}
+.tm-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink-2)}
+.tm-legend span{display:inline-flex;align-items:center;gap:5px}
+.tm-legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.tm-legend em{font-style:normal;color:var(--ink-3)}
+.tm-detail{min-height:92px;padding:10px 12px;border-radius:10px;background:var(--surface-2);font-size:13px}
+.tm-dh{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.tm-detail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.tm-detail li{display:grid;grid-template-columns:minmax(0,1fr) auto 76px;gap:10px;padding:3px 0;border-bottom:1px solid var(--line-2)}
+.tm-detail li:last-child{border-bottom:0}
+.tm-detail li.cur{font-weight:700}
+.tm-detail .num{text-align:right;font-variant-numeric:tabular-nums}
+.tm-foot{font-size:12px}
+.tm-empty{display:flex;flex-direction:column;align-items:flex-start;gap:10px;font-size:13.5px;color:var(--ink-2)}
+.tm-empty p{margin:0}
+.tm-list{max-height:520px;overflow:auto}
+.tm-compact .tm-map{gap:2px}
+.tm-compact .tm-t{border-radius:4px}
+.tm-compact .tm-t b{font-size:8.5px}
+.tm-compact .tm-t span{font-size:10.5px}
+
+@media (max-width: 1100px){.sc-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.sc-transit{grid-template-columns:minmax(0,1fr)}}
+@media (max-width: 700px){
+  .sc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sc-kpi b{font-size:20px}
+  .sc-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+  .sc-tabs button{justify-content:center;padding:7px 4px;font-size:12px;white-space:nowrap}
+  .sc-tabrow .aa-search{width:100%}
+  .sc-scan{width:100%;max-width:none}
+  .sc-panes{grid-template-columns:minmax(0,1fr)}
+  .qs-f{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .qs-f .qs-size,.qs-f button{grid-column:1/-1}
+  .qs-sum{grid-template-columns:minmax(0,1fr)}
+  .tm-map{gap:2px}
+  .tm-t{border-radius:4px}
+  .tm-t b{font-size:8px}
+  .tm-t span{font-size:10px}
+}
+.qs-f label{min-width:0}
+.qs-f input,.qs-f select{width:100%;min-width:0}
+@media (max-width: 700px){.sc-tabs button{min-width:0;overflow:hidden;gap:3px}.sc-tabs .aa-n{padding:1px 4px;min-width:0}}
+.tm:not(.tm-compact) .tm-map{max-width:620px}
