@@ -226,7 +226,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                     </div>
                     <span className="faint" style={{ fontSize: 11.5 }}>Shows up in the Assistant on that day.</span>
                   </div>
-                  <div className="field"><label htmlFor="cu-own">Account owner</label><input id="cu-own" type="email" placeholder="who handles this customer" value={c.owner_email || ""} onChange={(e) => set("owner_email", e.target.value.trim().toLowerCase())} /></div>
+                  <div className="field"><label htmlFor="cu-own">Account owner</label><select id="cu-own" value={c.account_owner || ""} onChange={(e) => set("account_owner", e.target.value)}><option value="">No one yet</option>{(settings?.accountOwners || []).map((o) => <option key={o.name} value={o.name}>{o.name}</option>)}{c.account_owner && !(settings?.accountOwners || []).some((o) => o.name === c.account_owner) ? <option value={c.account_owner}>{c.account_owner}</option> : null}</select><span className="faint" style={{ fontSize: 11.5 }}>Owners are set in Settings → Staff.</span></div>
                 </div>
                 <div className="field"><label htmlFor="cu-tag">Tags</label>
                   <div className="tag-edit">

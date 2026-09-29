@@ -66,6 +66,9 @@ export default function Dashboard() {
       // account owners: the owner on the customer's latest Printavo order
       const own: Record<string, string> = {};
       for (const r of (recent.data || []) as { customer_id: string | null; owner: string | null }[]) if (r.customer_id && r.owner && !own[r.customer_id]) own[r.customer_id] = r.owner.split(/\s+/)[0].toLowerCase();
+      // …unless the customer has an account owner set here (Settings → Staff → Account owners)
+      const { data: ao } = await sb.from("customer_private").select("customer_id, account_owner").neq("account_owner", "").limit(5000);
+      for (const r of (ao || []) as { customer_id: string; account_owner: string }[]) own[r.customer_id] = r.account_owner.split(/\s+/)[0].toLowerCase();
       setOwners(own);
       const js: Job[] = [
         ...((o.data || []) as { id: string; number: number; nickname: string; customer_id: string | null; due_date: string | null; status: string; type: string; total: number; delivery_method: string; submitted_at: string | null }[])

@@ -97,7 +97,7 @@ export type Garment = { id: string; style: string; brand: string; description: s
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string; fee?: number; processor_id?: string | null; note?: string | null };
 export type Customer = { id: string; is_test?: boolean; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType; payment_terms?: PayTerms;
-  /** CRM */ tags?: string[]; next_follow_up?: string | null; owner_email?: string; last_contact_at?: string | null;
+  /** CRM */ tags?: string[]; next_follow_up?: string | null; owner_email?: string; /** account owner's name (Settings → Staff) */ account_owner?: string; last_contact_at?: string | null;
   /** shipping: whose carrier account pays (fbs = ours, with markup) */ ship_bill?: "fbs" | "ups" | "fedex"; ship_ups_account?: string; ship_fedex_account?: string; ship_bill_zip?: string };
 /** One entry on a customer's timeline: an email, call, note, meeting or task. */
 export type Activity = { id: string; customer_id: string | null; order_id: string | null; kind: "note" | "call" | "email" | "meeting" | "task" | "sms"; direction: "in" | "out" | "none"; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; ai_processed_at: string | null; meta: Record<string, unknown>; created_by: string; created_at: string };
@@ -129,7 +129,20 @@ export function isLightColor(color: string, pl: Pick<PriceList, "lightColors">, 
   return !!c && (list || []).some((x) => normColor(x) === c);
 }
 export type Finishing = { id: string; name: string; price: number };
+/** Someone who owns customer accounts (a salesperson / account manager). Email links them to their shop login. */
+export type AccountOwner = { name: string; email: string };
+export const DEFAULT_ACCOUNT_OWNERS: AccountOwner[] = [{ name: "Nicholas McCoy", email: "nicholas@fbsprint.com" }, { name: "Amanda McCoy", email: "" }, { name: "Claudia Garcia", email: "" }];
+/** Is this account owner the person signed in? (their email, or the same first name as their staff name) */
+export function isMe(owner: string, owners: AccountOwner[], me: { email: string; name: string }) {
+  if (!owner) return false;
+  const o = owners.find((x) => x.name === owner);
+  if (o?.email && me.email && o.email.toLowerCase() === me.email.toLowerCase()) return true;
+  const first = (x: string) => x.trim().split(/[\s._@-]+/)[0].toLowerCase();
+  return !!me.name && first(owner) === first(me.name) || (!!me.email && first(owner) === first(me.email));
+}
 export type Settings = PriceList & {
+  /** people who own customer accounts ("My accounts" views use this) */
+  accountOwners?: AccountOwner[];
   shop: { name: string; address: string; phone: string; email: string; terms: string; logoUrl: string };
   /** The logo at the top of the shop's left menu (dark background, so a light version), its width, and the line under it. */
   brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string };
@@ -183,6 +196,7 @@ export type AssistantSettings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
+  accountOwners: DEFAULT_ACCOUNT_OWNERS,
   shop: { name: "FBS Print", address: "", phone: "", email: "", terms: "50% deposit to start production. Balance due at pickup.", logoUrl: "" },
   brand: { sideLogoUrl: "/brand/fbs-logo-white.svg", sideLogoWidth: 64, sideTagline: "Shop management" },
   markup: 50,

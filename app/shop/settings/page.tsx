@@ -248,6 +248,19 @@ export default function SettingsPage() {
             <div className="row"><input type="email" placeholder="name@fbsprint.com" value={newStaff} onChange={(e) => setNewStaff(e.target.value)} style={{ maxWidth: 280 }} aria-label="New staff email" /><select aria-label="Role for new staff" value={newRole} onChange={(e) => setNewRole(e.target.value)} style={{ width: 240 }}>{Object.entries(ROLES).filter(([k]) => k !== "owner").map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button className="btn" type="button" onClick={addStaff}>Add staff</button></div>
           </div>
         </section>
+        <section className="panel" id="owners">
+          <div className="panel-h"><h2>Account owners</h2><span className="faint" style={{ fontSize: 12 }}>Who handles which customers. &quot;My accounts&quot; views (dashboard, production calendar) use this. Add an email to link an owner to their shop login.</span></div>
+          <div className="panel-b stack">
+            {(s.accountOwners || []).map((o, i) => (
+              <div key={i} className="pay-row">
+                <input type="text" aria-label="Owner name" placeholder="Name" value={o.name} onChange={(e) => upd((d) => { d.accountOwners![i].name = e.target.value; })} style={{ maxWidth: 240 }} />
+                <input type="email" aria-label="Owner email" placeholder="email (optional)" value={o.email} onChange={(e) => upd((d) => { d.accountOwners![i].email = e.target.value.trim().toLowerCase(); })} style={{ maxWidth: 280 }} />
+                <button className="btn sm ghost danger" type="button" onClick={() => upd((d) => { d.accountOwners!.splice(i, 1); })}>Remove</button>
+              </div>
+            ))}
+            <div className="row"><button className="btn sm" type="button" onClick={() => upd((d) => { d.accountOwners = [...(d.accountOwners || []), { name: "", email: "" }]; })}>+ Add account owner</button><span className="faint" style={{ fontSize: 12 }}>Save Changes at the top to keep them.</span></div>
+          </div>
+        </section>
         <ConnectionsPanel />
       </div>
     </>

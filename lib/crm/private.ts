@@ -5,8 +5,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Customer } from "@/lib/pricing";
 
-export const PRIVATE_KEYS = ["notes", "tags", "next_follow_up", "owner_email", "last_contact_at"] as const;
-type Priv = { customer_id: string; notes: string; tags: string[]; next_follow_up: string | null; owner_email: string; last_contact_at: string | null };
+export const PRIVATE_KEYS = ["notes", "tags", "next_follow_up", "owner_email", "account_owner", "last_contact_at"] as const;
+type Priv = { customer_id: string; notes: string; tags: string[]; next_follow_up: string | null; owner_email: string; account_owner: string; last_contact_at: string | null };
 
 /** Adds the private fields to each customer (staff session or admin client only). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,13 +21,13 @@ export async function withPrivate<T extends Customer>(sb: SupabaseClient<any, an
   const m = new Map(rows.map((r) => [r.customer_id, r]));
   return customers.map((c) => {
     const p = m.get(c.id);
-    return { ...c, notes: p?.notes || "", tags: p?.tags || [], next_follow_up: p?.next_follow_up || null, owner_email: p?.owner_email || "", last_contact_at: p?.last_contact_at || null };
+    return { ...c, notes: p?.notes || "", tags: p?.tags || [], next_follow_up: p?.next_follow_up || null, owner_email: p?.owner_email || "", account_owner: p?.account_owner || "", last_contact_at: p?.last_contact_at || null };
   });
 }
 
 /** Splits a customer into the public row and the private row for saving. last_contact_at is kept by the database. */
 export function splitCustomer(c: Partial<Customer>) {
-  const { notes, tags, next_follow_up, owner_email, last_contact_at: _lc, ...pub0 } = c;
+  const { notes, tags, next_follow_up, owner_email, account_owner, last_contact_at: _lc, ...pub0 } = c;
   // company_key is worked out by the database from the company name (never saved directly)
   const { company_key: _ck, ...pub } = pub0 as typeof pub0 & { company_key?: string };
   const priv: Record<string, unknown> = {};
@@ -35,5 +35,6 @@ export function splitCustomer(c: Partial<Customer>) {
   if (tags !== undefined) priv.tags = tags;
   if (next_follow_up !== undefined) priv.next_follow_up = next_follow_up || null;
   if (owner_email !== undefined) priv.owner_email = owner_email;
+  if (account_owner !== undefined) priv.account_owner = account_owner;
   return { pub, priv };
 }

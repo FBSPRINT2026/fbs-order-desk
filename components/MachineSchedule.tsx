@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, PV_READY, type Machine, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
-import type { Group } from "@/lib/pricing";
+import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 
 /**
  * The production calendar, on the shop's real hours.
@@ -15,7 +15,7 @@ import type { Group } from "@/lib/pricing";
  * machine, day or time (a job only drops on a machine that can run it), or tap it to move it. Only our own orders are
  * planned here; Printavo jobs are left off (the Printavo-lane code stays, fed nothing, in case it's wanted again).
  */
-type Job = { key: string; kind: "o" | "a"; id: string; number: string; customer: string; name: string; due: string | null; qty: number; status: string; needs: Need[]; href: string };
+type Job = { key: string; kind: "o" | "a"; id: string; number: string; customer: string; name: string; due: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string };
 type Slot = { id: string; order_id: string | null; archived_order_id: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "done"; source: string; note: string; rolled_from: string | null };
 /** a job on the calendar; startMin = asked-for start (minutes after midnight), null = right after the job before it */
 type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; carried?: string | null };
@@ -49,6 +49,7 @@ const snap = (min: number, step = 15) => Math.round(min / step) * step;
 const TYPE_LBL = { screen: "Screen Print", embroidery: "Embroidery", heat: "Heat Press" };
 /** "Embroidery · 12 Head" → "12 Head", "Press 3 · 8C Sportsman" → "Press 3" */
 const shortName = (m: Machine) => { const p = m.name.split(" · "); return p.length < 2 ? m.name : m.type === "embroidery" ? p[1] : p[0]; };
+const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 const PV_DONE = /job\s*completed|quote|cancel|ship|fulfillment|issue/i;
 const HOUR_PX = 56;
 const LANE = 22;
@@ -111,6 +112,10 @@ export default function MachineSchedule() {
   const [open, setOpen] = useState<Card | null>(null);
   const [msg, setMsg] = useState("");
   const [typeF, setTypeF] = useState<"" | "screen" | "embroidery" | "heat">("");
+  // whose jobs: everyone's, or the accounts the signed-in person owns (others fade on the calendar)
+  const [mine, setMine] = useState(false);
+  const [me, setMe] = useState<{ email: string; name: string }>({ email: "", name: "" });
+  const [owners, setOwners] = useState<AccountOwner[]>([]);
   const [trayAll, setTrayAll] = useState(false);
   const [trayOpen, setTrayOpen] = useState(true);
   const [showPast, setShowPast] = useState(false);
@@ -135,11 +140,18 @@ export default function MachineSchedule() {
     setS(ps); setSlots(sl);
     const pv = ((a || []) as { id: string; visual_id: string; nickname: string; due_date: string | null; qty: number; status_name: string; customer_id: string | null; start: string | null; pend: string | null; pvgroups: unknown }[]).filter((x) => !PV_DONE.test(x.status_name || "") || PV_READY.test(x.status_name || ""));
     const ids = [...new Set([...((o || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...pv.map((x) => x.customer_id)].filter(Boolean))] as string[];
-    const cn = new Map<string, string>();
-    for (let i = 0; i < ids.length; i += 300) { const { data } = await sb.from("customers").select("id, company, name").in("id", ids.slice(i, i + 300)); for (const c of (data || []) as { id: string; company: string; name: string }[]) cn.set(c.id, c.company || c.name); }
+    const cn = new Map<string, string>(), own = new Map<string, string>();
+    for (let i = 0; i < ids.length; i += 300) {
+      const [{ data }, { data: pr }] = await Promise.all([sb.from("customers").select("id, company, name").in("id", ids.slice(i, i + 300)), sb.from("customer_private").select("customer_id, account_owner").in("customer_id", ids.slice(i, i + 300))]);
+      for (const c of (data || []) as { id: string; company: string; name: string }[]) cn.set(c.id, c.company || c.name);
+      for (const r of (pr || []) as { customer_id: string; account_owner: string }[]) if (r.account_owner) own.set(r.customer_id, r.account_owner);
+    }
+    setOwners(mergeSettings(st?.data).accountOwners || []);
+    const { data: { user } } = await sb.auth.getUser();
+    if (user?.email) { const { data: sf } = await sb.from("staff").select("name").eq("email", user.email.toLowerCase()).maybeSingle(); setMe({ email: user.email.toLowerCase(), name: (sf?.name as string) || "" }); }
     const js: Job[] = [
-      ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[] }[]).map((x) => ({ key: "o:" + x.id, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status, needs: needsForOrder(ps, x as never), href: `/shop/orders/${x.id}` })),
-      ...pv.map((x) => ({ key: "a:" + x.id, kind: "a" as const, id: x.id, number: x.visual_id, customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status_name, needs: needsForPrintavo(ps, { qty: x.qty, status_name: x.status_name, nickname: x.nickname, data: { groups: x.pvgroups as never } }), href: `/shop/archive/${x.id}` })),
+      ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[] }[]).map((x) => ({ key: "o:" + x.id, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status, needs: needsForOrder(ps, x as never), href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" })),
+      ...pv.map((x) => ({ key: "a:" + x.id, kind: "a" as const, id: x.id, number: x.visual_id, customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status_name, needs: needsForPrintavo(ps, { qty: x.qty, status_name: x.status_name, nickname: x.nickname, data: { groups: x.pvgroups as never } }), href: `/shop/archive/${x.id}`, owner: "" })),
     ];
     setJobs(js);
     // Printavo jobs in a machine status sit on that machine at their Printavo times; past ones still in the status carry to today
@@ -200,7 +212,7 @@ export default function MachineSchedule() {
   const tray = useMemo(() => {
     if (!s || !jobs) return [];
     const onCal = new Set(cards.map((c) => c.job.key + ":" + c.need.type));
-    const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "production" : PV_READY.test(j.status)));
+    const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "production" : PV_READY.test(j.status)) && (!mine || isMe(j.owner, owners, me)));
     const ld = JSON.parse(JSON.stringify(loadMap)) as Record<string, Record<string, number>>;
     const out: { job: Job; need: Need; sug: Suggestion | null }[] = [];
     for (const j of [...ready].sort((a, b) => (a.due || "9").localeCompare(b.due || "9"))) for (const n of j.needs) {
@@ -210,7 +222,7 @@ export default function MachineSchedule() {
       out.push({ job: j, need: n, sug });
     }
     return out;
-  }, [s, jobs, cards, loadMap, today]);
+  }, [s, jobs, cards, loadMap, today, mine, owners, me]);
   const coming = (jobs || []).filter((j) => j.kind === "o" && ["approved", "art", "blanks"].includes(j.status));
 
   async function book(job: Job, need: Need, machine: Machine, d: string, source = "manual", slot?: Slot | null, startMin: number | null = null) {
@@ -272,7 +284,7 @@ export default function MachineSchedule() {
     const c = g.c, late = !!c.job.due && g.day > c.job.due;
     return "ms-blk " + c.need.type + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (g.part > 1 ? " cont-l" : "") + (g.part < g.parts ? " cont-r" : "");
   };
-  const tip = (g: Seg) => `#${g.c.job.number} ${g.c.job.customer}\n${dayLbl(g.day)} ${clockLong(g.start)} – ${clockLong(g.end)}${g.parts > 1 ? ` (part ${g.part} of ${g.parts}; ${fmtMin(g.c.minutes)} in all)` : ` (${fmtMin(g.c.minutes)})`}\n${g.c.need.label}${g.c.job.due ? `\nIn-hands ${dayLbl(g.c.job.due)}` : ""}${g.c.slot?.status === "done" ? "\nDone" : g.c.slot?.status === "running" ? "\nRunning" : ""}${g.c.fromPv ? "\nFrom its Printavo status" : ""}${g.c.carried ? `\nRolled forward from ${dayLbl(g.c.carried)}` : ""}${g.pushed ? "\nStarts later than asked (the job before runs long)" : ""}`;
+  const tip = (g: Seg) => `#${g.c.job.number} ${g.c.job.customer}${g.c.job.owner ? ` (${g.c.job.owner})` : ""}\n${g.c.job.name}\n${dayLbl(g.day)} ${clockLong(g.start)} – ${clockLong(g.end)}${g.parts > 1 ? ` (part ${g.part} of ${g.parts}; ${fmtMin(g.c.minutes)} in all)` : ` (${fmtMin(g.c.minutes)})`}\n${g.c.need.label}${g.c.job.due ? `\nIn-hands ${dayLbl(g.c.job.due)}` : ""}${g.c.slot?.status === "done" ? "\nDone" : g.c.slot?.status === "running" ? "\nRunning" : ""}${g.c.fromPv ? "\nFrom its Printavo status" : ""}${g.c.carried ? `\nRolled forward from ${dayLbl(g.c.carried)}` : ""}${g.pushed ? "\nStarts later than asked (the job before runs long)" : ""}`;
   const offShade = (mach: Machine, d: string) => {
     const a = mach.startMin ?? 420, b = a + mach.hoursPerDay * 60, works = mach.days.includes(dow(d)) || at(mach, d).length > 0;
     return works ? [[vStart, a], [b, vEnd]].filter(([x, y]) => y > x) : [[vStart, vEnd]];
@@ -410,13 +422,14 @@ export default function MachineSchedule() {
   const chip = (g: Seg, d: string) => {
     const c = g.c, when = d >= today;
     return (
-      <button key={c.key + g.part} type="button" draggable className={"ms-chip " + c.need.type + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (!!c.job.due && g.day > c.job.due ? " late" : "") + (g.part > 1 ? " cont" : "")}
+      <button key={c.key + g.part} type="button" draggable className={"ms-chip " + c.need.type + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (!!c.job.due && g.day > c.job.due ? " late" : "") + (g.part > 1 ? " cont" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "")}
         title={tip(g)} onClick={() => setOpen(c)}
         onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver("k:" + c.key); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (drag && g.part === 1) place(drag, g.c.machine, d, c.key); else if (drag) place(drag, g.c.machine, d); }}>
         {over === "k:" + c.key && <i className="ms-ins" />}
-        <span className="ms-c1"><b>#{c.job.number}</b>{c.slot?.status === "done" ? <em className="ok">✓</em> : c.slot?.status === "running" ? <em className="rn">●</em> : null}<small>{when ? clock(g.start) : fmtMin(g.end - g.start)}</small></span>
-        <span className="ms-c2">{g.part > 1 ? <em>cont. {g.part}/{g.parts} · </em> : g.parts > 1 ? <em>1 of {g.parts} · </em> : null}{c.job.customer || c.job.name}</span>
+        <b>{c.job.number}</b>{c.slot?.status === "done" ? <em className="ok">✓</em> : c.slot?.status === "running" ? <em className="rn">●</em> : null}
+        <span className="ms-cn">{g.part > 1 ? <em>cont. </em> : null}{c.job.customer || c.job.name}</span>
+        <small>{g.parts > 1 ? `${g.part}/${g.parts}` : when ? clock(g.start) : fmtMin(g.end - g.start)}</small>
       </button>
     );
   };
@@ -465,6 +478,7 @@ export default function MachineSchedule() {
       <div className="ms-bar">
         <h2 className="ms-title">Production Calendar</h2>
         <div className="rv-seg">{([["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const).map(([k, l]) => <button key={k} type="button" className={typeF === k ? "on" : ""} onClick={() => setTypeF(k)}>{l}</button>)}</div>
+        <div className="rv-seg ms-who" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
         <span className="spacer" />
         <label className="ms-wknd"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Weekends</label>
         <div className="rv-seg ms-span">{([["week", "Week"], ["timeline", "Timeline"], ["day", "Day"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
@@ -484,21 +498,16 @@ export default function MachineSchedule() {
         </div>
         {trayOpen && (!tray.length ? <div className="db-empty">Nothing waiting. Jobs land here when they go to In Production (goods here, art approved).</div> : (
           <>
-            <ul className="ms-band-l">{(trayAll ? tray : tray.slice(0, 8)).map((t) => (
-              <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-t " + t.need.type + (t.sug?.late ? " late" : "")}>
-                <div className="ms-t-h"><b>#{t.job.number}</b><span>{t.job.customer || t.job.name}</span>{t.job.due && <small>due {dayShort(t.job.due)}</small>}</div>
-                <div className="ms-t-n">{t.need.label} · {t.need.qty} pcs</div>
-                {t.sug ? (
-                  <div className="ms-t-a">
-                    <button type="button" className="btn sm primary" onClick={() => book(t.job, t.need, t.sug!.machine, t.sug!.day, "suggested")} title={t.sug.reason}>{shortName(t.sug.machine)} {t.sug.day === today ? "today" : dayLbl(t.sug.day).split(",")[0]} · {fmtMin(t.sug.minutes)}</button>
-                    {t.sug.alternatives.slice(0, 1).map((x) => <button key={x.machine.id} type="button" className="btn sm" onClick={() => book(t.job, t.need, x.machine, x.day)} title={`${x.machine.name}, ${dayLbl(x.day)}, ${fmtMin(x.minutes)}`}>{shortName(x.machine)} {x.day === today ? "today" : dayLbl(x.day).split(",")[0]}</button>)}
-                    <Link className="linkbtn" href={t.job.href}>Open</Link>
-                  </div>
-                ) : <div className="ms-late">No machine can run this (check colors / machines in settings).</div>}
-                {t.sug?.late && <div className="ms-late ms-t-w">{t.job.due && t.sug.day > t.job.due ? "Suggested day is after in-hands" : "No buffer before in-hands"}</div>}
+            <ul className="ms-band-l">{(trayAll ? tray : tray.slice(0, 12)).map((t) => (
+              <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-r " + t.need.type + (t.sug?.late ? " late" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
+                <Link className="ms-r-n" href={t.job.href}>#{t.job.number}</Link>
+                <span className="ms-r-c"><b>{t.job.customer || t.job.name}</b><small>{t.need.label} · {t.need.qty} pcs</small></span>
+                {t.job.owner ? <span className="ms-own" title={t.job.owner}>{initials(t.job.owner)}</span> : <span />}
+                <span className={"ms-r-d" + (t.sug?.late ? " late" : "")}>{t.job.due ? dayShort(t.job.due) : "—"}</span>
+                {t.sug ? <button type="button" className="btn sm primary ms-r-b" onClick={() => book(t.job, t.need, t.sug!.machine, t.sug!.day, "suggested")}>{shortName(t.sug.machine)} {t.sug.day === today ? "today" : dayLbl(t.sug.day).split(",")[0]}</button> : <span className="ms-late ms-r-b">no machine</span>}
               </li>
             ))}</ul>
-            {tray.length > 8 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${tray.length}`}</button>}
+            {tray.length > 12 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${tray.length}`}</button>}
           </>
         ))}
       </section>
