@@ -23,7 +23,7 @@ function arrives(r: Rate) {
 export default function QuickShipQuote({ compact = false }: { compact?: boolean }) {
   const [boxes, setBoxes] = useState<{ name: string; l: number; w: number; h: number }[]>([]);
   const [ourZip, setOurZip] = useState("");
-  const [box, setBox] = useState("");
+  const [box, setBox] = useState(""), [defBox, setDefBox] = useState("");
   const [from, setFrom] = useState(""), [zip, setZip] = useState(""), [lb, setLb] = useState(""), [n, setN] = useState("1");
   const [rates, setRates] = useState<Rate[] | null>(null);
   const [only, setOnly] = useState<"all" | "UPS" | "FedEx">("all");
@@ -32,7 +32,7 @@ export default function QuickShipQuote({ compact = false }: { compact?: boolean 
     createClient().from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => {
       const s = mergeSettings(data?.data).ship as unknown as { from: { zip: string }; boxes: { name: string; l?: number; w?: number; h?: number; length?: number; width?: number; height?: number }[]; defaultBox: string };
       const bs = (s.boxes || []).map((b) => ({ name: b.name, l: +(b.l ?? b.length ?? 0), w: +(b.w ?? b.width ?? 0), h: +(b.h ?? b.height ?? 0) }));
-      setBoxes(bs); setBox(s.defaultBox || bs[0]?.name || ""); setOurZip(s.from?.zip || ""); setFrom(s.from?.zip || "");
+      setBoxes(bs); setBox(s.defaultBox || bs[0]?.name || ""); setDefBox(s.defaultBox || bs[0]?.name || ""); setOurZip(s.from?.zip || ""); setFrom(s.from?.zip || "");
     });
   }, []);
   async function quote(e: React.FormEvent) {
@@ -54,23 +54,13 @@ export default function QuickShipQuote({ compact = false }: { compact?: boolean 
 
   return (
     <div className={"qs" + (compact ? " qs-compact" : "")}>
-      <form className="qs-form" onSubmit={quote}>
-        <div className="qs-need">
-          <div className="qs-grp-h"><b>Fill in</b><span>needed for a rate</span></div>
-          <div className="qs-f">
-            <label className={zip.trim().length === 5 ? "done" : "todo"}><span>Ship to ZIP <i className="req">*</i></span><input inputMode="numeric" maxLength={5} value={zip} onChange={(e) => setZip(e.target.value.replace(/\D/g, ""))} placeholder="Enter ZIP" required aria-required="true" /></label>
-            <label className={+lb > 0 ? "done" : "todo"}><span>Weight per box <i className="req">*</i></span><span className="qs-unit"><input type="number" min={0.1} step={0.1} value={lb} onChange={(e) => setLb(e.target.value)} placeholder="Enter weight" required aria-required="true" /><em>lb</em></span></label>
-          </div>
-        </div>
-        <div className="qs-set">
-          <div className="qs-grp-h"><b>Already set</b><span>change if you need to</span></div>
-          <div className="qs-f">
-            <label><span>Ship from ZIP</span><input inputMode="numeric" maxLength={5} value={from} onChange={(e) => setFrom(e.target.value.replace(/\D/g, ""))} />{from === ourZip && ourZip ? <small className="qs-def">Our shop</small> : null}</label>
-            <label><span>Boxes</span><input type="number" min={1} max={50} value={n} onChange={(e) => setN(e.target.value)} /></label>
-            <label className="qs-size"><span>Box size</span><select value={box} onChange={(e) => setBox(e.target.value)}>{boxes.map((b) => <option key={b.name} value={b.name}>{b.name} {b.l}×{b.w}×{b.h}</option>)}</select></label>
-          </div>
-        </div>
-        <button type="submit" className="btn primary qs-go" disabled={busy || zip.trim().length !== 5 || !(+lb > 0)}>{busy ? "Getting rates…" : zip.trim().length !== 5 || !(+lb > 0) ? "Enter ZIP & weight" : "Get Rates"}</button>
+      <form className="qs-f qs-one" onSubmit={quote}>
+        <label>Ship to ZIP<input inputMode="numeric" maxLength={5} value={zip} onChange={(e) => setZip(e.target.value.replace(/\D/g, ""))} placeholder="Enter ZIP" required /></label>
+        <label>Weight per box<span className="qs-unit"><input type="number" min={0.1} step={0.1} value={lb} onChange={(e) => setLb(e.target.value)} placeholder="Enter lb" required /><em>lb</em></span></label>
+        <label>Ship from ZIP<input className={from === ourZip ? "pre" : ""} inputMode="numeric" maxLength={5} value={from} onChange={(e) => setFrom(e.target.value.replace(/\D/g, ""))} title="Our shop's ZIP (change if shipping from somewhere else)" /></label>
+        <label>Boxes<input className={n === "1" ? "pre" : ""} type="number" min={1} max={50} value={n} onChange={(e) => setN(e.target.value)} /></label>
+        <label className="qs-size">Box size<select className={box === defBox ? "pre" : ""} value={box} onChange={(e) => setBox(e.target.value)}>{boxes.map((b) => <option key={b.name} value={b.name}>{b.name} {b.l}×{b.w}×{b.h}</option>)}</select></label>
+        <button type="submit" className="btn primary" disabled={busy || zip.trim().length !== 5 || !(+lb > 0)}>{busy ? "Getting rates…" : "Get Rates"}</button>
       </form>
       {err && <div className="pv-err">{err}</div>}
       {rates && (rates.length ? (

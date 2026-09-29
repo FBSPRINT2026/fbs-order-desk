@@ -2753,30 +2753,20 @@ a.as-ai{text-decoration:none}
 .sc-transit{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
 
 /* rate & transit calculator */
-.qs-form{display:flex;flex-direction:column;gap:10px}
-.qs-need,.qs-set{border-radius:10px;padding:8px 10px 10px;display:flex;flex-direction:column;gap:6px}
-.qs-need{background:color-mix(in srgb,var(--fbs-orange) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--fbs-orange) 35%,var(--line))}
-.qs-set{background:var(--surface-2);border:1px solid var(--line-2,var(--line))}
-.qs-grp-h{display:flex;gap:6px;align-items:baseline;font-size:12px}
-.qs-grp-h b{font-size:12px;text-transform:uppercase;letter-spacing:.05em}
-.qs-grp-h span{color:var(--ink-3)}
-.qs-f{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.qs-set .qs-f{grid-template-columns:1fr 0.6fr 1.4fr}
-.qs-f label>span:first-child{display:flex;align-items:center;gap:6px}
-.qs-f .req{color:var(--danger);font-style:normal}
-.qs-need .qs-f input{background:var(--surface);font-size:15px;font-weight:600;padding:8px 9px;border:2px solid color-mix(in srgb,var(--fbs-orange) 55%,var(--line))}
-.qs-need .qs-f label.done input{border-color:var(--ok)}
-.qs-need .qs-f input::placeholder{color:var(--ink-3);font-weight:400;font-style:italic;opacity:.75}
-.qs-set .qs-f input,.qs-set .qs-f select{background:var(--surface);color:var(--ink)}
-.qs-def{font-size:11px;font-weight:600;color:var(--ink-3)}
+.qs-f.qs-one{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.qs-one .qs-size{grid-column:span 2}
+.qs-one button{grid-column:span 2;align-self:end}
+.qs-one input,.qs-one select{background:var(--surface);color:var(--ink);font-weight:600}
+.qs-one input::placeholder{color:var(--ink-3);font-weight:400;font-style:italic;opacity:.7}
+/* prefilled (our defaults): greyed until changed */
+.qs-one .pre{background:var(--surface-2);color:var(--ink-3);font-weight:400;border-color:var(--line-2,var(--line))}
+.qs-one .pre:focus{background:var(--surface);color:var(--ink)}
 .qs-unit{position:relative;display:block}
 .qs-unit input{width:100%;padding-right:30px!important}
 .qs-unit em{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-style:normal;color:var(--ink-3);font-size:13px;pointer-events:none}
-.qs-go{align-self:flex-start;min-width:180px}
-.qs-compact .qs-set .qs-f{grid-template-columns:repeat(2,minmax(0,1fr))}
-.qs-compact .qs-set .qs-f .qs-size{grid-column:1/-1}
-.qs-compact .qs-go{align-self:stretch}
-@media (max-width: 700px){.qs-set .qs-f{grid-template-columns:repeat(2,minmax(0,1fr))}.qs-set .qs-f .qs-size{grid-column:1/-1}.qs-go{align-self:stretch}}
+.qs-compact .qs-one{grid-template-columns:repeat(2,minmax(0,1fr))}
+.qs-compact .qs-one .qs-size,.qs-compact .qs-one button{grid-column:1/-1}
+@media (max-width: 700px){.qs-f.qs-one{grid-template-columns:repeat(2,minmax(0,1fr))}.qs-one .qs-size,.qs-one button{grid-column:1/-1}}
 .qs-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .qs-sum>div{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border-radius:10px;background:var(--surface-2);min-width:0}
 .qs-sum span{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em}
