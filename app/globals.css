@@ -3632,3 +3632,5 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-ci-r .rv-seg button{padding:3px 8px;font-size:11.5px}
 @media (max-width:700px){.ms-ci-r{grid-template-columns:1fr}}
 .ms-inl{white-space:nowrap}
+.ms-ask{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--fbs-orange) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--fbs-orange) 40%,transparent);font-size:13px}
+.ms-ask.ok{background:var(--accent-soft);border-color:transparent;flex-direction:row;flex-wrap:wrap;gap:8px}

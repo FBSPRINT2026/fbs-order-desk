@@ -149,7 +149,7 @@ export default function MachineSchedule() {
   const [downEdit, setDownEdit] = useState<{ machine?: string; day?: string; start?: number; allDay?: boolean } | null>(null);
   const [extras, setExtras] = useState<Extra[]>([]);
   const [shiftEdit, setShiftEdit] = useState(false);
-  const [replan, setReplan] = useState<null | { why: string }>(null);
+  const [replan, setReplan] = useState<null | { why: string; split?: boolean }>(null);
   const [replanTray, setReplanTray] = useSticky("cal.replanTray", true);
   const [replanBusy, setReplanBusy] = useState(false);
   const [checkin, setCheckin] = useState(false);
@@ -396,7 +396,7 @@ export default function MachineSchedule() {
    * available: crew shifts, weekend/extra shifts, around downtime, slower where someone's out. Running and done work
    * stays put. Returns the moves so they can be looked at before anything changes.
    */
-  const planIt = () => {
+  const planIt = (allowSplit = false) => {
     const nowAbs = ord(today) * 1440 + now.min;
     const winsOf = (m: Machine, d: string) => { const sh = shiftOn(m, d); return sh ? windowsIn(sh, m.down?.[d]) : []; };
     const norm = (m: Machine, t: number) => { for (let g = 0; g < 120; g++) { const dd = Math.floor(t / 1440), mm = t - dd * 1440, w = winsOf(m, fromOrd(dd)).find(([, y]) => mm < y); if (!w) { t = (dd + 1) * 1440; continue; } return mm < w[0] ? dd * 1440 + w[0] : t; } return t; };
@@ -437,9 +437,11 @@ export default function MachineSchedule() {
       if (!best) { skipped.push(it); continue; }
       const locs = locsOf(it.need);
       // won't make it in one piece: try the print locations separately (fronts on one press, backs on another / the next day)
-      if (it.job.due && endDayOf(best.end) > it.job.due && locs.length > 1 && it.left >= 0.999) {
+      // only when allowed (the schedule is tight and someone said OK): splitting costs efficiency (shared screens, one setup)
+      if (allowSplit && it.job.due && endDayOf(best.end) > it.job.due && locs.length > 1 && it.left >= 0.999) {
         const cur2 = { ...cursor }, parts: { need: Need; b: NonNullable<ReturnType<typeof bestFor>>; l: string }[] = [];
-        for (const l of locs) { const sn = subNeed(it.need, [l]), b = bestFor(sn, 1, cur2, it.cur); if (!b) { parts.length = 0; break; } cur2[b.m.id] = b.end; parts.push({ need: sn, b, l }); }
+        // each extra run costs another setup: re-registering and ink changes, about 15 minutes
+        for (const [i, l] of locs.entries()) { const sn = subNeed(it.need, [l]), b = bestFor(sn, 1, cur2, it.cur); if (!b) { parts.length = 0; break; } if (i > 0) { const r = sim(b.m, b.start, b.minutes + 15); b.end = r.end; b.minutes += 15; } cur2[b.m.id] = b.end; parts.push({ need: sn, b, l }); }
         const splitEnd = Math.max(...parts.map((p) => p.b.end));
         if (parts.length > 1 && splitEnd < best.end - 30) {
           Object.assign(cursor, cur2); splits++;
@@ -770,9 +772,10 @@ export default function MachineSchedule() {
               <div>{tight.length} job{tight.length === 1 ? "" : "s"} won&apos;t make {tight.length === 1 ? "its" : "their"} in-hands date on the regular schedule:</div>
               <ul className="ms-offs">{tight.slice(0, 8).map((t) => <li key={t.job.key}><span>#{t.job.number}</span><span className="faint">{t.job.customer || t.job.name} · {t.why}</span><span /></li>)}</ul>
               {tight.length > 8 && <div className="faint">and {tight.length - 8} more</div>}
-              <b>Add a weekend shift?</b>
+              <b>Add a weekend shift, or split jobs up (fronts and backs as separate runs) where that helps?</b>
               <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
                 <button type="button" className="btn" onClick={() => setTightSeen(`${today}:${tight.length}`)}>Not Now</button>
+                <button type="button" className="btn" onClick={() => { setTightSeen(`${today}:${tight.length}`); setReplan({ why: "OK to split jobs (fronts and backs as separate runs) where that makes an in-hands date?", split: true }); }}>Split Jobs As Needed</button>
                 <button type="button" className="btn primary" onClick={() => { setTightSeen(`${today}:${tight.length}`); setShiftEdit(true); }}>Yes, Add Weekend Shift</button>
               </div>
             </div>
@@ -813,7 +816,11 @@ export default function MachineSchedule() {
       {checkin && <CheckIn rows={cards.filter((c) => c.slot && !c.fromPv && (c.day === today || c.slot.status === "running" || c.slot.status === "paused")).map((c) => ({ c, first: (segs.ofCard.get(c.key) || []).filter((g) => g.day === today)[0] })).sort((a, b) => a.c.machine.id.localeCompare(b.c.machine.id) || (a.first?.start ?? 9999) - (b.first?.start ?? 9999))}
         machines={machines} crews={s.crews} now={now.min} onClose={() => setCheckin(false)}
         onSave={async (changes) => { for (const ch of changes) await logAction(ch.slot, ch.action, ch.progress, false); setCheckin(false); load(); setReplan({ why: `Progress saved (${changes.length} update${changes.length === 1 ? "" : "s"}). Re-plan the rest of the day and the week around it?` }); }} />}
-      {replan && (() => { const p = planIt(); return (
+      {replan && (() => {
+        const whole = planIt(false), splitP = whole.lateAfter > 0 ? planIt(true) : null;
+        const splitHelps = !!splitP && splitP.splits > 0 && splitP.lateAfter < whole.lateAfter;
+        const p = replan.split && splitHelps ? splitP! : whole;
+        return (
         <div className="pp-modal" onClick={() => setReplan(null)}>
           <div className="pp-sheet tmx-ed" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Re-plan schedule">
             <div className="pp-sheet-h"><b>Re-plan Schedule</b><button type="button" className="btn icon ghost" onClick={() => setReplan(null)} aria-label="Close">✕</button></div>
@@ -824,6 +831,8 @@ export default function MachineSchedule() {
               <div className="ms-rp-sum"><span><b>{p.moves.length}</b> move{p.moves.length === 1 ? "" : "s"}{p.added ? ` (${p.added} newly booked)` : ""}</span>{p.splits ? <span><b>{p.splits}</b> split by print location</span> : null}<span className={p.lateAfter < p.lateBefore ? "good" : p.lateAfter > p.lateBefore ? "bad" : ""}>Late: <b>{p.lateBefore}</b> → <b>{p.lateAfter}</b></span></div>
               {p.moves.length > 0 && <ul className="ms-offs">{p.moves.slice(0, 40).map((o) => <li key={o.it.key + o.part}><span>#{o.it.job.number}{o.parts > 1 ? <small className="faint"> · {o.locs?.join(", ")}</small> : null}{o.it.job.due ? <small className="faint"> · due {dayShort(o.it.job.due)}</small> : null}</span><span className="faint">{o.it.slot ? `${shortName(s.machines.find((x) => x.id === o.it.cur) || o.mach)} ${dayShort(o.it.curDay)}` : "Ready To Schedule"} → <b className={o.late ? "ms-late" : ""}>{shortName(o.mach)} {dayShort(o.day)}{o.end !== o.day ? `–${dayShort(o.end)}` : ""}</b></span><span /></li>)}</ul>}
               {p.moves.length > 40 && <div className="faint">and {p.moves.length - 40} more</div>}
+              {splitHelps && !replan.split && <div className="ms-ask"><b>The schedule is tight. OK to split jobs up as needed?</b><span>Printing the fronts and backs of {splitP!.splits} job{splitP!.splits === 1 ? "" : "s"} as separate runs (another day or press) brings late jobs from {whole.lateAfter} to {splitP!.lateAfter}. Separate runs lose some efficiency: extra setup, screens not shared.</span><div className="row" style={{ gap: 8 }}><button type="button" className="btn sm primary" onClick={() => setReplan({ ...replan, split: true })}>Yes, Split As Needed</button><button type="button" className="btn sm" onClick={() => setShiftEdit(true)}>Add a Weekend Shift Instead</button></div></div>}
+              {replan.split && splitHelps && <div className="ms-ask ok">Splitting allowed: {splitP!.splits} job{splitP!.splits === 1 ? "" : "s"} run fronts and backs separately. <button type="button" className="linkbtn" onClick={() => setReplan({ ...replan, split: false })}>Keep jobs whole</button></div>}
               {p.lateAfter > 0 && <div className="faint" style={{ fontSize: 12.5 }}>{p.lateAfter} still won&apos;t make {p.lateAfter === 1 ? "its" : "their"} in-hands date. Another weekend shift or overtime would help.</div>}
               <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
                 <button type="button" className="btn" onClick={() => setReplan(null)}>Keep As Is</button>
