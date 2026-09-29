@@ -8,6 +8,7 @@ import { saveShortcuts, type Shortcut } from "@/app/shop/shortcut-actions";
 import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 
 const ICONS: Record<string, React.ReactNode> = {
+  home: <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>,
   assistant: <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
   orders: <svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3z" /><path d="M8 9h8M8 13h8M8 17h5" /></svg>,
@@ -32,6 +33,8 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
   const [hello, setHello] = useState("Hello");
   const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false); // phones: the menu slides open from the top bar
+  useEffect(() => { setOpen(false); }, [path]);
   const [mine, setMine] = useState<Shortcut[]>(shortcuts || []);
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState<Shortcut | null>(null);
@@ -77,11 +80,11 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
 
   // the menu, in groups
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
-    { title: "Sales", items: [["/shop", "orders", "Orders"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/projects", "projects", "Projects"], ["/shop/customers", "customers", "Customers"]] },
+    { title: "Sales", items: [["/shop/orders", "orders", "Orders"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/projects", "projects", "Projects"], ["/shop/customers", "customers", "Customers"]] },
     { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/board", "board", "Production"], ["/shop/calendar", "calendar", "Production Calendar"]] },
     { title: "Shop Tools", items: [["/shop/shipping", "shipping", "Shipping Center"], ["/shop/receiving", "goods", "Goods & Receiving"]] },
   ];
-  const active = (href: string) => (href === "/shop" ? path === "/shop" || path.startsWith("/shop/orders") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
+  const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
 
   const link = ([href, icon, label]: [string, string, string]) => (
@@ -99,12 +102,17 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
         {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}
         {brand.sideTagline && <span>{brand.sideTagline}</span>}
       </Link>
+      <button type="button" className="side-menu-btn" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen((x) => !x)}>
+        {open ? <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg> : <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}
+      </button>
+      <div className={"side-drawer" + (open ? " open" : "")}>
       <div className="side-hello">{hello}{firstName ? `, ${firstName}` : ""}</div>
       <form className="side-search" role="search" onSubmit={(e) => { e.preventDefault(); const t = q.trim(); if (t) router.push(`/shop/search?q=${encodeURIComponent(t)}`); }}>
         <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Everything…" aria-label="Search orders, customers, artwork, shipments" />
       </form>
       <nav className="nav">
+        {link(["/shop", "home", "Today"])}
         {link(["/shop/assistant", "assistant", "Assistant"])}
         {GROUPS.map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "")}>
@@ -145,6 +153,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
       <div className="side-user">
         <span>{email}</span>
         <form action="/auth/signout" method="post"><button className="btn ghost sm" style={{ color: "inherit", padding: 0 }} type="submit">Sign out</button></form>
+      </div>
       </div>
     </aside>
   );

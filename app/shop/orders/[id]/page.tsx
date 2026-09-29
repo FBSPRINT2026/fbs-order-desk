@@ -417,7 +417,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     notesTimer.current = setTimeout(() => { sb.from("order_internal").upsert({ order_id: id, production_notes: v }); }, 700);
   }
 
-  if (missing) return <><Link className="back" href="/shop">← Orders</Link><div className="empty">This order was deleted or doesn&apos;t exist.</div></>;
+  if (missing) return <><Link className="back" href="/shop/orders">← Orders</Link><div className="empty">This order was deleted or doesn&apos;t exist.</div></>;
   if (!o || !calc) return <div className="empty">Loading…</div>;
 
   const st = ST[o.status] || ST.quote;
@@ -431,7 +431,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
   return (
     <>
-      <Link className="back" href="/shop">← Orders</Link>
+      <Link className="back" href="/shop/orders">← Orders</Link>
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
           <div className="eyebrow">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
