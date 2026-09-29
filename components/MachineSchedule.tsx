@@ -12,9 +12,8 @@ import type { Group } from "@/lib/pricing";
  * 30-hour job fills that press for several days (shift hours only, never "overnight").
  * Day view: machines across, the clock down. Jobs not marked Done by the end of their day roll forward to today.
  * Ready To Schedule suggests a machine and day from colors, quantity, garments and stitches; drag a job to another
- * machine, day or time (a job only drops on a machine that can run it), or tap it to move it. Printavo jobs in a
- * machine status ("SP - Press 1 - 12C Gauntlet III") show on that machine at their Printavo time until go-live
- * (read-only toward Printavo: moving one here books it in our schedule only).
+ * machine, day or time (a job only drops on a machine that can run it), or tap it to move it. Only our own orders are
+ * planned here; Printavo jobs are left off (the Printavo-lane code stays, fed nothing, in case it's wanted again).
  */
 type Job = { key: string; kind: "o" | "a"; id: string; number: string; customer: string; name: string; due: string | null; qty: number; status: string; needs: Need[]; href: string };
 type Slot = { id: string; order_id: string | null; archived_order_id: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "done"; source: string; note: string; rolled_from: string | null };
@@ -121,12 +120,13 @@ export default function MachineSchedule() {
     const [{ data: st }, { data: o }, { data: a }, { data: sl0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id, groups, lines").in("status", ["approved", "art", "blanks", "production"]).limit(300),
-      sb.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, customer_id, start:data->>startAt, pend:data->>dueAt, pvgroups:data->groups").eq("kind", "invoice").gte("due_date", addDay(today, -45)).not("status_name", "ilike", "%complete%").limit(600),
-      sb.from("production_slots").select("*").gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
+      // Printavo jobs are left off the calendar (it plans our own orders only); nothing in Printavo is read or changed here
+      Promise.resolve({ data: [] as unknown[] }),
+      sb.from("production_slots").select("*").not("order_id", "is", null).gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
     ]);
     let sl = (sl0 || []) as Slot[];
     // not marked done by the end of its day → it moves forward to today (first in line), remembering where it started
-    const stale = sl.filter((x) => x.day < today && x.status !== "done");
+    const stale = sl.filter((x) => x.order_id && x.day < today && x.status !== "done");
     if (stale.length) {
       await Promise.all(stale.map((x) => sb.from("production_slots").update({ day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day, updated_at: new Date().toISOString() }).eq("id", x.id)));
       sl = sl.map((x) => (stale.includes(x) ? { ...x, day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day } : x));
@@ -482,7 +482,7 @@ export default function MachineSchedule() {
           <span className="spacer" />
           {trayOpen && tray.some((t) => t.sug && !t.sug.late) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All Suggestions</button>}
         </div>
-        {trayOpen && (!tray.length ? <div className="db-empty">Nothing waiting. Jobs land here when they go to In Production (goods here, art approved), or a Printavo &quot;Ready for Production / Scheduling&quot; status.</div> : (
+        {trayOpen && (!tray.length ? <div className="db-empty">Nothing waiting. Jobs land here when they go to In Production (goods here, art approved).</div> : (
           <>
             <ul className="ms-band-l">{(trayAll ? tray : tray.slice(0, 8)).map((t) => (
               <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-t " + t.need.type + (t.sug?.late ? " late" : "")}>
@@ -506,7 +506,7 @@ export default function MachineSchedule() {
       <div className="ms-main">
         {view === "week" ? listGrid() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayView()}
         {phoneView()}
-        <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k pv" />From Printavo</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
+        <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
       {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={allDays.filter(visible)} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} />}

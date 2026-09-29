@@ -3485,3 +3485,12 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ps-days button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .ps-st{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .ps-st label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+
+/* test account switch on a customer page */
+.ta-bar{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:6px 10px;border:1px dashed var(--line);border-radius:10px;margin:0 0 12px;font-size:12.5px}
+.ta-bar.on{border:1px solid color-mix(in srgb,#7C5CD6 40%,var(--line));background:color-mix(in srgb,#7C5CD6 7%,var(--surface))}
+.ta-sw{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.ta-sw input{width:auto;margin:0}
+.ta-note{color:var(--ink-2)}
+.ta-msg{width:100%;font-weight:600;color:var(--ink-2)}
+.ta-tag{margin-left:8px;font-size:10.5px;background:#7C5CD6;color:#fff;border-radius:99px;padding:1px 8px;letter-spacing:.02em;vertical-align:middle}

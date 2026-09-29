@@ -1,4 +1,5 @@
 "use client";
+import TestAccount from "@/components/TestAccount";
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -144,7 +145,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     <>
       <Link className="back" href="/shop/customers">← Customers</Link>
       <div className="page-head" style={{ marginTop: 8 }}>
-        <div><div className="eyebrow">Customer</div><h1>{c.company || c.name || "New Customer"}</h1></div>
+        <div><div className="eyebrow">Customer{c.is_test ? <span className="ta-tag">Test account</span> : null}</div><h1>{c.company || c.name || "New Customer"}</h1></div>
         <div className="row">
           <Link className="btn" href={`/shop/customers/${id}?area=details`} scroll={false}>Customer details</Link>
           <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">View their portal</a>
@@ -152,6 +153,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           <button className={"btn danger" + (armed ? " armed" : "")} type="button" onClick={del} disabled={os.length > 0 || archive.length > 0} title={os.length ? "Delete this customer's orders first" : archive.length ? "This customer has archived Printavo orders" : ""}>{armed ? "Confirm delete" : "Delete"}</button>
         </div>
       </div>
+      <TestAccount key={id} customerId={id} isTest={!!c.is_test} jobs={os.length} onChange={(v) => { reloadShop(); if (v !== undefined) setC((x) => (x ? { ...x, is_test: v } : x)); }} />
       <AccountAreas mode="shop" goodsCount={goodsOpen}
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} onCount={setProjOpen} />} projectsCount={projOpen}
           programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
