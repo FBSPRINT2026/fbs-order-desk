@@ -125,25 +125,16 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Map<string, [
     }
     return t;
   };
-  for (const c of sorted) {
-    // finished work stays on the day it was done (it never spills into later days or pushes today's jobs)
-    if (c.slot?.status === "done") {
-      const [s0, s1] = hrs(c.day);
-      const prior = out.filter((g) => g.day === c.day).reduce((m, g) => Math.max(m, g.end), s0);
-      const st = Math.min(prior, s1 - 15);
-      const en = Math.min(s1, st + Math.max(15, c.minutes));
-      out.push({ c, day: c.day, start: st, end: en, part: 1, parts: 1, pushed: false, work: en - st });
-      busy.set(c.job.key, [...(busy.get(c.job.key) || []), [ord(c.day) * 1440 + st, ord(c.day) * 1440 + en]]);
-      continue;
-    }
+  type Piece = { day: string; start: number; end: number; work: number; slow: number };
+  // where a job would go if it were next on this machine (doesn't commit anything but a moved lunch)
+  const tryPlace = (c: Card) => {
     // work that hasn't started can't happen in the past: it starts from now at the earliest (the late crew, the
     // morning breakdown…), so everything after it slides forward, into tomorrow if today's shift is used up
     const notStarted = !c.slot || c.slot.status === "scheduled" || c.slot.status === "paused";
     const planned = ord(c.day) * 1440 + (c.startMin ?? hrs(c.day)[0]);
     const asked = Math.max(planned, notStarted ? nowAbs : -Infinity);
     let t = norm(Math.max(cursor, asked), cursor < asked && c.startMin != null && asked === planned);
-    type Piece = { day: string; start: number; end: number; work: number; slow: number };
-    let pieces: Piece[] = [];
+    const free = t;
     // lay it out from t; if another part of this job is on another machine then, start after that part is done
     const lay = (t0: number) => {
     let t = t0, left = Math.max(1, c.minutes);
@@ -173,12 +164,47 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Map<string, [
         t = norm(ord(d0) * 1440 + p0.start); r = lay(t);
       }
     }
+    let blocked = false;
     for (let k = 0; k < 30 && c.slot?.status !== "running"; k++) {
       const hit = jb.find(([a, b]) => r.pieces.some((p) => ord(p.day) * 1440 + p.start < b && ord(p.day) * 1440 + p.end > a));
       if (!hit) break;
+      blocked = true;
       t = norm(hit[1]); r = lay(t);
     }
-    pieces = r.pieces;
+    return { t, r, planned, free, blocked, jb };
+  };
+  const pending = [...sorted];
+  while (pending.length) {
+    let c = pending[0];
+    // finished work stays on the day it was done (it never spills into later days or pushes today's jobs)
+    if (c.slot?.status === "done") {
+      pending.shift();
+      const [s0, s1] = hrs(c.day);
+      const prior = out.filter((g) => g.day === c.day).reduce((m, g) => Math.max(m, g.end), s0);
+      const st = Math.min(prior, s1 - 15);
+      const en = Math.min(s1, st + Math.max(15, c.minutes));
+      out.push({ c, day: c.day, start: st, end: en, part: 1, parts: 1, pushed: false, work: en - st });
+      busy.set(c.job.key, [...(busy.get(c.job.key) || []), [ord(c.day) * 1440 + st, ord(c.day) * 1440 + en]]);
+      continue;
+    }
+    const before = new Map(lunch);
+    let pl = tryPlace(c);
+    // the next job is waiting on its other part (the front's still on another press): don't leave this press idle,
+    // run the next job that can start now instead (one booked for this day or earlier, not one with a set start time)
+    if (pl.blocked && pl.t > pl.free + 5) {
+      for (let i = 1; i < pending.length; i++) {
+        const o = pending[i];
+        if (o.slot?.status === "done" || o.slot?.status === "running" || o.startMin != null || o.day > fromOrd(Math.floor(pl.free / 1440))) continue;
+        const keep = new Map(lunch);
+        lunch.clear(); for (const [k, v] of before) lunch.set(k, v);
+        const alt = tryPlace(o);
+        if (!alt.blocked && alt.t <= pl.free + 1) { c = o; pl = alt; break; }
+        lunch.clear(); for (const [k, v] of keep) lunch.set(k, v);
+      }
+    }
+    pending.splice(pending.indexOf(c), 1);
+    const { t, r, planned, jb } = pl;
+    const pieces = r.pieces;
     // work laid past a day's lunch settles it
     for (const p of pieces) if (!lunch.has(p.day)) { const L = lunchStart(mach, hrs(p.day)); if (L != null && p.end > L) lunch.set(p.day, L); }
     const pushed = t > planned + 1;
@@ -692,7 +718,7 @@ export default function MachineSchedule() {
             {at(m, day).map((g) => { const h = Math.max(22, ((g.end - g.start) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes); return (
               <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "")} style={{ top: ((g.start - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
                 onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
-                <span className="ms-l1"><b>#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b><span className="co"><span className="full">{g.c.job.customer}</span><span className="ab">{abbrCo(g.c.job.customer)}</span></span></span>
+                <span className="ms-l1"><b>#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b><span className="co"><span className="full">{g.c.job.customer}</span><span className="ab">{abbrCo(g.c.job.customer)}</span></span><span className="l1x">{gl.colors} · {gl.units.toLocaleString()}P</span></span>
                 <span className="ms-l2">{g.c.job.name || g.c.need.label}</span>
                 <span className="ms-l3"><i>{gl.colors}</i><i className="q">{gl.units.toLocaleString()} pcs</i><i className="t">{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</i><i className="qc">{gl.units.toLocaleString()}P</i></span>
               </button>
@@ -760,7 +786,7 @@ export default function MachineSchedule() {
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver("k:" + c.key); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (drag && g.part === 1) place(drag, g.c.machine, d, c.key); else if (drag) place(drag, g.c.machine, d); }}>
         {over === "k:" + c.key && <i className="ms-ins" />}
         {two ? (() => { const gl = glance(c.need, c.minutes); return <>
-          <span className="ms-l1"><b>#{c.job.number}{c.slot?.status === "done" ? <em className="ok"> ✓</em> : c.slot?.status === "running" ? <em className="rn"> ●</em> : null}</b><span className="co"><span className="full">{c.job.customer}</span><span className="ab">{abbrCo(c.job.customer)}</span></span></span>
+          <span className="ms-l1"><b>#{c.job.number}{c.slot?.status === "done" ? <em className="ok"> ✓</em> : c.slot?.status === "running" ? <em className="rn"> ●</em> : null}</b><span className="co"><span className="full">{c.job.customer}</span><span className="ab">{abbrCo(c.job.customer)}</span></span><span className="l1x">{gl.colors} · {gl.units.toLocaleString()}P</span></span>
           <span className="ms-l2">{c.job.name || c.need.label}</span>
           <span className="ms-l3"><i>{gl.colors}</i><i className="q">{gl.units.toLocaleString()} pcs</i><i className="t">{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</i><i className="qc">{gl.units.toLocaleString()}P</i></span>
         </>; })() : <>

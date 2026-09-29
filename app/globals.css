@@ -3805,3 +3805,18 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-rc-d{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .ms-rc-3 .spacer{flex:1 1 0;min-width:0}
 @media (max-width:700px){.ms-alert-l{grid-template-columns:minmax(0,1fr)}.ms-alert-l li{grid-template-columns:48px minmax(0,1fr)}.ms-alert-l small{grid-column:2;white-space:normal}}
+/* a one-line card (a short job) keeps its colors and count: "#1290 JKL Test · 2/0 · 300P" */
+.ms-l1 .l1x{display:none;flex:none;font-weight:700;font-variant-numeric:tabular-nums}
+.ms-l1 .l1x::before{content:"\00B7\00A0";color:var(--ink-3);font-weight:400}
+.ms-blk.card.tiny .ms-l1 .l1x{display:inline}
+.ms-blk.card.tiny .ms-l1 .co .full{display:none}
+.ms-blk.card.tiny .ms-l1 .co .ab{display:inline}
+.ms-blk.card.tiny .ms-l1 .co{flex:0 1 auto}
+@container (max-width: 190px){
+  .ms-blk.card.tiny .ms-l1{font-size:11px;gap:0 4px}
+  .ms-blk.card.tiny .ms-l1>b{font-size:11.5px}
+  .ms-l1 .l1x::before{content:"\00B7";margin:0 3px 0 0}
+}
+@container (max-width: 125px){
+  .ms-blk.card.tiny .ms-l1 .co{display:none}
+}
