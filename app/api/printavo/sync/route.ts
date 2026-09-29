@@ -74,7 +74,7 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     // the full pass over every order: during the import it keeps going alongside; once caught up, a new pass starts 30 minutes after the last
     const sweepDue = !!sync.sweep_cursor || !sync.sweep_done_at || Date.now() - new Date(sync.sweep_done_at).getTime() > 30 * 60000;
     // a pass that's under way gets most turns (it only reads lists, and it's how new orders are found); otherwise every 6th
-    if (sweepDue && (!pending || (sync.sweep_cursor ? turn % 3 !== 0 : turn % 6 === 0))) { await sweepPage(admin, sync, did); continue; }
+    if (sweepDue && (!pending || (sync.sweep_cursor ? turn % 3 !== 0 : turn % 6 === 1))) { await sweepPage(admin, sync, did); continue; }
 
     // a big order can take 15+ seconds to read at our pace: don't start one near the end of the run
     if (pending) { if (Date.now() > deadline - 17000) break; await importOne(admin, pending.printavo_id, pending.attempts, did); continue; }
