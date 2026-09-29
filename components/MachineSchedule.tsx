@@ -82,6 +82,8 @@ const snap = (min: number, step = 15) => Math.round(min / step) * step;
 const TYPE_LBL = { screen: "Screen Print", embroidery: "Embroidery", heat: "Heat Press" };
 /** "Embroidery · 12 Head" → "12 Head", "Press 3 · 8C Sportsman" → "Press 3" */
 const shortName = (m: Machine) => { const p = m.name.split(" · "); return p.length < 2 ? m.name : m.type === "embroidery" ? p[1] : p[0]; };
+// a customer name for narrow cards: drop Company / Inc / LLC and the like ("ABC Test Company" → "ABC Test")
+const abbrCo = (n: string) => n.replace(/[,.]?\s+(company|co|inc|llc|l\.l\.c|corp|corporation|ltd|limited)\.?$/i, "").replace(/\s+(and|&)\s+/gi, " & ").trim() || n;
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 const PV_DONE = /job\s*completed|quote|cancel|ship|fulfillment|issue/i;
 const HOUR_PX0 = 56;
@@ -689,9 +691,9 @@ export default function MachineSchedule() {
             {at(m, day).map((g) => { const h = Math.max(22, ((g.end - g.start) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes); return (
               <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "")} style={{ top: ((g.start - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
                 onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
-                <span className="ms-l1"><b>#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b><span>{g.c.job.customer}</span></span>
+                <span className="ms-l1"><b>#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b><span className="co"><span className="full">{g.c.job.customer}</span><span className="ab">{abbrCo(g.c.job.customer)}</span></span></span>
                 <span className="ms-l2">{g.c.job.name || g.c.need.label}</span>
-                <span className="ms-l3"><i>{gl.colors}</i><i>{gl.units.toLocaleString()} pcs</i><i>{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</i></span>
+                <span className="ms-l3"><i>{gl.colors}</i><i className="q">{gl.units.toLocaleString()} pcs</i><i className="t">{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</i><i className="qc">{gl.units.toLocaleString()}P</i></span>
               </button>
             ); })}
           </div>
@@ -757,9 +759,9 @@ export default function MachineSchedule() {
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver("k:" + c.key); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (drag && g.part === 1) place(drag, g.c.machine, d, c.key); else if (drag) place(drag, g.c.machine, d); }}>
         {over === "k:" + c.key && <i className="ms-ins" />}
         {two ? (() => { const gl = glance(c.need, c.minutes); return <>
-          <span className="ms-l1"><b>#{c.job.number}{c.slot?.status === "done" ? <em className="ok"> ✓</em> : c.slot?.status === "running" ? <em className="rn"> ●</em> : null}</b><span>{c.job.customer}</span></span>
+          <span className="ms-l1"><b>#{c.job.number}{c.slot?.status === "done" ? <em className="ok"> ✓</em> : c.slot?.status === "running" ? <em className="rn"> ●</em> : null}</b><span className="co"><span className="full">{c.job.customer}</span><span className="ab">{abbrCo(c.job.customer)}</span></span></span>
           <span className="ms-l2">{c.job.name || c.need.label}</span>
-          <span className="ms-l3"><i>{gl.colors}</i><i>{gl.units.toLocaleString()} pcs</i><i>{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</i></span>
+          <span className="ms-l3"><i>{gl.colors}</i><i className="q">{gl.units.toLocaleString()} pcs</i><i className="t">{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</i><i className="qc">{gl.units.toLocaleString()}P</i></span>
         </>; })() : <>
         <b>{c.job.number}</b>{c.slot?.status === "done" ? <em className="ok">✓</em> : c.slot?.status === "running" ? <em className="rn">●</em> : null}
         <span className="ms-cn">{g.part > 1 ? <em>cont. </em> : null}{c.job.customer || c.job.name}</span>
