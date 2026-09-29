@@ -223,7 +223,8 @@ export default function MachineSchedule() {
   const [replanBusy, setReplanBusy] = useState(false);
   const [checkin, setCheckin] = useState(false);
   // the "schedule too tight" prompt shows once a day (again if more jobs go late)
-  const [tightSeen, setTightSeen] = useSticky("cal.tightSeen", "");
+  const [toolsOpen, setToolsOpen] = useSticky("cal.toolsOpen", true);
+  const [tightOpen, setTightOpen] = useSticky("cal.tightOpen", false);
 
   const load = useCallback(async () => {
     const sb = createClient();
@@ -877,67 +878,81 @@ export default function MachineSchedule() {
 
   return (
     <div className="ms">
-      <div className="ms-top">
+      {/* the calendar's own controls on one line: what's shown on the left, how it's shown on the right */}
+      <div className="ms-head">
         <h2 className="ms-title">Production Calendar</h2>
-        <span className="spacer" />
-        <Link className="linkbtn" href="/shop/settings/production">Machines, crews &amp; times</Link>
-        <button type="button" className="btn ms-dn-btn" onClick={() => setCheckin(true)}>Update Progress</button>
-        <button type="button" className="btn ms-dn-btn" onClick={() => setReplan({ why: "" })}>Re-plan Schedule</button>
-        <button type="button" className="btn ms-dn-btn" onClick={() => setShiftEdit(true)}>+ Add Weekend Shift</button>
-        <button type="button" className="btn primary ms-dn-btn" onClick={() => setDownEdit({})}>+ Add Downtime / Maintenance</button>
-      </div>
-      <div className="ms-bar">
         <div className="rv-seg">{([["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const).map(([k, l]) => <button key={k} type="button" className={typeF === k ? "on" : ""} onClick={() => setTypeF(k)}>{l}</button>)}</div>
         <div className="rv-seg ms-who" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
-        <span className="spacer" />
+        <div className="ms-head-r">
         <label className="ms-wknd"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Weekends</label>
         <div className="rv-seg ms-span">{([["split", "24 Hours + Next 5"], ["timeline", "Timeline"], ["day", "Day"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
-        <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
-        <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "timeline" ? "This Week" : "Today"}</button>
-        <button type="button" className="btn sm" onClick={() => shift(1)} aria-label="Later">→</button>
+        <div className="ms-nav">
+          <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
+          <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "timeline" ? "This Week" : "Today"}</button>
+          <button type="button" className="btn sm" onClick={() => shift(1)} aria-label="Later">→</button>
+        </div>
+        </div>
       </div>
       {msg && <div className="banner" style={{ marginBottom: 8 }} onClick={() => setMsg("")}>{msg}</div>}
-      {tight.length > 0 && <div className="ms-tight"><b>Schedule too tight:</b> {tight.length} job{tight.length === 1 ? " can't" : "s can't"} fit before {tight.length === 1 ? "its" : "their"} in-hands date.<span className="spacer" /><button type="button" className="btn sm" onClick={() => setReplan({ why: "" })}>Re-plan Schedule</button><button type="button" className="btn sm primary" onClick={() => setShiftEdit(true)}>Add Weekend Shift</button></div>}
-      {tight.length > 0 && tightSeen !== `${today}:${tight.length}` && !shiftEdit && (
-        <div className="pp-modal" onClick={() => setTightSeen(`${today}:${tight.length}`)}>
-          <div className="pp-sheet tmx-ed" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Schedule too tight">
-            <div className="pp-sheet-h"><b>Schedule too tight, can&apos;t fit</b><button type="button" className="btn icon ghost" onClick={() => setTightSeen(`${today}:${tight.length}`)} aria-label="Close">✕</button></div>
-            <div className="tmx-ed-b">
-              <div>{tight.length} job{tight.length === 1 ? "" : "s"} won&apos;t make {tight.length === 1 ? "its" : "their"} in-hands date on the regular schedule:</div>
-              <ul className="ms-offs">{tight.slice(0, 8).map((t) => <li key={t.job.key}><span>#{t.job.number}</span><span className="faint">{t.job.customer || t.job.name} · {t.why}</span><span /></li>)}</ul>
-              {tight.length > 8 && <div className="faint">and {tight.length - 8} more</div>}
-              <b>Add a weekend shift, or split jobs up (fronts and backs as separate runs) where that helps?</b>
-              <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
-                <button type="button" className="btn" onClick={() => setTightSeen(`${today}:${tight.length}`)}>Not Now</button>
-                <button type="button" className="btn" onClick={() => { setTightSeen(`${today}:${tight.length}`); setReplan({ why: "OK to split jobs (fronts and backs as separate runs) where that makes an in-hands date?", split: true }); }}>Split Jobs As Needed</button>
-                <button type="button" className="btn primary" onClick={() => { setTightSeen(`${today}:${tight.length}`); setShiftEdit(true); }}>Yes, Add Weekend Shift</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      <section className={"ms-band" + (trayOpen ? "" : " closed")}>
-        <div className="ms-band-h">
-          <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
-          <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art, blanks) · ` : ""}drag one onto a machine and day, or accept the suggestion</span>
+      {/* Scheduling Tools: the schedule's health, the actions that change it, and the jobs waiting for a spot */}
+      <section className={"ms-tools" + (toolsOpen ? "" : " closed")}>
+        <div className="ms-tools-h">
+          <button type="button" className="ms-tools-t" onClick={() => setToolsOpen(!toolsOpen)} aria-expanded={toolsOpen}><span className="car">{toolsOpen ? "▾" : "▸"}</span>Scheduling Tools</button>
+          {!toolsOpen && (tight.length ? <span className="ms-health bad">{tight.length} job{tight.length === 1 ? "" : "s"} can&apos;t make in-hands</span> : <span className="ms-health ok">On track</span>)}
+          {!toolsOpen && tray.length > 0 && <span className="ms-health">{tray.length} ready to schedule</span>}
           <span className="spacer" />
-          {trayOpen && tray.some((t) => t.sug && !t.sug.late) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All Suggestions</button>}
+          <Link className="linkbtn" href="/shop/settings/production">Machines, crews &amp; times</Link>
         </div>
-        {trayOpen && (!tray.length ? <div className="db-empty">Nothing waiting. Jobs land here when they go to In Production (goods here, art approved).</div> : (
-          <>
-            <ul className="ms-band-l">{(trayAll ? tray : tray.slice(0, 12)).map((t) => (
-              <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-r " + t.need.type + (t.sug?.late ? " late" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
-                <Link className="ms-r-n" href={t.job.href}>#{t.job.number}</Link>
-                <span className="ms-r-c"><b>{t.job.customer || t.job.name}</b><small>{t.need.label} · {t.need.qty} pcs</small></span>
-                {t.job.owner ? <span className="ms-own" title={t.job.owner}>{initials(t.job.owner)}</span> : <span />}
-                <span className={"ms-r-d" + (t.sug?.late ? " late" : "")}>{t.job.due ? dayShort(t.job.due) : "—"}</span>
-                {t.sug ? <button type="button" className="btn sm primary ms-r-b" onClick={() => book(t.job, t.need, t.sug!.machine, t.sug!.day, "suggested")}>{shortName(t.sug.machine)} {t.sug.day === today ? "today" : dayLbl(t.sug.day).split(",")[0]}</button> : <span className="ms-late ms-r-b">no machine</span>}
-              </li>
-            ))}</ul>
-            {tray.length > 12 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${tray.length}`}</button>}
-          </>
-        ))}
+        {toolsOpen && <>
+          <div className="ms-acts">
+            <button type="button" className="ms-act" onClick={() => setCheckin(true)}><b>Update Progress</b><small>What&apos;s started, done or paused today</small></button>
+            <button type="button" className="ms-act" onClick={() => setReplan({ why: "" })}><b>Re-plan Schedule</b><small>Re-lay open work from now, soonest in-hands first</small></button>
+            <button type="button" className="ms-act" onClick={() => setShiftEdit(true)}><b>+ Add Shift</b><small>A weekend or extra shift for a crew</small></button>
+            <button type="button" className="ms-act" onClick={() => setDownEdit({})}><b>+ Add Downtime</b><small>Maintenance, repairs, an employee out</small></button>
+          </div>
+
+          {tight.length > 0 ? (
+            <div className="ms-alert">
+              <div className="ms-alert-h">
+                <span className="ms-alert-i" aria-hidden>!</span>
+                <div className="ms-alert-t"><b>Schedule too tight</b><span>{tight.length} job{tight.length === 1 ? " won't" : "s won't"} make {tight.length === 1 ? "its" : "their"} in-hands date on the regular schedule.</span></div>
+                <span className="spacer" />
+                <button type="button" className="linkbtn" onClick={() => setTightOpen(!tightOpen)}>{tightOpen ? "Hide jobs" : "Which jobs?"}</button>
+                <button type="button" className="btn sm" onClick={() => setReplan({ why: "OK to split jobs (fronts and backs as separate runs) where that makes an in-hands date?", split: true })}>Split Jobs As Needed</button>
+                <button type="button" className="btn sm" onClick={() => setReplan({ why: "" })}>Re-plan</button>
+                <button type="button" className="btn sm primary" onClick={() => setShiftEdit(true)}>Add Weekend Shift</button>
+              </div>
+              {tightOpen && <ul className="ms-alert-l">{tight.map((t) => <li key={t.job.key}><Link href={t.job.href}>#{t.job.number}</Link><span>{t.job.customer || t.job.name}</span><small>{t.why}</small></li>)}</ul>}
+            </div>
+          ) : <div className="ms-okline"><span className="ms-ok-i" aria-hidden>✓</span>On track: every booked job makes its in-hands date.</div>}
+
+          <div className="ms-ready">
+            <div className="ms-ready-h">
+              <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
+              <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art, blanks) · ` : ""}{tray.length ? "drag onto a press and day, or take the suggested spot" : ""}</span>
+              <span className="spacer" />
+              {trayOpen && tray.some((t) => t.sug && !t.sug.late) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All Suggestions</button>}
+            </div>
+            {trayOpen && (!tray.length ? <div className="ms-ready-empty">Nothing waiting. Jobs land here when they go to In Production (goods here, art approved).</div> : (
+              <>
+                <ul className="ms-rc-l">{(trayAll ? tray : tray.slice(0, 12)).map((t) => (
+                  <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-rc " + t.need.type + (t.sug?.late ? " late" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
+                    <div className="ms-rc-1"><Link className="ms-r-n" href={t.job.href}>#{t.job.number}</Link><b>{t.job.customer || t.job.name}</b>{t.job.owner ? <span className="ms-own" title={t.job.owner}>{initials(t.job.owner)}</span> : null}</div>
+                    <div className="ms-rc-2">{t.need.label}</div>
+                    <div className="ms-rc-3">
+                      <span className="ms-rc-q">{t.need.qty.toLocaleString()} pcs</span>
+                      <span className={"ms-rc-d" + (t.sug?.late ? " late" : "")}>{t.job.due ? `Due ${dayShort(t.job.due)}` : "No due date"}</span>
+                      <span className="spacer" />
+                      {t.sug ? <button type="button" className="btn sm primary ms-r-b" onClick={() => book(t.job, t.need, t.sug!.machine, t.sug!.day, "suggested")} title={t.sug.reason}>{shortName(t.sug.machine)} · {t.sug.day === today ? "Today" : dayLbl(t.sug.day).split(",")[0]}</button> : <span className="ms-late ms-r-b">No machine</span>}
+                    </div>
+                  </li>
+                ))}</ul>
+                {tray.length > 12 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${tray.length}`}</button>}
+              </>
+            ))}
+          </div>
+        </>}
       </section>
 
       <div className="ms-main">
