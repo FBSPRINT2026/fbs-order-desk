@@ -3533,3 +3533,24 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 @media (max-width: 1100px){.bd-compact.board{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
 @media (max-width: 700px){.bd-compact.board{grid-template-columns:minmax(0,1fr)!important}}
 .sc-transit.sc-stack{display:flex!important;flex-direction:column;align-items:stretch;gap:14px;max-width:1000px}
+/* production calendar: capacity label no longer clipped */
+.ms-lc-cap{line-height:14px;font-size:10px}
+.ms-lc-cap span{display:block;white-space:nowrap}
+/* split: next two days hour by hour (left), the rest of two weeks (right) */
+.ms-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+.ms-split-col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.ms-split-h{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3)}
+.ms-dv-t{display:flex;align-items:baseline;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;left:0}
+.ms-dv-t b{font-size:15px}.ms-dv-t span{color:var(--ink-2);font-size:12.5px}.ms-dv-t small{margin-left:auto;color:var(--ink-3);font-size:11.5px}
+.ms-split .ms-dv-h{padding:6px 6px}
+.ms-split .ms-dv-h b{font-size:12px}
+.ms-split .ms-blk{left:2px;right:2px;padding:2px 5px;font-size:11px}
+.ms-lw.compact .ms-lg-d{padding:6px 6px}.ms-lw.compact .ms-lg-d b{font-size:13px}
+.ms-lw.compact .ms-lg-m{padding:6px 6px}.ms-lw.compact .ms-lg-m b{font-size:12px}
+.ms-lw.compact .ms-lc{padding:4px;min-height:46px}
+.ms-chip.two{flex-wrap:wrap;row-gap:0;align-items:center}
+.ms-chip.two small{margin-left:auto}
+.ms-chip.two .ms-cn{order:5;flex-basis:100%;font-size:10.5px;font-weight:500}
+@media (max-width: 1250px){.ms-split{grid-template-columns:minmax(0,1fr)}}
+@media (max-width: 700px){.ms-split{display:none}}
+@media (max-width: 700px){.ms-band-l{grid-template-columns:minmax(0,1fr)!important}.ms-r{grid-template-columns:40px minmax(0,1fr) 22px auto;gap:6px}.ms-r .ms-r-d{display:none}}

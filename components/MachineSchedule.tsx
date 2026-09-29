@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, PV_READY, type Machine, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
@@ -21,7 +21,7 @@ type Slot = { id: string; order_id: string | null; archived_order_id: string | n
 type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; carried?: string | null };
 /** one day's piece of a job (a long job is several pieces, one per working day) */
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean };
-type View = "week" | "timeline" | "day";
+type View = "split" | "timeline" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number };
 
 const TZ = "America/Chicago";
@@ -51,7 +51,7 @@ const TYPE_LBL = { screen: "Screen Print", embroidery: "Embroidery", heat: "Heat
 const shortName = (m: Machine) => { const p = m.name.split(" · "); return p.length < 2 ? m.name : m.type === "embroidery" ? p[1] : p[0]; };
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 const PV_DONE = /job\s*completed|quote|cancel|ship|fulfillment|issue/i;
-const HOUR_PX = 56;
+const HOUR_PX0 = 56;
 const LANE = 22;
 
 /**
@@ -107,7 +107,7 @@ export default function MachineSchedule() {
   useEffect(() => { const t = setInterval(() => setNow(shopTime(new Date())!), 60000); return () => clearInterval(t); }, []);
   const today = now.day;
   const [s, setS] = useState<ProductionSettings | null>(null);
-  const [view, setView] = useState<View>("week");
+  const [view, setView] = useState<View>("split");
   const [week, setWeek] = useState(() => monday(shopTime(new Date())!.day));
   const [day, setDay] = useState(() => shopTime(new Date())!.day);
   const [wknd, setWknd] = useState<boolean | null>(null);
@@ -349,14 +349,17 @@ export default function MachineSchedule() {
   };
 
   /* ---------- Day view: machines across, the clock down ---------- */
-  const dayView = () => (
-    <div className="ms-dv">
-      <div className="ms-dv-grid" style={{ gridTemplateColumns: `52px repeat(${machines.length}, minmax(112px,1fr))`, minWidth: 52 + machines.length * 112 }}>
+  const dayGrid = (day: string, o: { title?: ReactNode; colMin?: number; hourPx?: number } = {}) => {
+    const HOUR_PX = o.hourPx ?? HOUR_PX0, colMin = o.colMin ?? 112, gut = o.colMin ? 42 : 52;
+    return (
+    <div className="ms-dv" key={"dv" + day}>
+      {o.title ? <div className="ms-dv-t">{o.title}</div> : null}
+      <div className="ms-dv-grid" style={{ gridTemplateColumns: `${gut}px repeat(${machines.length}, minmax(${colMin}px,1fr))`, minWidth: gut + machines.length * colMin }}>
         <div className="ms-dv-corner" />
         {machines.map((m) => { const u = used(m, day), cap = capacityMin(s, m); return (
           <div key={m.id} className={"ms-dv-h " + m.type}><b>{shortName(m)}</b><small>{m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat press"}</small>
             <div className={"ms-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /></div>
-            <small className="ms-used">{fmtMin(u)} / {fmtMin(cap)}</small></div>
+            <small className="ms-used">{o.colMin ? `${+(u / 60).toFixed(1)} / ${+(cap / 60).toFixed(1)}h` : `${fmtMin(u)} / ${fmtMin(cap)}`}</small></div>
         ); })}
         <div className="ms-dv-gut" style={{ height: (range / 60) * HOUR_PX }}>{hours.map((h) => <span key={h} style={{ top: ((h - vStart) / 60) * HOUR_PX }}>{clock(h)}</span>)}</div>
         {machines.map((m) => (
@@ -377,7 +380,8 @@ export default function MachineSchedule() {
         ))}
       </div>
     </div>
-  );
+    );
+  };
 
   /* ---------- Phones: one day, each machine its jobs in time order with a small timeline ---------- */
   const phoneView = () => (
@@ -426,10 +430,10 @@ export default function MachineSchedule() {
   }
   const listDays = [...weekDays(week).filter(visible), ...weekDays(addDay(week, 7)).filter(visible)];
   const groups = (["screen", "embroidery", "heat"] as const).map((t) => ({ t, ms: machines.filter((m) => m.type === t) })).filter((g) => g.ms.length);
-  const chip = (g: Seg, d: string) => {
+  const chip = (g: Seg, d: string, two = false) => {
     const c = g.c, when = d >= today;
     return (
-      <button key={c.key + g.part} type="button" draggable className={"ms-chip " + c.need.type + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (!!c.job.due && g.day > c.job.due ? " late" : "") + (g.part > 1 ? " cont" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "")}
+      <button key={c.key + g.part} type="button" draggable className={"ms-chip " + c.need.type + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (!!c.job.due && g.day > c.job.due ? " late" : "") + (g.part > 1 ? " cont" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "") + (two ? " two" : "")}
         title={tip(g)} onClick={() => setOpen(c)}
         onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver("k:" + c.key); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (drag && g.part === 1) place(drag, g.c.machine, d, c.key); else if (drag) place(drag, g.c.machine, d); }}>
@@ -440,27 +444,30 @@ export default function MachineSchedule() {
       </button>
     );
   };
-  const listGrid = () => {
-    const past = listDays.filter((d) => d < today), rest = listDays.filter((d) => d >= today);
+  const wkName = (d: string) => (monday(d) === monday(today) ? "This Week" : monday(d) === addDay(monday(today), 7) ? "Next Week" : monday(d) === addDay(monday(today), 14) ? "In Two Weeks" : "Week of");
+  const listGrid = (days: string[] = listDays, o: { compact?: boolean } = {}) => {
+    const past = o.compact ? [] : days.filter((d) => d < today), rest = o.compact ? days : days.filter((d) => d >= today);
     const rows = [...(showPast ? past : []), ...rest];
     const nextMon = addDay(week, 7);
+    const colMin = o.compact ? 62 : 104, dayCol = o.compact ? 58 : 92;
     return (
-      <div className="ms-lw">
-        <div className="ms-lg" style={{ gridTemplateColumns: `92px repeat(${machines.length}, minmax(104px,1fr))`, minWidth: 92 + machines.length * 104 }}>
+      <div className={"ms-lw" + (o.compact ? " compact" : "")}>
+        <div className="ms-lg" style={{ gridTemplateColumns: `${dayCol}px repeat(${machines.length}, minmax(${colMin}px,1fr))`, minWidth: dayCol + machines.length * colMin }}>
           <div className="ms-lg-corner">{past.length > 0 && <button type="button" className="linkbtn" onClick={() => setShowPast(!showPast)}>{showPast ? "Hide" : "Show"} earlier this week</button>}</div>
           {groups.map((g) => <div key={g.t} className={"ms-lg-grp " + g.t} style={{ gridColumn: `span ${g.ms.length}` }}>{TYPE_LBL[g.t]}</div>)}
           <div className="ms-lg-corner2" />
           {groups.flatMap((g) => g.ms).map((m) => {
-            const wkU = listDays.filter((d) => d >= week && d < nextMon).reduce((a, d) => a + used(m, d), 0);
-            return <div key={m.id} className={"ms-lg-m " + m.type} title={m.name}><b>{shortName(m)}</b><small>{m.type === "screen" ? `${m.colors} color` : m.type === "embroidery" ? `${m.heads} head` : "heat"} · {Math.round(wkU / 60)}h this wk</small></div>;
+            const wkU = (o.compact ? rows : days.filter((d) => d >= week && d < nextMon)).reduce((a, d) => a + used(m, d), 0);
+            if (o.compact) return <div key={m.id} className={"ms-lg-m " + m.type} title={`${m.name}: ${fmtMin(wkU)} booked in these days`}><b>{shortName(m)}</b><small>{Math.round(wkU / 60)}h</small></div>;
+            return <div key={m.id} className={"ms-lg-m " + m.type} title={m.name}><b>{shortName(m)}</b><small>{o.compact ? `${Math.round(wkU / 60)}h booked` : <>{m.type === "screen" ? `${m.colors} color` : m.type === "embroidery" ? `${m.heads} head` : "heat"} · {Math.round(wkU / 60)}h this wk</>}</small></div>;
           })}
           {rows.map((d, ri) => {
             const isToday = d === today;
-            const newWeek = d === nextMon || (ri > 0 && monday(d) !== monday(rows[ri - 1]));
+            const newWeek = o.compact ? ri === 0 || monday(d) !== monday(rows[ri - 1]) : d === nextMon || (ri > 0 && monday(d) !== monday(rows[ri - 1]));
             const dayUsed = machines.reduce((a, m) => a + used(m, d), 0);
             return [
-              newWeek ? <div key={"wk" + d} className="ms-lg-wk" style={{ gridColumn: `1 / span ${machines.length + 1}` }}>{d >= nextMon ? "Next Week" : "This Week"} · {dayLbl(monday(d))}</div> : null,
-              <div key={"d" + d} className={"ms-lg-d" + (isToday ? " today" : d < today ? " past" : "")}><b>{isToday ? "Today" : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}</b><span>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span><small>{Math.round(dayUsed / 60)}h booked</small></div>,
+              newWeek ? <div key={"wk" + d} className="ms-lg-wk" style={{ gridColumn: `1 / span ${machines.length + 1}` }}>{o.compact ? wkName(d) : d >= nextMon ? "Next Week" : "This Week"} · {dayLbl(monday(d))}</div> : null,
+              <div key={"d" + d} className={"ms-lg-d" + (isToday ? " today" : d < today ? " past" : "")}><b>{isToday ? "Today" : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}</b><span>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span><small>{Math.round(dayUsed / 60)}h{o.compact ? "" : " booked"}</small></div>,
               ...groups.flatMap((g) => g.ms).map((m) => {
                 const gs = at(m, d).slice().sort((x, y) => x.start - y.start);
                 const u = used(m, d), cap = capacityMin(s, m), works = m.days.includes(dow(d)) || gs.length > 0;
@@ -468,7 +475,7 @@ export default function MachineSchedule() {
                   <div key={m.id + d} className={"ms-lc" + (isToday ? " today" : d < today ? " past" : "") + (!works ? " off" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")}
                     onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver((o) => (o === m.id + d ? "" : o))} onDrop={(e) => { e.preventDefault(); if (drag) place(drag, m, d); }}>
                     {works && <div className={"ms-lc-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /><span>{u ? `${(u / 60).toFixed(u % 60 ? 1 : 0)}/${Math.round(cap / 60)}h` : ""}</span></div>}
-                    {gs.map((g) => chip(g, d))}
+                    {gs.map((g) => chip(g, d, o.compact))}
                     {!works && !gs.length ? <span className="ms-lc-off">off</span> : null}
                   </div>
                 );
@@ -480,6 +487,26 @@ export default function MachineSchedule() {
     );
   };
 
+  /* ---------- Split (default): the next two days hour by hour on the left, the rest of the next two weeks on the right ---------- */
+  const nextVis = (d: string, step = 1) => { let x = d; for (let i = 0; i < 7 && !visible(x); i++) x = addDay(x, step); return x; };
+  const d0 = nextVis(day), d1 = nextVis(addDay(d0, 1));
+  const restDays = Array.from({ length: 14 }, (_, i) => addDay(d1, i + 1)).filter((d) => d <= addDay(d0, 14) && visible(d));
+  const dayTitle = (d: string) => { const u = machines.reduce((a, m) => a + used(m, d), 0); return <><b>{d === today ? "Today" : d === addDay(today, 1) ? "Tomorrow" : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}</b><span>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: d === today || d === addDay(today, 1) ? "short" : undefined, month: "short", day: "numeric" })}</span><small>{fmtMin(u)} booked</small></>; };
+  const split = () => (
+    <div className="ms-split">
+      <div className="ms-split-col">
+        <div className="ms-split-h">Next two days · hour by hour</div>
+        {dayGrid(d0, { title: dayTitle(d0), colMin: 70, hourPx: 40 })}
+        {dayGrid(d1, { title: dayTitle(d1), colMin: 70, hourPx: 40 })}
+      </div>
+      <div className="ms-split-col">
+        <div className="ms-split-h">The rest of the next two weeks</div>
+        {listGrid(restDays, { compact: true })}
+      </div>
+    </div>
+  );
+  const shift = (dir: 1 | -1) => (view === "timeline" ? setWeek(addDay(week, 7 * dir)) : setDay(nextVis(addDay(view === "split" ? d0 : day, dir), dir)));
+
   return (
     <div className="ms">
       <div className="ms-bar">
@@ -488,10 +515,10 @@ export default function MachineSchedule() {
         <div className="rv-seg ms-who" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
         <span className="spacer" />
         <label className="ms-wknd"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Weekends</label>
-        <div className="rv-seg ms-span">{([["week", "Week"], ["timeline", "Timeline"], ["day", "Day"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
-        <button type="button" className="btn sm" onClick={() => (view !== "day" ? setWeek(addDay(week, -7)) : setDay(addDay(day, -1)))} aria-label="Earlier">←</button>
-        <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view !== "day" ? "This Week" : "Today"}</button>
-        <button type="button" className="btn sm" onClick={() => (view !== "day" ? setWeek(addDay(week, 7)) : setDay(addDay(day, 1)))} aria-label="Later">→</button>
+        <div className="rv-seg ms-span">{([["split", "2 Days + 2 Weeks"], ["timeline", "Timeline"], ["day", "Day"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
+        <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
+        <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "timeline" ? "This Week" : "Today"}</button>
+        <button type="button" className="btn sm" onClick={() => shift(1)} aria-label="Later">→</button>
         <Link className="linkbtn" href="/shop/settings/production">Machines &amp; times</Link>
       </div>
       {msg && <div className="banner" style={{ marginBottom: 8 }} onClick={() => setMsg("")}>{msg}</div>}
@@ -520,12 +547,12 @@ export default function MachineSchedule() {
       </section>
 
       <div className="ms-main">
-        {view === "week" ? listGrid() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayView()}
+        {view === "split" ? split() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
         {phoneView()}
         <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
-      {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={allDays.filter(visible)} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} />}
+      {open && <CardPanel s={s} c={open} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, d0, d1, ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} />}
     </div>
   );
 }
