@@ -508,6 +508,7 @@ td > .sz-dim.on input{padding-right:24px}
 .ss-hits{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;max-height:360px;overflow:auto}
 .ss-hit{display:grid;grid-template-columns:180px 1fr auto;gap:10px;align-items:center;padding:6px 10px;font-size:13px;border-bottom:1px solid var(--line-2)}
 .ss-hit span{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ss-sup{font-style:normal;font-size:10px;font-weight:700;color:var(--accent);letter-spacing:.05em;margin-left:6px;text-transform:uppercase}
 .color-menu{width:min(260px,70vw)}
 .color-menu .sm-item{grid-template-columns:1fr}
 .color-menu .sm-item b{font-weight:500}

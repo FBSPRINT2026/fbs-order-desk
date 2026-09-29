@@ -41,7 +41,9 @@ export default function CatalogPage() {
   const [armed, setArmed] = useState("");
   const [ssq, setSsq] = useState("");
   const [ssBusy, setSsBusy] = useState("");
-  const [ssHits, setSsHits] = useState<{ styleID: number; brand: string; style: string; title: string }[]>([]);
+  type Hit = { styleID: number; brand: string; style: string; title: string; supplier?: "ss" | "sanmar" };
+  const [ssHits, setSsHits] = useState<Hit[]>([]);
+  const have = (h: Hit) => h.supplier === "sanmar" ? items.some((g) => g.supplier === "sanmar" && (g.supplier_style || g.style).toLowerCase() === h.style.toLowerCase()) : items.some((g) => g.ss_style_id === h.styleID);
   async function searchSS() {
     const q = ssq.trim();
     if (q.length < 2) return;
@@ -49,16 +51,17 @@ export default function CatalogPage() {
     const r = await fetch(`/api/ss/search?q=${encodeURIComponent(q)}`);
     const j = await r.json().catch(() => ({}));
     setSsBusy("");
-    if (!r.ok) return setMsg(j.error || "S&S search failed");
+    if (!r.ok) return setMsg(j.error || "Search failed");
     setSsHits(j.results || []);
-    if (!(j.results || []).length) setMsg(`S&S has nothing matching "${q}".`);
+    if (!(j.results || []).length) setMsg(`Neither S&S nor SanMar has anything matching "${q}".`);
   }
-  async function addOne(id: number, label: string) {
+  async function addOne(h: Hit) {
+    const label = `${h.brand} ${h.style}`;
     setSsBusy(label);
-    const r = await fetch(`/api/ss/lookup?styleid=${id}`);
+    const r = await fetch(h.supplier === "sanmar" ? `/api/ss/lookup?supplier=sanmar&style=${encodeURIComponent(h.style)}` : `/api/ss/lookup?styleid=${h.styleID}`);
     const j = await r.json().catch(() => ({}));
     setSsBusy("");
-    setMsg(r.ok ? `Added ${label} from S&S.` : j.error || "Couldn't add it");
+    setMsg(r.ok ? `Added ${label} from ${h.supplier === "sanmar" ? "SanMar" : "S&S"}.` : j.error || "Couldn't add it");
     load();
   }
 
@@ -70,13 +73,13 @@ export default function CatalogPage() {
     let ok = 0;
     for (const st of styles) {
       setSsBusy(st);
-      const g = items.find((x) => x.style === st && x.ss_style_id);
-      const r = await fetch(g ? `/api/ss/lookup?styleid=${g.ss_style_id}` : `/api/ss/lookup?style=${encodeURIComponent(st)}`);
+      const g = items.find((x) => x.style === st && (x.ss_style_id || x.supplier === "sanmar"));
+      const r = await fetch(g?.ss_style_id ? `/api/ss/lookup?styleid=${g.ss_style_id}` : g?.supplier === "sanmar" ? `/api/ss/lookup?supplier=sanmar&style=${encodeURIComponent(g.supplier_style || st)}` : `/api/ss/lookup?style=${encodeURIComponent(st)}`);
       const j = await r.json().catch(() => ({}));
       if (r.ok && j.garment) ok++; else bad.push(`${st}: ${j.error || r.status}`);
     }
     setSsBusy("");
-    setMsg(`Pulled ${ok} of ${styles.length} from S&S.${bad.length ? " " + bad.join("; ") : ""}`);
+    setMsg(`Refreshed ${ok} of ${styles.length} from S&S / SanMar.${bad.length ? " " + bad.join("; ") : ""}`);
     setSsq("");
     load();
   }
@@ -138,21 +141,20 @@ export default function CatalogPage() {
         </section>
       )}
       <section className="panel" style={{ marginBottom: 14 }}>
-        <div className="panel-h"><h2>Add from S&amp;S Activewear</h2><span className="faint" style={{ fontSize: 12 }}>Styles typed on an order are pulled in automatically too</span></div>
+        <div className="panel-h"><h2>Add from S&amp;S Activewear or SanMar</h2><span className="faint" style={{ fontSize: 12 }}>Styles typed on an order are pulled in automatically too</span></div>
         <div className="panel-b row">
-          <input type="text" placeholder="Style number or name, e.g. 5000, 18500, BC3001" value={ssq} onChange={(e) => setSsq(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") searchSS(); }} style={{ maxWidth: 420 }} aria-label="S&S style search" />
-          <button className="btn primary" type="button" disabled={!!ssBusy} onClick={searchSS}>{ssBusy === "search" ? "Searching…" : ssBusy ? `Adding ${ssBusy}…` : "Search S&S"}</button>
-          {items.some((g) => g.ss_style_id) && <button className="btn" type="button" disabled={!!ssBusy} onClick={() => addFromSS(items.filter((g) => g.ss_style_id).map((g) => g.style))}>Refresh all from S&amp;S</button>}
+          <input type="text" placeholder="Style number or name, e.g. 5000, 18500, K500, ST350" value={ssq} onChange={(e) => setSsq(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") searchSS(); }} style={{ maxWidth: 420 }} aria-label="Supplier style search" />
+          <button className="btn primary" type="button" disabled={!!ssBusy} onClick={searchSS}>{ssBusy === "search" ? "Searching…" : ssBusy ? `Adding ${ssBusy}…` : "Search"}</button>
+          {items.some((g) => g.ss_style_id || g.supplier === "sanmar") && <button className="btn" type="button" disabled={!!ssBusy} onClick={() => addFromSS(items.filter((g) => g.ss_style_id || g.supplier === "sanmar").map((g) => g.style))}>Refresh prices from suppliers</button>}
         </div>
         {ssHits.length > 0 && (
           <div className="panel-b" style={{ paddingTop: 0 }}>
             <div className="ss-hits">
               {ssHits.map((h) => {
-                const have = items.some((g) => g.ss_style_id === h.styleID);
                 return (
-                  <div key={h.styleID} className="ss-hit">
-                    <b>{h.brand} {h.style}</b><span>{h.title}</span>
-                    {have ? <span className="faint">In catalog</span> : <button className="btn sm" type="button" disabled={!!ssBusy} onClick={() => addOne(h.styleID, `${h.brand} ${h.style}`)}>Add</button>}
+                  <div key={(h.supplier || "ss") + (h.styleID || h.style)} className="ss-hit">
+                    <b>{h.brand} {h.style}</b><span>{h.title} <em className="ss-sup">{h.supplier === "sanmar" ? "SanMar" : "S&S"}</em></span>
+                    {have(h) ? <span className="faint">In catalog</span> : <button className="btn sm" type="button" disabled={!!ssBusy} onClick={() => addOne(h)}>Add</button>}
                   </div>
                 );
               })}

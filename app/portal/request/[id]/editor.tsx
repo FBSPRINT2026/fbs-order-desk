@@ -65,12 +65,12 @@ export default function RequestEditor({ initial, settings, catalog: cat0, design
   }
   useEffect(() => () => { if (timer.current) flush(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function lookupStyle(style: string, styleID?: number): Promise<Garment | null> {
+  async function lookupStyle(style: string, styleID?: number, supplier?: string): Promise<Garment | null> {
     const key = style.trim().toUpperCase();
     if (!key || lookingUp === key) return null;
     setLookingUp(key);
     try {
-      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}`);
+      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${supplier === "sanmar" ? "&supplier=sanmar" : ""}`);
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.garment) { setErr(j.error || "Couldn't find that style."); return null; }
       const g = j.garment as Garment;

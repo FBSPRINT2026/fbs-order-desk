@@ -256,4 +256,4 @@ export function teeSvg(hex: string, view: View) {
 }
 
 /** Same-origin link to an S&S photo (so it can be drawn into the saved mockup). */
-export const ssImg = (path: string) => (path ? `/api/ss/img?p=${encodeURIComponent(path.replace(/^https?:\/\/[^/]+\//, ""))}` : "");
+export const ssImg = (path: string) => (!path ? "" : /^https?:\/\/[\w.-]*sanmar\.com\//i.test(path) ? `/api/ss/img?u=${encodeURIComponent(path)}` : `/api/ss/img?p=${encodeURIComponent(path.replace(/^https?:\/\/[^/]+\//, ""))}`);

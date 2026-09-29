@@ -19,7 +19,7 @@ type Props = {
   onDuplicate: () => void;
   onRemove: () => void;
   onSaveToCatalog: (l: GLine) => void;
-  onLookup?: (style: string, styleID?: number) => Promise<Garment | null>;
+  onLookup?: (style: string, styleID?: number, supplier?: string) => Promise<Garment | null>;
   designs?: Design[];
   onMockup?: () => void;
   /** why a mockup can't be made yet (no customer / no garment) */
@@ -129,7 +129,7 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                     <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
                       onType={(v) => onStyle(li, v)}
                       onPick={(gm) => onStyle(li, gm.style, gm)}
-                      onPickSS={(h) => onLookup ? onLookup(h.style, h.styleID).then((gm) => { if (gm) onStyle(li, gm.style, gm); }) : Promise.resolve()} />
+                      onPickSS={(h) => onLookup ? onLookup(h.style, h.styleID || undefined, h.supplier).then((gm) => { if (gm) onStyle(li, gm.style, gm); }) : Promise.resolve()} />
                     {lookingUp && lookingUp === l.style.trim().toUpperCase() && <div className="ink-hint">Pulling from S&amp;S…</div>}
                   </div>
                   <div className="a-br"><input type="text" tabIndex={-1} className="pre" title="Filled from the catalog. Click to change." aria-label="Brand" placeholder="Brand" value={l.brand || ""} onChange={(e) => update((x) => { x.lines[li].brand = e.target.value; })} /></div>
@@ -393,8 +393,9 @@ function InchInput({ num, onNum, label, placeholder }: { num: string; onNum: (v:
   );
 }
 
-type SSHit = { styleID: number; brand: string; style: string; title: string; image: string };
-/** Style # box: type a number and pick from your catalog or from every matching S&S style. */
+type SSHit = { styleID: number; brand: string; style: string; title: string; image: string; supplier?: "ss" | "sanmar" };
+const inCatalog = (catalog: Garment[], h: SSHit) => h.supplier === "sanmar" ? catalog.some((c) => c.supplier === "sanmar" && (c.supplier_style || c.style).toLowerCase() === h.style.toLowerCase()) : catalog.some((c) => c.ss_style_id === h.styleID);
+/** Style # box: type a number and pick from your catalog or from every matching S&S and SanMar style. */
 function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: {
   value: string; catalog: Garment[]; busy: boolean;
   onType: (v: string) => void; onPick: (g: Garment) => void; onPickSS: (h: SSHit) => Promise<void>;
@@ -422,7 +423,7 @@ function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: {
   const local = q ? catalog.filter((c) => [c.style, `${c.brand} ${c.style}`].some((x) => { const v = x.toLowerCase(); return v.startsWith(q) || v.startsWith(stripped) || v.includes(" " + stripped); })).sort((a, b) => rank(a.brand) - rank(b.brand) || a.style.localeCompare(b.style)).slice(0, 8) : [];
   const items: ({ kind: "cat"; g: Garment } | { kind: "ss"; h: SSHit })[] = [
     ...local.map((g) => ({ kind: "cat" as const, g })),
-    ...hits.filter((h) => !catalog.some((c) => c.ss_style_id === h.styleID)).map((h) => ({ kind: "ss" as const, h })),
+    ...hits.filter((h) => !inCatalog(catalog, h)).map((h) => ({ kind: "ss" as const, h })),
   ];
   const choose = (i: number) => {
     const it = items[i];
@@ -446,15 +447,15 @@ function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: {
       {open && q.length >= 2 && (items.length || loading) ? (
         <div className="style-menu" role="listbox">
           {items.map((it, i) => (
-            <div key={it.kind === "cat" ? "c" + it.g.id : "s" + it.h.styleID} role="option" aria-selected={i === active}
+            <div key={it.kind === "cat" ? "c" + it.g.id : (it.h.supplier === "sanmar" ? "m" + it.h.style : "s" + it.h.styleID)} role="option" aria-selected={i === active}
               className={"sm-item" + (i === active ? " on" : "")} onMouseDown={(e) => { e.preventDefault(); choose(i); }} onMouseEnter={() => setActive(i)}>
               <b>{it.kind === "cat" ? `${it.g.brand} ${it.g.style}` : `${it.h.brand} ${it.h.style}`}</b>
               <span>{it.kind === "cat" ? it.g.description : it.h.title}</span>
-              {it.kind === "ss" && <em>S&amp;S</em>}
+              {it.kind === "ss" && <em>{it.h.supplier === "sanmar" ? "SANMAR" : "S&S"}</em>}
             </div>
           ))}
-          {loading && <div className="sm-note">Searching S&amp;S…</div>}
-          {busy && <div className="sm-note">Pulling from S&amp;S…</div>}
+          {loading && <div className="sm-note">Searching S&amp;S and SanMar…</div>}
+          {busy && <div className="sm-note">Pulling it in…</div>}
         </div>
       ) : null}
     </div>

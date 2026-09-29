@@ -50,14 +50,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [designUrls, setDesignUrls] = useState<Record<string, string>>({});
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   // Style not in the catalog yet: pull it from S&S (saves it to the catalog too)
-  async function lookupStyle(style: string, styleID?: number): Promise<Garment | null> {
+  async function lookupStyle(style: string, styleID?: number, supplier?: string): Promise<Garment | null> {
     const key = style.trim().toUpperCase();
     if (!key || lookingUp === key) return null;
     setLookingUp(key);
     try {
-      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}`);
+      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${supplier === "sanmar" ? "&supplier=sanmar" : ""}`);
       const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.garment) { say(j.error || "Couldn't find that style on S&S."); return null; }
+      if (!r.ok || !j.garment) { say(j.error || "Couldn't find that style at S&S or SanMar."); return null; }
       const g = j.garment as Garment;
       setCatalog((c) => [...c.filter((x) => x.id !== g.id), g].sort((a, b) => a.style.localeCompare(b.style)));
       return g;
