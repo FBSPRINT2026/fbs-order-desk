@@ -1,5 +1,5 @@
 "use client";
-import ProductionCalendar from "@/components/ProductionCalendar";
+import MachineSchedule from "@/components/MachineSchedule";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -36,7 +36,7 @@ export default function BoardPage() {
         <div><div className="eyebrow">Drag a card to change its status</div><h1>Production</h1></div>
         <div className="row">
           <label className="check"><input type="checkbox" checked={showQuotes} onChange={(e) => setShowQuotes(e.target.checked)} /> Show quotes</label>
-          <Link className="btn" href="/shop/calendar">Calendar view</Link>
+          <Link className="btn" href="/shop/calendar">Due Dates Calendar</Link>
         </div>
       </div>
       {msg && <div className="faint" style={{ marginBottom: 10 }} role="status">{msg}</div>}
@@ -62,7 +62,7 @@ export default function BoardPage() {
         </div>
       )}
       {/* the calendar lives under the board: one Production page */}
-      <section className="board-cal"><ProductionCalendar embedded /></section>
+      <section className="board-cal"><MachineSchedule /></section>
     </>
   );
 }

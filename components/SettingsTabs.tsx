@@ -8,6 +8,7 @@ export const SETTINGS_TABS: [string, string][] = [
   ["/shop/settings#pricing", "Pricing"],
   ["/shop/settings#payments", "Payments"],
   ["/shop/catalog", "Garments"],
+  ["/shop/settings/production", "Production"],
   ["/shop/settings#assistant", "Assistant & AI"],
   ["/shop/settings#shop", "Shop info"],
   ["/shop/settings#staff", "Staff"],
