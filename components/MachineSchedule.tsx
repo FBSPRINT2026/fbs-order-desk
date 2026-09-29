@@ -621,12 +621,9 @@ export default function MachineSchedule() {
             {at(m, day).map((g) => { const h = Math.max(22, ((g.end - g.start) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes); return (
               <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "")} style={{ top: ((g.start - vStart) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
                 onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
-                <span className="ms-kw">
-                  <b className="ms-kn">#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b>
-                  <span className="ms-col">{gl.colors}</span>
-                  <span className="ms-ku"><b>{gl.units.toLocaleString()}</b> pcs</span>
-                  <span className="ms-kr">{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</span>
-                </span>
+                <span className="ms-l1"><b>#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b><span>{g.c.job.customer}</span></span>
+                <span className="ms-l2">{g.c.job.name || g.c.need.label}</span>
+                <span className="ms-l3"><i>{gl.colors}</i><i>{gl.units.toLocaleString()} pcs</i><i>{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</i></span>
               </button>
             ); })}
           </div>
@@ -692,12 +689,9 @@ export default function MachineSchedule() {
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver("k:" + c.key); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (drag && g.part === 1) place(drag, g.c.machine, d, c.key); else if (drag) place(drag, g.c.machine, d); }}>
         {over === "k:" + c.key && <i className="ms-ins" />}
         {two ? (() => { const gl = glance(c.need, c.minutes); return <>
-          <span className="ms-kw">
-            <b className="ms-kn">#{c.job.number}{c.slot?.status === "done" ? <em className="ok"> ✓</em> : c.slot?.status === "running" ? <em className="rn"> ●</em> : null}</b>
-            <span className="ms-col">{gl.colors}</span>
-            <span className="ms-ku"><b>{gl.units.toLocaleString()}</b> pcs</span>
-            <span className="ms-kr">{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</span>
-          </span>
+          <span className="ms-l1"><b>#{c.job.number}{c.slot?.status === "done" ? <em className="ok"> ✓</em> : c.slot?.status === "running" ? <em className="rn"> ●</em> : null}</b><span>{c.job.customer}</span></span>
+          <span className="ms-l2">{c.job.name || c.need.label}</span>
+          <span className="ms-l3"><i>{gl.colors}</i><i>{gl.units.toLocaleString()} pcs</i><i>{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</i></span>
         </>; })() : <>
         <b>{c.job.number}</b>{c.slot?.status === "done" ? <em className="ok">✓</em> : c.slot?.status === "running" ? <em className="rn">●</em> : null}
         <span className="ms-cn">{g.part > 1 ? <em>cont. </em> : null}{c.job.customer || c.job.name}</span>
