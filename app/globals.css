@@ -3870,3 +3870,6 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-ci-h.on{background:color-mix(in srgb,var(--accent) 9%,transparent)}
 .ms-ci-r{grid-template-columns:minmax(0,1fr) auto 104px}
 @media (max-width:640px){.ms-ci-r{grid-template-columns:1fr}.ms-ci-h{grid-template-columns:1fr auto auto auto}.ms-ci-h>span:first-child{grid-column:1/-1}}
+/* My accounts: other reps' jobs fade back in the hour-by-hour view too */
+.ms-blk.other{opacity:.28;filter:grayscale(1)}
+.ms-blk.other:hover{opacity:.8;filter:none}
