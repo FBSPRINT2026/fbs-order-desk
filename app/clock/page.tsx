@@ -16,7 +16,7 @@ const initials = (e: Emp) => ((e.first_name[0] || "") + (e.last_name[0] || "")).
 const IDLE_MS = 25000;
 
 export default function TimeClock() {
-  const [info, setInfo] = useState<{ paired: boolean; device?: string; shop?: string; photo?: boolean; employees?: Emp[] } | null>(null);
+  const [info, setInfo] = useState<{ paired: boolean; device?: string; shop?: string; photo?: boolean; employees?: Emp[]; tasks?: string[]; stations?: string[] } | null>(null);
   const [now, setNow] = useState(new Date());
   const [who, setWho] = useState<Emp | null>(null);
   const [pin, setPin] = useState("");
@@ -24,6 +24,7 @@ export default function TimeClock() {
   const [done, setDone] = useState<{ text: string; sub: string } | null>(null);
   const [err, setErr] = useState(""), [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
+
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
   const idle = useRef<ReturnType<typeof setTimeout> | null>(null);

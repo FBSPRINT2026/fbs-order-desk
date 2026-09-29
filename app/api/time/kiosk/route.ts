@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DEVICE_COOKIE, deviceFor, pinFailed, pinOk, recordPunch, shopName, statusOf, timeSettings, validPin, verifyEmployeePin } from "@/lib/timeclockServer";
+import { DEVICE_COOKIE, clockedIn, jobAction, deviceFor, openJobs, pinFailed, pinOk, recordPunch, shopName, startJob, statusOf, stopJob, timeSettings, validPin, verifyEmployeePin } from "@/lib/timeclockServer";
 import type { Punch } from "@/lib/timeclock";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export async function GET() {
   const last = new Map<string, { kind: string; at: string }>();
   for (const p of (recent || []) as { employee_id: string; kind: string; at: string }[]) last.set(p.employee_id, p);
   return NextResponse.json({
-    paired: true, device: dev.name, shop: name, photo: s.photo, locked: dev.locked_until && Date.parse(dev.locked_until) > Date.now() ? dev.locked_until : null,
+    paired: true, device: dev.name, shop: name, photo: s.photo, tasks: s.tasks, stations: s.stations, locked: dev.locked_until && Date.parse(dev.locked_until) > Date.now() ? dev.locked_until : null,
     employees: (emps || []).map((e) => { const l = last.get(e.id); return { ...e, state: !l || l.kind === "out" ? "out" : l.kind === "break_start" ? "break" : "in", since: l && l.kind !== "out" ? l.at : null }; }),
   });
 }
@@ -44,6 +44,13 @@ export async function POST(req: Request) {
   }
   await pinOk(admin, dev.id);
   const s = await timeSettings(admin);
+  // job punches
+  if (b.action === "jobs") return NextResponse.json({ jobs: await openJobs(admin), clockedIn: await clockedIn(admin) });
+  if (b.action === "job_start" || b.action === "job_stop") {
+    const r = await jobAction(admin, employeeId, b, dev.id);
+    if (r.error) return NextResponse.json({ error: r.error }, { status: 409 });
+    return NextResponse.json({ ok: true, name: emp.first_name, message: r.message, ...(await statusOf(admin, s, employeeId)) });
+  }
   const kind = b.kind as Punch["kind"] | undefined;
   if (!kind) return NextResponse.json({ ok: true, name: emp.first_name, ...(await statusOf(admin, s, employeeId)) });
   if (!["in", "out", "break_start", "break_end"].includes(kind)) return NextResponse.json({ error: "Unknown punch." }, { status: 400 });
@@ -51,3 +58,4 @@ export async function POST(req: Request) {
   if ("error" in r && r.error) return NextResponse.json({ error: r.error, ...r.status }, { status: 409 });
   return NextResponse.json({ ok: true, name: emp.first_name, punch: r.punch, ...r.status });
 }
+

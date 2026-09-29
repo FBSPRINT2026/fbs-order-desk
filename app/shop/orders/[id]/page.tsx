@@ -1,4 +1,5 @@
 "use client";
+import JobLabor from "@/components/team/JobLabor";
 import { SITE_URL } from "@/lib/config";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -607,6 +608,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
 
         <aside className="ed-aside">
+          <JobLabor orderId={o.id} qty={o.qty} total={+o.total || 0} />
           <section className="panel" id="messages">
             <div className="panel-h"><h2>Customer communication</h2><Pill status={o.status} portal /></div>
             <div className="panel-b stack">

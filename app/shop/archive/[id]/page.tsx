@@ -1,4 +1,5 @@
 "use client";
+import JobLabor from "@/components/team/JobLabor";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -37,6 +38,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
     <>
       <Link className="back" href={`/shop/customers/${row.customer_id}?area=orders`}>← {company || "Customer"} · Orders</Link>
       <ArchivedGoods id={row.id} groups={(row.data as unknown as { groups?: PvGroup[] }).groups || []} />
+      <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
       <div style={{ marginTop: 10 }}>
         <ArchivedOrderView o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} />
       </div>

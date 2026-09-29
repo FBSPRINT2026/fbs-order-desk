@@ -18,6 +18,7 @@ const ICONS: Record<string, React.ReactNode> = {
   projects: <svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" /><path d="M3 7V5a1 1 0 0 1 1-1h5l2 2" /></svg>,
   customers: <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .8 3.1 2.6 3.5 5.2" /></svg>,
   catalog: <svg viewBox="0 0 24 24"><path d="M8 3l-5 3 2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.7-2 3-4 3S8.5 4.7 8 3z" /></svg>,
+  team: <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3" /><circle cx="16.5" cy="9" r="2.5" /><path d="M2.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5" /><path d="M14 14.3c.8-.4 1.6-.6 2.5-.6 2.2 0 3.9 1.5 4.5 4.3" /></svg>,
   clock: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>,
   goods: <svg viewBox="0 0 24 24"><path d="M3 9l9-5 9 5-9 5z" /><path d="M3 9v6l9 5 9-5V9" /><path d="M12 14v6" /></svg>,
   shipping: <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z" /><path d="M3 7l9 4 9-4M12 11v10" /></svg>,
@@ -106,7 +107,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
   // the menu, in groups
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
     { title: "Sales", items: [["/shop/orders", "orders", "Orders"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/projects", "projects", "Projects"], ["/shop/customers", "customers", "Customers"]] },
-    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/board", "board", "Production"]] },
+    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/board", "board", "Production"], ["/shop/employees", "team", "Employees"]] },
     { title: "Shop Tools", items: [["/shop/shipping", "shipping", "Shipping Center"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/time", "clock", "Time Clock"]] },
   ];
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));

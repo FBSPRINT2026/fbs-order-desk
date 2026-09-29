@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { recordPunch, statusOf, timeSettings } from "@/lib/timeclockServer";
+import { clockedIn, jobAction, openJobs, recordPunch, statusOf, timeSettings } from "@/lib/timeclockServer";
 import { meters, type Punch } from "@/lib/timeclock";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function GET() {
   if (!m) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   if (!m.emp) return NextResponse.json({ linked: false });
   const s = await timeSettings(m.admin);
-  return NextResponse.json({ linked: true, name: m.emp.first_name, phone: s.phone, geo: !!(s.geo.lat && s.geo.lng), ...(await statusOf(m.admin, s, m.emp.id)) });
+  return NextResponse.json({ linked: true, employeeId: m.emp.id, name: m.emp.first_name, phone: s.phone, geo: !!(s.geo.lat && s.geo.lng), tasks: s.tasks, stations: s.stations, ...(await statusOf(m.admin, s, m.emp.id)) });
 }
 
 export async function POST(req: Request) {
@@ -30,6 +30,13 @@ export async function POST(req: Request) {
   const s = await timeSettings(m.admin);
   if (!s.phone) return NextResponse.json({ error: "Phone punching is turned off. Use the time clock." }, { status: 403 });
   const b = await req.json().catch(() => ({}));
+  // job punches from a phone or the shop screens (no location check: they're already on the clock)
+  if (b.action === "jobs") return NextResponse.json({ jobs: await openJobs(m.admin), clockedIn: await clockedIn(m.admin) });
+  if (b.action === "job_start" || b.action === "job_stop") {
+    const r = await jobAction(m.admin, m.emp.id, b, null, "phone");
+    if (r.error) return NextResponse.json({ error: r.error }, { status: 409 });
+    return NextResponse.json({ ok: true, message: r.message, ...(await statusOf(m.admin, s, m.emp.id)) });
+  }
   const kind = b.kind as Punch["kind"];
   if (!["in", "out", "break_start", "break_end"].includes(kind)) return NextResponse.json({ error: "Unknown punch." }, { status: 400 });
   const lat = typeof b.lat === "number" ? b.lat : null, lng = typeof b.lng === "number" ? b.lng : null, accuracy = typeof b.accuracy === "number" ? b.accuracy : null;

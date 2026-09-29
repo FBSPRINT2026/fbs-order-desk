@@ -6,7 +6,7 @@
 export const TZ = "America/Chicago";
 
 export type Punch = { id: string; employee_id: string; kind: "in" | "out" | "break_start" | "break_end"; at: string; source: string; photo_path?: string | null; note?: string; original_at?: string | null; edited_by?: string | null; voided?: boolean; lat?: number | null; lng?: number | null };
-export type Employee = { id: string; first_name: string; last_name: string; email: string; phone: string; staff_email: string | null; department: string; title: string; pay_type: "hourly" | "salary"; color: string; has_pin: boolean; active: boolean; hire_date: string | null; end_date: string | null; uattend_id: string | null; notes: string };
+export type Employee = { id: string; first_name: string; last_name: string; email: string; phone: string; staff_email: string | null; department: string; title: string; pay_type: "hourly" | "salary"; color: string; has_pin: boolean; active: boolean; hire_date: string | null; end_date: string | null; uattend_id: string | null; notes: string; code?: number | null; lang?: string };
 export type Shift = { id: string; employee_id: string; starts_at: string; ends_at: string; station: string; note: string; published: boolean };
 export type TimeOff = { id: string; employee_id: string; starts_on: string; ends_on: string; hours: number; kind: "pto" | "sick" | "holiday" | "unpaid"; status: "requested" | "approved" | "denied"; note: string };
 
@@ -28,14 +28,19 @@ export type TimeSettings = {
   /** flag anyone still clocked in after this many hours (a forgotten clock-out) */
   longShiftHours: number;
   departments: string[];
+  /** job punches: the tasks people pick when they start a job, and the presses / stations */
+  tasks: string[];
+  stations: string[];
 };
 export const DEFAULT_TIME: TimeSettings = {
   period: "weekly", anchor: "2026-09-28", otWeekly: 40, rounding: 0, graceMin: 5, photo: true, phone: true,
   geo: { lat: null, lng: null, radiusM: 200 }, longShiftHours: 12, departments: ["Production", "Embroidery", "Shipping & Receiving", "Office"],
+  tasks: ["Setup", "Printing", "Embroidery", "DTF / Heat Press", "Screen Prep", "Folding & Bagging", "Quality Check", "Packing & Shipping", "Cleanup"],
+  stations: ["Press 1", "Press 2", "Press 3", "Embroidery", "Heat Press", "Packing Table"],
 };
 export function mergeTime(d: unknown): TimeSettings {
   const t = (d && typeof d === "object" ? d : {}) as Partial<TimeSettings>;
-  return { ...DEFAULT_TIME, ...t, geo: { ...DEFAULT_TIME.geo, ...(t.geo || {}) }, departments: Array.isArray(t.departments) ? t.departments : DEFAULT_TIME.departments };
+  return { ...DEFAULT_TIME, ...t, geo: { ...DEFAULT_TIME.geo, ...(t.geo || {}) }, departments: Array.isArray(t.departments) ? t.departments : DEFAULT_TIME.departments, tasks: Array.isArray(t.tasks) && t.tasks.length ? t.tasks : DEFAULT_TIME.tasks, stations: Array.isArray(t.stations) ? t.stations : DEFAULT_TIME.stations };
 }
 
 export const fullName = (e: Pick<Employee, "first_name" | "last_name">) => [e.first_name, e.last_name].filter(Boolean).join(" ") || "Unnamed";
@@ -185,3 +190,12 @@ export function meters(a: { lat: number; lng: number }, b: { lat: number; lng: n
 }
 
 export const KIND_LABEL: Record<Punch["kind"], string> = { in: "Clock In", out: "Clock Out", break_start: "Start Break", break_end: "End Break" };
+
+/* ---------- job time (who worked on which order, doing what, how long) ---------- */
+
+export type JobTime = { id: string; employee_id: string; order_id: string | null; archived_order_id: string | null; job_label: string; task: string; station: string; started_at: string; ended_at: string | null; pieces: number | null; note: string; source: string; team_id: string | null; auto_stopped: boolean; voided: boolean; edited_by?: string | null };
+/** A job people can punch onto: a new order ("o") or, until go-live, a Printavo order ("a"). */
+export type OpenJob = { kind: "o" | "a"; id: string; number: string; name: string; customer: string; due: string | null; qty: number; status: string };
+export const jobKey = (j: { order_id: string | null; archived_order_id: string | null }) => (j.order_id ? "o:" + j.order_id : j.archived_order_id ? "a:" + j.archived_order_id : "");
+/** Minutes on an entry (a running one counts up to now). */
+export const jobMinutes = (j: Pick<JobTime, "started_at" | "ended_at">, now = Date.now()) => Math.max(0, ((j.ended_at ? Date.parse(j.ended_at) : now) - Date.parse(j.started_at)) / 60000);

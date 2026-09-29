@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { calcOrder, imprintLabel, mergeSettings, orderGroups, sizeLabel, SIZES, type ArtFile, type Customer, type Design, type Group, type GroupCalc, type Order, type Payment } from "@/lib/pricing";
 import { fmtDateLong, money, todayISO } from "@/lib/format";
 import PrintButton from "./PrintButton";
+import { code128Svg } from "@/lib/barcode";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,11 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
               <div style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6478" }}>Work order</div>
               <h1 style={{ margin: 0 }}>#{o.number} {o.nickname}</h1>
               <div>{cust.company || cust.name}{o.po_number ? ` · PO ${o.po_number}` : ""}</div>
+            </div>
+            {/* job ticket barcode: the employee app scans it to log time on this job */}
+            <div style={{ textAlign: "center" }}>
+              <div style={{ width: `${(code128Svg(String(o.number), 40).width * 1.6) / 96}in`, height: "0.55in" }} dangerouslySetInnerHTML={{ __html: code128Svg(String(o.number), 40).svg }} />
+              <div style={{ fontSize: 11, letterSpacing: ".08em" }}>SCAN TO LOG TIME · #{o.number}</div>
             </div>
             <div style={{ textAlign: "right" }}>
               {o.rush && <div className="wo-rush">RUSH</div>}
