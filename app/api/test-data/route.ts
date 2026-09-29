@@ -66,7 +66,8 @@ export async function POST(req: Request) {
         const sug = suggest(ps, need, o.due_date as string, from, load);
         if (!sug) continue;
         (load[sug.machine.id] ||= {})[sug.day] = (load[sug.machine.id]?.[sug.day] || 0) + sug.minutes;
-        slots.push({ order_id: o.id, machine: sug.machine.id, day: sug.day, minutes: sug.minutes, position: slots.length, kind: need.type, label: need.label, source: "sample" });
+        // every row carries every column: a bulk insert fills a missing key with null, not the default
+        slots.push({ order_id: o.id, machine: sug.machine.id, day: sug.day, minutes: sug.minutes, position: slots.length, kind: need.type, label: need.label, source: "sample", status: "scheduled" });
       }
     });
     // a few finished earlier this week, and one running now, so the week looks lived-in
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
     const pastDays: string[] = [];
     for (let k = 1; k < dow && k <= 4; k++) { const x = new Date(today + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() - k); pastDays.push(x.toISOString().slice(0, 10)); }
     slots.slice(-Math.min(4, pastDays.length * 2)).forEach((x, i) => { x.day = pastDays[i % pastDays.length]; x.status = "done"; });
-    const first = slots.find((x) => x.day === today && !x.status); if (first) first.status = "running";
+    const first = slots.find((x) => x.day === today && x.status === "scheduled"); if (first) first.status = "running";
     if (slots.length) {
       const { error: e2 } = await admin.from("production_slots").insert(slots);
       if (e2) return NextResponse.json({ error: e2.message, created: made?.length || 0 }, { status: 500 });
