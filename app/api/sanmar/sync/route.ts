@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sanmarConfigured, sanmarProbe, sanmarSellableStyles, sanmarStyleSummary } from "@/lib/sanmar";
+import { sanmarConfigured, sanmarLookup, sanmarProbe, sanmarSellableStyles, sanmarStyleSummary } from "@/lib/sanmar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +20,18 @@ export async function GET(req: Request) {
   if (!ps || req.headers.get("x-sync-token") !== (ps as { token: string }).token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   if (!sanmarConfigured()) return NextResponse.json({ error: "SanMar isn't connected" }, { status: 503 });
   if (new URL(req.url).searchParams.get("probe")) return NextResponse.json(await sanmarProbe());
+  // re-pull SanMar garments already in the catalog (photos, colors, sizes, our prices)
+  if (new URL(req.url).searchParams.get("garments")) {
+    const { data: gs } = await admin.from("garments").select("id, style, supplier_style").eq("supplier", "sanmar");
+    const done: string[] = [];
+    for (const g of (gs || []) as { id: string; style: string; supplier_style: string | null }[]) {
+      const f = await sanmarLookup(g.supplier_style || g.style).catch(() => null);
+      if (!f) continue;
+      await admin.from("garments").update({ ...f, synced_at: new Date().toISOString() }).eq("id", g.id);
+      done.push(g.style);
+    }
+    return NextResponse.json({ refreshed: done });
+  }
   const { data: s } = await admin.from("sanmar_sync").select("enabled, list_at").eq("id", 1).single();
   const sync = s as { enabled: boolean; list_at: string | null } | null;
   if (!sync?.enabled) return NextResponse.json({ off: true });
