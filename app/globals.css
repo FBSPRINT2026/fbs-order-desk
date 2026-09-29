@@ -2714,3 +2714,22 @@ a.as-ai{text-decoration:none}
 .psy-y small{font-size:11px;color:var(--ink-3)}
 .psy-y.part{border-left-color:var(--fbs-orange)}
 .psy-y.hole{border-left-color:var(--danger);background:var(--danger-soft)}
+
+/* the rest of the portal on phones (order page, requests, projects, statement) */
+@media (max-width: 640px){
+  .portal .p-main{overflow-wrap:anywhere}
+  .portal .two,.portal .grid.g3,.portal .grid.g2{grid-template-columns:minmax(0,1fr)}
+  .portal img,.portal video{max-width:100%;height:auto}
+  .portal .items{min-width:0}
+  .portal .items th,.portal .items td{padding:9px 6px}
+  .portal .items th{font-size:10px;letter-spacing:.04em}
+  .portal .sizechips{flex-wrap:wrap}
+  .portal .panel-h{flex-wrap:wrap;gap:6px}
+  .portal .row{flex-wrap:wrap}
+  .portal .st-tbl{font-size:11.5px}
+  .portal .st-tbl th,.portal .st-tbl td{padding:6px 3px}
+  .portal .st-page{padding:14px!important}
+  .portal .totals{min-width:0;width:100%}
+}
+.psy-bar{display:block;height:4px;border-radius:3px;background:var(--line);margin-top:4px;overflow:hidden}
+.psy-bar em{display:block;height:100%;background:var(--fbs-orange)}

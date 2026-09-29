@@ -12,7 +12,7 @@ type Status = {
   expected: number; have: number; new_waiting: number;
   /** the full pass (customer by customer): how many customers are done, null when no pass is running */
   pass_customer: number | null;
-  by_year: { year: number; found: number; imported: number }[];
+  by_year: { year: number; found: number; imported: number; est: number }[];
 };
 
 const size = (b: number) => { const u = ["bytes", "KB", "MB", "GB", "TB"]; let i = 0, x = b; while (x >= 1024 && i < u.length - 1) { x /= 1024; i++; } return `${x >= 100 || i === 0 ? Math.round(x) : x.toFixed(1)} ${u[i]}`; };
@@ -42,9 +42,12 @@ export default function PrintavoSync() {
 
   if (!s) return <section className="panel" style={{ marginTop: 14 }}><div className="panel-b faint">{err || "Loading…"}</div></section>;
   const imported = s.have ?? s.done + s.files_waiting;
-  const total = Math.max(s.expected || 0, s.orders);
+  const yearsEst = (s.by_year || []).reduce((a, y) => a + (y.est || y.found), 0);
+  const total = Math.max(s.expected || 0, s.orders, yearsEst);
   const passing = s.pass_customer != null;
-  const eta = s.last_hour > 0 && s.pending > 0 ? s.pending / s.last_hour : null;
+  // what's left is everything Printavo has that we don't (not just what's been found so far), at the last hour's pace
+  const left = Math.max(0, total - imported);
+  const eta = s.last_hour > 0 && left > 0 ? left / s.last_hour : null;
   const phase = !s.enabled ? (s.orders ? "Paused" : "Off")
     : s.listing ? "Step 1 of 2: listing every order in Printavo"
     : passing && s.new_waiting > 0 ? "Finding every order (customer by customer) and importing them, newest first"
@@ -55,7 +58,7 @@ export default function PrintavoSync() {
   // years with orders: a year missing in the middle is a hole
   const years = (s.by_year || []).filter((y) => y.year > 2000);
   const yMin = years.length ? years[0].year : 0, yMax = new Date().getFullYear();
-  const allYears = years.length ? Array.from({ length: yMax - yMin + 1 }, (_, i) => years.find((y) => y.year === yMin + i) || { year: yMin + i, found: 0, imported: 0 }) : [];
+  const allYears = years.length ? Array.from({ length: yMax - yMin + 1 }, (_, i) => years.find((y) => y.year === yMin + i) || { year: yMin + i, found: 0, imported: 0, est: 0 }) : [];
   const stale = s.enabled && s.last_run_at && Date.now() - new Date(s.last_run_at).getTime() > 5 * 60000;
 
   return (
@@ -80,15 +83,17 @@ export default function PrintavoSync() {
             <div className="pvc-kpis">
               <div><span>In Printavo</span><b>{total.toLocaleString()}</b><small>orders · {s.customers.toLocaleString()} customers</small></div>
               <div><span>Last hour</span><b>{s.last_hour.toLocaleString()}</b><small>orders imported</small></div>
-              <div><span>Time left</span><b>{eta == null ? "—" : eta < 1 ? `${Math.max(1, Math.round(eta * 60))} min` : `${eta.toFixed(eta < 10 ? 1 : 0)} h`}</b><small>{s.pending.toLocaleString()} orders to go{passing ? ", more being found" : ""}</small></div>
+              <div><span>Time left</span><b>{eta == null ? "—" : eta < 1 ? `${Math.max(1, Math.round(eta * 60))} min` : eta < 36 ? `${Math.round(eta)} h` : `${(eta / 24).toFixed(1)} days`}</b><small>about {left.toLocaleString()} orders to go at {s.last_hour.toLocaleString()}/h</small></div>
               <div><span>Storage used</span><b>{size(s.storage_bytes)}</b><small>{s.oldest_done ? `back to ${new Date(s.oldest_done).toLocaleDateString([], { month: "short", year: "numeric" })}` : "files copied"}</small></div>
             </div>
             {allYears.length > 0 && (
               <div className="psy-years" aria-label="Orders by year">
-                {allYears.map((y) => (
-                  <div key={y.year} className={"psy-y" + (!y.found ? " hole" : y.imported < y.found ? " part" : " full")} title={`${y.year}: ${y.imported.toLocaleString()} imported of ${y.found.toLocaleString()} found`}>
-                    <span>{y.year}</span><b>{y.imported.toLocaleString()}</b><small>{!y.found ? "none found yet" : y.imported < y.found ? `of ${y.found.toLocaleString()}` : "all in"}</small>
+                {allYears.map((y) => { const est = Math.max(y.est || 0, y.found); const guess = est > y.found; return (
+                  <div key={y.year} className={"psy-y" + (!est ? " hole" : y.imported < est ? " part" : " full")} title={`${y.year}: ${y.imported.toLocaleString()} imported · ${y.found.toLocaleString()} found so far${guess ? ` · about ${est.toLocaleString()} in Printavo (from the order numbers used that year)` : ""}`}>
+                    <span>{y.year}</span><b>{y.imported.toLocaleString()}</b><small>{!est ? "none found yet" : y.imported >= est ? "all in" : `of ${guess ? "about " : ""}${est.toLocaleString()}`}</small>
+                    {est > 0 && y.imported < est && <i className="psy-bar"><em style={{ width: `${Math.min(100, (y.imported / est) * 100)}%` }} /></i>}
                   </div>
+                ); })}
                 ))}
               </div>
             )}

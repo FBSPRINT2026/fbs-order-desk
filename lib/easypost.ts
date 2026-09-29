@@ -50,3 +50,14 @@ export async function rateShipment(p: { from: ShipAddress; to: ShipAddress; boxe
       .sort((a, b) => a.cost - b.cost),
   };
 }
+
+/** Rates for one box between two places (the transit map, quick quotes). Nothing is bought. */
+export async function rateParcel(p: { from: ShipAddress; to: ShipAddress; parcel: { length: number; width: number; height: number; weightLb: number } }): Promise<Omit<Rate, "price">[]> {
+  const sh = await ep<{ id: string; rates: EpRate[] }>("/shipments", {
+    shipment: {
+      to_address: addr(p.to), from_address: addr(p.from),
+      parcel: { length: p.parcel.length, width: p.parcel.width, height: p.parcel.height, weight: Math.round(p.parcel.weightLb * 16 * 10) / 10 },
+    },
+  });
+  return (sh.rates || []).map((r) => ({ id: r.id, carrier: r.carrier, service: r.service, cost: +r.rate || 0, days: r.delivery_days, deliveryDate: r.delivery_date }));
+}
