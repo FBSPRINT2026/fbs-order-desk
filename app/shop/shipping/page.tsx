@@ -135,7 +135,7 @@ export default function ShippingCenter() {
       {tab === "overview" ? (
         <Overview items={items} shipped={shipped} perBox={settings.ship.perBox} onOpen={(x) => setOpen({ item: x, box: null })} go={setTab} />
       ) : tab === "transit" ? (
-        <div className="sc-transit">
+        <div className="sc-transit sc-stack">
           <section className="db-card db-blue"><div className="db-card-h"><h2>Transit Time Map</h2><span className="faint db-h-note">business days from our shop</span></div><TransitMap /></section>
           <section className="db-card db-orange"><div className="db-card-h"><h2>Rate &amp; Transit Calculator</h2></div><QuickShipQuote /></section>
         </div>
@@ -238,8 +238,8 @@ function Overview({ items, shipped, perBox, onOpen, go }: { items: Item[] | null
           </section>
         </div>
         <div className="dash-col">
-          <section className="db-card db-orange"><div className="db-card-h"><h2>Rate &amp; Transit Calculator</h2></div><QuickShipQuote compact /></section>
           <section className="db-card db-salmon"><div className="db-card-h"><h2>Transit Map</h2><span className="spacer" /><button type="button" className="linkbtn" onClick={() => go("transit")}>Full map →</button></div><TransitMap compact /></section>
+          <section className="db-card db-orange"><div className="db-card-h"><h2>Rate &amp; Transit Calculator</h2></div><QuickShipQuote compact /></section>
         </div>
       </div>
     </div>
