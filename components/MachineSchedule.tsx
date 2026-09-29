@@ -24,6 +24,18 @@ type Slot = { id: string; order_id: string | null; archived_order_id: string | n
 type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; carried?: string | null };
 /** the locations a booking covers when it's only part of the job's work on that kind of machine (null = all of it) */
 const locsFor = (job: { needs: Need[] }, need: Need) => { const full = job.needs.find((n) => n.type === need.type); return full && locsOf(need).length < locsOf(full).length ? locsOf(need) : null; };
+/** Screen print colors the way the shop says them: front / back, then any sleeves etc. A front-only 4 color is "4/0". */
+function screenColors(need: Need) {
+  let front = 0, back = 0;
+  const extra = new Map<string, number>();
+  for (const st of need.steps) {
+    const loc = (st.location || "").toLowerCase(), c = st.colors || 1;
+    if (/back|nape|yoke|neck/.test(loc)) back = Math.max(back, c);
+    else if (/sleeve|leg|hip|hood|cuff|collar/.test(loc)) extra.set(loc.trim(), Math.max(extra.get(loc.trim()) || 0, c));
+    else front = Math.max(front, c);
+  }
+  return [front, back, ...extra.values()].join("/");
+}
 /** A job's print at a glance: units, colors per location ("7/1/2" = front 7, back 1, sleeve 2), run time. */
 function glance(need: Need, minutes: number) {
   const byLoc = new Map<string, { colors: number; qty: number; k: number }>();
@@ -33,7 +45,7 @@ function glance(need: Need, minutes: number) {
   }
   const locs = [...byLoc.values()].sort((a, b) => a.k - b.k);
   const units = Math.max(0, ...locs.map((x) => x.qty));
-  const colors = need.type === "screen" ? locs.map((x) => x.colors || 1).join("/") : need.type === "embroidery" ? locs.map((x) => `${x.colors || 8}k`).join("/") : locs.length > 1 ? `${locs.length} loc` : "heat";
+  const colors = need.type === "screen" ? screenColors(need) : need.type === "embroidery" ? locs.map((x) => `${x.colors || 8}k`).join("/") : locs.length > 1 ? `${locs.length} loc` : "heat";
   const h = Math.floor(minutes / 60), m = Math.round(minutes % 60);
   return { units, colors, run: h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m` };
 }
