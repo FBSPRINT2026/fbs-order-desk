@@ -15,7 +15,7 @@ async function sanmarSearch(q: string): Promise<Hit[]> {
   const stripped = words.length === 1 ? words[0].replace(/^[a-z]{1,2}(?=\d)/, "") : "";
   const ors = words.flatMap((w) => [`style.ilike.${w}%`, `title.ilike.%${w}%`, `brand.ilike.%${w}%`]);
   if (stripped && stripped !== words[0]) ors.push(`style.ilike.${stripped}%`);
-  const { data } = await createAdminClient().from("sanmar_styles").select("style, brand, title, image").eq("sellable", true).neq("brand", "").or(ors.join(",")).limit(400);
+  const { data } = await createAdminClient().from("sanmar_styles").select("style, brand, title, image").eq("sellable", true).or(ors.join(",")).limit(400);
   const rows = (data || []) as { style: string; brand: string; title: string; image: string }[];
   const lc = (x: string) => (x || "").toLowerCase();
   const full = q.trim().toLowerCase();
@@ -29,7 +29,7 @@ async function sanmarSearch(q: string): Promise<Hit[]> {
     .filter((r) => { const hay = lc(`${r.brand} ${r.style} ${r.title}`); return words.every((w) => hay.includes(w)) || (stripped && lc(r.style).startsWith(stripped)); })
     .sort((a, b) => score(a) - score(b) || brandRank(a.brand) - brandRank(b.brand) || a.style.length - b.style.length || a.style.localeCompare(b.style))
     .slice(0, 25)
-    .map((r) => ({ styleID: 0, brand: r.brand, style: r.style, title: r.title, image: r.image, supplier: "sanmar" as const }));
+    .map((r) => ({ styleID: 0, brand: r.brand || "SanMar", style: r.style, title: r.title, image: r.image, supplier: "sanmar" as const }));
 }
 
 // Signed-in staff and customers: list S&S and SanMar styles matching a style number or name (no prices in the results).
