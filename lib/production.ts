@@ -17,6 +17,9 @@ export type Machine = {
   mirror?: boolean;
   /** today: where the crew's press operator is on the time clock (uAttend), attached by the calendar */
   clock?: ClockState;
+  /** this pay week, from the time clock: each crew member's hours so far and on pace for, and `head` = how far the
+   *  busiest one is ahead of the crew's schedule (minutes; overtime starts that much sooner). Attached by the calendar. */
+  crewHours?: { ws: string; head: number; who: string | null; members: { id: string; name: string; role: string; worked: number; projected: number; missing: boolean }[] };
   /** when its day starts (minutes after midnight, 420 = 7:00 AM), hours it runs a day, and which days (0 = Sunday) */
   startMin: number; hoursPerDay: number; days: number[];
   /** Printavo status text that puts a job on this machine (until go-live), e.g. "Press 1" */
@@ -514,7 +517,7 @@ export const isOffDay = (mach: Machine, day: string) => !!mach.off && day in mac
 
 /** a time-clock punch today, in minutes after midnight shop time */
 export type ClockPunch = { employee_id: string; kind: "in" | "out" | "break_start" | "break_end"; min: number };
-export type ClockState = { state: "in" | "late" | "waiting" | "out" | "noshow"; at: number | null; who: string };
+export type ClockState = { state: "in" | "late" | "waiting" | "out" | "noshow" | "crew"; at: number | null; who: string; crew?: string[] };
 const hm = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${h % 12 || 12}:${String(mm).padStart(2, "0")}${h < 12 ? "a" : "p"}`; };
 /**
  * The press operator's punches decide when a crew's day really starts (and stops). Miguel due at 6:30 and not
@@ -524,7 +527,7 @@ const hm = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; retu
  * and an operator set (Employees → Press Crews) who has punched in the last two weeks (`tracked`), and only when the
  * clock is reporting (the calling page checks).
  */
-export function withClock(ps: ProductionSettings, punches: ClockPunch[], today: string, nowMin: number, grace = 5, tracked?: Set<string>): ProductionSettings {
+export function withClock(ps: ProductionSettings, punches: ClockPunch[], today: string, nowMin: number, grace = 5, tracked?: Set<string>, names?: Record<string, string>): ProductionSettings {
   const away = (ps.breaks?.lunchMin || 30) + 20;
   const machines = ps.machines.map((m) => {
     const crew = m.crew ? ps.crews.find((c) => c.id === m.crew) : undefined, op = crew?.members?.operator;
@@ -536,7 +539,14 @@ export function withClock(ps: ProductionSettings, punches: ClockPunch[], today: 
     const downs: Down[] = [], up5 = (x: number) => Math.ceil(x / 5) * 5;
     let clock: ClockState | undefined;
     const first = mine.find((p) => p.kind === "in");
-    if (!first) {
+    // the operator has no punch but the rest of the crew clocked in: the press is running (he most likely forgot to punch)
+    const others = (["assistant", "catcher"] as const).map((k) => crew.members?.[k]).filter((x): x is string => !!x && x !== op);
+    const crewIn = others.map((id) => punches.filter((p) => p.employee_id === id && (p.kind === "in" || p.kind === "break_end")).sort((a, b) => a.min - b.min)[0]).filter(Boolean);
+    if (!first && crewIn.length) {
+      const at = Math.min(...crewIn.map((p) => p!.min));
+      if (at > sh[0] + grace && at < sh[1]) downs.push([sh[0], Math.min(sh[1], up5(at)), `${who}'s crew in at ${hm(at)}`, 0]);
+      clock = { state: "crew", at, who, crew: crewIn.map((p) => names?.[p!.employee_id] || "").filter(Boolean) };
+    } else if (!first) {
       if (nowMin >= sh[1]) { downs.push([sh[0], sh[1], `${who} didn't clock in`, 0]); clock = { state: "noshow", at: null, who }; }
       else if (nowMin > sh[0] + grace) { downs.push([sh[0], Math.min(sh[1], up5(nowMin + 1)), `Waiting on ${who} (not clocked in)`, 0]); clock = { state: "waiting", at: null, who }; }
     } else {
@@ -631,7 +641,8 @@ export type WeekOT = { weekStart: string; paid: number; ot: number; days: Record
 /** A press crew's paid minutes Friday → Thursday and where overtime starts (after 40 hours). Machines without a crew: null. */
 export function weekOvertime(mach: Machine, weekStart: string): WeekOT | null {
   if (!mach.crew) return null;
-  let cum = 0, ot = 0;
+  // the crew member furthest ahead on the time clock this week (can be behind too, e.g. out a day)
+  let cum = mach.crewHours && mach.crewHours.ws === weekStart ? mach.crewHours.head : 0, ot = 0;
   const days: WeekOT["days"] = {};
   for (let i = 0; i < 7; i++) {
     const d = addDay(weekStart, i);
@@ -645,6 +656,29 @@ export function weekOvertime(mach: Machine, weekStart: string): WeekOT | null {
     days[d] = { paid: dp, ot: dot, otFrom: from };
   }
   return { weekStart, paid: cum, ot, days };
+}
+/**
+ * Real hours from the time clock, per crew member, for the pay week so far. Sonia already at 38 hours by Wednesday
+ * (she stayed late, or worked Saturday on another press) means Miguel's crew goes into overtime sooner than its
+ * schedule says; `head` carries that into weekOvertime, so Re-plan, suggestions and Get Recommendations steer work to
+ * a crew whose people aren't in overtime yet. Only members with punches this week count.
+ */
+export function withCrewHours(ps: ProductionSettings, worked: Record<string, { worked: number; missing: boolean }>, names: Record<string, string>, today: string, nowMin: number): ProductionSettings {
+  const ws = payWeekStart(today);
+  const machines = ps.machines.map((m) => {
+    const crew = m.crew ? ps.crews.find((c) => c.id === m.crew) : undefined;
+    if (!crew?.members) return m;
+    const list = CREW_ROLES.map(([k, role]) => ({ id: crew.members![k] || "", role })).filter((x) => x.id && worked[x.id]);
+    if (!list.length) return m;
+    // the crew's scheduled paid time from Friday up to now
+    let past = 0;
+    for (let d = ws; d <= today; d = addDay(d, 1)) for (const [a, b] of paidOn(m, d)) past += d < today ? b - a : Math.max(0, Math.min(b, nowMin) - a);
+    const week = weekOvertime(m, ws)?.paid ?? past;
+    const members = list.map((x) => ({ id: x.id, name: names[x.id] || x.role, role: x.role, worked: worked[x.id].worked, projected: worked[x.id].worked + Math.max(0, week - past), missing: worked[x.id].missing }));
+    const top = members.reduce((a, b) => (b.worked - past > a.worked - past ? b : a));
+    return { ...m, crewHours: { ws, head: top.worked - past, who: top.name, members } };
+  });
+  return { ...ps, machines };
 }
 /** When overtime starts on a day for this machine's crew (minutes after midnight), or null. */
 export const otFromOn = (mach: Machine, day: string) => weekOvertime(mach, payWeekStart(day))?.days[day]?.otFrom ?? null;

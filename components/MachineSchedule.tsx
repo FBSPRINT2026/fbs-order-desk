@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 import PressLayout from "@/components/PressLayout";
@@ -276,33 +276,53 @@ export default function MachineSchedule() {
   const today = now.day;
   const [sBase, setS] = useState<ProductionSettings | null>(null);
   // the time clock (uAttend, or our own clock): today's punches of each press crew's operator, checked every minute
-  const [tc, setTc] = useState<{ ok: boolean; punches: ClockPunch[]; ranAt: string | null; tracked: string[] }>({ ok: false, punches: [], ranAt: null, tracked: [] });
+  const [tc, setTc] = useState<{ ok: boolean; punches: ClockPunch[]; ranAt: string | null; tracked: string[]; worked: Record<string, { worked: number; missing: boolean }>; names: Record<string, string> }>({ ok: false, punches: [], ranAt: null, tracked: [], worked: {}, names: {} });
   useEffect(() => {
-    const ops = [...new Set((sBase?.crews || []).map((c) => c.members?.operator).filter(Boolean))] as string[];
-    if (!ops.length) return;
+    // every crew member (operator, assistant, catcher): the operator starts the press; everyone's hours count toward overtime
+    const ids = [...new Set((sBase?.crews || []).flatMap((c) => [c.members?.operator, c.members?.assistant, c.members?.catcher]).filter(Boolean))] as string[];
+    if (!ids.length) return;
     let live = true;
     const get = async () => {
-      const sb = createClient(), day = shopTime(new Date())!.day;
+      const sb = createClient(), nowT = shopTime(new Date())!, day = nowT.day, ws = payWeekStart(day);
       // two weeks back: an operator with no punches in that time doesn't use the clock, so the schedule doesn't wait on them
-      const from = new Date(Date.parse(day + "T00:00:00Z") - 14 * 86400000).toISOString();
-      const [{ data: p }, { data: st }] = await Promise.all([
-        sb.from("time_punches").select("employee_id, kind, at, source").in("employee_id", ops).eq("voided", false).gte("at", from).order("at").limit(3000),
+      const from = new Date(Date.parse(addDay(ws < addDay(day, -14) ? ws : addDay(day, -14), -1) + "T00:00:00Z")).toISOString();
+      const [{ data: p }, { data: st }, { data: em }] = await Promise.all([
+        sb.from("time_punches").select("employee_id, kind, at, source").in("employee_id", ids).eq("voided", false).gte("at", from).order("at").limit(5000),
         sb.from("uattend_sync").select("last_ok_at").eq("id", 1).maybeSingle(),
+        sb.from("employees").select("id, first_name").in("id", ids),
       ]);
       if (!live) return;
       const all = ((p || []) as { employee_id: string; kind: ClockPunch["kind"]; at: string; source: string }[]).map((x) => ({ ...x, t: shopTime(x.at)! }));
-      const tracked = [...new Set(all.map((x) => x.employee_id))], rows = all.filter((x) => x.t.day === day);
+      const tracked = [...new Set(all.filter((x) => x.t.day >= addDay(day, -14)).map((x) => x.employee_id))], rows = all.filter((x) => x.t.day === day);
+      // hours worked this pay week (Friday on), pair by pair; a shift left open on an earlier day isn't counted (missing punch)
+      const worked: Record<string, { worked: number; missing: boolean }> = {}, nowAbs = ord(day) * 1440 + nowT.min;
+      for (const id of ids) {
+        const ps = all.filter((x) => x.employee_id === id && x.t.day >= ws);
+        if (!ps.length) continue;
+        let open: number | null = null, tot = 0, missing = false;
+        for (const x of ps) {
+          const a = ord(x.t.day) * 1440 + x.t.min, isIn = x.kind === "in" || x.kind === "break_end";
+          if (isIn) { if (open != null) missing = true; open = a; } else if (open != null) { tot += a - open; open = null; }
+        }
+        if (open != null) { if (nowAbs - open < 16 * 60) tot += nowAbs - open; else missing = true; }
+        worked[id] = { worked: tot, missing };
+      }
       const okAt = (st?.last_ok_at as string | null) || null;
       // trust "not clocked in" only while the clock is reporting: uAttend synced in the last 15 minutes, or someone used our own clock today
       const ok = (!!okAt && Date.now() - Date.parse(okAt) < 15 * 60000) || rows.some((x) => x.source !== "uattend");
-      setTc({ ok, punches: rows.map((x) => ({ employee_id: x.employee_id, kind: x.kind, min: x.t.min })), ranAt: okAt, tracked });
+      const names = Object.fromEntries(((em || []) as { id: string; first_name: string }[]).map((x) => [x.id, x.first_name]));
+      setTc({ ok, punches: rows.map((x) => ({ employee_id: x.employee_id, kind: x.kind, min: x.t.min })), ranAt: okAt, tracked, worked, names });
     };
     get(); const t = setInterval(get, 60000);
     return () => { live = false; clearInterval(t); };
   }, [sBase]);
   const clockBucket = Math.floor(now.min / 5);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const s = useMemo(() => (sBase && tc.ok ? withClock(sBase, tc.punches, today, now.min, 5, new Set(tc.tracked)) : sBase), [sBase, tc, today, clockBucket]);
+  const s = useMemo(() => {
+    if (!sBase) return sBase;
+    const withTc = tc.ok ? withClock(sBase, tc.punches, today, now.min, 5, new Set(tc.tracked), tc.names) : sBase;
+    return Object.keys(tc.worked).length ? withCrewHours(withTc, tc.worked, tc.names, today, now.min) : withTc;
+  }, [sBase, tc, today, clockBucket]);
   const [view, setView] = useSticky<View>("cal.view", "split");
   const [week, setWeek] = useState(() => monday(shopTime(new Date())!.day));
   const [day, setDay] = useState(() => shopTime(new Date())!.day);
@@ -2013,7 +2033,7 @@ function whyUnfit(need: Need, m: Machine) {
 function ClockTag({ m }: { m: Machine }) {
   const c = m.clock; if (!c) return null;
   const t = c.at == null ? "" : clockLong(c.at);
-  const [txt, tip] = c.state === "in" ? [`In ${t}`, `${c.who} clocked in at ${t}`] : c.state === "late" ? [`In ${t} · late`, `${c.who} clocked in late at ${t}: nothing ran on this press before then`] : c.state === "waiting" ? ["Not in yet", `${c.who} hasn't clocked in: jobs on this press wait until they do (the schedule moves every few minutes)`] : c.state === "out" ? [`Out ${t}`, `${c.who} clocked out at ${t}`] : ["No punch today", `${c.who} didn't clock in today`];
+  const [txt, tip] = c.state === "in" ? [`In ${t}`, `${c.who} clocked in at ${t}`] : c.state === "late" ? [`In ${t} · late`, `${c.who} clocked in late at ${t}: nothing ran on this press before then`] : c.state === "waiting" ? ["Not in yet", `${c.who} hasn't clocked in: jobs on this press wait until they do (the schedule moves every few minutes)`] : c.state === "out" ? [`Out ${t}`, `${c.who} clocked out at ${t}`] : c.state === "crew" ? [`${c.who}: no punch`, `${c.who} hasn't clocked in, but ${c.crew?.length ? c.crew.join(" and ") : "the crew"} did (from ${t}), so the press is running. Fix the missing punch in uAttend.`] : ["No punch today", `${c.who} didn't clock in today`];
   return <span className={"ms-clk " + c.state} title={`${tip} (time clock)`}>{txt}</span>;
 }
 /** a little warning on a press's name when Equipment Status says something's wrong with it */
@@ -2170,10 +2190,12 @@ function OvertimePanel({ today, thisWeek, nextWeek, mult, leader, onClose, onCut
           </div>
           {!rows.length ? <div className="empty">No press crews in view. Staff them on Employees → People &amp; Teams.</div> : (
             <div className="ms-ot-t">
-              <div className="ms-ot-r h"><span>Crew</span><span>Paid hours</span><span>Overtime</span><span>Starts</span><span>Booked in OT</span><span>OT pay</span></div>
+              <div className="ms-ot-r h"><span>Crew</span><span title="The crew's paid hours this week; with the time clock, the crew member with the most hours">Paid hours</span><span>Overtime</span><span>Starts</span><span>Booked in OT</span><span>OT pay</span></div>
               {rows.map((r) => (
                 <div key={r.m.id} className={"ms-ot-r" + (r.w.ot ? " on" : "")}>
-                  <span><b>{shortName(r.m)} · {leader(r.m)}</b><small>{r.who.length ? r.who.join(" + ") + "/hr" : r.perHour == null ? "no rates (owners see pay)" : ""}</small></span>
+                  <span><b>{shortName(r.m)} · {leader(r.m)}</b><small>{r.who.length ? r.who.join(" + ") + "/hr" : r.perHour == null ? "no rates (owners see pay)" : ""}</small>
+                    {wk === "this" && r.m.crewHours && <small className="ms-ot-mem">{r.m.crewHours.members.map((x) => <span key={x.id} className={x.projected > 2400 ? "bad" : ""} title={`${x.name} (${x.role}): ${fmtMin(x.worked)} on the clock since ${dayLbl(r.m.crewHours!.ws)}, on pace for ${fmtMin(x.projected)} by Thursday${x.missing ? " · a punch is missing" : ""}`}>{x.name} {fmtMin(x.worked)}{x.projected > 2400 ? ` → ${fmtMin(x.projected)}` : ""}{x.missing ? " ⚠" : ""}</span>)}</small>}
+                  </span>
                   <span>{fmtMin(r.w.paid)}</span>
                   <span className={r.w.ot ? "bad" : ""}>{h(r.w.ot)}</span>
                   <span>{r.starts ? `${r.starts.day === today ? "Today" : dayLbl(r.starts.day).split(",")[0]} ${clock(r.starts.min)}` : "—"}</span>
@@ -2183,7 +2205,7 @@ function OvertimePanel({ today, thisWeek, nextWeek, mult, leader, onClose, onCut
               ))}
             </div>
           )}
-          <div className="faint" style={{ fontSize: 12.5 }}>From the schedule: crew hours, extra shifts, days off and early finishes (not the time clock yet). The planner and Re-plan steer work away from crews in overtime when another press can still make the date. Hours in overtime with no jobs booked can be cut: the crew leaves when their work is done.</div>
+          <div className="faint" style={{ fontSize: 12.5 }}>From the schedule (crew hours, extra shifts, days off and early finishes) plus the time clock: each crew member's real hours so far this week, so a crew goes into overtime as soon as any one of them passes 40 hours. The planner and Re-plan steer work away from crews in overtime when another press can still make the date. Hours in overtime with no jobs booked can be cut: the crew leaves when their work is done.</div>
           <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
             <button type="button" className="btn" onClick={onClose}>Close</button>
             {wk === "this" && unused > 0 && <button type="button" className="btn primary" disabled={busy} onClick={async () => { setBusy(true); await onCut(rows.filter((r) => r.unused > 0)); setBusy(false); }}>Cut {fmtMin(unused)} of Unused Overtime</button>}
