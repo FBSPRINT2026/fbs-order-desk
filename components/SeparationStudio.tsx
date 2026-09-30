@@ -134,7 +134,10 @@ export default function SeparationStudio({ id }: { id: string }) {
       const raster = /^image\/(png|jpe?g|webp)/i.test(des.file_type || "") || /\.(png|jpe?g|webp)$/i.test(des.file_name || "");
       const paths = [raster ? des.file_path : des.preview_path || des.file_path, des.file_path].filter(Boolean) as string[];
       const { data: urls } = await sb.storage.from("proofs").createSignedUrls(paths, 3600);
-      setArtUrl(urls?.[0]?.signedUrl || ""); setOrigUrl(urls?.[1]?.signedUrl || urls?.[0]?.signedUrl || "");
+      setOrigUrl(urls?.[1]?.signedUrl || urls?.[0]?.signedUrl || "");
+      // the art as a local blob, so the canvas can read its pixels (no cross-site image)
+      const { data: blob } = await sb.storage.from("proofs").download(paths[0]);
+      setArtUrl(blob ? URL.createObjectURL(blob) : urls?.[0]?.signedUrl || "");
     }
   }, [sb, id]);
   useEffect(() => { load(); }, [load]);
