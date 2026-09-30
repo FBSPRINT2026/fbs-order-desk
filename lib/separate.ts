@@ -680,7 +680,8 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
       // …and there the color on top is made fatter out onto the bare shirt instead (a stroke on the top color), so it
       // still covers the edge of the white
       const b = Math.max(0, s.bump ?? 0);
-      if (detail && b > 0) {
+      // (spot color only: in simulated process every color is a halftone blend, so there's no solid top color to fatten)
+      if (detail && b > 0 && s.method === "spot") {
         const dD = chamfer(detail, w, h), NB = 5 * (b + 1.5), near = new Uint8Array(n);
         for (let i = 0; i < n; i++) if (dD[i] <= NB) near[i] = 1;
         for (const st of seq) {
@@ -852,6 +853,7 @@ export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: n
   const clean = halftone && o.clean !== false, cellPx = (w / widthIn) / lpi;
   const B = clean ? boxBlur(A, w, h, Math.max(0, Math.round(cellPx / 2 - 0.5))) : null;
   const icell = 1 / (cs * cs + sn * sn); // (cs, sn) are cos/cell, sin/cell: back from cell units to film pixels
+  let lastU = NaN, lastT = NaN, lastTone = 0; // the cell tone is worked out once per cell (the same for ~100 film pixels)
   for (let y = 0; y < H; y++) {
     const fy = Math.max(0, Math.min(h - 1, (y + 0.5) * sy - 0.5)), y0 = h === 1 ? 0 : Math.min(h - 2, Math.floor(fy)), ty = fy - y0, y1 = Math.min(h - 1, y0 + 1);
     const r0 = y0 * w, r1 = y1 * w, orow = y * rowBytes;
@@ -860,6 +862,7 @@ export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: n
       const a00 = A[r0 + x0], a01 = A[r0 + x1], a10 = A[r1 + x0], a11 = A[r1 + x1];
       let on: boolean;
       const near = r0 + (tx < 0.5 ? x0 : x1) + (ty < 0.5 ? 0 : r1 - r0);
+      if (halftone && o.within && o.within[near] < 3) continue; // outside the art: nothing to print
       if (!halftone || (hiM![near] >= 245 && loM![near] <= 10)) {
         if ((a00 === 0 || a00 === 255) && a00 === a01 && a00 === a10 && a00 === a11) on = a00 === 255;
         else {
@@ -877,6 +880,7 @@ export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: n
         if (B) {
           const nearest = o.within ? o.within[near] : k;
           if (nearest < 3) tone = 0; // outside the art: no dot spills past its edge
+          else if (iu === lastU && it === lastT) tone = lastTone;
           else {
             // the cell's center, back in film pixels, then in plate pixels
             const cu = iu + 0.5, ct = it + 0.5, xc = (cu * cs - ct * sn) * icell, yc = (cu * sn + ct * cs) * icell;
@@ -884,6 +888,7 @@ export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: n
             const bx = Math.min(w - 2, Math.floor(px)), by = Math.min(h - 2, Math.floor(py)), bx1 = Math.min(w - 1, bx + 1), by1 = Math.min(h - 1, by + 1), ux = px - bx, uy = py - by;
             const b0 = B[by * w + bx] + (B[by * w + bx1] - B[by * w + bx]) * ux, b1 = B[by1 * w + bx] + (B[by1 * w + bx1] - B[by1 * w + bx]) * ux;
             tone = b0 + (b1 - b0) * uy;
+            lastU = iu; lastT = it; lastTone = tone;
           }
         }
         const v = LUT[tone < 0 ? 0 : tone > 255 ? 255 : Math.round(tone)];
