@@ -63,6 +63,10 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
         for (const { sh, t } of mine) content += `${Math.min(1, t).toFixed(3)} scn\n` + sh.ops + (sh.evenodd ? "f*\n" : "f\n");
         content += "Q\n";
       }
+    } else if (o.vector && p.kind === "underbase" && !o.tonal) {
+      // vector art's underbase: smooth curves (solid white under everything that prints)
+      const path = traceCurves(p.alpha, w, h, s, H);
+      if (path) content += `q /GS0 gs /CS${i} cs 1 scn\n${path}f*\nQ\n`;
     } else if (o.tonal || p.tonal) {
       // tonal: a grayscale image in the ink (the RIP halftones it)
       xo.push(`/Im${i} ${csn + 1} 0 R`);

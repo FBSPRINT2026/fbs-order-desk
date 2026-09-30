@@ -584,9 +584,14 @@ export function composite(res: { plates: Plate[]; w: number; h: number }, garmen
   for (let i = 0; i < n; i++) {
     // the spot is split into areas: ink dots (printed on the underbase where there is one), bare underbase, bare shirt
     const u = ub ? ub.alpha[i] / 255 : 0;
+    // where inks overlap (a trap, or dots that land on each other) the one printed later covers the one under it:
+    // hand out the spot from the top ink down
     let r = 0, gg = 0, b = 0, tot = 0;
-    for (const k of inks) { const f = k.a[i] / 255; if (!f) continue; tot += f; r += f * k.c[0]; gg += f * k.c[1]; b += f * k.c[2]; }
-    if (tot > 1) { r /= tot; gg /= tot; b /= tot; tot = 1; }
+    for (let j = inks.length - 1; j >= 0 && tot < 1; j--) {
+      const k = inks[j]; let f = k.a[i] / 255; if (!f) continue;
+      if (f > 1 - tot) f = 1 - tot;
+      tot += f; r += f * k.c[0]; gg += f * k.c[1]; b += f * k.c[2];
+    }
     const white = Math.max(0, u - tot), shirt = 1 - Math.max(u, tot);
     r += white + shirt * g[0]; gg += white + shirt * g[1]; b += white + shirt * g[2];
     const o = i * 4; out[o] = back(Math.max(0, Math.min(1, r))); out[o + 1] = back(Math.max(0, Math.min(1, gg))); out[o + 2] = back(Math.max(0, Math.min(1, b))); out[o + 3] = 255;
