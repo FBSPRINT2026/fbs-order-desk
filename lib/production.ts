@@ -517,7 +517,7 @@ export const isOffDay = (mach: Machine, day: string) => !!mach.off && day in mac
 
 /** a time-clock punch today, in minutes after midnight shop time */
 export type ClockPunch = { employee_id: string; kind: "in" | "out" | "break_start" | "break_end"; min: number };
-export type ClockState = { state: "in" | "late" | "waiting" | "out" | "noshow" | "crew"; at: number | null; who: string; crew?: string[] };
+export type ClockState = { state: "in" | "late" | "waiting" | "out" | "noshow" | "crew"; at: number | null; who: string; crew?: string[]; /** first clock-in / last clock-out today (minutes) */ inAt?: number | null; outAt?: number | null };
 const hm = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${h % 12 || 12}:${String(mm).padStart(2, "0")}${h < 12 ? "a" : "p"}`; };
 /**
  * The press operator's punches decide when a crew's day really starts (and stops). Miguel due at 6:30 and not
@@ -545,21 +545,21 @@ export function withClock(ps: ProductionSettings, punches: ClockPunch[], today: 
     if (!first && crewIn.length) {
       const at = Math.min(...crewIn.map((p) => p!.min));
       if (at > sh[0] + grace && at < sh[1]) downs.push([sh[0], Math.min(sh[1], up5(at)), `${who}'s crew in at ${hm(at)}`, 0]);
-      clock = { state: "crew", at, who, crew: crewIn.map((p) => names?.[p!.employee_id] || "").filter(Boolean) };
+      clock = { state: "crew", at, inAt: at, who, crew: crewIn.map((p) => names?.[p!.employee_id] || "").filter(Boolean) };
     } else if (!first) {
       if (nowMin >= sh[1]) { downs.push([sh[0], sh[1], `${who} didn't clock in`, 0]); clock = { state: "noshow", at: null, who }; }
       else if (nowMin > sh[0] + grace) { downs.push([sh[0], Math.min(sh[1], up5(nowMin + 1)), `Waiting on ${who} (not clocked in)`, 0]); clock = { state: "waiting", at: null, who }; }
     } else {
       const late = first.min > sh[0] + grace;
       if (late && first.min < sh[1]) downs.push([sh[0], Math.min(sh[1], up5(first.min)), `${who} in at ${hm(first.min)}`, 0]);
-      clock = { state: late ? "late" : "in", at: first.min, who };
+      clock = { state: late ? "late" : "in", at: first.min, inAt: first.min, who };
       let out: number | null = null;
       for (const p of mine.slice(mine.indexOf(first) + 1)) {
         if (p.kind === "out") { if (out == null) out = p.min; continue; }
         if (out != null) { if (p.min - out > away && out < sh[1]) downs.push([Math.max(sh[0], out), Math.min(sh[1], up5(p.min)), `${who} out ${hm(out)}–${hm(p.min)}`, 0]); out = null; }
       }
       if (out != null) {
-        clock = { state: "out", at: out, who };
+        clock = { state: "out", at: out, inAt: first.min, outAt: out, who };
         if (nowMin - out > away && out < sh[1] - 10) downs.push([Math.max(sh[0], out), sh[1], `${who} clocked out at ${hm(out)}`, 0]);
       }
     }

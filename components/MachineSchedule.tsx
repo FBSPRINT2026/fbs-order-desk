@@ -996,8 +996,12 @@ export default function MachineSchedule() {
         </> : <>
         <div className="ms-dv-corner" />
         {machines.map((m) => { const u = used(m, day), cap = capacityMin(s, m, shiftOn(m, day) ? day : undefined); return (
-          <div key={m.id} className={"ms-dv-h " + m.type + (isOffDay(m, day) ? " off" : "")}><b>{shortName(m)}</b><small title={crewOf(m) ? `${crewOf(m)!.leader}'s crew` : undefined}>{crewOf(m) ? <b className="ms-lead">{crewOf(m)!.leader}</b> : m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat press"}</small><IssueTag m={m} />{day === today && <ClockTag m={m} />}
-            <button type="button" className={"ms-crew" + (isOffDay(m, day) ? " off" : "")} onClick={() => setDownEdit({ machine: m.id, day, allDay: true })} title={isOffDay(m, day) ? "Off this day: tap to change" : "Mark this press (or its crew) off"}>{crewLine(m, day)}</button>
+          <div key={m.id} className={"ms-dv-h " + m.type + (isOffDay(m, day) ? " off" : "")}><b title={m.name}>{shortName(m)}{crewOf(m) ? <span className="ms-lead-n"><span className="ms-dot-sep"> · </span>{crewOf(m)!.leader}</span> : null}</b>{!crewOf(m) && <small>{m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat press"}</small>}<IssueTag m={m} />
+            {/* the crew's regular hours next to when the operator actually clocked in today (time clock) */}
+            <div className="ms-sa">
+              <button type="button" className={"ms-sa-c ms-crew" + (isOffDay(m, day) ? " off" : "")} onClick={() => setDownEdit({ machine: m.id, day, allDay: true })} title={isOffDay(m, day) ? "Off this day: tap to change" : "Mark this press (or its crew) off"}><i>Schedule</i><span>{crewLine(m, day)}</span></button>
+              {crewOf(m) && day === today && <ActualCell m={m} />}
+            </div>
             <div className={"ms-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /></div>
             <small className="ms-used">{o.colMin ? `${+(u / 60).toFixed(1)} / ${+(cap / 60).toFixed(1)}h` : `${fmtMin(u)} / ${fmtMin(cap)}`}</small></div>
         ); })}</>}
@@ -2035,6 +2039,17 @@ function whyUnfit(need: Need, m: Machine) {
   if (need.type !== "screen") return `${shortName(m)} can't run it right now`;
   if (need.steps.some((st) => flashesFor(st) > 0) && flashesOf(m) === 0) return `needs a flash (underbase or puff): ${shortName(m)} has none working`;
   return `needs ${stationsNeeded(need)} heads (screens + flashes): more than ${shortName(m)} can print, even in two rounds`;
+}
+/** press header, 24-hour view: when the operator actually clocked in (and out) today */
+function ActualCell({ m }: { m: Machine }) {
+  const c = m.clock, t = (x: number | null | undefined) => (x == null ? "" : clock(x));
+  const [txt, cls, tip]: [ReactNode, string, string] = !c ? ["—", "", "No time clock punches to go by for this crew today"]
+    : c.state === "waiting" ? ["Not in yet", "warn", `${c.who} hasn't clocked in: jobs on this press wait until they do`]
+    : c.state === "noshow" ? ["No punch", "bad", `${c.who} didn't clock in today`]
+    : c.state === "crew" ? [<><em>Crew </em>{t(c.inAt)}</>, "warn", `${c.who} has no punch; ${c.crew?.length ? c.crew.join(" and ") : "the crew"} clocked in at ${t(c.inAt)}`]
+    : c.state === "out" ? [`${t(c.inAt)}–${t(c.outAt)}`, "", `${c.who} clocked in at ${t(c.inAt)} and out at ${t(c.outAt)}`]
+    : [<><em>In </em>{t(c.inAt)}</>, c.state === "late" ? "warn" : "ok", `${c.who} clocked in at ${t(c.inAt)}${c.state === "late" ? " (late)" : ""}`];
+  return <div className={"ms-sa-c act " + cls} title={`${tip} (time clock)`}><i>Actual</i><span>{txt}</span></div>;
 }
 /** where the press operator is on the time clock today: in (and when), not in yet, clocked out */
 function ClockTag({ m }: { m: Machine }) {
