@@ -10,6 +10,9 @@ export type Machine = {
   id: string; name: string; type: MachineType;
   /** screen: print heads / colors it can run; embroidery: heads (pieces sewn at once) */
   colors: number; heads: number;
+  /** screen: flash-cure units it has (default 2). A flash sits in a head's spot, so each flash a job needs is one
+   *  color less; more than it can hold in one pass means printing it in two rounds (twice the press time). */
+  flashes?: number;
   /** when its day starts (minutes after midnight, 420 = 7:00 AM), hours it runs a day, and which days (0 = Sunday) */
   startMin: number; hoursPerDay: number; days: number[];
   /** Printavo status text that puts a job on this machine (until go-live), e.g. "Press 1" */
@@ -32,7 +35,31 @@ export type Machine = {
   down?: Record<string, Down[]>;
   /** extra shifts outside the regular schedule (a Saturday 10–2): date → [start, end], attached by the calendar */
   extra?: Record<string, [number, number]>;
+  /** Equipment Status (a problem right now), attached by the calendar: `colors` / `speed` are already the working
+   *  numbers when it's set; `full` is how many colors / heads it has when everything works */
+  issue?: EquipIssue;
 };
+export type EquipIssue = { full: number; fullFlashes: number; flashes: number | null; colors: number | null; speed: number | null; down: boolean; note: string; since: string | null; until: string | null; by: string; at: string };
+export type EquipRow = { machine: string; colors_working: number | null; flashes_working?: number | null; speed: number | null; down: boolean; note: string; since: string | null; until: string | null; updated_by: string; updated_at: string };
+/** a machine with its Equipment Status applied: fewer colors / heads, slower, or down (days off) from `today` until it's back */
+export function withIssue(m: Machine, r: EquipRow | undefined, today: string): Machine {
+  if (!r || (!r.down && r.colors_working == null && r.speed == null && r.flashes_working == null)) return m;
+  if (r.until && r.until <= today) return m;
+  const full = m.type === "screen" ? m.colors : m.heads, work = r.colors_working == null ? null : Math.max(0, Math.min(full, r.colors_working));
+  const fullFl = flashesOf(m), fl = r.flashes_working == null || m.type !== "screen" ? null : Math.max(0, Math.min(fullFl, r.flashes_working));
+  const out: Machine = { ...m, issue: { full, fullFlashes: fullFl, flashes: fl, colors: work, speed: r.speed, down: r.down, note: r.note, since: r.since, until: r.until, by: r.updated_by, at: r.updated_at } };
+  if (work != null) { if (m.type === "screen") out.colors = work; else if (m.type === "embroidery") out.heads = Math.max(1, work); }
+  if (r.speed != null) out.speed = (m.speed || 1) * (r.speed / 100);
+  if (fl != null) out.flashes = fl;
+  if (r.down || work === 0) {
+    const off = { ...(m.off || {}) }, why = `Down${r.note ? `: ${r.note}` : ""}`;
+    // down until the day it's expected back (the day before `until`), or for the next two months if nobody knows yet
+    const last = r.until ? addDay(r.until, -1) : addDay(today, 60);
+    for (let d = r.since && r.since > today ? r.since : today; d <= last; d = addDay(d, 1)) off[d] = why;
+    out.off = off;
+  }
+  return out;
+}
 /** [start, end, why, rate]: minutes after midnight; rate = the share of normal speed (0 = stopped) */
 export type Down = [number, number, string, number];
 /** [start, end] in minutes after midnight (300 = 5:00 AM, 900 = 3:00 PM) */
@@ -350,10 +377,13 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
       }
       rate *= rateF;
       if (st.puff) suF /= S.puffSetupFactor ?? 1.5;
-      const su = (st.screens * S.setupPerScreen) / suF, td = (st.screens * S.teardownPerScreen) / (k ? pct(k.teardown) : 1), r = (st.qty / Math.max(1, rate)) * 60;
+      // more screens + flashes than the press has heads: two rounds, every piece goes around twice
+      const rounds = Math.min(2, roundsOn(st, mach));
+      const su = (st.screens * S.setupPerScreen) / suF, td = (st.screens * S.teardownPerScreen) / (k ? pct(k.teardown) : 1), r = (st.qty / Math.max(1, rate)) * 60 * rounds;
       const tot = Math.max(S.minMinutes, su + r + td);
       setup += su; run += tot - su - td; teardown += td;
-      parts.push({ label: `${st.location}${st.puff ? " (puff)" : ""}: ${st.screens} screens, ${st.qty} pcs @ ${Math.round(rate)}/hr`, minutes: tot * f });
+      const fl = flashesFor(st);
+      parts.push({ label: `${st.location}${st.puff ? " (puff)" : ""}: ${st.screens} screens${fl ? ` + ${fl} flash${fl === 1 ? "" : "es"}` : ""}, ${st.qty} pcs @ ${Math.round(rate)}/hr${rounds > 1 ? ` · 2 rounds (${st.screens + fl} heads needed, ${mach.colors} on this press)` : ""}`, minutes: tot * f });
     }
   } else if (need.type === "embroidery") {
     const E = s.embroidery;
@@ -385,8 +415,29 @@ export function quickNeed(s: ProductionSettings, j: QuickJob): Need {
   return { type: j.method, steps, needColors: Math.max(0, ...steps.map((x) => x.screens)), qty: j.qty, label, speed: (j.speed ?? 100) / 100 };
 }
 
-/** Can this machine run it? (a job needing 11 screens only fits a 12-color press) */
-export const fits = (need: Need, mach: Machine) => mach.active && mach.type === need.type && (need.type !== "screen" || need.needColors <= mach.colors);
+/** flash units on a press (2 unless Settings says otherwise) */
+export const flashesOf = (m: Machine) => (m.type === "screen" ? m.flashes ?? 2 : 0);
+/** flashes a print needs: one after the white underbase on a dark garment, one for puff */
+export const flashesFor = (st: Step) => (st.method !== "screen" ? 0 : (st.screens > st.colors ? 1 : 0) + (st.puff ? 1 : 0));
+/** heads a print takes up: its screens plus the flashes between them */
+export const stationsFor = (st: Step) => st.screens + flashesFor(st);
+/**
+ * How many rounds it takes on this press: 1 when screens + flashes fit on its heads (and it has the flash units);
+ * 2 when they don't but half of it does (print some colors, run them all again for the rest: twice the press time);
+ * Infinity when it can't (needs a flash and none work, or more than two rounds' worth).
+ */
+export function roundsOn(st: Step, mach: Machine): number {
+  if (st.method !== "screen") return 1;
+  const fl = flashesFor(st), have = flashesOf(mach), heads = mach.colors;
+  if (fl > 0 && have === 0) return Infinity;
+  if (st.screens + fl <= heads && fl <= have) return 1;
+  // two rounds: each round gets the flashes it needs (the underbase round flashes, the puff round flashes)
+  return st.screens + fl <= heads * 2 && fl <= have * 2 ? 2 : Infinity;
+}
+/** Can this machine run it? (a job needing 11 screens only fits a 12-color press; flashes take heads too) */
+export const fits = (need: Need, mach: Machine) => mach.active && mach.type === need.type && (need.type !== "screen" || need.steps.every((st) => roundsOn(st, mach) <= 2));
+/** the most heads any print location takes (screens + flashes), for messages */
+export const stationsNeeded = (need: Need) => Math.max(0, ...need.steps.map(stationsFor));
 
 /* ---------- where it should go ---------- */
 
@@ -530,7 +581,7 @@ export function suggest(s: ProductionSettings, need: Need, due: string | null, t
   let finish = best.day;
   for (let k = Math.max(0, Math.ceil(best.minutes / Math.max(1, capacityMin(s, best.machine))) - 1), g = 0; k > 0 && g < 60; g++) { finish = addDay(finish, 1); if (shiftOn(best.machine, finish)) k--; }
   const late = !!latest && finish > latest;
-  const needTxt = need.type === "screen" ? `${need.needColors} screens → needs a ${need.needColors}+ color press` : need.type === "embroidery" ? `${need.qty} pcs, ${need.label}` : `${need.qty} pcs heat press`;
+  const needTxt = need.type === "screen" ? `${need.needColors} screens + flashes → needs ${stationsNeeded(need)} heads in one round` : need.type === "embroidery" ? `${need.qty} pcs, ${need.label}` : `${need.qty} pcs heat press`;
   const reason = `${needTxt}. ${best.machine.name} is open ${best.day === today ? "today" : best.day}${due ? `; in-hands ${due}${late ? " — too late, needs attention" : " ✓"}` : ""}. About ${fmtMin(best.minutes)}.`;
   return { machine: best.machine, day: best.day, minutes: best.minutes, late, reason, alternatives: options.slice(1, 4).map(({ machine, day, minutes }) => ({ machine, day, minutes })) };
 }

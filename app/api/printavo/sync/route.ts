@@ -21,7 +21,7 @@ export const maxDuration = 60;
  *   job=files-N  copies artwork into our storage (doesn't use Printavo's request limit).
  */
 const RUN_MS = 47000;
-const QUICK_EVERY = 5 * 60000, QUICK_PAGES = 20; // active jobs: 20 pages x 25 = the 500 orders with the latest due dates
+const QUICK_EVERY = 10 * 60000, QUICK_PAGES = 20; // active jobs: 20 pages x 25 = the 500 orders with the latest due dates
 type Sync = { enabled: boolean; token: string; pause_until: string | null; quick_cursor: string | null; quick_pages: number; quick_done_at: string | null; sweep_cursor: string | null; sweep_no: number; sweep_started_at: string | null; sweep_done_at: string | null; customers_cursor: string | null; customers_done_at: string | null };
 type Idx = { printavo_id: string; fingerprint: string; status: string; imported_fingerprint: string | null; archived_id: string | null };
 
@@ -63,7 +63,7 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     // 1. the first pass lists every order before anything else (so we know the whole job and can go newest first)
     if (sync.sweep_no === 0) { await sweepPage(admin, sync, did); continue; }
 
-    // every 5 minutes: the active jobs (the ~500 orders with the latest due dates) are checked for changes first
+    // every 10 minutes: the active jobs (the ~500 orders with the latest due dates) are checked for changes first
     const quickDue = !!sync.quick_cursor || !sync.quick_done_at || Date.now() - new Date(sync.quick_done_at).getTime() > QUICK_EVERY;
     if (quickDue) { await quickPage(admin, sync, did); continue; }
 
@@ -71,8 +71,9 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     const pending = next?.[0] as { printavo_id: string; attempts: number } | undefined;
 
     // 2. keep noticing changes even during the big import: every 6th turn reads one page of the order list
-    // the full pass over every order: during the import it keeps going alongside; once caught up, a new pass starts 30 minutes after the last
-    const sweepDue = !!sync.sweep_cursor || !sync.sweep_done_at || Date.now() - new Date(sync.sweep_done_at).getTime() > 30 * 60000;
+    // the full pass over every order: during the import it keeps going alongside; once caught up, a new pass starts 6 hours
+    // after the last (each pass touches every order we have: ~23,000 row updates; the quick check above covers active jobs)
+    const sweepDue = !!sync.sweep_cursor || !sync.sweep_done_at || Date.now() - new Date(sync.sweep_done_at).getTime() > 6 * 3600000;
     // a pass that's under way gets most turns (it only reads lists, and it's how new orders are found); otherwise every 6th
     if (sweepDue && (!pending || (sync.sweep_cursor ? turn % 3 !== 0 : turn % 6 === 1))) { await sweepPage(admin, sync, did); continue; }
 
