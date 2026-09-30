@@ -4164,3 +4164,50 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-qf-cond.on.slow small{color:var(--danger)}
 .ms-qf-cond.on.fast small{color:var(--ok)}
 .ms-qf-cl{font-size:12px;color:var(--ink-3);align-self:center;margin-right:2px}
+
+/* Scheduling Tools: production (blue), shifts & equipment (orange), sales (purple) */
+.ms-tgs{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:12px}
+.ms-tg{--c:var(--fbs-blue);border:1px solid color-mix(in srgb,var(--c) 30%,var(--line));border-top:3px solid var(--c);border-radius:12px;padding:8px 10px 10px;background:color-mix(in srgb,var(--c) 6%,var(--surface));min-width:0}
+.ms-tg-prod{grid-column:1/-1}
+.ms-tg-eq{--c:var(--fbs-orange)}
+.ms-tg-sales{--c:#7C5CD6}
+.ms-tg-h{font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--c) 75%,var(--ink));margin:0 2px 7px}
+.ms-tg-grid{display:grid;gap:8px;grid-template-columns:repeat(4,minmax(0,1fr))}
+.ms-tg-eq .ms-tg-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.ms-tg-sales .ms-tg-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.ms-tg .ms-act{background:var(--surface);border-color:color-mix(in srgb,var(--c) 22%,var(--line))}
+.ms-tg .ms-act:hover{border-color:var(--c);background:color-mix(in srgb,var(--c) 10%,var(--surface))}
+.ms-tg .ms-act b{color:color-mix(in srgb,var(--c) 55%,var(--ink))}
+.ms-tg .ms-act.ms-act-warn{border-color:#F3D08A;background:#FFFAF0}
+@media (max-width:1100px){.ms-tgs{grid-template-columns:minmax(0,1fr)}.ms-tg-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+
+/* left menu: tighter by default, and tighter still (step by step) as My Shortcuts grows; shortcuts keep their size */
+@media (min-width: 821px){
+  .nav a{padding:clamp(4px,.75vh,7px) 10px}
+  .nav-g{margin-top:clamp(2px,.5vh,6px)}
+  .nav-h{padding-top:clamp(4px,.7vh,8px)}
+  .nav-mine .nav a{padding:5px 10px;font-size:13.5px}
+  .sd-1 .brand.brand-logo{padding-bottom:4px}
+  .sd-1 .brand.brand-logo img{max-height:44px}
+  .sd-1 .side-hello{font-size:13px}
+  .sd-1 .nav:not(.nav-mine .nav):not(.nav-foot) a{padding:4px 10px;font-size:13px}
+  .sd-1 .nav-g:not(.nav-mine){margin-top:0}
+  .sd-1 .nav-g:not(.nav-mine) .nav-h{padding-top:5px;padding-bottom:1px;font-size:10px}
+  .sd-2 .side-hello,.sd-2 .brand.brand-logo span{display:none}
+  .sd-2 .brand.brand-logo img{max-height:32px}
+  .sd-2 .nav:not(.nav-mine .nav):not(.nav-foot) a{padding:3px 10px;font-size:12.5px}
+  .sd-2 .side-search input{padding:4px 0}
+  /* two links a row in Sales / Production / Shop Tools */
+  .sd-3 .nav-g:not(.nav-mine){display:grid;grid-template-columns:1fr 1fr;column-gap:2px}
+  .sd-3 .nav-g:not(.nav-mine) .nav-h{grid-column:1/-1}
+  .side-in.sd-3 .nav .nav-g:not(.nav-mine) a{padding:3px 5px;font-size:11.5px;gap:5px;min-width:0}
+  .sd-3 .nav-g:not(.nav-mine) a .lbl-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sd-3 .nav-g:not(.nav-mine) a svg{width:15px;height:15px;flex:none}
+}
+.lbl-s{display:none}
+@media (min-width: 821px){
+  .side-in.sd-3 .nav .nav-g:not(.nav-mine) a{font-size:11.5px;padding:3px 5px;gap:5px}
+  .sd-3 .nav-g:not(.nav-mine) a:has(.lbl-s) .lbl-t{display:none}
+  .sd-3 .nav-g:not(.nav-mine) a .lbl-s{display:inline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sd-3 .nav-g:not(.nav-mine) a .badge{font-size:10px;padding:0 5px;margin-left:auto}
+}

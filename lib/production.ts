@@ -409,7 +409,7 @@ export type QuickJob = { method: MachineType; qty: number; garment: "tee" | "hea
  * speed slider to 100% × their factors (you can still fine-tune it). Puff also adds its flash and longer setup (its
  * slower printing is the slider's 70%). Planning numbers, not measured ones.
  */
-export const PRINT_CONDS: { k: string; label: string; f: number; tip: string }[] = [
+export const PRINT_CONDS: { k: string; label: string; f: number; tip: string; m?: MachineType }[] = [
   { k: "fleece", label: "Fleece", f: 0.85, tip: "Lint, thick fabric, longer flash (on top of Garment: Hoodies / heavy)" },
   { k: "puff", label: "Puff ink", f: 0.7, tip: "Thick stencil, extra strokes, careful flash; also adds a flash and longer setup" },
   { k: "poly", label: "Performance / poly", f: 0.85, tip: "Low-cure ink, dye migration, slower flash" },
@@ -419,7 +419,16 @@ export const PRINT_CONDS: { k: string; label: string; f: number; tip: string }[]
   { k: "small", label: "Small imprint", f: 1.15, tip: "Left chest, sleeve, tag: quick strokes and flash" },
   { k: "nounder", label: "No underbase", f: 1.15, tip: "Darks printed without a white underbase: no flash between" },
   { k: "simple", label: "Simple 1–2 color", f: 1.1, tip: "Easy registration, fast changeover" },
+  // embroidery
+  { k: "e3d", label: "3D puff", f: 0.75, tip: "Foam under the stitching: slower speed, more trims", m: "embroidery" },
+  { k: "emetal", label: "Metallic thread", f: 0.8, tip: "Run slower to keep it from breaking", m: "embroidery" },
+  { k: "edetail", label: "Small letters / fine detail", f: 0.85, tip: "Slower for clean small text", m: "embroidery" },
+  { k: "ehoop", label: "Hard to hoop", f: 0.8, tip: "Bags, thick jackets, pockets, magnetic frames", m: "embroidery" },
+  { k: "eapplique", label: "Appliqué", f: 0.75, tip: "Stops to place and trim the fabric", m: "embroidery" },
+  { k: "esimple", label: "Simple 1–2 color", f: 1.1, tip: "Few color changes and trims", m: "embroidery" },
 ];
+/** the conditions for this kind of machine (screen print ones have no m) */
+export const condsFor = (m: MachineType) => PRINT_CONDS.filter((c) => (c.m || "screen") === m);
 /** the print speed the picked conditions add up to (50–150%, in steps of 5) */
 export const condSpeed = (conds: string[]) => Math.max(50, Math.min(150, Math.round((100 * PRINT_CONDS.filter((c) => conds.includes(c.k)).reduce((t, c) => t * c.f, 1)) / 5) * 5));
 export function quickNeed(s: ProductionSettings, j: QuickJob): Need {

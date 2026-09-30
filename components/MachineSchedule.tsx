@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, PRINT_CONDS, condSpeed, withIssue, type EquipRow, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, type EquipRow, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 
@@ -822,6 +822,8 @@ export default function MachineSchedule() {
     setMsg(`Re-planned: ${p.moves.length} job${p.moves.length === 1 ? "" : "s"} moved${p.added ? ` (${p.added} booked from Ready To Schedule)` : ""}. Late: ${p.lateBefore} → ${p.lateAfter}.${cuts.length ? ` Overtime avoided: ${fmtMin(cuts.reduce((t, x) => t + x.end - x.start, 0))} (${[...new Set(cuts.map((x) => crewOf(x.m)?.leader || shortName(x.m)))].join(", ")} leave at 40 hours).` : ""}`);
     load();
   }
+  // Equipment Status problems on the machines in view
+  const eqIssues = s.machines.filter((m) => m.issue && m.active && (!typeF || m.type === typeF));
   // presses in number order (Press 1, 2, 3, 4); other machines keep their Settings order
   const machines = s.machines.filter((x) => x.active && (!typeF || x.type === typeF))
     .map((x, i) => ({ x, i })).sort((a, b) => a.x.type === "screen" && b.x.type === "screen" ? a.x.name.localeCompare(b.x.name, undefined, { numeric: true }) : a.i - b.i).map((o) => o.x);
@@ -1445,16 +1447,32 @@ export default function MachineSchedule() {
           <Link className="linkbtn" href="/shop/settings/production">Machines, crews &amp; times</Link>
         </div>
         {toolsOpen && <>
-          <div className="ms-acts">
-            <button type="button" className="ms-act ms-act-when" onClick={() => setWhenOpen(true)}><b>When Can We Print It?</b><small>Quick specs → soonest, aggressive and regular dates</small></button>
-            <button type="button" className="ms-act" onClick={() => setPlanOpen(true)}><b>Planner</b><small>Hold time for jobs you know are coming</small></button>
-            <button type="button" className="ms-act" onClick={() => setCheckin(true)}><b>Update Progress</b><small>What&apos;s started, done or paused today</small></button>
-            <button type="button" className="ms-act" onClick={() => setReplan({ why: "" })}><b>Re-plan Schedule</b><small>Re-lay open work from now, soonest in-hands first</small></button>
-            <button type="button" className="ms-act" onClick={() => setShiftEdit(true)}><b>+ Add Shift</b><small>A weekend or extra shift for a crew</small></button>
-            <button type="button" className="ms-act" onClick={() => setDownEdit({})}><b>+ Add Downtime</b><small>Maintenance, repairs, an employee out</small></button>
-            <button type="button" className="ms-act" onClick={() => setOtOpen(true)}><b>Overtime</b><small>Who&apos;s past 40 hours this pay week</small></button>
-            <button type="button" className="ms-act" onClick={() => setRenorm(true)}><b>Renormalize Schedule</b><small>Drop extra shifts, put split jobs back together</small></button>
-            <button type="button" className={"ms-act" + (s.machines.some((m) => m.issue) ? " ms-act-warn" : "")} onClick={() => setEqOpen(true)}><b>Equipment Status{s.machines.some((m) => m.issue) ? ` · ${s.machines.filter((m) => m.issue).length} issue${s.machines.filter((m) => m.issue).length === 1 ? "" : "s"}` : ""}</b><small>Heads out, running slow, or down</small></button>
+          {/* production (the production manager's day), shifts & equipment, and sales: each its own color */}
+          <div className="ms-tgs">
+            <div className="ms-tg ms-tg-prod">
+              <div className="ms-tg-h">Production</div>
+              <div className="ms-tg-grid">
+                <button type="button" className="ms-act" onClick={() => setCheckin(true)}><b>Update Progress</b><small>What&apos;s started, done or paused today</small></button>
+                <button type="button" className="ms-act" onClick={() => setReplan({ why: "" })}><b>Re-plan Schedule</b><small>Re-lay open work from now, soonest in-hands first</small></button>
+                <button type="button" className="ms-act" onClick={() => setOtOpen(true)}><b>Overtime</b><small>Who&apos;s past 40 hours this pay week</small></button>
+                <button type="button" className="ms-act" onClick={() => setRenorm(true)}><b>Renormalize Schedule</b><small>Drop extra shifts, put split jobs back together</small></button>
+              </div>
+            </div>
+            <div className="ms-tg ms-tg-eq">
+              <div className="ms-tg-h">Shifts &amp; equipment</div>
+              <div className="ms-tg-grid">
+                <button type="button" className="ms-act" onClick={() => setShiftEdit(true)}><b>+ Add Shift</b><small>A weekend or extra shift for a crew</small></button>
+                <button type="button" className="ms-act" onClick={() => setDownEdit({})}><b>+ Add Downtime</b><small>Maintenance, repairs, an employee out</small></button>
+                <button type="button" className={"ms-act" + (eqIssues.length ? " ms-act-warn" : "")} onClick={() => setEqOpen(true)}><b>Equipment Status{eqIssues.length ? ` · ${eqIssues.length} issue${eqIssues.length === 1 ? "" : "s"}` : ""}</b><small>Heads out, running slow, or down</small></button>
+              </div>
+            </div>
+            <div className="ms-tg ms-tg-sales">
+              <div className="ms-tg-h">Sales</div>
+              <div className="ms-tg-grid">
+                <button type="button" className="ms-act" onClick={() => setWhenOpen(true)}><b>When Can We {VERB[typeF || "screen"].v} It?</b><small>Quick specs → soonest, aggressive and regular dates</small></button>
+                <button type="button" className="ms-act" onClick={() => setPlanOpen(true)}><b>Planner</b><small>Hold time for jobs you know are coming</small></button>
+              </div>
+            </div>
           </div>
 
           {(() => { const rows = otReport(payWeekStart(today)), ot = rows.reduce((t, r) => t + r.w.ot, 0); if (!rows.length) return null; const pay = rows.reduce((t, r) => t + (r.pay || 0), 0), unused = rows.reduce((t, r) => t + r.unused, 0), known = rows.every((r) => r.pay != null); return (
@@ -1522,9 +1540,9 @@ export default function MachineSchedule() {
         <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
-      {planOpen && <PlannerPanel s={s} today={today} holds={holds} admin={isAdmin} spotOf={(id) => { const c = cards.find((x) => x.job.key === "h:" + id); const g = c ? (segs.ofCard.get(c.key) || [])[0] : undefined; return c && g ? `${shortName(c.machine)} · ${dayLbl(g.day)} · ${fmtMin(c.minutes)}` : ""; }} onSave={saveHold} onRemove={removeHold} onClose={() => setPlanOpen(false)} />}
-      {whenOpen && <WhenPanel s={s} today={today} nowLabel={`${dayLbl(today)} ${clockLong(now.min)}`} calc={whenCan} onClose={() => setWhenOpen(false)} />}
-      {eqOpen && <EquipmentPanel machines={s.machines.filter((m) => m.active)} rows={equip} today={today} me={me.email} crewOf={crewOf}
+      {planOpen && <PlannerPanel method={typeF || "screen"} s={s} today={today} holds={holds} admin={isAdmin} spotOf={(id) => { const c = cards.find((x) => x.job.key === "h:" + id); const g = c ? (segs.ofCard.get(c.key) || [])[0] : undefined; return c && g ? `${shortName(c.machine)} · ${dayLbl(g.day)} · ${fmtMin(c.minutes)}` : ""; }} onSave={saveHold} onRemove={removeHold} onClose={() => setPlanOpen(false)} />}
+      {whenOpen && <WhenPanel method={typeF || "screen"} s={s} today={today} nowLabel={`${dayLbl(today)} ${clockLong(now.min)}`} calc={whenCan} onClose={() => setWhenOpen(false)} />}
+      {eqOpen && <EquipmentPanel machines={s.machines.filter((m) => m.active && (!typeF || m.type === typeF))} rows={equip} today={today} me={me.email} crewOf={crewOf}
         stuck={(m, colors, fl) => { const mm = m.type === "screen" ? { ...m, colors, flashes: fl } : m.type === "embroidery" ? { ...m, heads: colors } : m; return cards.filter((c) => c.machine.id === m.id && c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !fits(c.need, mm)).map((c) => "#" + c.job.number); }}
         booked={(m) => cards.filter((c) => c.machine.id === m.id && c.slot && c.slot.status !== "done").length}
         onClose={() => setEqOpen(false)} onSaved={(msg0, replanToo) => { setEqOpen(false); setMsg(msg0); load(); if (replanToo) setReplan({ why: `${msg0} Re-plan so the jobs booked on it move to a press that can run them?` }); }} />}
@@ -1736,14 +1754,16 @@ function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSav
 
 /** Add an extra shift (usually Saturday or Sunday) for one or more presses and their crews, e.g. Saturday 10 AM – 2 PM. */
 /* ---------- quick job specs (When Can We Print It? and the Planner) ---------- */
+/** print / sew / press, by kind of machine (the tools follow the machine filter) */
+const VERB: Record<MachineType, { v: string; s: string; ed: string }> = { screen: { v: "Print", s: "Prints", ed: "printed" }, embroidery: { v: "Sew", s: "Sews", ed: "sewn" }, heat: { v: "Press", s: "Presses", ed: "pressed" } };
 const LOC_NAMES: Record<MachineType, string[]> = { screen: ["Front", "Back", "Sleeve", "Other"], embroidery: ["Left Chest", "Back", "Sleeve", "Other"], heat: ["Front", "Back", "Sleeve", "Other"] };
-const blankQuick = (): QuickJob => ({ method: "screen", qty: 144, garment: "tee", dark: false, locations: [{ name: "Front", colors: 4, stitches: 8000 }, { name: "Back", colors: 0, stitches: 0 }, { name: "Sleeve", colors: 0, stitches: 0 }, { name: "Other", colors: 0, stitches: 0 }] });
+const blankQuick = (method: MachineType = "screen"): QuickJob => ({ method, qty: method === "embroidery" ? 48 : 144, garment: "tee", dark: false, locations: LOC_NAMES[method].map((name, i) => ({ name, colors: i === 0 && method !== "embroidery" ? (method === "screen" ? 4 : 1) : 0, stitches: i === 0 && method === "embroidery" ? 8000 : 0 })) });
 function QuickJobForm({ v, onChange }: { v: QuickJob; onChange: (x: QuickJob) => void }) {
   const set = (x: Partial<QuickJob>) => onChange({ ...v, ...x });
   const setLoc = (i: number, x: Partial<QuickJob["locations"][number]>) => onChange({ ...v, locations: v.locations.map((l, k) => (k === i ? { ...l, ...x } : l)) });
   return (
     <div className="ms-qf">
-      <div className="rv-seg">{([["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const).map(([k, l]) => <button key={k} type="button" className={v.method === k ? "on" : ""} onClick={() => set({ method: k, locations: v.locations.map((x, i) => ({ ...x, name: LOC_NAMES[k][i] || x.name, stitches: k === "embroidery" && i === 0 && !x.stitches ? 8000 : x.stitches })) })}>{l}</button>)}</div>
+      <div className="rv-seg">{([["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const).map(([k, l]) => <button key={k} type="button" className={v.method === k ? "on" : ""} onClick={() => set({ method: k, conds: [], speed: 100, locations: v.locations.map((x, i) => ({ ...x, name: LOC_NAMES[k][i] || x.name, stitches: k === "embroidery" && i === 0 && !x.stitches ? 8000 : x.stitches })) })}>{l}</button>)}</div>
       <div className="ms-qf-g">
         <label>Pieces<input type="number" min={1} step={12} value={v.qty || ""} onChange={(e) => set({ qty: Math.max(0, +e.target.value || 0) })} /></label>
         <label>Garment<select value={v.garment} onChange={(e) => set({ garment: e.target.value as QuickJob["garment"] })}><option value="tee">T-shirts / light</option><option value="heavy">Hoodies / heavy</option><option value="bag">Bags / totes</option>{v.method === "embroidery" && <option value="cap">Caps</option>}</select></label>
@@ -1760,14 +1780,14 @@ function QuickJobForm({ v, onChange }: { v: QuickJob; onChange: (x: QuickJob) =>
         ))}
       </div>
       <label className="ms-qf-speed" title="A hard print (fine detail, specialty ink, tricky garment) runs slower; an easy one faster">
-        <span>Print speed</span>
+        <span>{v.method === "embroidery" ? "Sewing speed" : v.method === "heat" ? "Press speed" : "Print speed"}</span>
         <input type="range" min={50} max={150} step={5} value={v.speed ?? 100} onChange={(e) => set({ speed: +e.target.value })} />
         <b>{(v.speed ?? 100) === 100 ? "Normal" : (v.speed ?? 100) < 100 ? `${v.speed}% · hard print` : `${v.speed}% · easy print`}</b>
       </label>
-      {v.method === "screen" && (
+      {v.method !== "heat" && (
         <div className="ms-qf-conds" role="group" aria-label="What makes this print slower or faster">
           <span className="ms-qf-cl">Sets the speed:</span>
-          {PRINT_CONDS.map((c) => { const on = (v.conds || []).includes(c.k); return (
+          {condsFor(v.method).map((c) => { const on = (v.conds || []).includes(c.k); return (
             <button key={c.k} type="button" className={"ms-qf-cond" + (on ? " on" : "") + (c.f < 1 ? " slow" : " fast")} aria-pressed={on} title={`${c.tip} (${c.f < 1 ? "" : "+"}${Math.round((c.f - 1) * 100)}%)`}
               onClick={() => { const conds = on ? (v.conds || []).filter((x) => x !== c.k) : [...(v.conds || []), c.k]; set({ conds, speed: condSpeed(conds), locations: v.locations.map((l) => ({ ...l, puff: false })) }); }}>
               {c.label}<small>{c.f < 1 ? "−" : "+"}{Math.round(Math.abs(c.f - 1) * 100)}%</small>
@@ -1780,9 +1800,9 @@ function QuickJobForm({ v, onChange }: { v: QuickJob; onChange: (x: QuickJob) =>
 }
 
 /** Planner: jobs we know are coming. Each holds its press time on the calendar until the real order is booked. */
-function PlannerPanel({ s, today, holds, admin, spotOf, onSave, onRemove, onClose }: { s: ProductionSettings; today: string; holds: Hold[]; admin: boolean; spotOf: (id: string) => string; onSave: (h: { name: string; customer: string; spec: QuickJob; due_date: string; due_time: number | null; notes: string }) => Promise<string>; onRemove: (id: string) => Promise<void>; onClose: () => void }) {
+function PlannerPanel({ s, today, holds, admin, spotOf, onSave, onRemove, onClose, method = "screen" }: { method?: MachineType; s: ProductionSettings; today: string; holds: Hold[]; admin: boolean; spotOf: (id: string) => string; onSave: (h: { name: string; customer: string; spec: QuickJob; due_date: string; due_time: number | null; notes: string }) => Promise<string>; onRemove: (id: string) => Promise<void>; onClose: () => void }) {
   const [adding, setAdding] = useState(holds.length === 0 && admin);
-  const [name, setName] = useState(""), [cust, setCust] = useState(""), [spec, setSpec] = useState<QuickJob>(blankQuick), [due, setDue] = useState(""), [at, setAt] = useState<number | null>(null), [notes, setNotes] = useState("");
+  const [name, setName] = useState(""), [cust, setCust] = useState(""), [spec, setSpec] = useState<QuickJob>(() => blankQuick(method)), [due, setDue] = useState(""), [at, setAt] = useState<number | null>(null), [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(""), [err, setErr] = useState("");
   const need = quickNeed(s, spec);
   const est = need.steps.length ? Math.min(...s.machines.filter((m) => m.active && fits(need, m)).map((m) => estimate(s, need, m).minutes), Infinity) : 0;
@@ -1792,7 +1812,7 @@ function PlannerPanel({ s, today, holds, admin, spotOf, onSave, onRemove, onClos
     const e = await onSave({ name: name.trim(), customer: cust.trim(), spec, due_date: due, due_time: at, notes: notes.trim() });
     setBusy("");
     if (e) { setErr(e); return; }
-    setAdding(false); setName(""); setCust(""); setSpec(blankQuick()); setDue(""); setAt(null); setNotes("");
+    setAdding(false); setName(""); setCust(""); setSpec(blankQuick(method)); setDue(""); setAt(null); setNotes("");
   }
   const hm = (t: number) => `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
   return (
@@ -1823,7 +1843,7 @@ function PlannerPanel({ s, today, holds, admin, spotOf, onSave, onRemove, onClos
               {at != null && <label>Needed by<input type="time" step={900} value={hm(at)} onChange={(e) => { const [h, m] = e.target.value.split(":").map(Number); if (!isNaN(h)) setAt(h * 60 + (m || 0)); }} /></label>}
               <label style={{ flex: 1, minWidth: 180 }}>Notes<input type="text" value={notes} placeholder="Waiting on art; blanks ordered" onChange={(e) => setNotes(e.target.value)} /></label>
             </div>
-            <div className="faint" style={{ fontSize: 12.5 }}>{need.steps.length ? `About ${fmtMin(est)} of press time (${need.label}).` : "Pick at least one print location."}</div>
+            <div className="faint" style={{ fontSize: 12.5 }}>{need.steps.length ? `About ${fmtMin(est)} of ${spec.method === "embroidery" ? "sewing" : "press"} time (${need.label}).` : "Pick at least one location."}</div>
             {err && <div className="pv-err">{err}</div>}
             <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
               <button type="button" className="btn" onClick={() => { setAdding(false); setErr(""); }}>Cancel</button>
@@ -1837,8 +1857,9 @@ function PlannerPanel({ s, today, holds, admin, spotOf, onSave, onRemove, onClos
 }
 
 /** When Can We Print It?: quick specs in, three dates out (soonest, aggressive, regular), and the AI's pick. */
-function WhenPanel({ s, today, nowLabel, calc, onClose }: { s: ProductionSettings; today: string; nowLabel: string; calc: (n: Need) => WhenResult | null; onClose: () => void }) {
-  const [v, setV] = useState<QuickJob>(blankQuick);
+function WhenPanel({ s, today, nowLabel, calc, onClose, method = "screen" }: { s: ProductionSettings; today: string; nowLabel: string; calc: (n: Need) => WhenResult | null; onClose: () => void; method?: MachineType }) {
+  const [v, setV] = useState<QuickJob>(() => blankQuick(method));
+  const vb = VERB[v.method];
   const [needBy, setNeedBy] = useState("");
   const [ai, setAi] = useState<{ headline: string; pick: string; why: string; customerLine?: string } | null>(null);
   const [aiSt, setAiSt] = useState<"" | "loading" | "off" | "error">("");
@@ -1858,7 +1879,7 @@ function WhenPanel({ s, today, nowLabel, calc, onClose }: { s: ProductionSetting
     if (!r || !soon || !agg || !reg) return;
     setAsked(key); setAiSt("loading"); setAi(null);
     const d = (x: string) => dayLbl(x);
-    const desc = (o: WhenOpt & { hands: string }) => `printed ${d(printed(o))} ${clock(o.end % 1440)} on ${o.m.name}, in hands ${d(o.hands)}`;
+    const desc = (o: WhenOpt & { hands: string }) => `${vb.ed} ${d(printed(o))} ${clock(o.end % 1440)} on ${o.m.name}, in hands ${d(o.hands)}`;
     const push = (o: WhenOpt) => (o.bumped?.length ? `; pushes back ${o.bumped.length} job${o.bumped.length === 1 ? "" : "s"}${lateOf(o).length ? `, ${lateOf(o).length} would miss their date (${lateOf(o).map((x) => "#" + x.job.number).join(", ")})` : ", none late"}` : "; nothing moves");
     const j = await fetch("/api/production/when", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
       now: nowLabel, job: `${v.qty} pcs · ${need.label || "no print locations"} · ${v.garment}${v.dark ? " · darks" : ""}${(v.speed ?? 100) !== 100 ? ` · runs at ${v.speed}% (${(v.speed ?? 100) < 100 ? "hard print" : "easy print"})` : ""}`, runTime: fmtMin(r.minutes), needBy: needBy ? d(needBy) : "",
@@ -1880,17 +1901,17 @@ function WhenPanel({ s, today, nowLabel, calc, onClose }: { s: ProductionSetting
   );
   return (
     <div className="pp-modal" onClick={onClose}>
-      <div className="pp-sheet tmx-ed ms-whenp" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="When can we print it">
-        <div className="pp-sheet-h"><b>When Can We Print It?</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+      <div className="pp-sheet tmx-ed ms-whenp" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`When can we ${vb.v.toLowerCase()} it`}>
+        <div className="pp-sheet-h"><b>When Can We {vb.v} It?</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
         <div className="tmx-ed-b">
           <QuickJobForm v={v} onChange={setV} />
           <label className="ms-qf-need">Customer needs it by (optional)<input type="date" min={today} value={needBy} onChange={(e) => setNeedBy(e.target.value)} /></label>
           {!r ? <div className="faint">Enter the pieces and at least one print location.</div> : r.noMachine ? <div className="pv-err">No machine can run this ({need.needColors} screens on a {Math.max(...s.machines.filter((m) => m.type === "screen").map((m) => m.colors), 0)}-color press max).</div> : <>
-            <div className="faint" style={{ fontSize: 12.5 }}>About <b>{fmtMin(r.minutes)}</b> of press time ({need.label}). Dates are when it&apos;s in the customer&apos;s hands, from today&apos;s schedule.</div>
+            <div className="faint" style={{ fontSize: 12.5 }}>About <b>{fmtMin(r.minutes)}</b> of {v.method === "embroidery" ? "sewing" : "press"} time ({need.label}). Dates are when it&apos;s in the customer&apos;s hands, from today&apos;s schedule.</div>
             <div className="ms-when-g">
-              {col("soonest", "Absolute soonest", "Jump the line + overtime", soon?.hands || null, soon ? [`Prints ${dayLbl(printed(soon)).split(",")[0]} by ${clock(soon.end % 1440)} on ${shortName(soon.m)}`, soon.extra ? `Adds ${fmtMin(soon.extra)} of overtime / Saturday: ~${money(soon.cost || 0)} extra labor` : "No extra hours needed", soon.bumped?.length ? `Pushes back ${soon.bumped.length} job${soon.bumped.length === 1 ? "" : "s"}${lateOf(soon).length ? `, ${lateOf(soon).length} late (${lateOf(soon).slice(0, 3).map((x) => "#" + x.job.number).join(", ")})` : ", none late"}` : "Nothing has to move"] : [])}
-              {col("aggressive", "Aggressive", "Push others back, none late", agg?.hands || null, agg ? [`Prints ${dayLbl(printed(agg)).split(",")[0]} by ${clock(agg.end % 1440)} on ${shortName(agg.m)}`, agg.bumped?.length ? `Pushes back ${agg.bumped.length} job${agg.bumped.length === 1 ? "" : "s"}${lateOf(agg).length ? `, ${lateOf(agg).length} would be late` : ", all still on time"}` : "Nothing has to move", "Regular hours"] : [])}
-              {col("regular", "Regular turn", "Fits the schedule as it is", reg?.hands || null, reg ? [`Prints ${dayLbl(printed(reg)).split(",")[0]} on ${shortName(reg.m)}`, "Nothing moves", `${s.bufferDays} business day${s.bufferDays === 1 ? "" : "s"} to pack / ship`] : [])}
+              {col("soonest", "Absolute soonest", "Jump the line + overtime", soon?.hands || null, soon ? [`${vb.s} ${dayLbl(printed(soon)).split(",")[0]} by ${clock(soon.end % 1440)} on ${shortName(soon.m)}`, soon.extra ? `Adds ${fmtMin(soon.extra)} of overtime / Saturday: ~${money(soon.cost || 0)} extra labor` : "No extra hours needed", soon.bumped?.length ? `Pushes back ${soon.bumped.length} job${soon.bumped.length === 1 ? "" : "s"}${lateOf(soon).length ? `, ${lateOf(soon).length} late (${lateOf(soon).slice(0, 3).map((x) => "#" + x.job.number).join(", ")})` : ", none late"}` : "Nothing has to move"] : [])}
+              {col("aggressive", "Aggressive", "Push others back, none late", agg?.hands || null, agg ? [`${vb.s} ${dayLbl(printed(agg)).split(",")[0]} by ${clock(agg.end % 1440)} on ${shortName(agg.m)}`, agg.bumped?.length ? `Pushes back ${agg.bumped.length} job${agg.bumped.length === 1 ? "" : "s"}${lateOf(agg).length ? `, ${lateOf(agg).length} would be late` : ", all still on time"}` : "Nothing has to move", "Regular hours"] : [])}
+              {col("regular", "Regular turn", "Fits the schedule as it is", reg?.hands || null, reg ? [`${vb.s} ${dayLbl(printed(reg)).split(",")[0]} on ${shortName(reg.m)}`, "Nothing moves", `${s.bufferDays} business day${s.bufferDays === 1 ? "" : "s"} to pack / ship`] : [])}
               {col("slow", "Slow boat", "End of the line", slowHands, r.slow ? [`After everything booked on ${shortName(r.slow.m)}`, `At least our ${s.turnDays}-day turn`, "Most room for art, blanks and surprises"] : [])}
             </div>
             <div className={"ms-adv-ai" + (aiSt === "loading" ? " loading" : "")}>

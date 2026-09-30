@@ -30,6 +30,11 @@ const ICONS: Record<string, React.ReactNode> = {
 
 const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 
+/** shorter names for the tightest menu (two links a row) */
+const SHORT: Record<string, string> = { "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving" };
+/** the menu's tightness steps add up: step 2 has step 1's rules too */
+const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
+
 export default function ShopNav({ email, firstName, brand, shortcuts }: { email: string; firstName: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string }; shortcuts: Shortcut[] }) {
   const path = usePathname();
   const router = useRouter();
@@ -43,22 +48,26 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
   const [mine, setMine] = useState<Shortcut[]>(shortcuts || []);
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState<Shortcut | null>(null);
-  // desktop: the whole menu always fits the window height (it scales down on shorter screens instead of scrolling)
+  // desktop: the whole menu always fits the window height. As My Shortcuts grows, the main menu above tightens up
+  // step by step (less spacing, then no greeting, then two links a row) so the shortcuts keep their room; only if
+  // that's still not enough does everything scale down
   const sideRef = useRef<HTMLElement>(null), inRef = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState<{ z: number; h: number }>({ z: 1, h: 0 });
+  const [fit, setFit] = useState<{ z: number; h: number; l: number }>({ z: 1, h: 0, l: 0 });
   useLayoutEffect(() => {
     const run = () => {
       const side = sideRef.current, el = inRef.current;
       if (!side || !el) return;
-      if (window.innerWidth <= 820) { setFit({ z: 1, h: 0 }); return; }
+      if (window.innerWidth <= 820) { setFit({ z: 1, h: 0, l: 0 }); return; }
       const cs = getComputedStyle(side);
       const avail = side.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-      const prevZ = el.style.zoom, prevH = el.style.minHeight;
+      const prevZ = el.style.zoom, prevH = el.style.minHeight, prevC = el.className;
       el.style.zoom = "1"; el.style.minHeight = "0";
-      const need = el.scrollHeight;
-      el.style.zoom = prevZ; el.style.minHeight = prevH;
+      let l = 0, need = 0;
+      for (; l <= 3; l++) { el.className = sdClass(l); need = el.scrollHeight; if (need <= avail) break; }
+      l = Math.min(l, 3);
+      el.style.zoom = prevZ; el.style.minHeight = prevH; el.className = prevC;
       const z = need > avail ? Math.max(0.6, avail / need) : 1;
-      setFit((f) => (Math.abs(f.z - z) < 0.005 && Math.abs(f.h - avail) < 1 ? f : { z, h: avail }));
+      setFit((f) => (Math.abs(f.z - z) < 0.005 && Math.abs(f.h - avail) < 1 && f.l === l ? f : { z, h: avail, l }));
     };
     run();
     window.addEventListener("resize", run);
@@ -117,7 +126,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
 
   const link = ([href, icon, label]: [string, string, string]) => (
     <Link key={href} href={href} className={active(href) ? "on" : ""} title={label}>
-      {ICONS[icon]}<span className="lbl-t">{label}</span>
+      {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
       {href === "/shop/incoming" && incoming > 0 && <span className="badge" title={`${incoming} order request${incoming === 1 ? "" : "s"} to review`}>{incoming}</span>}
       {href === "/shop" && unread > 0 && <span className="badge" title={`${unread} unread customer message${unread === 1 ? "" : "s"}`}>{unread}</span>}
@@ -126,7 +135,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
 
   return (
     <aside className="side" ref={sideRef}>
-      <div className="side-in" ref={inRef} style={fit.h ? { zoom: fit.z, minHeight: fit.h / fit.z } : undefined}>
+      <div className={sdClass(fit.l)} ref={inRef} style={fit.h ? { zoom: fit.z, minHeight: fit.h / fit.z } : undefined}>
       <Link href="/shop" className="brand brand-logo" title="Home">
         {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}
         {brand.sideTagline && <span>{brand.sideTagline}</span>}
