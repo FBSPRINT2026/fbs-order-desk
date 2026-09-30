@@ -656,6 +656,27 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
         const dCore = chamfer(core, w, h), REACH = 5 * (1.42 * q + c + 1);
         detail = new Uint8Array(n);
         for (let i = 0; i < n; i++) if (ub[i] >= 24 && dCore[i] > REACH) detail[i] = 1;
+        // a pointed corner of a wide shape (a triangle's tip) is thin near its point too, but it's not a thin line: a
+        // thin part attached to a wide shape counts only if it runs out at least `fine` past where the base reaches
+        // (small type on its own always counts)
+        const lab = new Int32Array(n), stack = new Int32Array(n), LONG = REACH + 5 * fine, NEAR = REACH + 10;
+        let id = 0;
+        for (let i0 = 0; i0 < n; i0++) {
+          if (!detail[i0] || lab[i0]) continue;
+          id++; let sp = 0, far = 0, attached = false; const members: number[] = [];
+          lab[i0] = id; stack[sp++] = i0;
+          while (sp) {
+            const i = stack[--sp]; members.push(i);
+            if (dCore[i] > far) far = dCore[i];
+            const x = i % w;
+            for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
+              if (j < 0 || j >= n) continue;
+              if (detail[j]) { if (!lab[j]) { lab[j] = id; stack[sp++] = j; } }
+              else if (dCore[j] <= NEAR) attached = true;
+            }
+          }
+          if (attached && far < LONG) for (const i of members) detail[i] = 0;
+        }
       }
       const roomFine = detail ? (fc > 0 ? choke(inked, w, h, fc) : inked) : null;
       for (let i = 0; i < n; i++) { const m = detail && detail[i] ? roomFine![i] : room[i]; if (ub[i] > m) ub[i] = m; }
