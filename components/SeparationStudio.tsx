@@ -67,6 +67,18 @@ function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false): Px 
   }
   return { w, h, data };
 }
+/** art uploaded straight to a separation (no order): kept in its folder, remembered in settings.art */
+export type SepArt = { path: string; name: string; type: string };
+export const ART_ACCEPT = ".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml";
+export const artOk = (f: File) => /^image\/(png|jpe?g|webp|svg\+xml)$/i.test(f.type) || /\.(png|jpe?g|webp|svg)$/i.test(f.name);
+export async function uploadSepArt(sb: ReturnType<typeof createClient>, id: string, f: File): Promise<SepArt> {
+  const path = `separations/${id}/art-${Date.now()}-${f.name.replace(/[^\w.-]+/g, "_")}`;
+  const type = f.type || (/\.svg$/i.test(f.name) ? "image/svg+xml" : "application/octet-stream");
+  const r = await sb.storage.from("proofs").upload(path, f, { upsert: true, contentType: type });
+  if (r.error) throw new Error(r.error.message);
+  return { path, name: f.name, type };
+}
+
 const loadImg = (url: string) => new Promise<HTMLImageElement>((ok, bad) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => ok(i); i.onerror = () => bad(new Error("Couldn't load the art")); i.src = url; });
 const toBlob = (c: HTMLCanvasElement) => new Promise<Blob>((ok) => c.toBlob((b) => ok(b!), "image/png"));
 const download = (data: Uint8Array | Blob, name: string, type = "application/pdf") => { const a = document.createElement("a"); a.href = URL.createObjectURL(data instanceof Blob ? data : new Blob([data as BlobPart], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
@@ -75,8 +87,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   const sb = useMemo(() => createClient(), []);
   const [row, setRow] = useState<SepRow | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
-  const [design, setDesign] = useState<Design | null>(null);
   const [artUrl, setArtUrl] = useState(""), [origUrl, setOrigUrl] = useState("");
+  // null while loading; false = nothing to separate yet (show the upload box)
+  const [hasArt, setHasArt] = useState<boolean | null>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   // SVG art: its shapes, kept as vector for the Illustrator file
   const [vart, setVart] = useState<VArt | null>(null);
@@ -93,6 +106,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [presses, setPresses] = useState<Machine[]>([]);
   const [pressId, setPressId] = useSticky("sep.press", "");
   const [pick, setPick] = useState(false);
+  const [cancelAsk, setCancelAsk] = useState(false);
   const [tab, setTab] = useSticky<"studio" | "outside">("sep.tab", "studio");
   const cv = useRef<HTMLCanvasElement>(null);
   const cvOrig = useRef<HTMLCanvasElement>(null);
@@ -119,7 +133,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       sb.from("production_equipment").select("*"),
     ]);
-    setOrder((o as Order) || null); setDesign((d as Design) || null);
+    setOrder((o as Order) || null);
     const today = new Date().toISOString().slice(0, 10);
     const ps = mergeProduction((s0?.data as { production?: unknown } | null)?.production);
     setPresses(ps.machines.filter((m) => m.type === "screen" && m.active).map((m) => withIssue(m, ((eq0 || []) as EquipRow[]).find((e) => e.machine === m.id), today)));
@@ -134,7 +148,10 @@ export default function SeparationStudio({ id }: { id: string }) {
     if (saved.mesh) setMesh(saved.mesh);
     if (saved.names) setNames(saved.names);
     if (row0.status === "requested") { await sb.from("separations").update({ status: "in_progress", assigned_to: email, updated_at: new Date().toISOString() }).eq("id", id); setRow({ ...row0, status: "in_progress", assigned_to: email }); }
-    const des = d as Design | null;
+    // the art: the imprint's design, else art uploaded straight to this separation
+    const d0 = d as Design | null, up = (row0.settings as { art?: SepArt }).art;
+    const des = d0?.file_path ? { file_path: d0.file_path, file_type: d0.file_type, file_name: d0.file_name, preview_path: d0.preview_path } : up?.path ? { file_path: up.path, file_type: up.type, file_name: up.name, preview_path: null as string | null } : null;
+    setHasArt(!!des);
     if (des) {
       const raster = /^image\/(png|jpe?g|webp)/i.test(des.file_type || "") || /\.(png|jpe?g|webp)$/i.test(des.file_name || "");
       const svg = /svg/i.test(des.file_type || "") || /\.svg$/i.test(des.file_name || des.file_path || "");
@@ -215,7 +232,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   };
 
   /* ---------- outputs ---------- */
-  const title = `${order ? `#${order.number}` : "Separation"} ${row?.location || ""}`.trim();
+  const title = `${order ? `#${order.number}` : `S-${row?.number ?? ""}`} ${row?.location || ""}`.trim();
   const tonal = st.method === "sim";
   // spot color on vector art: each original shape goes on the plate of the ink its color maps to
   const vectorOut = vart?.ok && !tonal ? {
@@ -261,7 +278,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       const fname = `${slug(title)}-seps.pdf`;
       await up(`${base}/${fname}`, new Blob([await aiFile() as BlobPart], { type: "application/pdf" }), "illustrator", `${title} seps (Illustrator).pdf`);
       const keep = (row.files || []).filter((f) => f.kind === "upload");
-      const patch = { status, method: st.method, source: "studio", channels, files: [...keep, ...files], preview_path: `${base}/preview.png`, settings: { ...st, inks, order: plates.map((p) => p.key), mesh, names }, updated_at: new Date().toISOString() };
+      const patch = { status, method: st.method, source: "studio", channels, files: [...keep, ...files], preview_path: `${base}/preview.png`, settings: { ...row.settings, ...st, inks, order: plates.map((p) => p.key), mesh, names }, updated_at: new Date().toISOString() };
       const r = await sb.from("separations").update(patch).eq("id", row.id).select("*").single();
       if (r.error) throw new Error(r.error.message);
       setRow(r.data as SepRow);
@@ -284,6 +301,21 @@ export default function SeparationStudio({ id }: { id: string }) {
     setBusy(""); setMsg(r.error ? r.error.message : "Approved. The order's imprint now shows these inks.");
   }
   async function setStatus(status: SepRow["status"]) { if (!row) return; const r = await sb.from("separations").update({ status, updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single(); if (!r.error) setRow(r.data as SepRow); }
+  /** uploaded art: swap in a new file (the inks are found again) */
+  async function replaceArt(f?: File) {
+    if (!row || !f) return;
+    if (!artOk(f)) { setErr("Use a PNG, JPG, WebP or SVG."); return; }
+    setBusy("Uploading…"); setErr("");
+    try {
+      const art = await uploadSepArt(sb, row.id, f);
+      const { inks: _i, order: _o, names: _n, mesh: _m, ...keep } = row.settings as Record<string, unknown>; void _i; void _o; void _n; void _m;
+      const r = await sb.from("separations").update({ settings: { ...keep, art }, updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
+      if (r.error) throw new Error(r.error.message);
+      setRow(r.data as SepRow); setInks([]); setOrderKeys([]); setNames({}); setMesh({}); setHidden(new Set()); setSolo(null); setVart(null); setImg(null); setRes(null);
+      await load();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    setBusy("");
+  }
   async function openFile(path: string) { const { data } = await sb.storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
 
   /* ---------- press setup: the plates on a press, in print order, the underbase just before a flash ---------- */
@@ -323,13 +355,17 @@ export default function SeparationStudio({ id }: { id: string }) {
         <div className="row" style={{ gap: 8, alignItems: "center" }}>
           <span className="pill" style={{ ["--sc" as string]: s0.c }}>{s0.label}</span>
           {order && <Link className="btn" href={`/shop/orders/${order.id}`}>Open Order</Link>}
+          {!!(row.settings as { art?: SepArt }).art && row.status !== "approved" && row.status !== "films" && <label className="btn" title="Upload a different file (the inks are found again)"><input type="file" accept={ART_ACCEPT} hidden onChange={(e) => { replaceArt(e.target.files?.[0]); e.target.value = ""; }} />Replace Art</label>}
+          {!row.order_id && row.status !== "cancelled" && row.status !== "films" && (cancelAsk
+            ? <span className="sep-ask">Cancel this separation? <button type="button" className="btn sm" onClick={() => { setCancelAsk(false); setStatus("cancelled").then(() => location.assign("/shop/separations")); }}>Yes, Cancel</button> <button type="button" className="btn sm" onClick={() => setCancelAsk(false)}>No</button></span>
+            : <button type="button" className="btn" onClick={() => setCancelAsk(true)}>Cancel</button>)}
         </div>
       </div>
       {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
       {err && <div className="pv-err">{err}</div>}
       <div className="rv-seg sep-tabs">{([["studio", "Separate Here"], ["outside", "Separated Elsewhere (Separo…)"]] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
 
-      {tab === "outside" ? <Outside row={row} origUrl={origUrl} onSaved={(r) => { setRow(r); setMsg("Uploaded and sent for review."); }} openFile={openFile} /> : !design ? <div className="empty">This imprint has no design attached. Add the art to the order's imprint first, or use Separated Elsewhere.</div> : (
+      {tab === "outside" ? <Outside row={row} origUrl={origUrl} onSaved={(r) => { setRow(r); setMsg("Uploaded and sent for review."); }} openFile={openFile} /> : hasArt === false ? <AddArt row={row} onDone={(r) => { setRow(r); load(); }} /> : (
       <div className="sep-grid">
         {/* settings */}
         <aside className="sep-side">
@@ -454,6 +490,38 @@ export default function SeparationStudio({ id }: { id: string }) {
 
 import { WILFLEX_HEX as WILFLEX_NAMES, PMS_HEX } from "@/lib/inkColors";
 const PMS_NAMES = Object.keys(PMS_HEX);
+
+/** No art yet: upload a picture or SVG straight to this separation. */
+function AddArt({ row, onDone }: { row: SepRow; onDone: (r: SepRow) => void }) {
+  const sb = useMemo(() => createClient(), []);
+  const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [over, setOver] = useState(false);
+  async function go(f?: File) {
+    if (!f) return;
+    if (!artOk(f)) { setErr("Use a PNG, JPG, WebP or SVG. (EPS, AI and PDF: export a PNG or SVG first.)"); return; }
+    setBusy(true); setErr("");
+    try {
+      const art = await uploadSepArt(sb, row.id, f);
+      const r = await sb.from("separations").update({ settings: { ...row.settings, art }, updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
+      if (r.error) throw new Error(r.error.message);
+      onDone(r.data as SepRow);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    setBusy(false);
+  }
+  return (
+    <div className="sep-outside">
+      <section className="sep-card">
+        <h3>Art to separate</h3>
+        <p className="sep-help">{row.order_id ? "This imprint has no design attached. Upload the art here, or add it to the order's imprint." : "Upload the art to separate."}</p>
+        <label className={"tmx-drop" + (over ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); go(e.dataTransfer.files[0]); }}>
+          <input type="file" accept={ART_ACCEPT} onChange={(e) => go(e.target.files?.[0])} />
+          <b>{busy ? "Uploading…" : "Drop the art here or choose a file"}</b>
+          <span className="faint">PNG, JPG, WebP or SVG (SVG keeps real vector shapes)</span>
+        </label>
+        {err && <div className="pv-err">{err}</div>}
+      </section>
+    </div>
+  );
+}
 
 /** Separated somewhere else: download the art, upload what came back, list the inks. */
 function Outside({ row, origUrl, onSaved, openFile }: { row: SepRow; origUrl: string; onSaved: (r: SepRow) => void; openFile: (p: string) => void }) {

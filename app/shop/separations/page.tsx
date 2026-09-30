@@ -1,14 +1,16 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { fmtDate } from "@/lib/format";
-import { SEP_STATUS, type SepRow } from "@/components/SeparationStudio";
+import { ART_ACCEPT, SEP_STATUS, artOk, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
 
 /**
  * Separations queue (Production → Separations): every imprint waiting for films, from "Request Separations" on an
- * order. Open one to separate it here, or upload what came back from Separo.
+ * order, or from art uploaded right here (no order needed). Open one to separate it here, or upload what came back
+ * from Separo.
  */
 const TABS = [["open", "To do"], ["review", "Ready for review"], ["approved", "Approved"], ["all", "All"]] as const;
 type Tab = (typeof TABS)[number][0];
@@ -34,10 +36,11 @@ export default function SeparationsPage() {
     setOrders(Object.fromEntries(((o || []) as { id: string; number: number; nickname: string; due_date: string | null }[]).map((x) => [x.id, x])));
     setCust(Object.fromEntries(((c || []) as { id: string; company: string; name: string }[]).map((x) => [x.id, x.company || x.name])));
     // a small picture: the saved proof, else the design
-    const dids = [...new Set(list.filter((r) => !r.preview_path && r.design_id).map((r) => r.design_id))] as string[];
+    const upArt = (r: SepRow) => (r.settings as { art?: { path: string } }).art?.path;
+    const dids = [...new Set(list.filter((r) => !r.preview_path && !upArt(r) && r.design_id).map((r) => r.design_id))] as string[];
     const { data: ds } = dids.length ? await sb.from("designs").select("id, preview_path, file_path").in("id", dids) : { data: [] };
     const pathOf = new Map<string, string>();
-    for (const r of list) { const d = ((ds || []) as { id: string; preview_path: string; file_path: string }[]).find((x) => x.id === r.design_id); const p = r.preview_path || d?.preview_path || d?.file_path; if (p) pathOf.set(r.id, p); }
+    for (const r of list) { const d = ((ds || []) as { id: string; preview_path: string; file_path: string }[]).find((x) => x.id === r.design_id); const p = r.preview_path || upArt(r) || d?.preview_path || d?.file_path; if (p) pathOf.set(r.id, p); }
     const paths = [...new Set(pathOf.values())];
     if (paths.length) { const { data: sg } = await sb.storage.from("proofs").createSignedUrls(paths, 3600); const m = new Map(paths.map((p, i) => [p, sg?.[i]?.signedUrl || ""])); setThumbs(Object.fromEntries([...pathOf].map(([id, p]) => [id, m.get(p) || ""]))); }
   })(); }, [sb]);
@@ -51,11 +54,12 @@ export default function SeparationsPage() {
       <div className="page-head">
         <div><div className="eyebrow">Production</div><h1>Separations</h1></div>
       </div>
+      <NewFromArt />
       <div className="tmx-vbar">
         <div className="rv-seg">{TABS.map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}{rows ? <span className="sep-cnt">{count(k)}</span> : null}</button>)}</div>
         <input className="tmx-q" type="search" placeholder="Order, customer, location…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search separations" />
       </div>
-      {!rows ? <div className="empty">Loading…</div> : !shown.length ? <div className="empty">{tab === "open" ? "Nothing waiting. Request separations from an approved order (Separations panel on the order)." : "Nothing here."}</div> : (
+      {!rows ? <div className="empty">Loading…</div> : !shown.length ? <div className="empty">{tab === "open" ? "Nothing waiting. Request separations from an approved order, or upload an image above." : "Nothing here."}</div> : (
         <div className="sep-q">{shown.map((r) => {
           const o = r.order_id ? orders[r.order_id] : null, st = SEP_STATUS[r.status];
           const due = r.due_date || o?.due_date;
@@ -64,7 +68,7 @@ export default function SeparationsPage() {
               <span className="sep-qt" style={{ background: r.garment_color ? undefined : "var(--surface-2)" }}>{thumbs[r.id] ? <img src={thumbs[r.id]} alt="" /> : <span className="faint">No art</span>}</span>
               <span className="sep-qb">
                 <b>{o ? `#${o.number}` : `S-${r.number}`} · {r.location || "Imprint"}</b>
-                <span>{cust[r.customer_id || ""] || ""}{o?.nickname ? ` · ${o.nickname}` : ""}</span>
+                <span>{o ? <>{cust[r.customer_id || ""] || ""}{o.nickname ? ` · ${o.nickname}` : ""}</> : cust[r.customer_id || ""] || <span className="faint">Uploaded art · no order</span>}</span>
                 <small className="faint">{r.garment_color || "—"}{r.channels.length ? ` · ${r.channels.length} screen${r.channels.length === 1 ? "" : "s"}` : ""}{due ? ` · due ${fmtDate(due)}` : ""}</small>
               </span>
               <span className="pill" style={{ ["--sc" as string]: st.c }}>{st.label}</span>
@@ -73,5 +77,67 @@ export default function SeparationsPage() {
         })}</div>
       )}
     </>
+  );
+}
+
+const SHIRTS = ["Black", "White", "Navy", "Charcoal", "Sport Grey", "Heather Grey", "Royal", "Red", "Maroon", "Forest Green", "Kelly Green", "Orange", "Gold", "Purple", "Pink", "Natural", "Sand"];
+
+/** Separate any image without an order: drop it, name it, pick the shirt, and it opens in the Studio. */
+function NewFromArt() {
+  const sb = useMemo(() => createClient(), []);
+  const router = useRouter();
+  const [file, setFile] = useState<File | null>(null), [thumb, setThumb] = useState("");
+  const [name, setName] = useState(""), [shirt, setShirt] = useState("Black");
+  const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  useEffect(() => () => { if (thumb) URL.revokeObjectURL(thumb); }, [thumb]);
+  function pickFile(f?: File) {
+    if (!f) return;
+    if (!artOk(f)) { setErr("Use a PNG, JPG, WebP or SVG. (EPS, AI and PDF: export a PNG or SVG first.)"); return; }
+    setErr(""); setFile(f); setThumb(URL.createObjectURL(f)); setName(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 60));
+  }
+  async function start() {
+    if (!file) return;
+    setBusy(true); setErr("");
+    const { data: { user } } = await sb.auth.getUser(), me = (user?.email || "").toLowerCase();
+    const ins = await sb.from("separations").insert({ location: name.trim() || "Uploaded art", garment_color: shirt.trim(), status: "in_progress", requested_by: me, assigned_to: me }).select("*").single();
+    if (ins.error) { setErr(ins.error.message); setBusy(false); return; }
+    const row = ins.data as SepRow;
+    try {
+      const art = await uploadSepArt(sb, row.id, file);
+      const r = await sb.from("separations").update({ settings: { art }, updated_at: new Date().toISOString() }).eq("id", row.id);
+      if (r.error) throw new Error(r.error.message);
+      router.push(`/shop/separations/${row.id}`);
+    } catch (e) {
+      // keep the record, but out of the way
+      await sb.from("separations").update({ status: "cancelled", notes: "Upload failed", updated_at: new Date().toISOString() }).eq("id", row.id);
+      setErr(e instanceof Error ? e.message : String(e)); setBusy(false);
+    }
+  }
+  const reset = () => { setFile(null); setThumb(""); setName(""); setErr(""); };
+  return (
+    <section className="sep-new">
+      {!file ? (
+        <label className={"sep-new-drop" + (over ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); pickFile(e.dataTransfer.files[0]); }}>
+          <input type="file" accept={ART_ACCEPT} onChange={(e) => { pickFile(e.target.files?.[0]); e.target.value = ""; }} />
+          <span className="sep-new-ic" aria-hidden>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
+          </span>
+          <span className="sep-new-t"><b>Separate an image</b><small className="faint">No order needed. Drop art here or choose a file: PNG, JPG, WebP or SVG.</small></span>
+          <span className="btn sm">Choose File</span>
+        </label>
+      ) : (
+        <div className="sep-new-form">
+          <span className="sep-new-th">{thumb && <img src={thumb} alt="" />}</span>
+          <label className="sep-f">Name<input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="What is it?" autoFocus /></label>
+          <label className="sep-f">Shirt color<input type="text" list="sep-shirts" value={shirt} onChange={(e) => setShirt(e.target.value)} /></label>
+          <datalist id="sep-shirts">{SHIRTS.map((c) => <option key={c} value={c} />)}</datalist>
+          <span className="sep-new-go">
+            <button type="button" className="btn" disabled={busy} onClick={reset}>Cancel</button>
+            <button type="button" className="btn primary" disabled={busy} onClick={start}>{busy ? "Uploading…" : "Start Separating"}</button>
+          </span>
+        </div>
+      )}
+      {err && <div className="pv-err">{err}</div>}
+    </section>
   );
 }

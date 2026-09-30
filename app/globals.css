@@ -4557,3 +4557,26 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .sep-pname{text-overflow:ellipsis}
 .sep-ok{font-size:12.5px;padding:7px 9px;border-radius:8px;background:var(--ok-soft);color:var(--ok);border:1px solid color-mix(in srgb,var(--ok) 30%,transparent)}
 .sep-chip{width:104px}.sep-chip input{font-size:11px;text-overflow:ellipsis}
+
+/* Separations: separate an uploaded image (no order) */
+.sep-new{margin-bottom:14px}
+.sep-new-drop{display:flex;align-items:center;gap:12px;border:1.5px dashed var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;background:var(--surface);transition:border-color .15s,background .15s}
+.sep-new-drop:hover,.sep-new-drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.sep-new-drop input{display:none}
+.sep-new-ic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--surface-2);color:var(--accent);flex:none}
+.sep-new-t{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.sep-new-t small{font-size:12.5px}
+.sep-new-form{display:grid;grid-template-columns:64px minmax(0,1.4fr) minmax(0,1fr) auto;gap:12px;align-items:end;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--surface)}
+.sep-new-form .sep-f{flex-direction:column;align-items:stretch;gap:4px}
+.sep-new-form .sep-f input{width:100%}
+.sep-new-th{width:64px;height:64px;border-radius:8px;display:grid;place-items:center;overflow:hidden;background:repeating-conic-gradient(var(--surface-2) 0 25%,var(--surface) 0 50%) 0 0/14px 14px}
+.sep-new-th img{max-width:100%;max-height:100%;object-fit:contain}
+.sep-new-go{display:flex;gap:8px}
+.sep-ask{display:inline-flex;align-items:center;gap:6px;font-size:13px}
+.tmx-drop.over{border-color:var(--accent)}
+@media (max-width:640px){
+  .sep-new-drop .btn{display:none}
+  .sep-new-form{grid-template-columns:64px minmax(0,1fr)}
+  .sep-new-form .sep-f:nth-of-type(2),.sep-new-go{grid-column:1/-1}
+  .sep-new-go .btn{flex:1}
+}
