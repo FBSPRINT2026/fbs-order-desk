@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
-import { DEFAULT_SEP, composite, filmBits, findColors, findSimInks, gradientShare, isDark, separate, snapInk, spotMixer, type Plate, type Px, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
+import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, findSimInks, gradientShare, isDark, separate, snapInk, spotMixer, type Plate, type Px, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex } from "@/lib/mockup";
@@ -295,7 +295,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       setRes(r); setBusy("");
     }, 60);
     return () => clearTimeout(t);
-  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.widthIn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.widthIn, st.baseFor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // plates in the chosen print order (new plates keep their default spot)
   const arrange = useCallback((ps: Plate[]) => {
@@ -614,7 +614,15 @@ export default function SeparationStudio({ id }: { id: string }) {
                 <span className="sep-n">{i + 1}</span>
                 <span className="sep-sw" style={{ background: p.hex }} />
                 <input className="sep-pname" value={p.name} onChange={(e) => setNames((m) => ({ ...m, [p.key]: e.target.value }))} aria-label="Plate name" />
-                <small className="sep-meta">{p.kind === "underbase" ? "Base · flash after" : p.kind === "highlight" ? "Top white" : "Color"} · {(p.coverage * 100).toFixed(1)}% · mesh <input className="sep-mesh" type="number" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh" /></small>
+                <small className="sep-meta">{p.kind === "underbase" ? "Base · flash after" : p.kind === "highlight" ? "Top white" : "Color"} · {(p.coverage * 100).toFixed(1)}%
+                  {p.kind === "color" && res?.underbase && (() => {
+                    // underbase under this ink or not (black and dark colors like navy: not, by default)
+                    const art = "#" + p.key.slice(1);
+                    if (neverBase(art)) return <span className="sep-base fixed" title="Black never gets underbase: black ink on white bubbles">No base</span>;
+                    const on = st.baseFor?.[p.key] ?? baseByDefault(art);
+                    return <button type="button" className={"sep-base" + (on ? " on" : "")} title={on ? "White underbase prints under this ink. Click to leave it off (the ink prints straight on the shirt)" : "No underbase under this ink (prints straight on the shirt). Click to put base under it"} onClick={() => set({ baseFor: { ...(st.baseFor || {}), [p.key]: !on } })}>{on ? "Base" : "No base"}</button>;
+                  })()}
+                  {" "}· mesh <input className="sep-mesh" type="number" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh" /></small>
                 <span className="sep-pa">
                   <button type="button" className="btn icon ghost sm" title="Show / hide on the shirt" onClick={() => setHidden((h) => { const n = new Set(h); if (n.has(p.key)) n.delete(p.key); else n.add(p.key); return n; })}>{hidden.has(p.key) ? "◌" : "●"}</button>
                   <button type="button" className="btn icon ghost sm" title="See this film" onClick={() => setSolo(solo === p.key ? null : p.key)}>▣</button>

@@ -34,6 +34,9 @@ export type SepSettings = {
   /** spot color: how far (px of the working image) each color spreads under the darker colors printed after it, so
    *  neighbors overlap instead of just touching (no gaps, and room for registration). Default 1. */
   trap?: number;
+  /** dark shirt: which inks get underbase under them (plate key "c" + art hex → on/off); the rest follow
+   *  `baseByDefault` (not black, not dark colors like navy) */
+  baseFor?: Record<string, boolean>;
   /** inks the user fixed: palette hex → ink name (Wilflex / PMS / #hex) */
   inkNames?: Record<string, string>;
 };
@@ -401,6 +404,12 @@ export function choke(a: Uint8Array, w: number, h: number, r: number): Uint8Arra
 
 const MESH = { underbase: 156, color: 230, sim: 305, highlight: 230 };
 
+/** does an ink get white underbase under it by default? Not black, and not dark colors (navy, dark green, maroon…):
+ *  they print over the dark shirt as they are */
+export const baseByDefault = (hex: string) => lightness(hex) >= 30;
+/** black never gets underbase, no matter what: black ink over white bubbles (the shop's rule) */
+export const neverBase = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return L < 22 && Math.hypot(a, b) < 12; };
+
 /** a color this close (Lab distance) to an ink is that ink, printed solid (flat areas with a little noise) */
 const SNAP = 5;
 /** a color this close (sRGB units) to the line between two inks is an edge between them (anti-aliasing) */
@@ -540,13 +549,14 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   };
   const colorPlates = print.map((k) => ({ k, a: cover[inks.indexOf(k)] }));
   if (dark) {
-    // underbase: under every ink that isn't near-black (black ink doesn't need white under it) and under the white.
+    // underbase: under every ink that gets base (by default not black or dark colors like navy; each can be switched)
+    // and under the white.
     // Choked only where it meets the bare shirt (so white can't peek out past the art); where it meets black ink it
     // stays full, since black prints over it (pulling it back there would leave the colors next to every black line
     // without white under them, printing dull on a dark shirt; Separo doesn't pull back there either)
     const ub = new Uint8Array(n), inked = new Uint8Array(n);
     const add = (t: Uint8Array, a: Uint8Array) => { for (let i = 0; i < n; i++) { const v = t[i] + a[i]; t[i] = v > 255 ? 255 : v; } };
-    for (const { k, a } of colorPlates) { if (lightness(k.hex) >= 22) add(ub, a); add(inked, a); }
+    for (const { k, a } of colorPlates) { if (!neverBase(k.hex) && (s.baseFor?.["c" + k.hex.slice(1)] ?? baseByDefault(k.hex))) add(ub, a); add(inked, a); }
     if (white) { add(ub, white); add(inked, white); }
     const r = Math.max(0, Math.round(s.choke));
     if (r > 0) {
