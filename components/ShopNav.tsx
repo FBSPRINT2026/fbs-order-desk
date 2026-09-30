@@ -48,6 +48,8 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
   const [mine, setMine] = useState<Shortcut[]>(shortcuts || []);
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState<Shortcut | null>(null);
+  // the small "+ Add Shortcut" button opens the two ways to add one (a pop-up state, not remembered)
+  const [addOpen, setAddOpen] = useState(false);
   // desktop: the whole menu always fits the window height. As My Shortcuts grows, the main menu above tightens up
   // step by step (less spacing, then no greeting, then two links a row) so the shortcuts keep their room; only if
   // that's still not enough does everything scale down
@@ -159,7 +161,9 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
           </div>
         ))}
       </nav>
-      {/* my shortcuts: each admin's own quick links (customers, reports, dashboards, outside sites) */}
+      {/* my shortcuts: each admin's own quick links (customers, reports, dashboards, outside sites). Nothing shows until
+          there's one: just a small "+ Add Shortcut" at the bottom. */}
+      {(mine.length > 0 || adding || addOpen) && (
       <div className="nav-g nav-mine">
         <div className="nav-h">My Shortcuts</div>
         <nav className="nav">
@@ -175,19 +179,21 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
               </span>}
             </div>
           ))}
-          {!mine.length && !adding && <div className="nav-mine-empty">Your own quick links: customers, reports, anything you open all the time.</div>}
         </nav>
         {adding ? (
-          <form className="nav-add" onSubmit={(e) => { e.preventDefault(); if (adding.label.trim() && adding.href.trim()) { store([...mine, { label: adding.label.trim(), href: adding.href.trim() }]); setAdding(null); } }}>
+          <form className="nav-add" onSubmit={(e) => { e.preventDefault(); if (adding.label.trim() && adding.href.trim()) { store([...mine, { label: adding.label.trim(), href: adding.href.trim() }]); setAdding(null); setAddOpen(false); } }}>
             <input value={adding.label} onChange={(e) => setAdding({ ...adding, label: e.target.value })} placeholder="Name" aria-label="Shortcut name" autoFocus />
             <input value={adding.href} onChange={(e) => setAdding({ ...adding, href: e.target.value })} placeholder="/shop/customers/… or https://…" aria-label="Shortcut link" />
-            <div className="row" style={{ gap: 6 }}><button type="submit" className="btn primary sm">Add</button><button type="button" className="btn ghost sm" style={{ color: "inherit" }} onClick={() => setAdding(null)}>Cancel</button></div>
+            <div className="row" style={{ gap: 6 }}><button type="submit" className="btn primary sm">Add</button><button type="button" className="btn ghost sm" style={{ color: "inherit" }} onClick={() => { setAdding(null); setAddOpen(false); }}>Cancel</button></div>
           </form>
+        ) : addOpen ? (
+          <div className="nav-add-btns"><button type="button" onClick={() => { pinHere(); setAddOpen(false); }}>+ Pin this page</button><button type="button" onClick={() => setAdding({ label: "", href: "" })}>+ Add a link</button><button type="button" onClick={() => setAddOpen(false)}>Cancel</button></div>
         ) : (
-          <div className="nav-add-btns"><button type="button" onClick={pinHere}>+ Pin this page</button><button type="button" onClick={() => setAdding({ label: "", href: "" })}>+ Add a link</button>{mine.length > 0 && <button type="button" onClick={() => setEditing((x) => !x)}>{editing ? "Done" : "Edit"}</button>}</div>
+          <div className="nav-add-btns"><button type="button" onClick={() => setAddOpen(true)}>+ Add</button><button type="button" onClick={() => setEditing((x) => !x)}>{editing ? "Done" : "Edit"}</button></div>
         )}
       </div>
-      <nav className="nav nav-foot">{link(["/shop/settings", "settings", "Settings"])}</nav>
+      )}
+      <nav className="nav nav-foot">{link(["/shop/settings", "settings", "Settings"])}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} title="Your own quick links: customers, reports, anything you open all the time">+ Add Shortcut</button>}</nav>
       <div className="side-user">
         <span>{email}</span>
         <form action="/auth/signout" method="post"><button className="btn ghost sm" style={{ color: "inherit", padding: 0 }} type="submit">Sign out</button></form>
