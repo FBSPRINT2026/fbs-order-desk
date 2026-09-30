@@ -45,6 +45,9 @@ export type SepSettings = {
   /** dark shirt: which inks get underbase under them (plate key "c" + art hex → on/off); the rest follow
    *  `baseByDefault` (not black, not dark colors like navy) */
   baseFor?: Record<string, boolean>;
+  /** dot gain on press (0.15 = a 50% dot prints 65%): halftone plates are made lighter by that much ahead of time, so
+   *  they print as the art. 0 when the RIP adds its own dot gain curve. */
+  gain?: number;
   /** inks the user fixed: palette hex → ink name (Wilflex / PMS / #hex) */
   inkNames?: Record<string, string>;
 };
@@ -55,6 +58,19 @@ const rgbOf = (h: string): [number, number, number] => { const n = parseInt(h.re
 export const hexOf = (r: number, g: number, b: number) => "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("").toUpperCase();
 const lin = (v: number) => { v /= 255; return v > 0.04045 ? ((v + 0.055) / 1.055) ** 2.4 : v / 12.92; };
 const LIN = Float32Array.from({ length: 256 }, (_, i) => lin(i));
+/**
+ * How halftone inks mix on a shirt: in gamma (display) values, not in light. Light scatters inside the fabric, so a
+ * dot's color spreads past its edge (the Yule–Nielsen effect, strong on textiles) and side-by-side dots mix close to
+ * an sRGB average. Fitting Separo's own plates to the art they came from agrees: they rebuild it best mixed this way,
+ * with each ink laid over what's printed before it (ΔE 9.8 median, against 19–26 for mixing in light).
+ */
+const MIX = Float32Array.from({ length: 256 }, (_, i) => i / 255);
+/** a dot of v (0–1) on film prints about this big (dot gain g: most at 50%, none at 0 and 100%) */
+export const printedDot = (v: number, g: number) => (g > 0 ? Math.min(1, v + g * 4 * v * (1 - v)) : v);
+/** the film dot that prints as v (inverse of printedDot) */
+export const filmDot = (v: number, g: number) => { if (!(g > 0) || v <= 0 || v >= 1) return v; const G4 = 4 * g; return ((1 + G4) - Math.sqrt((1 + G4) ** 2 - 4 * G4 * v)) / (2 * G4); };
+/** Lab of a mix-space (gamma) color */
+const labMix = (r: number, g: number, b: number) => { const f = (v: number) => { v = Math.max(0, Math.min(1, v)); return v > 0.04045 ? ((v + 0.055) / 1.055) ** 2.4 : v / 12.92; }; return labLin(f(r), f(g), f(b)); };
 function labOf(r: number, g: number, b: number): [number, number, number] {
   const R = LIN[r], G = LIN[g], B = LIN[b];
   const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
@@ -160,14 +176,14 @@ export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004, garment
   // of the art it is. Separo takes the sun from yellow, gold, orange, white, black down to yellow, orange, black:
   // gold is yellow + orange, white is the underbase.
   if (res.length > max && garment) {
-    const gl = rgbOf(garment).map((v) => LIN[v]), dark = labOf(...rgbOf(garment))[0] < 55, base = dark ? [1, 1, 1] : gl;
-    const linOf = (h: string) => rgbOf(h).map((v) => LIN[v]);
+    const gl = rgbOf(garment).map((v) => MIX[v]), dark = labOf(...rgbOf(garment))[0] < 55, base = dark ? [1, 1, 1] : gl;
+    const linOf = (h: string) => rgbOf(h).map((v) => MIX[v]);
     const cost = (i: number) => {
       const t = linOf(res[i].hex), K = res.filter((_, j) => j !== i).map((c) => linOf(c.hex)); if (dark) K.push(gl);
       const x = unmix(t, base, K); let sum = 0; const r = [0, 0, 0];
       for (let k = 0; k < K.length; k++) { sum += x[k]; for (let c = 0; c < 3; c++) r[c] += x[k] * K[k][c]; }
       const rec = r.map((v, c) => Math.max(0, v + (1 - sum) * base[c]));
-      const a = labLin(rec[0], rec[1], rec[2]), b = labOf(...rgbOf(res[i].hex));
+      const a = labMix(rec[0], rec[1], rec[2]), b = labOf(...rgbOf(res[i].hex));
       return Math.sqrt(res[i].share) * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
     };
     while (res.length > max && res.length > 1) {
@@ -229,10 +245,10 @@ export function findSimInks(px: Px, garment: string, max = 8): Found[] {
     if (C >= 18 && L >= 10) pts.push({ L, a, b, C, h: (Math.atan2(b, a) * 180 / Math.PI + 360) % 360 });
   }
   if (!tot) return [];
-  const g = rgbOf(garment).map((v) => LIN[v]), gL = lightness(garment), dark = gL < 55;
+  const g = rgbOf(garment).map((v) => MIX[v]), gL = lightness(garment), dark = gL < 55;
   const base = dark ? [1, 1, 1] : g;
   // the colors to match: the heaviest 5-bit colors, weighted by how much of the art they are
-  const tg = [...cnt].sort((x, y) => y[1] - x[1]).slice(0, 600).map(([q, w]) => { const c = unQ(q), l = c.map((v) => LIN[v]); return { l, lab: labLin(l[0], l[1], l[2]), w }; });
+  const tg = [...cnt].sort((x, y) => y[1] - x[1]).slice(0, 600).map(([q, w]) => { const c = unQ(q), l = c.map((v) => MIX[v]); return { l, lab: labOf(c[0], c[1], c[2]), w }; });
   // candidates: the strong end (top fifth by chroma) of each 20° hue × lightness family
   const cand = new Map<string, number>();
   const bands = [[10, 38], [38, 62], [62, 101]];
@@ -246,7 +262,7 @@ export function findSimInks(px: Px, garment: string, max = 8): Found[] {
   }
   if (gL > 16) cand.set("#111111", 0);
   if (!dark && gL < 95) cand.set("#FFFFFF", 0);
-  const C = [...cand.keys()], CL = C.map((h) => rgbOf(h).map((v) => LIN[v]));
+  const C = [...cand.keys()], CL = C.map((h) => rgbOf(h).map((v) => MIX[v]));
   // how well a set of inks rebuilds the art (weighted squared ΔE)
   const err = (set: number[]) => {
     const K = set.map((j) => CL[j]); if (dark) K.push(g);
@@ -256,7 +272,7 @@ export function findSimInks(px: Px, garment: string, max = 8): Found[] {
       let s = 0; const r = [0, 1, 2].map((c) => { let v = 0; for (let k = 0; k < K.length; k++) v += x[k] * K[k][c]; return v; });
       for (let k = 0; k < x.length; k++) s += x[k];
       const rec = r.map((v, c) => Math.max(0, v + (1 - s) * base[c]));
-      const lb = labLin(rec[0], rec[1], rec[2]);
+      const lb = labMix(rec[0], rec[1], rec[2]);
       e += t.w * ((lb[0] - t.lab[0]) ** 2 + (lb[1] - t.lab[1]) ** 2 + (lb[2] - t.lab[2]) ** 2);
     }
     return e;
@@ -483,9 +499,9 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
   const dark = s.underbase === "on" || (s.underbase === "auto" && gLab[0] < 55);
   const dropped = s.dropGarment ? inks.map((k) => deltaE(k.hex, s.garment) < 12) : inks.map(() => false);
   const labs = inks.map((k) => labOf(...rgbOf(k.hex))), rgb = inks.map((k) => rgbOf(k.hex));
-  const g = rgbOf(s.garment).map((v) => LIN[v]), base = dark ? [1, 1, 1] : g;
+  const g = rgbOf(s.garment).map((v) => MIX[v]), base = dark ? [1, 1, 1] : g;
   const use = inks.map((_, j) => j).filter((j) => !dropped[j]);
-  const K = use.map((j) => rgbOf(inks[j].hex).map((v) => LIN[v]));
+  const K = use.map((j) => rgbOf(inks[j].hex).map((v) => MIX[v]));
   if (dark) K.push(g);
   const m = inks.length;
   // flat: the pixel is inside an area (its neighbors match), so it's a real color to print, mixed as halftones do (in
@@ -517,7 +533,7 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
       if (!dropped[bj]) out[bj] = t;
       return out;
     }
-    const ws = unmix([LIN[r], LIN[gg], LIN[b]], base, K);
+    const ws = unmix([MIX[r], MIX[gg], MIX[b]], base, K);
     let sum = 0; use.forEach((j, c) => { let v = ws[c]; if (v > 0.93) v = 1; else if (v < 0.04) v = 0; out[j] = v; sum += v; });
     if (sum > 1) for (const j of use) out[j] /= sum;
     if (dark) out[m] = Math.max(0, 1 - Math.min(1, sum) - ws[use.length]);
@@ -565,9 +581,9 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   } else {
     // simulated process: unmix each color into the inks (in linear light). Light shirt: over the shirt. Dark shirt:
     // over white (the underbase), with the shirt itself as a free "ink" where it should show through.
-    const g = rgbOf(s.garment).map((v) => LIN[v]);
+    const g = rgbOf(s.garment).map((v) => MIX[v]);
     const useInks = print.map((k) => inks.indexOf(k));
-    const K = useInks.map((j) => rgbOf(inks[j].hex).map((v) => LIN[v]));
+    const K = useInks.map((j) => rgbOf(inks[j].hex).map((v) => MIX[v]));
     const base = dark ? [1, 1, 1] : g;
     if (dark) { K.push(g); white = new Uint8Array(n); }
     const cache = new Map<number, Float32Array>();
@@ -575,7 +591,7 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
       const o = i * 4, a = data[o + 3]; if (a < 8) continue;
       const q = Q6(data[o], data[o + 1], data[o + 2]);
       let ws = cache.get(q);
-      if (!ws) { const c = unQ6(q).map((v) => LIN[v]); ws = unmix(c, base, K); cache.set(q, ws); }
+      if (!ws) { const c = unQ6(q).map((v) => MIX[v]); ws = unmix(c, base, K); cache.set(q, ws); }
       let sum = 0;
       for (let c = 0; c < useInks.length; c++) { sum += ws[c]; if (ws[c] > 0.02) cover[useInks[c]][i] = Math.round(ws[c] * a); }
       if (white) { const rest = 1 - sum - ws[useInks.length]; if (rest > 0.02) white[i] = Math.round(rest * a); }
@@ -596,9 +612,13 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
     }
     return on > 0 && mid / on > 0.08;
   };
+  // dot gain taken off halftone plates ahead of time (they print as the art)
+  const G = Math.max(0, s.gain || 0), GL = new Uint8Array(256);
+  for (let k = 0; k < 256; k++) GL[k] = Math.round(filmDot(k / 255, G) * 255);
   const mk = (key: string, name: string, hex: string, kind: PlateKind, alpha: Uint8Array, tonalIs?: boolean): Plate => {
-    let sum = 0; for (let i = 0; i < n; i++) sum += alpha[i];
     const tonal = tonalIs ?? tonalOf(alpha);
+    if (tonal && G > 0) for (let i = 0; i < n; i++) alpha[i] = GL[alpha[i]];
+    let sum = 0; for (let i = 0; i < n; i++) sum += alpha[i];
     return { key, name, hex, kind, alpha, coverage: sum / (255 * n), tonal, mesh: kind === "underbase" ? (s.method === "sim" ? MESH.simBase : MESH.underbase) : kind === "highlight" ? MESH.highlight : s.method === "sim" || tonal ? MESH.sim : MESH.color };
   };
   const colorPlates = print.map((k) => ({ k, a: cover[inks.indexOf(k)] }));
@@ -623,6 +643,25 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
     ...body.map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a, base: dark && based(k.hex) })),
     ...(hw ? [{ key: "hw", name: "Highlight White", hex: "#FFFFFF", kind: "highlight" as PlateKind, a: hw, base: true }] : []),
   ];
+  // the mix says how much of each ink should SHOW; on the press each ink covers its share of whatever is printed under
+  // it (it's laid on top), so an ink under others needs more: its share over what the inks above leave uncovered.
+  // (A gold made of yellow under orange: yellow solid, orange as dots, not two half-size dot patterns side by side.)
+  // The shares stay as they are for the underbase (it goes under all of it).
+  // (Halftone plates only: a solid ink's soft edge against its neighbor stays as drawn, or every lighter color would
+  // grow half a pixel under the darker one at every seam.)
+  {
+    const open = new Float32Array(n).fill(1);
+    for (let j = seq.length - 1; j >= 0; j--) {
+      const src = seq[j].a, layer = tonalOf(src), a = layer ? new Uint8Array(n) : src;
+      for (let i = 0; i < n; i++) {
+        const v = src[i]; if (!v) continue;
+        const o = open[i], t = !layer ? v / 255 : o > 0.004 ? Math.min(1, v / 255 / o) : 1;
+        if (layer) a[i] = Math.round(t * 255);
+        open[i] = o * (1 - t);
+      }
+      seq[j] = { ...seq[j], a };
+    }
+  }
   const tonals = seq.map((x) => tonalOf(x.a));
 
   // underbase (dark shirts): under every ink that gets base (by default not black or dark colors like navy; each can
@@ -732,29 +771,28 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
 }
 
 /**
- * The print as it'll look (RGBA for a canvas), in linear light: each ink covers its share of the spot (halftone dots
- * sit side by side, on top of the underbase), the underbase that no ink covers shows white, the rest is the shirt.
+ * The print as it'll look (RGBA for a canvas). Halftone dots print bigger than on film (dot gain `gain`). The inks
+ * are laid over each other in print order, each covering its share of what's under it, all of them on the
+ * underbase (same-angle dots: the base's dot under the inks'); the base no ink covers shows white, the rest is the
+ * shirt. Mixed in gamma values, as halftones mix on fabric (see MIX).
  */
-export function composite(res: { plates: Plate[]; w: number; h: number }, garment: string, show?: Set<string>): Uint8ClampedArray {
+export function composite(res: { plates: Plate[]; w: number; h: number }, garment: string, show?: Set<string>, gain = 0): Uint8ClampedArray {
   const { w, h } = res, n = w * h, out = new Uint8ClampedArray(n * 4);
-  const g = rgbOf(garment).map((v) => LIN[v]);
+  const g = rgbOf(garment);
   const on = res.plates.filter((p) => !show || show.has(p.key));
-  const ub = on.find((p) => p.kind === "underbase"), inks = on.filter((p) => p.kind !== "underbase").map((p) => ({ a: p.alpha, c: rgbOf(p.hex).map((v) => LIN[v]) }));
-  const back = (v: number) => Math.round(255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055));
+  const lut = (p: Plate) => Float32Array.from({ length: 256 }, (_, k) => (p.tonal ? printedDot(k / 255, gain) : k / 255));
+  const ub = on.find((p) => p.kind === "underbase"), ubL = ub ? lut(ub) : null;
+  const inks = on.filter((p) => p.kind !== "underbase").map((p) => ({ a: p.alpha, c: rgbOf(p.hex), L: lut(p) }));
   for (let i = 0; i < n; i++) {
-    // the spot is split into areas: ink dots (printed on the underbase where there is one), bare underbase, bare shirt
-    const u = ub ? ub.alpha[i] / 255 : 0;
-    // where inks overlap (a trap, or dots that land on each other) the one printed later covers the one under it:
-    // hand out the spot from the top ink down
-    let r = 0, gg = 0, b = 0, tot = 0;
-    for (let j = inks.length - 1; j >= 0 && tot < 1; j--) {
-      const k = inks[j]; let f = k.a[i] / 255; if (!f) continue;
-      if (f > 1 - tot) f = 1 - tot;
-      tot += f; r += f * k.c[0]; gg += f * k.c[1]; b += f * k.c[2];
+    // inks from the top down: each shows where nothing above it covers
+    let r = 0, gg = 0, b = 0, rest = 1;
+    for (let j = inks.length - 1; j >= 0 && rest > 1e-4; j--) {
+      const k = inks[j], t = k.L[k.a[i]]; if (!t) continue;
+      const v = t * rest; r += v * k.c[0]; gg += v * k.c[1]; b += v * k.c[2]; rest -= v;
     }
-    const white = Math.max(0, u - tot), shirt = 1 - Math.max(u, tot);
-    r += white + shirt * g[0]; gg += white + shirt * g[1]; b += white + shirt * g[2];
-    const o = i * 4; out[o] = back(Math.max(0, Math.min(1, r))); out[o + 1] = back(Math.max(0, Math.min(1, gg))); out[o + 2] = back(Math.max(0, Math.min(1, b))); out[o + 3] = 255;
+    const U = 1 - rest, u = ubL ? ubL[ub!.alpha[i]] : 0, white = u > U ? u - U : 0, shirt = 1 - (u > U ? u : U);
+    r += white * 255 + shirt * g[0]; gg += white * 255 + shirt * g[1]; b += white * 255 + shirt * g[2];
+    const o = i * 4; out[o] = r; out[o + 1] = gg; out[o + 2] = b; out[o + 3] = 255;
   }
   return out;
 }

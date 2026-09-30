@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
-import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, findSimInks, gradientShare, isDark, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
+import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex } from "@/lib/mockup";
@@ -45,14 +45,16 @@ type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: 
   finePt?: number; fineChokePt?: number; bumpPt?: number;
   /** films: halftone dot shape */
   dot?: "ellipse" | "round" | "square";
-  /** films: dot gain to take off halftones ahead of time (0.2 = a 50% dot prints about 70%) */
-  gain?: number };
+  /** dot gain on press, taken off the halftone plates ahead of time (Illustrator file and films); 0 if the RIP does it.
+   *  (`gain` from SepSettings is filled from this; an old saved films-only `gain` is ignored.) */
+  pressGain?: number };
 const DOT_NAME = { ellipse: "elliptical", round: "round", square: "square" } as const;
+const PRESS_GAIN = 0.15;
 const CHOKE_PT = 0.5, TRAP_PT = 0.25, FINE_PT = 2, FINE_CHOKE_PT = 0.15, BUMP_PT = 0.25;
 /** points at the print size → pixels of a copy `w` px wide (fractions kept: edges move by exact sub-pixel amounts) */
 const ptPx = (pt: number, w: number, widthIn: number) => (pt * w) / (widthIn * 72);
 /** the separation settings in pixels of a copy `w` px wide */
-const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, choke: ptPx(st.chokePt ?? CHOKE_PT, w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, w, st.widthIn),
+const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, gain: st.pressGain ?? PRESS_GAIN, choke: ptPx(st.chokePt ?? CHOKE_PT, w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, w, st.widthIn),
   fine: ptPx(st.finePt ?? FINE_PT, w, st.widthIn), fineChoke: ptPx(st.fineChokePt ?? FINE_CHOKE_PT, w, st.widthIn), bump: ptPx(st.bumpPt ?? BUMP_PT, w, st.widthIn) });
 /** the working size on screen (fast); the files are separated again at full size (OUT_PPI at the print width) */
 const MAX_SIDE = 2400;
@@ -307,7 +309,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       setRes(r); setBusy("");
     }, 60);
     return () => clearTimeout(t);
-  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.widthIn, st.baseFor, st.finePt, st.fineChokePt, st.bumpPt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.widthIn, st.baseFor, st.finePt, st.fineChokePt, st.bumpPt, st.pressGain]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // plates in the chosen print order (new plates keep their default spot)
   const arrange = useCallback((ps: Plate[]) => {
@@ -328,7 +330,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       const p = plates.find((q) => q.key === solo);
       if (p) for (let i = 0; i < p.alpha.length; i++) { const v = 255 - p.alpha[i]; imgData.data[i * 4] = imgData.data[i * 4 + 1] = imgData.data[i * 4 + 2] = v; imgData.data[i * 4 + 3] = 255; }
     } else {
-      imgData.data.set(composite({ plates, w: res.w, h: res.h }, st.garment, new Set(plates.filter((p) => !hidden.has(p.key)).map((p) => p.key))));
+      imgData.data.set(composite({ plates, w: res.w, h: res.h }, st.garment, new Set(plates.filter((p) => !hidden.has(p.key)).map((p) => p.key)), st.pressGain ?? PRESS_GAIN));
     }
     x.putImageData(imgData, 0, 0);
   }, [res, plates, hidden, solo, st.garment]);
@@ -344,12 +346,12 @@ export default function SeparationStudio({ id }: { id: string }) {
       let m = 0; for (const q of plates) if (q.alpha[j] > m) m = q.alpha[j]; within[y * cw + x] = m;
     }
     const ht = st.method === "sim" || !!p.tonal;
-    const f = filmBits({ ...p, alpha: a }, cw, ch, cw / ppi, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, gain: st.gain || 0, dot: st.dot || "ellipse", mesh: p.mesh, within });
+    const f = filmBits({ ...p, alpha: a }, cw, ch, cw / ppi, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", mesh: p.mesh, within });
     c.width = f.W; c.height = f.H;
     const x = c.getContext("2d")!, d = x.createImageData(f.W, f.H), rb = Math.ceil(f.W / 8);
     for (let yy = 0; yy < f.H; yy++) for (let xx = 0; xx < f.W; xx++) { const on = f.bits[yy * rb + (xx >> 3)] & (0x80 >> (xx & 7)), o = (yy * f.W + xx) * 4; d.data[o] = d.data[o + 1] = d.data[o + 2] = on ? 0 : 255; d.data[o + 3] = 255; }
     x.putImageData(d, 0, 0);
-  }, [loupe, solo, plates, res, st.widthIn, st.dpi, st.lpi, st.angle, st.gain, st.dot, st.method]);
+  }, [loupe, solo, plates, res, st.widthIn, st.dpi, st.lpi, st.angle, st.dot, st.method]);
 
   useEffect(() => {
     const c = cvOrig.current, px = pxRef.current; if (!c || !px) return;
@@ -427,6 +429,13 @@ export default function SeparationStudio({ id }: { id: string }) {
         if (at >= 0) out.push({ plate: at, tint: ws[j] });
       });
       if (ws[inks.length] > 0.02) { const at = ps.findIndex((p) => p.key === "hw"); if (at >= 0) out.push({ plate: at, tint: ws[inks.length] }); }
+      // the shares are what should show; each ink covers its share of what's under it (printed later = on top), and
+      // a tint is a halftone, so dot gain comes off it (the same as the picture plates)
+      const G = st.pressGain ?? PRESS_GAIN; let open = 1;
+      for (const e of [...out].sort((a, b) => b.plate - a.plate)) {
+        const t = open > 0.004 ? Math.min(1, e.tint / open) : 1; open *= 1 - t;
+        e.tint = t >= 0.98 ? 1 : filmDot(t, G);
+      }
       return out;
     },
   } : undefined);
@@ -443,8 +452,8 @@ export default function SeparationStudio({ id }: { id: string }) {
     for (const p of hr.plates) for (let j = 0; j < within.length; j++) if (p.alpha[j] > within[j]) within[j] = p.alpha[j];
     const pages = hr.plates.map((p, i) => {
       const ht = tonal || !!p.tonal;
-      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, gain: st.gain || 0, dot: st.dot || "ellipse", mesh: p.mesh, within });
-      return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg ${DOT_NAME[st.dot || "ellipse"]} dot${st.gain ? ` - dot gain ${Math.round(st.gain * 100)}% taken off` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
+      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", mesh: p.mesh, within });
+      return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg ${DOT_NAME[st.dot || "ellipse"]} dot${(st.pressGain ?? PRESS_GAIN) ? ` - ${Math.round((st.pressGain ?? PRESS_GAIN) * 100)}% dot gain allowed for` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
     });
     return filmPdf(pages);
   }
@@ -621,7 +630,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               })()}</>}
             {st.method === "spot" && <label className="sep-f" title="Each color spreads this far under the darker color printed after it, so colors that touch overlap a hair (no gaps if a screen is a little off). Keep it small on based colors; 0 = colors just touch. Black never spreads onto the white base.">Trap <input type="range" min={0} max={2} step={0.25} value={st.trapPt ?? TRAP_PT} onChange={(e) => set({ trapPt: +e.target.value })} /> <b>{st.trapPt ?? TRAP_PT} pt</b></label>}
             {st.method === "spot" && !vart?.ok && <label className="sep-f" title="Pixels: the art's own pixels at full size, like Separo. Smooth vector: traced curves, for low-resolution art.">Solid inks<select value={st.solidOut || "pixels"} onChange={(e) => set({ solidOut: e.target.value as Studio["solidOut"] })}><option value="pixels">Pixels (exact)</option><option value="vector">Smooth vector</option></select></label>}
-            {(tonal || plates.some((p) => p.tonal)) && <label className="sep-f" title="Halftone dots grow on the shirt (a 50% dot prints about 65–70%). The films take that off ahead of time. Leave at 0 if your RIP already does it.">Dot gain (films)<select value={st.gain || 0} onChange={(e) => set({ gain: +e.target.value })}>{[0, 0.1, 0.15, 0.2, 0.25, 0.3].map((g) => <option key={g} value={g}>{g ? `${Math.round(g * 100)}%` : "None"}</option>)}</select></label>}
+            {(tonal || plates.some((p) => p.tonal)) && <label className="sep-f" title="Halftone dots print bigger than on the film (at 15% a 50% dot prints about 65%). The halftone plates are made that much lighter so they print as the art, and the proof shows how it prints. Pick None if your RIP adds its own dot gain curve.">Dot gain on press<select value={st.pressGain ?? PRESS_GAIN} onChange={(e) => set({ pressGain: +e.target.value })}>{[0, 0.1, 0.15, 0.2, 0.25, 0.3].map((g) => <option key={g} value={g}>{g ? `${Math.round(g * 100)}%` : "None (RIP does it)"}</option>)}</select></label>}
             <label className="sep-f">Film DPI<select value={st.dpi} onChange={(e) => set({ dpi: +e.target.value })}>{[360, 600, 720, 1200].map((d) => <option key={d} value={d}>{d}</option>)}</select></label>
           </section>
         </aside>
