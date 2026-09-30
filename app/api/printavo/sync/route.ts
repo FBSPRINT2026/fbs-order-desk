@@ -21,10 +21,12 @@ export const maxDuration = 60;
  *   job=files-N  copies artwork into our storage (doesn't use Printavo's request limit).
  */
 const RUN_MS = 47000;
-const QUICK_EVERY = 10 * 60000, QUICK_PAGES = 20;
+const QUICK_EVERY = 10 * 60000, QUICK_PAGES = 20; // active jobs: 20 pages x 25 = the 500 orders with the latest due dates
 // only orders created in the last 30 days are imported / refreshed (older ones stay as they are); keeps the load light
 const RECENT_DAYS = 30;
-const recentSince = () => new Date(Date.now() - RECENT_DAYS * 86400000).toISOString(); // active jobs: 20 pages x 25 = the 500 orders with the latest due dates
+const recentSince = () => new Date(Date.now() - RECENT_DAYS * 86400000).toISOString();
+// after hours (7 PM – 6 AM shop time): older orders we never got (the rest of 2023) are brought over, once each
+const afterHours = () => { const h = +new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date()); return h >= 19 || h < 6; };
 type Sync = { enabled: boolean; token: string; pause_until: string | null; quick_cursor: string | null; quick_pages: number; quick_done_at: string | null; sweep_cursor: string | null; sweep_no: number; sweep_started_at: string | null; sweep_done_at: string | null; customers_cursor: string | null; customers_done_at: string | null };
 type Idx = { printavo_id: string; fingerprint: string; status: string; imported_fingerprint: string | null; archived_id: string | null };
 
@@ -70,7 +72,8 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     const quickDue = !!sync.quick_cursor || !sync.quick_done_at || Date.now() - new Date(sync.quick_done_at).getTime() > QUICK_EVERY;
     if (quickDue) { await quickPage(admin, sync, did); continue; }
 
-    const { data: next } = await admin.from("printavo_index").select("printavo_id, attempts").eq("status", "pending").gte("created_at", recentSince()).order("created_at", { ascending: false, nullsFirst: false }).limit(1);
+    let { data: next } = await admin.from("printavo_index").select("printavo_id, attempts").eq("status", "pending").gte("created_at", recentSince()).order("created_at", { ascending: false, nullsFirst: false }).limit(1);
+    if (!next?.length && afterHours()) ({ data: next } = await admin.from("printavo_index").select("printavo_id, attempts").eq("status", "pending").is("archived_id", null).order("created_at", { ascending: false, nullsFirst: false }).limit(1));
     const pending = next?.[0] as { printavo_id: string; attempts: number } | undefined;
 
     // 2. keep noticing changes even during the big import: every 6th turn reads one page of the order list
