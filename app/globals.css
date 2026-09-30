@@ -4034,3 +4034,21 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-cost small{color:#8a4b00;font-weight:600}
 .ms-due input[type=date],.ms-due input[type=time]{width:auto!important;flex:none}
 .ms-due .check{white-space:nowrap}
+/* crew speed sliders */
+.tp-skill{border-top:1px solid var(--line-2);margin-top:4px;padding-top:6px}
+.tp-skill summary{cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px;list-style:none}
+.tp-skill summary::-webkit-details-marker{display:none}
+.tp-skill summary::before{content:"\25B8";color:var(--ink-3);font-size:11px}
+.tp-skill[open] summary::before{content:"\25BE"}
+.tp-skill summary span{margin-left:auto;font-size:12px;color:var(--ink-3);text-align:right}
+.tp-skill summary b{white-space:nowrap}
+.tp-skill summary span.ok,.tp-sl-v.ok{color:var(--ok)}
+.tp-skill summary span.bad,.tp-sl-v.bad{color:#9a5b00}
+.tp-sl{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"l v" "s s";gap:0 8px;align-items:center;margin:8px 0 4px;font-size:12.5px}
+.tp-sl .tp-sl-l{grid-area:l}.tp-sl .tp-sl-v{grid-area:v}.tp-sl input[type=range]{grid-area:s}
+.tp-sl-l{display:flex;align-items:baseline;gap:6px;min-width:0;line-height:1.2;font-weight:600}
+.tp-sl-l small{font-size:11px;font-weight:400;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tp-sl input[type=range]{width:100%;accent-color:var(--accent)}
+.tp-sl-v{font-size:12px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.tp-sl-l{white-space:nowrap;overflow:hidden}
+.tp-sl-l small{flex:1 1 auto;min-width:0}

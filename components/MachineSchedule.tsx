@@ -392,7 +392,8 @@ export default function MachineSchedule() {
       const need0 = job.needs.find((n) => n.type === sl.kind) || job.needs[0];
       if (!need0) continue;
       const need = subNeed(need0, sl.locations);
-      const est = sl.minutes || estimate(s, need, mach).minutes, prog = Math.max(0, Math.min(1, +(sl.progress || 0)));
+      // live estimate: follows the press crew's speed sliders and the time standards as they change
+      const est = estimate(s, need, mach).minutes || sl.minutes, prog = Math.max(0, Math.min(1, +(sl.progress || 0)));
       let minutes = est, startMin = sl.start_min;
       // started: it sits where it really started; what's left is the estimate less the share already done
       const st0 = sl.started_at ? shopTime(sl.started_at) : null, pa = sl.progress_at ? shopTime(sl.progress_at) : null;

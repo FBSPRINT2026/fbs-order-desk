@@ -23,6 +23,8 @@ export type Machine = {
   week?: Shift[];
   /** warm-up / lunch for this machine (its crew's lunch time), worked out when settings load */
   brk?: Breaks;
+  /** how its crew runs vs the standard (setup, printing, darks…), worked out when settings load */
+  skill?: CrewSkill;
   /** dates it isn't running (its crew's or its own days off), attached by the calendar */
   off?: Record<string, string>;
   /** downtime or reduced capacity for part of a day: date → [start, end, why, rate][], rate 0 = stopped,
@@ -39,7 +41,23 @@ export type Shift = [number, number] | null;
 /** Who's on a press crew (employee ids): the press operator runs it, an assistant, and a catcher at the dryer. */
 export type CrewMembers = { operator?: string | null; assistant?: string | null; catcher?: string | null };
 export const CREW_ROLES: [keyof CrewMembers, string][] = [["operator", "Press Operator"], ["assistant", "Assistant"], ["catcher", "Catcher"]];
-export type Crew = { id: string; leader: string; week: Shift[]; /** lunch start (minutes after midnight), default the shop's */ lunchAt?: number; members?: CrewMembers };
+/**
+ * How a press crew runs compared with the shop standard, per kind of work: 100 = standard, 120 = 20% faster, 80 = 20%
+ * slower (Employees → People & Teams → Press Crews sliders). A crew can print fast but set up slow.
+ */
+export type CrewSkill = { setup: number; teardown: number; run: number; long: number; short: number; dark: number; colors: number };
+export const DEFAULT_SKILL: CrewSkill = { setup: 100, teardown: 100, run: 100, long: 100, short: 100, dark: 100, colors: 100 };
+export const SKILLS: [keyof CrewSkill, string, string][] = [
+  ["setup", "Setup", "registering screens, loading the press"],
+  ["teardown", "Teardown", "pulling screens, cleanup"],
+  ["run", "Printing speed", "pieces an hour once it's running"],
+  ["long", "Long runs", "keeping pace on 500+ piece runs"],
+  ["short", "Short runs", "quick turnaround on runs under 150"],
+  ["dark", "Darks & underbase", "flashing, white underbase"],
+  ["colors", "Many colors", "6+ color jobs: setup and print"],
+];
+export const LONG_RUN = 500, SHORT_RUN = 150;
+export type Crew = { id: string; leader: string; week: Shift[]; skill?: CrewSkill; /** lunch start (minutes after midnight), default the shop's */ lunchAt?: number; members?: CrewMembers };
 /** Built into every shift: press warm-up at the start, and a lunch break on long shifts. */
 export type Breaks = { warmupMin: number; lunchMin: number; lunchAfterHours: number; lunchAt: number; /** warming the press back up after lunch */ rewarmMin: number };
 /** What an hour of press time costs in labor, for weighing overtime / weekend shifts when the schedule is tight. */
@@ -126,10 +144,10 @@ export const DEFAULT_PRODUCTION: ProductionSettings = {
 };
 export function mergeProduction(d: unknown): ProductionSettings {
   const p = (d && typeof d === "object" ? d : {}) as Partial<ProductionSettings>;
-  const crews: Crew[] = (Array.isArray(p.crews) ? p.crews : DEFAULT_PRODUCTION.crews).map((c) => ({ id: c.id, leader: c.leader || "", week: Array.from({ length: 7 }, (_, i) => normShift(c.week?.[i])), lunchAt: c.lunchAt, members: c.members || {} }));
+  const crews: Crew[] = (Array.isArray(p.crews) ? p.crews : DEFAULT_PRODUCTION.crews).map((c) => ({ id: c.id, leader: c.leader || "", week: Array.from({ length: 7 }, (_, i) => normShift(c.week?.[i])), lunchAt: c.lunchAt, members: c.members || {}, skill: { ...DEFAULT_SKILL, ...(c.skill || {}) } }));
   const breaks: Breaks = { ...DEFAULT_BREAKS, ...(p.breaks || {}) };
   const machines = (Array.isArray(p.machines) && p.machines.length ? p.machines.map((x) => ({ ...m(x.id, x.name, x.type, x.colors, x.heads, x.pvMatch || ""), ...x })) : DEFAULT_PRODUCTION.machines)
-    .map((x) => { const c = x.crew ? crews.find((k) => k.id === x.crew) : undefined; return { ...x, crew: c ? c.id : undefined, week: c ? c.week : ownWeek(x), brk: { ...breaks, lunchAt: c?.lunchAt ?? breaks.lunchAt } }; });
+    .map((x) => { const c = x.crew ? crews.find((k) => k.id === x.crew) : undefined; return { ...x, crew: c ? c.id : undefined, week: c ? c.week : ownWeek(x), brk: { ...breaks, lunchAt: c?.lunchAt ?? breaks.lunchAt }, skill: c?.skill }; });
   return {
     ...DEFAULT_PRODUCTION, ...p,
     crews, machines, breaks,
@@ -313,7 +331,18 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
       if (st.garment === "heavy") rate *= S.heavyFactor;
       if (st.garment === "bag") rate *= S.bagFactor;
       if (smallLoc(st.location)) rate *= S.smallLocFactor;
-      const su = st.screens * S.setupPerScreen, td = st.screens * S.teardownPerScreen, r = (st.qty / Math.max(1, rate)) * 60;
+      // the crew's own pace (100 = standard): setup, teardown, printing, long / short runs, darks, many colors
+      const k = mach.skill, pct = (x: number | undefined) => Math.max(0.3, (x ?? 100) / 100);
+      let suF = 1, rateF = 1;
+      if (k) {
+        suF *= pct(k.setup); rateF *= pct(k.run);
+        if (st.qty >= LONG_RUN) rateF *= pct(k.long);
+        if (st.qty < SHORT_RUN) { rateF *= pct(k.short); suF *= pct(k.short); }
+        if (st.dark) rateF *= pct(k.dark);
+        if (st.colors >= 6) { rateF *= pct(k.colors); suF *= pct(k.colors); }
+      }
+      rate *= rateF;
+      const su = (st.screens * S.setupPerScreen) / suF, td = (st.screens * S.teardownPerScreen) / (k ? pct(k.teardown) : 1), r = (st.qty / Math.max(1, rate)) * 60;
       const tot = Math.max(S.minMinutes, su + r + td);
       setup += su; run += tot - su - td; teardown += td;
       parts.push({ label: `${st.location}: ${st.screens} screens, ${st.qty} pcs @ ${Math.round(rate)}/hr`, minutes: tot * f });

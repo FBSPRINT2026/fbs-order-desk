@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fullName, type Employee } from "@/lib/timeclock";
-import { mergeProduction, CREW_ROLES, type Crew, type CrewMembers, type ProductionSettings } from "@/lib/production";
+import { mergeProduction, estimate, CREW_ROLES, SKILLS, DEFAULT_SKILL, fmtMin, type Crew, type CrewMembers, type CrewSkill, type Need, type ProductionSettings } from "@/lib/production";
 import { EmployeeEditor } from "@/components/time/TimeEmployees";
 import { useSticky } from "@/lib/useSticky";
 import type { TeamData } from "./types";
@@ -58,12 +58,36 @@ export default function TeamPeople({ d }: { d: TeamData }) {
       const op = role === "operator" && id ? byId.get(id) : null;
       return { ...x, members, leader: op ? op.first_name.trim() : x.leader };
     });
-    const production = { ...cur, crews, machines: cur.machines.map(({ week: _w, off: _o, brk: _b, ...m }) => m) };
+    const production = { ...cur, crews, machines: cur.machines.map(({ week: _w, off: _o, brk: _b, skill: _k, ...m }) => m) };
     const r = await sb.from("settings").upsert({ id: 1, data: { ...(data?.data || {}), production }, updated_at: new Date().toISOString() });
     setBusy("");
     if (r.error) { setMsg(r.error.message); return; }
     setMsg(""); await load();
   }
+
+  // crew speed sliders: saved a moment after the last change
+  const [skills, setSkills] = useState<Record<string, CrewSkill>>({});
+  const skillOf = (c: Crew) => skills[c.id] || { ...DEFAULT_SKILL, ...(c.skill || {}) };
+  const timers = useMemo(() => new Map<string, ReturnType<typeof setTimeout>>(), []);
+  function setSkill(c: Crew, k: keyof CrewSkill, v: number) {
+    const next = { ...skillOf(c), [k]: v };
+    setSkills((x) => ({ ...x, [c.id]: next }));
+    clearTimeout(timers.get(c.id));
+    timers.set(c.id, setTimeout(async () => {
+      const sb = createClient();
+      const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle();
+      const cur = mergeProduction((data?.data as { production?: unknown } | null)?.production);
+      const crews = cur.crews.map((x) => (x.id === c.id ? { ...x, skill: next } : x));
+      const production = { ...cur, crews, machines: cur.machines.map(({ week: _w, off: _o, brk: _b, skill: _k, ...m }) => m) };
+      const r = await sb.from("settings").upsert({ id: 1, data: { ...(data?.data || {}), production }, updated_at: new Date().toISOString() });
+      setMsg(r.error ? r.error.message : "");
+    }, 700));
+  }
+  // what the sliders do to a typical job: 144 shirts, 4-color front + 1-color back
+  const sample: Need = { type: "screen", needColors: 4, qty: 144, label: "", steps: [
+    { method: "screen", location: "Full Front", colors: 4, screens: 4, qty: 144, dark: false, garment: "tee", stitches: 0, note: "" },
+    { method: "screen", location: "Full Back", colors: 1, screens: 1, qty: 144, dark: false, garment: "tee", stitches: 0, note: "" }] };
+  const typical = (c: Crew) => { if (!prod) return null; const m = prod.machines.find((x) => x.crew === c.id); if (!m) return null; const base = estimate(prod, sample, { ...m, skill: undefined }).minutes, mine = estimate(prod, sample, { ...m, skill: skillOf(c) }).minutes; return { base, mine }; };
 
   const crewRate = (c: Crew) => CREW_ROLES.reduce((t, [k]) => { const id = c.members?.[k]; return t + (id && rates[id] ? rates[id] : 0); }, 0);
   const onCrew = (id: string) => prod?.crews.filter((c) => CREW_ROLES.some(([k]) => c.members?.[k] === id)).map((c) => c.leader || "a crew") || [];
@@ -96,6 +120,17 @@ export default function TeamPeople({ d }: { d: TeamData }) {
             <div key={c.id} className="tp-crew">
               <div className="tp-crew-h"><b>{ps.length ? ps.join(", ") : "No press yet"}</b><span className="faint">{c.leader ? `${c.leader}'s crew` : "Crew"}</span>{d.boss && <span className={"tmx-tag" + (r ? " ok" : "")}>{r ? `${money(r)}/hr` : "no rates"}</span>}</div>
               {CREW_ROLES.map(([k, l]) => <label key={k} className="tp-role"><span>{l}</span>{pick(c, k)}</label>)}
+              <details className="tp-skill">
+                <summary><b>Crew speed</b>{(() => { const t = typical(c); if (!t) return null; const pc = Math.round((t.base / Math.max(1, t.mine) - 1) * 100); return <span className={pc > 0 ? "ok" : pc < 0 ? "bad" : ""}>{pc === 0 ? "standard" : `${pc > 0 ? pc + "% faster" : -pc + "% slower"} on a typical job`}</span>; })()}</summary>
+                {SKILLS.map(([k, l, hint]) => { const v = skillOf(c)[k]; return (
+                  <label key={k} className="tp-sl" title={hint}>
+                    <span className="tp-sl-l">{l}<small>{hint}</small></span>
+                    <input type="range" min={50} max={150} step={5} value={v} onChange={(e) => setSkill(c, k, +e.target.value)} aria-label={`${l} speed`} />
+                    <span className={"tp-sl-v" + (v > 100 ? " ok" : v < 100 ? " bad" : "")}>{v === 100 ? "Standard" : v > 100 ? `+${v - 100}%` : `−${100 - v}%`}</span>
+                  </label>
+                ); })}
+                {(() => { const t = typical(c); return t ? <div className="faint" style={{ fontSize: 12 }}>A typical job (144 shirts, 4-color front + 1-color back): {fmtMin(t.base)} standard → <b>{fmtMin(t.mine)}</b> with this crew. The calendar and Re-plan use these speeds for every job on {presses(c).join(", ") || "this crew's press"}.</div> : null; })()}
+              </details>
             </div>
           ); })}</div>
         )}

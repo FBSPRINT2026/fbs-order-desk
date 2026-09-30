@@ -30,7 +30,7 @@ export default function ProductionSettingsPage() {
     setState("Saving…");
     const sb = createClient();
     const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle();
-    const clean = { ...s!, machines: s!.machines.map(({ week: _w, off: _o, brk: _b, ...m }) => m) };
+    const clean = { ...s!, machines: s!.machines.map(({ week: _w, off: _o, brk: _b, skill: _k, ...m }) => m) };
     const { error } = await sb.from("settings").upsert({ id: 1, data: { ...(data?.data || {}), production: clean }, updated_at: new Date().toISOString() });
     setState(error ? `Couldn't save: ${error.message}` : "Saved");
   }
