@@ -684,6 +684,13 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
       if (detail && b > 0 && s.method === "spot") {
         const dD = chamfer(detail, w, h), NB = 5 * (b + 1.5), near = new Uint8Array(n);
         for (let i = 0; i < n; i++) if (dD[i] <= NB) near[i] = 1;
+        // only out into open shirt: not into a gap narrower than `fine` (the counter of a small "e", the space between
+        // letters, reversed type knocked out of a color), which would fill in
+        const inkM = new Uint8Array(n); for (let i = 0; i < n; i++) if (inked[i] >= 128) inkM[i] = 1;
+        const dInk = chamfer(inkM, w, h), G = 5 * (fine / 2), open = new Uint8Array(n);
+        for (let i = 0; i < n; i++) if (dInk[i] > G) open[i] = 1;
+        const dOpen = chamfer(open, w, h), OPEN = 5 * (fine / 2 + b + 1);
+        for (let i = 0; i < n; i++) if (near[i] && !inkM[i] && dOpen[i] > OPEN) near[i] = 0;
         for (const st of seq) {
           if (!st.base) continue;
           const g = spread(st.a, w, h, b, near), add2 = new Uint8Array(n); let any = false;
