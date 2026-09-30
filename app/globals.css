@@ -4211,3 +4211,36 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
   .sd-3 .nav-g:not(.nav-mine) a .lbl-s{display:inline;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sd-3 .nav-g:not(.nav-mine) a .badge{font-size:10px;padding:0 5px;margin-left:auto}
 }
+
+/* Scheduling Tools, cleaned up: one slim row of small buttons, thin notices */
+.ms-tools{gap:8px;padding:8px 12px 10px}
+.ms-tbar{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:2px 0 4px}
+.ms-tb-g{--c:var(--fbs-blue);display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+.ms-tb-eq{--c:var(--fbs-orange)}
+.ms-tb-sales{--c:#7C5CD6}
+.ms-tb-l{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-right:2px}
+.ms-tb-l::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+.ms-tb{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;font-size:12.5px;font-weight:600;color:color-mix(in srgb,var(--c) 60%,var(--ink));background:color-mix(in srgb,var(--c) 7%,transparent);border:1px solid color-mix(in srgb,var(--c) 18%,transparent);white-space:nowrap}
+.ms-tb:hover{background:color-mix(in srgb,var(--c) 14%,transparent);border-color:color-mix(in srgb,var(--c) 40%,transparent)}
+.ms-tb:focus-visible{outline:2px solid var(--c);outline-offset:1px}
+.ms-tb.warn{color:#8A5A00;background:#FFF1D6;border-color:#F3D08A}
+.ms-tb-n{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#E8A317;color:#fff;font-size:10.5px;font-weight:800}
+.ms-otline{padding:4px 8px;font-size:12.5px;border-radius:7px}
+.ms-otline .linkbtn{font-size:12px}
+.ms-alert{padding:5px 8px;border-radius:8px;background:color-mix(in srgb,var(--danger) 5%,var(--surface));border-color:color-mix(in srgb,var(--danger) 25%,transparent)}
+.ms-alert-h{gap:6px}
+.ms-alert-i{width:18px;height:18px;font-size:11px}
+.ms-alert-t{flex-direction:row;align-items:baseline;gap:6px;flex-wrap:wrap}
+.ms-alert-t b{font-size:13px}
+.ms-alert-t span{font-size:12px;color:var(--ink-3)}
+.ms-alert .btn.sm{padding:3px 9px;font-size:12px}
+.ms-alert .btn.ghost{border:1px solid var(--line)}
+.ms-okline{font-size:12.5px}
+.ms-ok-i{width:18px!important;height:18px!important;font-size:11px!important}
+.ms-ready{padding-top:6px;gap:6px}
+.ms-ready .ms-band-t b{font-size:13.5px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ms-tb.warn{background:#3A2C0C;color:#F3C969;border-color:#6B5215}}
+:root[data-theme="dark"] .ms-tb.warn{background:#3A2C0C;color:#F3C969;border-color:#6B5215}
+.ms-idle-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ms-otline .btn.sm{padding:2px 9px;font-size:12px}
+.ms-otline.ms-idle .btn.ghost{border:1px solid var(--line);background:var(--surface)}

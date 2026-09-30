@@ -1447,31 +1447,25 @@ export default function MachineSchedule() {
           <Link className="linkbtn" href="/shop/settings/production">Machines, crews &amp; times</Link>
         </div>
         {toolsOpen && <>
-          {/* production (the production manager's day), shifts & equipment, and sales: each its own color */}
-          <div className="ms-tgs">
-            <div className="ms-tg ms-tg-prod">
-              <div className="ms-tg-h">Production</div>
-              <div className="ms-tg-grid">
-                <button type="button" className="ms-act" onClick={() => setCheckin(true)}><b>Update Progress</b><small>What&apos;s started, done or paused today</small></button>
-                <button type="button" className="ms-act" onClick={() => setReplan({ why: "" })}><b>Re-plan Schedule</b><small>Re-lay open work from now, soonest in-hands first</small></button>
-                <button type="button" className="ms-act" onClick={() => setOtOpen(true)}><b>Overtime</b><small>Who&apos;s past 40 hours this pay week</small></button>
-                <button type="button" className="ms-act" onClick={() => setRenorm(true)}><b>Renormalize Schedule</b><small>Drop extra shifts, put split jobs back together</small></button>
-              </div>
+          {/* one slim row of tools: production (the production manager's day), shifts & equipment, sales; each its own color */}
+          <div className="ms-tbar">
+            <div className="ms-tb-g ms-tb-prod">
+              <span className="ms-tb-l">Production</span>
+              <button type="button" className="ms-tb" title="What's started, done or paused today" onClick={() => setCheckin(true)}>Update Progress</button>
+              <button type="button" className="ms-tb" title="Re-lay open work from now, soonest in-hands first" onClick={() => setReplan({ why: "" })}>Re-plan</button>
+              <button type="button" className="ms-tb" title="Who's past 40 hours this pay week" onClick={() => setOtOpen(true)}>Overtime</button>
+              <button type="button" className="ms-tb" title="Drop extra shifts, put split jobs back together" onClick={() => setRenorm(true)}>Renormalize</button>
             </div>
-            <div className="ms-tg ms-tg-eq">
-              <div className="ms-tg-h">Shifts &amp; equipment</div>
-              <div className="ms-tg-grid">
-                <button type="button" className="ms-act" onClick={() => setShiftEdit(true)}><b>+ Add Shift</b><small>A weekend or extra shift for a crew</small></button>
-                <button type="button" className="ms-act" onClick={() => setDownEdit({})}><b>+ Add Downtime</b><small>Maintenance, repairs, an employee out</small></button>
-                <button type="button" className={"ms-act" + (eqIssues.length ? " ms-act-warn" : "")} onClick={() => setEqOpen(true)}><b>Equipment Status{eqIssues.length ? ` · ${eqIssues.length} issue${eqIssues.length === 1 ? "" : "s"}` : ""}</b><small>Heads out, running slow, or down</small></button>
-              </div>
+            <div className="ms-tb-g ms-tb-eq">
+              <span className="ms-tb-l">Shifts &amp; equipment</span>
+              <button type="button" className="ms-tb" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}>+ Shift</button>
+              <button type="button" className="ms-tb" title="Maintenance, repairs, an employee out" onClick={() => setDownEdit({})}>+ Downtime</button>
+              <button type="button" className={"ms-tb" + (eqIssues.length ? " warn" : "")} title="Heads out, running slow, or down" onClick={() => setEqOpen(true)}>Equipment{eqIssues.length ? <span className="ms-tb-n">{eqIssues.length}</span> : null}</button>
             </div>
-            <div className="ms-tg ms-tg-sales">
-              <div className="ms-tg-h">Sales</div>
-              <div className="ms-tg-grid">
-                <button type="button" className="ms-act" onClick={() => setWhenOpen(true)}><b>When Can We {VERB[typeF || "screen"].v} It?</b><small>Quick specs → soonest, aggressive and regular dates</small></button>
-                <button type="button" className="ms-act" onClick={() => setPlanOpen(true)}><b>Planner</b><small>Hold time for jobs you know are coming</small></button>
-              </div>
+            <div className="ms-tb-g ms-tb-sales">
+              <span className="ms-tb-l">Sales</span>
+              <button type="button" className="ms-tb" title="Quick specs → soonest, aggressive, regular and slow-boat dates" onClick={() => setWhenOpen(true)}>When Can We {VERB[typeF || "screen"].v} It?</button>
+              <button type="button" className="ms-tb" title="Hold time for jobs you know are coming" onClick={() => setPlanOpen(true)}>Planner</button>
             </div>
           </div>
 
@@ -1488,19 +1482,18 @@ export default function MachineSchedule() {
             const d1 = Array.from({ length: 7 }, (_, i) => addDay(today, i + 1)).find((d) => machines.some((m) => shiftOn(m, d))); if (!d1) return null;
             const idle = machines.filter((m) => shiftOn(m, d1)).map((m) => ({ m, free: capacityMin(s, m, d1) - used(m, d1) })).filter((x) => x.free >= 120 && cards.some((c) => c.day > d1 && c.slot && c.slot.status === "scheduled" && !c.job.firm && c.job.kind !== "h" && fits(c.need, x.m)));
             if (!idle.length) return null;
-            return <div className="ms-otline ms-idle"><span className="ms-ot-i" aria-hidden>↺</span><span><b>{idle.map((x) => `${shortName(x.m)}${crewOf(x.m) ? ` (${crewOf(x.m)!.leader})` : ""} has ${fmtMin(x.free)} open`).join(", ")} {dayLbl(d1).split(",")[0] === dayLbl(addDay(today, 1)).split(",")[0] ? "tomorrow" : dayLbl(d1)}</b> while later jobs wait. Re-plan pulls them forward.</span><span className="spacer" /><button type="button" className="btn sm" onClick={() => setReplan({ why: "" })}>Re-plan</button></div>;
+            return <div className="ms-otline ms-idle" title={idle.map((x) => `${shortName(x.m)}${crewOf(x.m) ? ` (${crewOf(x.m)!.leader})` : ""}: ${fmtMin(x.free)} open`).join("\n")}><span className="ms-ot-i" aria-hidden>↺</span><span className="ms-idle-t"><b>{idle.length === 1 ? `${shortName(idle[0].m)} has ${fmtMin(idle[0].free)} open` : `${idle.length} machines have open time`} {dayLbl(d1).split(",")[0] === dayLbl(addDay(today, 1)).split(",")[0] ? "tomorrow" : dayLbl(d1)}</b> while later jobs wait{idle.length > 1 ? <span className="faint"> · {idle.map((x) => `${shortName(x.m)} ${fmtMin(x.free)}`).join(", ")}</span> : null}</span><span className="spacer" /><button type="button" className="btn sm ghost" onClick={() => setReplan({ why: "Pull later jobs forward into the open time?" })}>Re-plan</button></div>;
           })()}
           {tight.length > 0 ? (
             <div className="ms-alert">
               <div className="ms-alert-h">
                 <span className="ms-alert-i" aria-hidden>!</span>
-                <div className="ms-alert-t"><b>Schedule too tight</b><span>{tight.length} job{tight.length === 1 ? " won't" : "s won't"} make {tight.length === 1 ? "its" : "their"} in-hands date on the regular schedule.</span></div>
+                <div className="ms-alert-t"><b>{tight.length} job{tight.length === 1 ? " won't" : "s won't"} make {tight.length === 1 ? "its" : "their"} in-hands date</b><span>on the regular schedule</span></div>
                 <span className="spacer" />
                 <button type="button" className="linkbtn" onClick={() => setTightOpen(!tightOpen)}>{tightOpen ? "Hide jobs" : "Which jobs?"}</button>
-                <button type="button" className="btn sm ms-ai-b" onClick={() => setAdvise({ opts: whatIfs(), late: tight.map((t) => ({ job: "#" + t.job.number, customer: t.job.customer || t.job.name, inHands: t.job.due ? dayLbl(t.job.due) : "none", why: t.why })), lateBefore: tight.length })}>✦ Get Recommendations</button>
-                <button type="button" className="btn sm" onClick={() => setReplan({ why: "OK to split jobs (fronts and backs as separate runs) where that makes an in-hands date?", split: true })}>Split Jobs As Needed</button>
-                <button type="button" className="btn sm" onClick={() => setReplan({ why: "" })}>Re-plan</button>
-                <button type="button" className="btn sm primary" onClick={() => setShiftEdit(true)}>Add Weekend Shift</button>
+                <button type="button" className="btn sm ms-ai-b" onClick={() => setAdvise({ opts: whatIfs(), late: tight.map((t) => ({ job: "#" + t.job.number, customer: t.job.customer || t.job.name, inHands: t.job.due ? dayLbl(t.job.due) : "none", why: t.why })), lateBefore: tight.length })}>✦ Recommendations</button>
+                <button type="button" className="btn sm ghost" onClick={() => setReplan({ why: "OK to split jobs (fronts and backs as separate runs) where that makes an in-hands date?", split: true })}>Split Jobs</button>
+                <button type="button" className="btn sm ghost" onClick={() => setShiftEdit(true)}>Add Weekend Shift</button>
               </div>
               {tightOpen && <ul className="ms-alert-l">{tight.map((t) => <li key={t.job.key}><Link href={t.job.href}>#{t.job.number}</Link><span>{t.job.customer || t.job.name}</span><small>{t.why}</small></li>)}</ul>}
             </div>
@@ -1509,11 +1502,11 @@ export default function MachineSchedule() {
           <div className="ms-ready">
             <div className="ms-ready-h">
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
-              <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art, blanks) · ` : ""}{tray.length ? "drag onto a press and day, or take the suggested spot" : ""}</span>
+              <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art, blanks) · ` : ""}{tray.length ? "drag onto a press and day, or take the suggested spot" : "nothing waiting"}</span>
               <span className="spacer" />
               {trayOpen && tray.some((t) => t.sug && !t.sug.late) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All Suggestions</button>}
             </div>
-            {trayOpen && (!tray.length ? <div className="ms-ready-empty">Nothing waiting. Jobs land here when they go to In Production (goods here, art approved).</div> : (
+            {trayOpen && tray.length > 0 && (
               <>
                 <ul className="ms-rc-l">{(trayAll ? tray : tray.slice(0, 12)).map((t) => (
                   <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-rc " + t.need.type + (t.sug?.late ? " late" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
@@ -1529,7 +1522,7 @@ export default function MachineSchedule() {
                 ))}</ul>
                 {tray.length > 12 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${tray.length}`}</button>}
               </>
-            ))}
+            )}
           </div>
         </>}
       </section>
