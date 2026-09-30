@@ -521,13 +521,15 @@ const hm = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; retu
  * clocked in: the press is "waiting" from 6:30 up to now, and that grows every few minutes until he punches in;
  * in at 10:02 → nothing runs before 10:05 (the warm-up follows). Clocked out and not back after more than a lunch
  * break → the rest of the shift is down; back later → only the time away. Only today, only presses with a crew
- * and an operator set (Employees → Press Crews), and only when the clock is reporting (the calling page checks).
+ * and an operator set (Employees → Press Crews) who has punched in the last two weeks (`tracked`), and only when the
+ * clock is reporting (the calling page checks).
  */
-export function withClock(ps: ProductionSettings, punches: ClockPunch[], today: string, nowMin: number, grace = 5): ProductionSettings {
+export function withClock(ps: ProductionSettings, punches: ClockPunch[], today: string, nowMin: number, grace = 5, tracked?: Set<string>): ProductionSettings {
   const away = (ps.breaks?.lunchMin || 30) + 20;
   const machines = ps.machines.map((m) => {
     const crew = m.crew ? ps.crews.find((c) => c.id === m.crew) : undefined, op = crew?.members?.operator;
-    if (!crew || !op) return m;
+    // an operator who never uses the clock (no punches in the last two weeks) can't be "not in yet"
+    if (!crew || !op || (tracked && !tracked.has(op))) return m;
     const sh = shiftOn(m, today); if (!sh) return m;
     const who = crew.leader || "Operator";
     const mine = punches.filter((p) => p.employee_id === op).sort((a, b) => a.min - b.min).map((p) => ({ ...p, kind: p.kind === "break_start" ? "out" : p.kind === "break_end" ? "in" : p.kind }));

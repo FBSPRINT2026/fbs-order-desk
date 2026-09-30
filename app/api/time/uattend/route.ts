@@ -97,7 +97,9 @@ export async function GET(req: Request) {
   // the employee list once every 6 hours (and whenever a punch comes from someone we don't know)
   const usersDue = !st?.users_at || Date.now() - Date.parse(st.users_at as string) > 6 * 3600000;
   try {
-    const s = await run(admin, addDays(today, -1), today, usersDue);
+    // ?back=N (up to 120 days) catches up history; the schedule itself always asks for yesterday and today
+    const back = Math.max(1, Math.min(120, Math.round(+(new URL(req.url).searchParams.get("back") || 1)) || 1));
+    const s = await run(admin, addDays(today, -back), today, usersDue);
     await record(admin, true, s);
     if (usersDue) await admin.from("uattend_sync").update({ users_at: new Date().toISOString() }).eq("id", 1);
     return NextResponse.json(s);

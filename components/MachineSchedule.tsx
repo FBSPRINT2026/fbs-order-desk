@@ -276,31 +276,33 @@ export default function MachineSchedule() {
   const today = now.day;
   const [sBase, setS] = useState<ProductionSettings | null>(null);
   // the time clock (uAttend, or our own clock): today's punches of each press crew's operator, checked every minute
-  const [tc, setTc] = useState<{ ok: boolean; punches: ClockPunch[]; ranAt: string | null }>({ ok: false, punches: [], ranAt: null });
+  const [tc, setTc] = useState<{ ok: boolean; punches: ClockPunch[]; ranAt: string | null; tracked: string[] }>({ ok: false, punches: [], ranAt: null, tracked: [] });
   useEffect(() => {
     const ops = [...new Set((sBase?.crews || []).map((c) => c.members?.operator).filter(Boolean))] as string[];
     if (!ops.length) return;
     let live = true;
     const get = async () => {
       const sb = createClient(), day = shopTime(new Date())!.day;
-      const from = new Date(Date.parse(day + "T00:00:00Z") - 14 * 3600000).toISOString(); // a little before local midnight, trimmed below
+      // two weeks back: an operator with no punches in that time doesn't use the clock, so the schedule doesn't wait on them
+      const from = new Date(Date.parse(day + "T00:00:00Z") - 14 * 86400000).toISOString();
       const [{ data: p }, { data: st }] = await Promise.all([
-        sb.from("time_punches").select("employee_id, kind, at, source").in("employee_id", ops).eq("voided", false).gte("at", from).order("at").limit(400),
+        sb.from("time_punches").select("employee_id, kind, at, source").in("employee_id", ops).eq("voided", false).gte("at", from).order("at").limit(3000),
         sb.from("uattend_sync").select("last_ok_at").eq("id", 1).maybeSingle(),
       ]);
       if (!live) return;
-      const rows = ((p || []) as { employee_id: string; kind: ClockPunch["kind"]; at: string; source: string }[]).map((x) => ({ ...x, t: shopTime(x.at)! })).filter((x) => x.t.day === day);
+      const all = ((p || []) as { employee_id: string; kind: ClockPunch["kind"]; at: string; source: string }[]).map((x) => ({ ...x, t: shopTime(x.at)! }));
+      const tracked = [...new Set(all.map((x) => x.employee_id))], rows = all.filter((x) => x.t.day === day);
       const okAt = (st?.last_ok_at as string | null) || null;
       // trust "not clocked in" only while the clock is reporting: uAttend synced in the last 15 minutes, or someone used our own clock today
       const ok = (!!okAt && Date.now() - Date.parse(okAt) < 15 * 60000) || rows.some((x) => x.source !== "uattend");
-      setTc({ ok, punches: rows.map((x) => ({ employee_id: x.employee_id, kind: x.kind, min: x.t.min })), ranAt: okAt });
+      setTc({ ok, punches: rows.map((x) => ({ employee_id: x.employee_id, kind: x.kind, min: x.t.min })), ranAt: okAt, tracked });
     };
     get(); const t = setInterval(get, 60000);
     return () => { live = false; clearInterval(t); };
   }, [sBase]);
   const clockBucket = Math.floor(now.min / 5);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const s = useMemo(() => (sBase && tc.ok ? withClock(sBase, tc.punches, today, now.min) : sBase), [sBase, tc, today, clockBucket]);
+  const s = useMemo(() => (sBase && tc.ok ? withClock(sBase, tc.punches, today, now.min, 5, new Set(tc.tracked)) : sBase), [sBase, tc, today, clockBucket]);
   const [view, setView] = useSticky<View>("cal.view", "split");
   const [week, setWeek] = useState(() => monday(shopTime(new Date())!.day));
   const [day, setDay] = useState(() => shopTime(new Date())!.day);
