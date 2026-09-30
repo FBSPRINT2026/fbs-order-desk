@@ -43,8 +43,18 @@ export function contours(alpha: Uint8Array, w: number, h: number, iso = 128): P[
   };
   const link = new Map<number, number[]>();
   const seg = (a: number, b: number) => { const la = link.get(a); if (la) la.push(b); else link.set(a, [b]); const lb = link.get(b); if (lb) lb.push(a); else link.set(b, [a]); };
-  for (let y = -1; y < h; y++) for (let x = -1; x < w; x++) {
-    const tl = ins(v(x, y)) ? 8 : 0, tr = ins(v(x + 1, y)) ? 4 : 0, br = ins(v(x + 1, y + 1)) ? 2 : 0, bl = ins(v(x, y + 1)) ? 1 : 0;
+  // inside flags a row at a time (the field is read once per row, not once per corner)
+  const inRow = (y: number) => {
+    const o = new Uint8Array(w + 2);
+    if (F) { if (y >= 0 && y < h) { const sd = F(y).sd; for (let x = 0; x < w; x++) if (sd[x] < 0) o[x + 1] = 1; } }
+    else if (y >= 0 && y < h) for (let x = 0; x < w; x++) if (alpha[y * w + x] >= iso) o[x + 1] = 1;
+    return o;
+  };
+  let up = inRow(-1);
+  for (let y = -1; y < h; y++) {
+    const dn = inRow(y + 1);
+    for (let x = -1; x < w; x++) {
+    const tl = up[x + 1] ? 8 : 0, tr = up[x + 2] ? 4 : 0, br = dn[x + 2] ? 2 : 0, bl = dn[x + 1] ? 1 : 0;
     const c = tl | tr | br | bl; if (c === 0 || c === 15) continue;
     const T = () => at(H(x, y), x, y, x + 1, y), B = () => at(H(x, y + 1), x, y + 1, x + 1, y + 1);
     const L = () => at(V(x, y), x, y, x, y + 1), R = () => at(V(x + 1, y), x + 1, y, x + 1, y + 1);
@@ -59,6 +69,8 @@ export function contours(alpha: Uint8Array, w: number, h: number, iso = 128): P[
       case 5: if (mid) { seg(L(), T()); seg(B(), R()); } else { seg(T(), R()); seg(L(), B()); } break;
       case 10: if (mid) { seg(T(), R()); seg(L(), B()); } else { seg(L(), T()); seg(B(), R()); } break;
     }
+    }
+    up = dn;
   }
   // walk the links into closed loops (every crossing point joins exactly two segments)
   const loops: P[][] = [];

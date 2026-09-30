@@ -358,28 +358,25 @@ function local3(a: Uint8Array, w: number, h: number, hi: boolean): Uint8Array {
 /** 1 where a pixel is within `r` px (a square around it) of an edge or a gradient: a pixel that differs from a
  *  neighbor by more than a few levels (a wobble, like two inks adding up to 254 at a seam, isn't an edge) */
 function nearEdges(a: Uint8Array, w: number, h: number, r: number): Uint8Array {
-  const n = w * h, R = Math.ceil(r) + 1, e = new Uint8Array(n), t = new Uint8Array(n), out = new Uint8Array(n);
+  const n = w * h, R = Math.ceil(r) + 1, t = new Uint8Array(n), out = new Uint8Array(n), e = new Uint8Array(w);
   for (let y = 0; y < h; y++) {
-    const row = y * w;
-    for (let x = 0; x < w; x++) {
-      const i = row + x, v = a[i];
-      if (x < w - 1) { const d = v - a[i + 1]; if (d > 6 || d < -6) { e[i] = 1; e[i + 1] = 1; } }
-      if (y < h - 1) { const d = v - a[i + w]; if (d > 6 || d < -6) { e[i] = 1; e[i + w] = 1; } }
-      if ((x === 0 || y === 0 || x === w - 1 || y === h - 1) && v > 6) e[i] = 1;
-    }
-  }
-  for (let y = 0; y < h; y++) {
-    const row = y * w; let last = -1e9;
-    for (let x = 0; x < w; x++) { const i = row + x; if (e[i]) last = x; if (x - last <= R) t[i] = 1; }
-    last = 1e9;
-    for (let x = w - 1; x >= 0; x--) { const i = row + x; if (e[i]) last = x; if (last - x <= R) t[i] = 1; }
-  }
-  for (let x = 0; x < w; x++) {
+    const row = y * w, up = y > 0, dn = y < h - 1;
+    // edge pixels in this row: differs from a neighbor by more than 6, or ink touching the image's border
+    e.fill(0);
+    for (let x = 0; x < w - 1; x++) { const d = a[row + x] - a[row + x + 1]; if (d > 6 || d < -6) { e[x] = 1; e[x + 1] = 1; } }
+    if (up) for (let x = 0; x < w; x++) { const d = a[row + x] - a[row + x - w]; if (d > 6 || d < -6) e[x] = 1; } else for (let x = 0; x < w; x++) if (a[row + x] > 6) e[x] = 1;
+    if (dn) for (let x = 0; x < w; x++) { const d = a[row + x] - a[row + x + w]; if (d > 6 || d < -6) e[x] = 1; } else for (let x = 0; x < w; x++) if (a[row + x] > 6) e[x] = 1;
+    if (a[row] > 6) e[0] = 1; if (a[row + w - 1] > 6) e[w - 1] = 1;
     let last = -1e9;
-    for (let y = 0; y < h; y++) { const i = y * w + x; if (t[i]) last = y; if (y - last <= R) out[i] = 1; }
+    for (let x = 0; x < w; x++) { if (e[x]) last = x; if (x - last <= R) t[row + x] = 1; }
     last = 1e9;
-    for (let y = h - 1; y >= 0; y--) { const i = y * w + x; if (t[i]) last = y; if (last - y <= R) out[i] = 1; }
+    for (let x = w - 1; x >= 0; x--) { if (e[x]) last = x; if (last - x <= R) t[row + x] = 1; }
   }
+  // down the columns, a row at a time (row order is much faster than walking each column)
+  const last = new Int32Array(w).fill(-1e9);
+  for (let y = 0; y < h; y++) { const row = y * w; for (let x = 0; x < w; x++) { const i = row + x; if (t[i]) last[x] = y; if (y - last[x] <= R) out[i] = 1; } }
+  last.fill(1e9);
+  for (let y = h - 1; y >= 0; y--) { const row = y * w; for (let x = 0; x < w; x++) { const i = row + x; if (t[i]) last[x] = y; if (last[x] - y <= R) out[i] = 1; } }
   return out;
 }
 /** distance (×5: 5 across, 7 diagonally, within a few % of true distance) from each pixel to the nearest pixel where

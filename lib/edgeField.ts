@@ -10,7 +10,7 @@
  *
  * Streams row by row (films and the tracer both go top to bottom), so it never holds a full-size field in memory.
  */
-export type EdgeRow = { sd: Float32Array; nx: Float32Array; ny: Float32Array };
+export type EdgeRow = { sd: Float32Array; nx: Float32Array; ny: Float32Array; /** raw rows: 1 where the pixel has its own edge line */ e?: Uint8Array };
 
 /** distance (px) from a pixel's center to the edge line through it, for coverage a (0–1) and gradient (gx, gy);
  *  positive when the center is outside the ink */
@@ -36,13 +36,13 @@ export function edgeRows(a: Uint8Array, w: number, h: number): (y: number) => Ed
   const A = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : a[y * w + x]);
   const rawRow = (y: number): EdgeRow => {
     let r = raw.get(y); if (r) return r;
-    r = { sd: new Float32Array(w).fill(NaN), nx: new Float32Array(w), ny: new Float32Array(w) };
+    r = { sd: new Float32Array(w).fill(NaN), nx: new Float32Array(w), ny: new Float32Array(w), e: new Uint8Array(w) };
     if (y >= 0 && y < h) for (let x = 0; x < w; x++) {
       const v = a[y * w + x]; if (v === 0 || v === 255) continue;
       const gx = A(x + 1, y - 1) + 2 * A(x + 1, y) + A(x + 1, y + 1) - A(x - 1, y - 1) - 2 * A(x - 1, y) - A(x - 1, y + 1);
       const gy = A(x - 1, y + 1) + 2 * A(x, y + 1) + A(x + 1, y + 1) - A(x - 1, y - 1) - 2 * A(x, y - 1) - A(x + 1, y - 1);
       const L = Math.hypot(gx, gy); if (L < 1) continue;
-      r.sd[x] = edgedf(gx, gy, v / 255); r.nx[x] = -gx / L; r.ny[x] = -gy / L;
+      r.sd[x] = edgedf(gx, gy, v / 255); r.nx[x] = -gx / L; r.ny[x] = -gy / L; r.e![x] = 1;
     }
     raw.set(y, r); return r;
   };
@@ -51,9 +51,13 @@ export function edgeRows(a: Uint8Array, w: number, h: number): (y: number) => Ed
     if (y > top) { top = y; for (const k of [...full.keys()]) if (k < y - 3) full.delete(k); for (const k of [...raw.keys()]) if (k < y - 4) raw.delete(k); }
     const rows = [rawRow(y - 1), rawRow(y), rawRow(y + 1)], me = rows[1];
     r = { sd: new Float32Array(w), nx: new Float32Array(w), ny: new Float32Array(w) };
+    const e0 = rows[0].e!, e1 = rows[1].e!, e2 = rows[2].e!, base = y >= 0 && y < h ? y * w : -1;
     for (let x = 0; x < w; x++) {
-      if (!Number.isNaN(me.sd[x])) { r.sd[x] = me.sd[x]; r.nx[x] = me.nx[x]; r.ny[x] = me.ny[x]; continue; }
-      const v = y >= 0 && y < h ? a[y * w + x] : 0;
+      if (e1[x]) { r.sd[x] = me.sd[x]; r.nx[x] = me.nx[x]; r.ny[x] = me.ny[x]; continue; }
+      const v = base >= 0 ? a[base + x] : 0;
+      // no edge pixel around: clearly in or out
+      const xl = x > 0 ? x - 1 : x, xr = x < w - 1 ? x + 1 : x;
+      if (!(e0[xl] | e0[x] | e0[xr] | e1[xl] | e1[xr] | e2[xl] | e2[x] | e2[xr])) { r.sd[x] = v >= 128 ? -2 : 2; continue; }
       // the neighbor edge pixel closest to half covered (the most certain line), nearest first on ties
       let bd = 9, bx = 0, by = 0, br: EdgeRow | null = null;
       for (let dy = -1; dy <= 1; dy++) {
