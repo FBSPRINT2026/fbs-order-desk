@@ -1448,7 +1448,7 @@ export default function MachineSchedule() {
         </div>
         {toolsOpen && <>
           {/* one slim row of tools: production (the production manager's day), shifts & equipment, sales; each its own color */}
-          {/* left: the tools; right: Shop Pulse, how the shop is doing and what needs attention */}
+          {/* left: the tools; right: Shop AI Assistant, how the shop is doing and what needs attention */}
           <div className="ms-tools-2">
             <div className="ms-tpanel">
           <div className="ms-tbar">
@@ -1473,17 +1473,46 @@ export default function MachineSchedule() {
           </div>
 
             </div>
-            <div className="ms-pulse" aria-label="Shop Pulse">
-              <div className="ms-pulse-h"><span aria-hidden>✦</span> Shop Pulse</div>
+            <div className="ms-pulse" aria-label="Shop AI Assistant">
+              <div className="ms-pulse-h"><span aria-hidden>✦</span> Shop AI Assistant</div>
             {(() => {
-              // one line on how the shop is doing, then the details below it
-              const otRows = otReport(payWeekStart(today)).filter((r) => r.w.ot > 0), otMin = otRows.reduce((t, r) => t + r.w.ot, 0);
-              const bits: string[] = [];
-              if (tight.length) bits.push(`${tight.length} job${tight.length === 1 ? " is" : "s are"} at risk of missing in-hands`);
-              if (otMin) bits.push(`${otRows.map((r) => crewOf(r.m)?.leader || shortName(r.m)).join(" and ")} ${otRows.length === 1 ? "is" : "are"} heading into overtime`);
-              if (eqIssues.length) bits.push(`${eqIssues.length} machine${eqIssues.length === 1 ? " has" : "s have"} an equipment issue`);
-              const ok = !tight.length;
-              return <div className={"ms-pulse-hl" + (ok ? " ok" : "")}><span className="ms-pulse-dot" aria-hidden />{ok && !bits.length ? "Everything's on time. Nothing needs you right now." : `${ok ? "Everything's on time" : bits.shift()}${bits.length ? `; ${bits.join("; ")}` : ""}.`}</div>;
+              // the assistant's read on the shop: a status ring (share of jobs on time) and a plain sentence or two
+              const keys = new Set<string>();
+              for (const c of cards) if (c.slot && c.slot.status !== "done" && c.job.kind !== "h" && (!typeF || c.need.type === typeF)) keys.add(c.job.key);
+              for (const t of tray) keys.add(t.job.key);
+              const total = keys.size, late = tight.length, onTime = Math.max(0, total - late), pct = total ? onTime / total : 1;
+              const rows = otReport(payWeekStart(today)), otNeed = rows.reduce((t, r) => t + r.used, 0);
+              const otWho = rows.filter((r) => r.used > 0).map((r) => crewOf(r.m)?.leader || shortName(r.m));
+              const wkd = (d: string) => [0, 6].includes(new Date(d + "T12:00:00Z").getUTCDay());
+              const wk = extras.filter((x) => x.day >= today && wkd(x.day) && machines.some((m) => m.id === x.machine)).sort((x, y) => x.day.localeCompare(y.day));
+              const lvl = late ? "bad" : otNeed > 0 || eqIssues.length || wk.length ? "warn" : "ok";
+              const and = (xs: string[]) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+              const lines: string[] = [];
+              if (late) lines.push(wk.length ? `Even with the weekend shift ${dayLbl(wk[0].day)}, you're short — check Recommendations, or split jobs across presses.` : `You're trending toward a weekend shift — check Recommendations, or split jobs across presses.`);
+              if (otNeed > 0) lines.push(`Trending toward overtime: ${and(otWho)} ${otWho.length === 1 ? "needs" : "need"} about ${fmtMin(otNeed)} past 40 hours this pay week.`);
+              if (wk.length && !late) lines.push(`A weekend shift is booked ${dayLbl(wk[0].day)}.`);
+              if (eqIssues.length) lines.push(`${and(eqIssues.map((m) => shortName(m)))} ${eqIssues.length === 1 ? "has" : "have"} an equipment issue.`);
+              const title = lvl === "bad" ? `${late} job${late === 1 ? "" : "s"} won't make ${late === 1 ? "its" : "their"} in-hands date.` : lvl === "warn" ? "Jobs are on time, with a heads up." : "You're good.";
+              if (lvl === "ok" && !lines.length) lines.push("Every job makes its in-hands date and nobody needs overtime this week.");
+              const R = 20, C = 2 * Math.PI * R;
+              return (
+                <div className={"ms-as " + lvl}>
+                  <div className="ms-as-ring" title={`${onTime} of ${total} jobs on time`}>
+                    <svg viewBox="0 0 52 52" width="52" height="52" aria-hidden><circle cx="26" cy="26" r={R} className="trk" /><circle cx="26" cy="26" r={R} className="val" strokeDasharray={`${C * pct} ${C}`} transform="rotate(-90 26 26)" /></svg>
+                    <span className="ms-as-ic" aria-hidden>{lvl === "ok" ? "✓" : "!"}</span>
+                  </div>
+                  <div className="ms-as-b">
+                    <div className="ms-as-t">{title}</div>
+                    {lines.map((l, i) => <div key={i} className="ms-as-s">{l}</div>)}
+                    <div className="ms-as-chips">
+                      <span className={late ? "bad" : "ok"}><i />On time {onTime}/{total}</span>
+                      <span className={otNeed > 0 ? "warn" : "ok"}><i />{otNeed > 0 ? `Overtime ${fmtMin(otNeed)}` : "No overtime needed"}</span>
+                      <span className={wk.length ? "warn" : late ? "warn" : "ok"}><i />{wk.length ? `Weekend ${dayLbl(wk[0].day).replace(",", "")}` : late ? "Weekend may be needed" : "No weekend"}</span>
+                      <span className={eqIssues.length ? "warn" : "ok"}><i />{eqIssues.length ? `Equipment: ${eqIssues.length} issue${eqIssues.length === 1 ? "" : "s"}` : "Equipment OK"}</span>
+                    </div>
+                  </div>
+                </div>
+              );
             })()}
           {(() => { const rows = otReport(payWeekStart(today)), ot = rows.reduce((t, r) => t + r.w.ot, 0); if (!rows.length) return null; const pay = rows.reduce((t, r) => t + (r.pay || 0), 0), unused = rows.reduce((t, r) => t + r.unused, 0), known = rows.every((r) => r.pay != null); return (
             <div className={"ms-otline" + (ot ? " on" : "")}>
@@ -1504,7 +1533,7 @@ export default function MachineSchedule() {
             <div className="ms-alert">
               <div className="ms-alert-h">
                 <span className="ms-alert-i" aria-hidden>!</span>
-                <div className="ms-alert-t"><b>{tight.length} job{tight.length === 1 ? " won't" : "s won't"} make {tight.length === 1 ? "its" : "their"} in-hands date</b><span>on the regular schedule</span></div>
+                <div className="ms-alert-t"><b>Late jobs ({tight.length})</b><span>on the regular schedule</span></div>
                 <span className="spacer" />
                 <button type="button" className="linkbtn" onClick={() => setTightOpen(!tightOpen)}>{tightOpen ? "Hide jobs" : "Which jobs?"}</button>
                 <button type="button" className="btn sm ms-ai-b" onClick={() => setAdvise({ opts: whatIfs(), late: tight.map((t) => ({ job: "#" + t.job.number, customer: t.job.customer || t.job.name, inHands: t.job.due ? dayLbl(t.job.due) : "none", why: t.why })), lateBefore: tight.length })}>✦ Recommendations</button>
