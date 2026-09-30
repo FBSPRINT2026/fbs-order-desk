@@ -12,6 +12,7 @@ import { filmPdf, deflate } from "@/lib/filmPdf";
 import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg } from "@/lib/epsVector";
+import { browserInflate, parsePdf } from "@/lib/pdfVector";
 import { deltaE } from "@/lib/inkColors";
 import { mergeProduction, withIssue, type EquipRow, type Machine, type Station } from "@/lib/production";
 import PressLayout from "@/components/PressLayout";
@@ -111,28 +112,38 @@ function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false, side
 }
 /** art uploaded straight to a separation (no order): kept in its folder, remembered in settings.art */
 export type SepArt = { path: string; name: string; type: string; preview?: string };
-export const ART_ACCEPT = ".png,.jpg,.jpeg,.webp,.svg,.eps,image/png,image/jpeg,image/webp,image/svg+xml,application/postscript";
-export const ART_KINDS = "PNG, JPG, WebP, SVG or Illustrator EPS";
-const isEps = (name: string, type = "") => /postscript|eps/i.test(type) || /\.eps$/i.test(name);
-export const artOk = (f: File) => /^image\/(png|jpe?g|webp|svg\+xml)$/i.test(f.type) || /\.(png|jpe?g|webp|svg|eps)$/i.test(f.name);
+export const ART_ACCEPT = ".png,.jpg,.jpeg,.webp,.svg,.eps,.ai,.pdf,image/png,image/jpeg,image/webp,image/svg+xml,application/postscript,application/pdf,application/illustrator";
+export const ART_KINDS = "PNG, JPG, WebP, SVG, Illustrator (.ai), PDF or EPS";
+const isEps = (name: string, type = "") => /\.eps$/i.test(name) || (/postscript/i.test(type) && !/\.ai$/i.test(name));
+const isPdf = (name: string, type = "") => /\.(pdf|ai)$/i.test(name) || /pdf|illustrator/i.test(type);
+/** vector files we read ourselves (EPS, .ai, PDF): their shapes, or null for pictures and SVG */
+export async function readVector(blob: Blob, name: string, type = ""): Promise<VArt | null> {
+  if (isEps(name, type)) return parseEps(await blob.text());
+  if (isPdf(name, type)) {
+    try { return await parsePdf(new Uint8Array(await blob.arrayBuffer()), browserInflate); }
+    catch (e) { return { ok: false, why: e instanceof Error ? e.message : "couldn't be read", x: 0, y: 0, w: 1, h: 1, shapes: [] }; }
+  }
+  return null;
+}
+export const artOk = (f: File) => /^image\/(png|jpe?g|webp|svg\+xml)$/i.test(f.type) || /\.(png|jpe?g|webp|svg|eps|ai|pdf)$/i.test(f.name);
 /** null when the file can be separated, else why not (an EPS has to be flat filled shapes) */
 export async function artProblem(f: File): Promise<string | null> {
-  if (!artOk(f)) return `Use a ${ART_KINDS}. (AI or PDF: in Illustrator, File → Save As → EPS or Export → SVG / PNG.)`;
-  if (!isEps(f.name, f.type)) return null;
-  const v = parseEps(await f.text());
-  return v.ok ? null : `This EPS ${v.why}. Fix that in Illustrator, or save it as SVG or PNG.`;
+  if (!artOk(f)) return `Use a ${ART_KINDS}.`;
+  const v = await readVector(f, f.name, f.type);
+  if (!v || v.ok) return null;
+  const kind = isEps(f.name, f.type) ? "EPS" : /\.ai$/i.test(f.name) ? "Illustrator file" : "PDF";
+  return `This ${kind} ${v.why}. Fix that in Illustrator, or save it as PNG (at the print size) to separate it as a picture.`;
 }
 export async function uploadSepArt(sb: ReturnType<typeof createClient>, id: string, f: File): Promise<SepArt> {
   const stamp = Date.now(), path = `separations/${id}/art-${stamp}-${f.name.replace(/[^\w.-]+/g, "_")}`;
-  const eps = isEps(f.name, f.type);
-  const type = f.type || (/\.svg$/i.test(f.name) ? "image/svg+xml" : eps ? "application/postscript" : "application/octet-stream");
+  const type = f.type || (/\.svg$/i.test(f.name) ? "image/svg+xml" : isEps(f.name) ? "application/postscript" : isPdf(f.name) ? "application/pdf" : "application/octet-stream");
   const r = await sb.storage.from("proofs").upload(path, f, { upsert: true, contentType: type });
   if (r.error) throw new Error(r.error.message);
   const art: SepArt = { path, name: f.name, type };
-  if (eps) {
-    // a picture of it for the list (the Studio reads the EPS itself)
-    const v = parseEps(await f.text());
-    if (v.ok) { const pv = `separations/${id}/art-${stamp}-preview.svg`; const u = await sb.storage.from("proofs").upload(pv, new Blob([vartSvg(v)], { type: "image/svg+xml" }), { upsert: true, contentType: "image/svg+xml" }); if (!u.error) art.preview = pv; }
+  {
+    // vector files (EPS, .ai, PDF): a picture of it for the list (the Studio reads the file itself)
+    const v = await readVector(f, f.name, f.type);
+    if (v?.ok) { const pv = `separations/${id}/art-${stamp}-preview.svg`; const u = await sb.storage.from("proofs").upload(pv, new Blob([vartSvg(v)], { type: "image/svg+xml" }), { upsert: true, contentType: "image/svg+xml" }); if (!u.error) art.preview = pv; }
   }
   return art;
 }
@@ -215,12 +226,12 @@ export default function SeparationStudio({ id }: { id: string }) {
     const des = d0?.file_path ? { file_path: d0.file_path, file_type: d0.file_type, file_name: d0.file_name, preview_path: d0.preview_path } : up?.path ? { file_path: up.path, file_type: up.type, file_name: up.name, preview_path: null as string | null } : null;
     setHasArt(!!des);
     // Illustrator EPS: read its shapes (vector all the way to the Illustrator file)
-    if (des && isEps(des.file_name || des.file_path, des.file_type || "")) {
+    if (des && (isEps(des.file_name || des.file_path, des.file_type || "") || isPdf(des.file_name || des.file_path, des.file_type || ""))) {
       const [{ data: ev }, { data: su }] = await Promise.all([sb.storage.from("proofs").download(des.file_path), sb.storage.from("proofs").createSignedUrl(des.file_path, 3600)]);
       setOrigUrl(su?.signedUrl || "");
-      const v = ev ? parseEps(await ev.text()) : null;
+      const v = ev ? await readVector(ev, des.file_name || des.file_path, des.file_type || "") : null;
       if (v?.ok) { setVart(v); setArtUrl(URL.createObjectURL(new Blob([vartSvg(v)], { type: "image/svg+xml" }))); return; }
-      if (!des.preview_path) { setErr(`This EPS ${v?.why || "couldn't be read"}. Fix that in Illustrator, or upload it as SVG or PNG.`); setHasArt(false); return; }
+      if (!des.preview_path) { setErr(`This art file ${v?.why || "couldn't be read"}. Fix that in Illustrator, or upload a PNG at the print size.`); setHasArt(false); return; }
       if (v) setVart(v); // shows why, and the preview picture is separated instead
       const { data: pb } = await sb.storage.from("proofs").download(des.preview_path);
       if (pb) setArtUrl(URL.createObjectURL(pb));
@@ -255,10 +266,13 @@ export default function SeparationStudio({ id }: { id: string }) {
       if (auto || f.length < want) setSt((x) => ({ ...x, maxColors: Math.max(1, f.length) }));
       if (auto) setNatural(f.length);
       if (!auto && f.length < want) setMsg(`This art has ${f.length} color${f.length === 1 ? "" : "s"}. More inks would print almost nothing, so it stays at ${f.length}.`);
-      setInks(f.map((x) => ({ hex: x.hex, name: inkName(x.hex, st.lib) })));
+      // vector art with spot swatches (.ai / PDF): an ink that is one of the art's swatches takes the swatch's name
+      const spots = (vart?.shapes || []).filter((sh) => sh.ink && !/%$/.test(sh.ink));
+      const swatch = (hex: string) => { let best = "", bd = 4; for (const sh of spots) { const d = deltaE(hex, sh.fill); if (d < bd) { bd = d; best = sh.ink!; } } return best; };
+      setInks(f.map((x) => ({ hex: x.hex, name: swatch(x.hex) || inkName(x.hex, st.lib) })));
       setOrderKeys([]); setNames({}); setHidden(new Set()); setMatchAt(null); setBusy("");
     }, 30);
-  }, [st.method, st.garment, st.maxColors, st.lib]);
+  }, [st.method, st.garment, st.maxColors, st.lib, vart]);
   const hint = useMemo(() => { const px = pxRef.current; if (!px || !inks.length || st.method === "sim") return 0; return gradientShare(px, inks.map((k) => k.hex)); }, [pxTick, inks, st.method]);
   useEffect(() => { if (pxTick && !inks.length) findInks(st.method, true); }, [pxTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -546,8 +560,8 @@ export default function SeparationStudio({ id }: { id: string }) {
               <div key={k.hex + i} className={"sep-chip" + (res?.dropped.includes(k.hex) ? " shirt" : "")} title={res?.dropped.includes(k.hex) ? "Matches the shirt: not printed (the shirt shows through)" : undefined}>
                 <span className="sep-chip-sw" style={{ background: shown(k) }} title={`In the art: ${k.hex}`}><i style={{ background: k.hex }} /></span>
                 <input list="sep-inklist" value={k.name} onChange={(e) => setInks((l) => l.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} aria-label="Ink" data-notranslate />
-                {(() => { const m = inkKind(k.name, k.hex); return (
-                  <button type="button" className={"sep-chip-m" + (matchAt === i ? " on" : "") + (m ? " q-" + m.word.replace(/ /g, "-") : "")} onClick={() => setMatchAt(matchAt === i ? null : i)} title="Standard ink or PMS: see both and pick">
+                {(() => { const m = vart?.shapes.some((sh) => sh.ink === k.name) ? { kind: "Swatch", word: "from the art", dE: 0 } : inkKind(k.name, k.hex); return (
+                  <button type="button" className={"sep-chip-m" + (matchAt === i ? " on" : "") + (m ? " q-" + (m.kind === "Swatch" ? "exact" : m.word.replace(/ /g, "-")) : "")} onClick={() => setMatchAt(matchAt === i ? null : i)} title="Standard ink or PMS: see both and pick">
                     {m ? <>{m.kind} · {m.word}</> : "Pick an ink"}
                   </button>
                 ); })()}

@@ -39,7 +39,7 @@ export const PMS_HEX: Record<string, string> = {
 export const colorHex = (name: string) => {
   if (WILFLEX_HEX[name] || PMS_HEX[name]) return WILFLEX_HEX[name] || PMS_HEX[name];
   if (/^#[0-9a-f]{6}$/i.test(name)) return name;
-  const m = name.trim().replace(/^pms\s*/i, "").replace(/\s*c$/i, "");
+  const m = name.trim().replace(/^(pms|pantone)\s*/i, "").replace(/\s*c$/i, "");
   return m ? PMS_COATED[`PMS ${m.replace(/\b[a-z]/g, (c) => c.toUpperCase())} C`] || "" : "";
 };
 

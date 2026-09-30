@@ -5,7 +5,7 @@
  * polygon, nested group transforms, fill from attributes / style / <style> classes. Gradients, images, masks and
  * stroked outlines can't be separated this way: `ok` is false and the raster route is used instead.
  */
-export type VShape = { fill: string; evenodd: boolean; ops: string };
+export type VShape = { fill: string; evenodd: boolean; ops: string; /** the spot swatch it was filled with (PDF / .ai art), e.g. "PANTONE 186 C" */ ink?: string };
 export type VArt = { ok: boolean; why?: string; x: number; y: number; w: number; h: number; shapes: VShape[] };
 
 type M = [number, number, number, number, number, number];

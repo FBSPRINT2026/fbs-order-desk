@@ -5,8 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { fmtDate } from "@/lib/format";
-import { ART_ACCEPT, ART_KINDS, SEP_STATUS, artProblem, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
-import { parseEps, vartSvg } from "@/lib/epsVector";
+import { ART_ACCEPT, ART_KINDS, SEP_STATUS, artProblem, readVector, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
+import { vartSvg } from "@/lib/epsVector";
 
 /**
  * Separations queue (Production → Separations): every imprint waiting for films, from "Request Separations" on an
@@ -96,10 +96,10 @@ function NewFromArt() {
   async function pickFile(f?: File) {
     if (!f) return;
     const bad = await artProblem(f); if (bad) { setErr(bad); return; }
-    const eps = /\.eps$/i.test(f.name) || /postscript/i.test(f.type);
-    const url = URL.createObjectURL(eps ? new Blob([vartSvg(parseEps(await f.text()))], { type: "image/svg+xml" }) : f);
+    const v = await readVector(f, f.name, f.type);
+    const url = URL.createObjectURL(v ? new Blob([vartSvg(v)], { type: "image/svg+xml" }) : f);
     setErr(""); setFile(f); setThumb(url); setName(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 60));
-    const vector = eps || /\.svg$/i.test(f.name) || /svg/i.test(f.type);
+    const vector = !!v || /\.svg$/i.test(f.name) || /svg/i.test(f.type);
     const im = new Image(); im.onload = () => setDims({ w: im.naturalWidth, h: im.naturalHeight, vector }); im.src = url;
   }
   async function start() {
