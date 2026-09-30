@@ -68,10 +68,20 @@ export type Found = { hex: string; share: number };
 export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004): Found[] {
   const { data } = px, n = px.w * px.h;
   const pts: [number, number, number][] = [], rgbs: [number, number, number][] = [];
-  const step = Math.max(1, Math.floor(n / 60000));
-  for (let i = 0; i < n; i += step) { const o = i * 4; if (data[o + 3] < 160) continue; rgbs.push([data[o], data[o + 1], data[o + 2]]); pts.push(labOf(data[o], data[o + 1], data[o + 2])); }
+  const step = Math.max(1, Math.floor(n / 60000)), W = px.w;
+  // sample flat areas only: a pixel that matches its neighbors is a real ink; the in-between pixels along edges
+  // (anti-aliasing, black outlines over yellow) would otherwise become fake "colors" and pull real ones together
+  const flat = (i: number) => {
+    const o = i * 4, x = i % W;
+    for (const j of [x > 0 ? i - 1 : i, x < W - 1 ? i + 1 : i, i >= W ? i - W : i, i + W < n ? i + W : i]) {
+      const q = j * 4; if (data[q + 3] < 160 || Math.abs(data[q] - data[o]) + Math.abs(data[q + 1] - data[o + 1]) + Math.abs(data[q + 2] - data[o + 2]) > 24) return false;
+    }
+    return true;
+  };
+  for (let pass = 0; pass < 2 && pts.length < 500; pass++)
+    for (let i = 0; i < n; i += step) { const o = i * 4; if (data[o + 3] < 160 || (!pass && !flat(i))) continue; rgbs.push([data[o], data[o + 1], data[o + 2]]); pts.push(labOf(data[o], data[o + 1], data[o + 2])); }
   if (!pts.length) return [];
-  const k = Math.min(Math.max(max + 4, 6), 16, pts.length);
+  const k = Math.min(Math.max(max + 8, 8), 20, pts.length);
   // k-means++ seeding (deterministic: a fixed-seed random)
   let seed = 7; const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
   const cent: number[][] = [pts[Math.floor(rnd() * pts.length)].slice()];
@@ -99,6 +109,21 @@ export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004): Found[
   for (const c of list) { const hit = out.find((o) => deltaE(o.hex, c.hex) < merge); if (hit) hit.n += c.n; else out.push({ ...c }); }
   const total = pts.length;
   let res = out.filter((c) => c.n / total >= minShare).map((c) => ({ hex: c.hex, share: c.n / total }));
+  // a small color that sits on the line between two bigger ones is their blend (an edge), not an ink
+  const L = (h: string) => labOf(...rgbOf(h));
+  res = res.filter((c, i) => {
+    if (c.share > 0.08) return true;
+    const p = L(c.hex);
+    for (let a = 0; a < res.length; a++) for (let b = a + 1; b < res.length; b++) {
+      if (a === i || b === i || res[a].share < c.share || res[b].share < c.share) continue;
+      const A = L(res[a].hex), B = L(res[b].hex), AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], AP = [p[0] - A[0], p[1] - A[1], p[2] - A[2]];
+      const len = AB[0] ** 2 + AB[1] ** 2 + AB[2] ** 2; if (!len) continue;
+      const tt = (AP[0] * AB[0] + AP[1] * AB[1] + AP[2] * AB[2]) / len; if (tt < 0.1 || tt > 0.9) continue;
+      const d = Math.sqrt((AP[0] - tt * AB[0]) ** 2 + (AP[1] - tt * AB[1]) ** 2 + (AP[2] - tt * AB[2]) ** 2);
+      if (d < 7) return false;
+    }
+    return true;
+  });
   // still too many: join the closest pair until it fits
   while (res.length > max) {
     let bi = 0, bj = 1, bd = Infinity;
