@@ -310,29 +310,72 @@ function nnls(A: number[][], b: number[]): number[] {
  */
 function morph(src: Uint8Array, w: number, h: number, r: number, grow: boolean): Uint8Array {
   if (r <= 0) return src;
-  const sq = Math.round(r * 0.414), dm = Math.max(0, Math.round(r) - sq);
-  const pick = grow ? (x: number, y: number) => (x > y ? x : y) : (x: number, y: number) => (x < y ? x : y);
+  const sq = Math.round(r * 0.414), dm = Math.max(0, Math.round(r) - sq), n = w * h;
   let a = src;
+  // (the loops are written out for grow and shrink: this runs over millions of pixels at full size)
   if (sq > 0) {
     // square: across, then down (outside the image counts as empty)
-    const tmp = new Uint8Array(a.length), out = new Uint8Array(a.length);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = grow ? 0 : 255; for (let k = -sq; k <= sq; k++) { const xx = x + k; const v = xx < 0 || xx >= w ? 0 : a[y * w + xx]; m = pick(m, v); } tmp[y * w + x] = m; }
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = grow ? 0 : 255; for (let k = -sq; k <= sq; k++) { const yy = y + k; const v = yy < 0 || yy >= h ? 0 : tmp[yy * w + x]; m = pick(m, v); } out[y * w + x] = m; }
+    const tmp = new Uint8Array(n), out = new Uint8Array(n);
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) {
+        const x0 = x - sq, x1 = x + sq;
+        let m = grow ? 0 : (x0 < 0 || x1 >= w ? 0 : 255);
+        const lo = x0 < 0 ? 0 : x0, hi = x1 >= w ? w - 1 : x1;
+        if (grow) { for (let k = lo; k <= hi; k++) { const v = a[row + k]; if (v > m) m = v; } }
+        else if (m) { for (let k = lo; k <= hi; k++) { const v = a[row + k]; if (v < m) m = v; } }
+        tmp[row + x] = m;
+      }
+    }
+    for (let y = 0; y < h; y++) {
+      const y0 = y - sq, y1 = y + sq, lo = y0 < 0 ? 0 : y0, hi = y1 >= h ? h - 1 : y1, edge = y0 < 0 || y1 >= h;
+      for (let x = 0; x < w; x++) {
+        let m = grow ? 0 : (edge ? 0 : 255);
+        if (grow) { for (let k = lo; k <= hi; k++) { const v = tmp[k * w + x]; if (v > m) m = v; } }
+        else if (m) { for (let k = lo; k <= hi; k++) { const v = tmp[k * w + x]; if (v < m) m = v; } }
+        out[y * w + x] = m;
+      }
+    }
     a = out;
   }
   // diamond: dm passes of the 3×3 plus
   for (let it = 0; it < dm; it++) {
-    const out = new Uint8Array(a.length);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const i = y * w + x;
-      let m = a[i];
-      m = pick(m, x > 0 ? a[i - 1] : 0); m = pick(m, x < w - 1 ? a[i + 1] : 0);
-      m = pick(m, y > 0 ? a[i - w] : 0); m = pick(m, y < h - 1 ? a[i + w] : 0);
-      out[i] = m;
+    const out = new Uint8Array(n);
+    for (let y = 0; y < h; y++) {
+      const row = y * w, top = y > 0, bot = y < h - 1;
+      for (let x = 0; x < w; x++) {
+        const i = row + x;
+        let m = a[i];
+        const l = x > 0 ? a[i - 1] : 0, rr = x < w - 1 ? a[i + 1] : 0, u = top ? a[i - w] : 0, d = bot ? a[i + w] : 0;
+        if (grow) { if (l > m) m = l; if (rr > m) m = rr; if (u > m) m = u; if (d > m) m = d; }
+        else { if (l < m) m = l; if (rr < m) m = rr; if (u < m) m = u; if (d < m) m = d; }
+        out[i] = m;
+      }
     }
     a = out;
   }
   return a;
+}
+/** the pixel offsets inside a disc of radius r (a round brush), nearest first, as typed arrays */
+function disc(r: number, w: number): { dx: Int32Array; dy: Int32Array; off: Int32Array; R: number } {
+  const list: [number, number, number][] = [];
+  const R = Math.ceil(r);
+  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const d = dx * dx + dy * dy; if (d && d <= r * r + 0.25) list.push([dx, dy, d]); }
+  list.sort((a, b) => a[2] - b[2]);
+  return { dx: Int32Array.from(list, (v) => v[0]), dy: Int32Array.from(list, (v) => v[1]), off: Int32Array.from(list, (v) => v[1] * w + v[0]), R };
+}
+/** the most (grow) or least (shrink) of `a` within the disc around pixel i; outside the image counts as 0 */
+function discPick(a: Uint8Array, i: number, w: number, h: number, D: ReturnType<typeof disc>, grow: boolean, start: number): number {
+  const x = i % w, y = (i - x) / w, K = D.off.length, inside = x >= D.R && y >= D.R && x < w - D.R && y < h - D.R;
+  let m = start;
+  if (grow) {
+    if (inside) { for (let k = 0; k < K; k++) { const v = a[i + D.off[k]]; if (v > m) { m = v; if (m === 255) break; } } }
+    else for (let k = 0; k < K; k++) { const X = x + D.dx[k], Y = y + D.dy[k]; if (X < 0 || Y < 0 || X >= w || Y >= h) continue; const v = a[i + D.off[k]]; if (v > m) { m = v; if (m === 255) break; } }
+  } else {
+    if (inside) { for (let k = 0; k < K; k++) { const v = a[i + D.off[k]]; if (v < m) { m = v; if (!m) break; } } }
+    else for (let k = 0; k < K; k++) { const X = x + D.dx[k], Y = y + D.dy[k]; const v = X < 0 || Y < 0 || X >= w || Y >= h ? 0 : a[i + D.off[k]]; if (v < m) { m = v; if (!m) break; } }
+  }
+  return m;
 }
 /** push a coverage mask out by r pixels (round brush) */
 export function spread(a: Uint8Array, w: number, h: number, r: number): Uint8Array { return morph(a, w, h, r, true); }
@@ -418,16 +461,17 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   if (s.method === "spot") {
     // a color that is one of the inks prints solid; a color with no ink of its own (the gold, when only yellow and
     // orange are left) becomes a halftone mix of the inks that make it, like Separo
-    const mix = spotMixer(inks, s);
-    const cache = new Map<number, Float32Array>();
+    const mix = spotMixer(inks, s), m1 = inks.length + 1;
+    // each (6-bit) color is worked out once: slot per color in a flat table
+    const slot = new Int32Array(1 << 18).fill(-1), table: number[] = [];
     if (dark) white = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
       const o = i * 4, a = data[o + 3]; if (a < 8) continue;
       const q = Q6(data[o], data[o + 1], data[o + 2]);
-      let ws = cache.get(q);
-      if (!ws) { ws = mix(...unQ6(q)); cache.set(q, ws); }
-      for (let c = 0; c < inks.length; c++) if (ws[c] > 0.02) cover[c][i] = Math.round(ws[c] * a);
-      if (white && ws[inks.length] > 0.02) white[i] = Math.round(ws[inks.length] * a);
+      let at = slot[q];
+      if (at < 0) { at = slot[q] = table.length; const ws = mix(...unQ6(q)); for (let c = 0; c < m1; c++) table.push(ws[c]); }
+      for (let c = 0; c < inks.length; c++) { const v = table[at + c]; if (v > 0.02) cover[c][i] = Math.round(v * a); }
+      if (white) { const v = table[at + inks.length]; if (v > 0.02) white[i] = Math.round(v * a); }
     }
   } else {
     // simulated process: unmix each color into the inks (in linear light). Light shirt: over the shirt. Dark shirt:
@@ -476,9 +520,13 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
     if (white) { add(ub, white); add(inked, white); }
     const r = Math.max(0, Math.round(s.choke));
     if (r > 0) {
-      const bare = new Uint8Array(n); for (let i = 0; i < n; i++) bare[i] = 255 - inked[i];
-      const near = spread(bare, w, h, r);
-      for (let i = 0; i < n; i++) { const lim = 255 - near[i]; if (ub[i] > lim) ub[i] = lim; }
+      // under base only: no more base than the least-inked spot within r px (bare shirt nearby pulls it back)
+      const D = disc(r, w);
+      for (let i = 0; i < n; i++) {
+        if (!ub[i]) continue;
+        const m = discPick(inked, i, w, h, D, false, inked[i]);
+        if (ub[i] > m) ub[i] = m;
+      }
     }
     plates.push(mk("ub", "Underbase White", "#FFFFFF", "underbase", ub));
   }
@@ -508,8 +556,13 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
     for (let j = seq.length - 1; j >= 0; j--) {
       const a = seq[j].a, orig = a.slice();
       if (j < seq.length - 1) {
-        const grown = spread(orig, w, h, trap);
-        for (let i = 0; i < n; i++) if (later[i] && grown[i] > a[i]) a[i] = Math.min(grown[i], Math.max(a[i], later[i]));
+        // only where a later ink prints and this one isn't already solid: the most of this ink within `trap` px
+        const D = disc(trap, w);
+        for (let i = 0; i < n; i++) {
+          if (!later[i] || a[i] === 255) continue;
+          const g = discPick(orig, i, w, h, D, true, orig[i]);
+          if (g > a[i]) a[i] = Math.min(g, Math.max(a[i], later[i]));
+        }
       }
       for (let i = 0; i < n; i++) { const v = later[i] + orig[i]; later[i] = v > 255 ? 255 : v; }
     }
