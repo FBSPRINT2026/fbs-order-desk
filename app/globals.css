@@ -4244,3 +4244,20 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-idle-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ms-otline .btn.sm{padding:2px 9px;font-size:12px}
 .ms-otline.ms-idle .btn.ghost{border:1px solid var(--line);background:var(--surface)}
+
+/* Scheduling Tools notices: plain, uncolored rows (overtime, open time, jobs that won't make it) */
+.ms-tools .ms-otline,.ms-tools .ms-otline.on,.ms-tools .ms-otline.ms-idle,.ms-tools .ms-alert{background:transparent;border:0;border-top:1px solid var(--line-2);border-radius:0;padding:6px 2px;color:var(--ink-2)}
+.ms-tools .ms-otline b,.ms-tools .ms-alert-t b{color:var(--ink);font-weight:700;font-size:13px}
+.ms-tools .ms-otline small,.ms-tools .ms-alert-t span{color:var(--ink-3)}
+.ms-tools .ms-ot-i{width:18px;text-align:center;color:var(--ink-3);filter:grayscale(1);opacity:.8;font-size:13px}
+.ms-tools .ms-alert-i{background:transparent;color:var(--ink-3);border:1.5px solid var(--ink-3);width:16px;height:16px;font-size:10px}
+.ms-tools .ms-alert .btn.sm,.ms-tools .ms-otline .btn.sm{background:transparent;border:1px solid var(--line);color:var(--ink-2);font-weight:600}
+.ms-tools .ms-alert .btn.sm:hover,.ms-tools .ms-otline .btn.sm:hover{border-color:var(--ink-3);color:var(--ink)}
+.ms-tools .ms-ai-b{border-color:var(--line)!important;color:var(--ink-2)!important}
+.ms-tools .ms-alert-l{border-top-color:var(--line-2)}
+.ms-tools .ms-alert-l small{color:var(--ink-3)}
+.ms-tools .ms-okline{border-top:1px solid var(--line-2);padding:6px 2px;color:var(--ink-2);font-weight:500}
+.ms-tools .ms-ok-i{background:transparent!important;color:var(--ink-3)!important;border:1.5px solid var(--ink-3)}
+.ms-tools .ms-ready{border-top:1px solid var(--line-2)}
+.ms-tools .ms-otline,.ms-tools .ms-alert-h{min-height:32px;align-items:center}
+.ms-tools .ms-alert{padding:4px 2px}
