@@ -111,21 +111,38 @@ export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004, garment
   const out: { hex: string; n: number }[] = [];
   for (const c of list) { const hit = out.find((o) => deltaE(o.hex, c.hex) < merge); if (hit) hit.n += c.n; else out.push({ ...c }); }
   const total = pts.length;
-  let res = out.filter((c) => c.n / total >= minShare).map((c) => ({ hex: c.hex, share: c.n / total }));
-  // a small color that sits on the line between two bigger ones is their blend (an edge), not an ink
-  const L = (h: string) => labOf(...rgbOf(h));
+  // small colors: kept when they're big enough, or when they're a real detail ink (a solid inside of their own,
+  // like a thin tan mustache), not scattered noise
+  const L0 = (h: string) => labOf(...rgbOf(h));
+  const solidInside = (hex: string) => {
+    const t = L0(hex); let inside = 0, near = 0; const H0 = px.h;
+    const close = (j: number) => { const q = j * 4; if (data[q + 3] < 160) return false; return d2(labOf(data[q], data[q + 1], data[q + 2]), t) < 64; };
+    for (let i = 0; i < n; i += step) {
+      if (!close(i)) continue; near++;
+      const x = i % W, y = (i - x) / W; if (x < 1 || y < 1 || x >= W - 1 || y >= H0 - 1) continue;
+      let all = true; for (const dy of [-1, 0, 1]) { for (const dx of [-1, 0, 1]) if ((dx || dy) && !close(i + dy * W + dx)) { all = false; break; } if (!all) break; }
+      if (all) inside++;
+    }
+    return near ? inside / near : 0;
+  };
+  let res = out.filter((c) => c.n / total >= minShare || (c.n / total >= minShare / 4 && solidInside(c.hex) > 0.3)).map((c) => ({ hex: c.hex, share: c.n / total }));
+  // a small color that sits on the line between two bigger ones is their blend (an edge), not an ink, unless it has
+  // a solid inside of its own: a real ink (the tan of a mustache, between orange and black) fills areas; an edge blend
+  // is only ever a thin band
+  const L = L0, interior = solidInside;
   res = res.filter((c, i) => {
     if (c.share > 0.08) return true;
     const p = L(c.hex);
+    let blend = false;
     for (let a = 0; a < res.length; a++) for (let b = a + 1; b < res.length; b++) {
       if (a === i || b === i || res[a].share < c.share || res[b].share < c.share) continue;
       const A = L(res[a].hex), B = L(res[b].hex), AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], AP = [p[0] - A[0], p[1] - A[1], p[2] - A[2]];
       const len = AB[0] ** 2 + AB[1] ** 2 + AB[2] ** 2; if (!len) continue;
       const tt = (AP[0] * AB[0] + AP[1] * AB[1] + AP[2] * AB[2]) / len; if (tt < 0.1 || tt > 0.9) continue;
       const d = Math.sqrt((AP[0] - tt * AB[0]) ** 2 + (AP[1] - tt * AB[1]) ** 2 + (AP[2] - tt * AB[2]) ** 2);
-      if (d < 7) return false;
+      if (d < 7) { blend = true; break; }
     }
-    return true;
+    return !blend || interior(c.hex) > 0.3;
   });
   // still too many: drop the ink that's easiest to do without, one at a time: the one the others mix best
   // (as halftones over the shirt, or over the underbase on a dark shirt, where white comes free), weighed by how much
@@ -398,7 +415,7 @@ const EDGE = 22;
  *     with the shirt free to show (dark shirt); shares near 100% or 0% are rounded so flat areas stay solid
  * Also used for vector art, where a shape's fill becomes tints of the inks.
  */
-export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number, b: number) => Float32Array {
+export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number, b: number, flat?: boolean) => Float32Array {
   const gLab = labOf(...rgbOf(s.garment));
   const dark = s.underbase === "on" || (s.underbase === "auto" && gLab[0] < 55);
   const dropped = s.dropGarment ? inks.map((k) => deltaE(k.hex, s.garment) < 12) : inks.map(() => false);
@@ -408,7 +425,9 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
   const K = use.map((j) => rgbOf(inks[j].hex).map((v) => LIN[v]));
   if (dark) K.push(g);
   const m = inks.length;
-  return (r, gg, b) => {
+  // flat: the pixel is inside an area (its neighbors match), so it's a real color to print, mixed as halftones do (in
+  // light); otherwise it's a soft edge pixel the art drew between two colors, split along the line between them
+  return (r, gg, b, flat = false) => {
     const out = new Float32Array(m + 1), l = labOf(r, gg, b);
     let i1 = 0, d1 = Infinity;
     for (let c = 0; c < m; c++) { const d = d2(l, labs[c]); if (d < d1) { d1 = d; i1 = c; } }
@@ -429,7 +448,7 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
       const d = (r - A[0] - t * AB[0]) ** 2 + (gg - A[1] - t * AB[1]) ** 2 + (b - A[2] - t * AB[2]) ** 2;
       if (d < bd) { bd = d; bi = i; bj = j; bt = t; }
     }
-    if (bi >= 0 && bd < EDGE * EDGE) {
+    if (bi >= 0 && bd < EDGE * EDGE && !flat) {
       const t = bt < 0.03 ? 0 : bt > 0.97 ? 1 : bt;
       if (!dropped[bi]) out[bi] = 1 - t;
       if (!dropped[bj]) out[bj] = t;
@@ -463,13 +482,20 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
     // orange are left) becomes a halftone mix of the inks that make it, like Separo
     const mix = spotMixer(inks, s), m1 = inks.length + 1;
     // each (6-bit) color is worked out once: slot per color in a flat table
-    const slot = new Int32Array(1 << 18).fill(-1), table: number[] = [];
+    const slot = new Int32Array(1 << 19).fill(-1), table: number[] = [];
     if (dark) white = new Uint8Array(n);
+    // a pixel is flat when its 4 neighbors are (nearly) the same color and opaque
+    const flatAt = (i: number) => {
+      const o = i * 4, x = i % w;
+      if (x === 0 || x === w - 1 || i < w || i >= n - w) return false;
+      for (const j of [i - 1, i + 1, i - w, i + w]) { const q = j * 4; if (data[q + 3] < 250 || Math.abs(data[q] - data[o]) + Math.abs(data[q + 1] - data[o + 1]) + Math.abs(data[q + 2] - data[o + 2]) > 12) return false; }
+      return true;
+    };
     for (let i = 0; i < n; i++) {
       const o = i * 4, a = data[o + 3]; if (a < 8) continue;
-      const q = Q6(data[o], data[o + 1], data[o + 2]);
+      const f = flatAt(i) ? 1 : 0, q = (Q6(data[o], data[o + 1], data[o + 2]) << 1) | f;
       let at = slot[q];
-      if (at < 0) { at = slot[q] = table.length; const ws = mix(...unQ6(q)); for (let c = 0; c < m1; c++) table.push(ws[c]); }
+      if (at < 0) { at = slot[q] = table.length; const [cr, cg, cb] = unQ6(q >> 1); const ws = mix(cr, cg, cb, !!f); for (let c = 0; c < m1; c++) table.push(ws[c]); }
       for (let c = 0; c < inks.length; c++) { const v = table[at + c]; if (v > 0.02) cover[c][i] = Math.round(v * a); }
       if (white) { const v = table[at + inks.length]; if (v > 0.02) white[i] = Math.round(v * a); }
     }
@@ -493,10 +519,10 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
     }
   }
   const plates: Plate[] = [];
-  const mk = (key: string, name: string, hex: string, kind: PlateKind, alpha: Uint8Array): Plate => {
-    let sum = 0; for (let i = 0; i < n; i++) sum += alpha[i];
-    // tonal: a good part of what it prints is in-between (not just soft edges): it needs halftones
-    // (in-between values inside an area, not the soft rim along every edge)
+  // tonal: a good part of what it prints is in-between (not just soft edges): it needs halftones
+  // (in-between values inside an area, not the soft rim along every edge; judged before trapping, whose rim would count)
+  const tonalOf = (alpha: Uint8Array) => {
+    if (s.method === "sim") return true;
     const midv = (v: number) => v > 30 && v < 225;
     let on = 0, mid = 0;
     for (let i = 0; i < n; i++) {
@@ -505,7 +531,11 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
       const x = i % w;
       if (x > 0 && x < w - 1 && i >= w && i < n - w && midv(alpha[i - 1]) && midv(alpha[i + 1]) && midv(alpha[i - w]) && midv(alpha[i + w])) mid++;
     }
-    const tonal = s.method === "sim" || (on > 0 && mid / on > 0.08);
+    return on > 0 && mid / on > 0.08;
+  };
+  const mk = (key: string, name: string, hex: string, kind: PlateKind, alpha: Uint8Array, tonalIs?: boolean): Plate => {
+    let sum = 0; for (let i = 0; i < n; i++) sum += alpha[i];
+    const tonal = tonalIs ?? tonalOf(alpha);
     return { key, name, hex, kind, alpha, coverage: sum / (255 * n), tonal, mesh: kind === "underbase" ? MESH.underbase : kind === "highlight" ? MESH.highlight : s.method === "sim" || tonal ? MESH.sim : MESH.color };
   };
   const colorPlates = print.map((k) => ({ k, a: cover[inks.indexOf(k)] }));
@@ -533,11 +563,13 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   const body = colorPlates.filter(({ k }) => !(dark && s.highlight && isWhite(k.hex)));
   body.sort((x, y) => lightness(y.k.hex) - lightness(x.k.hex));
   // highlight white: the art's white (and, in simulated process, the white left over after the inks)
+  // (spot color: only when white is one of the chosen inks, as Separo counts it; the white left over in mixes is
+  // already in the underbase. Simulated process: the leftover white is the highlight.)
   let hw: Uint8Array | null = null;
-  if (dark && s.highlight) {
+  if (dark && s.highlight && (s.method !== "spot" || print.some((k) => isWhite(k.hex)))) {
     hw = new Uint8Array(n);
     for (const { k, a } of colorPlates) if (isWhite(k.hex)) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + a[i]);
-    if (white) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + white[i]);
+    if (white && s.method !== "spot") for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + white[i]);
   }
   // print order after the base: colors light → dark, the highlight white, then black-ish inks last (like Separo:
   // Base, 107 C, 143 C, 171 C, White, Black), so the darkest ink crisps up every edge it touches
@@ -550,6 +582,7 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   ];
   // trap: each color spreads a little under the colors printed after it (never out onto the bare shirt), so
   // neighbors overlap instead of just touching: no gaps, and a little room for registration
+  const tonals = seq.map((x) => tonalOf(x.a));
   const trap = Math.max(0, Math.round(s.trap ?? 1));
   if (s.method === "spot" && trap > 0 && seq.length > 1) {
     const later = new Uint8Array(n);
@@ -567,7 +600,7 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
       for (let i = 0; i < n; i++) { const v = later[i] + orig[i]; later[i] = v > 255 ? 255 : v; }
     }
   }
-  for (const st of seq) plates.push(mk(st.key, st.name, st.hex, st.kind, st.a));
+  seq.forEach((st, j) => plates.push(mk(st.key, st.name, st.hex, st.kind, st.a, tonals[j])));
   return { plates: plates.filter((p) => p.coverage > 0.0005), w, h, underbase: dark, dropped };
 }
 
