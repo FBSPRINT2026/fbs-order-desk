@@ -89,13 +89,18 @@ function NewFromArt() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null), [thumb, setThumb] = useState("");
   const [name, setName] = useState(""), [shirt, setShirt] = useState("Black");
+  // the print size comes first: a picture can only be made so big before it prints pixelated (vector art: any size)
+  const [widthIn, setWidthIn] = useState(11), [dims, setDims] = useState<{ w: number; h: number; vector: boolean } | null>(null);
   const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   useEffect(() => () => { if (thumb) URL.revokeObjectURL(thumb); }, [thumb]);
   async function pickFile(f?: File) {
     if (!f) return;
     const bad = await artProblem(f); if (bad) { setErr(bad); return; }
     const eps = /\.eps$/i.test(f.name) || /postscript/i.test(f.type);
-    setErr(""); setFile(f); setThumb(URL.createObjectURL(eps ? new Blob([vartSvg(parseEps(await f.text()))], { type: "image/svg+xml" }) : f)); setName(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 60));
+    const url = URL.createObjectURL(eps ? new Blob([vartSvg(parseEps(await f.text()))], { type: "image/svg+xml" }) : f);
+    setErr(""); setFile(f); setThumb(url); setName(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 60));
+    const vector = eps || /\.svg$/i.test(f.name) || /svg/i.test(f.type);
+    const im = new Image(); im.onload = () => setDims({ w: im.naturalWidth, h: im.naturalHeight, vector }); im.src = url;
   }
   async function start() {
     if (!file) return;
@@ -106,7 +111,7 @@ function NewFromArt() {
     const row = ins.data as SepRow;
     try {
       const art = await uploadSepArt(sb, row.id, file);
-      const r = await sb.from("separations").update({ settings: { art }, updated_at: new Date().toISOString() }).eq("id", row.id);
+      const r = await sb.from("separations").update({ settings: { art, widthIn }, updated_at: new Date().toISOString() }).eq("id", row.id);
       if (r.error) throw new Error(r.error.message);
       router.push(`/shop/separations/${row.id}`);
     } catch (e) {
@@ -115,7 +120,10 @@ function NewFromArt() {
       setErr(e instanceof Error ? e.message : String(e)); setBusy(false);
     }
   }
-  const reset = () => { setFile(null); setThumb(""); setName(""); setErr(""); };
+  const reset = () => { setFile(null); setThumb(""); setName(""); setErr(""); setDims(null); };
+  // how sharp the art is at this width (pixels per inch)
+  const ppi = dims && !dims.vector ? Math.round(dims.w / widthIn) : 0, sharpTo = dims ? Math.floor((dims.w / 300) * 4) / 4 : 0;
+  const lvl = !dims ? "" : dims.vector ? "ok" : ppi >= 250 ? "ok" : ppi >= 150 ? "warn" : "bad";
   return (
     <section className="sep-new">
       {!file ? (
@@ -132,11 +140,16 @@ function NewFromArt() {
           <span className="sep-new-th">{thumb && <img src={thumb} alt="" />}</span>
           <label className="sep-f">Name<input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="What is it?" autoFocus /></label>
           <label className="sep-f">Shirt color<input type="text" list="sep-shirts" value={shirt} onChange={(e) => setShirt(e.target.value)} /></label>
+          <label className="sep-f" title="How wide the print is on the shirt">Print width (in)<input type="number" min={1} max={20} step={0.25} value={widthIn} onChange={(e) => setWidthIn(+e.target.value || 1)} /></label>
           <datalist id="sep-shirts">{SHIRTS.map((c) => <option key={c} value={c} />)}</datalist>
           <span className="sep-new-go">
             <button type="button" className="btn" disabled={busy} onClick={reset}>Cancel</button>
-            <button type="button" className="btn primary" disabled={busy} onClick={start}>{busy ? "Uploading…" : "Start Separating"}</button>
+            <button type="button" className="btn primary" disabled={busy} onClick={start}>{busy ? "Uploading…" : lvl === "bad" ? "Start Anyway" : "Start Separating"}</button>
           </span>
+          {dims && <div className={"sep-res " + lvl}>
+            {dims.vector ? <>Vector art: sharp at any size. {widthIn}&quot; × {Math.round(widthIn * (dims.h / dims.w) * 100) / 100}&quot;.</>
+              : <>{dims.w} × {dims.h} px → <b>{ppi} ppi</b> at {widthIn}&quot; × {Math.round(widthIn * (dims.h / dims.w) * 100) / 100}&quot;. {lvl === "ok" ? "Sharp." : lvl === "warn" ? `Usable, a little soft; sharp up to ${sharpTo}" (300 ppi).` : `Too small for ${widthIn}": it will print pixelated. Sharp up to ${sharpTo}". Get bigger art or vector (SVG / EPS) for this size.`}</>}
+          </div>}
         </div>
       )}
       {err && <div className="pv-err">{err}</div>}

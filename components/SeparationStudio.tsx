@@ -39,7 +39,7 @@ export const SEP_STATUS: Record<SepRow["status"], { label: string; c: string }> 
 type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean; lib: "auto" | "wilflex" | "pms"; solidOut?: "pixels" | "vector";
   /** underbase choke and color trap, in points at the print size (so they mean the same at any resolution) */
   chokePt?: number; trapPt?: number };
-const CHOKE_PT = 1, TRAP_PT = 0.5;
+const CHOKE_PT = 0.5, TRAP_PT = 0.5;
 /** points at the print size → pixels of a copy `w` px wide */
 const ptPx = (pt: number, w: number, widthIn: number) => Math.round((pt * w) / (widthIn * 72));
 /** the working size on screen (fast); the files are separated again at full size (OUT_PPI at the print width) */

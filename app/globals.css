@@ -4602,3 +4602,6 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .sep-res.warn{background:color-mix(in srgb,var(--warn,#C98A0C) 14%,var(--surface))}
 .sep-res.bad{background:color-mix(in srgb,var(--bad,#D64545) 14%,var(--surface));color:var(--ink)}
 .sep-f b{white-space:nowrap}
+.sep-new-form{grid-template-columns:64px minmax(0,1.4fr) minmax(0,1fr) 120px auto}
+.sep-new-form .sep-res{grid-column:1/-1;margin:0}
+@media (max-width:640px){.sep-new-form{grid-template-columns:64px minmax(0,1fr)}.sep-new-form .sep-f:nth-of-type(3){grid-column:1/-1}}

@@ -466,12 +466,21 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   };
   const colorPlates = print.map((k) => ({ k, a: cover[inks.indexOf(k)] }));
   if (dark) {
-    // underbase: under every ink that isn't near-black (black ink doesn't need white under it) and under the white, choked
-    const ub = new Uint8Array(n);
-    const add = (a: Uint8Array) => { for (let i = 0; i < n; i++) { const v = ub[i] + a[i]; ub[i] = v > 255 ? 255 : v; } };
-    for (const { k, a } of colorPlates) if (lightness(k.hex) >= 22) add(a);
-    if (white) add(white);
-    plates.push(mk("ub", "Underbase White", "#FFFFFF", "underbase", choke(ub, w, h, Math.max(0, Math.round(s.choke)))));
+    // underbase: under every ink that isn't near-black (black ink doesn't need white under it) and under the white.
+    // Choked only where it meets the bare shirt (so white can't peek out past the art); where it meets black ink it
+    // stays full, since black prints over it (pulling it back there would leave the colors next to every black line
+    // without white under them, printing dull on a dark shirt; Separo doesn't pull back there either)
+    const ub = new Uint8Array(n), inked = new Uint8Array(n);
+    const add = (t: Uint8Array, a: Uint8Array) => { for (let i = 0; i < n; i++) { const v = t[i] + a[i]; t[i] = v > 255 ? 255 : v; } };
+    for (const { k, a } of colorPlates) { if (lightness(k.hex) >= 22) add(ub, a); add(inked, a); }
+    if (white) { add(ub, white); add(inked, white); }
+    const r = Math.max(0, Math.round(s.choke));
+    if (r > 0) {
+      const bare = new Uint8Array(n); for (let i = 0; i < n; i++) bare[i] = 255 - inked[i];
+      const near = spread(bare, w, h, r);
+      for (let i = 0; i < n; i++) { const lim = 255 - near[i]; if (ub[i] > lim) ub[i] = lim; }
+    }
+    plates.push(mk("ub", "Underbase White", "#FFFFFF", "underbase", ub));
   }
   const body = colorPlates.filter(({ k }) => !(dark && s.highlight && isWhite(k.hex)));
   body.sort((x, y) => lightness(y.k.hex) - lightness(x.k.hex));
