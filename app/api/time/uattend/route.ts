@@ -47,15 +47,20 @@ async function matchUsers(admin: Admin, users: UaUser[]) {
 async function run(admin: Admin, from: string, to: string, withUsers: boolean) {
   const summary = { from, to, punches: 0, added: 0, updated: 0, linked: 0, newEmployees: 0, unknown: 0, unmatched: [] as string[] };
   let map: Map<string, string> | null = null;
-  let usersDone = false;
-  if (withUsers) { const r = await matchUsers(admin, await uaUsers()); map = r.byUa; summary.linked = r.linked; summary.unmatched = r.unmatched; usersDone = true; }
+  let usersDone = false, usersBlocked = "";
+  // the user list; if uAttend won't give it (403 on /user), people are matched from the names on their punches instead
+  const users = async (fallback: UaUser[]) => { if (usersBlocked) return fallback; try { return await uaUsers(); } catch (e) { const m = e instanceof Error ? e.message : String(e); if (!/ 403 /.test(m)) throw e; usersBlocked = m; return fallback; } };
+  if (withUsers) { const got = await users([]); if (!usersBlocked) { const r = await matchUsers(admin, got); map = r.byUa; summary.linked = r.linked; summary.unmatched = r.unmatched; usersDone = true; } }
   // a month at a time (uAttend allows up to three per request)
   for (let a = from; a <= to; a = addDays(a, 31)) {
     const b = addDays(a, 30) < to ? addDays(a, 30) : to;
     const ps = await uaPunches(a, b);
     summary.punches += ps.length;
     if (!ps.length) continue;
-    if (!map || (!usersDone && ps.some((p) => !map!.has(p.user)))) { const r = await matchUsers(admin, await uaUsers()); map = r.byUa; summary.linked += r.linked; summary.unmatched = r.unmatched; usersDone = true; }
+    if (!map || (!usersDone && ps.some((p) => !map!.has(p.user)))) {
+      const fromPunches = [...new Map(ps.map((p) => [p.user, { id: p.user, first: p.first, last: p.last, active: true, email: "" }])).values()];
+      const r = await matchUsers(admin, await users(fromPunches)); map = r.byUa; summary.linked += r.linked; summary.unmatched = r.unmatched; usersDone = !usersBlocked;
+    }
     const keys = ps.map((p) => p.key), have = new Map<string, { id: string; at: string; edited_at: string | null }>();
     for (let i = 0; i < keys.length; i += 300) {
       const { data } = await admin.from("time_punches").select("id, at, edited_at, uattend_id").in("uattend_id", keys.slice(i, i + 300));
@@ -74,7 +79,7 @@ async function run(admin: Admin, from: string, to: string, withUsers: boolean) {
       summary.added += (data || []).length;
     }
   }
-  return summary;
+  return { ...summary, usersBlocked: usersBlocked || undefined };
 }
 
 async function record(admin: Admin, ok: boolean, info: unknown, error = "") {

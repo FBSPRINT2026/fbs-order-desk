@@ -14,7 +14,7 @@ const BASE = "https://api.workwelltech.com";
 export const uattendReady = () => !!process.env.UATTEND_API_KEY;
 
 async function call(path: string, body: unknown): Promise<Record<string, unknown>> {
-  const key = process.env.UATTEND_API_KEY;
+  const key = (process.env.UATTEND_API_KEY || "").trim().replace(/^["']|["']$/g, "");
   if (!key) throw new Error("The uAttend API key isn't set up yet (Vercel → UATTEND_API_KEY).");
   let last = "";
   for (let i = 0; i < 3; i++) {
