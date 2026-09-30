@@ -1448,6 +1448,9 @@ export default function MachineSchedule() {
         </div>
         {toolsOpen && <>
           {/* one slim row of tools: production (the production manager's day), shifts & equipment, sales; each its own color */}
+          {/* left: the tools; right: Shop Pulse, how the shop is doing and what needs attention */}
+          <div className="ms-tools-2">
+            <div className="ms-tpanel">
           <div className="ms-tbar">
             <div className="ms-tb-g ms-tb-prod">
               <span className="ms-tb-l">Production</span>
@@ -1469,6 +1472,19 @@ export default function MachineSchedule() {
             </div>
           </div>
 
+            </div>
+            <div className="ms-pulse" aria-label="Shop Pulse">
+              <div className="ms-pulse-h"><span aria-hidden>✦</span> Shop Pulse</div>
+            {(() => {
+              // one line on how the shop is doing, then the details below it
+              const otRows = otReport(payWeekStart(today)).filter((r) => r.w.ot > 0), otMin = otRows.reduce((t, r) => t + r.w.ot, 0);
+              const bits: string[] = [];
+              if (tight.length) bits.push(`${tight.length} job${tight.length === 1 ? " is" : "s are"} at risk of missing in-hands`);
+              if (otMin) bits.push(`${otRows.map((r) => crewOf(r.m)?.leader || shortName(r.m)).join(" and ")} ${otRows.length === 1 ? "is" : "are"} heading into overtime`);
+              if (eqIssues.length) bits.push(`${eqIssues.length} machine${eqIssues.length === 1 ? " has" : "s have"} an equipment issue`);
+              const ok = !tight.length;
+              return <div className={"ms-pulse-hl" + (ok ? " ok" : "")}><span className="ms-pulse-dot" aria-hidden />{ok && !bits.length ? "Everything's on time. Nothing needs you right now." : `${ok ? "Everything's on time" : bits.shift()}${bits.length ? `; ${bits.join("; ")}` : ""}.`}</div>;
+            })()}
           {(() => { const rows = otReport(payWeekStart(today)), ot = rows.reduce((t, r) => t + r.w.ot, 0); if (!rows.length) return null; const pay = rows.reduce((t, r) => t + (r.pay || 0), 0), unused = rows.reduce((t, r) => t + r.unused, 0), known = rows.every((r) => r.pay != null); return (
             <div className={"ms-otline" + (ot ? " on" : "")}>
               <span className="ms-ot-i" aria-hidden>⏱</span>
@@ -1497,8 +1513,11 @@ export default function MachineSchedule() {
               </div>
               {tightOpen && <ul className="ms-alert-l">{tight.map((t) => <li key={t.job.key}><Link href={t.job.href}>#{t.job.number}</Link><span>{t.job.customer || t.job.name}</span><small>{t.why}</small></li>)}</ul>}
             </div>
-          ) : <div className="ms-okline"><span className="ms-ok-i" aria-hidden>✓</span>On track: every booked job makes its in-hands date.</div>}
+          ) : null}
 
+            {eqIssues.length > 0 && <div className="ms-otline"><span className="ms-ot-i" aria-hidden>⚙</span><span className="ms-idle-t"><b>{eqIssues.map((m) => shortName(m)).join(", ")}</b> {eqIssues.length === 1 ? "has" : "have"} an equipment issue<span className="faint"> · {eqIssues.map((m) => m.issue!.down ? `${shortName(m)} down` : [m.issue!.colors != null ? `${shortName(m)} ${m.issue!.colors}/${m.issue!.full} ${m.type === "screen" ? "colors" : "heads"}` : "", m.issue!.flashes != null ? `${m.issue!.flashes}/${m.issue!.fullFlashes} flashes` : "", m.issue!.speed != null ? `${m.issue!.speed}% speed` : ""].filter(Boolean).join(" ")).join(" · ")}</span></span><span className="spacer" /><button type="button" className="btn sm ghost" onClick={() => setEqOpen(true)}>Details</button></div>}
+            </div>
+          </div>
           <div className="ms-ready">
             <div className="ms-ready-h">
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
