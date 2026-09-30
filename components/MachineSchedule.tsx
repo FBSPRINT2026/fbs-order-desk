@@ -2,9 +2,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, type EquipRow, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
+import PressLayout from "@/components/PressLayout";
 
 /**
  * The production calendar, on the shop's real hours.
@@ -1994,29 +1995,52 @@ function IssueTag({ m }: { m: Machine }) {
  */
 function EquipmentPanel({ machines, rows, today, me, crewOf, stuck, booked, onClose, onSaved }: { machines: Machine[]; rows: EquipRow[]; today: string; me: string; crewOf: (m: Machine) => Crew | undefined; stuck: (m: Machine, colors: number, flashes: number) => string[]; booked: (m: Machine) => number; onClose: () => void; onSaved: (msg: string, replan: boolean) => void }) {
   const [edit, setEdit] = useState<string | null>(null);
-  const [f, setF] = useState<{ state: "ok" | "issue" | "down"; colors: number; flashes: number; speed: number; note: string; until: string }>({ state: "ok", colors: 0, flashes: 0, speed: 100, note: "", until: "" });
+  const [f, setF] = useState<{ state: "ok" | "issue" | "down"; colors: number; flashes: number; speed: number; note: string; until: string; lay: Station[] | null }>({ state: "ok", colors: 0, flashes: 0, speed: 100, note: "", until: "", lay: null });
+  const [pick, setPick] = useState<number | null>(null);
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const full = (m: Machine) => m.issue?.full ?? (m.type === "screen" ? m.colors : m.heads);
   const fullFl = (m: Machine) => m.issue?.fullFlashes ?? flashesOf(m);
   const unit = (m: Machine) => (m.type === "screen" ? "colors (heads)" : m.type === "embroidery" ? "heads" : "");
+  // the press as it's set up now: its saved layout, or the usual one with any older "N of 12 working" marked on it
+  const layOf = (m: Machine): Station[] => {
+    if (m.layout) return [...m.layout];
+    const l = defaultLayout(full(m), fullFl(m)), x = m.issue;
+    if (x?.colors != null) for (let i = l.length - 1, k = full(m) - x.colors; i >= 0 && k > 0; i--) if (l[i] === "print") { l[i] = "down"; k--; }
+    if (x?.flashes != null) for (let i = l.length - 1, k = fullFl(m) - x.flashes; i >= 0 && k > 0; i--) if (l[i] === "flash") { l[i] = "flashdown"; k--; }
+    return l;
+  };
+  // set one head: a fault moves the status to "Problem, still running"; clearing the last one moves it back
+  const setHead = (i: number, s: Station) => {
+    if (!f.lay) return;
+    const lay = f.lay.map((x, j) => (j === i ? s : x)), c = layoutCounts(lay);
+    const state = f.state === "down" ? "down" : c.down || c.broken ? "issue" : f.state === "issue" && f.speed === 100 ? "ok" : f.state;
+    setF({ ...f, lay, state, colors: full0 - c.down, flashes: c.flashes });
+  };
+  const full0 = edit ? full(machines.find((x) => x.id === edit)!) : 0;
+  const headsTxt = (xs: number[]) => (!xs.length ? "" : xs.length === 1 ? `head ${xs[0]}` : `heads ${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+  const faultNote = (l: Station[]) => { const d = l.flatMap((s, i) => (s === "down" ? [i + 1] : [])), b = l.flatMap((s, i) => (s === "flashdown" ? [i + 1] : [])); return [d.length ? `${headsTxt(d)} down` : "", b.length ? `flash at ${headsTxt(b)} not heating` : ""].filter(Boolean).join("; ").replace(/^./, (ch) => ch.toUpperCase()); };
   const open = (m: Machine) => {
     const r = rows.find((x) => x.machine === m.id), live = !!m.issue;
-    setF({ state: !live ? "ok" : r?.down ? "down" : "issue", colors: live && r?.colors_working != null ? r.colors_working : full(m), flashes: live && r?.flashes_working != null ? r.flashes_working : fullFl(m), speed: live && r?.speed != null ? r.speed : 100, note: live ? r?.note || "" : "", until: live ? r?.until || "" : "" });
-    setEdit(m.id); setErr("");
+    setF({ state: !live ? "ok" : r?.down ? "down" : "issue", colors: live && r?.colors_working != null ? r.colors_working : full(m), flashes: live && r?.flashes_working != null ? r.flashes_working : fullFl(m), speed: live && r?.speed != null ? r.speed : 100, note: live ? r?.note || "" : "", until: live ? r?.until || "" : "", lay: m.type === "screen" ? layOf(m) : null });
+    setEdit(m.id); setErr(""); setPick(null);
   };
   async function save(m: Machine) {
     setBusy(true); setErr("");
     const fixed = f.state === "ok", sb = createClient(), fl = full(m);
-    const row = fixed ? { machine: m.id, colors_working: null, flashes_working: null, speed: null, down: false, note: "", since: null, until: null } : { machine: m.id, colors_working: f.state === "issue" && m.type !== "heat" && f.colors < fl ? f.colors : null, flashes_working: f.state === "issue" && m.type === "screen" && f.flashes < fullFl(m) ? f.flashes : null, speed: f.state === "issue" && f.speed !== 100 ? f.speed : null, down: f.state === "down", note: f.note.trim(), since: m.issue?.since || today, until: f.until || null };
-    if (!fixed && !row.down && row.colors_working == null && row.flashes_working == null && row.speed == null) { setBusy(false); setErr(`Pick how many ${unit(m) || "units"}${m.type === "screen" ? " or flashes" : ""} are working, or how slow it's running (or mark it down).`); return; }
+    // screen presses: the layout says it all (heads down, flashes working, where the flashes sit); fixed clears the faults
+    const lay = f.lay ? (fixed ? f.lay.map((s) => (s === "down" ? "print" : s === "flashdown" ? "flash" : s)) : f.lay) : null;
+    const lc = lay ? layoutCounts(lay) : null, units = lc ? lc.units : fullFl(m);
+    const colorsW = lc ? fl - lc.down : f.colors, flashW = lc ? lc.flashes : f.flashes;
+    const row = fixed ? { machine: m.id, colors_working: null, flashes_working: null, speed: null, down: false, note: "", since: null, until: null, stations: lay } : { machine: m.id, colors_working: f.state === "issue" && m.type !== "heat" && colorsW < fl ? colorsW : null, flashes_working: f.state === "issue" && m.type === "screen" && flashW < units ? flashW : null, speed: f.state === "issue" && f.speed !== 100 ? f.speed : null, down: f.state === "down", note: f.note.trim() || (lay ? faultNote(lay) : ""), since: m.issue?.since || today, until: f.until || null, stations: lay };
+    if (!fixed && !row.down && row.colors_working == null && row.flashes_working == null && row.speed == null) { setBusy(false); setErr(m.type === "screen" ? "Tap a head that's down or a flash that isn't heating, or pick how slow it's running (or mark it down)." : `Pick how many ${unit(m) || "units"} are working, or how slow it's running (or mark it down).`); return; }
     const r = await sb.from("production_equipment").upsert({ ...row, updated_by: me, updated_at: new Date().toISOString() }, { onConflict: "machine" });
     if (r.error) { setBusy(false); setErr(r.error.message); return; }
-    await sb.from("production_equipment_log").insert({ machine: m.id, colors_working: row.colors_working, flashes_working: row.flashes_working, speed: row.speed, down: row.down, note: row.note, until: row.until, cleared: fixed, by: me });
+    await sb.from("production_equipment_log").insert({ machine: m.id, colors_working: row.colors_working, flashes_working: row.flashes_working, speed: row.speed, down: row.down, note: row.note, until: row.until, cleared: fixed, by: me, stations: lay });
     setBusy(false); setEdit(null);
-    const name = shortName(m), lost = !fixed && !row.down && (row.colors_working != null || row.flashes_working != null) ? stuck(m, row.colors_working ?? fl, row.flashes_working ?? fullFl(m)) : [];
-    if (fixed) onSaved(`${name} is back to normal.`, !!m.issue);
+    const name = shortName(m), lost = !fixed && !row.down ? stuck(m, row.colors_working ?? fl, row.flashes_working ?? units) : [];
+    if (fixed) onSaved(m.issue ? `${name} is back to normal.` : lay ? `${name} press layout saved: flashes at ${headsTxt(lay!.flatMap((s, i) => (s === "flash" ? [i + 1] : []))) || "no heads"}.` : `${name} saved.`, !!m.issue || (units !== fullFl(m) && stuck(m, fl, units).length > 0));
     else if (row.down) onSaved(`${name} marked down${row.until ? ` until ${dayLbl(row.until)}` : ""}.${booked(m) ? ` ${booked(m)} job${booked(m) === 1 ? " is" : "s are"} booked on it.` : ""}`, booked(m) > 0);
-    else onSaved(`${name}: ${[row.colors_working != null ? `${row.colors_working} of ${fl} ${m.type === "screen" ? "colors" : "heads"} working` : "", row.flashes_working != null ? `${row.flashes_working} of ${fullFl(m)} flashes working` : "", row.speed != null ? `running at ${row.speed}%` : ""].filter(Boolean).join(", ")}.${lost.length ? ` ${lost.length} booked job${lost.length === 1 ? " needs" : "s need"} more heads (screens + flashes) than it can print now (${lost.slice(0, 6).join(", ")}).` : ""}`, lost.length > 0 || row.speed != null);
+    else onSaved(`${name}: ${[lay ? `flashes at ${headsTxt(lay.flatMap((s, i) => (s === "flash" ? [i + 1] : []))) || "no heads"}` : "", row.colors_working != null ? `${row.colors_working} of ${fl} ${m.type === "screen" ? "colors" : "heads"} working` : "", row.flashes_working != null ? `${row.flashes_working} of ${units} flashes working` : "", row.speed != null ? `running at ${row.speed}%` : ""].filter(Boolean).join(", ")}.${lost.length ? ` ${lost.length} booked job${lost.length === 1 ? " needs" : "s need"} more heads (screens + flashes) than it can print now (${lost.slice(0, 6).join(", ")}).` : ""}`, lost.length > 0 || row.speed != null);
   }
   return (
     <div className="pp-modal" onClick={onClose}>
@@ -2030,6 +2054,7 @@ function EquipmentPanel({ machines, rows, today, me, crewOf, stuck, booked, onCl
               return (
                 <li key={m.id} className={x ? (x.down ? "down" : "warn") : ""}>
                   <div className="ms-eq-row">
+                    {m.type === "screen" && <button type="button" className="pl-mini" title="Press layout: where the flashes are, heads down" onClick={() => open(m)}><PressLayout layout={layOf(m)} size={56} /></button>}
                     <span><b>{shortName(m)}</b>{c ? <span className="faint"> · {c.leader}</span> : null}<small className="faint"> · {m.type === "screen" ? `${fl} colors, ${fullFl(m)} flash${fullFl(m) === 1 ? "" : "es"}` : m.type === "embroidery" ? `${fl} heads` : "heat press"}</small></span>
                     <span className={"ms-eq-st" + (x ? (x.down ? " down" : " warn") : " ok")}>{!x ? "Working normally" : x.down ? `Down${x.until ? ` until ${dayShort(x.until)}` : ""}` : [x.colors != null ? `${x.colors} of ${x.full} ${m.type === "screen" ? "colors" : "heads"}` : "", x.flashes != null ? `${x.flashes} of ${x.fullFlashes} flashes` : "", x.speed != null ? `${x.speed}% speed` : ""].filter(Boolean).join(" · ")}</span>
                     {edit !== m.id && <button type="button" className="btn sm" onClick={() => open(m)}>{x ? "Update" : "Report a Problem"}</button>}
@@ -2038,18 +2063,36 @@ function EquipmentPanel({ machines, rows, today, me, crewOf, stuck, booked, onCl
                   {edit === m.id && (
                     <div className="ms-eq-ed">
                       <div className="ms-eq-seg">
-                        {([["ok", "Working normally"], ["issue", "Problem, still running"], ["down", "Down"]] as const).map(([k, l]) => <button key={k} type="button" className={f.state === k ? "on" : ""} onClick={() => setF({ ...f, state: k })}>{l}</button>)}
+                        {([["ok", "Working normally"], ["issue", "Problem, still running"], ["down", "Down"]] as const).map(([k, l]) => <button key={k} type="button" className={f.state === k ? "on" : ""} onClick={() => setF({ ...f, state: k, lay: k === "ok" && f.lay ? f.lay.map((s) => (s === "down" ? "print" : s === "flashdown" ? "flash" : s)) : f.lay })}>{l}</button>)}
                       </div>
+                      {m.type === "screen" && f.lay && f.state !== "down" && (() => {
+                        const lc = layoutCounts(f.lay), fx = f.lay.flatMap((s, i) => (s === "flash" || s === "flashdown" ? [i + 1] : []));
+                        return (
+                          <div className="pl-ed">
+                            <PressLayout layout={f.lay} selected={pick} onPick={(i) => setPick(pick === i ? null : i)} label={`${fl - lc.down} colors`} sub={`${fl + 2} stations`} />
+                            <div className="pl-side">
+                              <div className="pl-sum"><b>{fl} heads + load &amp; unload</b><span>{lc.units ? `Flash${lc.units === 1 ? "" : "es"} at ${headsTxt(fx)}` : "No flashes on the press"}{lc.down ? ` · ${lc.down} head${lc.down === 1 ? "" : "s"} down` : ""}{lc.broken ? ` · ${lc.broken} flash${lc.broken === 1 ? "" : "es"} not heating` : ""}</span></div>
+                              {pick == null ? <div className="faint pl-hint">Tap a head to move a flash there, or to report it down.</div> : (
+                                <div className="pl-pick">
+                                  <div className="pl-pick-h">Head {pick + 1}</div>
+                                  {([["print", "Printing"], ["flash", "Flash"], ["down", "Head down"], ["flashdown", "Flash not heating"]] as const).map(([k, l]) => <button key={k} type="button" className={"pl-opt " + k + (f.lay![pick] === k ? " on" : "")} onClick={() => setHead(pick, k)}><i aria-hidden />{l}</button>)}
+                                </div>
+                              )}
+                              <div className="pl-key"><span><i className="print" />Printing</span><span><i className="flash" />Flash</span><span><i className="down" />Down</span><span><i className="load" />Load / unload</span></div>
+                              <button type="button" className="linkbtn" onClick={() => { setF({ ...f, lay: defaultLayout(fl, Math.max(1, lc.units)), state: f.state === "issue" && f.speed === 100 ? "ok" : f.state }); setPick(null); }}>Reset to the usual layout</button>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {f.state === "issue" && (
                         <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
-                          {m.type !== "heat" && <label className="ms-eq-f">{m.type === "screen" ? "Colors (heads) working" : "Heads working"}<select value={f.colors} onChange={(e) => setF({ ...f, colors: +e.target.value })}>{Array.from({ length: fl }, (_, i) => fl - i).map((n) => <option key={n} value={n}>{n} of {fl}{n === fl ? " (all)" : ""}</option>)}</select></label>}
-                          {m.type === "screen" && <label className="ms-eq-f">Flashes working<select value={f.flashes} onChange={(e) => setF({ ...f, flashes: +e.target.value })}>{Array.from({ length: fullFl(m) + 1 }, (_, i) => fullFl(m) - i).map((n) => <option key={n} value={n}>{n} of {fullFl(m)}{n === fullFl(m) ? " (all)" : ""}</option>)}</select></label>}
+                          {m.type === "embroidery" && <label className="ms-eq-f">{"Heads working"}<select value={f.colors} onChange={(e) => setF({ ...f, colors: +e.target.value })}>{Array.from({ length: fl }, (_, i) => fl - i).map((n) => <option key={n} value={n}>{n} of {fl}{n === fl ? " (all)" : ""}</option>)}</select></label>}
                           <label className="ms-eq-f">Speed<select value={f.speed} onChange={(e) => setF({ ...f, speed: +e.target.value })}>{[100, 90, 80, 75, 70, 60, 50, 40].map((n) => <option key={n} value={n}>{n === 100 ? "Normal" : `${n}% (slower)`}</option>)}</select></label>
                         </div>
                       )}
-                      {f.state === "issue" && m.type === "screen" && stuck(m, f.colors, f.flashes).length > 0 && <div className="ms-ask"><b>{stuck(m, f.colors, f.flashes).length} booked job{stuck(m, f.colors, f.flashes).length === 1 ? " needs" : "s need"} more than {f.colors} heads ({f.flashes} flash{f.flashes === 1 ? "" : "es"}), even in two rounds</b><span>{stuck(m, f.colors, f.flashes).slice(0, 10).join(", ")}. After saving, Re-plan moves them to a press that can print them.</span></div>}
+                      {f.state !== "down" && m.type === "screen" && f.lay && (() => { const lc = layoutCounts(f.lay), cw = fl - lc.down, s0 = stuck(m, cw, lc.flashes); return s0.length > 0 && <div className="ms-ask"><b>{s0.length} booked job{s0.length === 1 ? " needs" : "s need"} more than {cw} heads ({lc.flashes} flash{lc.flashes === 1 ? "" : "es"}), even in two rounds</b><span>{s0.slice(0, 10).join(", ")}. After saving, Re-plan moves them to a press that can print them.</span></div>; })()}
                       {f.state !== "ok" && <>
-                        <label className="ms-eq-f">What&apos;s wrong<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder={m.type === "screen" ? "e.g. heads 3 and 7 not indexing" : "e.g. waiting on a part"} /></label>
+                        <label className="ms-eq-f">What&apos;s wrong<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder={m.type === "screen" ? "e.g. not indexing (leave blank and we note which heads)" : "e.g. waiting on a part"} /></label>
                         <label className="ms-eq-f">Expected fixed (optional)<input type="date" value={f.until} min={addDay(today, 1)} onChange={(e) => setF({ ...f, until: e.target.value })} /></label>
                         {f.state === "down" && <div className="faint" style={{ fontSize: 12.5 }}>{f.until ? `Nothing runs on it through ${dayLbl(addDay(f.until, -1))}.` : "Nothing runs on it until it's marked fixed."}{booked(m) ? ` ${booked(m)} job${booked(m) === 1 ? " is" : "s are"} booked on it: re-plan after saving to move them.` : ""}</div>}
                       </>}

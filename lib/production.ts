@@ -38,11 +38,35 @@ export type Machine = {
   /** Equipment Status (a problem right now), attached by the calendar: `colors` / `speed` are already the working
    *  numbers when it's set; `full` is how many colors / heads it has when everything works */
   issue?: EquipIssue;
+  /** screen: what sits at each print head, head 1 first (after the load station), from Equipment Status → press layout */
+  layout?: Station[];
 };
+/**
+ * One print head on a screen press: printing, a flash-cure unit parked there (it takes the head's spot), the head out
+ * of service, or a flash that's there but not heating. Load and unload are the two extra stations (not in the list),
+ * so a 12-color press has 14 stations.
+ */
+export type Station = "print" | "flash" | "down" | "flashdown";
+/** the usual setup: a flash after head 1 (the underbase) and the rest spread across the press */
+export function defaultLayout(heads: number, flashes: number): Station[] {
+  const out: Station[] = Array.from({ length: heads }, () => "print");
+  const f = Math.min(flashes, Math.max(0, heads - 1));
+  for (let i = 0; i < f; i++) { let k = i === 0 ? 1 : Math.round(1 + (i * (heads - 1)) / f); while (k < heads && out[k] !== "print") k++; if (k < heads) out[k] = "flash"; }
+  return out;
+}
+const STATIONS = new Set(["print", "flash", "down", "flashdown"]);
+export const validLayout = (x: unknown, heads: number): x is Station[] => Array.isArray(x) && x.length === heads && x.every((s) => STATIONS.has(s as string));
+/** heads out, flashes working, flash units on the press */
+export const layoutCounts = (l: Station[]) => ({ down: l.filter((s) => s === "down").length, flashes: l.filter((s) => s === "flash").length, units: l.filter((s) => s === "flash" || s === "flashdown").length, broken: l.filter((s) => s === "flashdown").length });
 export type EquipIssue = { full: number; fullFlashes: number; flashes: number | null; colors: number | null; speed: number | null; down: boolean; note: string; since: string | null; until: string | null; by: string; at: string };
-export type EquipRow = { machine: string; colors_working: number | null; flashes_working?: number | null; speed: number | null; down: boolean; note: string; since: string | null; until: string | null; updated_by: string; updated_at: string };
+export type EquipRow = { machine: string; colors_working: number | null; flashes_working?: number | null; stations?: Station[] | null; speed: number | null; down: boolean; note: string; since: string | null; until: string | null; updated_by: string; updated_at: string };
 /** a machine with its Equipment Status applied: fewer colors / heads, slower, or down (days off) from `today` until it's back */
 export function withIssue(m: Machine, r: EquipRow | undefined, today: string): Machine {
+  // the press layout (where the flashes are): it sets how many flash units the press has, fault or not
+  if (r && m.type === "screen" && validLayout(r.stations, m.colors)) {
+    const over = !!(r.until && r.until <= today), lay = over ? r.stations.map((s) => (s === "down" ? "print" : s === "flashdown" ? "flash" : s)) : r.stations;
+    m = { ...m, layout: lay, flashes: layoutCounts(lay).units };
+  }
   if (!r || (!r.down && r.colors_working == null && r.speed == null && r.flashes_working == null)) return m;
   if (r.until && r.until <= today) return m;
   const full = m.type === "screen" ? m.colors : m.heads, work = r.colors_working == null ? null : Math.max(0, Math.min(full, r.colors_working));

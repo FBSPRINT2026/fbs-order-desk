@@ -4323,3 +4323,55 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 /* the tools panel narrower than ~640px (laptops): group name above its buttons so every button fits */
 .ms-tpanel{container-type:inline-size}
 @container (max-width:720px){.ms-tpanel .ms-tb-g{grid-template-columns:repeat(var(--n,4),minmax(0,1fr));row-gap:4px}.ms-tpanel .ms-tb-l{grid-column:1/-1}}
+/* Press layout (Equipment Status): a screen press from above, load → heads → unload around the hub */
+.pl{display:block;max-width:100%;height:auto;--pl-flash:#E8792B;--pl-flash-soft:color-mix(in srgb,#E8792B 22%,var(--surface))}
+.pl-arm{stroke:color-mix(in srgb,var(--accent) 55%,var(--surface));stroke-linecap:round}
+.pl-arm[data-kind=load],.pl-arm[data-kind=unload]{stroke:var(--line)}
+.pl-hub{fill:var(--surface);stroke:var(--accent)}
+.pl-hub-t{font-size:15px;font-weight:800;fill:var(--ink)}
+.pl-hub-s{font-size:10.5px;font-weight:600;fill:var(--ink-3)}
+.pl-st rect{fill:var(--surface);stroke:color-mix(in srgb,var(--ink) 35%,var(--surface));stroke-width:1.5}
+.pl-st.load rect,.pl-st.unload rect{fill:color-mix(in srgb,var(--ink) 4%,var(--surface));stroke:var(--line);stroke-dasharray:4 3}
+.pl-st.flash rect{fill:var(--pl-flash-soft);stroke:var(--pl-flash);stroke-width:2}
+.pl-st.flashdown rect{fill:var(--surface);stroke:var(--pl-flash);stroke-width:2;stroke-dasharray:4 3}
+.pl-st.down rect{fill:color-mix(in srgb,var(--danger) 10%,var(--surface));stroke:var(--danger);stroke-width:2}
+.pl-x line{stroke:var(--danger);stroke-width:2;stroke-linecap:round}
+.pl-st.flashdown .pl-x line{stroke:var(--pl-flash)}
+.pl-badge{fill:var(--ink);stroke:var(--surface);stroke-width:2}
+.pl-num{font-size:11px;font-weight:800;fill:var(--surface);pointer-events:none}
+.pl-st.load .pl-badge,.pl-st.unload .pl-badge{fill:var(--ink-3)}
+.pl-st.down .pl-badge{fill:var(--danger)}
+.pl-st.flash .pl-badge,.pl-st.flashdown .pl-badge{fill:var(--pl-flash)}
+.pl-tag{font-size:10px;font-weight:800;fill:var(--pl-flash);pointer-events:none}
+.pl-st.can{cursor:pointer}
+.pl-st.can:hover rect{stroke:var(--accent);stroke-width:2.5}
+.pl-st.can:focus{outline:none}
+.pl-st.can:focus-visible rect,.pl-st.sel rect{stroke:var(--accent)!important;stroke-width:3.5!important}
+.pl.sm .pl-st rect{stroke-width:1}
+.pl.sm .pl-st.flash rect,.pl.sm .pl-st.down rect,.pl.sm .pl-st.flashdown rect{stroke-width:1.5}
+.pl.sm .pl-x line{stroke-width:1.2}
+.pl-ed{display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:6px 0}
+.pl-ed .pl{width:300px;flex:none}
+.pl-side{flex:1;min-width:200px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.pl-sum{display:flex;flex-direction:column;gap:2px;font-size:13px}
+.pl-sum span{color:var(--ink-2)}
+.pl-hint{font-size:12.5px}
+.pl-pick{display:flex;flex-direction:column;gap:4px;width:100%;max-width:240px}
+.pl-pick-h{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.pl-opt{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-weight:600;color:var(--ink-2);background:var(--surface)}
+.pl-opt:hover{border-color:var(--ink-3);color:var(--ink)}
+.pl-opt.on{border-color:var(--accent);color:var(--ink);box-shadow:0 0 0 1px var(--accent) inset}
+.pl-opt:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pl-opt i,.pl-key i{width:14px;height:10px;border-radius:2px;border:1.5px solid color-mix(in srgb,var(--ink) 35%,var(--surface));background:var(--surface);flex:none}
+.pl-opt.flash i,.pl-key i.flash{border-color:#E8792B;background:color-mix(in srgb,#E8792B 22%,var(--surface))}
+.pl-opt.flashdown i{border-color:#E8792B;border-style:dashed}
+.pl-opt.down i,.pl-key i.down{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,var(--surface))}
+.pl-key i.load{border-style:dashed;border-color:var(--line)}
+.pl-key{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--ink-3)}
+.pl-key span{display:inline-flex;align-items:center;gap:5px}
+.pl-mini{all:unset;cursor:pointer;flex:none;border-radius:8px;line-height:0;margin-right:4px}
+.pl-mini:hover{background:var(--surface-2)}
+.pl-mini:focus-visible{outline:2px solid var(--accent)}
+@media (max-width:560px){.pl-ed .pl{width:100%}}
+.tmx-ed.ms-eq{width:min(760px,100%);max-width:none}
+@container (max-width:720px){.ms-tpanel .ms-tb-g{display:flex;flex-wrap:wrap;gap:4px 6px}.ms-tpanel .ms-tb-l{flex:0 0 100%}.ms-tpanel .ms-tb{flex:1 1 auto}}
