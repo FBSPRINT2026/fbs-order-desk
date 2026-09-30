@@ -285,6 +285,7 @@ export default function MachineSchedule() {
   const [over, setOver] = useState("");
   const [open, setOpen] = useState<Card | null>(null);
   const [msg, setMsg] = useState("");
+  useEffect(() => { if (!msg) return; const id = setTimeout(() => setMsg(""), Math.min(20000, 6000 + msg.length * 45)); return () => clearTimeout(id); }, [msg]);
   const [typeF, setTypeF] = useSticky<"" | "screen" | "embroidery" | "heat">("cal.type", "");
   // whose jobs: everyone's, or the accounts the signed-in person owns (others fade on the calendar)
   const [mine, setMine] = useSticky("cal.mine", false);
@@ -1435,7 +1436,8 @@ export default function MachineSchedule() {
         </div>
       </div>
       </div>
-      {msg && <div className="banner" style={{ marginBottom: 8 }} onClick={() => setMsg("")}>{msg}</div>}
+      {/* what just happened (booked, re-planned, saved): a quiet note at the bottom of the screen, not above the tools */}
+      {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
 
       {/* Scheduling Tools: the schedule's health, the actions that change it, and the jobs waiting for a spot */}
       <section className={"ms-tools" + (toolsOpen ? "" : " closed")}>
@@ -1451,6 +1453,7 @@ export default function MachineSchedule() {
           {/* left: the tools; right: Shop AI Assistant, how the shop is doing and what needs attention */}
           <div className="ms-tools-2">
             <div className="ms-tpanel">
+              <div className="ms-pulse-h">Tools</div>
           <div className="ms-tbar">
             <div className="ms-tb-g ms-tb-prod">
               <span className="ms-tb-l">Production</span>
