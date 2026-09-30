@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 
@@ -16,13 +16,13 @@ import { useSticky } from "@/lib/useSticky";
  * machine, day or time (a job only drops on a machine that can run it), or tap it to move it. Only our own orders are
  * planned here; Printavo jobs are left off (the Printavo-lane code stays, fed nothing, in case it's wanted again).
  */
-type Job = { key: string; kind: "o" | "a"; id: string; number: string; customer: string; name: string; due: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string; rush?: boolean; firm?: boolean; dueTime?: number | null };
+type Job = { key: string; kind: "o" | "a" | "h"; id: string; number: string; customer: string; name: string; due: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string; rush?: boolean; firm?: boolean; dueTime?: number | null };
 /** when a job has to be done (absolute minutes): end of its in-hands day, or the set time on a firm date */
 const dueAbs = (j: Job) => (j.due ? ord(j.due) * 1440 + (j.dueTime != null ? j.dueTime : 1440) : Infinity);
 /** 🔥 rush, ⛰️ firm date */
 const flags = (j: Job) => (j.rush || j.firm ? <i className="ms-flags" title={[j.rush ? "Rush" : "", j.firm ? `Firm: needed ${firmLbl(j)}` : ""].filter(Boolean).join(" · ")}>{j.rush ? "🔥" : ""}{j.firm ? "⛰️" : ""}</i> : null);
 const firmLbl = (j: Job) => (j.due ? `${new Date(j.due + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}${j.dueTime != null ? " " + clock(j.dueTime) : ""}` : "");
-type Slot = { id: string; order_id: string | null; archived_order_id: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "paused" | "done"; source: string; note: string; rolled_from: string | null;
+type Slot = { id: string; order_id: string | null; archived_order_id: string | null; /** a Planner hold (a job we know is coming) */ hold_id?: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "paused" | "done"; source: string; note: string; rolled_from: string | null;
   /** job log: when it really started / finished, how far along (0–1) as of progress_at; which print locations this booking covers (null = all) */
   started_at?: string | null; finished_at?: string | null; progress?: number; progress_at?: string | null; locations?: string[] | null };
 /** a job on the calendar; startMin = asked-for start (minutes after midnight), null = right after the job before it */
@@ -60,6 +60,9 @@ type Seg = { c: Card; day: string; start: number; end: number; part: number; par
 type View = "split" | "timeline" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number };
 type WhatIf = { id: string; kind: "split" | "ot" | "sat" | "combo"; title: string; detail: string; split: boolean; shifts: { machine: string; crew_id: string | null; day: string; start_min: number; end_min: number }[]; splits: number; lateAfter: number; stillLate: string[]; addedHours: number; cost: number };
+type WhenOpt = { m: Machine; start: number; end: number; minutes: number; ot: number };
+type WhenResult = { need: Need; minutes: number; soonest: WhenOpt | null; open: WhenOpt | null; bumped: { job: Job; late: boolean }[]; noMachine: boolean };
+type Hold = { id: string; name: string; customer: string; spec: QuickJob | Record<string, never>; due_date: string | null; due_time: number | null; notes: string; status: string; created_by: string; created_at: string };
 type Extra = { id: string; machine: string; crew_id: string | null; day: string; start_min: number; end_min: number; note: string };
 type DayOff = { id: string; crew_id: string | null; machine: string | null; day: string; note: string; start_min: number | null; end_min: number | null; capacity: number | null; employee: string };
 
@@ -267,6 +270,10 @@ export default function MachineSchedule() {
   const [checkin, setCheckin] = useState(false);
   const [renorm, setRenorm] = useState(false);
   const [otOpen, setOtOpen] = useState(false);
+  const [whenOpen, setWhenOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [holds, setHolds] = useState<Hold[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [advise, setAdvise] = useState<null | { opts: WhatIf[]; late: { job: string; customer: string; inHands: string; why: string }[]; lateBefore: number }>(null);
   // the "schedule too tight" prompt shows once a day (again if more jobs go late)
   const [toolsOpen, setToolsOpen] = useSticky("cal.toolsOpen", true);
@@ -274,14 +281,15 @@ export default function MachineSchedule() {
 
   const load = useCallback(async () => {
     const sb = createClient();
-    const [{ data: st }, { data: o }, { data: a }, { data: sl0 }, { data: off0 }, { data: ex0 }] = await Promise.all([
+    const [{ data: st }, { data: o }, { data: a }, { data: sl0 }, { data: off0 }, { data: ex0 }, { data: ho0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id, groups, lines, rush, firm, due_time").in("status", ["approved", "art", "blanks", "production"]).limit(300),
       // Printavo jobs are left off the calendar (it plans our own orders only); nothing in Printavo is read or changed here
       Promise.resolve({ data: [] as unknown[] }),
-      sb.from("production_slots").select("*").not("order_id", "is", null).gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
+      sb.from("production_slots").select("*").or("order_id.not.is.null,hold_id.not.is.null").gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
       sb.from("production_days_off").select("id, crew_id, machine, day, note, start_min, end_min, capacity, employee").gte("day", addDay(today, -21)).lte("day", addDay(today, 120)),
       sb.from("production_extra_shifts").select("id, machine, crew_id, day, start_min, end_min, note").gte("day", addDay(today, -21)).lte("day", addDay(today, 120)),
+      sb.from("production_holds").select("*").eq("status", "planned").order("due_date"),
     ]);
     const exList = (ex0 || []) as Extra[];
     setExtras(exList);
@@ -289,7 +297,7 @@ export default function MachineSchedule() {
     setOffs(offList);
     let sl = (sl0 || []) as Slot[];
     // not marked done by the end of its day → it moves forward to today (first in line), remembering where it started
-    const stale = sl.filter((x) => x.order_id && x.day < today && x.status !== "done");
+    const stale = sl.filter((x) => (x.order_id || x.hold_id) && x.day < today && x.status !== "done");
     if (stale.length) {
       await Promise.all(stale.map((x) => sb.from("production_slots").update({ day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day, updated_at: new Date().toISOString() }).eq("id", x.id)));
       sl = sl.map((x) => (stale.includes(x) ? { ...x, day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day } : x));
@@ -354,6 +362,7 @@ export default function MachineSchedule() {
     const { data: { user } } = await sb.auth.getUser();
     if (user?.email) {
       const { data: sf } = await sb.from("staff").select("name, role").eq("email", user.email.toLowerCase()).maybeSingle(); setMe({ email: user.email.toLowerCase(), name: (sf?.name as string) || "" });
+      setIsAdmin(["owner", "admin"].includes((sf?.role as string) || ""));
       if (["owner", "admin"].includes((sf?.role as string) || "")) {
         const [{ data: pr }, { data: em }] = await Promise.all([sb.from("employee_pay").select("employee_id, rate"), sb.from("employees").select("id, first_name, last_name")]);
         setPay({ rates: Object.fromEntries(((pr || []) as { employee_id: string; rate: number | null }[]).filter((x) => x.rate != null).map((x) => [x.employee_id, +x.rate!])), names: Object.fromEntries(((em || []) as { id: string; first_name: string; last_name: string }[]).map((x) => [x.id, `${x.first_name} ${x.last_name}`.trim()])) });
@@ -362,7 +371,10 @@ export default function MachineSchedule() {
     const js: Job[] = [
       ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[]; rush?: boolean; firm?: boolean; due_time?: number | null }[]).map((x) => ({ rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, key: "o:" + x.id, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status, needs: needsForOrder(ps, x as never), href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" })),
       ...pv.map((x) => ({ key: "a:" + x.id, kind: "a" as const, id: x.id, number: x.visual_id, customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status_name, needs: needsForPrintavo(ps, { qty: x.qty, status_name: x.status_name, nickname: x.nickname, data: { groups: x.pvgroups as never } }), href: `/shop/archive/${x.id}`, owner: "" })),
+      // Planner holds: jobs we know are coming, holding time before there's an order
+      ...((ho0 || []) as Hold[]).map((h) => ({ key: "h:" + h.id, kind: "h" as const, id: h.id, number: "PLAN", customer: h.customer || "Planned", name: h.name || "Planned job", due: h.due_date, dueTime: h.due_time, firm: h.due_time != null, qty: +(h.spec as QuickJob)?.qty || 0, status: "planned", needs: [quickNeed(ps, h.spec as QuickJob)], href: "", owner: "" })),
     ];
+    setHolds((ho0 || []) as Hold[]);
     setJobs(js);
     // Printavo jobs in a machine status sit on that machine at their Printavo times; past ones still in the status carry to today
     setPvLane(pv.map((x) => {
@@ -379,7 +391,7 @@ export default function MachineSchedule() {
   useEffect(() => { load(); }, [load]);
 
   const byKey = useMemo(() => new Map((jobs || []).map((j) => [j.key, j])), [jobs]);
-  const slotKey = (x: { order_id: string | null; archived_order_id: string | null }) => (x.order_id ? "o:" + x.order_id : "a:" + x.archived_order_id);
+  const slotKey = (x: { order_id: string | null; archived_order_id: string | null; hold_id?: string | null }) => (x.hold_id ? "h:" + x.hold_id : x.order_id ? "o:" + x.order_id : "a:" + x.archived_order_id);
   // everything on the calendar: our bookings, then Printavo machine statuses that aren't booked here
   const cards = useMemo<Card[]>(() => {
     if (!s || !jobs) return [];
@@ -577,7 +589,7 @@ export default function MachineSchedule() {
     // not started yet (or paused partway): free to move. Running and done work stays where it is.
     // a firm job (⛰️) that's on course for its date and time stays exactly where it is
     const firmHolds = (c: Card) => !!c.job.firm && (segs.ofCard.get(c.key) || []).reduce((t, g) => Math.max(t, ord(g.day) * 1440 + g.end), 0) <= dueAbs(c.job);
-    const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c));
+    const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c) && c.job.kind !== "h");
     // work that stays where it is (running, done, a firm job on course, other machine types) is an obstacle on its
     // machine, not a wall: open time before and between it is still used (a firm job on Thursday doesn't empty Wednesday)
     const fixed = new Map<string, [number, number][]>();
@@ -693,7 +705,7 @@ export default function MachineSchedule() {
   }
   const cls = (g: Seg) => {
     const c = g.c, late = ord(g.day) * 1440 + g.end > dueAbs(c.job);
-    return "ms-blk " + c.need.type + (inOT(g) ? " ot" : "") + (c.job.firm ? " is-firm" : "") + (c.job.rush ? " is-rush" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "") + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (g.part > 1 ? " cont-l" : "") + (g.part < g.parts ? " cont-r" : "");
+    return "ms-blk " + c.need.type + (c.job.kind === "h" ? " hold" : "") + (inOT(g) ? " ot" : "") + (c.job.firm ? " is-firm" : "") + (c.job.rush ? " is-rush" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "") + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (g.part > 1 ? " cont-l" : "") + (g.part < g.parts ? " cont-r" : "");
   };
   const tip = (g: Seg) => `#${g.c.job.number} ${g.c.job.customer}${g.c.job.owner ? ` (${g.c.job.owner})` : ""}\n${g.c.job.name}\n${dayLbl(g.day)} ${clockLong(g.start)} – ${clockLong(g.end)}${g.parts > 1 ? ` (part ${g.part} of ${g.parts}; ${fmtMin(g.c.minutes)} in all)` : ` (${fmtMin(g.c.minutes)})`}\n${g.c.need.label}${g.c.job.due ? `\nIn-hands ${dayLbl(g.c.job.due)}` : ""}${g.c.slot?.status === "done" ? "\nDone" : g.c.slot?.status === "running" ? "\nRunning" : ""}${g.c.fromPv ? "\nFrom its Printavo status" : ""}${g.c.carried ? `\nRolled forward from ${dayLbl(g.c.carried)}` : ""}${g.pushed ? "\nStarts later than asked (the job before runs long)" : ""}`;
   const offShade = (mach: Machine, d: string) => {
@@ -875,7 +887,7 @@ export default function MachineSchedule() {
   const chip = (g: Seg, d: string, two = false) => {
     const c = g.c, when = d >= today;
     return (
-      <button key={c.key + g.part} type="button" draggable className={"ms-chip " + c.need.type + (inOT(g) ? " ot" : "") + (c.job.firm ? " is-firm" : "") + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (ord(g.day) * 1440 + g.end > dueAbs(c.job) ? " late" : "") + (g.part > 1 ? " cont" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "") + (two ? " two" : "")}
+      <button key={c.key + g.part} type="button" draggable className={"ms-chip " + c.need.type + (c.job.kind === "h" ? " hold" : "") + (inOT(g) ? " ot" : "") + (c.job.firm ? " is-firm" : "") + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (ord(g.day) * 1440 + g.end > dueAbs(c.job) ? " late" : "") + (g.part > 1 ? " cont" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "") + (two ? " two" : "")}
         title={tip(g)} onClick={() => setOpen(c)}
         onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver("k:" + c.key); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (drag && g.part === 1) place(drag, g.c.machine, d, c.key); else if (drag) place(drag, g.c.machine, d); }}>
@@ -1109,6 +1121,83 @@ export default function MachineSchedule() {
       return { id: d.id, kind: d.kind, title: d.title, detail: d.detail, split: d.split, shifts: d.x.shifts, splits: p.splits, lateAfter: p.lateAfter, stillLate, addedHours: Math.round(hoursOf(d.x.shifts) * 10) / 10, cost: Math.round(costOf(d.x.shifts, p.splits)) };
     }).sort((a, b) => a.lateAfter - b.lateAfter || a.cost - b.cost);
   };
+  /**
+   * "When can we print it?": a job that isn't booked yet, tried on every press that can run it.
+   *  - soonest: first in line from now (unstarted work that isn't firm would get pushed back)
+   *  - next opening: after everything already booked (nobody moves)
+   * Both follow each press's real hours, breaks, downtime and crew speed.
+   */
+  // booked time on each press/day (from the calendar), for trying a new job around it
+  const obst = (keep: (c: Card) => boolean) => { const mp = new Map<string, [number, number][]>(); for (const c of cards) if (keep(c)) for (const g of segs.ofCard.get(c.key) || []) if (g.day >= today) { const k = c.machine.id + "|" + g.day; mp.set(k, [...(mp.get(k) || []), [g.start, g.end]]); } return mp; };
+  // lay `minutes` of work on a press from t0 (absolute minutes) around its hours, breaks, downtime and booked time
+  const simFrom = (m: Machine, obs: Map<string, [number, number][]>, minutes: number, t0: number): WhenOpt => {
+    const wins = (d: string) => { const sh = shiftOn(m, d); if (!sh) return []; return windowsIn(sh, [...downsOn(m, d, sh), ...(obs.get(m.id + "|" + d) || []).map(([a, b]): Down => [a, b, "Booked", 0])]); };
+    let t = t0, start = -1, left = minutes, ot = 0;
+    for (let g = 0; g < 2000 && left > 0.01; g++) {
+      const dd = Math.floor(t / 1440), mm = t - dd * 1440, d = fromOrd(dd), w = wins(d).find(([, y]) => mm < y);
+      if (!w) { t = (dd + 1) * 1440; continue; }
+      const a = Math.max(mm, w[0]); if (start < 0) start = dd * 1440 + a;
+      const e = Math.min(a + left / w[2], w[1]); const oa = otOn(m, d); if (oa != null) ot += Math.max(0, e - Math.max(a, oa));
+      left -= (e - a) * w[2]; t = dd * 1440 + e;
+    }
+    return { m, start, end: t, minutes, ot };
+  };
+  const stays = (c: Card) => !!c.slot && (c.slot.status === "running" || c.slot.status === "done" || !!c.job.firm);
+  /**
+   * "When can we print it?": a job that isn't booked yet, tried on every press that can run it.
+   *  - soonest: first in line from now (unstarted work that isn't firm would get pushed back)
+   *  - next opening: after everything already booked (nobody moves), including Planner holds
+   * Both follow each press's real hours, breaks, downtime and crew speed.
+   */
+  const whenCan = (need: Need): WhenResult | null => {
+    if (!need.steps.length) return null;
+    const nowAbs = ord(today) * 1440 + now.min;
+    const cand = s.machines.filter((m) => m.active && fits(need, m));
+    if (!cand.length) return { need, minutes: 0, soonest: null, open: null, bumped: [], noMachine: true };
+    const best = (obs: Map<string, [number, number][]>) => cand.map((m) => simFrom(m, obs, estimate(s, need, m).minutes, nowAbs)).sort((a, b) => a.end - b.end || a.ot - b.ot)[0];
+    const soonest = best(obst(stays)), open = best(obst(() => true));
+    // what jumping the line would push back on that press, and which of those would then miss their date
+    const bumped = cards.filter((c) => c.machine.id === soonest.m.id && !stays(c) && !c.fromPv && (segs.ofCard.get(c.key) || []).some((g) => ord(g.day) * 1440 + g.end > soonest.start))
+      .map((c) => { const cur = (segs.ofCard.get(c.key) || []).reduce((t, g) => Math.max(t, ord(g.day) * 1440 + g.end), 0); return { job: c.job, late: cur <= dueAbs(c.job) && cur + soonest.minutes > dueAbs(c.job) }; })
+      .filter((x, i, a) => a.findIndex((y) => y.job.key === x.job.key) === i);
+    return { need, minutes: estimate(s, need, soonest.m).minutes, soonest, open, bumped, noMachine: false };
+  };
+  /**
+   * Where a Planner hold goes: just in time, not first thing. The latest start that still finishes the working day
+   * before its in-hands date (packing / shipping), on the press that fits it best; if nothing fits by then, the soonest.
+   */
+  const holdSpot = (need: Need, due: string | null): WhenOpt | null => {
+    const cand = s.machines.filter((m) => m.active && fits(need, m));
+    if (!cand.length) return null;
+    const obs = obst(() => true), nowAbs = ord(today) * 1440 + now.min;
+    if (due) {
+      const target = minusWorkdays(due, Math.max(1, s.bufferDays)), deadline = ord(target) * 1440 + 1440;
+      for (let k = 0; k < 30; k++) {
+        const d = minusWorkdays(target, k); if (d < today) break;
+        const t0 = Math.max(nowAbs, ord(d) * 1440);
+        const ok = cand.map((m) => simFrom(m, obs, estimate(s, need, m).minutes, t0)).filter((r) => r.end <= deadline).sort((a, b) => a.ot - b.ot || a.end - b.end)[0];
+        if (ok) return ok;
+      }
+    }
+    return cand.map((m) => simFrom(m, obs, estimate(s, need, m).minutes, nowAbs)).sort((a, b) => a.end - b.end)[0];
+  };
+  async function saveHold(h: { name: string; customer: string; spec: QuickJob; due_date: string; due_time: number | null; notes: string }) {
+    const need = quickNeed(s!, h.spec);
+    if (!need.steps.length) return "Add at least one print location.";
+    const spot = holdSpot(need, h.due_date);
+    if (!spot) return "No machine can run this.";
+    const sb = createClient();
+    const r = await sb.from("production_holds").insert({ ...h, created_by: me.email }).select("id").single();
+    if (r.error) return r.error.message;
+    const day = fromOrd(Math.floor(spot.start / 1440));
+    const r2 = await sb.from("production_slots").insert({ hold_id: (r.data as { id: string }).id, machine: spot.m.id, day, minutes: spot.minutes, start_min: null, position: cards.filter((c) => c.machine.id === spot.m.id && c.day === day).length, kind: need.type, label: need.label, source: "planner", status: "scheduled", locations: null });
+    if (r2.error) return r2.error.message;
+    setMsg(`Planned: ${h.name || "job"} holds ${fmtMin(spot.minutes)} on ${spot.m.name}, ${dayLbl(day)}${h.due_date && spot.end > ord(minusWorkdays(h.due_date, Math.max(1, s!.bufferDays))) * 1440 + 1440 ? " (the schedule is full: it finishes after the in-hands date)" : ""}. Drag it anywhere on the calendar.`);
+    load();
+    return "";
+  }
+  async function removeHold(id: string) { await createClient().from("production_holds").delete().eq("id", id); load(); }
+
   async function applyWhatIf(w: WhatIf) {
     const note = w.kind === "sat" || w.id === "sat4s" ? "Saturday shift" : "Overtime";
     if (w.shifts.length) {
@@ -1156,6 +1245,8 @@ export default function MachineSchedule() {
         </div>
         {toolsOpen && <>
           <div className="ms-acts">
+            <button type="button" className="ms-act ms-act-when" onClick={() => setWhenOpen(true)}><b>When Can We Print It?</b><small>Quick specs → soonest, aggressive and regular dates</small></button>
+            <button type="button" className="ms-act" onClick={() => setPlanOpen(true)}><b>Planner</b><small>Hold time for jobs you know are coming</small></button>
             <button type="button" className="ms-act" onClick={() => setCheckin(true)}><b>Update Progress</b><small>What&apos;s started, done or paused today</small></button>
             <button type="button" className="ms-act" onClick={() => setReplan({ why: "" })}><b>Re-plan Schedule</b><small>Re-lay open work from now, soonest in-hands first</small></button>
             <button type="button" className="ms-act" onClick={() => setShiftEdit(true)}><b>+ Add Shift</b><small>A weekend or extra shift for a crew</small></button>
@@ -1222,6 +1313,8 @@ export default function MachineSchedule() {
         <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
+      {planOpen && <PlannerPanel s={s} today={today} holds={holds} admin={isAdmin} spotOf={(id) => { const c = cards.find((x) => x.job.key === "h:" + id); const g = c ? (segs.ofCard.get(c.key) || [])[0] : undefined; return c && g ? `${shortName(c.machine)} · ${dayLbl(g.day)} · ${fmtMin(c.minutes)}` : ""; }} onSave={saveHold} onRemove={removeHold} onClose={() => setPlanOpen(false)} />}
+      {whenOpen && <WhenPanel s={s} today={today} nowLabel={`${dayLbl(today)} ${clockLong(now.min)}`} calc={whenCan} onClose={() => setWhenOpen(false)} />}
       {otOpen && <OvertimePanel today={today} thisWeek={otReport(payWeekStart(today))} nextWeek={otReport(addDay(payWeekStart(today), 7))} mult={s.labor.otMultiplier} leader={(m) => crewOf(m)?.leader || shortName(m)} onClose={() => setOtOpen(false)} onCut={async (rows) => { await cutOvertime(rows); setOtOpen(false); }} />}
       {advise && <AdvisePanel options={advise.opts} late={advise.late} lateBefore={advise.lateBefore} labor={s.labor} otNote={otReport(payWeekStart(today)).filter((r) => r.w.ot).map((r) => `${crewOf(r.m)?.leader || shortName(r.m)}'s crew (${shortName(r.m)}): ${fmtMin(r.w.ot)} overtime already on the schedule this pay week${r.starts ? `, from ${dayLbl(r.starts.day)} ${clock(r.starts.min)}` : ""}`).join("; ")} machinesLabel={typeF ? TYPE_LBL[typeF] : "all machines"} nowLabel={`${dayLbl(today)} ${clockLong(now.min)}`} onClose={() => setAdvise(null)} onApply={applyWhatIf} />}
       {renorm && <RenormPanel items={renormItems()} onClose={() => setRenorm(false)} onDone={(m) => { setRenorm(false); setMsg(m); load(); setReplan({ why: `${m} Re-plan now so the jobs fill the regular week?` }); }} />}
@@ -1333,7 +1426,7 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
             <label>Start<select value={st} onChange={(e) => setSt(e.target.value)}><option value="auto">After the job before it</option>{times.map((t) => <option key={t} value={t}>{clockLong(t)}</option>)}</select></label>
           </div>
           <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <Link className="btn" href={c.job.href}>Open Job</Link>
+            {c.job.kind !== "h" ? <Link className="btn" href={c.job.href}>Open Job</Link> : null}
             {c.slot && locsOf(c.need).length > 1 && stt !== "done" && <button type="button" className="btn" onClick={() => setSplitting([])} title="Run some print locations (like a sleeve) separately, on another day or press">Split Job…</button>}
             {c.slot && <button type="button" className="btn danger" onClick={() => onUnbook(c.slot!)}>Take Off Schedule</button>}
             <button type="button" className="btn primary" disabled={same} onClick={() => onMove(m, day, newStart)}>{c.fromPv ? "Book Here" : "Move"}</button>
@@ -1421,6 +1514,154 @@ function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSav
 }
 
 /** Add an extra shift (usually Saturday or Sunday) for one or more presses and their crews, e.g. Saturday 10 AM – 2 PM. */
+/* ---------- quick job specs (When Can We Print It? and the Planner) ---------- */
+const LOC_NAMES: Record<MachineType, string[]> = { screen: ["Front", "Back", "Sleeve", "Other"], embroidery: ["Left Chest", "Back", "Sleeve", "Other"], heat: ["Front", "Back", "Sleeve", "Other"] };
+const blankQuick = (): QuickJob => ({ method: "screen", qty: 144, garment: "tee", dark: false, locations: [{ name: "Front", colors: 4, stitches: 8000 }, { name: "Back", colors: 0, stitches: 0 }, { name: "Sleeve", colors: 0, stitches: 0 }, { name: "Other", colors: 0, stitches: 0 }] });
+function QuickJobForm({ v, onChange }: { v: QuickJob; onChange: (x: QuickJob) => void }) {
+  const set = (x: Partial<QuickJob>) => onChange({ ...v, ...x });
+  const setLoc = (i: number, x: Partial<QuickJob["locations"][number]>) => onChange({ ...v, locations: v.locations.map((l, k) => (k === i ? { ...l, ...x } : l)) });
+  return (
+    <div className="ms-qf">
+      <div className="rv-seg">{([["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const).map(([k, l]) => <button key={k} type="button" className={v.method === k ? "on" : ""} onClick={() => set({ method: k, locations: v.locations.map((x, i) => ({ ...x, name: LOC_NAMES[k][i] || x.name, stitches: k === "embroidery" && i === 0 && !x.stitches ? 8000 : x.stitches })) })}>{l}</button>)}</div>
+      <div className="ms-qf-g">
+        <label>Pieces<input type="number" min={1} step={12} value={v.qty || ""} onChange={(e) => set({ qty: Math.max(0, +e.target.value || 0) })} /></label>
+        <label>Garment<select value={v.garment} onChange={(e) => set({ garment: e.target.value as QuickJob["garment"] })}><option value="tee">T-shirts / light</option><option value="heavy">Hoodies / heavy</option><option value="bag">Bags / totes</option>{v.method === "embroidery" && <option value="cap">Caps</option>}</select></label>
+        {v.method === "screen" && <label className="check ms-qf-dark"><input type="checkbox" checked={v.dark} onChange={(e) => set({ dark: e.target.checked })} /> Dark garments (underbase)</label>}
+      </div>
+      <div className="ms-qf-l">
+        {v.locations.map((l, i) => (
+          <label key={i} className={(v.method === "screen" ? l.colors : v.method === "embroidery" ? l.stitches : l.colors) ? "on" : ""}>
+            <span>{l.name}</span>
+            {v.method === "screen" && <select value={l.colors} onChange={(e) => setLoc(i, { colors: +e.target.value })}>{Array.from({ length: 13 }, (_, c) => <option key={c} value={c}>{c ? `${c} color${c === 1 ? "" : "s"}` : "—"}</option>)}</select>}
+            {v.method === "embroidery" && <select value={l.stitches} onChange={(e) => setLoc(i, { stitches: +e.target.value })}><option value={0}>—</option>{[3000, 5000, 8000, 10000, 12000, 15000, 20000, 30000, 40000].map((x) => <option key={x} value={x}>{x / 1000}k stitches</option>)}</select>}
+            {v.method === "heat" && <select value={l.colors ? 1 : 0} onChange={(e) => setLoc(i, { colors: +e.target.value })}><option value={0}>—</option><option value={1}>Yes</option></select>}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Planner: jobs we know are coming. Each holds its press time on the calendar until the real order is booked. */
+function PlannerPanel({ s, today, holds, admin, spotOf, onSave, onRemove, onClose }: { s: ProductionSettings; today: string; holds: Hold[]; admin: boolean; spotOf: (id: string) => string; onSave: (h: { name: string; customer: string; spec: QuickJob; due_date: string; due_time: number | null; notes: string }) => Promise<string>; onRemove: (id: string) => Promise<void>; onClose: () => void }) {
+  const [adding, setAdding] = useState(holds.length === 0 && admin);
+  const [name, setName] = useState(""), [cust, setCust] = useState(""), [spec, setSpec] = useState<QuickJob>(blankQuick), [due, setDue] = useState(""), [at, setAt] = useState<number | null>(null), [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(""), [err, setErr] = useState("");
+  const need = quickNeed(s, spec);
+  const est = need.steps.length ? Math.min(...s.machines.filter((m) => m.active && fits(need, m)).map((m) => estimate(s, need, m).minutes), Infinity) : 0;
+  async function save() {
+    if (!due) { setErr("Pick the in-hands date."); return; }
+    setBusy("save"); setErr("");
+    const e = await onSave({ name: name.trim(), customer: cust.trim(), spec, due_date: due, due_time: at, notes: notes.trim() });
+    setBusy("");
+    if (e) { setErr(e); return; }
+    setAdding(false); setName(""); setCust(""); setSpec(blankQuick()); setDue(""); setAt(null); setNotes("");
+  }
+  const hm = (t: number) => `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+  return (
+    <div className="pp-modal" onClick={onClose}>
+      <div className="pp-sheet tmx-ed ms-whenp" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Planner">
+        <div className="pp-sheet-h"><b>Planner</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="tmx-ed-b">
+          <div className="faint" style={{ fontSize: 12.5 }}>Jobs you know are coming but don&apos;t have an order for yet. Each one holds its press time on the calendar (dashed purple, “PLAN”), just in time for its in-hands date, so When Can We Print It?, suggestions and Re-plan treat that time as taken. Drag it like any job; remove it once the real order is booked.</div>
+          {holds.length > 0 && <ul className="ms-plan-l">{holds.map((h) => { const n = quickNeed(s, h.spec as QuickJob), sp = spotOf(h.id); return (
+            <li key={h.id}>
+              <span className="ms-plan-t"><b>{h.name || "Planned job"}{h.customer ? <span className="faint"> · {h.customer}</span> : null}</b><small>{(h.spec as QuickJob).qty || 0} pcs · {n.label || "—"}</small>{h.notes ? <small className="faint">{h.notes}</small> : null}</span>
+              <span className="ms-plan-d"><b>In hands {h.due_date ? dayLbl(h.due_date) : "—"}{h.due_time != null ? ` ${clock(h.due_time)}` : ""}</b><small>{sp ? `Held: ${sp}` : "Not on the calendar yet"}</small></span>
+              {admin ? <button type="button" className="btn sm danger" disabled={busy === h.id} onClick={async () => { setBusy(h.id); await onRemove(h.id); setBusy(""); }}>Remove</button> : <span />}
+            </li>
+          ); })}</ul>}
+          {!holds.length && !adding && <div className="empty">Nothing planned yet.</div>}
+          {admin && !adding && <button type="button" className="btn primary" style={{ alignSelf: "flex-start" }} onClick={() => setAdding(true)}>+ Plan a Job</button>}
+          {!admin && <div className="faint" style={{ fontSize: 12.5 }}>Owners and admins add and remove planned jobs.</div>}
+          {adding && <div className="ms-plan-f">
+            <div className="ms-qf-g">
+              <label>Job name<input type="text" value={name} placeholder="Fall league shirts" onChange={(e) => setName(e.target.value)} /></label>
+              <label>Customer<input type="text" value={cust} placeholder="Lakeside Running" onChange={(e) => setCust(e.target.value)} /></label>
+            </div>
+            <QuickJobForm v={spec} onChange={setSpec} />
+            <div className="ms-qf-g">
+              <label>In-hands date<input type="date" min={today} value={due} onChange={(e) => setDue(e.target.value)} /></label>
+              <label className="check ms-qf-dark"><input type="checkbox" checked={at != null} onChange={(e) => setAt(e.target.checked ? 600 : null)} /> Specific time</label>
+              {at != null && <label>Needed by<input type="time" step={900} value={hm(at)} onChange={(e) => { const [h, m] = e.target.value.split(":").map(Number); if (!isNaN(h)) setAt(h * 60 + (m || 0)); }} /></label>}
+              <label style={{ flex: 1, minWidth: 180 }}>Notes<input type="text" value={notes} placeholder="Waiting on art; blanks ordered" onChange={(e) => setNotes(e.target.value)} /></label>
+            </div>
+            <div className="faint" style={{ fontSize: 12.5 }}>{need.steps.length ? `About ${fmtMin(est)} of press time (${need.label}).` : "Pick at least one print location."}</div>
+            {err && <div className="pv-err">{err}</div>}
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+              <button type="button" className="btn" onClick={() => { setAdding(false); setErr(""); }}>Cancel</button>
+              <button type="button" className="btn primary" disabled={busy === "save" || !need.steps.length} onClick={save}>{busy === "save" ? "Holding time…" : "Save & Hold Time"}</button>
+            </div>
+          </div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** When Can We Print It?: quick specs in, three dates out (soonest, aggressive, regular), and the AI's pick. */
+function WhenPanel({ s, today, nowLabel, calc, onClose }: { s: ProductionSettings; today: string; nowLabel: string; calc: (n: Need) => WhenResult | null; onClose: () => void }) {
+  const [v, setV] = useState<QuickJob>(blankQuick);
+  const [needBy, setNeedBy] = useState("");
+  const [ai, setAi] = useState<{ headline: string; pick: string; why: string; customerLine?: string } | null>(null);
+  const [aiSt, setAiSt] = useState<"" | "loading" | "off" | "error">("");
+  const need = quickNeed(s, v);
+  const r = v.qty > 0 ? calc(need) : null;
+  const inHands = (end: number, soonest: boolean) => { const d = fromOrd(Math.floor((end - 1) / 1440)), m = end - Math.floor((end - 1) / 1440) * 1440; return soonest && m <= 15 * 60 ? d : plusWorkdays(d, Math.max(1, s.bufferDays)); };
+  const soon = r?.soonest ? { ...r.soonest, hands: inHands(r.soonest.end, true) } : null;
+  const agg = r?.open ? { ...r.open, hands: inHands(r.open.end, false) } : null;
+  const regHands = agg ? [plusWorkdays(today, s.turnDays), agg.hands].sort().pop()! : plusWorkdays(today, s.turnDays);
+  const late = r?.bumped.filter((b) => b.late) || [];
+  const key = JSON.stringify([v, needBy]);
+  const [asked, setAsked] = useState("");
+  async function ask() {
+    if (!r || !soon || !agg) return;
+    setAsked(key); setAiSt("loading"); setAi(null);
+    const d = (x: string) => dayLbl(x);
+    const j = await fetch("/api/production/when", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+      now: nowLabel, job: `${v.qty} pcs · ${need.label || "no print locations"} · ${v.garment}${v.dark ? " · darks" : ""}`, runTime: fmtMin(r.minutes), needBy: needBy ? d(needBy) : "",
+      soonest: `printed ${d(fromOrd(Math.floor((soon.end - 1) / 1440)))} ${clock(soon.end % 1440)} on ${soon.m.name}, in hands ${d(soon.hands)}; jumps the line: ${r.bumped.length} job${r.bumped.length === 1 ? "" : "s"} on that press get pushed${late.length ? `, ${late.length} would miss their date (${late.map((b) => "#" + b.job.number).join(", ")})` : ", none would miss their date"}${soon.ot ? `; ${fmtMin(soon.ot)} in overtime` : ""}`,
+      aggressive: `next opening: printed ${d(fromOrd(Math.floor((agg.end - 1) / 1440)))} on ${agg.m.name}, in hands ${d(agg.hands)}; nothing else moves${agg.ot ? `; ${fmtMin(agg.ot)} in overtime` : ""}`,
+      regular: `regular turn (${s.turnDays} business days, or later if the schedule is full): in hands ${d(regHands)}`,
+    }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the AI." }));
+    if (j.off) setAiSt("off"); else if (j.error) setAiSt("error"); else { setAi(j); setAiSt(""); }
+  }
+  const col = (id: string, title: string, sub: string, hands: string | null, lines: ReactNode[]) => (
+    <div className={"ms-when-c" + (ai?.pick === id ? " pick" : "") + (needBy && hands ? (hands <= needBy ? " ok" : " no") : "")}>
+      <small>{title}{ai?.pick === id ? <em>Recommended</em> : null}</small>
+      <b>{hands ? dayLbl(hands) : "—"}</b>
+      <span className="faint">{sub}</span>
+      {needBy && hands ? <span className={hands <= needBy ? "good" : "bad"}>{hands <= needBy ? "✓ Makes " : "✗ Misses "}{dayLbl(needBy)}</span> : null}
+      <ul>{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+    </div>
+  );
+  return (
+    <div className="pp-modal" onClick={onClose}>
+      <div className="pp-sheet tmx-ed ms-whenp" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="When can we print it">
+        <div className="pp-sheet-h"><b>When Can We Print It?</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="tmx-ed-b">
+          <QuickJobForm v={v} onChange={setV} />
+          <label className="ms-qf-need">Customer needs it by (optional)<input type="date" min={today} value={needBy} onChange={(e) => setNeedBy(e.target.value)} /></label>
+          {!r ? <div className="faint">Enter the pieces and at least one print location.</div> : r.noMachine ? <div className="pv-err">No machine can run this ({need.needColors} screens on a {Math.max(...s.machines.filter((m) => m.type === "screen").map((m) => m.colors), 0)}-color press max).</div> : <>
+            <div className="faint" style={{ fontSize: 12.5 }}>About <b>{fmtMin(r.minutes)}</b> of press time ({need.label}). Dates are when it&apos;s in the customer&apos;s hands, from today&apos;s schedule.</div>
+            <div className="ms-when-g">
+              {col("soonest", "Absolute soonest", "Jump the line", soon?.hands || null, soon ? [`Prints ${dayLbl(fromOrd(Math.floor((soon.end - 1) / 1440))).split(",")[0]} by ${clock(soon.end % 1440)} on ${shortName(soon.m)}`, r.bumped.length ? `Pushes back ${r.bumped.length} job${r.bumped.length === 1 ? "" : "s"}${late.length ? `, ${late.length} would be late (${late.slice(0, 3).map((b) => "#" + b.job.number).join(", ")})` : ", none late"}` : "Nothing has to move", ...(soon.ot ? [`${fmtMin(soon.ot)} in overtime`] : [])] : [])}
+              {col("aggressive", "Aggressive", "Next opening, nothing moves", agg?.hands || null, agg ? [`Prints ${dayLbl(fromOrd(Math.floor((agg.end - 1) / 1440))).split(",")[0]} on ${shortName(agg.m)}`, `${s.bufferDays} business day${s.bufferDays === 1 ? "" : "s"} to pack / ship`, ...(agg.ot ? [`${fmtMin(agg.ot)} in overtime`] : [])] : [])}
+              {col("regular", "Regular turn", `${s.turnDays} business days`, regHands, [agg && agg.hands > plusWorkdays(today, s.turnDays) ? "The schedule is full past our normal turn" : "Our normal turnaround", "Room for art, blanks and surprises"])}
+            </div>
+            <div className={"ms-adv-ai" + (aiSt === "loading" ? " loading" : "")}>
+              <span className="ms-adv-i" aria-hidden>✦</span>
+              {ai && asked === key ? <div><b>{ai.headline}</b><span>{ai.why}</span>{ai.customerLine && <span className="ms-when-say">Tell the customer: “{ai.customerLine}”</span>}</div>
+                : aiSt === "loading" ? <div><b>Thinking it over…</b></div>
+                : <div><span>{aiSt === "off" ? "AI advice is off (Settings → Assistant & AI)." : aiSt === "error" ? "The AI didn't answer. Try again." : "Get a recommendation on which date to promise."}</span><button type="button" className="btn sm ms-ai-b" style={{ alignSelf: "flex-start", marginTop: 4 }} onClick={ask}>✦ What Should We Promise?</button></div>}
+            </div>
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Overtime: each press crew's paid hours this pay week (Friday–Thursday), what's past 40, and what it costs. */
 type OtRow = { m: Machine; w: WeekOT; used: number; unused: number; perHour: number | null; who: string[]; pay: number | null; premium: number | null; starts: { day: string; min: number } | null };
 function OvertimePanel({ today, thisWeek, nextWeek, mult, leader, onClose, onCut }: { today: string; thisWeek: OtRow[]; nextWeek: OtRow[]; mult: number; leader: (m: Machine) => string; onClose: () => void; onCut: (rows: OtRow[]) => Promise<void> }) {
@@ -1642,7 +1883,7 @@ function CheckIn({ s, cards, segsOf, machines, crews, today, nowMin, onClose, on
   const [atDay, setAtDay] = useState(today);
   const [atMin, setAtMin] = useState(() => Math.min(20 * 60, Math.max(12 * 60, Math.ceil(nowMin / 60) * 60)));
   const asDay = when === "now" ? today : atDay, asMin = when === "now" ? nowMin : atMin;
-  const rows = cards.filter((c) => c.slot && !c.fromPv && machines.some((m) => m.id === c.machine.id) && (c.day === asDay || c.slot.status === "running" || c.slot.status === "paused"))
+  const rows = cards.filter((c) => c.slot && !c.fromPv && c.job.kind !== "h" && machines.some((m) => m.id === c.machine.id) && (c.day === asDay || c.slot.status === "running" || c.slot.status === "paused"))
     .map((c) => ({ c, first: segsOf(c).filter((g) => g.day === asDay)[0] }))
     .sort((a, b) => (a.first?.start ?? 9999) - (b.first?.start ?? 9999));
   const init = (c: Card): CiEdit => ({ st: c.slot!.status as CiSt, p: Math.round(+(c.slot!.progress || 0) * 10) * 10, doneLocs: [], restDay: "", restMach: c.machine.id });

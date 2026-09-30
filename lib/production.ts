@@ -100,6 +100,8 @@ export type ProductionSettings = {
   heat: { secsPerPiece: number; setupMin: number };
   /** plan this many business days before the in-hands date (packing, shipping) */
   bufferDays: number;
+  /** the shop's regular turnaround: business days from order to in-hands */
+  turnDays: number;
   breaks: Breaks;
   labor: Labor;
   /** fill a machine's day to this share before suggesting the next day (85% keeps room for surprises) */
@@ -137,6 +139,7 @@ export const DEFAULT_PRODUCTION: ProductionSettings = {
   },
   heat: { secsPerPiece: 45, setupMin: 10 },
   bufferDays: 1,
+  turnDays: 10,
   breaks: DEFAULT_BREAKS,
   labor: DEFAULT_LABOR,
   fillTarget: 0.85,
@@ -364,6 +367,19 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
   return { minutes: Math.round((setup + run + teardown) * f), setup: Math.round(setup * f), run: Math.round(run * f), teardown: Math.round(teardown * f), parts };
 }
 
+/** A job described in a few fields (the "When can we print it?" form) as what it needs from a machine. */
+export type QuickJob = { method: MachineType; qty: number; garment: "tee" | "heavy" | "bag" | "cap"; dark: boolean; locations: { name: string; colors: number; stitches: number }[] };
+export function quickNeed(s: ProductionSettings, j: QuickJob): Need {
+  const locs = j.locations.filter((l) => (j.method === "embroidery" ? l.stitches > 0 : l.colors > 0));
+  const steps: Step[] = locs.map((l) => {
+    const colors = j.method === "screen" ? l.colors : 0;
+    const screens = j.method === "screen" ? colors + (j.dark && s.screen.underbaseOnDark && colors < 11 ? 1 : 0) : 0;
+    return { method: j.method, location: l.name, colors, screens, qty: j.qty, dark: j.dark, garment: j.method === "embroidery" && j.garment === "cap" ? "cap" : j.garment, stitches: j.method === "embroidery" ? l.stitches : 0, note: "" };
+  });
+  const label = steps.map((x) => (j.method === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}` : j.method === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k` : x.location)).join(" + ");
+  return { type: j.method, steps, needColors: Math.max(0, ...steps.map((x) => x.screens)), qty: j.qty, label };
+}
+
 /** Can this machine run it? (a job needing 11 screens only fits a 12-color press) */
 export const fits = (need: Need, mach: Machine) => mach.active && mach.type === need.type && (need.type !== "screen" || need.needColors <= mach.colors);
 
@@ -471,6 +487,7 @@ export function weekOvertime(mach: Machine, weekStart: string): WeekOT | null {
 /** When overtime starts on a day for this machine's crew (minutes after midnight), or null. */
 export const otFromOn = (mach: Machine, day: string) => weekOvertime(mach, payWeekStart(day))?.days[day]?.otFrom ?? null;
 /** Business days back from a date on the shop's week (Mon–Fri). */
+export function plusWorkdays(d: string, n: number) { let x = d, k = n; while (k > 0) { x = addDay(x, 1); if (dow(x) !== 0 && dow(x) !== 6) k--; } return x; }
 export function minusWorkdays(d: string, n: number) { let x = d, k = n; while (k > 0) { x = addDay(x, -1); if (dow(x) !== 0 && dow(x) !== 6) k--; } return x; }
 
 export type Suggestion = { machine: Machine; day: string; minutes: number; late: boolean; reason: string; alternatives: { machine: Machine; day: string; minutes: number }[] };

@@ -162,6 +162,7 @@ export default function ProductionSettingsPage() {
             {num("Heat press: seconds per piece", s.heat.secsPerPiece, (x) => upd((d) => { d.heat.secsPerPiece = x; }), 1, "press + handling, ~45–60")}
             {num("Heat press: setup (min)", s.heat.setupMin, (x) => upd((d) => { d.heat.setupMin = x; }))}
             {num("Finish this many business days before in-hands", s.bufferDays, (x) => upd((d) => { d.bufferDays = x; }))}
+            {num("Regular turnaround (business days)", s.turnDays, (x) => upd((d) => { d.turnDays = Math.max(1, Math.min(40, x)); }), 1, "Used by \"When can we print it?\" for the regular turn time")}
             {num("Fill each machine's day to (%)", Math.round(s.fillTarget * 100), (x) => upd((d) => { d.fillTarget = Math.min(1, x / 100); }), 5, "85% leaves room for rushes")}
           </div>
         </section>

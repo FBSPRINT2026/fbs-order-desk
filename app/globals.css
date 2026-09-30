@@ -4052,3 +4052,41 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .tp-sl-v{font-size:12px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
 .tp-sl-l{white-space:nowrap;overflow:hidden}
 .tp-sl-l small{flex:1 1 auto;min-width:0}
+/* When Can We Print It? / Planner quick form */
+.ms-act-when{border-color:color-mix(in srgb,#7C5CD6 40%,var(--line))}
+.ms-act-when b{color:#5B3FC4}
+.ms-whenp{max-width:820px;width:min(820px,96vw)}
+.ms-whenp .tmx-ed-b{max-height:84vh;overflow:auto}
+.ms-qf{display:flex;flex-direction:column;gap:10px}
+.ms-qf-g{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end}
+.ms-qf-g label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--ink-2)}
+.ms-qf-g input[type=number]{width:110px}
+.ms-qf-g .ms-qf-dark{flex-direction:row;align-items:center;padding-bottom:6px}
+.ms-qf-l{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.ms-qf-l label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--ink-2);padding:6px 8px;border:1px solid var(--line);border-radius:8px}
+.ms-qf-l label.on{border-color:var(--accent);background:var(--accent-soft)}
+.ms-qf-l select{font-size:12.5px;width:100%}
+.ms-qf-need{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2)}
+.ms-qf-need input{width:auto}
+.ms-when-g{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ms-when-c{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.ms-when-c small{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ms-when-c small em{font-style:normal;color:#fff;background:#7C5CD6;border-radius:999px;padding:0 7px;font-size:10px}
+.ms-when-c>b{font-size:18px;font-family:var(--display)}
+.ms-when-c ul{margin:4px 0 0;padding-left:16px;font-size:12.5px;color:var(--ink-2)}
+.ms-when-c .good{color:var(--ok);font-weight:700;font-size:12.5px}.ms-when-c .bad{color:var(--danger);font-weight:700;font-size:12.5px}
+.ms-when-c.pick{border-color:#7C5CD6;box-shadow:0 0 0 1px #7C5CD6 inset}
+.ms-when-say{margin-top:4px;padding:6px 8px;border-radius:7px;background:var(--surface);color:var(--ink)!important;font-size:12.5px}
+@media (max-width:700px){.ms-qf-l{grid-template-columns:1fr 1fr}.ms-when-g{grid-template-columns:1fr}}
+.ms-qf-need{justify-content:flex-start;align-self:flex-start;font-weight:400!important;flex-direction:row!important}
+/* Planner holds */
+.ms-blk.hold,.ms-chip.hold{background:repeating-linear-gradient(135deg,color-mix(in srgb,#7C5CD6 10%,var(--surface)) 0 6px,var(--surface) 6px 12px)!important;border:1.5px dashed #7C5CD6!important;border-left-width:4px!important}
+.ms-plan-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.ms-plan-l li{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1.5px dashed color-mix(in srgb,#7C5CD6 55%,var(--line));border-radius:9px}
+.ms-plan-t,.ms-plan-d{display:flex;flex-direction:column;min-width:0;font-size:13px}
+.ms-plan-t small,.ms-plan-d small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-plan-f{display:flex;flex-direction:column;gap:10px;padding:10px;border-radius:10px;background:var(--surface-2)}
+.ms-plan-f .ms-qf-g label input[type=text]{min-width:200px}
+@media (max-width:640px){.ms-plan-l li{grid-template-columns:1fr}}
+.ms-acts{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:1100px){.ms-acts{grid-template-columns:repeat(2,minmax(0,1fr))}}
