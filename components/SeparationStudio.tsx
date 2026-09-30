@@ -10,6 +10,7 @@ import { guessHex } from "@/lib/mockup";
 import { filmPdf, deflate } from "@/lib/filmPdf";
 import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
+import { parseEps, vartSvg } from "@/lib/epsVector";
 import { deltaE } from "@/lib/inkColors";
 import { mergeProduction, withIssue, type EquipRow, type Machine, type Station } from "@/lib/production";
 import PressLayout from "@/components/PressLayout";
@@ -68,15 +69,31 @@ function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false): Px 
   return { w, h, data };
 }
 /** art uploaded straight to a separation (no order): kept in its folder, remembered in settings.art */
-export type SepArt = { path: string; name: string; type: string };
-export const ART_ACCEPT = ".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml";
-export const artOk = (f: File) => /^image\/(png|jpe?g|webp|svg\+xml)$/i.test(f.type) || /\.(png|jpe?g|webp|svg)$/i.test(f.name);
+export type SepArt = { path: string; name: string; type: string; preview?: string };
+export const ART_ACCEPT = ".png,.jpg,.jpeg,.webp,.svg,.eps,image/png,image/jpeg,image/webp,image/svg+xml,application/postscript";
+export const ART_KINDS = "PNG, JPG, WebP, SVG or Illustrator EPS";
+const isEps = (name: string, type = "") => /postscript|eps/i.test(type) || /\.eps$/i.test(name);
+export const artOk = (f: File) => /^image\/(png|jpe?g|webp|svg\+xml)$/i.test(f.type) || /\.(png|jpe?g|webp|svg|eps)$/i.test(f.name);
+/** null when the file can be separated, else why not (an EPS has to be flat filled shapes) */
+export async function artProblem(f: File): Promise<string | null> {
+  if (!artOk(f)) return `Use a ${ART_KINDS}. (AI or PDF: in Illustrator, File → Save As → EPS or Export → SVG / PNG.)`;
+  if (!isEps(f.name, f.type)) return null;
+  const v = parseEps(await f.text());
+  return v.ok ? null : `This EPS ${v.why}. Fix that in Illustrator, or save it as SVG or PNG.`;
+}
 export async function uploadSepArt(sb: ReturnType<typeof createClient>, id: string, f: File): Promise<SepArt> {
-  const path = `separations/${id}/art-${Date.now()}-${f.name.replace(/[^\w.-]+/g, "_")}`;
-  const type = f.type || (/\.svg$/i.test(f.name) ? "image/svg+xml" : "application/octet-stream");
+  const stamp = Date.now(), path = `separations/${id}/art-${stamp}-${f.name.replace(/[^\w.-]+/g, "_")}`;
+  const eps = isEps(f.name, f.type);
+  const type = f.type || (/\.svg$/i.test(f.name) ? "image/svg+xml" : eps ? "application/postscript" : "application/octet-stream");
   const r = await sb.storage.from("proofs").upload(path, f, { upsert: true, contentType: type });
   if (r.error) throw new Error(r.error.message);
-  return { path, name: f.name, type };
+  const art: SepArt = { path, name: f.name, type };
+  if (eps) {
+    // a picture of it for the list (the Studio reads the EPS itself)
+    const v = parseEps(await f.text());
+    if (v.ok) { const pv = `separations/${id}/art-${stamp}-preview.svg`; const u = await sb.storage.from("proofs").upload(pv, new Blob([vartSvg(v)], { type: "image/svg+xml" }), { upsert: true, contentType: "image/svg+xml" }); if (!u.error) art.preview = pv; }
+  }
+  return art;
 }
 
 const loadImg = (url: string) => new Promise<HTMLImageElement>((ok, bad) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => ok(i); i.onerror = () => bad(new Error("Couldn't load the art")); i.src = url; });
@@ -152,6 +169,18 @@ export default function SeparationStudio({ id }: { id: string }) {
     const d0 = d as Design | null, up = (row0.settings as { art?: SepArt }).art;
     const des = d0?.file_path ? { file_path: d0.file_path, file_type: d0.file_type, file_name: d0.file_name, preview_path: d0.preview_path } : up?.path ? { file_path: up.path, file_type: up.type, file_name: up.name, preview_path: null as string | null } : null;
     setHasArt(!!des);
+    // Illustrator EPS: read its shapes (vector all the way to the Illustrator file)
+    if (des && isEps(des.file_name || des.file_path, des.file_type || "")) {
+      const [{ data: ev }, { data: su }] = await Promise.all([sb.storage.from("proofs").download(des.file_path), sb.storage.from("proofs").createSignedUrl(des.file_path, 3600)]);
+      setOrigUrl(su?.signedUrl || "");
+      const v = ev ? parseEps(await ev.text()) : null;
+      if (v?.ok) { setVart(v); setArtUrl(URL.createObjectURL(new Blob([vartSvg(v)], { type: "image/svg+xml" }))); return; }
+      if (!des.preview_path) { setErr(`This EPS ${v?.why || "couldn't be read"}. Fix that in Illustrator, or upload it as SVG or PNG.`); setHasArt(false); return; }
+      if (v) setVart(v); // shows why, and the preview picture is separated instead
+      const { data: pb } = await sb.storage.from("proofs").download(des.preview_path);
+      if (pb) setArtUrl(URL.createObjectURL(pb));
+      return;
+    }
     if (des) {
       const raster = /^image\/(png|jpe?g|webp)/i.test(des.file_type || "") || /\.(png|jpe?g|webp)$/i.test(des.file_name || "");
       const svg = /svg/i.test(des.file_type || "") || /\.svg$/i.test(des.file_name || des.file_path || "");
@@ -171,9 +200,13 @@ export default function SeparationStudio({ id }: { id: string }) {
   /* ---------- find inks (first time, or on request) ---------- */
   const findInks = useCallback((method = st.method) => {
     const px = pxRef.current; if (!px) return;
-    const f = method === "sim" ? findSimInks(px, st.garment, st.maxColors) : findColors(px, st.maxColors);
-    setInks(f.map((x) => ({ hex: x.hex, name: inkName(x.hex, st.lib) })));
-    setOrderKeys([]); setNames({}); setHidden(new Set());
+    // sim tries every candidate ink against the whole art (a few seconds): let the page say so first
+    setBusy("Finding inks…");
+    setTimeout(() => {
+      const f = method === "sim" ? findSimInks(px, st.garment, st.maxColors) : findColors(px, st.maxColors);
+      setInks(f.map((x) => ({ hex: x.hex, name: inkName(x.hex, st.lib) })));
+      setOrderKeys([]); setNames({}); setHidden(new Set()); setBusy("");
+    }, 30);
   }, [st.method, st.garment, st.maxColors, st.lib]);
   const hint = useMemo(() => { const px = pxRef.current; if (!px || !inks.length || st.method === "sim") return 0; return gradientShare(px, inks.map((k) => k.hex)); }, [pxTick, inks, st.method]);
   useEffect(() => { if (pxTick && !inks.length) findInks(); }, [pxTick]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -304,7 +337,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   /** uploaded art: swap in a new file (the inks are found again) */
   async function replaceArt(f?: File) {
     if (!row || !f) return;
-    if (!artOk(f)) { setErr("Use a PNG, JPG, WebP or SVG."); return; }
+    const bad = await artProblem(f); if (bad) { setErr(bad); return; }
     setBusy("Uploading…"); setErr("");
     try {
       const art = await uploadSepArt(sb, row.id, f);
@@ -497,7 +530,7 @@ function AddArt({ row, onDone }: { row: SepRow; onDone: (r: SepRow) => void }) {
   const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [over, setOver] = useState(false);
   async function go(f?: File) {
     if (!f) return;
-    if (!artOk(f)) { setErr("Use a PNG, JPG, WebP or SVG. (EPS, AI and PDF: export a PNG or SVG first.)"); return; }
+    const bad = await artProblem(f); if (bad) { setErr(bad); return; }
     setBusy(true); setErr("");
     try {
       const art = await uploadSepArt(sb, row.id, f);
@@ -515,7 +548,7 @@ function AddArt({ row, onDone }: { row: SepRow; onDone: (r: SepRow) => void }) {
         <label className={"tmx-drop" + (over ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); go(e.dataTransfer.files[0]); }}>
           <input type="file" accept={ART_ACCEPT} onChange={(e) => go(e.target.files?.[0])} />
           <b>{busy ? "Uploading…" : "Drop the art here or choose a file"}</b>
-          <span className="faint">PNG, JPG, WebP or SVG (SVG keeps real vector shapes)</span>
+          <span className="faint">{ART_KINDS} (SVG and EPS keep the real vector shapes)</span>
         </label>
         {err && <div className="pv-err">{err}</div>}
       </section>

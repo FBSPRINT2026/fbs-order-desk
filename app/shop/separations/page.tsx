@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { fmtDate } from "@/lib/format";
-import { ART_ACCEPT, SEP_STATUS, artOk, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
+import { ART_ACCEPT, ART_KINDS, SEP_STATUS, artProblem, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
+import { parseEps, vartSvg } from "@/lib/epsVector";
 
 /**
  * Separations queue (Production → Separations): every imprint waiting for films, from "Request Separations" on an
@@ -36,7 +37,7 @@ export default function SeparationsPage() {
     setOrders(Object.fromEntries(((o || []) as { id: string; number: number; nickname: string; due_date: string | null }[]).map((x) => [x.id, x])));
     setCust(Object.fromEntries(((c || []) as { id: string; company: string; name: string }[]).map((x) => [x.id, x.company || x.name])));
     // a small picture: the saved proof, else the design
-    const upArt = (r: SepRow) => (r.settings as { art?: { path: string } }).art?.path;
+    const upArt = (r: SepRow) => { const a = (r.settings as { art?: { path: string; preview?: string } }).art; return a?.preview || a?.path; };
     const dids = [...new Set(list.filter((r) => !r.preview_path && !upArt(r) && r.design_id).map((r) => r.design_id))] as string[];
     const { data: ds } = dids.length ? await sb.from("designs").select("id, preview_path, file_path").in("id", dids) : { data: [] };
     const pathOf = new Map<string, string>();
@@ -90,10 +91,11 @@ function NewFromArt() {
   const [name, setName] = useState(""), [shirt, setShirt] = useState("Black");
   const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   useEffect(() => () => { if (thumb) URL.revokeObjectURL(thumb); }, [thumb]);
-  function pickFile(f?: File) {
+  async function pickFile(f?: File) {
     if (!f) return;
-    if (!artOk(f)) { setErr("Use a PNG, JPG, WebP or SVG. (EPS, AI and PDF: export a PNG or SVG first.)"); return; }
-    setErr(""); setFile(f); setThumb(URL.createObjectURL(f)); setName(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 60));
+    const bad = await artProblem(f); if (bad) { setErr(bad); return; }
+    const eps = /\.eps$/i.test(f.name) || /postscript/i.test(f.type);
+    setErr(""); setFile(f); setThumb(URL.createObjectURL(eps ? new Blob([vartSvg(parseEps(await f.text()))], { type: "image/svg+xml" }) : f)); setName(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 60));
   }
   async function start() {
     if (!file) return;
@@ -122,7 +124,7 @@ function NewFromArt() {
           <span className="sep-new-ic" aria-hidden>
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
           </span>
-          <span className="sep-new-t"><b>Separate an image</b><small className="faint">No order needed. Drop art here or choose a file: PNG, JPG, WebP or SVG.</small></span>
+          <span className="sep-new-t"><b>Separate an image</b><small className="faint">No order needed. Drop art here or choose a file: {ART_KINDS}.</small></span>
           <span className="btn sm">Choose File</span>
         </label>
       ) : (

@@ -145,49 +145,79 @@ export function labHex(L: number, a: number, b: number): string {
   return hexOf(g(R), g(G), g(B));
 }
 
+/** Lab from linear-light RGB (0–1) */
+function labLin(R: number, G: number, B: number): [number, number, number] {
+  const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const X = f((R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047), Y = f(R * 0.2126 + G * 0.7152 + B * 0.0722), Z = f((R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883);
+  return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)];
+}
+
 /**
- * Inks for simulated process: not the average colors (those come out muddy) but the strongest color of each hue
- * family in the art, plus white and black, so halftones of a few bright inks can mix every in-between color
- * (how Separo picks: 115 C yellow, 7702 C teal, 214 C pink, 7686 C blue… with white and black).
+ * Inks for simulated process. Not the average colors (those come out muddy) but strong, clean inks that halftones
+ * can mix every color in the art from (how Separo picks: 3245 C aqua, 388 C yellow, 802 C green, 807 C pink,
+ * 363 C dark green, 2369 C violet, 273 C indigo, black… for a rainbow tiger).
+ *   - candidates: the saturated end of every hue × lightness family in the art (a bright green AND a dark green),
+ *     plus black and white
+ *   - picked one at a time: each round adds the candidate that best lowers the error (CIE ΔE) when every color in
+ *     the art is unmixed into the chosen inks over the shirt (over the white underbase on a dark shirt, with the
+ *     shirt itself free), so an ink only gets in if it earns its screen
+ *   - stops at `max` inks, or earlier when another ink barely helps
+ * Dark shirt: white always comes first (it's the underbase and highlight).
  */
 export function findSimInks(px: Px, garment: string, max = 8): Found[] {
-  const { data } = px, n = px.w * px.h, step = Math.max(1, Math.floor(n / 120000));
-  const bins = new Float64Array(72), pts: { L: number; a: number; b: number; C: number; h: number }[] = [];
-  let tot = 0, darkN = 0, lightN = 0;
+  const { data } = px, n = px.w * px.h, step = Math.max(1, Math.floor(n / 200000));
+  const cnt = new Map<number, number>(), pts: { L: number; a: number; b: number; C: number; h: number }[] = [];
+  let tot = 0;
   for (let i = 0; i < n; i += step) {
     const o = i * 4; if (data[o + 3] < 160) continue; tot++;
+    const q = Q(data[o], data[o + 1], data[o + 2]); cnt.set(q, (cnt.get(q) || 0) + 1);
     const [L, a, b] = labOf(data[o], data[o + 1], data[o + 2]), C = Math.hypot(a, b);
-    if (L < 22 && C < 15) darkN++;
-    if (L > 85 && C < 12) lightN++;
-    if (C < 22 || L < 12) continue;
-    const h = (Math.atan2(b, a) * 180 / Math.PI + 360) % 360;
-    pts.push({ L, a, b, C, h }); bins[Math.floor(h / 5) % 72] += C;
+    if (C >= 18 && L >= 10) pts.push({ L, a, b, C, h: (Math.atan2(b, a) * 180 / Math.PI + 360) % 360 });
   }
   if (!tot) return [];
-  const gL = lightness(garment), out: Found[] = [];
-  // white (highlights) and black (shadows, unless the shirt is black and can be the black)
-  out.push({ hex: "#FFFFFF", share: lightN / tot });
-  if (gL > 16) out.push({ hex: "#111111", share: darkN / tot });
-  // smooth the hue histogram, then take the biggest peaks at least 30° apart
-  const sm = Float64Array.from(bins, (_, i) => bins[(i + 71) % 72] * 0.25 + bins[i] * 0.5 + bins[(i + 1) % 72] * 0.25);
-  const peaks: number[] = [];
-  const order = Array.from({ length: 72 }, (_, i) => i).sort((x, y) => sm[y] - sm[x]);
-  for (const i of order) {
-    if (peaks.length >= max - out.length || sm[i] <= 0) break;
-    if (sm[i] < sm[(i + 71) % 72] || sm[i] < sm[(i + 1) % 72]) continue;
-    if (peaks.some((p) => Math.min(Math.abs(p - i), 72 - Math.abs(p - i)) < 6)) continue;
-    if (sm[i] < 0.02 * sm[order[0]]) break;
-    peaks.push(i);
-  }
-  for (const pk of peaks) {
-    const c = pk * 5 + 2.5;
-    const fam = pts.filter((p) => Math.min(Math.abs(p.h - c), 360 - Math.abs(p.h - c)) <= 15).sort((x, y) => y.C - x.C);
-    if (!fam.length) continue;
-    // the strong end of the family: the top fifth by chroma
+  const g = rgbOf(garment).map((v) => LIN[v]), gL = lightness(garment), dark = gL < 55;
+  const base = dark ? [1, 1, 1] : g;
+  // the colors to match: the heaviest 5-bit colors, weighted by how much of the art they are
+  const tg = [...cnt].sort((x, y) => y[1] - x[1]).slice(0, 600).map(([q, w]) => { const c = unQ(q), l = c.map((v) => LIN[v]); return { l, lab: labLin(l[0], l[1], l[2]), w }; });
+  // candidates: the strong end (top fifth by chroma) of each 20° hue × lightness family
+  const cand = new Map<string, number>();
+  const bands = [[10, 38], [38, 62], [62, 101]];
+  for (let hb = 0; hb < 18; hb++) for (const [lo, hi] of bands) {
+    const fam = pts.filter((p) => p.L >= lo && p.L < hi && Math.floor(p.h / 20) === hb);
+    if (fam.length < 0.004 * tot) continue;
+    fam.sort((x, y) => y.C - x.C);
     const top = fam.slice(0, Math.max(1, Math.ceil(fam.length / 5)));
-    const L = top.reduce((s, p) => s + p.L, 0) / top.length, a = top.reduce((s, p) => s + p.a, 0) / top.length, b = top.reduce((s, p) => s + p.b, 0) / top.length;
-    out.push({ hex: labHex(L, a, b), share: fam.length / tot });
+    const hex = labHex(top.reduce((s, p) => s + p.L, 0) / top.length, top.reduce((s, p) => s + p.a, 0) / top.length, top.reduce((s, p) => s + p.b, 0) / top.length);
+    cand.set(hex, fam.length / tot);
   }
+  if (gL > 16) cand.set("#111111", 0);
+  if (!dark && gL < 95) cand.set("#FFFFFF", 0);
+  const C = [...cand.keys()], CL = C.map((h) => rgbOf(h).map((v) => LIN[v]));
+  // how well a set of inks rebuilds the art (weighted squared ΔE)
+  const err = (set: number[]) => {
+    const K = set.map((j) => CL[j]); if (dark) K.push(g);
+    let e = 0;
+    for (const t of tg) {
+      const x = unmix(t.l, base, K);
+      let s = 0; const r = [0, 1, 2].map((c) => { let v = 0; for (let k = 0; k < K.length; k++) v += x[k] * K[k][c]; return v; });
+      for (let k = 0; k < x.length; k++) s += x[k];
+      const rec = r.map((v, c) => Math.max(0, v + (1 - s) * base[c]));
+      const lb = labLin(rec[0], rec[1], rec[2]);
+      e += t.w * ((lb[0] - t.lab[0]) ** 2 + (lb[1] - t.lab[1]) ** 2 + (lb[2] - t.lab[2]) ** 2);
+    }
+    return e;
+  };
+  const out: Found[] = dark ? [{ hex: "#FFFFFF", share: 0 }] : [];
+  const chosen: number[] = [];
+  let cur = err([]);
+  const e0 = cur;
+  while (out.length + chosen.length < max && chosen.length < C.length) {
+    let best = -1, be = cur;
+    for (let j = 0; j < C.length; j++) { if (chosen.includes(j)) continue; const e = err([...chosen, j]); if (e < be) { be = e; best = j; } }
+    if (best < 0 || cur - be < 0.001 * e0) break;
+    chosen.push(best); cur = be;
+  }
+  for (const j of chosen) out.push({ hex: C[j], share: cand.get(C[j]) || 0 });
   return out;
 }
 
@@ -331,8 +361,8 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
 }
 
 /**
- * The print as it'll look (RGBA for a canvas), in linear light: the underbase turns the shirt white where it prints,
- * then each ink covers its share of the spot (spot plates don't overlap; halftone dots sit side by side).
+ * The print as it'll look (RGBA for a canvas), in linear light: each ink covers its share of the spot (halftone dots
+ * sit side by side, on top of the underbase), the underbase that no ink covers shows white, the rest is the shirt.
  */
 export function composite(res: { plates: Plate[]; w: number; h: number }, garment: string, show?: Set<string>): Uint8ClampedArray {
   const { w, h } = res, n = w * h, out = new Uint8ClampedArray(n * 4);
@@ -341,12 +371,13 @@ export function composite(res: { plates: Plate[]; w: number; h: number }, garmen
   const ub = on.find((p) => p.kind === "underbase"), inks = on.filter((p) => p.kind !== "underbase").map((p) => ({ a: p.alpha, c: rgbOf(p.hex).map((v) => LIN[v]) }));
   const back = (v: number) => Math.round(255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055));
   for (let i = 0; i < n; i++) {
+    // the spot is split into areas: ink dots (printed on the underbase where there is one), bare underbase, bare shirt
     const u = ub ? ub.alpha[i] / 255 : 0;
-    let r = g[0] + u * (1 - g[0]), gg = g[1] + u * (1 - g[1]), b = g[2] + u * (1 - g[2]);
-    const r0 = r, g0 = gg, b0 = b;
-    let tot = 0;
-    for (const k of inks) { const f = k.a[i] / 255; if (!f) continue; tot += f; r += f * (k.c[0] - r0); gg += f * (k.c[1] - g0); b += f * (k.c[2] - b0); }
-    if (tot > 1) { r = r0 + (r - r0) / tot; gg = g0 + (gg - g0) / tot; b = b0 + (b - b0) / tot; }
+    let r = 0, gg = 0, b = 0, tot = 0;
+    for (const k of inks) { const f = k.a[i] / 255; if (!f) continue; tot += f; r += f * k.c[0]; gg += f * k.c[1]; b += f * k.c[2]; }
+    if (tot > 1) { r /= tot; gg /= tot; b /= tot; tot = 1; }
+    const white = Math.max(0, u - tot), shirt = 1 - Math.max(u, tot);
+    r += white + shirt * g[0]; gg += white + shirt * g[1]; b += white + shirt * g[2];
     const o = i * 4; out[o] = back(Math.max(0, Math.min(1, r))); out[o + 1] = back(Math.max(0, Math.min(1, gg))); out[o + 2] = back(Math.max(0, Math.min(1, b))); out[o + 3] = 255;
   }
   return out;
