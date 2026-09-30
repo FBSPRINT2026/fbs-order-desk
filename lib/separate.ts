@@ -735,7 +735,35 @@ export function composite(res: { plates: Plate[]; w: number; h: number }, garmen
 
 /* ---------- films ---------- */
 export type Dot = "ellipse" | "round" | "square";
-export type FilmOpts = { halftone: boolean; lpi?: number; angle?: number; gain?: number; dot?: Dot; mesh?: number };
+export type FilmOpts = { halftone: boolean; lpi?: number; angle?: number; gain?: number; dot?: Dot; mesh?: number;
+  /** whole dots (default): each dot sized by its cell's average tone, so none breaks into specks the screen can't
+   *  hold; false: every film pixel against its own tone (more detail, ragged dots) */
+  clean?: boolean };
+/** average of each pixel's (2r+1)² square, as 0–255 floats (two running sums) */
+function boxBlur(a: Uint8Array, w: number, h: number, r: number): Float32Array {
+  const n = w * h, t = new Float32Array(n), o = new Float32Array(n);
+  for (let y = 0; y < h; y++) {
+    const row = y * w; let s = 0, c = 0;
+    for (let x = 0; x <= Math.min(r, w - 1); x++) { s += a[row + x]; c++; }
+    for (let x = 0; x < w; x++) {
+      t[row + x] = s / c;
+      const add = x + r + 1, drop = x - r;
+      if (add < w) { s += a[row + add]; c++; }
+      if (drop >= 0) { s -= a[row + drop]; c--; }
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let s = 0, c = 0;
+    for (let y = 0; y <= Math.min(r, h - 1); y++) { s += t[y * w + x]; c++; }
+    for (let y = 0; y < h; y++) {
+      o[y * w + x] = s / c;
+      const add = y + r + 1, drop = y - r;
+      if (add < h) { s += t[add * w + x]; c++; }
+      if (drop >= 0) { s -= t[drop * w + x]; c--; }
+    }
+  }
+  return o;
+}
 /**
  * The smallest halftone dot a screen holds, as a share of the cell: a dot has to be about 1.25 mesh threads across
  * (an opening and a thread) or it has nothing to stand on and washes out. At 55 lpi: 305 mesh 4%, 230 mesh 7%,
@@ -799,6 +827,10 @@ export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: n
   // a halftone plate can have solid parts too (a spot color that's solid in one place and mixed in another): where a
   // solid area meets nothing, its edge is cut sharp like a solid plate's instead of breaking into half dots
   const hiM = halftone ? local3(A, w, h, true) : null, loM = halftone ? local3(A, w, h, false) : null;
+  // whole dots: the tone of each cell (the plate averaged over about a cell), read at the cell's center
+  const clean = halftone && o.clean !== false, cellPx = (w / widthIn) / lpi;
+  const B = clean ? boxBlur(A, w, h, Math.max(0, Math.round(cellPx / 2 - 0.5))) : null;
+  const icell = 1 / (cs * cs + sn * sn); // (cs, sn) are cos/cell, sin/cell: back from cell units to film pixels
   for (let y = 0; y < H; y++) {
     const fy = Math.max(0, Math.min(h - 1, (y + 0.5) * sy - 0.5)), y0 = h === 1 ? 0 : Math.min(h - 2, Math.floor(fy)), ty = fy - y0, y1 = Math.min(h - 1, y0 + 1);
     const r0 = y0 * w, r1 = y1 * w, orow = y * rowBytes;
@@ -818,15 +850,24 @@ export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: n
         }
       } else {
         const top = a00 + (a01 - a00) * tx, bot = a10 + (a11 - a10) * tx, k = top + (bot - top) * ty;
-        const v = LUT[k < 0 ? 0 : k > 255 ? 255 : Math.round(k)];
+        // where this film pixel sits in its (rotated) halftone cell
+        const u = x * cs + y * sn, t = -x * sn + y * cs, iu = Math.floor(u), it = Math.floor(t), fu = u - iu, ft = t - it;
+        let tone = k;
+        if (B) {
+          if (k < 3) tone = 0; // no ink here at all (outside the art): no dot spills past its edge
+          else {
+            // the cell's center, back in film pixels, then in plate pixels
+            const cu = iu + 0.5, ct = it + 0.5, xc = (cu * cs - ct * sn) * icell, yc = (cu * sn + ct * cs) * icell;
+            const px = Math.max(0, Math.min(w - 1, (xc + 0.5) * sx - 0.5)), py = Math.max(0, Math.min(h - 1, (yc + 0.5) * sy - 0.5));
+            const bx = Math.min(w - 2, Math.floor(px)), by = Math.min(h - 2, Math.floor(py)), bx1 = Math.min(w - 1, bx + 1), by1 = Math.min(h - 1, by + 1), ux = px - bx, uy = py - by;
+            const b0 = B[by * w + bx] + (B[by * w + bx1] - B[by * w + bx]) * ux, b1 = B[by1 * w + bx] + (B[by1 * w + bx1] - B[by1 * w + bx]) * ux;
+            tone = b0 + (b1 - b0) * uy;
+          }
+        }
+        const v = LUT[tone < 0 ? 0 : tone > 255 ? 255 : Math.round(tone)];
         if (v <= 0) on = false;
         else if (v >= 1) on = true;
-        else {
-          // where this film pixel sits in its (rotated) halftone cell
-          const u = x * cs + y * sn, t = -x * sn + y * cs;
-          const fu = u - Math.floor(u), ft = t - Math.floor(t);
-          on = v > T[((ft * TN) | 0) * TN + ((fu * TN) | 0)];
-        }
+        else on = v > T[((ft * TN) | 0) * TN + ((fu * TN) | 0)];
       }
       if (on) bits[orow + (x >> 3)] |= 0x80 >> (x & 7);
     }
