@@ -77,6 +77,17 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
         for (const { sh, t } of mine) content += `${Math.min(1, t).toFixed(3)} scn\n` + sh.ops + (sh.evenodd ? "f*\n" : "f\n");
         content += "Q\n";
       }
+      // fine detail: the color made fatter over the base's edge (small type), traced as curves around those parts
+      if (p.bump) {
+        const near = new Uint8Array(p.alpha.length), R = 3;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          if (!p.bump[y * w + x]) continue;
+          for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < w && Y < h) near[Y * w + X] = 1; }
+        }
+        const m = new Uint8Array(p.alpha.length); for (let j = 0; j < m.length; j++) if (near[j]) m[j] = p.alpha[j];
+        const path = traceCurves(m, w, h, s, H);
+        if (path) content += `q /GS0 gs /CS${i} cs 1 scn\n${path}f*\nQ\n`;
+      }
     } else {
       // smooth curves: vector art's underbase, or a solid plate traced on request
       const path = traceCurves(p.alpha, w, h, s, H);

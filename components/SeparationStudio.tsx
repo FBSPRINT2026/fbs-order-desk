@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
-import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, findSimInks, gradientShare, isDark, separate, snapInk, spotMixer, type Plate, type Px, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
+import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, findSimInks, gradientShare, isDark, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex } from "@/lib/mockup";
@@ -40,11 +40,20 @@ export const SEP_STATUS: Record<SepRow["status"], { label: string; c: string }> 
 type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean; lib: "auto" | "wilflex" | "pms"; solidOut?: "pixels" | "vector";
   /** underbase choke and color trap, in points at the print size (so they mean the same at any resolution) */
   chokePt?: number; trapPt?: number;
+  /** fine detail (small type, thin lines): narrower than finePt (0 = off), the base is choked only fineChokePt and the
+   *  color on top is fattened bumpPt onto the shirt instead */
+  finePt?: number; fineChokePt?: number; bumpPt?: number;
+  /** films: halftone dot shape */
+  dot?: "ellipse" | "round" | "square";
   /** films: dot gain to take off halftones ahead of time (0.2 = a 50% dot prints about 70%) */
   gain?: number };
-const CHOKE_PT = 0.5, TRAP_PT = 0.5;
-/** points at the print size → pixels of a copy `w` px wide */
-const ptPx = (pt: number, w: number, widthIn: number) => Math.round((pt * w) / (widthIn * 72));
+const DOT_NAME = { ellipse: "elliptical", round: "round", square: "square" } as const;
+const CHOKE_PT = 0.5, TRAP_PT = 0.25, FINE_PT = 2, FINE_CHOKE_PT = 0.15, BUMP_PT = 0.25;
+/** points at the print size → pixels of a copy `w` px wide (fractions kept: edges move by exact sub-pixel amounts) */
+const ptPx = (pt: number, w: number, widthIn: number) => (pt * w) / (widthIn * 72);
+/** the separation settings in pixels of a copy `w` px wide */
+const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, choke: ptPx(st.chokePt ?? CHOKE_PT, w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, w, st.widthIn),
+  fine: ptPx(st.finePt ?? FINE_PT, w, st.widthIn), fineChoke: ptPx(st.fineChokePt ?? FINE_CHOKE_PT, w, st.widthIn), bump: ptPx(st.bumpPt ?? BUMP_PT, w, st.widthIn) });
 /** the working size on screen (fast); the files are separated again at full size (OUT_PPI at the print width) */
 const MAX_SIDE = 2400;
 const OUT_PPI = 400, OUT_MAX_SIDE = 7200, OUT_MAX_PX = 36e6;
@@ -288,14 +297,14 @@ export default function SeparationStudio({ id }: { id: string }) {
     const px = pxRef.current; if (!px || !inks.length) return;
     setBusy("Separating…");
     const t = setTimeout(() => {
-      const r = separate(px, inks.map((k) => ({ hex: k.hex, name: k.name })), { ...st, choke: ptPx(st.chokePt ?? CHOKE_PT, px.w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, px.w, st.widthIn) });
+      const r = separate(px, inks.map((k) => ({ hex: k.hex, name: k.name })), sepOpts(st, px.w));
       // show the ink's real color, not the art's
       r.plates.forEach((p) => { const k = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (k) p.hex = shown(k); });
       hiRef.current = null;
       setRes(r); setBusy("");
     }, 60);
     return () => clearTimeout(t);
-  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.widthIn, st.baseFor]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.widthIn, st.baseFor, st.finePt, st.fineChokePt, st.bumpPt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // plates in the chosen print order (new plates keep their default spot)
   const arrange = useCallback((ps: Plate[]) => {
@@ -356,9 +365,21 @@ export default function SeparationStudio({ id }: { id: string }) {
     setBusy("Separating at full size…"); await new Promise((r) => setTimeout(r, 40));
     const { side, ppi } = outSize();
     const px = pixelsOf(img, st.removeBg, !!vart, side);
-    const r = separate(px, inks.map((x) => ({ hex: x.hex, name: x.name })), { ...st, choke: ptPx(st.chokePt ?? CHOKE_PT, px.w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, px.w, st.widthIn) });
+    const r = separate(px, inks.map((x) => ({ hex: x.hex, name: x.name })), sepOpts(st, px.w));
     r.plates.forEach((p) => { const q = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (q) p.hex = shown(q); });
-    hiRef.current = { key, plates: arrange(r.plates), w: px.w, h: px.h, ppi };
+    // a picture under 400 ppi: the plates (not the art) are drawn again at 400 ppi, following the art's own soft
+    // edges, so the Illustrator file doesn't step in the art's pixels
+    let w = px.w, h = px.h, outPpi = ppi;
+    if (!vart && ppi && ppi < OUT_PPI) {
+      const k = Math.min(OUT_PPI / ppi, OUT_MAX_SIDE / Math.max(px.w, px.h), Math.sqrt(OUT_MAX_PX / (px.w * px.h)));
+      if (k > 1.15) {
+        setBusy("Smoothing the plates to 400 ppi…"); await new Promise((res) => setTimeout(res, 20));
+        const W = Math.round(px.w * k), H = Math.round(px.h * k);
+        r.plates.forEach((p) => { p.alpha = resamplePlate(p, px.w, px.h, W, H); delete p.bump; });
+        w = W; h = H; outPpi = Math.round(W / st.widthIn);
+      }
+    }
+    hiRef.current = { key, plates: arrange(r.plates), w, h, ppi: outPpi };
     return hiRef.current;
   }
 
@@ -392,8 +413,8 @@ export default function SeparationStudio({ id }: { id: string }) {
     setBusy("Making films…"); await new Promise((r) => setTimeout(r, 30));
     const pages = hr.plates.map((p, i) => {
       const ht = tonal || !!p.tonal;
-      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, ht, st.lpi, st.angle, st.gain || 0);
-      return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg${st.gain ? ` - dot gain ${Math.round(st.gain * 100)}% taken off` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
+      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, gain: st.gain || 0, dot: st.dot || "ellipse", mesh: p.mesh });
+      return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg ${DOT_NAME[st.dot || "ellipse"]} dot${st.gain ? ` - dot gain ${Math.round(st.gain * 100)}% taken off` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
     });
     return filmPdf(pages);
   }
@@ -539,6 +560,14 @@ export default function SeparationStudio({ id }: { id: string }) {
             <h3>Underbase{dark ? "" : " (light shirt)"}</h3>
             <div className="rv-seg sep-full">{([["auto", "Auto"], ["on", "On"], ["off", "Off"]] as const).map(([k, l]) => <button key={k} type="button" className={st.underbase === k ? "on" : ""} onClick={() => set({ underbase: k })}>{l}</button>)}</div>
             <label className="sep-f" title="How far the underbase is pulled in from the edges of the colors, so it never peeks out">Choke <input type="range" min={0} max={3} step={0.25} value={st.chokePt ?? CHOKE_PT} onChange={(e) => set({ chokePt: +e.target.value })} /> <b>{st.chokePt ?? CHOKE_PT} pt</b></label>
+            {(() => { const on = (st.finePt ?? FINE_PT) > 0; return (<div className="sep-fine">
+              <label className="sep-chk" title="Small type and thin lines (sponsor backs): the full choke would thin their base to nothing. There the base is choked only a little and the color on top is made a little fatter instead, so it still covers the white."><input type="checkbox" checked={on} onChange={(e) => set({ finePt: e.target.checked ? FINE_PT : 0 })} /> Small type &amp; thin lines</label>
+              {on && <>
+                <label className="sep-f" title="Parts of the art thinner than this count as fine detail">Thinner than <input type="range" min={0.5} max={4} step={0.25} value={st.finePt ?? FINE_PT} onChange={(e) => set({ finePt: +e.target.value })} /> <b>{st.finePt ?? FINE_PT} pt</b></label>
+                <label className="sep-f" title="How far the base is pulled in on fine detail (instead of the full choke)">Base choke there <input type="range" min={0} max={Math.max(0.25, st.chokePt ?? CHOKE_PT)} step={0.05} value={Math.min(st.fineChokePt ?? FINE_CHOKE_PT, st.chokePt ?? CHOKE_PT)} onChange={(e) => set({ fineChokePt: +e.target.value })} /> <b>{Math.min(st.fineChokePt ?? FINE_CHOKE_PT, st.chokePt ?? CHOKE_PT)} pt</b></label>
+                <label className="sep-f" title="How much fatter the color on top is made on fine detail (a stroke on the top color), so it covers the white's edge">Color fatter <input type="range" min={0} max={1} step={0.05} value={st.bumpPt ?? BUMP_PT} onChange={(e) => set({ bumpPt: +e.target.value })} /> <b>{st.bumpPt ?? BUMP_PT} pt</b></label>
+              </>}
+            </div>); })()}
             <label className="sep-chk"><input type="checkbox" checked={st.highlight} onChange={(e) => set({ highlight: e.target.checked })} /> Highlight white on top</label>
             <label className="sep-chk"><input type="checkbox" checked={st.removeBg} onChange={(e) => set({ removeBg: e.target.checked })} /> White background isn&apos;t printed</label>
           </section>
@@ -552,8 +581,15 @@ export default function SeparationStudio({ id }: { id: string }) {
               const lvl = ppi >= 250 ? "ok" : ppi >= 150 ? "warn" : "bad";
               return <div className={"sep-res " + lvl}>Art is {img.naturalWidth} px wide: <b>{ppi} ppi</b> at {st.widthIn}&quot;. {lvl === "ok" ? "Sharp." : lvl === "warn" ? `Usable; edges soften a little past ${best}" (300 ppi).` : `Too small for ${st.widthIn}": it will print pixelated. Up to ${best}" is sharp; get bigger art or vector (SVG / EPS)${st.method === "spot" ? ", or try Smooth vector for solid inks" : ""}.`}</div>;
             })()}
-            {(tonal || plates.some((p) => p.tonal)) && <><label className="sep-f">Halftone LPI<input type="number" min={25} max={85} value={st.lpi} onChange={(e) => set({ lpi: +e.target.value || 55 })} /></label><label className="sep-f">Angle<input type="number" min={0} max={90} step={0.5} value={st.angle} onChange={(e) => set({ angle: +e.target.value })} /></label></>}
-            {st.method === "spot" && <label className="sep-f" title="Each color spreads this far under the darker color printed after it, so colors that touch overlap a hair: no gaps, even if a screen is slightly off">Trap <input type="range" min={0} max={2} step={0.25} value={st.trapPt ?? TRAP_PT} onChange={(e) => set({ trapPt: +e.target.value })} /> <b>{st.trapPt ?? TRAP_PT} pt</b></label>}
+            {(tonal || plates.some((p) => p.tonal)) && <><label className="sep-f">Halftone LPI<input type="number" min={25} max={85} value={st.lpi} onChange={(e) => set({ lpi: +e.target.value || 55 })} /></label><label className="sep-f">Angle<input type="number" min={0} max={90} step={0.5} value={st.angle} onChange={(e) => set({ angle: +e.target.value })} /></label>
+              <label className="sep-f" title="Elliptical: neighbors join near 40% one way and 60% the other, so midtones don't jump (the usual pick for screen printing). Round: joins at 78%. Square: all four corners join at 50%.">Dot<select value={st.dot || "ellipse"} onChange={(e) => set({ dot: e.target.value as Studio["dot"] })}><option value="ellipse">Elliptical</option><option value="round">Round</option><option value="square">Square</option></select></label>
+              {(() => {
+                // a halftone needs about 4 threads per dot (mesh ≥ 4 × LPI), and dots smaller than a thread and an opening wash out
+                const ht = plates.filter((p) => tonal || p.tonal), low = ht.filter((p) => p.mesh < st.lpi * 4);
+                const md = ht.length ? Math.round(Math.max(...ht.map((p) => minDot(p.mesh, st.lpi))) * 100) : 0;
+                return <div className={"sep-res " + (low.length ? "warn" : "ok")}>{low.length ? <>Mesh too open for {st.lpi} lpi on {low.map((p) => p.name).join(", ")}: use {Math.ceil((st.lpi * 4) / 10) * 10}+ mesh or a lower LPI.</> : <>Mesh fits {st.lpi} lpi.</>} Smallest dot that holds: {md}% (lighter tones drop out, darker ones print solid past {100 - md}%).</div>;
+              })()}</>}
+            {st.method === "spot" && <label className="sep-f" title="Each color spreads this far under the darker color printed after it, so colors that touch overlap a hair (no gaps if a screen is a little off). Keep it small on based colors; 0 = colors just touch. Black never spreads onto the white base.">Trap <input type="range" min={0} max={2} step={0.25} value={st.trapPt ?? TRAP_PT} onChange={(e) => set({ trapPt: +e.target.value })} /> <b>{st.trapPt ?? TRAP_PT} pt</b></label>}
             {st.method === "spot" && !vart?.ok && <label className="sep-f" title="Pixels: the art's own pixels at full size, like Separo. Smooth vector: traced curves, for low-resolution art.">Solid inks<select value={st.solidOut || "pixels"} onChange={(e) => set({ solidOut: e.target.value as Studio["solidOut"] })}><option value="pixels">Pixels (exact)</option><option value="vector">Smooth vector</option></select></label>}
             {(tonal || plates.some((p) => p.tonal)) && <label className="sep-f" title="Halftone dots grow on the shirt (a 50% dot prints about 65–70%). The films take that off ahead of time. Leave at 0 if your RIP already does it.">Dot gain (films)<select value={st.gain || 0} onChange={(e) => set({ gain: +e.target.value })}>{[0, 0.1, 0.15, 0.2, 0.25, 0.3].map((g) => <option key={g} value={g}>{g ? `${Math.round(g * 100)}%` : "None"}</option>)}</select></label>}
             <label className="sep-f">Film DPI<select value={st.dpi} onChange={(e) => set({ dpi: +e.target.value })}>{[360, 600, 720, 1200].map((d) => <option key={d} value={d}>{d}</option>)}</select></label>

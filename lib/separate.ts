@@ -12,10 +12,12 @@
  * Everything here is plain math on RGBA arrays so it runs in the page, a worker, or a test.
  */
 import { WILFLEX_HEX, PMS_HEX, deltaE } from "./inkColors";
+import { edgeRows } from "./edgeField";
 
 export type Px = { w: number; h: number; data: Uint8ClampedArray | Uint8Array };
 export type PlateKind = "underbase" | "color" | "highlight";
-export type Plate = { key: string; name: string; hex: string; kind: PlateKind; alpha: Uint8Array; coverage: number; mesh: number; /** needs halftones (a mixed color, or simulated process) */ tonal?: boolean };
+export type Plate = { key: string; name: string; hex: string; kind: PlateKind; alpha: Uint8Array; coverage: number; mesh: number; /** needs halftones (a mixed color, or simulated process) */ tonal?: boolean;
+  /** fine detail: what was added to this color to cover the base's edge (in `alpha` already; vector output adds it as a shape) */ bump?: Uint8Array };
 export type SepMethod = "spot" | "sim";
 export type SepSettings = {
   method: SepMethod;
@@ -31,9 +33,15 @@ export type SepSettings = {
   highlight: boolean;
   /** leave out ink that matches the shirt */
   dropGarment: boolean;
-  /** spot color: how far (px of the working image) each color spreads under the darker colors printed after it, so
-   *  neighbors overlap instead of just touching (no gaps, and room for registration). Default 1. */
+  /** spot color: how far (px of the working image, fractions allowed) each color spreads under the darker colors
+   *  printed after it, so neighbors overlap a hair instead of just touching. Default 0. */
   trap?: number;
+  /** fine detail (small type, thin lines): parts of the underbase narrower than this (px) can't take the full choke
+   *  (it would thin them to nothing). There the base is choked only `fineChoke` and the color on top is made
+   *  `bump` px fatter out onto the shirt instead, so it still covers the base's edge. 0 / unset = off. */
+  fine?: number;
+  fineChoke?: number;
+  bump?: number;
   /** dark shirt: which inks get underbase under them (plate key "c" + art hex → on/off); the rest follow
    *  `baseByDefault` (not black, not dark colors like navy) */
   baseFor?: Record<string, boolean>;
@@ -323,86 +331,135 @@ function nnls(A: number[][], b: number[]): number[] {
   return x;
 }
 
-/**
- * Grow (max) or shrink (min) a coverage mask by r pixels with a round (octagon) brush, the same distance in every
- * direction, so a round dot stays round and a diagonal edge moves as far as a straight one. The octagon is a square
- * of half-width 0.414·r followed by a diamond of radius 0.586·r (their sum reaches r along the axes and diagonals).
- */
-function morph(src: Uint8Array, w: number, h: number, r: number, grow: boolean): Uint8Array {
-  if (r <= 0) return src;
-  const sq = Math.round(r * 0.414), dm = Math.max(0, Math.round(r) - sq), n = w * h;
-  let a = src;
-  // (the loops are written out for grow and shrink: this runs over millions of pixels at full size)
-  if (sq > 0) {
-    // square: across, then down (outside the image counts as empty)
-    const tmp = new Uint8Array(n), out = new Uint8Array(n);
-    for (let y = 0; y < h; y++) {
-      const row = y * w;
-      for (let x = 0; x < w; x++) {
-        const x0 = x - sq, x1 = x + sq;
-        let m = grow ? 0 : (x0 < 0 || x1 >= w ? 0 : 255);
-        const lo = x0 < 0 ? 0 : x0, hi = x1 >= w ? w - 1 : x1;
-        if (grow) { for (let k = lo; k <= hi; k++) { const v = a[row + k]; if (v > m) m = v; } }
-        else if (m) { for (let k = lo; k <= hi; k++) { const v = a[row + k]; if (v < m) m = v; } }
-        tmp[row + x] = m;
-      }
-    }
-    for (let y = 0; y < h; y++) {
-      const y0 = y - sq, y1 = y + sq, lo = y0 < 0 ? 0 : y0, hi = y1 >= h ? h - 1 : y1, edge = y0 < 0 || y1 >= h;
-      for (let x = 0; x < w; x++) {
-        let m = grow ? 0 : (edge ? 0 : 255);
-        if (grow) { for (let k = lo; k <= hi; k++) { const v = tmp[k * w + x]; if (v > m) m = v; } }
-        else if (m) { for (let k = lo; k <= hi; k++) { const v = tmp[k * w + x]; if (v < m) m = v; } }
-        out[y * w + x] = m;
-      }
-    }
-    a = out;
-  }
-  // diamond: dm passes of the 3×3 plus
-  for (let it = 0; it < dm; it++) {
-    const out = new Uint8Array(n);
-    for (let y = 0; y < h; y++) {
-      const row = y * w, top = y > 0, bot = y < h - 1;
-      for (let x = 0; x < w; x++) {
-        const i = row + x;
-        let m = a[i];
-        const l = x > 0 ? a[i - 1] : 0, rr = x < w - 1 ? a[i + 1] : 0, u = top ? a[i - w] : 0, d = bot ? a[i + w] : 0;
-        if (grow) { if (l > m) m = l; if (rr > m) m = rr; if (u > m) m = u; if (d > m) m = d; }
-        else { if (l < m) m = l; if (rr < m) m = rr; if (u < m) m = u; if (d < m) m = d; }
-        out[i] = m;
-      }
-    }
-    a = out;
-  }
-  return a;
-}
-/** the pixel offsets inside a disc of radius r (a round brush), nearest first, as typed arrays */
-function disc(r: number, w: number): { dx: Int32Array; dy: Int32Array; off: Int32Array; R: number } {
-  const list: [number, number, number][] = [];
-  const R = Math.ceil(r);
-  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const d = dx * dx + dy * dy; if (d && d <= r * r + 0.25) list.push([dx, dy, d]); }
-  list.sort((a, b) => a[2] - b[2]);
-  return { dx: Int32Array.from(list, (v) => v[0]), dy: Int32Array.from(list, (v) => v[1]), off: Int32Array.from(list, (v) => v[1] * w + v[0]), R };
-}
-/** the most (grow) or least (shrink) of `a` within the disc around pixel i; outside the image counts as 0 */
-function discPick(a: Uint8Array, i: number, w: number, h: number, D: ReturnType<typeof disc>, grow: boolean, start: number): number {
-  const x = i % w, y = (i - x) / w, K = D.off.length, inside = x >= D.R && y >= D.R && x < w - D.R && y < h - D.R;
-  let m = start;
-  if (grow) {
-    if (inside) { for (let k = 0; k < K; k++) { const v = a[i + D.off[k]]; if (v > m) { m = v; if (m === 255) break; } } }
-    else for (let k = 0; k < K; k++) { const X = x + D.dx[k], Y = y + D.dy[k]; if (X < 0 || Y < 0 || X >= w || Y >= h) continue; const v = a[i + D.off[k]]; if (v > m) { m = v; if (m === 255) break; } }
-  } else {
-    if (inside) { for (let k = 0; k < K; k++) { const v = a[i + D.off[k]]; if (v < m) { m = v; if (!m) break; } } }
-    else for (let k = 0; k < K; k++) { const X = x + D.dx[k], Y = y + D.dy[k]; const v = X < 0 || Y < 0 || X >= w || Y >= h ? 0 : a[i + D.off[k]]; if (v < m) { m = v; if (!m) break; } }
-  }
-  return m;
-}
 /** push a coverage mask out by r pixels (round brush) */
-export function spread(a: Uint8Array, w: number, h: number, r: number): Uint8Array { return morph(a, w, h, r, true); }
+export function spread(a: Uint8Array, w: number, h: number, r: number, only?: Uint8Array): Uint8Array { return r > 0 ? moveEdge(a, w, h, r, true, only) : a; }
 /** pull a coverage mask in by r pixels (round brush) */
-export function choke(a: Uint8Array, w: number, h: number, r: number): Uint8Array { return morph(a, w, h, r, false); }
+export function choke(a: Uint8Array, w: number, h: number, r: number): Uint8Array { return r > 0 ? moveEdge(a, w, h, r, false) : a; }
 
-const MESH = { underbase: 156, color: 230, sim: 305, highlight: 230 };
+/** the most (hi) or least (lo) of `a` in the 3×3 around each pixel (outside the image counts as 0) */
+function local3(a: Uint8Array, w: number, h: number, hi: boolean): Uint8Array {
+  const n = w * h, t = new Uint8Array(n), o = new Uint8Array(n);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      const i = row + x, l = x > 0 ? a[i - 1] : 0, r = x < w - 1 ? a[i + 1] : 0, v = a[i];
+      t[i] = hi ? (l > v ? (l > r ? l : r) : v > r ? v : r) : (l < v ? (l < r ? l : r) : v < r ? v : r);
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    const row = y * w, up = y > 0, dn = y < h - 1;
+    for (let x = 0; x < w; x++) {
+      const i = row + x, u = up ? t[i - w] : 0, d = dn ? t[i + w] : 0, v = t[i];
+      o[i] = hi ? (u > v ? (u > d ? u : d) : v > d ? v : d) : (u < v ? (u < d ? u : d) : v < d ? v : d);
+    }
+  }
+  return o;
+}
+/** 1 where a pixel is within `r` px (a square around it) of an edge or a gradient: a pixel that differs from a
+ *  neighbor by more than a few levels (a wobble, like two inks adding up to 254 at a seam, isn't an edge) */
+function nearEdges(a: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  const n = w * h, R = Math.ceil(r) + 1, e = new Uint8Array(n), t = new Uint8Array(n), out = new Uint8Array(n);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      const i = row + x, v = a[i];
+      if (x < w - 1) { const d = v - a[i + 1]; if (d > 6 || d < -6) { e[i] = 1; e[i + 1] = 1; } }
+      if (y < h - 1) { const d = v - a[i + w]; if (d > 6 || d < -6) { e[i] = 1; e[i + w] = 1; } }
+      if ((x === 0 || y === 0 || x === w - 1 || y === h - 1) && v > 6) e[i] = 1;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    const row = y * w; let last = -1e9;
+    for (let x = 0; x < w; x++) { const i = row + x; if (e[i]) last = x; if (x - last <= R) t[i] = 1; }
+    last = 1e9;
+    for (let x = w - 1; x >= 0; x--) { const i = row + x; if (e[i]) last = x; if (last - x <= R) t[i] = 1; }
+  }
+  for (let x = 0; x < w; x++) {
+    let last = -1e9;
+    for (let y = 0; y < h; y++) { const i = y * w + x; if (t[i]) last = y; if (y - last <= R) out[i] = 1; }
+    last = 1e9;
+    for (let y = h - 1; y >= 0; y--) { const i = y * w + x; if (t[i]) last = y; if (last - y <= R) out[i] = 1; }
+  }
+  return out;
+}
+/** distance (×5: 5 across, 7 diagonally, within a few % of true distance) from each pixel to the nearest pixel where
+ *  `on` is set; for yes/no questions (is this part thinner than…), not for moving edges */
+function chamfer(on: Uint8Array, w: number, h: number): Uint16Array {
+  const n = w * h, d = new Uint16Array(n).fill(65535);
+  for (let i = 0; i < n; i++) if (on[i]) d[i] = 0;
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      const i = row + x; let v = d[i]; if (!v) continue;
+      if (x > 0 && d[i - 1] + 5 < v) v = d[i - 1] + 5;
+      if (y > 0) { const u = i - w; if (d[u] + 5 < v) v = d[u] + 5; if (x > 0 && d[u - 1] + 7 < v) v = d[u - 1] + 7; if (x < w - 1 && d[u + 1] + 7 < v) v = d[u + 1] + 7; }
+      d[i] = v;
+    }
+  }
+  for (let y = h - 1; y >= 0; y--) {
+    const row = y * w;
+    for (let x = w - 1; x >= 0; x--) {
+      const i = row + x; let v = d[i]; if (!v) continue;
+      if (x < w - 1 && d[i + 1] + 5 < v) v = d[i + 1] + 5;
+      if (y < h - 1) { const u = i + w; if (d[u] + 5 < v) v = d[u] + 5; if (x < w - 1 && d[u + 1] + 7 < v) v = d[u + 1] + 7; if (x > 0 && d[u - 1] + 7 < v) v = d[u - 1] + 7; }
+      d[i] = v;
+    }
+  }
+  return d;
+}
+/**
+ * Move a coverage mask's edges out (grow) or in (shrink) by exactly r pixels, round brush, to a fraction of a pixel.
+ * A soft edge pixel's coverage says where the edge crosses it (half covered = the edge runs through its middle), so
+ * the moved edge stays as smooth as the art's own (no stair steps, no rounding to whole pixels): a pixel's new
+ * coverage is the most (grow) of every nearby inked pixel's coverage pushed by (r − its distance), i.e. the art's
+ * edge moved r further (an empty pixel says nothing about where the edge is when growing, a full one nothing when
+ * shrinking, so they're left out; within 2% of full / empty counts, so two inks meeting at a seam, which add up to
+ * 254 there, don't read as an edge and put pinholes in the base). A flat tint keeps its shade: nothing grows past the most ink around where it came from (nothing
+ * shrinks below the least). Only the pixels near an edge are worked out.
+ */
+export function moveEdge(a: Uint8Array, w: number, h: number, r: number, grow: boolean, only?: Uint8Array): Uint8Array {
+  const out = a.slice();
+  if (!(r > 0)) return out;
+  const cap = local3(a, w, h, grow), hi = cap, lo = cap, band = nearEdges(a, w, h, r + 1.5);
+  const R = Math.ceil(r + 1), offs: number[] = [], ds: number[] = [], dxs: number[] = [], dys: number[] = [];
+  const list: [number, number, number][] = [];
+  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const d = Math.hypot(dx, dy); if (d > 0 && d < r + 1) list.push([dx, dy, d]); }
+  list.sort((p, q) => p[2] - q[2]);
+  for (const [dx, dy, d] of list) { dxs.push(dx); dys.push(dy); offs.push(dy * w + dx); ds.push(255 * (r - d)); }
+  const K = offs.length, R255 = 255 * r, off = Int32Array.from(offs), push = Float32Array.from(ds), DX = Int32Array.from(dxs), DY = Int32Array.from(dys);
+  for (let y = 0; y < h; y++) {
+    const inY = y >= R && y < h - R;
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x; if (!band[i] || (only && !only[i])) continue;
+      const inside = inY && x >= R && x < w - R;
+      if (grow) {
+        let m: number = a[i];
+        if (m > 5) { m += R255; if (m > hi[i]) m = hi[i]; }
+        for (let k = 0; k < K && m < 255; k++) {
+          if (!inside) { const X = x + DX[k], Y = y + DY[k]; if (X < 0 || Y < 0 || X >= w || Y >= h) continue; }
+          const j = i + off[k], aj = a[j]; if (aj <= 5) continue;
+          let v = aj + push[k]; if (v > hi[j]) v = hi[j]; if (v > m) m = v;
+        }
+        out[i] = m > 255 ? 255 : Math.round(m);
+      } else {
+        let m: number = a[i];
+        if (m < 250) { m -= R255; if (m < lo[i]) m = lo[i]; }
+        for (let k = 0; k < K && m > 0; k++) {
+          let v: number;
+          if (!inside) { const X = x + DX[k], Y = y + DY[k]; if (X < 0 || Y < 0 || X >= w || Y >= h) { v = -push[k]; if (v < 0) v = 0; if (v < m) m = v; continue; } }
+          const j = i + off[k], aj = a[j]; if (aj >= 250) continue;
+          v = aj - push[k]; if (v < lo[j]) v = lo[j]; if (v < m) m = v;
+        }
+        out[i] = m < 0 ? 0 : Math.round(m);
+      }
+    }
+  }
+  return out;
+}
+
+// mesh by screen (spot: base 156, colors 230; halftones 305; simulated process prints its base and highlight white as
+// halftones too, so they need a finer mesh than a spot base: 230, T-Biz's 180–230)
+const MESH = { underbase: 156, color: 230, sim: 305, highlight: 230, simBase: 230 };
 
 /** does an ink get white underbase under it by default? Not black, and not dark colors (navy, dark green, maroon…):
  *  they print over the dark shirt as they are */
@@ -545,33 +602,12 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   const mk = (key: string, name: string, hex: string, kind: PlateKind, alpha: Uint8Array, tonalIs?: boolean): Plate => {
     let sum = 0; for (let i = 0; i < n; i++) sum += alpha[i];
     const tonal = tonalIs ?? tonalOf(alpha);
-    return { key, name, hex, kind, alpha, coverage: sum / (255 * n), tonal, mesh: kind === "underbase" ? MESH.underbase : kind === "highlight" ? MESH.highlight : s.method === "sim" || tonal ? MESH.sim : MESH.color };
+    return { key, name, hex, kind, alpha, coverage: sum / (255 * n), tonal, mesh: kind === "underbase" ? (s.method === "sim" ? MESH.simBase : MESH.underbase) : kind === "highlight" ? MESH.highlight : s.method === "sim" || tonal ? MESH.sim : MESH.color };
   };
   const colorPlates = print.map((k) => ({ k, a: cover[inks.indexOf(k)] }));
-  if (dark) {
-    // underbase: under every ink that gets base (by default not black or dark colors like navy; each can be switched)
-    // and under the white.
-    // Choked only where it meets the bare shirt (so white can't peek out past the art); where it meets black ink it
-    // stays full, since black prints over it (pulling it back there would leave the colors next to every black line
-    // without white under them, printing dull on a dark shirt; Separo doesn't pull back there either)
-    const ub = new Uint8Array(n), inked = new Uint8Array(n);
-    const add = (t: Uint8Array, a: Uint8Array) => { for (let i = 0; i < n; i++) { const v = t[i] + a[i]; t[i] = v > 255 ? 255 : v; } };
-    for (const { k, a } of colorPlates) { if (!neverBase(k.hex) && (s.baseFor?.["c" + k.hex.slice(1)] ?? baseByDefault(k.hex))) add(ub, a); add(inked, a); }
-    if (white) { add(ub, white); add(inked, white); }
-    const r = Math.max(0, Math.round(s.choke));
-    if (r > 0) {
-      // under base only: no more base than the least-inked spot within r px (bare shirt nearby pulls it back)
-      const D = disc(r, w);
-      for (let i = 0; i < n; i++) {
-        if (!ub[i]) continue;
-        const m = discPick(inked, i, w, h, D, false, inked[i]);
-        if (ub[i] > m) ub[i] = m;
-      }
-    }
-    plates.push(mk("ub", "Underbase White", "#FFFFFF", "underbase", ub));
-  }
+  const add = (t: Uint8Array, a: Uint8Array) => { for (let i = 0; i < n; i++) { const v = t[i] + a[i]; t[i] = v > 255 ? 255 : v; } };
+  const based = (hex: string) => !neverBase(hex) && (s.baseFor?.["c" + hex.slice(1)] ?? baseByDefault(hex));
   const body = colorPlates.filter(({ k }) => !(dark && s.highlight && isWhite(k.hex)));
-  body.sort((x, y) => lightness(y.k.hex) - lightness(x.k.hex));
   // highlight white: the art's white (and, in simulated process, the white left over after the inks)
   // (spot color: only when white is one of the chosen inks, as Separo counts it; the white left over in mixes is
   // already in the underbase. Simulated process: the leftover white is the highlight.)
@@ -581,36 +617,89 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
     for (const { k, a } of colorPlates) if (isWhite(k.hex)) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + a[i]);
     if (white && s.method !== "spot") for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + white[i]);
   }
-  // print order after the base: colors light → dark, the highlight white, then black-ish inks last (like Separo:
-  // Base, 107 C, 143 C, 171 C, White, Black), so the darkest ink crisps up every edge it touches
-  const blackish = (hex: string) => lightness(hex) < 25;
-  type Step = { key: string; name: string; hex: string; kind: PlateKind; a: Uint8Array };
+  // print order after the base: colors light → dark (black, the darkest, last of them), then the highlight white on
+  // top: the usual order for spot color and simulated process on dark shirts (T-Biz: "light to dark… black next to
+  // last… highlight white last")
+  body.sort((x, y) => lightness(y.k.hex) - lightness(x.k.hex));
+  type Step = { key: string; name: string; hex: string; kind: PlateKind; a: Uint8Array; base: boolean };
   const seq: Step[] = [
-    ...body.filter(({ k }) => !blackish(k.hex)).map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a })),
-    ...(hw ? [{ key: "hw", name: "Highlight White", hex: "#FFFFFF", kind: "highlight" as PlateKind, a: hw }] : []),
-    ...body.filter(({ k }) => blackish(k.hex)).map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a })),
+    ...body.map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a, base: dark && based(k.hex) })),
+    ...(hw ? [{ key: "hw", name: "Highlight White", hex: "#FFFFFF", kind: "highlight" as PlateKind, a: hw, base: true }] : []),
   ];
-  // trap: each color spreads a little under the colors printed after it (never out onto the bare shirt), so
-  // neighbors overlap instead of just touching: no gaps, and a little room for registration
   const tonals = seq.map((x) => tonalOf(x.a));
-  const trap = Math.max(0, Math.round(s.trap ?? 1));
+
+  // underbase (dark shirts): under every ink that gets base (by default not black or dark colors like navy; each can
+  // be switched) and under the white.
+  let ub: Uint8Array | null = null;
+  const bumps = new Map<string, Uint8Array>();
+  if (dark) {
+    ub = new Uint8Array(n); const inked = new Uint8Array(n);
+    for (const { k, a } of colorPlates) { if (based(k.hex)) add(ub, a); add(inked, a); }
+    if (white) { add(ub, white); add(inked, white); }
+    // choked only where it meets the bare shirt (so white can't peek out past the art); where two colors touch, or a
+    // color meets black, it runs straight through (no gap in the white between yellow and orange)
+    const c = Math.max(0, s.choke);
+    if (c > 0) {
+      const room = choke(inked, w, h, c);
+      const fine = Math.max(0, s.fine || 0), fc = Math.min(c, Math.max(0, s.fineChoke ?? 0));
+      let detail: Uint8Array | null = null;
+      if (fine > 0) {
+        // fine detail: where the fully choked base would be narrower than what's left of `fine` after the choke (or
+        // gone): small type, hairlines. Found as the parts of the art that the choked base's wide parts don't reach:
+        // open the choked base (shrink by q, grow back) and grow it out to the art's edge again; the grow-back is a
+        // little generous (0.42 q, a pixel) so the corners of wide shapes, which an opening rounds off, don't count
+        // (distance transforms: this is a yes/no question, so a few % of a pixel doesn't matter and big radii are free)
+        const q = Math.max(0.5, (fine - 2 * c) / 2), out = new Uint8Array(n);
+        for (let i = 0; i < n; i++) if ((ub[i] < room[i] ? ub[i] : room[i]) < 128) out[i] = 1;
+        const dIn = chamfer(out, w, h), core = new Uint8Array(n), Q = 5 * q;
+        for (let i = 0; i < n; i++) if (dIn[i] > Q) core[i] = 1;
+        const dCore = chamfer(core, w, h), REACH = 5 * (1.42 * q + c + 1);
+        detail = new Uint8Array(n);
+        for (let i = 0; i < n; i++) if (ub[i] >= 24 && dCore[i] > REACH) detail[i] = 1;
+      }
+      const roomFine = detail ? (fc > 0 ? choke(inked, w, h, fc) : inked) : null;
+      for (let i = 0; i < n; i++) { const m = detail && detail[i] ? roomFine![i] : room[i]; if (ub[i] > m) ub[i] = m; }
+      // …and there the color on top is made fatter out onto the bare shirt instead (a stroke on the top color), so it
+      // still covers the edge of the white
+      const b = Math.max(0, s.bump ?? 0);
+      if (detail && b > 0) {
+        const dD = chamfer(detail, w, h), NB = 5 * (b + 1.5), near = new Uint8Array(n);
+        for (let i = 0; i < n; i++) if (dD[i] <= NB) near[i] = 1;
+        for (const st of seq) {
+          if (!st.base) continue;
+          const g = spread(st.a, w, h, b, near), add2 = new Uint8Array(n); let any = false;
+          for (let i = 0; i < n; i++) {
+            if (!near[i] || g[i] <= st.a[i]) continue;
+            // onto bare shirt only (not over another ink)
+            const free = 255 - (inked[i] - Math.min(inked[i], st.a[i]));
+            const v = Math.min(g[i], free);
+            if (v > st.a[i]) { add2[i] = v - st.a[i]; st.a[i] = v; any = true; }
+          }
+          if (any) bumps.set(st.key, add2);
+        }
+      }
+    }
+  }
+  // trap: each color spreads a little under the colors printed after it (never out onto the bare shirt), so
+  // neighbors overlap a hair instead of just touching. An ink with no base under it (black, navy…) never spreads
+  // onto the white base (black on white bubbles): under the highlight white it stays where it is.
+  const trap = Math.max(0, s.trap ?? 0);
   if (s.method === "spot" && trap > 0 && seq.length > 1) {
     const later = new Uint8Array(n);
     for (let j = seq.length - 1; j >= 0; j--) {
       const a = seq[j].a, orig = a.slice();
       if (j < seq.length - 1) {
-        // only where a later ink prints and this one isn't already solid: the most of this ink within `trap` px
-        const D = disc(trap, w);
+        const g = spread(orig, w, h, trap, later), bare = dark && !seq[j].base && ub;
         for (let i = 0; i < n; i++) {
-          if (!later[i] || a[i] === 255) continue;
-          const g = discPick(orig, i, w, h, D, true, orig[i]);
-          if (g > a[i]) a[i] = Math.min(g, Math.max(a[i], later[i]));
+          if (!later[i] || g[i] <= a[i] || (bare && bare[i])) continue;
+          a[i] = Math.min(g[i], Math.max(a[i], later[i]));
         }
       }
       for (let i = 0; i < n; i++) { const v = later[i] + orig[i]; later[i] = v > 255 ? 255 : v; }
     }
   }
-  seq.forEach((st, j) => plates.push(mk(st.key, st.name, st.hex, st.kind, st.a, tonals[j])));
+  if (ub) plates.push(mk("ub", "Underbase White", "#FFFFFF", "underbase", ub));
+  seq.forEach((st, j) => { const p = mk(st.key, st.name, st.hex, st.kind, st.a, tonals[j]); const b = bumps.get(st.key); if (b) p.bump = b; plates.push(p); });
   // drop only plates that print (almost) nothing: a small detail ink (fine text in its own color) must never vanish
   const prints = (p: Plate) => { if (p.coverage > 0.0005) return true; let c = 0; for (let i = 0; i < n; i++) if (p.alpha[i] >= 128 && ++c > 16) return true; return false; };
   return { plates: plates.filter(prints), w, h, underbase: dark, dropped };
@@ -645,45 +734,131 @@ export function composite(res: { plates: Plate[]; w: number; h: number }, garmen
 }
 
 /* ---------- films ---------- */
+export type Dot = "ellipse" | "round" | "square";
+export type FilmOpts = { halftone: boolean; lpi?: number; angle?: number; gain?: number; dot?: Dot; mesh?: number };
 /**
- * A plate as film at `dpi` for a print `widthIn` wide: 1 = black (ink). Spot plates are solid (edges at 50%);
- * simulated-process plates are halftoned: round dots at `lpi`, angled `angle`°, sized by the ink coverage.
+ * The smallest halftone dot a screen holds, as a share of the cell: a dot has to be about 1.25 mesh threads across
+ * (an opening and a thread) or it has nothing to stand on and washes out. At 55 lpi: 305 mesh 4%, 230 mesh 7%,
+ * 156 mesh 15%. The same size of hole is the least a nearly-solid tone can keep open (so 96%, 93%, 85%).
+ * (Mesh count should be about 4× the LPI or more: 55 lpi wants 220+.)
  */
-export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: number, halftone: boolean, lpi = 55, angle = 22.5, gain = 0): { W: number; H: number; bits: Uint8Array } {
+export const minDot = (mesh: number, lpi: number) => Math.min(0.2, Math.max(0.03, (Math.PI / 4) * ((1.25 * lpi) / mesh) ** 2));
+/** spot functions (PostScript's, x and y −1…1 across the cell): higher = inks first */
+const SPOT: Record<Dot, (x: number, y: number) => number> = {
+  // round dots that grow until they touch at 78%, then the corners fill
+  round: (x, y) => 1 - (x * x + y * y),
+  // Euclidean: round in the highlights, a checkerboard at 50%, round holes in the shadows
+  square: (x, y) => { const a = Math.abs(x), b = Math.abs(y); return a + b > 1 ? (a - 1) ** 2 + (b - 1) ** 2 - 1 : 1 - (a * a + b * b); },
+  // elliptical (Adobe's "Ellipse"): neighbors join along one axis near 40% and the other near 60%, so there's no
+  // single jump in tone where all four corners join at once (screen printers' pick for smooth midtones)
+  ellipse: (x, y) => {
+    const a = Math.abs(y), b = Math.abs(x), w = 3 * b + 4 * a - 3;
+    if (w < 0) return 1 - (b * b + (a / 0.75) ** 2) / 4;
+    if (w > 1) return ((1 - b) ** 2 + ((1 - a) / 0.75) ** 2) / 4 - 1;
+    return 0.5 - w;
+  },
+};
+/** the halftone cell as thresholds: the spot at (u, v) inks once the tone passes T (the spot function's rank), so a
+ *  tone covers exactly its share of the cell whatever the dot's shape */
+const TN = 96, tCache = new Map<Dot, Float32Array>();
+function thresholds(dot: Dot): Float32Array {
+  const hit = tCache.get(dot); if (hit) return hit;
+  const f = SPOT[dot], n = TN * TN, v = new Float64Array(n), idx = new Uint32Array(n);
+  for (let j = 0; j < TN; j++) for (let i = 0; i < TN; i++) { const x = ((i + 0.5) / TN) * 2 - 1, y = ((j + 0.5) / TN) * 2 - 1; v[j * TN + i] = f(x, y) + 1e-9 * (x * 0.37 + y * 0.61); idx[j * TN + i] = j * TN + i; }
+  idx.sort((p, q) => v[q] - v[p]);
+  const T = new Float32Array(n); for (let r = 0; r < n; r++) T[idx[r]] = (r + 0.5) / n;
+  tCache.set(dot, T); return T;
+}
+/**
+ * A plate as film at `dpi` for a print `widthIn` wide: 1 = black (ink).
+ *   - Solid plates: each soft edge pixel's own edge line (lib/edgeField) is followed at film resolution, so edges are
+ *     as smooth as the art drew them, with no stair steps from its pixel grid; hard-edged art stays as drawn.
+ *   - Halftone plates: dots at `lpi`, angled `angle`°, in the chosen shape, sized by the ink (the tone sampled
+ *     smoothly between pixels). Tones too light for the mesh to hold a dot drop out (the lightest half) or print
+ *     as the smallest dot that holds; nearly solid tones the same way at the top. Dot gain is taken off first.
+ */
+export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: number, o: FilmOpts): { W: number; H: number; bits: Uint8Array } {
+  const halftone = o.halftone, lpi = o.lpi || 55, angle = o.angle ?? 22.5, gain = o.gain || 0;
   const W = Math.max(1, Math.round(widthIn * dpi)), H = Math.max(1, Math.round(W * (h / w))), rowBytes = Math.ceil(W / 8);
   const bits = new Uint8Array(rowBytes * H), sx = w / W, sy = h / H;
-  const cell = dpi / lpi, rad = (angle * Math.PI) / 180, cs = Math.cos(rad), sn = Math.sin(rad);
-  // the plate is sampled smoothly (bilinear) between its pixels, so a solid edge on film follows the art's soft
-  // edge at film resolution instead of stepping in plate-pixel blocks
-  const A = p.alpha;
+  const cell = dpi / lpi, rad = (angle * Math.PI) / 180, cs = Math.cos(rad) / cell, sn = Math.sin(rad) / cell;
+  const T = thresholds(o.dot || "ellipse"), md = o.mesh ? minDot(o.mesh, lpi) : 0.04;
+  const A = p.alpha, G4 = 4 * gain;
+  // tone → dot: gain off, then only dots the screen can hold
+  const LUT = new Float32Array(256);
+  for (let k = 0; k < 256; k++) {
+    let v = k / 255;
+    if (v > 0 && v < 1 && gain > 0) v = ((1 + G4) - Math.sqrt((1 + G4) ** 2 - 4 * G4 * v)) / (2 * G4);
+    if (v < md / 2) v = 0; else if (v < md) v = md; else if (v > 1 - md / 2) v = 1; else if (v > 1 - md) v = 1 - md;
+    LUT[k] = v;
+  }
+  // where each film column / row falls between the plate's pixels
+  const X0 = new Int32Array(W), TX = new Float32Array(W);
+  for (let x = 0; x < W; x++) { const f = Math.max(0, Math.min(w - 1, (x + 0.5) * sx - 0.5)); X0[x] = Math.min(w - 2, Math.floor(f)); TX[x] = f - X0[x]; if (w === 1) { X0[x] = 0; TX[x] = 0; } }
+  const field = edgeRows(A, w, h);
+  // a halftone plate can have solid parts too (a spot color that's solid in one place and mixed in another): where a
+  // solid area meets nothing, its edge is cut sharp like a solid plate's instead of breaking into half dots
+  const hiM = halftone ? local3(A, w, h, true) : null, loM = halftone ? local3(A, w, h, false) : null;
   for (let y = 0; y < H; y++) {
-    const fy = Math.max(0, Math.min(h - 1, (y + 0.5) * sy - 0.5)), y0 = Math.floor(fy), y1 = Math.min(h - 1, y0 + 1), ty = fy - y0;
-    const r0 = y0 * w, r1 = y1 * w;
+    const fy = Math.max(0, Math.min(h - 1, (y + 0.5) * sy - 0.5)), y0 = h === 1 ? 0 : Math.min(h - 2, Math.floor(fy)), ty = fy - y0, y1 = Math.min(h - 1, y0 + 1);
+    const r0 = y0 * w, r1 = y1 * w, orow = y * rowBytes;
     for (let x = 0; x < W; x++) {
-      const fx = Math.max(0, Math.min(w - 1, (x + 0.5) * sx - 0.5)), x0 = Math.floor(fx), x1 = Math.min(w - 1, x0 + 1), tx = fx - x0;
-      const top = A[r0 + x0] + (A[r0 + x1] - A[r0 + x0]) * tx, bot = A[r1 + x0] + (A[r1 + x1] - A[r1 + x0]) * tx;
-      let v = (top + (bot - top) * ty) / 255;
-      // halftones: dots smaller than the screen can hold print nothing, nearly-solid prints solid (4% / 96%), and
-      // dot gain is taken off ahead of time (a dot grows about gain·4·v·(1−v) on the shirt: 20% at a 50% dot)
-      if (halftone && v > 0.02 && v < 0.98) {
-        if (gain > 0) { const G4 = 4 * gain; v = ((1 + G4) - Math.sqrt((1 + G4) ** 2 - 4 * G4 * v)) / (2 * G4); }
-        if (v < 0.04) v = 0; else if (v > 0.96) v = 1;
-      }
+      const x0 = X0[x], x1 = Math.min(w - 1, x0 + 1), tx = TX[x];
+      const a00 = A[r0 + x0], a01 = A[r0 + x1], a10 = A[r1 + x0], a11 = A[r1 + x1];
       let on: boolean;
-      if (!halftone) on = v >= 0.5;
-      else if (v <= 0.02) on = false;
-      else if (v >= 0.98) on = true;
-      else {
-        // position inside the rotated halftone cell, -0.5..0.5; round dot that fills area v
-        const u = (x * cs + y * sn) / cell, t = (-x * sn + y * cs) / cell;
-        const fu = u - Math.floor(u) - 0.5, ft = t - Math.floor(t) - 0.5;
-        const r2 = fu * fu + ft * ft;
-        // up to 50%: a black dot of area v in the cell; past 50%: white holes of area 1 − v at the cell corners
-        if (v <= 0.5) on = r2 <= v / Math.PI;
-        else { const cr2 = (0.5 - Math.abs(fu)) ** 2 + (0.5 - Math.abs(ft)) ** 2; on = cr2 > (1 - v) / Math.PI; }
+      const near = r0 + (tx < 0.5 ? x0 : x1) + (ty < 0.5 ? 0 : r1 - r0);
+      if (!halftone || (hiM![near] >= 245 && loM![near] <= 10)) {
+        if ((a00 === 0 || a00 === 255) && a00 === a01 && a00 === a10 && a00 === a11) on = a00 === 255;
+        else {
+          // the signed distance to the edge here, from the edge lines of the 4 pixels around
+          const R0 = field(y0), R1 = field(y1), ux = tx - 1, uy = ty - 1;
+          const sd = (1 - tx) * (1 - ty) * (R0.sd[x0] + R0.nx[x0] * tx + R0.ny[x0] * ty) + tx * (1 - ty) * (R0.sd[x1] + R0.nx[x1] * ux + R0.ny[x1] * ty)
+            + (1 - tx) * ty * (R1.sd[x0] + R1.nx[x0] * tx + R1.ny[x0] * uy) + tx * ty * (R1.sd[x1] + R1.nx[x1] * ux + R1.ny[x1] * uy);
+          on = sd < 0;
+        }
+      } else {
+        const top = a00 + (a01 - a00) * tx, bot = a10 + (a11 - a10) * tx, k = top + (bot - top) * ty;
+        const v = LUT[k < 0 ? 0 : k > 255 ? 255 : Math.round(k)];
+        if (v <= 0) on = false;
+        else if (v >= 1) on = true;
+        else {
+          // where this film pixel sits in its (rotated) halftone cell
+          const u = x * cs + y * sn, t = -x * sn + y * cs;
+          const fu = u - Math.floor(u), ft = t - Math.floor(t);
+          on = v > T[((ft * TN) | 0) * TN + ((fu * TN) | 0)];
+        }
       }
-      if (on) bits[y * rowBytes + (x >> 3)] |= 0x80 >> (x & 7);
+      if (on) bits[orow + (x >> 3)] |= 0x80 >> (x & 7);
     }
   }
   return { W, H, bits };
+}
+
+/**
+ * A plate at a bigger size W × H, for art under 400 ppi: solid plates follow each soft pixel's own edge line
+ * (lib/edgeField), so the edge comes out smooth and anti-aliased at the new size instead of in the art's pixel steps
+ * (nothing is redrawn: hard-edged art stays as drawn); halftone plates are blended smoothly (bilinear).
+ */
+export function resamplePlate(p: Plate, w: number, h: number, W: number, H: number): Uint8Array {
+  const A = p.alpha, out = new Uint8Array(W * H), sx = w / W, sy = h / H, k = W / w;
+  const field = p.tonal ? null : edgeRows(A, w, h);
+  const X0 = new Int32Array(W), TX = new Float32Array(W);
+  for (let x = 0; x < W; x++) { const f = Math.max(0, Math.min(w - 1, (x + 0.5) * sx - 0.5)); X0[x] = w < 2 ? 0 : Math.min(w - 2, Math.floor(f)); TX[x] = f - X0[x]; }
+  for (let y = 0; y < H; y++) {
+    const fy = Math.max(0, Math.min(h - 1, (y + 0.5) * sy - 0.5)), y0 = h < 2 ? 0 : Math.min(h - 2, Math.floor(fy)), ty = fy - y0, y1 = Math.min(h - 1, y0 + 1);
+    const r0 = y0 * w, r1 = y1 * w;
+    for (let x = 0; x < W; x++) {
+      const x0 = X0[x], x1 = Math.min(w - 1, x0 + 1), tx = TX[x];
+      const a00 = A[r0 + x0], a01 = A[r0 + x1], a10 = A[r1 + x0], a11 = A[r1 + x1];
+      if (a00 === a01 && a00 === a10 && a00 === a11 && (a00 === 0 || a00 === 255 || !field)) { out[y * W + x] = a00; continue; }
+      if (!field) { const top = a00 + (a01 - a00) * tx, bot = a10 + (a11 - a10) * tx; out[y * W + x] = Math.round(top + (bot - top) * ty); continue; }
+      const R0 = field(y0), R1 = field(y1), ux = tx - 1, uy = ty - 1;
+      const sd = (1 - tx) * (1 - ty) * (R0.sd[x0] + R0.nx[x0] * tx + R0.ny[x0] * ty) + tx * (1 - ty) * (R0.sd[x1] + R0.nx[x1] * ux + R0.ny[x1] * ty)
+        + (1 - tx) * ty * (R1.sd[x0] + R1.nx[x0] * tx + R1.ny[x0] * uy) + tx * ty * (R1.sd[x1] + R1.nx[x1] * ux + R1.ny[x1] * uy);
+      // distance in new pixels → coverage of the new pixel (a one-pixel soft edge)
+      const c = 0.5 - sd * k;
+      out[y * W + x] = c <= 0 ? 0 : c >= 1 ? 255 : Math.round(c * 255);
+    }
+  }
+  return out;
 }

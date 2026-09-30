@@ -8,30 +8,47 @@
  *      fraction of a pixel of the outline, so a round dot comes out round and a long curve as a few clean curves.
  * Holes come out as their own loops; the caller fills with even-odd. Specks under `minArea` px² are dropped.
  */
+import { edgeRows } from "./edgeField";
 export type Loop = number[]; // x0, y0, x1, y1, … in pixels (closed)
 type P = [number, number];
 
-/** outline loops of alpha ≥ iso, sub-pixel (in pixel units, pixel centers at +0.5) */
+/** outline loops of alpha ≥ iso, sub-pixel (in pixel units, pixel centers at +0.5). At the 50% level the outline
+ *  follows each soft edge pixel's own edge line (lib/edgeField), not a straight blend between pixel centers. */
 export function contours(alpha: Uint8Array, w: number, h: number, iso = 128): P[][] {
   const W2 = w + 2;
-  const v = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : alpha[y * w + x]);
+  const F = iso === 128 ? edgeRows(alpha, w, h) : null;
+  const OUT = { sd: new Float32Array(w).fill(2), nx: new Float32Array(w), ny: new Float32Array(w) };
+  const row = (y: number) => (y < 0 || y >= h ? OUT : F!(y));
+  // inside test and value: signed distance (negative inside) with the field, else alpha against iso
+  const v = F ? (x: number, y: number) => (x < 0 || x >= w ? 2 : row(y).sd[x]) : (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : alpha[y * w + x]);
+  const ins = F ? (q: number) => q < 0 : (q: number) => q >= iso;
   // edge keys: horizontal edge from (x,y) to (x+1,y) and vertical from (x,y) to (x,y+1), x,y from -1
   const H = (x: number, y: number) => ((y + 1) * W2 + (x + 1)) * 2, V = (x: number, y: number) => ((y + 1) * W2 + (x + 1)) * 2 + 1;
   const pt = new Map<number, P>();
   const at = (k: number, x0: number, y0: number, x1: number, y1: number) => {
     if (pt.has(k)) return k;
-    const a = v(x0, y0), b = v(x1, y1), t = a === b ? 0.5 : (iso - a) / (b - a);
+    let t: number;
+    if (F) {
+      // where the two pixels' edge lines, blended along the way, cross zero
+      const dx = x1 - x0, dy = y1 - y0, r0 = row(y0), r1 = row(y1);
+      const s0 = v(x0, y0), s1 = v(x1, y1);
+      const n0 = x0 >= 0 && x0 < w ? r0.nx[x0] * dx + r0.ny[x0] * dy : 0, n1 = x1 >= 0 && x1 < w ? r1.nx[x1] * dx + r1.ny[x1] * dy : 0;
+      const f = (u: number) => (1 - u) * (s0 + n0 * u) + u * (s1 + n1 * (u - 1));
+      let lo = 0, hi = 1; const neg0 = s0 < 0;
+      for (let it = 0; it < 22; it++) { const m = (lo + hi) / 2; if ((f(m) < 0) === neg0) lo = m; else hi = m; }
+      t = (lo + hi) / 2;
+    } else { const a = v(x0, y0), b = v(x1, y1); t = a === b ? 0.5 : (iso - a) / (b - a); }
     pt.set(k, [x0 + (x1 - x0) * t + 0.5, y0 + (y1 - y0) * t + 0.5]);
     return k;
   };
   const link = new Map<number, number[]>();
   const seg = (a: number, b: number) => { const la = link.get(a); if (la) la.push(b); else link.set(a, [b]); const lb = link.get(b); if (lb) lb.push(a); else link.set(b, [a]); };
   for (let y = -1; y < h; y++) for (let x = -1; x < w; x++) {
-    const tl = v(x, y) >= iso ? 8 : 0, tr = v(x + 1, y) >= iso ? 4 : 0, br = v(x + 1, y + 1) >= iso ? 2 : 0, bl = v(x, y + 1) >= iso ? 1 : 0;
+    const tl = ins(v(x, y)) ? 8 : 0, tr = ins(v(x + 1, y)) ? 4 : 0, br = ins(v(x + 1, y + 1)) ? 2 : 0, bl = ins(v(x, y + 1)) ? 1 : 0;
     const c = tl | tr | br | bl; if (c === 0 || c === 15) continue;
     const T = () => at(H(x, y), x, y, x + 1, y), B = () => at(H(x, y + 1), x, y + 1, x + 1, y + 1);
     const L = () => at(V(x, y), x, y, x, y + 1), R = () => at(V(x + 1, y), x + 1, y, x + 1, y + 1);
-    const mid = (v(x, y) + v(x + 1, y) + v(x + 1, y + 1) + v(x, y + 1)) / 4 >= iso;
+    const mid = ins((v(x, y) + v(x + 1, y) + v(x + 1, y + 1) + v(x, y + 1)) / 4);
     switch (c) {
       case 1: case 14: seg(L(), B()); break;
       case 2: case 13: seg(B(), R()); break;

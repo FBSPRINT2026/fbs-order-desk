@@ -4609,3 +4609,8 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .sep-base.on{background:var(--ink,#1c2230);color:#fff;border-color:transparent}
 .sep-base:hover{border-color:var(--accent)}
 .sep-base.fixed{cursor:default;opacity:.7}.sep-base.fixed:hover{border-color:var(--line)}
+/* separations: small type & thin lines (fine detail underbase) */
+.sep-fine{display:flex;flex-direction:column;gap:6px}
+.sep-fine .sep-f{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding-left:22px;font-weight:500}
+.sep-fine .sep-f input[type=range]{grid-column:1/-1;grid-row:2;width:100%}
+.sep-fine .sep-f b{grid-column:2;grid-row:1}
