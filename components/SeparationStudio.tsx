@@ -75,23 +75,28 @@ function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false, side
   const data = x.getImageData(0, 0, w, h).data;
   if (removeBg) {
     const n = w * h;
-    // flood from the edges through near-white, opaque pixels
+    // flood from the edges through near-white, opaque pixels (each pixel is marked when it's queued, so it's queued once)
     const near = (i: number) => data[i * 4 + 3] > 200 && data[i * 4] > 242 && data[i * 4 + 1] > 242 && data[i * 4 + 2] > 242;
-    const gone = new Uint8Array(n), stack = new Int32Array(n + 4 * (w + h)); let sp = 0;
-    for (let i = 0; i < w; i++) { stack[sp++] = i; stack[sp++] = (h - 1) * w + i; }
-    for (let j = 0; j < h; j++) { stack[sp++] = j * w; stack[sp++] = j * w + w - 1; }
+    const gone = new Uint8Array(n), stack = new Int32Array(n); let sp = 0, removed = 0;
+    const seed = (i: number) => { if (!gone[i] && near(i)) { gone[i] = 1; stack[sp++] = i; } };
+    for (let i = 0; i < w; i++) { seed(i); seed((h - 1) * w + i); }
+    for (let j = 0; j < h; j++) { seed(j * w); seed(j * w + w - 1); }
     while (sp) {
-      const i = stack[--sp]; if (gone[i] || !near(i)) continue; gone[i] = 1; data[i * 4 + 3] = 0;
-      const xx = i % w, yy = (i / w) | 0;
-      if (xx > 0 && !gone[i - 1]) stack[sp++] = i - 1; if (xx < w - 1 && !gone[i + 1]) stack[sp++] = i + 1;
-      if (yy > 0 && !gone[i - w]) stack[sp++] = i - w; if (yy < h - 1 && !gone[i + w]) stack[sp++] = i + w;
+      const i = stack[--sp]; data[i * 4 + 3] = 0; removed++;
+      const xx = i % w, yy = (i - xx) / w;
+      if (xx > 0) seed(i - 1); if (xx < w - 1) seed(i + 1); if (yy > 0) seed(i - w); if (yy < h - 1) seed(i + w);
     }
-    // the edge ring (within 2 px of the removed background): take the white back out
+    // the edge ring (within 2 px of the removed background): take the white back out. Found by growing the removed
+    // area 2 px (across, then down), and only if anything was removed
+    const ring = new Uint8Array(n);
+    if (removed) {
+      const tmp = new Uint8Array(n);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x; if (gone[i]) for (let k = Math.max(0, x - 2); k <= Math.min(w - 1, x + 2); k++) tmp[y * w + k] = 1; }
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (!tmp[y * w + x]) continue; for (let k = Math.max(0, y - 2); k <= Math.min(h - 1, y + 2); k++) ring[k * w + x] = 1; }
+    }
     for (let i = 0; i < n; i++) {
-      if (gone[i]) continue;
-      const xx = i % w, yy = (i / w) | 0; let ring = false;
-      for (let dy = -2; dy <= 2 && !ring; dy++) for (let dx = -2; dx <= 2; dx++) { const X = xx + dx, Y = yy + dy; if (X >= 0 && Y >= 0 && X < w && Y < h && gone[Y * w + X]) { ring = true; break; } }
-      if (!ring) continue;
+      if (!ring[i] || gone[i]) continue;
+      const xx = i % w, yy = (i - xx) / w;
       const o = i * 4, r = data[o], g = data[o + 1], b = data[o + 2];
       // the art's own color here: the strongest (farthest from white) pixel close by that isn't background
       let F = [r, g, b], fd = (255 - r) ** 2 + (255 - g) ** 2 + (255 - b) ** 2;
