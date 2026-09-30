@@ -13,6 +13,7 @@
  */
 import { traceMask } from "./sepVector";
 import type { Plate } from "./separate";
+import type { VArt } from "./svgVector";
 
 const enc = new TextEncoder();
 const pdfName = (s: string) => "/" + s.replace(/[^A-Za-z0-9_.-]/g, (c) => "#" + c.charCodeAt(0).toString(16).padStart(2, "0").toUpperCase());
@@ -25,7 +26,11 @@ function cmyk(hex: string, kind: Plate["kind"]): [number, number, number, number
   return [(1 - r - k) / (1 - k), (1 - g - k) / (1 - k), (1 - b - k) / (1 - k), k].map((v) => Math.round(v * 1000) / 1000) as [number, number, number, number];
 }
 
-export type IllustratorOpts = { widthIn: number; tonal: boolean; title: string };
+export type IllustratorOpts = {
+  widthIn: number; tonal: boolean; title: string;
+  /** vector art (SVG): the color plates are the original shapes, each put on the plate its fill belongs to */
+  vector?: { art: VArt; plateOf: (fill: string) => number | null };
+};
 
 export async function illustratorPdf(plates: Plate[], w: number, h: number, o: IllustratorOpts, z: (u8: Uint8Array) => Promise<Uint8Array>): Promise<Uint8Array> {
   const W = o.widthIn * 72, H = W * (h / w), s = W / w;
@@ -47,6 +52,15 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
       xo.push(`/Im${i} ${csn + 1} 0 R`);
       imgs.push({ n: csn + 1, data: p.alpha });
       content += `q /GS1 gs ${W.toFixed(2)} 0 0 ${H.toFixed(2)} 0 0 cm /Im${i} Do Q\n`;
+    } else if (o.vector && p.kind !== "underbase") {
+      // the original vector shapes of this plate's color, in SVG coordinates (flipped onto the page)
+      const a = o.vector.art, k = W / a.w;
+      const mine = a.shapes.filter((sh) => o.vector!.plateOf(sh.fill) === i);
+      if (mine.length) {
+        content += `q /GS0 gs ${k.toFixed(5)} 0 0 ${(-k).toFixed(5)} ${(-a.x * k).toFixed(3)} ${(H + a.y * k).toFixed(3)} cm /CS${i} cs 1 scn\n`;
+        for (const sh of mine) content += sh.ops + (sh.evenodd ? "f*\n" : "f\n");
+        content += "Q\n";
+      }
     } else {
       const loops = traceMask(p.alpha, w, h);
       let path = "";

@@ -9,6 +9,8 @@ import { closestPms, colorHex } from "@/lib/inkColors";
 import { guessHex } from "@/lib/mockup";
 import { filmPdf, deflate } from "@/lib/filmPdf";
 import { illustratorPdf } from "@/lib/illustratorPdf";
+import { parseSvg, type VArt } from "@/lib/svgVector";
+import { deltaE } from "@/lib/inkColors";
 import { mergeProduction, withIssue, type EquipRow, type Machine, type Station } from "@/lib/production";
 import PressLayout from "@/components/PressLayout";
 
@@ -44,8 +46,9 @@ const inkName = (hex: string, lib: Studio["lib"]) => {
 const shown = (ink: SepInk) => colorHex(ink.name) || ink.hex;
 
 /** the art as pixels, at most MAX_SIDE on the long side; a white background around the art becomes transparent */
-function pixelsOf(img: HTMLImageElement, removeBg: boolean): Px {
-  const k = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false): Px {
+  // vector art is drawn big (an SVG's own size is often tiny); photos are never blown up
+  const k = vector ? MAX_SIDE / Math.max(img.naturalWidth || 1, img.naturalHeight || 1) : Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
   const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
   const c = document.createElement("canvas"); c.width = w; c.height = h;
   const x = c.getContext("2d", { willReadFrequently: true })!; x.drawImage(img, 0, 0, w, h);
@@ -75,6 +78,8 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [design, setDesign] = useState<Design | null>(null);
   const [artUrl, setArtUrl] = useState(""), [origUrl, setOrigUrl] = useState("");
   const [img, setImg] = useState<HTMLImageElement | null>(null);
+  // SVG art: its shapes, kept as vector for the Illustrator file
+  const [vart, setVart] = useState<VArt | null>(null);
   const [me, setMe] = useState({ email: "", boss: false });
   const [err, setErr] = useState(""), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
   const [st, setSt] = useState<Studio>({ ...DEFAULT_SEP, widthIn: 11, lpi: 55, angle: 22.5, dpi: 600, removeBg: true, lib: "wilflex" });
@@ -132,7 +137,9 @@ export default function SeparationStudio({ id }: { id: string }) {
     const des = d as Design | null;
     if (des) {
       const raster = /^image\/(png|jpe?g|webp)/i.test(des.file_type || "") || /\.(png|jpe?g|webp)$/i.test(des.file_name || "");
-      const paths = [raster ? des.file_path : des.preview_path || des.file_path, des.file_path].filter(Boolean) as string[];
+      const svg = /svg/i.test(des.file_type || "") || /\.svg$/i.test(des.file_name || des.file_path || "");
+      const paths = [raster || svg ? des.file_path : des.preview_path || des.file_path, des.file_path].filter(Boolean) as string[];
+      if (svg) { const { data: sv } = await sb.storage.from("proofs").download(des.file_path); if (sv) setVart(parseSvg(await sv.text())); }
       const { data: urls } = await sb.storage.from("proofs").createSignedUrls(paths, 3600);
       setOrigUrl(urls?.[1]?.signedUrl || urls?.[0]?.signedUrl || "");
       // the art as a local blob, so the canvas can read its pixels (no cross-site image)
@@ -142,7 +149,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   }, [sb, id]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (!artUrl) return; loadImg(artUrl).then(setImg).catch((e) => setErr(e.message)); }, [artUrl]);
-  useEffect(() => { if (!img) return; pxRef.current = pixelsOf(img, st.removeBg); setPxTick((t) => t + 1); }, [img, st.removeBg]);
+  useEffect(() => { if (!img) return; pxRef.current = pixelsOf(img, st.removeBg, !!vart); setPxTick((t) => t + 1); }, [img, st.removeBg, vart]);
 
   /* ---------- find inks (first time, or on request) ---------- */
   const findInks = useCallback((method = st.method) => {
@@ -210,7 +217,20 @@ export default function SeparationStudio({ id }: { id: string }) {
   /* ---------- outputs ---------- */
   const title = `${order ? `#${order.number}` : "Separation"} ${row?.location || ""}`.trim();
   const tonal = st.method === "sim";
-  async function aiFile() { return illustratorPdf(plates, res!.w, res!.h, { widthIn: st.widthIn, tonal, title }, deflate); }
+  // spot color on vector art: each original shape goes on the plate of the ink its color maps to
+  const vectorOut = vart?.ok && !tonal ? {
+    art: vart,
+    plateOf: (fill: string) => {
+      let best = -1, bd = Infinity;
+      inks.forEach((k, j) => { const d = deltaE(fill, k.hex); if (d < bd) { bd = d; best = j; } });
+      if (best < 0) return null;
+      const k = inks[best], white = /^#F[A-F0-9]F[A-F0-9]F[A-F0-9]$/i.test(k.hex) || k.name === "White";
+      const key = white && res?.underbase && st.highlight ? "hw" : "c" + k.hex.slice(1);
+      const at = plates.findIndex((p) => p.key === key);
+      return at < 0 ? null : at;
+    },
+  } : undefined;
+  async function aiFile() { return illustratorPdf(plates, res!.w, res!.h, { widthIn: st.widthIn, tonal, title, vector: vectorOut }, deflate); }
   async function filmsFile() {
     const pages = plates.map((p, i) => {
       const f = filmBits(p, res!.w, res!.h, st.widthIn, st.dpi, tonal, st.lpi, st.angle);
@@ -317,6 +337,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <h3>Method</h3>
             <div className="rv-seg sep-full">{([["spot", "Spot color"], ["sim", "Simulated process"]] as const).map(([k, l]) => <button key={k} type="button" className={st.method === k ? "on" : ""} onClick={() => { set({ method: k }); findInks(k); }}>{l}</button>)}</div>
             <p className="sep-help">{st.method === "spot" ? "Flat colors, solid screens. Logos, text, cartoon art." : "Photos and painted art: a few bright inks in halftones, mixed on the shirt."}</p>
+            {vart && <div className={vart.ok ? "sep-ok" : "sep-tip"}>{vart.ok ? `Vector art (${vart.shapes.length} shapes): the Illustrator file keeps the original shapes for each ink.` : `Vector art, but it ${vart.why}: the plates are traced from a picture of it instead.`}</div>}
             {st.method === "spot" && hint > 0.18 && <div className="sep-tip">This art has a lot of shading ({Math.round(hint * 100)}% between colors). <button type="button" className="linkbtn" onClick={() => { set({ method: "sim" }); findInks("sim"); }}>Try simulated process</button></div>}
           </section>
           <section className="sep-card">
