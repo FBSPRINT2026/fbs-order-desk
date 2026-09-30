@@ -13,12 +13,13 @@ import { isVector, knockOut } from "@/lib/artPrep";
 import { starMyDesign } from "@/app/portal/actions";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
+import Match from "@/components/InkMatch";
 import ShirtDesigner from "@/components/ShirtDesigner";
 import { loadDesignerDoc, saveDesignerLogo } from "@/lib/designerSave";
 import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
-import { PMS_HEX, WILFLEX_HEX, closestInk, closestPms, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
+import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot, basePlacement, maxWidthFor, sideMaxWidth, viewsFor, guessHex, measureGarment, printWidth, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 import { useSticky } from "@/lib/useSticky";
 
@@ -1238,25 +1239,6 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
           )) : <span className="faint">Colors not read yet</span>}
         </div>
       )}
-    </div>
-  );
-}
-
-const matchWord = (dE: number) => (dE < 1 ? "exact" : dE < 3 ? "very close" : dE < 6 ? "close" : "not very close");
-/** The color read from the art, with the closest standard Wilflex ink and the closest Pantone coated color to pick from. */
-function Match({ hex, cur, onPick, onHover }: { hex: string; cur?: { name: string; hex: string }; onPick: (v: { name: string; hex: string }) => void; onHover?: (v: { name: string; hex: string } | null) => void }) {
-  const ink = closestInk(hex), pms = closestPms(hex);
-  const opt = (label: string, c: { name: string; hex: string; dE: number }) => (
-    <button type="button" className={"mk-near" + (cur?.name === c.name ? " on" : "")} title={`${c.name} — ${matchWord(c.dE)} (ΔE ${c.dE})`} onClick={() => onPick({ name: c.name, hex: c.hex })}
-      onMouseEnter={() => onHover?.({ name: c.name, hex: c.hex })} onMouseLeave={() => onHover?.(null)}>
-      <span className="k">{label}</span><span className="sw" style={{ background: c.hex }} /><span className="n">{c.name}</span><span className="q">{matchWord(c.dE)}</span>
-    </button>
-  );
-  return (
-    <div className="mk-match">
-      <div className="mk-match-h"><span>SUGGESTED COLORS</span><span className="mono">{hex.toUpperCase()}</span></div>
-      {opt("Standard", ink)}
-      {opt("PMS", pms)}
     </div>
   );
 }

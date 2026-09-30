@@ -143,3 +143,22 @@ const nearest = (hex: string, chart: Record<string, string>) => {
 export const closestInk = (hex: string) => nearest(hex, WILFLEX_HEX);
 /** The Pantone coated color that looks closest (same idea as pantoneconverter.com's HEX to Pantone). */
 export const closestPms = (hex: string) => nearest(hex, PMS_COATED);
+
+/** how close a match is, in shop words (CIEDE2000) */
+export const matchWord = (dE: number) => (dE < 1 ? "exact" : dE < 3 ? "very close" : dE < 6 ? "close" : "not very close");
+export type InkMatch = { name: string; hex: string; dE: number };
+/**
+ * Standard ink or PMS for a color from the art:
+ *   - a standard (stock Wilflex RFU) ink when it's very close: no mixing, always on the shelf
+ *   - a PMS when no stock ink is very close and the PMS is clearly closer (mix it)
+ *   - otherwise the standard ink (the PMS isn't worth mixing for)
+ * White and black are always the standard inks.
+ */
+export function suggestInk(hex: string): { standard: InkMatch; pms: InkMatch; rec: "standard" | "pms"; why: string } {
+  const standard = closestInk(hex), pms = closestPms(hex);
+  const n = parseInt(hex.replace("#", ""), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const plain = (r > 238 && g > 238 && b > 238) || (r < 30 && g < 30 && b < 30);
+  if (plain || standard.dE < 3) return { standard, pms, rec: "standard", why: plain ? "White and black: standard ink." : `${standard.name} is ${matchWord(standard.dE)}: stock ink, no mixing.` };
+  if (pms.dE + 1 < standard.dE) return { standard, pms, rec: "pms", why: `No stock ink is very close (${standard.name} is ${matchWord(standard.dE)}). ${pms.name} is ${matchWord(pms.dE)}: mix it.` };
+  return { standard, pms, rec: "standard", why: `${standard.name} is about as close as any PMS: use the stock ink.` };
+}

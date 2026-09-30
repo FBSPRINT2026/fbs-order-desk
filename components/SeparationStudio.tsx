@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
 import { DEFAULT_SEP, composite, filmBits, findColors, findSimInks, gradientShare, isDark, separate, snapInk, type Plate, type Px, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
-import { closestPms, colorHex } from "@/lib/inkColors";
+import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
+import InkMatch from "@/components/InkMatch";
 import { guessHex } from "@/lib/mockup";
 import { filmPdf, deflate } from "@/lib/filmPdf";
 import { illustratorPdf } from "@/lib/illustratorPdf";
@@ -35,15 +36,21 @@ export const SEP_STATUS: Record<SepRow["status"], { label: string; c: string }> 
   approved: { label: "Approved", c: "#2E9D5B" }, films: { label: "Films printed", c: "#0A8FC0" }, cancelled: { label: "Cancelled", c: "#7C8799" },
 };
 
-type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean; lib: "wilflex" | "pms" };
+type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean; lib: "auto" | "wilflex" | "pms" };
 const MAX_SIDE = 2400;
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "plate";
 const inkName = (hex: string, lib: Studio["lib"]) => {
   const n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
   if (r > 238 && g > 238 && b > 238) return "White";
   if (r < 30 && g < 30 && b < 30) return "Black";
-  return lib === "pms" ? closestPms(hex).name : snapInk(hex).name;
+  return lib === "pms" ? closestPms(hex).name : lib === "wilflex" ? snapInk(hex).name : (({ standard, pms, rec }) => (rec === "pms" ? pms : standard).name)(suggestInk(hex));
 };
+/** what an ink name is and how close it is to the art's color: "Standard · very close", "PMS · close", "Custom" */
+function inkKind(name: string, art: string): { kind: string; word: string; dE: number } | null {
+  const hex = colorHex(name); if (!hex) return null;
+  const kind = WILFLEX_NAMES[name] ? "Standard" : /^#/.test(name) ? "Custom" : "PMS", dE = Math.round(deltaE(art, hex) * 10) / 10;
+  return { kind, word: matchWord(dE), dE };
+}
 const shown = (ink: SepInk) => colorHex(ink.name) || ink.hex;
 
 /** the art as pixels, at most MAX_SIDE on the long side; a white background around the art becomes transparent */
@@ -112,7 +119,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [vart, setVart] = useState<VArt | null>(null);
   const [me, setMe] = useState({ email: "", boss: false });
   const [err, setErr] = useState(""), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
-  const [st, setSt] = useState<Studio>({ ...DEFAULT_SEP, widthIn: 11, lpi: 55, angle: 22.5, dpi: 600, removeBg: true, lib: "wilflex" });
+  const [st, setSt] = useState<Studio>({ ...DEFAULT_SEP, widthIn: 11, lpi: 55, angle: 22.5, dpi: 600, removeBg: true, lib: "auto" });
   const [inks, setInks] = useState<SepInk[]>([]);
   const [res, setRes] = useState<SepResult | null>(null);
   const [orderKeys, setOrderKeys] = useState<string[]>([]);
@@ -124,6 +131,8 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [pressId, setPressId] = useSticky("sep.press", "");
   const [pick, setPick] = useState(false);
   const [cancelAsk, setCancelAsk] = useState(false);
+  // the ink whose Suggested colors box is open (index in the ink bar)
+  const [matchAt, setMatchAt] = useState<number | null>(null);
   const [tab, setTab] = useSticky<"studio" | "outside">("sep.tab", "studio");
   const cv = useRef<HTMLCanvasElement>(null);
   const cvOrig = useRef<HTMLCanvasElement>(null);
@@ -205,7 +214,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     setTimeout(() => {
       const f = method === "sim" ? findSimInks(px, st.garment, st.maxColors) : findColors(px, st.maxColors);
       setInks(f.map((x) => ({ hex: x.hex, name: inkName(x.hex, st.lib) })));
-      setOrderKeys([]); setNames({}); setHidden(new Set()); setBusy("");
+      setOrderKeys([]); setNames({}); setHidden(new Set()); setMatchAt(null); setBusy("");
     }, 30);
   }, [st.method, st.garment, st.maxColors, st.lib]);
   const hint = useMemo(() => { const px = pxRef.current; if (!px || !inks.length || st.method === "sim") return 0; return gradientShare(px, inks.map((k) => k.hex)); }, [pxTick, inks, st.method]);
@@ -422,7 +431,8 @@ export default function SeparationStudio({ id }: { id: string }) {
           </section>
           <section className="sep-card">
             <h3>Finding inks</h3>
-            <label className="sep-f">Ink names<select value={st.lib} onChange={(e) => set({ lib: e.target.value as Studio["lib"] })}><option value="wilflex">Wilflex RFU</option><option value="pms">PMS</option></select></label>
+            <label className="sep-f">Ink names<select value={st.lib} onChange={(e) => { const lib = e.target.value as Studio["lib"]; set({ lib }); setInks((l) => l.map((x) => ({ ...x, name: inkName(x.hex, lib) }))); }} title="Names every ink again"><option value="auto">Suggested</option><option value="wilflex">All standard</option><option value="pms">All PMS</option></select></label>
+            <p className="sep-help">{st.lib === "auto" ? "Suggested: a standard (stock) ink when one is very close, a PMS when only the PMS is. Tap an ink's match line to see both." : st.lib === "wilflex" ? "Every ink named as the closest Wilflex RFU stock ink." : "Every ink named as the closest PMS coated color."}</p>
             <button type="button" className="btn sm" onClick={() => findInks()}>Find Inks Again</button>
           </section>
           <section className="sep-card">
@@ -447,8 +457,13 @@ export default function SeparationStudio({ id }: { id: string }) {
             {inks.map((k, i) => (
               <div key={k.hex + i} className={"sep-chip" + (res?.dropped.includes(k.hex) ? " shirt" : "")} title={res?.dropped.includes(k.hex) ? "Matches the shirt: not printed (the shirt shows through)" : undefined}>
                 <span className="sep-chip-sw" style={{ background: shown(k) }} title={`In the art: ${k.hex}`}><i style={{ background: k.hex }} /></span>
-                <input list="sep-inklist" value={k.name} onChange={(e) => setInks((l) => l.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} aria-label="Ink" />
-                <button type="button" className="sep-chip-x" onClick={() => setInks((l) => l.filter((_, j) => j !== i))} aria-label={`Remove ${k.name}`} title="Remove (its part of the art goes to the nearest other ink)">×</button>
+                <input list="sep-inklist" value={k.name} onChange={(e) => setInks((l) => l.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} aria-label="Ink" data-notranslate />
+                {(() => { const m = inkKind(k.name, k.hex); return (
+                  <button type="button" className={"sep-chip-m" + (matchAt === i ? " on" : "") + (m ? " q-" + m.word.replace(/ /g, "-") : "")} onClick={() => setMatchAt(matchAt === i ? null : i)} title="Standard ink or PMS: see both and pick">
+                    {m ? <>{m.kind} · {m.word}</> : "Pick an ink"}
+                  </button>
+                ); })()}
+                <button type="button" className="sep-chip-x" onClick={() => { setMatchAt(null); setInks((l) => l.filter((_, j) => j !== i)); }} aria-label={`Remove ${k.name}`} title="Remove (its part of the art goes to the nearest other ink)">×</button>
               </div>
             ))}
             <button type="button" className={"sep-add" + (pick ? " on" : "")} onClick={() => setPick(!pick)} title="Add an ink: click a color in the art">{pick ? "Click the art" : "+"}</button>
@@ -456,6 +471,13 @@ export default function SeparationStudio({ id }: { id: string }) {
             <label className="sep-count">Colors <select value={st.maxColors} onChange={(e) => { set({ maxColors: +e.target.value }); }}>{Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
             <button type="button" className="btn sm" onClick={() => findInks()} title="Find the inks again with this many colors">Apply</button>
           </div>
+          {matchAt != null && inks[matchAt] && (
+            <div className="sep-matchbox">
+              <InkMatch hex={inks[matchAt].hex} title={`INK ${matchAt + 1} OF ${inks.length}: SUGGESTED COLORS`} cur={{ name: inks[matchAt].name, hex: colorHex(inks[matchAt].name) || inks[matchAt].hex }}
+                onPick={(v) => { const at = matchAt; setInks((l) => l.map((x, j) => (j === at ? { ...x, name: v.name } : x))); setMatchAt(at + 1 < inks.length ? at + 1 : null); }} />
+              <button type="button" className="sep-matchbox-x" onClick={() => setMatchAt(null)} aria-label="Close">×</button>
+            </div>
+          )}
           <datalist id="sep-inklist">{[...Object.keys(WILFLEX_NAMES), ...PMS_NAMES].map((n) => <option key={n} value={n} />)}</datalist>
           <div className="sep-vbar">
             <div className="rv-seg">{([["proof", "Proof"], ["compare", "Compare"], ["original", "Original"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => { setView(k); setSolo(null); }}>{l}</button>)}</div>
@@ -521,8 +543,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   );
 }
 
-import { WILFLEX_HEX as WILFLEX_NAMES, PMS_HEX } from "@/lib/inkColors";
-const PMS_NAMES = Object.keys(PMS_HEX);
+import { WILFLEX_HEX as WILFLEX_NAMES } from "@/lib/inkColors";
+import { PMS_COATED } from "@/lib/pms";
+const PMS_NAMES = Object.keys(PMS_COATED);
 
 /** No art yet: upload a picture or SVG straight to this separation. */
 function AddArt({ row, onDone }: { row: SepRow; onDone: (r: SepRow) => void }) {

@@ -4580,3 +4580,20 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
   .sep-new-form .sep-f:nth-of-type(2),.sep-new-go{grid-column:1/-1}
   .sep-new-go .btn{flex:1}
 }
+
+/* Suggested colors: standard vs PMS, with our pick */
+.mk-near{grid-template-columns:58px 14px 1fr auto auto}
+.mk-near .q-exact,.mk-near .q-very-close{color:var(--ok,#2E9D5B);font-weight:600}
+.mk-near .q-not-very-close{color:var(--warn,#C98A0C)}
+.mk-rec{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.mk-near:not(.rec){grid-template-columns:58px 14px 1fr auto}
+.mk-match-why{font-size:11px;color:var(--ink-2,#556);padding:2px 6px 0;line-height:1.35}
+.sep-chip-m{all:unset;cursor:pointer;display:block;font-size:10px;line-height:1.2;text-align:center;padding:0 3px 5px;color:var(--faint,#8a93a3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sep-chip-m:hover,.sep-chip-m.on{color:var(--accent);text-decoration:underline}
+.sep-chip-m.q-exact,.sep-chip-m.q-very-close{color:var(--ok,#2E9D5B)}
+.sep-chip-m.q-not-very-close{color:var(--warn,#C98A0C)}
+.sep-matchbox{position:relative;max-width:440px;margin:-4px 0 10px}
+.sep-matchbox .mk-match{margin:0;background:var(--surface);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.sep-matchbox-x{all:unset;cursor:pointer;position:absolute;top:3px;right:8px;font-size:15px;color:var(--faint,#8a93a3)}
+.sep-matchbox .mk-match-h{padding-right:18px}
+.sep-chip{width:118px}
