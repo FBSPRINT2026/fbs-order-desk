@@ -21,7 +21,10 @@ export const maxDuration = 60;
  *   job=files-N  copies artwork into our storage (doesn't use Printavo's request limit).
  */
 const RUN_MS = 47000;
-const QUICK_EVERY = 10 * 60000, QUICK_PAGES = 20; // active jobs: 20 pages x 25 = the 500 orders with the latest due dates
+const QUICK_EVERY = 10 * 60000, QUICK_PAGES = 20;
+// only orders created in the last 30 days are imported / refreshed (older ones stay as they are); keeps the load light
+const RECENT_DAYS = 30;
+const recentSince = () => new Date(Date.now() - RECENT_DAYS * 86400000).toISOString(); // active jobs: 20 pages x 25 = the 500 orders with the latest due dates
 type Sync = { enabled: boolean; token: string; pause_until: string | null; quick_cursor: string | null; quick_pages: number; quick_done_at: string | null; sweep_cursor: string | null; sweep_no: number; sweep_started_at: string | null; sweep_done_at: string | null; customers_cursor: string | null; customers_done_at: string | null };
 type Idx = { printavo_id: string; fingerprint: string; status: string; imported_fingerprint: string | null; archived_id: string | null };
 
@@ -67,13 +70,14 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     const quickDue = !!sync.quick_cursor || !sync.quick_done_at || Date.now() - new Date(sync.quick_done_at).getTime() > QUICK_EVERY;
     if (quickDue) { await quickPage(admin, sync, did); continue; }
 
-    const { data: next } = await admin.from("printavo_index").select("printavo_id, attempts").eq("status", "pending").order("created_at", { ascending: false, nullsFirst: false }).limit(1);
+    const { data: next } = await admin.from("printavo_index").select("printavo_id, attempts").eq("status", "pending").gte("created_at", recentSince()).order("created_at", { ascending: false, nullsFirst: false }).limit(1);
     const pending = next?.[0] as { printavo_id: string; attempts: number } | undefined;
 
     // 2. keep noticing changes even during the big import: every 6th turn reads one page of the order list
     // the full pass over every order: during the import it keeps going alongside; once caught up, a new pass starts 6 hours
     // after the last (each pass touches every order we have: ~23,000 row updates; the quick check above covers active jobs)
-    const sweepDue = !!sync.sweep_cursor || !sync.sweep_done_at || Date.now() - new Date(sync.sweep_done_at).getTime() > 6 * 3600000;
+    // (off for now: the quick check of active jobs finds new orders; the full pass re-read every order)
+    const sweepDue = false as boolean;
     // a pass that's under way gets most turns (it only reads lists, and it's how new orders are found); otherwise every 6th
     if (sweepDue && (!pending || (sync.sweep_cursor ? turn % 3 !== 0 : turn % 6 === 1))) { await sweepPage(admin, sync, did); continue; }
 
@@ -81,7 +85,7 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     if (pending) { if (Date.now() > deadline - 17000) break; await importOne(admin, pending.printavo_id, pending.attempts, did); continue; }
 
     // 3. nothing waiting: a full re-read of a recent order (new messages, files, approvals), once a day each
-    const since = new Date(Date.now() - 90 * 86400000).toISOString(), stale = new Date(Date.now() - 86400000).toISOString();
+    const since = recentSince(), stale = new Date(Date.now() - 86400000).toISOString();
     const { data: deep } = await admin.from("printavo_index").select("printavo_id").eq("status", "done").gte("created_at", since).or(`deep_at.is.null,deep_at.lt.${stale}`).order("created_at", { ascending: false }).limit(1);
     if (deep?.[0]) { if (Date.now() > deadline - 17000) break; await importOne(admin, deep[0].printavo_id, 0, did, true); continue; }
 
@@ -102,6 +106,8 @@ async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typ
   const rows = orders.flatMap((o) => {
     const k = known.get(o.id);
     const row = { printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "pending", seen_sweep: pass || currentPass }; // (every row sends the same columns; an order seen by the quick check counts as seen)
+    // older than 30 days: left as it is
+    if (o.createdAt && o.createdAt < recentSince()) return [];
     if (!k) return [row];
     // back after being marked removed, and nothing changed since we imported it: no need to read it all again
     if (k.status === "gone" && k.archived_id && k.imported_fingerprint === o.fingerprint) { back.push(o.id); return []; }

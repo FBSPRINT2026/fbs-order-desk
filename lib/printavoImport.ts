@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCustomer, getOrder, type PvCustomer } from "@/lib/printavo";
 import { fileUrls, orderFiles, type PvAddress, type PvOrder } from "@/lib/archive";
@@ -92,15 +93,18 @@ export async function importOrder(sb: SupabaseClient, printavoId: string, custom
   const o = await getOrder(printavoId);
   const cid = customerId || (o.customer.id ? await ensureCustomer(sb, o.customer.id) : null);
   if (!cid) throw new Error("This order has no customer in Printavo.");
-  const { data: prev } = await sb.from("archived_orders").select("files").eq("printavo_id", o.id).maybeSingle();
+  const { data: prev } = await sb.from("archived_orders").select("id, files, data_hash").eq("printavo_id", o.id).maybeSingle();
   const urls = fileUrls(o);
   const kept = Object.fromEntries(Object.entries((prev?.files || {}) as Record<string, string>).filter(([u, path]) => urls.includes(u) && path !== "failed"));
+  // nothing changed since the last import: don't rewrite the whole order (the database's heaviest write)
+  const hash = createHash("sha1").update(JSON.stringify(o)).digest("hex");
+  if (prev?.id && prev.data_hash === hash && cid) return { id: prev.id as string, visualId: o.visualId, filesLeft: urls.length - Object.keys(kept).length, warnings: o.warnings || [], order: o };
   const row = {
     printavo_id: o.id, kind: o.kind, visual_id: o.visualId, customer_id: cid, nickname: o.nickname,
     status_name: o.status.name, status_color: o.status.color,
     order_date: (o.createdAt || "").slice(0, 10) || null, due_date: (o.customerDueAt || o.dueAt || "").slice(0, 10) || null,
     total: o.total, paid: o.amountPaid, balance: o.amountOutstanding, qty: o.totalQuantity, po_number: o.poNumber,
-    data: o, files: kept, files_total: urls.length, files_copied: Object.keys(kept).length, imported_at: new Date().toISOString(),
+    data: o, data_hash: hash, files: kept, files_total: urls.length, files_copied: Object.keys(kept).length, imported_at: new Date().toISOString(),
   };
   const { data, error } = await sb.from("archived_orders").upsert(row, { onConflict: "printavo_id" }).select("id").single();
   if (error || !data) throw new Error("Couldn't save: " + (error?.message || "unknown"));
