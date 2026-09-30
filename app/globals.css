@@ -4597,3 +4597,8 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .sep-matchbox-x{all:unset;cursor:pointer;position:absolute;top:3px;right:8px;font-size:15px;color:var(--faint,#8a93a3)}
 .sep-matchbox .mk-match-h{padding-right:18px}
 .sep-chip{width:118px}
+.sep-res{font-size:11.5px;line-height:1.35;padding:6px 8px;border-radius:6px;margin:2px 0 4px;background:var(--surface-2);color:var(--ink-2)}
+.sep-res.ok{background:color-mix(in srgb,var(--ok,#2E9D5B) 12%,var(--surface))}
+.sep-res.warn{background:color-mix(in srgb,var(--warn,#C98A0C) 14%,var(--surface))}
+.sep-res.bad{background:color-mix(in srgb,var(--bad,#D64545) 14%,var(--surface));color:var(--ink)}
+.sep-f b{white-space:nowrap}

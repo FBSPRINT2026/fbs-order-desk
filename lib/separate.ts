@@ -15,7 +15,7 @@ import { WILFLEX_HEX, PMS_HEX, deltaE } from "./inkColors";
 
 export type Px = { w: number; h: number; data: Uint8ClampedArray | Uint8Array };
 export type PlateKind = "underbase" | "color" | "highlight";
-export type Plate = { key: string; name: string; hex: string; kind: PlateKind; alpha: Uint8Array; coverage: number; mesh: number };
+export type Plate = { key: string; name: string; hex: string; kind: PlateKind; alpha: Uint8Array; coverage: number; mesh: number; /** needs halftones (a mixed color, or simulated process) */ tonal?: boolean };
 export type SepMethod = "spot" | "sim";
 export type SepSettings = {
   method: SepMethod;
@@ -31,6 +31,9 @@ export type SepSettings = {
   highlight: boolean;
   /** leave out ink that matches the shirt */
   dropGarment: boolean;
+  /** spot color: how far (px of the working image) each color spreads under the darker colors printed after it, so
+   *  neighbors overlap instead of just touching (no gaps, and room for registration). Default 1. */
+  trap?: number;
   /** inks the user fixed: palette hex → ink name (Wilflex / PMS / #hex) */
   inkNames?: Record<string, string>;
 };
@@ -65,7 +68,7 @@ export type Found = { hex: string; share: number };
  * The art's main colors: k-means++ in Lab on a sample of opaque pixels, then colors closer than `merge`
  * (CIEDE2000) are joined and anything under `minShare` of the art is dropped. Largest first.
  */
-export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004): Found[] {
+export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004, garment?: string): Found[] {
   const { data } = px, n = px.w * px.h;
   const pts: [number, number, number][] = [], rgbs: [number, number, number][] = [];
   const step = Math.max(1, Math.floor(n / 60000)), W = px.w;
@@ -124,7 +127,30 @@ export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004): Found[
     }
     return true;
   });
-  // still too many: join the closest pair until it fits
+  // still too many: drop the ink that's easiest to do without, one at a time: the one the others mix best
+  // (as halftones over the shirt, or over the underbase on a dark shirt, where white comes free), weighed by how much
+  // of the art it is. Separo takes the sun from yellow, gold, orange, white, black down to yellow, orange, black:
+  // gold is yellow + orange, white is the underbase.
+  if (res.length > max && garment) {
+    const gl = rgbOf(garment).map((v) => LIN[v]), dark = labOf(...rgbOf(garment))[0] < 55, base = dark ? [1, 1, 1] : gl;
+    const linOf = (h: string) => rgbOf(h).map((v) => LIN[v]);
+    const cost = (i: number) => {
+      const t = linOf(res[i].hex), K = res.filter((_, j) => j !== i).map((c) => linOf(c.hex)); if (dark) K.push(gl);
+      const x = unmix(t, base, K); let sum = 0; const r = [0, 0, 0];
+      for (let k = 0; k < K.length; k++) { sum += x[k]; for (let c = 0; c < 3; c++) r[c] += x[k] * K[k][c]; }
+      const rec = r.map((v, c) => Math.max(0, v + (1 - sum) * base[c]));
+      const a = labLin(rec[0], rec[1], rec[2]), b = labOf(...rgbOf(res[i].hex));
+      return Math.sqrt(res[i].share) * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    };
+    while (res.length > max && res.length > 1) {
+      let bi = 0, bc = Infinity;
+      for (let i = 0; i < res.length; i++) { const c = cost(i); if (c < bc) { bc = c; bi = i; } }
+      const gone = res[bi]; res = res.filter((x) => x !== gone);
+      // its pixels go to the nearest ink left (only the shares; the plates are unmixed later)
+      let nj = 0, nd = Infinity; res.forEach((c, j) => { const d = deltaE(c.hex, gone.hex); if (d < nd) { nd = d; nj = j; } }); res[nj].share += gone.share;
+    }
+  }
+  // no shirt given: join the closest pair until it fits
   while (res.length > max) {
     let bi = 0, bj = 1, bd = Infinity;
     for (let i = 0; i < res.length; i++) for (let j = i + 1; j < res.length; j++) { const d = deltaE(res[i].hex, res[j].hex); if (d < bd) { bd = d; bi = i; bj = j; } }
@@ -277,16 +303,102 @@ function nnls(A: number[][], b: number[]): number[] {
   return x;
 }
 
-/** pull a coverage mask in by r pixels (min filter, done across then down) */
-export function choke(a: Uint8Array, w: number, h: number, r: number): Uint8Array {
-  if (r <= 0) return a;
-  const tmp = new Uint8Array(a.length), out = new Uint8Array(a.length);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = 255; for (let k = -r; k <= r; k++) { const xx = x + k; const v = xx < 0 || xx >= w ? 0 : a[y * w + xx]; if (v < m) m = v; } tmp[y * w + x] = m; }
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = 255; for (let k = -r; k <= r; k++) { const yy = y + k; const v = yy < 0 || yy >= h ? 0 : tmp[yy * w + x]; if (v < m) m = v; } out[y * w + x] = m; }
-  return out;
+/**
+ * Grow (max) or shrink (min) a coverage mask by r pixels with a round (octagon) brush, the same distance in every
+ * direction, so a round dot stays round and a diagonal edge moves as far as a straight one. The octagon is a square
+ * of half-width 0.414·r followed by a diamond of radius 0.586·r (their sum reaches r along the axes and diagonals).
+ */
+function morph(src: Uint8Array, w: number, h: number, r: number, grow: boolean): Uint8Array {
+  if (r <= 0) return src;
+  const sq = Math.round(r * 0.414), dm = Math.max(0, Math.round(r) - sq);
+  const pick = grow ? (x: number, y: number) => (x > y ? x : y) : (x: number, y: number) => (x < y ? x : y);
+  let a = src;
+  if (sq > 0) {
+    // square: across, then down (outside the image counts as empty)
+    const tmp = new Uint8Array(a.length), out = new Uint8Array(a.length);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = grow ? 0 : 255; for (let k = -sq; k <= sq; k++) { const xx = x + k; const v = xx < 0 || xx >= w ? 0 : a[y * w + xx]; m = pick(m, v); } tmp[y * w + x] = m; }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = grow ? 0 : 255; for (let k = -sq; k <= sq; k++) { const yy = y + k; const v = yy < 0 || yy >= h ? 0 : tmp[yy * w + x]; m = pick(m, v); } out[y * w + x] = m; }
+    a = out;
+  }
+  // diamond: dm passes of the 3×3 plus
+  for (let it = 0; it < dm; it++) {
+    const out = new Uint8Array(a.length);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      let m = a[i];
+      m = pick(m, x > 0 ? a[i - 1] : 0); m = pick(m, x < w - 1 ? a[i + 1] : 0);
+      m = pick(m, y > 0 ? a[i - w] : 0); m = pick(m, y < h - 1 ? a[i + w] : 0);
+      out[i] = m;
+    }
+    a = out;
+  }
+  return a;
 }
+/** push a coverage mask out by r pixels (round brush) */
+export function spread(a: Uint8Array, w: number, h: number, r: number): Uint8Array { return morph(a, w, h, r, true); }
+/** pull a coverage mask in by r pixels (round brush) */
+export function choke(a: Uint8Array, w: number, h: number, r: number): Uint8Array { return morph(a, w, h, r, false); }
 
 const MESH = { underbase: 156, color: 230, sim: 305, highlight: 230 };
+
+/** a color this close (Lab distance) to an ink is that ink, printed solid (flat areas with a little noise) */
+const SNAP = 5;
+/** a color this close (sRGB units) to the line between two inks is an edge between them (anti-aliasing) */
+const EDGE = 22;
+/**
+ * Spot color: the shares of each ink (and, last, of the white underbase showing) that print a color from the art.
+ *   - an ink's own color is 100% that ink
+ *   - a color on the line between two inks (the soft pixels along the edge where they meet, or a color made of
+ *     those two) is split between them by where it sits on that line, the way the art was drawn, so each plate
+ *     keeps a smooth edge and the two edges meet exactly
+ *   - anything else is unmixed into all the inks (halftones), over the shirt (light shirt) or over the underbase
+ *     with the shirt free to show (dark shirt); shares near 100% or 0% are rounded so flat areas stay solid
+ * Also used for vector art, where a shape's fill becomes tints of the inks.
+ */
+export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number, b: number) => Float32Array {
+  const gLab = labOf(...rgbOf(s.garment));
+  const dark = s.underbase === "on" || (s.underbase === "auto" && gLab[0] < 55);
+  const dropped = s.dropGarment ? inks.map((k) => deltaE(k.hex, s.garment) < 12) : inks.map(() => false);
+  const labs = inks.map((k) => labOf(...rgbOf(k.hex))), rgb = inks.map((k) => rgbOf(k.hex));
+  const g = rgbOf(s.garment).map((v) => LIN[v]), base = dark ? [1, 1, 1] : g;
+  const use = inks.map((_, j) => j).filter((j) => !dropped[j]);
+  const K = use.map((j) => rgbOf(inks[j].hex).map((v) => LIN[v]));
+  if (dark) K.push(g);
+  const m = inks.length;
+  return (r, gg, b) => {
+    const out = new Float32Array(m + 1), l = labOf(r, gg, b);
+    let i1 = 0, d1 = Infinity;
+    for (let c = 0; c < m; c++) { const d = d2(l, labs[c]); if (d < d1) { d1 = d; i1 = c; } }
+    if (d1 < SNAP * SNAP || !use.length || m === 1 && !dark) {
+      if (m === 1 && !dark && d1 >= SNAP * SNAP) {
+        // one ink on a light shirt: how much of it (between the shirt and the ink)
+        const A = rgbOf(s.garment), B = rgb[0], AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], L2 = AB[0] ** 2 + AB[1] ** 2 + AB[2] ** 2;
+        if (L2 && !dropped[0]) out[0] = Math.max(0, Math.min(1, ((r - A[0]) * AB[0] + (gg - A[1]) * AB[1] + (b - A[2]) * AB[2]) / L2));
+        return out;
+      }
+      if (!dropped[i1]) out[i1] = 1; return out;
+    }
+    // the pair of inks whose line passes closest to this color
+    let bi = -1, bj = -1, bt = 0, bd = Infinity;
+    for (let i = 0; i < m; i++) for (let j = i + 1; j < m; j++) {
+      const A = rgb[i], B = rgb[j], AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], L2 = AB[0] ** 2 + AB[1] ** 2 + AB[2] ** 2; if (!L2) continue;
+      const t = Math.max(0, Math.min(1, ((r - A[0]) * AB[0] + (gg - A[1]) * AB[1] + (b - A[2]) * AB[2]) / L2));
+      const d = (r - A[0] - t * AB[0]) ** 2 + (gg - A[1] - t * AB[1]) ** 2 + (b - A[2] - t * AB[2]) ** 2;
+      if (d < bd) { bd = d; bi = i; bj = j; bt = t; }
+    }
+    if (bi >= 0 && bd < EDGE * EDGE) {
+      const t = bt < 0.03 ? 0 : bt > 0.97 ? 1 : bt;
+      if (!dropped[bi]) out[bi] = 1 - t;
+      if (!dropped[bj]) out[bj] = t;
+      return out;
+    }
+    const ws = unmix([LIN[r], LIN[gg], LIN[b]], base, K);
+    let sum = 0; use.forEach((j, c) => { let v = ws[c]; if (v > 0.93) v = 1; else if (v < 0.04) v = 0; out[j] = v; sum += v; });
+    if (sum > 1) for (const j of use) out[j] /= sum;
+    if (dark) out[m] = Math.max(0, 1 - Math.min(1, sum) - ws[use.length]);
+    return out;
+  };
+}
 
 /**
  * Split the art into plates. `inks` are the colors to print (from findColors, maybe edited), each with the ink
@@ -304,15 +416,18 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   // sim on a dark shirt: whatever isn't ink or shirt is the white (underbase + highlight)
   let white: Uint8Array | null = null;
   if (s.method === "spot") {
-    // nearest ink per color, looked up once per (5-bit) color
-    const labs = inks.map((k) => labOf(...rgbOf(k.hex)));
-    const lut = new Int16Array(32768).fill(-1);
+    // a color that is one of the inks prints solid; a color with no ink of its own (the gold, when only yellow and
+    // orange are left) becomes a halftone mix of the inks that make it, like Separo
+    const mix = spotMixer(inks, s);
+    const cache = new Map<number, Float32Array>();
+    if (dark) white = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
       const o = i * 4, a = data[o + 3]; if (a < 8) continue;
-      const q = Q(data[o], data[o + 1], data[o + 2]);
-      let b = lut[q];
-      if (b < 0) { const l = labOf(...unQ(q)); let bd = Infinity; b = 0; for (let c = 0; c < labs.length; c++) { const d = d2(l, labs[c]); if (d < bd) { bd = d; b = c; } } lut[q] = b; }
-      cover[b][i] = a;
+      const q = Q6(data[o], data[o + 1], data[o + 2]);
+      let ws = cache.get(q);
+      if (!ws) { ws = mix(...unQ6(q)); cache.set(q, ws); }
+      for (let c = 0; c < inks.length; c++) if (ws[c] > 0.02) cover[c][i] = Math.round(ws[c] * a);
+      if (white && ws[inks.length] > 0.02) white[i] = Math.round(ws[inks.length] * a);
     }
   } else {
     // simulated process: unmix each color into the inks (in linear light). Light shirt: over the shirt. Dark shirt:
@@ -336,7 +451,18 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   const plates: Plate[] = [];
   const mk = (key: string, name: string, hex: string, kind: PlateKind, alpha: Uint8Array): Plate => {
     let sum = 0; for (let i = 0; i < n; i++) sum += alpha[i];
-    return { key, name, hex, kind, alpha, coverage: sum / (255 * n), mesh: kind === "underbase" ? MESH.underbase : kind === "highlight" ? MESH.highlight : s.method === "sim" ? MESH.sim : MESH.color };
+    // tonal: a good part of what it prints is in-between (not just soft edges): it needs halftones
+    // (in-between values inside an area, not the soft rim along every edge)
+    const midv = (v: number) => v > 30 && v < 225;
+    let on = 0, mid = 0;
+    for (let i = 0; i < n; i++) {
+      const v = alpha[i]; if (v <= 8) continue; on++;
+      if (!midv(v)) continue;
+      const x = i % w;
+      if (x > 0 && x < w - 1 && i >= w && i < n - w && midv(alpha[i - 1]) && midv(alpha[i + 1]) && midv(alpha[i - w]) && midv(alpha[i + w])) mid++;
+    }
+    const tonal = s.method === "sim" || (on > 0 && mid / on > 0.08);
+    return { key, name, hex, kind, alpha, coverage: sum / (255 * n), tonal, mesh: kind === "underbase" ? MESH.underbase : kind === "highlight" ? MESH.highlight : s.method === "sim" || tonal ? MESH.sim : MESH.color };
   };
   const colorPlates = print.map((k) => ({ k, a: cover[inks.indexOf(k)] }));
   if (dark) {
@@ -349,14 +475,37 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   }
   const body = colorPlates.filter(({ k }) => !(dark && s.highlight && isWhite(k.hex)));
   body.sort((x, y) => lightness(y.k.hex) - lightness(x.k.hex));
-  for (const { k, a } of body) plates.push(mk("c" + k.hex.slice(1), k.name, k.hex, "color", a));
   // highlight white: the art's white (and, in simulated process, the white left over after the inks)
-  if (dark && (s.highlight || white)) {
-    const hw = new Uint8Array(n);
+  let hw: Uint8Array | null = null;
+  if (dark && s.highlight) {
+    hw = new Uint8Array(n);
     for (const { k, a } of colorPlates) if (isWhite(k.hex)) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + a[i]);
     if (white) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + white[i]);
-    if (s.highlight) plates.push(mk("hw", "Highlight White", "#FFFFFF", "highlight", hw));
   }
+  // print order after the base: colors light → dark, the highlight white, then black-ish inks last (like Separo:
+  // Base, 107 C, 143 C, 171 C, White, Black), so the darkest ink crisps up every edge it touches
+  const blackish = (hex: string) => lightness(hex) < 25;
+  type Step = { key: string; name: string; hex: string; kind: PlateKind; a: Uint8Array };
+  const seq: Step[] = [
+    ...body.filter(({ k }) => !blackish(k.hex)).map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a })),
+    ...(hw ? [{ key: "hw", name: "Highlight White", hex: "#FFFFFF", kind: "highlight" as PlateKind, a: hw }] : []),
+    ...body.filter(({ k }) => blackish(k.hex)).map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a })),
+  ];
+  // trap: each color spreads a little under the colors printed after it (never out onto the bare shirt), so
+  // neighbors overlap instead of just touching: no gaps, and a little room for registration
+  const trap = Math.max(0, Math.round(s.trap ?? 1));
+  if (s.method === "spot" && trap > 0 && seq.length > 1) {
+    const later = new Uint8Array(n);
+    for (let j = seq.length - 1; j >= 0; j--) {
+      const a = seq[j].a, orig = a.slice();
+      if (j < seq.length - 1) {
+        const grown = spread(orig, w, h, trap);
+        for (let i = 0; i < n; i++) if (later[i] && grown[i] > a[i]) a[i] = Math.min(grown[i], Math.max(a[i], later[i]));
+      }
+      for (let i = 0; i < n; i++) { const v = later[i] + orig[i]; later[i] = v > 255 ? 255 : v; }
+    }
+  }
+  for (const st of seq) plates.push(mk(st.key, st.name, st.hex, st.kind, st.a));
   return { plates: plates.filter((p) => p.coverage > 0.0005), w, h, underbase: dark, dropped };
 }
 
@@ -392,10 +541,16 @@ export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: n
   const W = Math.max(1, Math.round(widthIn * dpi)), H = Math.max(1, Math.round(W * (h / w))), rowBytes = Math.ceil(W / 8);
   const bits = new Uint8Array(rowBytes * H), sx = w / W, sy = h / H;
   const cell = dpi / lpi, rad = (angle * Math.PI) / 180, cs = Math.cos(rad), sn = Math.sin(rad);
+  // the plate is sampled smoothly (bilinear) between its pixels, so a solid edge on film follows the art's soft
+  // edge at film resolution instead of stepping in plate-pixel blocks
+  const A = p.alpha;
   for (let y = 0; y < H; y++) {
-    const srcY = Math.min(h - 1, Math.floor(y * sy)) * w;
+    const fy = Math.max(0, Math.min(h - 1, (y + 0.5) * sy - 0.5)), y0 = Math.floor(fy), y1 = Math.min(h - 1, y0 + 1), ty = fy - y0;
+    const r0 = y0 * w, r1 = y1 * w;
     for (let x = 0; x < W; x++) {
-      const v = p.alpha[srcY + Math.min(w - 1, Math.floor(x * sx))] / 255;
+      const fx = Math.max(0, Math.min(w - 1, (x + 0.5) * sx - 0.5)), x0 = Math.floor(fx), x1 = Math.min(w - 1, x0 + 1), tx = fx - x0;
+      const top = A[r0 + x0] + (A[r0 + x1] - A[r0 + x0]) * tx, bot = A[r1 + x0] + (A[r1 + x1] - A[r1 + x0]) * tx;
+      const v = (top + (bot - top) * ty) / 255;
       let on: boolean;
       if (!halftone) on = v >= 0.5;
       else if (v <= 0.02) on = false;

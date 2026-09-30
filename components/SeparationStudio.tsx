@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
-import { DEFAULT_SEP, composite, filmBits, findColors, findSimInks, gradientShare, isDark, separate, snapInk, type Plate, type Px, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
+import { DEFAULT_SEP, composite, filmBits, findColors, findSimInks, gradientShare, isDark, separate, snapInk, spotMixer, type Plate, type Px, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex } from "@/lib/mockup";
@@ -36,8 +36,15 @@ export const SEP_STATUS: Record<SepRow["status"], { label: string; c: string }> 
   approved: { label: "Approved", c: "#2E9D5B" }, films: { label: "Films printed", c: "#0A8FC0" }, cancelled: { label: "Cancelled", c: "#7C8799" },
 };
 
-type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean; lib: "auto" | "wilflex" | "pms" };
+type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean; lib: "auto" | "wilflex" | "pms"; solidOut?: "pixels" | "vector";
+  /** underbase choke and color trap, in points at the print size (so they mean the same at any resolution) */
+  chokePt?: number; trapPt?: number };
+const CHOKE_PT = 1, TRAP_PT = 0.5;
+/** points at the print size → pixels of a copy `w` px wide */
+const ptPx = (pt: number, w: number, widthIn: number) => Math.round((pt * w) / (widthIn * 72));
+/** the working size on screen (fast); the files are separated again at full size (OUT_PPI at the print width) */
 const MAX_SIDE = 2400;
+const OUT_PPI = 400, OUT_MAX_SIDE = 7200, OUT_MAX_PX = 36e6;
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "plate";
 const inkName = (hex: string, lib: Studio["lib"]) => {
   const n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
@@ -53,24 +60,51 @@ function inkKind(name: string, art: string): { kind: string; word: string; dE: n
 }
 const shown = (ink: SepInk) => colorHex(ink.name) || ink.hex;
 
-/** the art as pixels, at most MAX_SIDE on the long side; a white background around the art becomes transparent */
-function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false): Px {
-  // vector art is drawn big (an SVG's own size is often tiny); photos are never blown up
-  const k = vector ? MAX_SIDE / Math.max(img.naturalWidth || 1, img.naturalHeight || 1) : Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+/**
+ * The art as pixels, at most `side` on the long side (vector art is drawn at exactly that size; pictures are never
+ * blown up). With removeBg, a white background around the art becomes transparent, and the soft pixels along the
+ * art's edge have the white taken back out of them (color-to-alpha), so no pale fringe prints around the outline.
+ */
+function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false, side = MAX_SIDE): Px {
+  const nat = Math.max(img.naturalWidth || 1, img.naturalHeight || 1);
+  const k = vector ? side / nat : Math.min(1, side / nat);
   const w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
   const c = document.createElement("canvas"); c.width = w; c.height = h;
-  const x = c.getContext("2d", { willReadFrequently: true })!; x.drawImage(img, 0, 0, w, h);
+  const x = c.getContext("2d", { willReadFrequently: true })!; x.imageSmoothingQuality = "high"; x.drawImage(img, 0, 0, w, h);
   const data = x.getImageData(0, 0, w, h).data;
   if (removeBg) {
+    const n = w * h;
     // flood from the edges through near-white, opaque pixels
     const near = (i: number) => data[i * 4 + 3] > 200 && data[i * 4] > 242 && data[i * 4 + 1] > 242 && data[i * 4 + 2] > 242;
-    const seen = new Uint8Array(w * h), q: number[] = [];
-    for (let i = 0; i < w; i++) { q.push(i, (h - 1) * w + i); }
-    for (let j = 0; j < h; j++) { q.push(j * w, j * w + w - 1); }
-    while (q.length) {
-      const i = q.pop()!; if (seen[i] || !near(i)) continue; seen[i] = 1; data[i * 4 + 3] = 0;
+    const gone = new Uint8Array(n), stack = new Int32Array(n + 4 * (w + h)); let sp = 0;
+    for (let i = 0; i < w; i++) { stack[sp++] = i; stack[sp++] = (h - 1) * w + i; }
+    for (let j = 0; j < h; j++) { stack[sp++] = j * w; stack[sp++] = j * w + w - 1; }
+    while (sp) {
+      const i = stack[--sp]; if (gone[i] || !near(i)) continue; gone[i] = 1; data[i * 4 + 3] = 0;
       const xx = i % w, yy = (i / w) | 0;
-      if (xx > 0) q.push(i - 1); if (xx < w - 1) q.push(i + 1); if (yy > 0) q.push(i - w); if (yy < h - 1) q.push(i + w);
+      if (xx > 0 && !gone[i - 1]) stack[sp++] = i - 1; if (xx < w - 1 && !gone[i + 1]) stack[sp++] = i + 1;
+      if (yy > 0 && !gone[i - w]) stack[sp++] = i - w; if (yy < h - 1 && !gone[i + w]) stack[sp++] = i + w;
+    }
+    // the edge ring (within 2 px of the removed background): take the white back out
+    for (let i = 0; i < n; i++) {
+      if (gone[i]) continue;
+      const xx = i % w, yy = (i / w) | 0; let ring = false;
+      for (let dy = -2; dy <= 2 && !ring; dy++) for (let dx = -2; dx <= 2; dx++) { const X = xx + dx, Y = yy + dy; if (X >= 0 && Y >= 0 && X < w && Y < h && gone[Y * w + X]) { ring = true; break; } }
+      if (!ring) continue;
+      const o = i * 4, r = data[o], g = data[o + 1], b = data[o + 2];
+      // the art's own color here: the strongest (farthest from white) pixel close by that isn't background
+      let F = [r, g, b], fd = (255 - r) ** 2 + (255 - g) ** 2 + (255 - b) ** 2;
+      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+        const X = xx + dx, Y = yy + dy; if (X < 0 || Y < 0 || X >= w || Y >= h) continue; const j = Y * w + X; if (gone[j]) continue;
+        const q = j * 4, d = (255 - data[q]) ** 2 + (255 - data[q + 1]) ** 2 + (255 - data[q + 2]) ** 2; if (d > fd) { fd = d; F = [data[q], data[q + 1], data[q + 2]]; }
+      }
+      if (fd < 30 * 30) continue; // a pale color: nothing to take out
+      // how much of the pixel is that color (the rest is the white it was blended with)
+      const a = Math.max(0, Math.min(1, ((255 - r) * (255 - F[0]) + (255 - g) * (255 - F[1]) + (255 - b) * (255 - F[2])) / fd));
+      if (a >= 0.98) continue;
+      if (a < 0.02) { data[o + 3] = 0; continue; }
+      data[o] = Math.round((r - (1 - a) * 255) / a); data[o + 1] = Math.round((g - (1 - a) * 255) / a); data[o + 2] = Math.round((b - (1 - a) * 255) / a);
+      data[o + 3] = Math.round(data[o + 3] * a);
     }
   }
   return { w, h, data };
@@ -131,6 +165,8 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [pressId, setPressId] = useSticky("sep.press", "");
   const [pick, setPick] = useState(false);
   const [cancelAsk, setCancelAsk] = useState(false);
+  // how many inks the art itself needs (from the last automatic find): fewer is a choice, not "shading"
+  const [natural, setNatural] = useState(0);
   // the ink whose Suggested colors box is open (index in the ink bar)
   const [matchAt, setMatchAt] = useState<number | null>(null);
   const [tab, setTab] = useSticky<"studio" | "outside">("sep.tab", "studio");
@@ -207,39 +243,46 @@ export default function SeparationStudio({ id }: { id: string }) {
   useEffect(() => { if (!img) return; pxRef.current = pixelsOf(img, st.removeBg, !!vart); setPxTick((t) => t + 1); }, [img, st.removeBg, vart]);
 
   /* ---------- find inks (first time, or on request) ---------- */
-  const findInks = useCallback((method = st.method) => {
+  // auto: find as many inks as the art needs and set the Colors count to that; otherwise use the Colors count (fewer
+  // than the art has: the inks easiest to mix from the others are left out and printed as halftones of them)
+  const findInks = useCallback((method = st.method, auto = false) => {
     const px = pxRef.current; if (!px) return;
     // sim tries every candidate ink against the whole art (a few seconds): let the page say so first
     setBusy("Finding inks…");
     setTimeout(() => {
-      const f = method === "sim" ? findSimInks(px, st.garment, st.maxColors) : findColors(px, st.maxColors);
+      const want = auto ? (method === "sim" ? 8 : 12) : st.maxColors;
+      const f = method === "sim" ? findSimInks(px, st.garment, want) : findColors(px, want, 9, 0.004, st.garment);
+      if (auto || f.length < want) setSt((x) => ({ ...x, maxColors: Math.max(1, f.length) }));
+      if (auto) setNatural(f.length);
+      if (!auto && f.length < want) setMsg(`This art has ${f.length} color${f.length === 1 ? "" : "s"}. More inks would print almost nothing, so it stays at ${f.length}.`);
       setInks(f.map((x) => ({ hex: x.hex, name: inkName(x.hex, st.lib) })));
       setOrderKeys([]); setNames({}); setHidden(new Set()); setMatchAt(null); setBusy("");
     }, 30);
   }, [st.method, st.garment, st.maxColors, st.lib]);
   const hint = useMemo(() => { const px = pxRef.current; if (!px || !inks.length || st.method === "sim") return 0; return gradientShare(px, inks.map((k) => k.hex)); }, [pxTick, inks, st.method]);
-  useEffect(() => { if (pxTick && !inks.length) findInks(); }, [pxTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (pxTick && !inks.length) findInks(st.method, true); }, [pxTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- separate (a moment after anything changes) ---------- */
   useEffect(() => {
     const px = pxRef.current; if (!px || !inks.length) return;
     setBusy("Separating…");
     const t = setTimeout(() => {
-      const r = separate(px, inks.map((k) => ({ hex: k.hex, name: k.name })), st);
+      const r = separate(px, inks.map((k) => ({ hex: k.hex, name: k.name })), { ...st, choke: ptPx(st.chokePt ?? CHOKE_PT, px.w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, px.w, st.widthIn) });
       // show the ink's real color, not the art's
       r.plates.forEach((p) => { const k = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (k) p.hex = shown(k); });
+      hiRef.current = null;
       setRes(r); setBusy("");
     }, 60);
     return () => clearTimeout(t);
-  }, [pxTick, inks, st.method, st.garment, st.underbase, st.choke, st.highlight, st.dropGarment]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.widthIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // plates in the chosen print order (new plates keep their default spot)
-  const plates = useMemo(() => {
-    if (!res) return [];
-    const list = res.plates.map((p) => ({ ...p, name: names[p.key] || p.name, mesh: mesh[p.key] ?? p.mesh }));
+  const arrange = useCallback((ps: Plate[]) => {
+    const list = ps.map((p) => ({ ...p, name: names[p.key] || p.name, mesh: mesh[p.key] ?? p.mesh }));
     if (!orderKeys.length) return list;
     return [...list].sort((a, b) => { const x = orderKeys.indexOf(a.key), y = orderKeys.indexOf(b.key); return (x < 0 ? 999 : x) - (y < 0 ? 999 : y); });
-  }, [res, orderKeys, names, mesh]);
+  }, [orderKeys, names, mesh]);
+  const plates = useMemo(() => (res ? arrange(res.plates) : []), [res, arrange]);
 
   /* ---------- draw ---------- */
   useEffect(() => {
@@ -273,27 +316,63 @@ export default function SeparationStudio({ id }: { id: string }) {
     setInks((l) => [...l, { hex, name: inkName(hex, st.lib) }]); setPick(false);
   };
 
+  /* ---------- full size (for the files) ---------- */
+  // the screen works on a copy of at most 2,400 px; the Illustrator file and films are separated again from the art
+  // at full size: the art's own pixels (up to OUT_PPI at the print width), vector art drawn at OUT_PPI
+  const hiRef = useRef<{ key: string; plates: Plate[]; w: number; h: number; ppi: number } | null>(null);
+  const outSize = useCallback(() => {
+    if (!img) return { side: MAX_SIDE, ppi: 0 };
+    const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1, long = Math.max(nw, nh);
+    let side = (st.widthIn * OUT_PPI * long) / nw;
+    if (!vart) side = Math.min(side, long);
+    side = Math.min(side, OUT_MAX_SIDE, Math.sqrt(OUT_MAX_PX * (long / Math.min(nw, nh))));
+    return { side: Math.round(side), ppi: Math.round((side * (nw / long)) / st.widthIn) };
+  }, [img, vart, st.widthIn]);
+  async function fullSep() {
+    const key = JSON.stringify([inks, st, names, mesh, orderKeys, !!vart?.ok]);
+    if (hiRef.current?.key === key) return hiRef.current;
+    if (!img || !pxRef.current) throw new Error("The art isn't loaded yet.");
+    setBusy("Separating at full size…"); await new Promise((r) => setTimeout(r, 40));
+    const { side, ppi } = outSize();
+    const px = pixelsOf(img, st.removeBg, !!vart, side);
+    const r = separate(px, inks.map((x) => ({ hex: x.hex, name: x.name })), { ...st, choke: ptPx(st.chokePt ?? CHOKE_PT, px.w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, px.w, st.widthIn) });
+    r.plates.forEach((p) => { const q = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (q) p.hex = shown(q); });
+    hiRef.current = { key, plates: arrange(r.plates), w: px.w, h: px.h, ppi };
+    return hiRef.current;
+  }
+
   /* ---------- outputs ---------- */
   const title = `${order ? `#${order.number}` : `S-${row?.number ?? ""}`} ${row?.location || ""}`.trim();
   const tonal = st.method === "sim";
-  // spot color on vector art: each original shape goes on the plate of the ink its color maps to
-  const vectorOut = vart?.ok && !tonal ? {
+  // spot color on vector art: each original shape goes on the plates of the inks that print its color (solid, or as
+  // tints when its color is mixed from other inks)
+  const vectorOut = (ps: Plate[]) => (vart?.ok && !tonal ? {
     art: vart,
-    plateOf: (fill: string) => {
-      let best = -1, bd = Infinity;
-      inks.forEach((k, j) => { const d = deltaE(fill, k.hex); if (d < bd) { bd = d; best = j; } });
-      if (best < 0) return null;
-      const k = inks[best], white = /^#F[A-F0-9]F[A-F0-9]F[A-F0-9]$/i.test(k.hex) || k.name === "White";
-      const key = white && res?.underbase && st.highlight ? "hw" : "c" + k.hex.slice(1);
-      const at = plates.findIndex((p) => p.key === key);
-      return at < 0 ? null : at;
+    mixOf: (fill: string) => {
+      const ws = spotMixer(inks.map((k) => ({ hex: k.hex, name: k.name })), st)(...(fill.match(/[0-9a-f]{2}/gi) || ["00", "00", "00"]).map((h) => parseInt(h, 16)) as [number, number, number]);
+      const out: { plate: number; tint: number }[] = [];
+      inks.forEach((k, j) => {
+        if (ws[j] <= 0.02) return;
+        const white = /^#F[A-F0-9]F[A-F0-9]F[A-F0-9]$/i.test(k.hex) || k.name === "White";
+        const at = ps.findIndex((p) => p.key === (white && res?.underbase && st.highlight ? "hw" : "c" + k.hex.slice(1)));
+        if (at >= 0) out.push({ plate: at, tint: ws[j] });
+      });
+      if (ws[inks.length] > 0.02) { const at = ps.findIndex((p) => p.key === "hw"); if (at >= 0) out.push({ plate: at, tint: ws[inks.length] }); }
+      return out;
     },
-  } : undefined;
-  async function aiFile() { return illustratorPdf(plates, res!.w, res!.h, { widthIn: st.widthIn, tonal, title, vector: vectorOut }, deflate); }
+  } : undefined);
+  async function aiFile() {
+    const hr = await fullSep();
+    setBusy("Making the Illustrator file…"); await new Promise((r) => setTimeout(r, 30));
+    return illustratorPdf(hr.plates, hr.w, hr.h, { widthIn: st.widthIn, tonal, title, vector: vectorOut(hr.plates), solid: st.solidOut || "pixels" }, deflate);
+  }
   async function filmsFile() {
-    const pages = plates.map((p, i) => {
-      const f = filmBits(p, res!.w, res!.h, st.widthIn, st.dpi, tonal, st.lpi, st.angle);
-      return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (res!.h / res!.w), label: `${title} - ${i + 1}/${plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${tonal ? ` - ${st.lpi} lpi ${st.angle} deg` : " - solid"} - print ${st.widthIn}" wide at 100%` };
+    const hr = await fullSep();
+    setBusy("Making films…"); await new Promise((r) => setTimeout(r, 30));
+    const pages = hr.plates.map((p, i) => {
+      const ht = tonal || !!p.tonal;
+      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, ht, st.lpi, st.angle);
+      return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg` : " - solid"} - print ${st.widthIn}" wide at 100%` };
     });
     return filmPdf(pages);
   }
@@ -413,10 +492,10 @@ export default function SeparationStudio({ id }: { id: string }) {
         <aside className="sep-side">
           <section className="sep-card">
             <h3>Method</h3>
-            <div className="rv-seg sep-full">{([["spot", "Spot color"], ["sim", "Simulated process"]] as const).map(([k, l]) => <button key={k} type="button" className={st.method === k ? "on" : ""} onClick={() => { set({ method: k }); findInks(k); }}>{l}</button>)}</div>
+            <div className="rv-seg sep-full">{([["spot", "Spot color"], ["sim", "Simulated process"]] as const).map(([k, l]) => <button key={k} type="button" className={st.method === k ? "on" : ""} onClick={() => { set({ method: k }); findInks(k, true); }}>{l}</button>)}</div>
             <p className="sep-help">{st.method === "spot" ? "Flat colors, solid screens. Logos, text, cartoon art." : "Photos and painted art: a few bright inks in halftones, mixed on the shirt."}</p>
             {vart && <div className={vart.ok ? "sep-ok" : "sep-tip"}>{vart.ok ? `Vector art (${vart.shapes.length} shapes): the Illustrator file keeps the original shapes for each ink.` : `Vector art, but it ${vart.why}: the plates are traced from a picture of it instead.`}</div>}
-            {st.method === "spot" && hint > 0.18 && <div className="sep-tip">This art has a lot of shading ({Math.round(hint * 100)}% between colors). <button type="button" className="linkbtn" onClick={() => { set({ method: "sim" }); findInks("sim"); }}>Try simulated process</button></div>}
+            {st.method === "spot" && hint > 0.18 && inks.length >= natural && <div className="sep-tip">This art has a lot of shading ({Math.round(hint * 100)}% between colors). <button type="button" className="linkbtn" onClick={() => { set({ method: "sim" }); findInks("sim", true); }}>Try simulated process</button></div>}
           </section>
           <section className="sep-card">
             <h3>Shirt</h3>
@@ -433,19 +512,28 @@ export default function SeparationStudio({ id }: { id: string }) {
             <h3>Finding inks</h3>
             <label className="sep-f">Ink names<select value={st.lib} onChange={(e) => { const lib = e.target.value as Studio["lib"]; set({ lib }); setInks((l) => l.map((x) => ({ ...x, name: inkName(x.hex, lib) }))); }} title="Names every ink again"><option value="auto">Suggested</option><option value="wilflex">All standard</option><option value="pms">All PMS</option></select></label>
             <p className="sep-help">{st.lib === "auto" ? "Suggested: a standard (stock) ink when one is very close, a PMS when only the PMS is. Tap an ink's match line to see both." : st.lib === "wilflex" ? "Every ink named as the closest Wilflex RFU stock ink." : "Every ink named as the closest PMS coated color."}</p>
-            <button type="button" className="btn sm" onClick={() => findInks()}>Find Inks Again</button>
+            <button type="button" className="btn sm" onClick={() => findInks(st.method, true)} title="Start over: find the inks the art needs">Find Inks Again</button>
           </section>
           <section className="sep-card">
             <h3>Underbase{dark ? "" : " (light shirt)"}</h3>
             <div className="rv-seg sep-full">{([["auto", "Auto"], ["on", "On"], ["off", "Off"]] as const).map(([k, l]) => <button key={k} type="button" className={st.underbase === k ? "on" : ""} onClick={() => set({ underbase: k })}>{l}</button>)}</div>
-            <label className="sep-f">Choke <input type="range" min={0} max={6} value={st.choke} onChange={(e) => set({ choke: +e.target.value })} /> <b>{st.choke}px</b></label>
+            <label className="sep-f" title="How far the underbase is pulled in from the edges of the colors, so it never peeks out">Choke <input type="range" min={0} max={3} step={0.25} value={st.chokePt ?? CHOKE_PT} onChange={(e) => set({ chokePt: +e.target.value })} /> <b>{st.chokePt ?? CHOKE_PT} pt</b></label>
             <label className="sep-chk"><input type="checkbox" checked={st.highlight} onChange={(e) => set({ highlight: e.target.checked })} /> Highlight white on top</label>
             <label className="sep-chk"><input type="checkbox" checked={st.removeBg} onChange={(e) => set({ removeBg: e.target.checked })} /> White background isn&apos;t printed</label>
           </section>
           <section className="sep-card">
             <h3>Output</h3>
             <label className="sep-f">Print width (in)<input type="number" min={1} max={20} step={0.25} value={st.widthIn} onChange={(e) => set({ widthIn: +e.target.value || 1 })} /></label>
+            {img && (() => {
+              // pictures can't be blown up (Separo can't either): say how sharp the art is at this print size
+              if (vart?.ok) return <div className="sep-res ok">Vector art: sharp at any size.</div>;
+              const ppi = Math.round((img.naturalWidth || 0) / st.widthIn), best = Math.floor((img.naturalWidth || 0) / 300 * 4) / 4;
+              const lvl = ppi >= 250 ? "ok" : ppi >= 150 ? "warn" : "bad";
+              return <div className={"sep-res " + lvl}>Art is {img.naturalWidth} px wide: <b>{ppi} ppi</b> at {st.widthIn}&quot;. {lvl === "ok" ? "Sharp." : lvl === "warn" ? `Usable; edges soften a little past ${best}" (300 ppi).` : `Too small for ${st.widthIn}": it will print pixelated. Up to ${best}" is sharp; get bigger art or vector (SVG / EPS)${st.method === "spot" ? ", or try Smooth vector for solid inks" : ""}.`}</div>;
+            })()}
             {tonal && <><label className="sep-f">Halftone LPI<input type="number" min={25} max={85} value={st.lpi} onChange={(e) => set({ lpi: +e.target.value || 55 })} /></label><label className="sep-f">Angle<input type="number" min={0} max={90} step={0.5} value={st.angle} onChange={(e) => set({ angle: +e.target.value })} /></label></>}
+            {st.method === "spot" && <label className="sep-f" title="Each color spreads this far under the darker color printed after it, so colors that touch overlap a hair: no gaps, even if a screen is slightly off">Trap <input type="range" min={0} max={2} step={0.25} value={st.trapPt ?? TRAP_PT} onChange={(e) => set({ trapPt: +e.target.value })} /> <b>{st.trapPt ?? TRAP_PT} pt</b></label>}
+            {st.method === "spot" && !vart?.ok && <label className="sep-f" title="Pixels: the art's own pixels at full size, like Separo. Smooth vector: traced curves, for low-resolution art.">Solid inks<select value={st.solidOut || "pixels"} onChange={(e) => set({ solidOut: e.target.value as Studio["solidOut"] })}><option value="pixels">Pixels (exact)</option><option value="vector">Smooth vector</option></select></label>}
             <label className="sep-f">Film DPI<select value={st.dpi} onChange={(e) => set({ dpi: +e.target.value })}>{[360, 600, 720].map((d) => <option key={d} value={d}>{d}</option>)}</select></label>
           </section>
         </aside>
@@ -469,7 +557,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <button type="button" className={"sep-add" + (pick ? " on" : "")} onClick={() => setPick(!pick)} title="Add an ink: click a color in the art">{pick ? "Click the art" : "+"}</button>
             <span className="spacer" />
             <label className="sep-count">Colors <select value={st.maxColors} onChange={(e) => { set({ maxColors: +e.target.value }); }}>{Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
-            <button type="button" className="btn sm" onClick={() => findInks()} title="Find the inks again with this many colors">Apply</button>
+            <button type="button" className="btn sm" onClick={() => findInks()} title="Separate with this many inks. Fewer than the art has: the colors left out are mixed from the other inks as halftones.">Apply</button>
           </div>
           {matchAt != null && inks[matchAt] && (
             <div className="sep-matchbox">
@@ -530,11 +618,11 @@ export default function SeparationStudio({ id }: { id: string }) {
               {row.status === "approved" && <button type="button" className="btn" onClick={() => setStatus("films")}>Films Printed</button>}
             </div>
             <div className="sep-dl">
-              <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { setBusy("Making the Illustrator file…"); download(await aiFile(), `${slug(title)}-seps.pdf`); setBusy(""); }}>Illustrator file (spot colors)</button>
-              <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { setBusy("Making films…"); download(await filmsFile(), `${slug(title)}-films.pdf`); setBusy(""); }}>Films PDF ({st.dpi} dpi{tonal ? `, ${st.lpi} lpi` : ""})</button>
+              <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await aiFile(), `${slug(title)}-seps.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Illustrator file (spot colors)</button>
+              <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await filmsFile(), `${slug(title)}-films.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Films PDF ({st.dpi} dpi{tonal ? `, ${st.lpi} lpi` : ""})</button>
             </div>
             {(row.files || []).length > 0 && <ul className="sep-files">{row.files.filter((f) => f.kind !== "plate").map((f) => <li key={f.path}><button type="button" className="linkbtn" onClick={() => openFile(f.path)}>{f.name}</button></li>)}</ul>}
-            <p className="sep-help">The Illustrator file opens straight in Illustrator: each ink is a spot color swatch, so File → Print → Separations prints one film per ink.</p>
+            <p className="sep-help">The Illustrator file opens straight in Illustrator: each ink is a spot color swatch, so File → Print → Separations prints one film per ink.{img && !vart ? ` Files are made from the art at full size: ${outSize().ppi} pixels per inch at ${st.widthIn}" wide${outSize().ppi < 200 ? " (low: consider Smooth vector for solid inks, or better art)" : ""}.` : vart?.ok ? " Vector art: the original shapes, sharp at any size." : ""}</p>
           </section>
         </aside>
       </div>
