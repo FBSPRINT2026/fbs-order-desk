@@ -125,7 +125,7 @@ export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004, garment
     }
     return near ? inside / near : 0;
   };
-  let res = out.filter((c) => c.n / total >= minShare || (c.n / total >= minShare / 4 && solidInside(c.hex) > 0.3)).map((c) => ({ hex: c.hex, share: c.n / total }));
+  let res = out.filter((c) => c.n / total >= minShare || (c.n / total >= minShare / 8 && solidInside(c.hex) > 0.3)).map((c) => ({ hex: c.hex, share: c.n / total }));
   // a small color that sits on the line between two bigger ones is their blend (an edge), not an ink, unless it has
   // a solid inside of its own: a real ink (the tan of a mustache, between orange and black) fills areas; an edge blend
   // is only ever a thin band
@@ -601,7 +601,9 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
     }
   }
   seq.forEach((st, j) => plates.push(mk(st.key, st.name, st.hex, st.kind, st.a, tonals[j])));
-  return { plates: plates.filter((p) => p.coverage > 0.0005), w, h, underbase: dark, dropped };
+  // drop only plates that print (almost) nothing: a small detail ink (fine text in its own color) must never vanish
+  const prints = (p: Plate) => { if (p.coverage > 0.0005) return true; let c = 0; for (let i = 0; i < n; i++) if (p.alpha[i] >= 128 && ++c > 16) return true; return false; };
+  return { plates: plates.filter(prints), w, h, underbase: dark, dropped };
 }
 
 /**
