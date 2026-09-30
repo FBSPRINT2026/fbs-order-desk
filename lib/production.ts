@@ -15,6 +15,8 @@ export type Machine = {
   flashes?: number;
   /** screen: the press turns the other way (load on the left of the operator, head 1 to the left): Presses 1 and 3 */
   mirror?: boolean;
+  /** today: where the crew's press operator is on the time clock (uAttend), attached by the calendar */
+  clock?: ClockState;
   /** when its day starts (minutes after midnight, 420 = 7:00 AM), hours it runs a day, and which days (0 = Sunday) */
   startMin: number; hoursPerDay: number; days: number[];
   /** Printavo status text that puts a job on this machine (until go-live), e.g. "Press 1" */
@@ -509,6 +511,51 @@ export const shiftOn = (mach: Machine, day: string): Shift => {
   return ex ? (reg ? [Math.min(reg[0], ex[0]), Math.max(reg[1], ex[1])] : [ex[0], ex[1]]) : reg;
 };
 export const isOffDay = (mach: Machine, day: string) => !!mach.off && day in mach.off;
+
+/** a time-clock punch today, in minutes after midnight shop time */
+export type ClockPunch = { employee_id: string; kind: "in" | "out" | "break_start" | "break_end"; min: number };
+export type ClockState = { state: "in" | "late" | "waiting" | "out" | "noshow"; at: number | null; who: string };
+const hm = (m: number) => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${h % 12 || 12}:${String(mm).padStart(2, "0")}${h < 12 ? "a" : "p"}`; };
+/**
+ * The press operator's punches decide when a crew's day really starts (and stops). Miguel due at 6:30 and not
+ * clocked in: the press is "waiting" from 6:30 up to now, and that grows every few minutes until he punches in;
+ * in at 10:02 → nothing runs before 10:05 (the warm-up follows). Clocked out and not back after more than a lunch
+ * break → the rest of the shift is down; back later → only the time away. Only today, only presses with a crew
+ * and an operator set (Employees → Press Crews), and only when the clock is reporting (the calling page checks).
+ */
+export function withClock(ps: ProductionSettings, punches: ClockPunch[], today: string, nowMin: number, grace = 5): ProductionSettings {
+  const away = (ps.breaks?.lunchMin || 30) + 20;
+  const machines = ps.machines.map((m) => {
+    const crew = m.crew ? ps.crews.find((c) => c.id === m.crew) : undefined, op = crew?.members?.operator;
+    if (!crew || !op) return m;
+    const sh = shiftOn(m, today); if (!sh) return m;
+    const who = crew.leader || "Operator";
+    const mine = punches.filter((p) => p.employee_id === op).sort((a, b) => a.min - b.min).map((p) => ({ ...p, kind: p.kind === "break_start" ? "out" : p.kind === "break_end" ? "in" : p.kind }));
+    const downs: Down[] = [], up5 = (x: number) => Math.ceil(x / 5) * 5;
+    let clock: ClockState | undefined;
+    const first = mine.find((p) => p.kind === "in");
+    if (!first) {
+      if (nowMin >= sh[1]) { downs.push([sh[0], sh[1], `${who} didn't clock in`, 0]); clock = { state: "noshow", at: null, who }; }
+      else if (nowMin > sh[0] + grace) { downs.push([sh[0], Math.min(sh[1], up5(nowMin + 1)), `Waiting on ${who} (not clocked in)`, 0]); clock = { state: "waiting", at: null, who }; }
+    } else {
+      const late = first.min > sh[0] + grace;
+      if (late && first.min < sh[1]) downs.push([sh[0], Math.min(sh[1], up5(first.min)), `${who} in at ${hm(first.min)}`, 0]);
+      clock = { state: late ? "late" : "in", at: first.min, who };
+      let out: number | null = null;
+      for (const p of mine.slice(mine.indexOf(first) + 1)) {
+        if (p.kind === "out") { if (out == null) out = p.min; continue; }
+        if (out != null) { if (p.min - out > away && out < sh[1]) downs.push([Math.max(sh[0], out), Math.min(sh[1], up5(p.min)), `${who} out ${hm(out)}–${hm(p.min)}`, 0]); out = null; }
+      }
+      if (out != null) {
+        clock = { state: "out", at: out, who };
+        if (nowMin - out > away && out < sh[1] - 10) downs.push([Math.max(sh[0], out), sh[1], `${who} clocked out at ${hm(out)}`, 0]);
+      }
+    }
+    if (!downs.length && !clock) return m;
+    return { ...m, clock, down: downs.length ? { ...(m.down || {}), [today]: [...(m.down?.[today] || []), ...downs] } : m.down };
+  });
+  return { ...ps, machines };
+}
 /** Its usual shift: the longest working day of its week (for days it doesn't normally run but has work booked). */
 export const typicalShift = (mach: Machine): [number, number] => ((mach.week || ownWeek(mach)).filter(Boolean) as [number, number][]).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0] || [mach.startMin ?? 420, (mach.startMin ?? 420) + (mach.hoursPerDay || 11) * 60];
 /**

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 import PressLayout from "@/components/PressLayout";
@@ -274,7 +274,33 @@ export default function MachineSchedule() {
   const [now, setNow] = useState(() => shopTime(new Date())!);
   useEffect(() => { const t = setInterval(() => setNow(shopTime(new Date())!), 60000); return () => clearInterval(t); }, []);
   const today = now.day;
-  const [s, setS] = useState<ProductionSettings | null>(null);
+  const [sBase, setS] = useState<ProductionSettings | null>(null);
+  // the time clock (uAttend, or our own clock): today's punches of each press crew's operator, checked every minute
+  const [tc, setTc] = useState<{ ok: boolean; punches: ClockPunch[]; ranAt: string | null }>({ ok: false, punches: [], ranAt: null });
+  useEffect(() => {
+    const ops = [...new Set((sBase?.crews || []).map((c) => c.members?.operator).filter(Boolean))] as string[];
+    if (!ops.length) return;
+    let live = true;
+    const get = async () => {
+      const sb = createClient(), day = shopTime(new Date())!.day;
+      const from = new Date(Date.parse(day + "T00:00:00Z") - 14 * 3600000).toISOString(); // a little before local midnight, trimmed below
+      const [{ data: p }, { data: st }] = await Promise.all([
+        sb.from("time_punches").select("employee_id, kind, at, source").in("employee_id", ops).eq("voided", false).gte("at", from).order("at").limit(400),
+        sb.from("uattend_sync").select("last_ok_at").eq("id", 1).maybeSingle(),
+      ]);
+      if (!live) return;
+      const rows = ((p || []) as { employee_id: string; kind: ClockPunch["kind"]; at: string; source: string }[]).map((x) => ({ ...x, t: shopTime(x.at)! })).filter((x) => x.t.day === day);
+      const okAt = (st?.last_ok_at as string | null) || null;
+      // trust "not clocked in" only while the clock is reporting: uAttend synced in the last 15 minutes, or someone used our own clock today
+      const ok = (!!okAt && Date.now() - Date.parse(okAt) < 15 * 60000) || rows.some((x) => x.source !== "uattend");
+      setTc({ ok, punches: rows.map((x) => ({ employee_id: x.employee_id, kind: x.kind, min: x.t.min })), ranAt: okAt });
+    };
+    get(); const t = setInterval(get, 60000);
+    return () => { live = false; clearInterval(t); };
+  }, [sBase]);
+  const clockBucket = Math.floor(now.min / 5);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const s = useMemo(() => (sBase && tc.ok ? withClock(sBase, tc.punches, today, now.min) : sBase), [sBase, tc, today, clockBucket]);
   const [view, setView] = useSticky<View>("cal.view", "split");
   const [week, setWeek] = useState(() => monday(shopTime(new Date())!.day));
   const [day, setDay] = useState(() => shopTime(new Date())!.day);
@@ -941,7 +967,7 @@ export default function MachineSchedule() {
         </> : <>
         <div className="ms-dv-corner" />
         {machines.map((m) => { const u = used(m, day), cap = capacityMin(s, m, shiftOn(m, day) ? day : undefined); return (
-          <div key={m.id} className={"ms-dv-h " + m.type + (isOffDay(m, day) ? " off" : "")}><b>{shortName(m)}</b><small title={crewOf(m) ? `${crewOf(m)!.leader}'s crew` : undefined}>{crewOf(m) ? <b className="ms-lead">{crewOf(m)!.leader}</b> : m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat press"}</small><IssueTag m={m} />
+          <div key={m.id} className={"ms-dv-h " + m.type + (isOffDay(m, day) ? " off" : "")}><b>{shortName(m)}</b><small title={crewOf(m) ? `${crewOf(m)!.leader}'s crew` : undefined}>{crewOf(m) ? <b className="ms-lead">{crewOf(m)!.leader}</b> : m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat press"}</small><IssueTag m={m} />{day === today && <ClockTag m={m} />}
             <button type="button" className={"ms-crew" + (isOffDay(m, day) ? " off" : "")} onClick={() => setDownEdit({ machine: m.id, day, allDay: true })} title={isOffDay(m, day) ? "Off this day: tap to change" : "Mark this press (or its crew) off"}>{crewLine(m, day)}</button>
             <div className={"ms-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /></div>
             <small className="ms-used">{o.colMin ? `${+(u / 60).toFixed(1)} / ${+(cap / 60).toFixed(1)}h` : `${fmtMin(u)} / ${fmtMin(cap)}`}</small></div>
@@ -993,7 +1019,7 @@ export default function MachineSchedule() {
           <div className="ms-pd-h"><b>{d === today ? "Today" : d === addDay(today, 1) ? "Tomorrow" : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}</b><span>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span><small>{fmtMin(booked)} booked</small></div>
           {busy.map(({ m, gs, sh }) => (
             <div key={m.id} className={"ms-pm " + m.type}>
-              <div className="ms-pm-h"><b>{shortName(m)}<IssueTag m={m} />{crewOf(m) ? <span> · {crewOf(m)!.leader}</span> : null}</b><span className="faint">{isOffDay(m, d) ? `Off · ${m.off![d]}` : sh ? hrsTxt(sh) : "extra"} · {fmtMin(used(m, d))}</span></div>
+              <div className="ms-pm-h"><b>{shortName(m)}<IssueTag m={m} />{crewOf(m) ? <span> · {crewOf(m)!.leader}</span> : null}{d === today && <ClockTag m={m} />}</b><span className="faint">{isOffDay(m, d) ? `Off · ${m.off![d]}` : sh ? hrsTxt(sh) : "extra"} · {fmtMin(used(m, d))}</span></div>
               <ul className="ms-pl">{gs.map((g) => { const gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, past = d === today && g.end <= now.min && st !== "running"; return (
                 <li key={g.c.key + g.part}><button type="button" className={"ms-pj " + g.c.need.type + (st === "done" ? " done" : st === "running" ? " run" : "") + (past ? " past" : "") + (mine && !isMe(g.c.job.owner, owners, me) ? " other" : "") + (ord(g.day) * 1440 + g.end > dueAbs(g.c.job) ? " late" : "")} onClick={() => setOpen(g.c)}>
                   <span className="ms-pj-t">{clock(g.start)}<small>{clock(g.end)}</small></span>
@@ -1980,6 +2006,13 @@ function whyUnfit(need: Need, m: Machine) {
   if (need.type !== "screen") return `${shortName(m)} can't run it right now`;
   if (need.steps.some((st) => flashesFor(st) > 0) && flashesOf(m) === 0) return `needs a flash (underbase or puff): ${shortName(m)} has none working`;
   return `needs ${stationsNeeded(need)} heads (screens + flashes): more than ${shortName(m)} can print, even in two rounds`;
+}
+/** where the press operator is on the time clock today: in (and when), not in yet, clocked out */
+function ClockTag({ m }: { m: Machine }) {
+  const c = m.clock; if (!c) return null;
+  const t = c.at == null ? "" : clockLong(c.at);
+  const [txt, tip] = c.state === "in" ? [`In ${t}`, `${c.who} clocked in at ${t}`] : c.state === "late" ? [`In ${t} · late`, `${c.who} clocked in late at ${t}: nothing ran on this press before then`] : c.state === "waiting" ? ["Not in yet", `${c.who} hasn't clocked in: jobs on this press wait until they do (the schedule moves every few minutes)`] : c.state === "out" ? [`Out ${t}`, `${c.who} clocked out at ${t}`] : ["No punch today", `${c.who} didn't clock in today`];
+  return <span className={"ms-clk " + c.state} title={`${tip} (time clock)`}>{txt}</span>;
 }
 /** a little warning on a press's name when Equipment Status says something's wrong with it */
 function IssueTag({ m }: { m: Machine }) {
