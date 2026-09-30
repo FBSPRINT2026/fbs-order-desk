@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { uaPunches, uaUsers, uattendReady, type UaUser } from "@/lib/uattend";
+import { uaPunches, uaRaw, uaUsers, uattendReady, type UaUser } from "@/lib/uattend";
 import { addDays, localDay } from "@/lib/timeclock";
 
 export const dynamic = "force-dynamic";
@@ -93,6 +93,9 @@ export async function GET(req: Request) {
   if (!ps || req.headers.get("x-sync-token") !== (ps as { token: string }).token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   if (!uattendReady()) { await record(admin, false, null, "The uAttend API key isn't set up yet (Vercel → UATTEND_API_KEY)."); return NextResponse.json({ error: "no key" }); }
   const today = localDay(new Date());
+  // ?raw=<uAttend user id>&back=N: what uAttend sends for one person (read only, nothing saved), for checking the fields
+  const raw = new URL(req.url).searchParams.get("raw");
+  if (raw) { const n = Math.max(1, Math.min(31, +(new URL(req.url).searchParams.get("back") || 3) || 3)); try { return NextResponse.json(await uaRaw(addDays(today, -n), today, +raw || undefined)); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); } }
   const { data: st } = await admin.from("uattend_sync").select("users_at").eq("id", 1).single();
   // the employee list once every 6 hours (and whenever a punch comes from someone we don't know)
   const usersDue = !st?.users_at || Date.now() - Date.parse(st.users_at as string) > 6 * 3600000;
