@@ -4614,3 +4614,9 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .sep-fine .sep-f{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding-left:22px;font-weight:500}
 .sep-fine .sep-f input[type=range]{grid-column:1/-1;grid-row:2;width:100%}
 .sep-fine .sep-f b{grid-column:2;grid-row:1}
+/* separations: film close-up (loupe) */
+.sep-loupe{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-top:10px}
+.sep-loupe canvas{width:min(100%,360px);height:auto;image-rendering:pixelated;border:1px solid var(--line,#d8dde6);border-radius:8px;background:#fff}
+.sep-loupe-hint{width:min(100%,360px);aspect-ratio:3/1;display:grid;place-items:center;border:1px dashed var(--line,#d8dde6);border-radius:8px;color:var(--ink-3,#7c8799);font-size:13px}
+.sep-loupe small{color:var(--ink-3,#7c8799)}
+.sep-canvases canvas.zoom{cursor:zoom-in}

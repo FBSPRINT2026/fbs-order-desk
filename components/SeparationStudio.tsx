@@ -186,6 +186,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [orderKeys, setOrderKeys] = useState<string[]>([]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [solo, setSolo] = useState<string | null>(null);
+  /** film close-up: where on the plate (px of the screen copy) */
+  const [loupe, setLoupe] = useState<{ x: number; y: number } | null>(null);
+  const loupeCv = useRef<HTMLCanvasElement>(null);
   const [mesh, setMesh] = useState<Record<string, number>>({});
   const [names, setNames] = useState<Record<string, string>>({});
   const [presses, setPresses] = useState<Machine[]>([]);
@@ -330,6 +333,24 @@ export default function SeparationStudio({ id }: { id: string }) {
     x.putImageData(imgData, 0, 0);
   }, [res, plates, hidden, solo, st.garment]);
 
+  // film close-up: about 0.6" of the real film around the clicked spot, at the film settings (dots, dpi, mesh)
+  const LOUPE_IN = 0.6;
+  useEffect(() => {
+    const c = loupeCv.current, p = plates.find((q) => q.key === solo); if (!c || !p || !res || !loupe) return;
+    const ppi = res.w / st.widthIn, n = Math.max(8, Math.round(LOUPE_IN * ppi)), x0 = Math.max(0, Math.min(res.w - n, loupe.x - (n >> 1))), y0 = Math.max(0, Math.min(res.h - n, loupe.y - (n >> 1)));
+    const cw = Math.min(n, res.w), ch = Math.min(n, res.h), a = new Uint8Array(cw * ch), within = new Uint8Array(cw * ch);
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+      const j = (y0 + y) * res.w + x0 + x; a[y * cw + x] = p.alpha[j];
+      let m = 0; for (const q of plates) if (q.alpha[j] > m) m = q.alpha[j]; within[y * cw + x] = m;
+    }
+    const ht = st.method === "sim" || !!p.tonal;
+    const f = filmBits({ ...p, alpha: a }, cw, ch, cw / ppi, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, gain: st.gain || 0, dot: st.dot || "ellipse", mesh: p.mesh, within });
+    c.width = f.W; c.height = f.H;
+    const x = c.getContext("2d")!, d = x.createImageData(f.W, f.H), rb = Math.ceil(f.W / 8);
+    for (let yy = 0; yy < f.H; yy++) for (let xx = 0; xx < f.W; xx++) { const on = f.bits[yy * rb + (xx >> 3)] & (0x80 >> (xx & 7)), o = (yy * f.W + xx) * 4; d.data[o] = d.data[o + 1] = d.data[o + 2] = on ? 0 : 255; d.data[o + 3] = 255; }
+    x.putImageData(d, 0, 0);
+  }, [loupe, solo, plates, res, st.widthIn, st.dpi, st.lpi, st.angle, st.gain, st.dot, st.method]);
+
   useEffect(() => {
     const c = cvOrig.current, px = pxRef.current; if (!c || !px) return;
     c.width = px.w; c.height = px.h;
@@ -338,6 +359,12 @@ export default function SeparationStudio({ id }: { id: string }) {
 
   // eyedropper: click the preview to add that color from the art as an ink
   const onPick = (e: MouseEvent<HTMLCanvasElement>) => {
+    if (solo && !pick && res) {
+      // film close-up of this spot
+      const r = e.currentTarget.getBoundingClientRect();
+      setLoupe({ x: Math.floor(((e.clientX - r.left) / r.width) * res.w), y: Math.floor(((e.clientY - r.top) / r.height) * res.h) });
+      return;
+    }
     if (!pick) return;
     const px = pxRef.current, c = cv.current; if (!px || !c) return;
     const r = c.getBoundingClientRect(), x = Math.floor(((e.clientX - r.left) / r.width) * px.w), y = Math.floor(((e.clientY - r.top) / r.height) * px.h);
@@ -406,7 +433,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   async function aiFile() {
     const hr = await fullSep();
     setBusy("Making the Illustrator file…"); await new Promise((r) => setTimeout(r, 30));
-    return illustratorPdf(hr.plates, hr.w, hr.h, { widthIn: st.widthIn, tonal, title, vector: vectorOut(hr.plates), solid: st.solidOut || "pixels" }, deflate);
+    return illustratorPdf(hr.plates, hr.w, hr.h, { widthIn: st.widthIn, tonal, title, vector: vectorOut(hr.plates), solid: st.solidOut || "pixels", minDot: hr.plates.map((p) => minDot(p.mesh, st.lpi)) }, deflate);
   }
   async function filmsFile() {
     const hr = await fullSep();
@@ -634,14 +661,20 @@ export default function SeparationStudio({ id }: { id: string }) {
           </div>
           <div className={"sep-stage" + (bg === "checker" && !solo ? " checker" : "")} style={{ background: solo ? "#fff" : bg === "shirt" ? st.garment : undefined }}>
             <div className="sep-canvases">
-              <canvas ref={cv} className={(pick ? "pick " : "") + (view === "original" && !solo ? "gone" : "")} onClick={onPick} />
+              <canvas ref={cv} className={(pick ? "pick " : solo ? "zoom " : "") + (view === "original" && !solo ? "gone" : "")} onClick={onPick} />
               <canvas ref={cvOrig} className={"sep-orig" + (view === "proof" || solo ? " gone" : "")} style={view === "compare" && !solo ? { clipPath: `inset(0 ${100 - split}% 0 0)` } : undefined} onClick={onPick} />
               {view === "compare" && !solo && <input className="sep-split" type="range" min={0} max={100} value={split} onChange={(e) => setSplit(+e.target.value)} aria-label="Original | proof" />}
             </div>
             {busy && <div className="sep-busy">{busy}</div>}
             {!img && !err && <div className="sep-busy">Loading the art…</div>}
           </div>
-          <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). <button type="button" className="linkbtn" onClick={() => setSolo(null)}>Back to the proof</button></> : view === "compare" ? <>Left of the line: the original art. Right: how it prints.</> : <>{view === "original" ? "The original art" : "Soft proof: how it prints"}{bg === "shirt" ? ` on a ${st.garment} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
+          {solo && (
+            <div className="sep-loupe">
+              {loupe ? <canvas ref={loupeCv} aria-label="Film close-up" /> : <div className="sep-loupe-hint">Click the film to see the real dots up close</div>}
+              <small>{loupe ? <>{LOUPE_IN}&quot; of film at {st.dpi} dpi{(st.method === "sim" || plates.find((p) => p.key === solo)?.tonal) ? `, ${st.lpi} lpi ${DOT_NAME[st.dot || "ellipse"]} dots` : ", solid"}. Click elsewhere to move.</> : "Film close-up"}</small>
+            </div>
+          )}
+          <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). Click it for a close-up of the real film. <button type="button" className="linkbtn" onClick={() => { setSolo(null); setLoupe(null); }}>Back to the proof</button></> : view === "compare" ? <>Left of the line: the original art. Right: how it prints.</> : <>{view === "original" ? "The original art" : "Soft proof: how it prints"}{bg === "shirt" ? ` on a ${st.garment} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
         </section>
 
         {/* plates, press, save */}

@@ -35,7 +35,13 @@ export type IllustratorOpts = {
   solid?: "pixels" | "vector";
   /** vector art: the color plates are the original shapes; each fill goes on the plates that print it, as a tint (1 = solid) */
   vector?: { art: VArt; mixOf: (fill: string) => { plate: number; tint: number }[] };
+  /** halftone plates are left as gray for the RIP to make the dots (like Separo's files). Per plate, the smallest dot
+   *  its mesh holds (0–1): lighter grays are dropped or raised to it, so the RIP never makes specks that wash out */
+  minDot?: number[];
 };
+/** a gray (0–1) the RIP can print as dots that hold: under half the smallest dot → none, under it → the smallest; the
+ *  same at the dark end (holes) */
+const holdable = (v: number, md: number) => (!md || v <= 0 || v >= 1 ? v : v < md / 2 ? 0 : v < md ? md : v > 1 - md / 2 ? 1 : v > 1 - md ? 1 - md : v);
 
 /** the plate names as they appear in Illustrator: "1 - Underbase White" … (print order) */
 export const plateLabel = (p: Plate, i: number) => `${i + 1} - ${p.name}`;
@@ -74,7 +80,7 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
       const mine = a.shapes.map((sh) => ({ sh, t: o.vector!.mixOf(sh.fill).find((m) => m.plate === i)?.tint || 0 })).filter((x) => x.t > 0.02);
       if (mine.length) {
         content += `q /GS0 gs ${k.toFixed(5)} 0 0 ${(-k).toFixed(5)} ${(-a.x * k).toFixed(3)} ${(H + a.y * k).toFixed(3)} cm /CS${i} cs\n`;
-        for (const { sh, t } of mine) content += `${Math.min(1, t).toFixed(3)} scn\n` + sh.ops + (sh.evenodd ? "f*\n" : "f\n");
+        for (const { sh, t } of mine) { const v = holdable(Math.min(1, t), o.minDot?.[i] || 0); if (v > 0) content += `${v.toFixed(3)} scn\n` + sh.ops + (sh.evenodd ? "f*\n" : "f\n"); }
         content += "Q\n";
       }
       // fine detail: the color made fatter over the base's edge (small type), traced as curves around those parts
@@ -101,7 +107,20 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
     const data = new Uint8Array(w * h * M);
     ri.forEach((pi, c) => {
       const a = plates[pi].alpha, solid = !(o.tonal || plates[pi].tonal);
-      for (let j = 0, q = c; j < a.length; j++, q += M) data[q] = solid ? (a[j] >= 128 ? 255 : 0) : a[j];
+      if (solid) { for (let j = 0, q = c; j < a.length; j++, q += M) data[q] = a[j] >= 128 ? 255 : 0; return; }
+      // gray for the RIP: holdable tones, and where a solid part meets nothing its soft edge is cut sharp (the RIP
+      // would break a soft edge into half dots)
+      const md = o.minDot?.[pi] || 0, lut = new Uint8Array(256);
+      for (let k = 0; k < 256; k++) lut[k] = Math.round(holdable(k / 255, md) * 255);
+      for (let y = 0, j = 0; y < h; y++) for (let x = 0; x < w; x++, j++) {
+        let v = a[j];
+        if (v > 0 && v < 255) {
+          let hi = 0, lo = 255;
+          for (let dy = -1; dy <= 1; dy++) { const yy = y + dy; if (yy < 0 || yy >= h) { lo = 0; continue; } for (let dx = -1; dx <= 1; dx++) { const xx = x + dx; const u = xx < 0 || xx >= w ? 0 : a[yy * w + xx]; if (u > hi) hi = u; if (u < lo) lo = u; } }
+          v = hi >= 245 && lo <= 10 ? (v >= 128 ? 255 : 0) : lut[v];
+        }
+        data[j * M + c] = v;
+      }
     });
     // how it looks on screen: the inks laid down in print order, each covering what's under it by its amount
     // (acc = acc + t·(ink − acc)), like on the press; it only affects the screen, each ink prints on its own plate
