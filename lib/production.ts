@@ -194,7 +194,7 @@ export function mergeProduction(d: unknown): ProductionSettings {
 /* ---------- what a job needs ---------- */
 
 /** One decoration to run: a location on a group of garments. */
-export type Step = { method: MachineType; location: string; colors: number; screens: number; qty: number; dark: boolean; garment: "tee" | "heavy" | "bag" | "cap"; stitches: number; note: string; /** puff ink (raised print): slower printing, longer setup */ puff?: boolean };
+export type Step = { method: MachineType; location: string; colors: number; screens: number; qty: number; dark: boolean; garment: "tee" | "heavy" | "bag" | "cap"; stitches: number; note: string; /** puff ink (raised print): slower printing, longer setup */ puff?: boolean; /** puff picked as a job condition: its slower printing is already in the speed slider */ puffInSpeed?: boolean };
 /** Everything to run on one kind of machine, and the most colors any of it needs. */
 export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string; /** a hard or easy print: 0.7 = runs at 70% ("When can we print it?" speed) */ speed?: number };
 
@@ -361,7 +361,7 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
     for (const st of need.steps) {
       let rate = S.baseRate * Math.max(0.5, 1 - S.perExtraColor * Math.max(0, st.colors - 4));
       if (st.dark) rate *= S.darkFactor;
-      if (st.puff) rate *= S.puffFactor ?? 0.7;
+      if (st.puff && !st.puffInSpeed) rate *= S.puffFactor ?? 0.7;
       if (st.garment === "heavy") rate *= S.heavyFactor;
       if (st.garment === "bag") rate *= S.bagFactor;
       if (smallLoc(st.location)) rate *= S.smallLocFactor;
@@ -403,13 +403,35 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
 }
 
 /** A job described in a few fields (the "When can we print it?" form) as what it needs from a machine. */
-export type QuickJob = { method: MachineType; qty: number; garment: "tee" | "heavy" | "bag" | "cap"; dark: boolean; locations: { name: string; colors: number; stitches: number; puff?: boolean }[]; /** 100 = normal; 70 = a hard print that runs at 70% */ speed?: number };
+export type QuickJob = { method: MachineType; qty: number; garment: "tee" | "heavy" | "bag" | "cap"; dark: boolean; locations: { name: string; colors: number; stitches: number; puff?: boolean }[]; /** 100 = normal; 70 = a hard print that runs at 70% */ speed?: number; /** job conditions picked under the speed slider (they set the slider); see PRINT_CONDS */ conds?: string[] };
+/**
+ * Things that make a screen print run slower or faster ("When can we print it?" / Planner). Picking them sets the print
+ * speed slider to 100% × their factors (you can still fine-tune it). Puff also adds its flash and longer setup (its
+ * slower printing is the slider's 70%). Planning numbers, not measured ones.
+ */
+export const PRINT_CONDS: { k: string; label: string; f: number; tip: string }[] = [
+  { k: "fleece", label: "Fleece", f: 0.85, tip: "Lint, thick fabric, longer flash (on top of Garment: Hoodies / heavy)" },
+  { k: "puff", label: "Puff ink", f: 0.7, tip: "Thick stencil, extra strokes, careful flash; also adds a flash and longer setup" },
+  { k: "poly", label: "Performance / poly", f: 0.85, tip: "Low-cure ink, dye migration, slower flash" },
+  { k: "detail", label: "Fine detail / halftones", f: 0.85, tip: "Tighter registration, more press checks" },
+  { k: "specialty", label: "Specialty ink", f: 0.8, tip: "Metallic, glitter, glow, high density" },
+  { k: "oversize", label: "Oversize / jumbo print", f: 0.8, tip: "Bigger screens, longer strokes and flash" },
+  { k: "small", label: "Small imprint", f: 1.15, tip: "Left chest, sleeve, tag: quick strokes and flash" },
+  { k: "nounder", label: "No underbase", f: 1.15, tip: "Darks printed without a white underbase: no flash between" },
+  { k: "simple", label: "Simple 1–2 color", f: 1.1, tip: "Easy registration, fast changeover" },
+];
+/** the print speed the picked conditions add up to (50–150%, in steps of 5) */
+export const condSpeed = (conds: string[]) => Math.max(50, Math.min(150, Math.round((100 * PRINT_CONDS.filter((c) => conds.includes(c.k)).reduce((t, c) => t * c.f, 1)) / 5) * 5));
 export function quickNeed(s: ProductionSettings, j: QuickJob): Need {
   const locs = j.locations.filter((l) => (j.method === "embroidery" ? l.stitches > 0 : l.colors > 0));
+  const cond = (k: string) => j.method === "screen" && (j.conds || []).includes(k);
   const steps: Step[] = locs.map((l) => {
     const colors = j.method === "screen" ? l.colors : 0;
-    const screens = j.method === "screen" ? colors + (j.dark && s.screen.underbaseOnDark && colors < 11 ? 1 : 0) : 0;
-    return { method: j.method, location: l.name, colors, screens, qty: j.qty, dark: j.dark, garment: j.method === "embroidery" && j.garment === "cap" ? "cap" : j.garment, stitches: j.method === "embroidery" ? l.stitches : 0, note: "", puff: j.method === "screen" && !!l.puff };
+    const under = j.dark && s.screen.underbaseOnDark && colors < 11 && !cond("nounder");
+    const screens = j.method === "screen" ? colors + (under ? 1 : 0) : 0;
+    // puff picked as a condition: its slowdown is already in the slider, so only its flash and setup count here
+    const puffC = cond("puff");
+    return { method: j.method, location: l.name, colors, screens, qty: j.qty, dark: j.dark, garment: j.method === "embroidery" && j.garment === "cap" ? "cap" : j.garment, stitches: j.method === "embroidery" ? l.stitches : 0, note: "", puff: j.method === "screen" && (!!l.puff || puffC), ...(puffC && !l.puff ? { puffInSpeed: true } : {}) };
   });
   const label = steps.map((x) => (j.method === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}${x.puff ? " puff" : ""}` : j.method === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k` : x.location)).join(" + ");
   return { type: j.method, steps, needColors: Math.max(0, ...steps.map((x) => x.screens)), qty: j.qty, label, speed: (j.speed ?? 100) / 100 };

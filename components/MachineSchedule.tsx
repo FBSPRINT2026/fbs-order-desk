@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, withIssue, type EquipRow, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
+import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, PRINT_CONDS, condSpeed, withIssue, type EquipRow, flashesOf, flashesFor, stationsNeeded, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 
@@ -1756,7 +1756,6 @@ function QuickJobForm({ v, onChange }: { v: QuickJob; onChange: (x: QuickJob) =>
             {v.method === "screen" && <select value={l.colors} onChange={(e) => setLoc(i, { colors: +e.target.value })}>{Array.from({ length: 13 }, (_, c) => <option key={c} value={c}>{c ? `${c} color${c === 1 ? "" : "s"}` : "—"}</option>)}</select>}
             {v.method === "embroidery" && <select value={l.stitches} onChange={(e) => setLoc(i, { stitches: +e.target.value })}><option value={0}>—</option>{[3000, 5000, 8000, 10000, 12000, 15000, 20000, 30000, 40000].map((x) => <option key={x} value={x}>{x / 1000}k stitches</option>)}</select>}
             {v.method === "heat" && <select value={l.colors ? 1 : 0} onChange={(e) => setLoc(i, { colors: +e.target.value })}><option value={0}>—</option><option value={1}>Yes</option></select>}
-            {v.method === "screen" && l.colors > 0 && <label className="check ms-qf-puff" title="Puff ink: slower printing and longer setup (Settings → Production)"><input type="checkbox" checked={!!l.puff} onChange={(e) => setLoc(i, { puff: e.target.checked })} /> Puff</label>}
           </div>
         ))}
       </div>
@@ -1765,6 +1764,17 @@ function QuickJobForm({ v, onChange }: { v: QuickJob; onChange: (x: QuickJob) =>
         <input type="range" min={50} max={150} step={5} value={v.speed ?? 100} onChange={(e) => set({ speed: +e.target.value })} />
         <b>{(v.speed ?? 100) === 100 ? "Normal" : (v.speed ?? 100) < 100 ? `${v.speed}% · hard print` : `${v.speed}% · easy print`}</b>
       </label>
+      {v.method === "screen" && (
+        <div className="ms-qf-conds" role="group" aria-label="What makes this print slower or faster">
+          <span className="ms-qf-cl">Sets the speed:</span>
+          {PRINT_CONDS.map((c) => { const on = (v.conds || []).includes(c.k); return (
+            <button key={c.k} type="button" className={"ms-qf-cond" + (on ? " on" : "") + (c.f < 1 ? " slow" : " fast")} aria-pressed={on} title={`${c.tip} (${c.f < 1 ? "" : "+"}${Math.round((c.f - 1) * 100)}%)`}
+              onClick={() => { const conds = on ? (v.conds || []).filter((x) => x !== c.k) : [...(v.conds || []), c.k]; set({ conds, speed: condSpeed(conds), locations: v.locations.map((l) => ({ ...l, puff: false })) }); }}>
+              {c.label}<small>{c.f < 1 ? "−" : "+"}{Math.round(Math.abs(c.f - 1) * 100)}%</small>
+            </button>
+          ); })}
+        </div>
+      )}
     </div>
   );
 }
