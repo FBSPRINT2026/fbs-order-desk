@@ -4,7 +4,8 @@
  *   POST https://api.workwelltech.com/reports/punch  { StartDate, EndDate, ... } → { PunchReportLineItems: [...] }
  * Auth: the account's key in the `x-api-key` header (Vercel env UATTEND_API_KEY, added by Nicholas).
  * Each punch-report line is one in/out pair: we store it as an "in" punch and, once it has one, an "out" punch
- * (keys `ua:<Id>:in` / `ua:<Id>:out` in time_punches.uattend_id, so running again never doubles anything).
+ * (key `ua:<UserId>:<in|out>:<instant>` in time_punches.uattend_id, so running again never doubles anything; the
+ * report's own Id is just its line number).
  * Field names follow uAttend's help-center documentation; the parsing is forgiving about case and wrappers.
  */
 import { localToIso } from "@/lib/timeclock";
@@ -81,8 +82,9 @@ export async function uaPunches(from: string, to: string): Promise<UaPunch[]> {
       const user = String(f(x, "UserId") ?? ""), first = String(f(x, "FirstName") ?? ""), last = String(f(x, "LastName") ?? "");
       const day = f(x, "PunchDate");
       const inAt = when(f(x, "InDate") ?? day, f(x, "InTime")), outAt = when(f(x, "OutDate") ?? f(x, "InDate") ?? day, f(x, "OutTime"));
-      if (inAt) out.push({ key: `ua:${id}:in`, user, first, last, kind: "in", at: inAt });
-      if (outAt) out.push({ key: `ua:${id}:out`, user, first, last, kind: "out", at: outAt });
+      // uAttend's "Id" is only the line number in the report, so a punch is known by who and when
+      if (inAt) out.push({ key: `ua:${user}:in:${inAt}`, user, first, last, kind: "in", at: inAt });
+      if (outAt) out.push({ key: `ua:${user}:out:${outAt}`, user, first, last, kind: "out", at: outAt });
     }
     if (items.length < 500) break;
   }

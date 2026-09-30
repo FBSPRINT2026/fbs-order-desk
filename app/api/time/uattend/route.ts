@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uaPunches, uaRaw, uaUsers, uattendReady, type UaUser } from "@/lib/uattend";
-import { addDays, localDay } from "@/lib/timeclock";
+import { addDays, localDay, localToIso } from "@/lib/timeclock";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -13,7 +13,7 @@ export const maxDuration = 60;
  *   POST (an owner/admin on Time Clock → Import): { from, to } brings history over, a month at a time; {} = the same
  *        quick sync now.
  * Employees are matched by uAttend user ID, then by name (the ID is saved on the match); nobody is ever added from
- * uAttend (people not on our list are reported and their punches skipped). A punch changed in uAttend is updated here unless someone edited it here.
+ * uAttend (people not on our list are reported and their punches skipped). A punch changed in uAttend is voided here and the new one added (unless someone edited it here).
  * Status (last run, last success, last error, counts) is kept in uattend_sync for the pages to show.
  */
 type Admin = ReturnType<typeof createAdminClient>;
@@ -61,17 +61,27 @@ async function run(admin: Admin, from: string, to: string, withUsers: boolean) {
       const fromPunches = [...new Map(ps.map((p) => [p.user, { id: p.user, first: p.first, last: p.last, active: true, email: "" }])).values()];
       const r = await matchUsers(admin, await users(fromPunches)); map = r.byUa; summary.linked += r.linked; summary.unmatched = r.unmatched; usersDone = !usersBlocked;
     }
-    const keys = ps.map((p) => p.key), have = new Map<string, { id: string; at: string; edited_at: string | null }>();
+    const keys = [...new Set(ps.map((p) => p.key))], have = new Set<string>();
     for (let i = 0; i < keys.length; i += 300) {
-      const { data } = await admin.from("time_punches").select("id, at, edited_at, uattend_id").in("uattend_id", keys.slice(i, i + 300));
-      for (const r of (data || []) as { id: string; at: string; edited_at: string | null; uattend_id: string }[]) have.set(r.uattend_id, r);
+      const { data } = await admin.from("time_punches").select("uattend_id").in("uattend_id", keys.slice(i, i + 300));
+      for (const r of (data || []) as { uattend_id: string }[]) have.add(r.uattend_id);
     }
-    const ins: Record<string, unknown>[] = [];
+    const ins: Record<string, unknown>[] = [], seen = new Set<string>();
     for (const p of ps) {
       const emp = map.get(p.user); if (!emp) { summary.unknown++; continue; }
-      const h = have.get(p.key);
-      if (!h) ins.push({ employee_id: emp, kind: p.kind, at: p.at, source: "uattend", uattend_id: p.key, note: "uAttend" });
-      else if (!h.edited_at && Date.parse(h.at) !== Date.parse(p.at)) { await admin.from("time_punches").update({ at: p.at }).eq("id", h.id); summary.updated++; }
+      if (have.has(p.key) || seen.has(p.key)) continue;
+      seen.add(p.key);
+      ins.push({ employee_id: emp, kind: p.kind, at: p.at, source: "uattend", uattend_id: p.key, note: "uAttend" });
+    }
+    // a punch changed or removed in uAttend: the old one here is voided (never deleted), unless someone edited it here.
+    // Only from the second day of the window on (a shift that started the day before isn't in this report).
+    const live = new Set(keys), fromIso = localToIso(addDays(a, 1), 0), toIso = localToIso(addDays(b, 1), 0);
+    const emps = [...new Set(ps.map((p) => map!.get(p.user)).filter(Boolean))] as string[];
+    if (emps.length && fromIso < toIso) {
+      const { data: old } = await admin.from("time_punches").select("id, uattend_id").eq("source", "uattend").eq("voided", false).is("edited_at", null).in("employee_id", emps).gte("at", fromIso).lt("at", toIso).limit(5000);
+      const stale = ((old || []) as { id: string; uattend_id: string | null }[]).filter((r) => r.uattend_id && !live.has(r.uattend_id)).map((r) => r.id);
+      for (let i = 0; i < stale.length; i += 200) await admin.from("time_punches").update({ voided: true, note: "Changed or removed in uAttend" }).in("id", stale.slice(i, i + 200));
+      summary.updated += stale.length;
     }
     for (let i = 0; i < ins.length; i += 500) {
       const { data, error } = await admin.from("time_punches").upsert(ins.slice(i, i + 500), { onConflict: "uattend_id", ignoreDuplicates: true }).select("id");
