@@ -296,15 +296,22 @@ export default function MachineSchedule() {
       const tracked = [...new Set(all.filter((x) => x.t.day >= addDay(day, -14)).map((x) => x.employee_id))], rows = all.filter((x) => x.t.day === day);
       // hours worked this pay week (Friday on), pair by pair; a shift left open on an earlier day isn't counted (missing punch)
       const worked: Record<string, { worked: number; missing: boolean }> = {}, nowAbs = ord(day) * 1440 + nowT.min;
+      // lunch isn't punched here: like the schedule, a stretch longer than the lunch rule's hours loses the unpaid lunch.
+      // A day left open (no clock-out) counts to the end of that crew's shift, and is flagged.
+      const brk = sBase!.breaks, lunchAfter = (brk.lunchAfterHours || 8) * 60, lunch = brk.lunchMin || 0;
+      const endOf = (id: string, d: string) => { const c = sBase!.crews.find((k) => k.members && Object.values(k.members).includes(id)); const m = c && sBase!.machines.find((x) => x.crew === c.id); const sh = m && shiftOn(m, d); return sh ? sh[1] : null; };
+      const span = (a: number, b: number) => { const len = Math.max(0, b - a); return len > lunchAfter ? len - lunch : len; };
       for (const id of ids) {
         const ps = all.filter((x) => x.employee_id === id && x.t.day >= ws);
         if (!ps.length) continue;
-        let open: number | null = null, tot = 0, missing = false;
+        let open: { at: number; day: string; min: number } | null = null, tot = 0, missing = false;
+        const close = () => { if (!open) return; const e = endOf(id, open.day); tot += span(open.at, ord(open.day) * 1440 + (e != null && e > open.min ? e : open.min + 9 * 60)); missing = true; open = null; };
         for (const x of ps) {
           const a = ord(x.t.day) * 1440 + x.t.min, isIn = x.kind === "in" || x.kind === "break_end";
-          if (isIn) { if (open != null) missing = true; open = a; } else if (open != null) { tot += a - open; open = null; }
+          if (isIn) { if (open && open.day !== x.t.day) close(); else if (open) { missing = true; } open = { at: a, day: x.t.day, min: x.t.min }; }
+          else if (open) { tot += span(open.at, a); open = null; }
         }
-        if (open != null) { if (nowAbs - open < 16 * 60) tot += nowAbs - open; else missing = true; }
+        if (open) { if (open.day === day) tot += span(open.at, nowAbs); else close(); }
         worked[id] = { worked: tot, missing };
       }
       const okAt = (st?.last_ok_at as string | null) || null;
