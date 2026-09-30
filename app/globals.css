@@ -4375,3 +4375,4 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 @media (max-width:560px){.pl-ed .pl{width:100%}}
 .tmx-ed.ms-eq{width:min(760px,100%);max-width:none}
 @container (max-width:720px){.ms-tpanel .ms-tb-g{display:flex;flex-wrap:wrap;gap:4px 6px}.ms-tpanel .ms-tb-l{flex:0 0 100%}.ms-tpanel .ms-tb{flex:1 1 auto}}
+.pl-arr path{fill:none;stroke:var(--surface);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}

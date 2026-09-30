@@ -7,12 +7,13 @@ import type { Station } from "@/lib/production";
  * down, a flash that isn't heating. Tap a head to pick it (Equipment Status → press layout).
  * A 12-color press has 14 stations: load + 12 heads + unload.
  */
-export default function PressLayout({ layout, size = 300, selected = null, onPick, label, sub }: { layout: Station[]; size?: number; selected?: number | null; onPick?: (i: number) => void; label?: string; sub?: string }) {
+export default function PressLayout({ layout, size = 300, selected = null, onPick, label, sub, mirror = false }: { layout: Station[]; size?: number; selected?: number | null; onPick?: (i: number) => void; label?: string; sub?: string; mirror?: boolean }) {
   const heads = layout.length, n = heads + 2, c = size / 2, step = 360 / n;
   const rp = size * 0.34, len = size * 0.2, w = Math.min(((2 * Math.PI * rp) / n) * 0.72, size * 0.15), hub = size * 0.15;
   const small = size < 160;
-  // pallets travel counter-clockwise on screen: load just right of the bottom, head 1 next, … unload just left of it
-  const ang = (k: number) => 90 - step / 2 - k * step;
+  // pallets travel counter-clockwise on screen: load just right of the bottom, head 1 next, … unload just left of it.
+  // A flipped press (Presses 1 and 3) turns the other way: load on the left, head 1 to the left, the last head on the right.
+  const ang = (k: number) => (mirror ? 90 + step / 2 + k * step : 90 - step / 2 - k * step);
   const stations: { k: number; kind: Station | "load" | "unload"; head: number | null }[] = [
     { k: 0, kind: "load", head: null },
     ...layout.map((s, i) => ({ k: i + 1, kind: s, head: i })),
@@ -30,7 +31,7 @@ export default function PressLayout({ layout, size = 300, selected = null, onPic
       {stations.map(({ k, kind, head }) => {
         const a = ang(k), rad = (a * Math.PI) / 180, x = c + rp * Math.cos(rad), y = c + rp * Math.sin(rad);
         const pick = head != null && onPick ? () => onPick(head) : undefined;
-        const title = kind === "load" ? "Load" : kind === "unload" ? "Unload" : `Head ${head! + 1}: ${kind === "print" ? "printing" : kind === "flash" ? "flash" : kind === "down" ? "head down" : "flash not heating"}`;
+        const title = kind === "load" ? "Load (pallets come on here)" : kind === "unload" ? "Unload (off the press)" : `Head ${head! + 1}: ${kind === "print" ? "printing" : kind === "flash" ? "flash" : kind === "down" ? "head down" : "flash not heating"}`;
         return (
           <g key={k} className={`pl-st ${kind}${head != null && head === selected ? " sel" : ""}${pick ? " can" : ""}`} onClick={pick} role={pick ? "button" : undefined} tabIndex={pick ? 0 : undefined} aria-label={title} aria-pressed={pick ? head === selected : undefined} onKeyDown={pick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } } : undefined}>
             <title>{title}</title>
@@ -38,7 +39,10 @@ export default function PressLayout({ layout, size = 300, selected = null, onPic
             {(kind === "down" || kind === "flashdown") && <g transform={`rotate(${a} ${c} ${c})`} className="pl-x"><line x1={c + rp - len / 2 + 4} y1={c - w / 2 + 4} x2={c + rp + len / 2 - 4} y2={c + w / 2 - 4} /><line x1={c + rp - len / 2 + 4} y1={c + w / 2 - 4} x2={c + rp + len / 2 - 4} y2={c - w / 2 + 4} /></g>}
             {!small && <>
               <circle className="pl-badge" cx={x} cy={y} r={11} />
-              <text className="pl-num" x={x} y={y + 4} textAnchor="middle">{kind === "load" ? "L" : kind === "unload" ? "U" : head! + 1}</text>
+              {kind === "load" || kind === "unload" ? (
+                // load: an arrow onto the press (toward the hub); unload: an arrow off it
+                <g className="pl-arr" transform={`rotate(${kind === "load" ? a + 180 : a} ${x} ${y})`}><path d={`M ${x - 5.5} ${y} H ${x + 5} M ${x + 1} ${y - 4} L ${x + 5.5} ${y} L ${x + 1} ${y + 4}`} /></g>
+              ) : <text className="pl-num" x={x} y={y + 4} textAnchor="middle">{head! + 1}</text>}
               {(kind === "flash" || kind === "flashdown") && <text className="pl-tag" x={c + (rp + len / 2 + 11) * Math.cos(rad)} y={c + (rp + len / 2 + 11) * Math.sin(rad) + 3.5} textAnchor="middle">F</text>}
             </>}
           </g>

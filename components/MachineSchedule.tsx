@@ -2054,7 +2054,7 @@ function EquipmentPanel({ machines, rows, today, me, crewOf, stuck, booked, onCl
               return (
                 <li key={m.id} className={x ? (x.down ? "down" : "warn") : ""}>
                   <div className="ms-eq-row">
-                    {m.type === "screen" && <button type="button" className="pl-mini" title="Press layout: where the flashes are, heads down" onClick={() => open(m)}><PressLayout layout={layOf(m)} size={56} /></button>}
+                    {m.type === "screen" && <button type="button" className="pl-mini" title="Press layout: where the flashes are, heads down" onClick={() => open(m)}><PressLayout layout={layOf(m)} size={56} mirror={!!m.mirror} /></button>}
                     <span><b>{shortName(m)}</b>{c ? <span className="faint"> · {c.leader}</span> : null}<small className="faint"> · {m.type === "screen" ? `${fl} colors, ${fullFl(m)} flash${fullFl(m) === 1 ? "" : "es"}` : m.type === "embroidery" ? `${fl} heads` : "heat press"}</small></span>
                     <span className={"ms-eq-st" + (x ? (x.down ? " down" : " warn") : " ok")}>{!x ? "Working normally" : x.down ? `Down${x.until ? ` until ${dayShort(x.until)}` : ""}` : [x.colors != null ? `${x.colors} of ${x.full} ${m.type === "screen" ? "colors" : "heads"}` : "", x.flashes != null ? `${x.flashes} of ${x.fullFlashes} flashes` : "", x.speed != null ? `${x.speed}% speed` : ""].filter(Boolean).join(" · ")}</span>
                     {edit !== m.id && <button type="button" className="btn sm" onClick={() => open(m)}>{x ? "Update" : "Report a Problem"}</button>}
@@ -2069,7 +2069,7 @@ function EquipmentPanel({ machines, rows, today, me, crewOf, stuck, booked, onCl
                         const lc = layoutCounts(f.lay), fx = f.lay.flatMap((s, i) => (s === "flash" || s === "flashdown" ? [i + 1] : []));
                         return (
                           <div className="pl-ed">
-                            <PressLayout layout={f.lay} selected={pick} onPick={(i) => setPick(pick === i ? null : i)} label={`${fl - lc.down} colors`} sub={`${fl + 2} stations`} />
+                            <PressLayout layout={f.lay} mirror={!!m.mirror} selected={pick} onPick={(i) => setPick(pick === i ? null : i)} label={`${fl - lc.down} colors`} sub={`${fl + 2} stations`} />
                             <div className="pl-side">
                               <div className="pl-sum"><b>{fl} heads + load &amp; unload</b><span>{lc.units ? `Flash${lc.units === 1 ? "" : "es"} at ${headsTxt(fx)}` : "No flashes on the press"}{lc.down ? ` · ${lc.down} head${lc.down === 1 ? "" : "s"} down` : ""}{lc.broken ? ` · ${lc.broken} flash${lc.broken === 1 ? "" : "es"} not heating` : ""}</span></div>
                               {pick == null ? <div className="faint pl-hint">Tap a head to move a flash there, or to report it down.</div> : (

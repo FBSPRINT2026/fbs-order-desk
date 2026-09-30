@@ -13,6 +13,8 @@ export type Machine = {
   /** screen: flash-cure units it has (default 2). A flash sits in a head's spot, so each flash a job needs is one
    *  color less; more than it can hold in one pass means printing it in two rounds (twice the press time). */
   flashes?: number;
+  /** screen: the press turns the other way (load on the left of the operator, head 1 to the left): Presses 1 and 3 */
+  mirror?: boolean;
   /** when its day starts (minutes after midnight, 420 = 7:00 AM), hours it runs a day, and which days (0 = Sunday) */
   startMin: number; hoursPerDay: number; days: number[];
   /** Printavo status text that puts a job on this machine (until go-live), e.g. "Press 1" */
@@ -175,9 +177,9 @@ export const DEFAULT_PRODUCTION: ProductionSettings = {
     crew("c-juan", "Juan", 420, 930), // 7 AM – 3:30 PM
   ],
   machines: [
-    { ...m("p1", "Press 1 · 12C Gauntlet III", "screen", 12, 1, "Press 1"), crew: "c-miguel" },
+    { ...m("p1", "Press 1 · 12C Gauntlet III", "screen", 12, 1, "Press 1"), crew: "c-miguel", mirror: true },
     { ...m("p2", "Press 2 · 8C Sportsman", "screen", 8, 1, "Press 2"), crew: "c-ana" },
-    { ...m("p3", "Press 3 · 8C Sportsman", "screen", 8, 1, "Press 3"), crew: "c-kelsey" },
+    { ...m("p3", "Press 3 · 8C Sportsman", "screen", 8, 1, "Press 3"), crew: "c-kelsey", mirror: true },
     { ...m("p4", "Press 4 · 10 Color", "screen", 10, 1, "Press 4"), crew: "c-juan" },
     m("e12", "Embroidery · 12 Head", "embroidery", 15, 12, "12 Head"),
     m("e6", "Embroidery · 6 Head", "embroidery", 15, 6, "6 Head"),
