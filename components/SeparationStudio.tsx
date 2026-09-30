@@ -39,7 +39,9 @@ export const SEP_STATUS: Record<SepRow["status"], { label: string; c: string }> 
 
 type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean; lib: "auto" | "wilflex" | "pms"; solidOut?: "pixels" | "vector";
   /** underbase choke and color trap, in points at the print size (so they mean the same at any resolution) */
-  chokePt?: number; trapPt?: number };
+  chokePt?: number; trapPt?: number;
+  /** films: dot gain to take off halftones ahead of time (0.2 = a 50% dot prints about 70%) */
+  gain?: number };
 const CHOKE_PT = 0.5, TRAP_PT = 0.5;
 /** points at the print size → pixels of a copy `w` px wide */
 const ptPx = (pt: number, w: number, widthIn: number) => Math.round((pt * w) / (widthIn * 72));
@@ -390,8 +392,8 @@ export default function SeparationStudio({ id }: { id: string }) {
     setBusy("Making films…"); await new Promise((r) => setTimeout(r, 30));
     const pages = hr.plates.map((p, i) => {
       const ht = tonal || !!p.tonal;
-      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, ht, st.lpi, st.angle);
-      return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg` : " - solid"} - print ${st.widthIn}" wide at 100%` };
+      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, ht, st.lpi, st.angle, st.gain || 0);
+      return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg${st.gain ? ` - dot gain ${Math.round(st.gain * 100)}% taken off` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
     });
     return filmPdf(pages);
   }
@@ -550,9 +552,10 @@ export default function SeparationStudio({ id }: { id: string }) {
               const lvl = ppi >= 250 ? "ok" : ppi >= 150 ? "warn" : "bad";
               return <div className={"sep-res " + lvl}>Art is {img.naturalWidth} px wide: <b>{ppi} ppi</b> at {st.widthIn}&quot;. {lvl === "ok" ? "Sharp." : lvl === "warn" ? `Usable; edges soften a little past ${best}" (300 ppi).` : `Too small for ${st.widthIn}": it will print pixelated. Up to ${best}" is sharp; get bigger art or vector (SVG / EPS)${st.method === "spot" ? ", or try Smooth vector for solid inks" : ""}.`}</div>;
             })()}
-            {tonal && <><label className="sep-f">Halftone LPI<input type="number" min={25} max={85} value={st.lpi} onChange={(e) => set({ lpi: +e.target.value || 55 })} /></label><label className="sep-f">Angle<input type="number" min={0} max={90} step={0.5} value={st.angle} onChange={(e) => set({ angle: +e.target.value })} /></label></>}
+            {(tonal || plates.some((p) => p.tonal)) && <><label className="sep-f">Halftone LPI<input type="number" min={25} max={85} value={st.lpi} onChange={(e) => set({ lpi: +e.target.value || 55 })} /></label><label className="sep-f">Angle<input type="number" min={0} max={90} step={0.5} value={st.angle} onChange={(e) => set({ angle: +e.target.value })} /></label></>}
             {st.method === "spot" && <label className="sep-f" title="Each color spreads this far under the darker color printed after it, so colors that touch overlap a hair: no gaps, even if a screen is slightly off">Trap <input type="range" min={0} max={2} step={0.25} value={st.trapPt ?? TRAP_PT} onChange={(e) => set({ trapPt: +e.target.value })} /> <b>{st.trapPt ?? TRAP_PT} pt</b></label>}
             {st.method === "spot" && !vart?.ok && <label className="sep-f" title="Pixels: the art's own pixels at full size, like Separo. Smooth vector: traced curves, for low-resolution art.">Solid inks<select value={st.solidOut || "pixels"} onChange={(e) => set({ solidOut: e.target.value as Studio["solidOut"] })}><option value="pixels">Pixels (exact)</option><option value="vector">Smooth vector</option></select></label>}
+            {(tonal || plates.some((p) => p.tonal)) && <label className="sep-f" title="Halftone dots grow on the shirt (a 50% dot prints about 65–70%). The films take that off ahead of time. Leave at 0 if your RIP already does it.">Dot gain (films)<select value={st.gain || 0} onChange={(e) => set({ gain: +e.target.value })}>{[0, 0.1, 0.15, 0.2, 0.25, 0.3].map((g) => <option key={g} value={g}>{g ? `${Math.round(g * 100)}%` : "None"}</option>)}</select></label>}
             <label className="sep-f">Film DPI<select value={st.dpi} onChange={(e) => set({ dpi: +e.target.value })}>{[360, 600, 720].map((d) => <option key={d} value={d}>{d}</option>)}</select></label>
           </section>
         </aside>
@@ -638,7 +641,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             </div>
             <div className="sep-dl">
               <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await aiFile(), `${slug(title)}-seps.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Illustrator file (spot colors)</button>
-              <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await filmsFile(), `${slug(title)}-films.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Films PDF ({st.dpi} dpi{tonal ? `, ${st.lpi} lpi` : ""})</button>
+              <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await filmsFile(), `${slug(title)}-films.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Films PDF ({st.dpi} dpi{tonal || plates.some((p) => p.tonal) ? `, ${st.lpi} lpi` : ""})</button>
             </div>
             {(row.files || []).length > 0 && <ul className="sep-files">{row.files.filter((f) => f.kind !== "plate").map((f) => <li key={f.path}><button type="button" className="linkbtn" onClick={() => openFile(f.path)}>{f.name}</button></li>)}</ul>}
             <p className="sep-help">The Illustrator file opens straight in Illustrator: each ink is a spot color swatch, so File → Print → Separations prints one film per ink.{img && !vart ? ` Files are made from the art at full size: ${outSize().ppi} pixels per inch at ${st.widthIn}" wide${outSize().ppi < 200 ? " (low: consider Smooth vector for solid inks, or better art)" : ""}.` : vart?.ok ? " Vector art: the original shapes, sharp at any size." : ""}</p>

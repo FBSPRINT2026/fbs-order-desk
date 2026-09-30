@@ -639,7 +639,7 @@ export function composite(res: { plates: Plate[]; w: number; h: number }, garmen
  * A plate as film at `dpi` for a print `widthIn` wide: 1 = black (ink). Spot plates are solid (edges at 50%);
  * simulated-process plates are halftoned: round dots at `lpi`, angled `angle`°, sized by the ink coverage.
  */
-export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: number, halftone: boolean, lpi = 55, angle = 22.5): { W: number; H: number; bits: Uint8Array } {
+export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: number, halftone: boolean, lpi = 55, angle = 22.5, gain = 0): { W: number; H: number; bits: Uint8Array } {
   const W = Math.max(1, Math.round(widthIn * dpi)), H = Math.max(1, Math.round(W * (h / w))), rowBytes = Math.ceil(W / 8);
   const bits = new Uint8Array(rowBytes * H), sx = w / W, sy = h / H;
   const cell = dpi / lpi, rad = (angle * Math.PI) / 180, cs = Math.cos(rad), sn = Math.sin(rad);
@@ -652,7 +652,13 @@ export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: n
     for (let x = 0; x < W; x++) {
       const fx = Math.max(0, Math.min(w - 1, (x + 0.5) * sx - 0.5)), x0 = Math.floor(fx), x1 = Math.min(w - 1, x0 + 1), tx = fx - x0;
       const top = A[r0 + x0] + (A[r0 + x1] - A[r0 + x0]) * tx, bot = A[r1 + x0] + (A[r1 + x1] - A[r1 + x0]) * tx;
-      const v = (top + (bot - top) * ty) / 255;
+      let v = (top + (bot - top) * ty) / 255;
+      // halftones: dots smaller than the screen can hold print nothing, nearly-solid prints solid (4% / 96%), and
+      // dot gain is taken off ahead of time (a dot grows about gain·4·v·(1−v) on the shirt: 20% at a 50% dot)
+      if (halftone && v > 0.02 && v < 0.98) {
+        if (gain > 0) { const G4 = 4 * gain; v = ((1 + G4) - Math.sqrt((1 + G4) ** 2 - 4 * G4 * v)) / (2 * G4); }
+        if (v < 0.04) v = 0; else if (v > 0.96) v = 1;
+      }
       let on: boolean;
       if (!halftone) on = v >= 0.5;
       else if (v <= 0.02) on = false;
