@@ -25,7 +25,7 @@ export default function TimeEmployees({ d }: { d: TimeData }) {
           <ul className="db-list">{list.map((e, i) => (
             <li key={e.id} className="db-row tmx-row" style={{ cursor: "pointer" }} onClick={() => setEdit(e)}>
               <span className="tmx-av" style={{ background: e.color || COLORS[i % COLORS.length] }}>{(e.first_name[0] || "") + (e.last_name[0] || "")}</span>
-              <span className="db-main"><b>{fullName(e)}{!e.active && <span className="faint"> · former</span>}</b><span className="faint">{[e.title, e.department, e.staff_email ? "has a shop login" : ""].filter(Boolean).join(" · ") || "—"}</span></span>
+              <span className="db-main"><b>{e.last_name ? `${e.last_name}, ${e.first_name}` : e.first_name}{!e.active && <span className="faint"> · former</span>}</b><span className="faint">{[e.title, e.department, e.staff_email ? "has a shop login" : ""].filter(Boolean).join(" · ") || "—"}</span></span>
               <span className="db-side">{e.has_pin ? <span className="tmx-tag ok">PIN set</span> : <span className="tmx-tag warn">No PIN</span>}<span className="faint">{e.pay_type === "salary" ? "Salary" : "Hourly"}</span></span>
             </li>
           ))}</ul>

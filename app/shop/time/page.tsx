@@ -33,7 +33,7 @@ export default function TimePage() {
     const email = (user?.email || "").toLowerCase();
     const [{ data: st }, { data: emps }, { data: s }] = await Promise.all([
       sb.from("staff").select("role").eq("email", email).maybeSingle(),
-      sb.from("employees").select("*").order("first_name"),
+      sb.from("employees").select("*").order("last_name").order("first_name"),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
     setMe(email); setRole((st?.role as string) || "");

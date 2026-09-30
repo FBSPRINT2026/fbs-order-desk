@@ -2,6 +2,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { KIND_LABEL, addDays, dayLabel, daysBetween, dec, fullName, hm, localDay, localMinutes, localToIso, periodOf, timeLabel, timecard, type Punch, type TimeOff } from "@/lib/timeclock";
+import { useSticky } from "@/lib/useSticky";
 import { isBoss, type TimeData } from "./types";
 
 /**
@@ -16,7 +17,10 @@ export default function TimeCards({ d }: { d: TimeData }) {
   const [pay, setPay] = useState<Record<string, { rate: number | null; salary: number | null }>>({});
   const [approved, setApproved] = useState<{ approved_at: string | null; approved_by: string | null } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const [edit, setEdit] = useState<{ emp: string; punch?: Punch; day: string } | null>(null);
+  const [edit, setEdit] = useState<{ emp: string; punch?: Punch; day: string; kind?: Punch["kind"] } | null>(null);
+  // Summary (hours per person) or Punches (every in and out, day by day, for everyone)
+  const [view, setView] = useSticky<"summary" | "punches">("time.cardsView", "summary");
+  const [q, setQ] = useState("");
   const boss = isBoss(d);
 
   const load = useCallback(async () => {
@@ -80,6 +84,19 @@ export default function TimeCards({ d }: { d: TimeData }) {
         <div className={"sc-kpi " + (tot.issues ? "bad" : "")}><span>To Fix</span><b>{tot.issues}</b><small>missed or odd punches</small></div>
         <div className="sc-kpi"><span>People</span><b>{cards.length}</b><small>on this period</small></div>
       </div>
+      <div className="tmx-vbar">
+        <div className="rv-seg">{([["summary", "Summary"], ["punches", "All Punches"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
+        {view === "punches" && <input className="tmx-q" type="search" placeholder="Find someone…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find someone" />}
+      </div>
+      {view === "punches" ? (
+        punches === null ? <div className="db-empty">Loading…</div> : !cards.length ? <div className="db-empty">No hours in this period.</div> : (
+          <div className="tpl-list">
+            {cards.filter(({ e }) => !q.trim() || fullName(e).toLowerCase().includes(q.trim().toLowerCase())).map(({ e, c }) => (
+              <PunchList key={e.id} e={e} c={c} days={days} punches={punches} otWeekly={d.settings.otWeekly} onEdit={(punch, day, kind) => setEdit({ emp: e.id, punch, day, kind })} />
+            ))}
+          </div>
+        )
+      ) : (
       <section className="db-card db-blue">
         {punches === null ? <div className="db-empty">Loading…</div> : !cards.length ? <div className="db-empty">No hours in this period.</div> : (
           <table className="rv-tbl tmx-tbl">
@@ -97,22 +114,7 @@ export default function TimeCards({ d }: { d: TimeData }) {
                 </tr>
                 {open === e.id && (
                   <tr className="tmx-detail"><td colSpan={7}>
-                    <div className="tmx-days">{days.map((day) => {
-                      const dh = c.days[day];
-                      const ps = (punches || []).filter((p) => p.employee_id === e.id && localDay(p.at) === day);
-                      return (
-                        <div key={day} className={"tmx-day" + (dh?.issues.length ? " bad" : "")}>
-                          <div className="tmx-dh"><b>{dayLabel(day)}</b><span className="num">{dh ? hm(dh.worked) : "0:00"}</span></div>
-                          {ps.map((p) => (
-                            <button key={p.id} type="button" className={"tmx-pp " + p.kind + (p.voided ? " void" : "") + (p.original_at ? " edited" : "")} onClick={() => setEdit({ emp: e.id, punch: p, day })} title={[p.source, p.original_at ? `was ${timeLabel(p.original_at)}, changed by ${p.edited_by}` : "", p.note].filter(Boolean).join(" · ")}>
-                              {KIND_LABEL[p.kind].replace("Clock ", "")} <b>{timeLabel(p.at)}</b>{p.original_at ? " ✎" : ""}{p.voided ? " (voided)" : ""}
-                            </button>
-                          ))}
-                          {dh?.issues.map((i, k) => <div key={k} className="tmx-issue">{i.text}</div>)}
-                          <button type="button" className="linkbtn tmx-add" onClick={() => setEdit({ emp: e.id, day })}>+ Add punch</button>
-                        </div>
-                      );
-                    })}</div>
+                    <PunchList e={e} c={c} days={days} punches={punches || []} otWeekly={d.settings.otWeekly} bare onEdit={(punch, day, kind) => setEdit({ emp: e.id, punch, day, kind })} />
                   </td></tr>
                 )}
               </Fragment>
@@ -120,17 +122,18 @@ export default function TimeCards({ d }: { d: TimeData }) {
           </table>
         )}
       </section>
-      {edit && <PunchEditor d={d} emp={edit.emp} day={edit.day} punch={edit.punch} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
+      )}
+      {edit && <PunchEditor d={d} emp={edit.emp} day={edit.day} punch={edit.punch} kind0={edit.kind} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
     </div>
   );
 }
 
 /** Fix a punch: change its time (the original is kept), void it, or add a missed one. */
-function PunchEditor({ d, emp, day, punch, onClose, onSaved }: { d: TimeData; emp: string; day: string; punch?: Punch; onClose: () => void; onSaved: () => void }) {
+function PunchEditor({ d, emp, day, punch, kind0, onClose, onSaved }: { d: TimeData; emp: string; day: string; punch?: Punch; kind0?: Punch["kind"]; onClose: () => void; onSaved: () => void }) {
   const toHHMM = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
   const [date, setDate] = useState(punch ? localDay(punch.at) : day);
-  const [time, setTime] = useState(punch ? toHHMM(localMinutes(punch.at)) : "08:00");
-  const [kind, setKind] = useState<Punch["kind"]>(punch?.kind || "in");
+  const [time, setTime] = useState(punch ? toHHMM(localMinutes(punch.at)) : kind0 === "out" ? "16:00" : "08:00");
+  const [kind, setKind] = useState<Punch["kind"]>(punch?.kind || kind0 || "in");
   const [note, setNote] = useState(punch?.note || "");
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const name = fullName(d.employees.find((e) => e.id === emp) || { first_name: "", last_name: "" });
@@ -165,5 +168,87 @@ function PunchEditor({ d, emp, day, punch, onClose, onSaved }: { d: TimeData; em
         </div>
       </div>
     </div>
+  );
+}
+
+const t12 = (min: number) => { const h = Math.floor(min / 60) % 24, m = min % 60; return `${h % 12 || 12}:${String(m).padStart(2, "0")}${h < 12 ? "a" : "p"}`; };
+type Seg = { a: number; b: number | null; inP: Punch; outP: Punch | null; brk: boolean };
+/** a day's punches as in → out stretches (a break splits one); an in with nothing after it is left open */
+function pairsOf(ps: Punch[]): Seg[] {
+  const out: Seg[] = [];
+  let cur: { p: Punch; brk: boolean } | null = null;
+  for (const p of ps) {
+    if (p.kind === "in" || p.kind === "break_end") { if (cur) out.push({ a: localMinutes(cur.p.at), b: null, inP: cur.p, outP: null, brk: cur.brk }); cur = { p, brk: p.kind === "break_end" }; }
+    else if (cur) { out.push({ a: localMinutes(cur.p.at), b: localMinutes(p.at), inP: cur.p, outP: p, brk: cur.brk }); cur = null; }
+  }
+  if (cur) out.push({ a: localMinutes(cur.p.at), b: null, inP: cur.p, outP: null, brk: cur.brk });
+  return out;
+}
+
+/**
+ * One person's pay period as a list: each day (Friday → Thursday), a bar of the day from early morning to evening with
+ * the time they were on the clock, their ins and outs (tap one to fix it), and the day's hours. A day with no
+ * clock-out shows it in red; hours past the weekly overtime line are marked.
+ */
+function PunchList({ e, c, days, punches, otWeekly, onEdit, bare }: { e: { id: string; first_name: string; last_name: string; department: string }; c: ReturnType<typeof timecard>; days: string[]; punches: Punch[]; otWeekly: number; onEdit: (p: Punch | undefined, day: string, kind?: Punch["kind"]) => void; bare?: boolean }) {
+  const today = localDay(new Date()), nowMin = localMinutes(new Date());
+  const mine = punches.filter((p) => p.employee_id === e.id && !p.voided).sort((a, b) => a.at.localeCompare(b.at));
+  const byDay = days.map((day) => ({ day, segs: pairsOf(mine.filter((p) => localDay(p.at) === day)) }));
+  // the bar spans 5 AM – 7 PM, stretched for anyone earlier or later
+  const all = byDay.flatMap((x) => x.segs.flatMap((s) => [s.a, s.b ?? s.a]));
+  const lo = Math.min(300, ...all.map((m) => Math.floor(m / 60) * 60)), hi = Math.max(1140, ...all.map((m) => Math.ceil(m / 60) * 60));
+  const pct = (m: number) => `${((Math.max(lo, Math.min(hi, m)) - lo) / (hi - lo)) * 100}%`;
+  const ticks = Array.from({ length: (hi - lo) / 60 + 1 }, (_, i) => lo + i * 60).filter((m) => (m - lo) % 180 === 0);
+  let cum = 0;
+  const cap = otWeekly * 60, total = c.regular + c.overtime;
+  const initials = `${e.first_name[0] || ""}${e.last_name[0] || ""}`.toUpperCase();
+  return (
+    <section className={"tpl" + (bare ? " bare" : "")}>
+      {!bare && (
+        <div className="tpl-h">
+          <span className="tpl-av" aria-hidden>{initials}</span>
+          <div className="tpl-n"><b>{e.last_name ? `${e.last_name}, ${e.first_name}` : e.first_name}</b><small>{e.department || "\u00a0"}</small></div>
+          <span className="spacer" />
+          <span className="tpl-tot"><b className="num">{hm(total)}</b><small>worked</small></span>
+          {c.overtime > 0 && <span className="tpl-tot ot"><b className="num">{hm(c.overtime)}</b><small>overtime</small></span>}
+          {c.issues.length > 0 && <span className="tpl-flag">{c.issues.length} to fix</span>}
+        </div>
+      )}
+      <div className="tpl-rows">
+        <div className="tpl-r tpl-axis" aria-hidden><span /><div className="tpl-track">{ticks.map((m) => <i key={m} style={{ left: pct(m) }}>{t12(m).replace(":00", "")}</i>)}</div><span /><span /></div>
+        {byDay.map(({ day, segs }) => {
+          const dh = c.days[day], w = dh?.worked || 0, before = cum; cum += w;
+          const ot = Math.max(0, cum - Math.max(cap, before));
+          const dl = dayLabel(day).split(", ");
+          const isToday = day === today;
+          return (
+            <div key={day} className={"tpl-r" + (segs.length ? "" : " none") + (isToday ? " today" : "") + (dh?.issues.length ? " bad" : "")}>
+              <div className="tpl-d"><b>{dl[0]}</b><small>{dl[1] || ""}</small></div>
+              <div className="tpl-track">
+                {ticks.map((m) => <i key={m} className="g" style={{ left: pct(m) }} />)}
+                {segs.map((s, k) => {
+                  const end = s.b ?? (isToday ? nowMin : Math.min(hi, s.a + 60));
+                  return <span key={k} className={"tpl-seg" + (s.b == null ? (isToday ? " live" : " open") : "")} style={{ left: pct(s.a), width: `calc(${pct(end)} - ${pct(s.a)})` }} title={`${t12(s.a)} – ${s.b != null ? t12(s.b) : isToday ? "now" : "no clock-out"}`} />;
+                })}
+              </div>
+              <div className="tpl-ps">
+                {!segs.length ? <span className="faint">No punches</span> : segs.map((s, k) => (
+                  <span key={k} className="tpl-pair">
+                    <button type="button" className={"tpl-p in" + (s.inP.original_at ? " ed" : "")} onClick={() => onEdit(s.inP, day)} title={`${s.brk ? "Back from break" : "In"} ${timeLabel(s.inP.at)} · ${s.inP.source}${s.inP.original_at ? ` · changed (was ${timeLabel(s.inP.original_at)})` : ""}`}>{t12(s.a)}</button>
+                    <span className="tpl-dash" aria-hidden>→</span>
+                    {s.outP ? <button type="button" className={"tpl-p out" + (s.outP.original_at ? " ed" : "")} onClick={() => onEdit(s.outP!, day)} title={`${s.outP.kind === "break_start" ? "Break" : "Out"} ${timeLabel(s.outP.at)} · ${s.outP.source}`}>{t12(s.b!)}</button>
+                      : isToday ? <span className="tpl-p live">on the clock</span>
+                      : <button type="button" className="tpl-p miss" onClick={() => onEdit(undefined, day, "out")} title="No clock-out: add it">missing out</button>}
+                  </span>
+                ))}
+                <button type="button" className="tpl-add" onClick={() => onEdit(undefined, day)} aria-label={`Add a punch on ${dayLabel(day)}`} title="Add a punch">+</button>
+              </div>
+              <div className="tpl-hrs num">{w ? hm(w) : "—"}{ot > 0 && <small className="ot">{hm(ot)} OT</small>}</div>
+            </div>
+          );
+        })}
+        <div className="tpl-r tpl-foot"><div className="tpl-d"><b>Total</b></div><div /><div className="tpl-ps faint">{c.overtime > 0 ? `${hm(c.regular)} regular + ${hm(c.overtime)} overtime` : `${hm(c.regular)} regular`}</div><div className="tpl-hrs num"><b>{hm(total)}</b></div></div>
+      </div>
+    </section>
   );
 }
