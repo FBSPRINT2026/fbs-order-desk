@@ -128,6 +128,8 @@ export default function ProductionSettingsPage() {
             {num("Pieces / hour, simple job", s.screen.baseRate, (x) => upd((d) => { d.screen.baseRate = x; }), 10, "auto press planning figure ~400")}
             {num("Slower per color over 4 (%)", Math.round(s.screen.perExtraColor * 100), (x) => upd((d) => { d.screen.perExtraColor = x / 100; }), 1)}
             {num("Dark shirts: speed (%)", Math.round(s.screen.darkFactor * 100), (x) => upd((d) => { d.screen.darkFactor = x / 100; }), 5, "flash + underbase ~75%")}
+            {num("Puff ink: speed (%)", Math.round((s.screen.puffFactor ?? 0.7) * 100), (x) => upd((d) => { d.screen.puffFactor = Math.max(0.2, Math.min(1, x / 100)); }), 5, "thick stencil, extra strokes, careful flash ~70%")}
+            {num("Puff ink: setup (× longer)", s.screen.puffSetupFactor ?? 1.5, (x) => upd((d) => { d.screen.puffSetupFactor = Math.max(1, Math.min(4, x)); }), 0.1, "thicker stencils, test prints ~1.5×")}
             {num("Hoodies / jackets: speed (%)", Math.round(s.screen.heavyFactor * 100), (x) => upd((d) => { d.screen.heavyFactor = x / 100; }), 5, "loading ~50–60%")}
             {num("Totes / bags: speed (%)", Math.round(s.screen.bagFactor * 100), (x) => upd((d) => { d.screen.bagFactor = x / 100; }), 5)}
             {num("Pockets / sleeves: speed (%)", Math.round(s.screen.smallLocFactor * 100), (x) => upd((d) => { d.screen.smallLocFactor = x / 100; }), 5)}

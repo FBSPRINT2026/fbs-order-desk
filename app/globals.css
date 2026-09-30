@@ -4063,12 +4063,12 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-qf-g input[type=number]{width:110px}
 .ms-qf-g .ms-qf-dark{flex-direction:row;align-items:center;padding-bottom:6px}
 .ms-qf-l{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.ms-qf-l label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--ink-2);padding:6px 8px;border:1px solid var(--line);border-radius:8px}
-.ms-qf-l label.on{border-color:var(--accent);background:var(--accent-soft)}
+.ms-qf-loc{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--ink-2);padding:6px 8px;border:1px solid var(--line);border-radius:8px}
+.ms-qf-loc.on{border-color:var(--accent);background:var(--accent-soft)}
 .ms-qf-l select{font-size:12.5px;width:100%}
 .ms-qf-need{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2)}
 .ms-qf-need input{width:auto}
-.ms-when-g{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ms-when-g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .ms-when-c{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .ms-when-c small{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .ms-when-c small em{font-style:normal;color:#fff;background:#7C5CD6;border-radius:999px;padding:0 7px;font-size:10px}
@@ -4077,6 +4077,7 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 .ms-when-c .good{color:var(--ok);font-weight:700;font-size:12.5px}.ms-when-c .bad{color:var(--danger);font-weight:700;font-size:12.5px}
 .ms-when-c.pick{border-color:#7C5CD6;box-shadow:0 0 0 1px #7C5CD6 inset}
 .ms-when-say{margin-top:4px;padding:6px 8px;border-radius:7px;background:var(--surface);color:var(--ink)!important;font-size:12.5px}
+@media (max-width:900px){.ms-when-g{grid-template-columns:1fr 1fr}}
 @media (max-width:700px){.ms-qf-l{grid-template-columns:1fr 1fr}.ms-when-g{grid-template-columns:1fr}}
 .ms-qf-need{justify-content:flex-start;align-self:flex-start;font-weight:400!important;flex-direction:row!important}
 /* Planner holds */
@@ -4090,3 +4091,9 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 @media (max-width:640px){.ms-plan-l li{grid-template-columns:1fr}}
 .ms-acts{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:1100px){.ms-acts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ms-whenp{max-width:980px;width:min(980px,96vw)}
+.ms-qf-speed{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-2)}
+.ms-qf-speed input{flex:1;max-width:280px;accent-color:var(--accent)}
+.ms-qf-speed b{min-width:120px}
+.ms-qf-l .ms-qf-puff{flex-direction:row!important;align-items:center;gap:5px;border:0!important;padding:0!important;background:none!important;font-size:12px}
+.ms-otline.ms-idle{background:var(--accent-soft);color:var(--ink-2)}

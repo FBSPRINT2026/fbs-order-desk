@@ -76,6 +76,8 @@ export type ProductionSettings = {
     perExtraColor: number;
     /** darks: add a white underbase screen, and run this fraction of the speed (flash) */
     underbaseOnDark: boolean; darkFactor: number;
+    /** puff ink: print at this fraction of the speed (thick stencil, extra strokes, careful flash), and set up this many times longer */
+    puffFactor: number; puffSetupFactor: number;
     /** hoodies / jackets / fleece, and totes / bags run slower (loading) */
     heavyFactor: number; bagFactor: number;
     /** pockets, sleeves, necks, legs: fiddly locations */
@@ -132,7 +134,7 @@ export const DEFAULT_PRODUCTION: ProductionSettings = {
     m("e1", "Embroidery · Single Head", "embroidery", 15, 1, "Single Head"),
     m("hp", "Heat Press", "heat", 0, 1, ""),
   ],
-  screen: { setupPerScreen: 6, teardownPerScreen: 3, baseRate: 400, perExtraColor: 0.04, underbaseOnDark: true, darkFactor: 0.75, heavyFactor: 0.55, bagFactor: 0.6, smallLocFactor: 0.6, minMinutes: 15 },
+  screen: { setupPerScreen: 6, teardownPerScreen: 3, baseRate: 400, perExtraColor: 0.04, underbaseOnDark: true, darkFactor: 0.75, puffFactor: 0.7, puffSetupFactor: 1.5, heavyFactor: 0.55, bagFactor: 0.6, smallLocFactor: 0.6, minMinutes: 15 },
   embroidery: {
     spmFlat: 700, spmCap: 600, hoopSecs: 30, trimSecs: 8, trimsPerDesign: 8, breakMinPer10k: 2, setupMin: 15, extraLocationSetupMin: 5,
     stitches: { "Left Chest": 8000, "Right Chest": 8000, "Cap Front": 8000, "Hat Front": 8000, "Full Front": 15000, "Full Back": 30000, "Sleeve": 5000, "Left Sleeve": 5000, "Right Sleeve": 5000, "Back Neck": 4000, "Nape": 4000, "Pocket": 6000, "default": 8000 },
@@ -165,9 +167,9 @@ export function mergeProduction(d: unknown): ProductionSettings {
 /* ---------- what a job needs ---------- */
 
 /** One decoration to run: a location on a group of garments. */
-export type Step = { method: MachineType; location: string; colors: number; screens: number; qty: number; dark: boolean; garment: "tee" | "heavy" | "bag" | "cap"; stitches: number; note: string };
+export type Step = { method: MachineType; location: string; colors: number; screens: number; qty: number; dark: boolean; garment: "tee" | "heavy" | "bag" | "cap"; stitches: number; note: string; /** puff ink (raised print): slower printing, longer setup */ puff?: boolean };
 /** Everything to run on one kind of machine, and the most colors any of it needs. */
-export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string };
+export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string; /** a hard or easy print: 0.7 = runs at 70% ("When can we print it?" speed) */ speed?: number };
 
 const LIGHT = /\b(white|natural|ash|cream|ivory|light|silver|heather\s*grey|sport\s*grey|pink|yellow|lime|sand|oatmeal|bone|vanilla|butter|mint|sky|baby)\b/i;
 const garmentKind = (text: string): Step["garment"] => (/\b(cap|hat|beanie|visor|trucker|snapback)\b/i.test(text) ? "cap" : /\b(tote|bag|backpack|apron)\b/i.test(text) ? "bag" : /\b(hood|hoodie|sweat|crew\s*neck|fleece|jacket|pullover|quarter|zip)\b/i.test(text) ? "heavy" : "tee");
@@ -195,7 +197,8 @@ export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "
       const colors = Math.max(1, Math.min(15, +i.colors || 1));
       const dark = darkQty > qty / 2;
       const screens = method === "screen" ? colors + (dark && s.screen.underbaseOnDark && colors < 11 ? 1 : 0) : 0;
-      steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "" });
+      const puff = method === "screen" && /puff/i.test(`${i.inks || ""} ${i.notes || ""} ${(i as unknown as { size?: string }).size || ""}`);
+      steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff });
     }
   }
   return groupNeeds(steps);
@@ -287,7 +290,7 @@ export function needsForPrintavo(s: ProductionSettings, row: { qty: number | nul
 /** "Print 1c + Print 1c + Back 2c" → "Print 1c ×2 + Back 2c" */
 const collapse = (ls: string[]) => [...new Set(ls)].map((l) => { const n = ls.filter((x) => x === l).length; return n > 1 ? `${l} ×${n}` : l; }).join(" + ");
 function needOf(type: MachineType, st: Step[]): Need {
-  return { type, steps: st, needColors: type === "screen" ? Math.max(...st.map((x) => x.screens)) : 0, qty: Math.max(...st.map((x) => x.qty)), label: collapse(st.map((x) => (type === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}` : type === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k${x.garment === "cap" ? " cap" : ""}` : x.location))) };
+  return { type, steps: st, needColors: type === "screen" ? Math.max(...st.map((x) => x.screens)) : 0, qty: Math.max(...st.map((x) => x.qty)), label: collapse(st.map((x) => (type === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}${x.puff ? " puff" : ""}` : type === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k${x.garment === "cap" ? " cap" : ""}` : x.location))) };
 }
 function groupNeeds(steps: Step[]): Need[] {
   const out: Need[] = [];
@@ -323,7 +326,7 @@ export type Estimate = { minutes: number; setup: number; run: number; teardown: 
 
 /** Minutes for a need on a given machine (embroidery depends on the heads; screen on the press's own speed). */
 export function estimate(s: ProductionSettings, need: Need, mach: Machine): Estimate {
-  const f = (s.factor[need.type] || 1) / (mach.speed || 1);
+  const f = (s.factor[need.type] || 1) / (mach.speed || 1) / Math.max(0.3, need.speed || 1);
   let setup = 0, run = 0, teardown = 0;
   const parts: Estimate["parts"] = [];
   if (need.type === "screen") {
@@ -331,6 +334,7 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
     for (const st of need.steps) {
       let rate = S.baseRate * Math.max(0.5, 1 - S.perExtraColor * Math.max(0, st.colors - 4));
       if (st.dark) rate *= S.darkFactor;
+      if (st.puff) rate *= S.puffFactor ?? 0.7;
       if (st.garment === "heavy") rate *= S.heavyFactor;
       if (st.garment === "bag") rate *= S.bagFactor;
       if (smallLoc(st.location)) rate *= S.smallLocFactor;
@@ -345,10 +349,11 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
         if (st.colors >= 6) { rateF *= pct(k.colors); suF *= pct(k.colors); }
       }
       rate *= rateF;
+      if (st.puff) suF /= S.puffSetupFactor ?? 1.5;
       const su = (st.screens * S.setupPerScreen) / suF, td = (st.screens * S.teardownPerScreen) / (k ? pct(k.teardown) : 1), r = (st.qty / Math.max(1, rate)) * 60;
       const tot = Math.max(S.minMinutes, su + r + td);
       setup += su; run += tot - su - td; teardown += td;
-      parts.push({ label: `${st.location}: ${st.screens} screens, ${st.qty} pcs @ ${Math.round(rate)}/hr`, minutes: tot * f });
+      parts.push({ label: `${st.location}${st.puff ? " (puff)" : ""}: ${st.screens} screens, ${st.qty} pcs @ ${Math.round(rate)}/hr`, minutes: tot * f });
     }
   } else if (need.type === "embroidery") {
     const E = s.embroidery;
@@ -368,16 +373,16 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
 }
 
 /** A job described in a few fields (the "When can we print it?" form) as what it needs from a machine. */
-export type QuickJob = { method: MachineType; qty: number; garment: "tee" | "heavy" | "bag" | "cap"; dark: boolean; locations: { name: string; colors: number; stitches: number }[] };
+export type QuickJob = { method: MachineType; qty: number; garment: "tee" | "heavy" | "bag" | "cap"; dark: boolean; locations: { name: string; colors: number; stitches: number; puff?: boolean }[]; /** 100 = normal; 70 = a hard print that runs at 70% */ speed?: number };
 export function quickNeed(s: ProductionSettings, j: QuickJob): Need {
   const locs = j.locations.filter((l) => (j.method === "embroidery" ? l.stitches > 0 : l.colors > 0));
   const steps: Step[] = locs.map((l) => {
     const colors = j.method === "screen" ? l.colors : 0;
     const screens = j.method === "screen" ? colors + (j.dark && s.screen.underbaseOnDark && colors < 11 ? 1 : 0) : 0;
-    return { method: j.method, location: l.name, colors, screens, qty: j.qty, dark: j.dark, garment: j.method === "embroidery" && j.garment === "cap" ? "cap" : j.garment, stitches: j.method === "embroidery" ? l.stitches : 0, note: "" };
+    return { method: j.method, location: l.name, colors, screens, qty: j.qty, dark: j.dark, garment: j.method === "embroidery" && j.garment === "cap" ? "cap" : j.garment, stitches: j.method === "embroidery" ? l.stitches : 0, note: "", puff: j.method === "screen" && !!l.puff };
   });
-  const label = steps.map((x) => (j.method === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}` : j.method === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k` : x.location)).join(" + ");
-  return { type: j.method, steps, needColors: Math.max(0, ...steps.map((x) => x.screens)), qty: j.qty, label };
+  const label = steps.map((x) => (j.method === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}${x.puff ? " puff" : ""}` : j.method === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k` : x.location)).join(" + ");
+  return { type: j.method, steps, needColors: Math.max(0, ...steps.map((x) => x.screens)), qty: j.qty, label, speed: (j.speed ?? 100) / 100 };
 }
 
 /** Can this machine run it? (a job needing 11 screens only fits a 12-color press) */

@@ -60,8 +60,8 @@ type Seg = { c: Card; day: string; start: number; end: number; part: number; par
 type View = "split" | "timeline" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number };
 type WhatIf = { id: string; kind: "split" | "ot" | "sat" | "combo"; title: string; detail: string; split: boolean; shifts: { machine: string; crew_id: string | null; day: string; start_min: number; end_min: number }[]; splits: number; lateAfter: number; stillLate: string[]; addedHours: number; cost: number };
-type WhenOpt = { m: Machine; start: number; end: number; minutes: number; ot: number };
-type WhenResult = { need: Need; minutes: number; soonest: WhenOpt | null; open: WhenOpt | null; bumped: { job: Job; late: boolean }[]; noMachine: boolean };
+type WhenOpt = { m: Machine; start: number; end: number; minutes: number; ot: number; extra?: number; cost?: number; bumped?: { job: Job; late: boolean }[] };
+type WhenResult = { need: Need; minutes: number; soonest: WhenOpt | null; aggressive: WhenOpt | null; open: WhenOpt | null; slow: WhenOpt | null; noMachine: boolean };
 type Hold = { id: string; name: string; customer: string; spec: QuickJob | Record<string, never>; due_date: string | null; due_time: number | null; notes: string; status: string; created_by: string; created_at: string };
 type Extra = { id: string; machine: string; crew_id: string | null; day: string; start_min: number; end_min: number; note: string };
 type DayOff = { id: string; crew_id: string | null; machine: string | null; day: string; note: string; start_min: number | null; end_min: number | null; capacity: number | null; employee: string };
@@ -1130,17 +1130,19 @@ export default function MachineSchedule() {
   // booked time on each press/day (from the calendar), for trying a new job around it
   const obst = (keep: (c: Card) => boolean) => { const mp = new Map<string, [number, number][]>(); for (const c of cards) if (keep(c)) for (const g of segs.ofCard.get(c.key) || []) if (g.day >= today) { const k = c.machine.id + "|" + g.day; mp.set(k, [...(mp.get(k) || []), [g.start, g.end]]); } return mp; };
   // lay `minutes` of work on a press from t0 (absolute minutes) around its hours, breaks, downtime and booked time
-  const simFrom = (m: Machine, obs: Map<string, [number, number][]>, minutes: number, t0: number): WhenOpt => {
+  const simFrom = (m: Machine, obs: Map<string, [number, number][]>, minutes: number, t0: number, base?: Machine): WhenOpt => {
     const wins = (d: string) => { const sh = shiftOn(m, d); if (!sh) return []; return windowsIn(sh, [...downsOn(m, d, sh), ...(obs.get(m.id + "|" + d) || []).map(([a, b]): Down => [a, b, "Booked", 0])]); };
-    let t = t0, start = -1, left = minutes, ot = 0;
+    let t = t0, start = -1, left = minutes, ot = 0, extra = 0;
     for (let g = 0; g < 2000 && left > 0.01; g++) {
       const dd = Math.floor(t / 1440), mm = t - dd * 1440, d = fromOrd(dd), w = wins(d).find(([, y]) => mm < y);
       if (!w) { t = (dd + 1) * 1440; continue; }
       const a = Math.max(mm, w[0]); if (start < 0) start = dd * 1440 + a;
-      const e = Math.min(a + left / w[2], w[1]); const oa = otOn(m, d); if (oa != null) ot += Math.max(0, e - Math.max(a, oa));
+      const e = Math.min(a + left / w[2], w[1]); const oa = otOn(base || m, d); if (oa != null) ot += Math.max(0, e - Math.max(a, oa));
+      // time outside the crew's regular shift (the overtime / Saturday added to make it)
+      if (base) { const sh = shiftOn(base, d); extra += sh ? Math.max(0, Math.min(e, sh[0]) - a) + Math.max(0, e - Math.max(a, sh[1])) : e - a; }
       left -= (e - a) * w[2]; t = dd * 1440 + e;
     }
-    return { m, start, end: t, minutes, ot };
+    return { m: base || m, start, end: t, minutes, ot, extra };
   };
   const stays = (c: Card) => !!c.slot && (c.slot.status === "running" || c.slot.status === "done" || !!c.job.firm);
   /**
@@ -1153,14 +1155,34 @@ export default function MachineSchedule() {
     if (!need.steps.length) return null;
     const nowAbs = ord(today) * 1440 + now.min;
     const cand = s.machines.filter((m) => m.active && fits(need, m));
-    if (!cand.length) return { need, minutes: 0, soonest: null, open: null, bumped: [], noMachine: true };
-    const best = (obs: Map<string, [number, number][]>) => cand.map((m) => simFrom(m, obs, estimate(s, need, m).minutes, nowAbs)).sort((a, b) => a.end - b.end || a.ot - b.ot)[0];
-    const soonest = best(obst(stays)), open = best(obst(() => true));
-    // what jumping the line would push back on that press, and which of those would then miss their date
-    const bumped = cards.filter((c) => c.machine.id === soonest.m.id && !stays(c) && !c.fromPv && (segs.ofCard.get(c.key) || []).some((g) => ord(g.day) * 1440 + g.end > soonest.start))
-      .map((c) => { const cur = (segs.ofCard.get(c.key) || []).reduce((t, g) => Math.max(t, ord(g.day) * 1440 + g.end), 0); return { job: c.job, late: cur <= dueAbs(c.job) && cur + soonest.minutes > dueAbs(c.job) }; })
-      .filter((x, i, a) => a.findIndex((y) => y.job.key === x.job.key) === i);
-    return { need, minutes: estimate(s, need, soonest.m).minutes, soonest, open, bumped, noMachine: false };
+    if (!cand.length) return { need, minutes: 0, soonest: null, aggressive: null, open: null, slow: null, noMachine: true };
+    const est = (m: Machine) => estimate(s, need, m).minutes;
+    const perHr = (m: Machine) => crewCost(m)?.perHour ?? (m.crew ? s.labor.crewSize : 1) * s.labor.wage, mult = s.labor.otMultiplier;
+    const lastEnd = (m: Machine) => cards.filter((c) => c.machine.id === m.id).reduce((t, c) => Math.max(t, ...(segs.ofCard.get(c.key) || []).map((g) => ord(g.day) * 1440 + g.end)), nowAbs);
+    // jumping the line on a press pushes back its unstarted, non-firm work: which of those would then miss their date
+    const bumpsOn = (r: WhenOpt) => cards.filter((c) => c.machine.id === r.m.id && !stays(c) && !c.fromPv && (segs.ofCard.get(c.key) || []).some((g) => ord(g.day) * 1440 + g.end > r.start))
+      .map((c) => { const cur = (segs.ofCard.get(c.key) || []).reduce((t, g) => Math.max(t, ord(g.day) * 1440 + g.end), 0); return { job: c.job, late: cur <= dueAbs(c.job) && cur + r.minutes > dueAbs(c.job) }; })
+      .filter((x, i, arr) => arr.findIndex((y) => y.job.key === x.job.key) === i);
+    const first = obst(stays), all = obst(() => true);
+    // 1. absolute soonest: jump the line and add time: up to 2 hours after every regular shift and a Saturday 8–2
+    const withExtra = (m: Machine): Machine => {
+      const extra = { ...(m.extra || {}) };
+      for (let i = 0, d = today; i < 21; i++, d = addDay(d, 1)) {
+        const sh = shiftOn(m, d), wd = dow(d);
+        if (sh && wd !== 0 && wd !== 6) { const e = extra[d]; extra[d] = [Math.min(e?.[0] ?? sh[0], sh[0]), Math.max(e?.[1] ?? sh[1], Math.min(1440, sh[1] + 120))]; }
+        else if (wd === 6 && !isOffDay(m, d)) extra[d] = extra[d] || [480, 840];
+      }
+      return { ...m, extra };
+    };
+    const soonest = cand.map((m) => { const r = simFrom(withExtra(m), first, est(m), nowAbs, m); return { ...r, bumped: bumpsOn(r), cost: Math.round(((r.extra || 0) / 60) * perHr(m) * mult + (Math.max(0, r.ot - (r.extra || 0)) / 60) * perHr(m) * (mult - 1)) }; }).sort((x, y) => x.end - y.end || (x.cost || 0) - (y.cost || 0))[0];
+    // 2. aggressive: jump the line on regular hours where nobody else ends up late
+    const jumps = cand.map((m) => { const r = simFrom(m, first, est(m), nowAbs); return { ...r, bumped: bumpsOn(r) }; });
+    const aggressive = [...jumps].sort((x, y) => x.bumped.filter((b) => b.late).length - y.bumped.filter((b) => b.late).length || x.end - y.end)[0];
+    // 3. regular: the next opening, nothing moves
+    const open = cand.map((m) => simFrom(m, all, est(m), nowAbs)).sort((x, y) => x.end - y.end || x.ot - y.ot)[0];
+    // 4. slow boat: the end of the line, after everything already booked on the press
+    const slow = cand.map((m) => simFrom(m, all, est(m), lastEnd(m))).sort((x, y) => x.end - y.end)[0];
+    return { need, minutes: est(open.m), soonest, aggressive, open, slow, noMachine: false };
   };
   /**
    * Where a Planner hold goes: just in time, not first thing. The latest start that still finishes the working day
@@ -1263,6 +1285,13 @@ export default function MachineSchedule() {
               <button type="button" className="linkbtn" onClick={() => setOtOpen(true)}>Details</button>
             </div>
           ); })()}
+          {(() => {
+            // a press with hours open on the next working day while unstarted work waits on later days: Re-plan fills it
+            const d1 = Array.from({ length: 7 }, (_, i) => addDay(today, i + 1)).find((d) => machines.some((m) => shiftOn(m, d))); if (!d1) return null;
+            const idle = machines.filter((m) => shiftOn(m, d1)).map((m) => ({ m, free: capacityMin(s, m, d1) - used(m, d1) })).filter((x) => x.free >= 120 && cards.some((c) => c.day > d1 && c.slot && c.slot.status === "scheduled" && !c.job.firm && c.job.kind !== "h" && fits(c.need, x.m)));
+            if (!idle.length) return null;
+            return <div className="ms-otline ms-idle"><span className="ms-ot-i" aria-hidden>↺</span><span><b>{idle.map((x) => `${shortName(x.m)}${crewOf(x.m) ? ` (${crewOf(x.m)!.leader})` : ""} has ${fmtMin(x.free)} open`).join(", ")} {dayLbl(d1).split(",")[0] === dayLbl(addDay(today, 1)).split(",")[0] ? "tomorrow" : dayLbl(d1)}</b> while later jobs wait. Re-plan pulls them forward.</span><span className="spacer" /><button type="button" className="btn sm" onClick={() => setReplan({ why: "" })}>Re-plan</button></div>;
+          })()}
           {tight.length > 0 ? (
             <div className="ms-alert">
               <div className="ms-alert-h">
@@ -1530,14 +1559,20 @@ function QuickJobForm({ v, onChange }: { v: QuickJob; onChange: (x: QuickJob) =>
       </div>
       <div className="ms-qf-l">
         {v.locations.map((l, i) => (
-          <label key={i} className={(v.method === "screen" ? l.colors : v.method === "embroidery" ? l.stitches : l.colors) ? "on" : ""}>
+          <div key={i} className={"ms-qf-loc" + ((v.method === "embroidery" ? l.stitches : l.colors) ? " on" : "")}>
             <span>{l.name}</span>
             {v.method === "screen" && <select value={l.colors} onChange={(e) => setLoc(i, { colors: +e.target.value })}>{Array.from({ length: 13 }, (_, c) => <option key={c} value={c}>{c ? `${c} color${c === 1 ? "" : "s"}` : "—"}</option>)}</select>}
             {v.method === "embroidery" && <select value={l.stitches} onChange={(e) => setLoc(i, { stitches: +e.target.value })}><option value={0}>—</option>{[3000, 5000, 8000, 10000, 12000, 15000, 20000, 30000, 40000].map((x) => <option key={x} value={x}>{x / 1000}k stitches</option>)}</select>}
             {v.method === "heat" && <select value={l.colors ? 1 : 0} onChange={(e) => setLoc(i, { colors: +e.target.value })}><option value={0}>—</option><option value={1}>Yes</option></select>}
-          </label>
+            {v.method === "screen" && l.colors > 0 && <label className="check ms-qf-puff" title="Puff ink: slower printing and longer setup (Settings → Production)"><input type="checkbox" checked={!!l.puff} onChange={(e) => setLoc(i, { puff: e.target.checked })} /> Puff</label>}
+          </div>
         ))}
       </div>
+      <label className="ms-qf-speed" title="A hard print (fine detail, specialty ink, tricky garment) runs slower; an easy one faster">
+        <span>Print speed</span>
+        <input type="range" min={50} max={150} step={5} value={v.speed ?? 100} onChange={(e) => set({ speed: +e.target.value })} />
+        <b>{(v.speed ?? 100) === 100 ? "Normal" : (v.speed ?? 100) < 100 ? `${v.speed}% · hard print` : `${v.speed}% · easy print`}</b>
+      </label>
     </div>
   );
 }
@@ -1608,21 +1643,27 @@ function WhenPanel({ s, today, nowLabel, calc, onClose }: { s: ProductionSetting
   const need = quickNeed(s, v);
   const r = v.qty > 0 ? calc(need) : null;
   const inHands = (end: number, soonest: boolean) => { const d = fromOrd(Math.floor((end - 1) / 1440)), m = end - Math.floor((end - 1) / 1440) * 1440; return soonest && m <= 15 * 60 ? d : plusWorkdays(d, Math.max(1, s.bufferDays)); };
+  const printed = (o: WhenOpt) => fromOrd(Math.floor((o.end - 1) / 1440));
   const soon = r?.soonest ? { ...r.soonest, hands: inHands(r.soonest.end, true) } : null;
-  const agg = r?.open ? { ...r.open, hands: inHands(r.open.end, false) } : null;
-  const regHands = agg ? [plusWorkdays(today, s.turnDays), agg.hands].sort().pop()! : plusWorkdays(today, s.turnDays);
-  const late = r?.bumped.filter((b) => b.late) || [];
+  const agg = r?.aggressive ? { ...r.aggressive, hands: inHands(r.aggressive.end, true) } : null;
+  const reg = r?.open ? { ...r.open, hands: inHands(r.open.end, false) } : null;
+  const slowHands = r?.slow ? [inHands(r.slow.end, false), plusWorkdays(today, s.turnDays)].sort().pop()! : null;
+  const lateOf = (o: WhenOpt | null) => (o?.bumped || []).filter((x) => x.late);
   const key = JSON.stringify([v, needBy]);
   const [asked, setAsked] = useState("");
+  const money = (n: number) => `$${Math.round(n).toLocaleString()}`;
   async function ask() {
-    if (!r || !soon || !agg) return;
+    if (!r || !soon || !agg || !reg) return;
     setAsked(key); setAiSt("loading"); setAi(null);
     const d = (x: string) => dayLbl(x);
+    const desc = (o: WhenOpt & { hands: string }) => `printed ${d(printed(o))} ${clock(o.end % 1440)} on ${o.m.name}, in hands ${d(o.hands)}`;
+    const push = (o: WhenOpt) => (o.bumped?.length ? `; pushes back ${o.bumped.length} job${o.bumped.length === 1 ? "" : "s"}${lateOf(o).length ? `, ${lateOf(o).length} would miss their date (${lateOf(o).map((x) => "#" + x.job.number).join(", ")})` : ", none late"}` : "; nothing moves");
     const j = await fetch("/api/production/when", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-      now: nowLabel, job: `${v.qty} pcs · ${need.label || "no print locations"} · ${v.garment}${v.dark ? " · darks" : ""}`, runTime: fmtMin(r.minutes), needBy: needBy ? d(needBy) : "",
-      soonest: `printed ${d(fromOrd(Math.floor((soon.end - 1) / 1440)))} ${clock(soon.end % 1440)} on ${soon.m.name}, in hands ${d(soon.hands)}; jumps the line: ${r.bumped.length} job${r.bumped.length === 1 ? "" : "s"} on that press get pushed${late.length ? `, ${late.length} would miss their date (${late.map((b) => "#" + b.job.number).join(", ")})` : ", none would miss their date"}${soon.ot ? `; ${fmtMin(soon.ot)} in overtime` : ""}`,
-      aggressive: `next opening: printed ${d(fromOrd(Math.floor((agg.end - 1) / 1440)))} on ${agg.m.name}, in hands ${d(agg.hands)}; nothing else moves${agg.ot ? `; ${fmtMin(agg.ot)} in overtime` : ""}`,
-      regular: `regular turn (${s.turnDays} business days, or later if the schedule is full): in hands ${d(regHands)}`,
+      now: nowLabel, job: `${v.qty} pcs · ${need.label || "no print locations"} · ${v.garment}${v.dark ? " · darks" : ""}${(v.speed ?? 100) !== 100 ? ` · runs at ${v.speed}% (${(v.speed ?? 100) < 100 ? "hard print" : "easy print"})` : ""}`, runTime: fmtMin(r.minutes), needBy: needBy ? d(needBy) : "",
+      soonest: `${desc(soon)}${push(soon)}; adds ${fmtMin(soon.extra || 0)} of overtime/Saturday, about ${money(soon.cost || 0)} extra labor`,
+      aggressive: `${desc(agg)}${push(agg)}; regular hours`,
+      regular: `${desc(reg)}; fits the schedule as it is, nothing moves`,
+      slow: `end of the line: in hands ${slowHands ? d(slowHands) : "?"}; after everything already booked`,
     }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the AI." }));
     if (j.off) setAiSt("off"); else if (j.error) setAiSt("error"); else { setAi(j); setAiSt(""); }
   }
@@ -1645,9 +1686,10 @@ function WhenPanel({ s, today, nowLabel, calc, onClose }: { s: ProductionSetting
           {!r ? <div className="faint">Enter the pieces and at least one print location.</div> : r.noMachine ? <div className="pv-err">No machine can run this ({need.needColors} screens on a {Math.max(...s.machines.filter((m) => m.type === "screen").map((m) => m.colors), 0)}-color press max).</div> : <>
             <div className="faint" style={{ fontSize: 12.5 }}>About <b>{fmtMin(r.minutes)}</b> of press time ({need.label}). Dates are when it&apos;s in the customer&apos;s hands, from today&apos;s schedule.</div>
             <div className="ms-when-g">
-              {col("soonest", "Absolute soonest", "Jump the line", soon?.hands || null, soon ? [`Prints ${dayLbl(fromOrd(Math.floor((soon.end - 1) / 1440))).split(",")[0]} by ${clock(soon.end % 1440)} on ${shortName(soon.m)}`, r.bumped.length ? `Pushes back ${r.bumped.length} job${r.bumped.length === 1 ? "" : "s"}${late.length ? `, ${late.length} would be late (${late.slice(0, 3).map((b) => "#" + b.job.number).join(", ")})` : ", none late"}` : "Nothing has to move", ...(soon.ot ? [`${fmtMin(soon.ot)} in overtime`] : [])] : [])}
-              {col("aggressive", "Aggressive", "Next opening, nothing moves", agg?.hands || null, agg ? [`Prints ${dayLbl(fromOrd(Math.floor((agg.end - 1) / 1440))).split(",")[0]} on ${shortName(agg.m)}`, `${s.bufferDays} business day${s.bufferDays === 1 ? "" : "s"} to pack / ship`, ...(agg.ot ? [`${fmtMin(agg.ot)} in overtime`] : [])] : [])}
-              {col("regular", "Regular turn", `${s.turnDays} business days`, regHands, [agg && agg.hands > plusWorkdays(today, s.turnDays) ? "The schedule is full past our normal turn" : "Our normal turnaround", "Room for art, blanks and surprises"])}
+              {col("soonest", "Absolute soonest", "Jump the line + overtime", soon?.hands || null, soon ? [`Prints ${dayLbl(printed(soon)).split(",")[0]} by ${clock(soon.end % 1440)} on ${shortName(soon.m)}`, soon.extra ? `Adds ${fmtMin(soon.extra)} of overtime / Saturday: ~${money(soon.cost || 0)} extra labor` : "No extra hours needed", soon.bumped?.length ? `Pushes back ${soon.bumped.length} job${soon.bumped.length === 1 ? "" : "s"}${lateOf(soon).length ? `, ${lateOf(soon).length} late (${lateOf(soon).slice(0, 3).map((x) => "#" + x.job.number).join(", ")})` : ", none late"}` : "Nothing has to move"] : [])}
+              {col("aggressive", "Aggressive", "Push others back, none late", agg?.hands || null, agg ? [`Prints ${dayLbl(printed(agg)).split(",")[0]} by ${clock(agg.end % 1440)} on ${shortName(agg.m)}`, agg.bumped?.length ? `Pushes back ${agg.bumped.length} job${agg.bumped.length === 1 ? "" : "s"}${lateOf(agg).length ? `, ${lateOf(agg).length} would be late` : ", all still on time"}` : "Nothing has to move", "Regular hours"] : [])}
+              {col("regular", "Regular turn", "Fits the schedule as it is", reg?.hands || null, reg ? [`Prints ${dayLbl(printed(reg)).split(",")[0]} on ${shortName(reg.m)}`, "Nothing moves", `${s.bufferDays} business day${s.bufferDays === 1 ? "" : "s"} to pack / ship`] : [])}
+              {col("slow", "Slow boat", "End of the line", slowHands, r.slow ? [`After everything booked on ${shortName(r.slow.m)}`, `At least our ${s.turnDays}-day turn`, "Most room for art, blanks and surprises"] : [])}
             </div>
             <div className={"ms-adv-ai" + (aiSt === "loading" ? " loading" : "")}>
               <span className="ms-adv-i" aria-hidden>✦</span>
