@@ -411,9 +411,12 @@ export default function SeparationStudio({ id }: { id: string }) {
   async function filmsFile() {
     const hr = await fullSep();
     setBusy("Making films…"); await new Promise((r) => setTimeout(r, 30));
+    // where the art prints at all: halftone dots are cut only at the art's edge
+    const within = new Uint8Array(hr.w * hr.h);
+    for (const p of hr.plates) for (let j = 0; j < within.length; j++) if (p.alpha[j] > within[j]) within[j] = p.alpha[j];
     const pages = hr.plates.map((p, i) => {
       const ht = tonal || !!p.tonal;
-      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, gain: st.gain || 0, dot: st.dot || "ellipse", mesh: p.mesh });
+      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, gain: st.gain || 0, dot: st.dot || "ellipse", mesh: p.mesh, within });
       return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg ${DOT_NAME[st.dot || "ellipse"]} dot${st.gain ? ` - dot gain ${Math.round(st.gain * 100)}% taken off` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
     });
     return filmPdf(pages);

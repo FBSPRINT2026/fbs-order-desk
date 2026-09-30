@@ -738,7 +738,10 @@ export type Dot = "ellipse" | "round" | "square";
 export type FilmOpts = { halftone: boolean; lpi?: number; angle?: number; gain?: number; dot?: Dot; mesh?: number;
   /** whole dots (default): each dot sized by its cell's average tone, so none breaks into specks the screen can't
    *  hold; false: every film pixel against its own tone (more detail, ragged dots) */
-  clean?: boolean };
+  clean?: boolean;
+  /** where the art prints at all (any ink; plate size): whole dots are cut off only at the art's own edge, not where
+   *  this ink's area meets another ink's (there the dots sit side by side, as halftones do) */
+  within?: Uint8Array };
 /** average of each pixel's (2r+1)² square, as 0–255 floats (two running sums) */
 function boxBlur(a: Uint8Array, w: number, h: number, r: number): Float32Array {
   const n = w * h, t = new Float32Array(n), o = new Float32Array(n);
@@ -854,7 +857,8 @@ export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: n
         const u = x * cs + y * sn, t = -x * sn + y * cs, iu = Math.floor(u), it = Math.floor(t), fu = u - iu, ft = t - it;
         let tone = k;
         if (B) {
-          if (k < 3) tone = 0; // no ink here at all (outside the art): no dot spills past its edge
+          const nearest = o.within ? o.within[near] : k;
+          if (nearest < 3) tone = 0; // outside the art: no dot spills past its edge
           else {
             // the cell's center, back in film pixels, then in plate pixels
             const cu = iu + 0.5, ct = it + 0.5, xc = (cu * cs - ct * sn) * icell, yc = (cu * sn + ct * cs) * icell;
