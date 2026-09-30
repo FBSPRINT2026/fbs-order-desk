@@ -562,7 +562,8 @@ export default function MachineSchedule() {
   // ms: the machines with their hours; a what-if (an hour of overtime, a Saturday shift) passes changed copies
   const planIt = (allowSplit = false, ms: Machine[] = machines) => {
     const nowAbs = ord(today) * 1440 + now.min;
-    const winsOf = (m: Machine, d: string) => { const sh = shiftOn(m, d); return sh ? windowsIn(sh, downsOn(m, d, sh)) : []; };
+    // a machine's open time: its shift less breaks and downtime, and less the work that stays put (running, done, firm)
+    const winsOf = (m: Machine, d: string) => { const sh = shiftOn(m, d); if (!sh) return []; const fx = (fixed.get(m.id + "|" + d) || []).map(([a, b]): Down => [a, b, "Booked", 0]); return windowsIn(sh, [...downsOn(m, d, sh), ...fx]); };
     const norm = (m: Machine, t: number) => { for (let g = 0; g < 120; g++) { const dd = Math.floor(t / 1440), mm = t - dd * 1440, w = winsOf(m, fromOrd(dd)).find(([, y]) => mm < y); if (!w) { t = (dd + 1) * 1440; continue; } return mm < w[0] ? dd * 1440 + w[0] : t; } return t; };
     // when each crew goes into overtime (past 40 paid hours, Friday–Thursday), per machine copy and day
     const otc = new WeakMap<Machine, Map<string, number | null>>();
@@ -576,9 +577,12 @@ export default function MachineSchedule() {
     // a firm job (⛰️) that's on course for its date and time stays exactly where it is
     const firmHolds = (c: Card) => !!c.job.firm && (segs.ofCard.get(c.key) || []).reduce((t, g) => Math.max(t, ord(g.day) * 1440 + g.end), 0) <= dueAbs(c.job);
     const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c));
+    // work that stays where it is (running, done, a firm job on course, other machine types) is an obstacle on its
+    // machine, not a wall: open time before and between it is still used (a firm job on Thursday doesn't empty Wednesday)
+    const fixed = new Map<string, [number, number][]>();
+    for (const c of cards) if (!movable.includes(c)) for (const g of segs.ofCard.get(c.key) || []) if (g.day >= today) { const k = c.machine.id + "|" + g.day; fixed.set(k, [...(fixed.get(k) || []), [g.start, g.end]]); }
     const cursor: Record<string, number> = {};
     for (const m of ms) cursor[m.id] = nowAbs;
-    for (const c of cards) if (!movable.includes(c)) for (const g of segs.ofCard.get(c.key) || []) if (g.day >= today) cursor[c.machine.id] = Math.max(cursor[c.machine.id] ?? nowAbs, ord(g.day) * 1440 + g.end);
     type Item = { key: string; job: Job; need: Need; slot: Slot | null; cur: string; curDay: string; left: number };
     const items: Item[] = [
       ...movable.map((c) => ({ key: c.key, job: c.job, need: c.need, slot: c.slot, cur: c.machine.id, curDay: c.day, left: 1 - Math.max(0, Math.min(1, +(c.slot?.progress || 0))) })),
