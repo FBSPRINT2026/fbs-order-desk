@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Customer } from "@/lib/pricing";
 import { money } from "@/lib/format";
+import { pvCountsAsSale, orderCountsAsSale } from "@/lib/sales";
 import { useShopData } from "@/lib/shopData";
 import { Due, Pill } from "@/components/bits";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type APayment } from "@/components/AccountAreas";
@@ -127,7 +128,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [tagDraft, setTagDraft] = useState("");
   const addTag = (raw: string) => { const t = raw.trim().replace(/,$/, "").slice(0, 40); if (!t || !c) return; if (!(c.tags || []).some((x) => x.toLowerCase() === t.toLowerCase())) set("tags", [...(c.tags || []), t]); setTagDraft(""); };
   const os = orders.filter((o) => o.customer_id === id);
-  const spent = os.filter((o) => o.type === "invoice").reduce((a, o) => a + o.total, 0) + archive.filter((a) => a.kind === "invoice").reduce((s, a) => s + (+a.total || 0), 0);
+  const spent = os.filter((o) => orderCountsAsSale(o as { type: string; status: string; source?: string })).reduce((a, o) => a + o.total, 0) + archive.filter((a) => pvCountsAsSale(a.kind, a.status_name)).reduce((s, a) => s + (+a.total || 0), 0);
   const owed = os.filter((o) => o.type === "invoice").reduce((a, o) => a + Math.max(0, o.balance), 0);
 
   async function del() {

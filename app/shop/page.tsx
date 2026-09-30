@@ -239,6 +239,12 @@ export default function Dashboard() {
             ))}
           </div>
 
+          {/* sales charts (owners / admins) */}
+          {boss && <section className="db-card db-orange db-sales">
+            <div className="db-card-h"><h2>Sales Charts</h2><span className="faint db-h-note">invoices by order date · closed quotes, quotes and holders don&apos;t count</span></div>
+            <SalesAnalytics part="charts" />
+          </section>}
+
           {/* 3. the order pipeline: every job by stage (follows Everyone / Mine) */}
           <section className="db-card db-blue db-pipe">
             <div className="db-card-h"><h2>{mine ? "My Order Pipeline" : "Order Pipeline"}</h2><span className="faint db-h-note">every job by stage · drag a card or use → to move it along</span></div>
