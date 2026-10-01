@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fileUrls, orderFiles, type PvOrder } from "@/lib/archive";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -83,11 +84,19 @@ export async function POST(req: Request) {
           sum.orders++; if (r.kind === "quote") sum.quotes++; else sum.invoices++;
           sum.total += +r.total || 0; sum.paid += +r.paid || 0; sum.files += r.files_total || 0; sum.filesCopied += r.files_copied || 0;
           if (r.customer_id) customerIds.add(r.customer_id);
-          const names = new Map<string, string>();
-          for (const f of ((r.data?.files || []) as { full?: string; name?: string }[])) if (f.full && f.name) names.set(f.full, f.name);
-          for (const [url, p] of Object.entries((r.files || {}) as Record<string, string>)) {
-            const state = p === "failed" || p === "too-big" ? p : "copied";
-            const name = names.get(url) || (state === "copied" ? p.split("/").pop() : decodeURIComponent(url.split("?")[0].split("/").pop() || ""));
+          // every file on the order (from its record), each with where it stands
+          const names = new Map<string, string>(), map = (r.files || {}) as Record<string, string>;
+          let urls: string[] = Object.keys(map);
+          try {
+            const o = r.data as PvOrder;
+            for (const f of orderFiles(o)) if (f.full && f.name) names.set(f.full, f.name);
+            for (const m of o.messages || []) for (const at of m.attachments || []) if (at.url && at.name) names.set(at.url, at.name);
+            urls = [...new Set([...fileUrls(o), ...urls])];
+          } catch { /* an odd record: just the files we have */ }
+          for (const url of urls) {
+            const p = map[url] || "";
+            const state = !p ? "not-copied-yet" : p === "failed" || p === "too-big" ? p : "copied";
+            const name = names.get(url) || (state === "copied" ? p.split("/").pop() : (() => { try { return decodeURIComponent(url.split("?")[0].split("/").pop() || ""); } catch { return url.split("?")[0].split("/").pop() || ""; } })());
             fileLines.push([r.id, r.visual_id, r.order_date, state, name, state === "copied" ? `proofs/${p}` : "", url].map(csv).join(","));
           }
         }
@@ -124,7 +133,7 @@ export async function POST(req: Request) {
       "                        complete Printavo record (customer, line items and sizes, imprints, fees, payments, notes, tasks,",
       "                        approvals, messages), and `files`, each original file link mapped to our copy.",
       "customers.ndjson.gz     {\"table\": ..., \"row\": ...} lines: customers, customer_contacts, printavo_customers.",
-      "files.csv.gz            Every artwork file: order, name, state (copied / failed / too-big), our copy's path in Supabase",
+      "files.csv.gz            Every artwork file: order, name, state (copied / not-copied-yet / failed / too-big), our copy's path in Supabase",
       "                        storage (bucket proofs), and the original Printavo link (dead once Printavo is cancelled).",
       "manifest.json           Counts and dollar totals per year, and a SHA-256 checksum of every file here.",
       "",
