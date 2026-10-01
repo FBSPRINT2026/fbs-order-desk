@@ -383,10 +383,10 @@ function InchInput({ num, onNum, label, placeholder }: { num: string; onNum: (v:
   );
 }
 
-type SSHit = { styleID: number; brand: string; style: string; title: string; image: string; supplier?: "ss" | "sanmar" };
+export type SSHit = { styleID: number; brand: string; style: string; title: string; image: string; supplier?: "ss" | "sanmar" };
 const inCatalog = (catalog: Garment[], h: SSHit) => h.supplier === "sanmar" ? catalog.some((c) => c.supplier === "sanmar" && (c.supplier_style || c.style).toLowerCase() === h.style.toLowerCase()) : catalog.some((c) => c.ss_style_id === h.styleID);
 /** Style # box: type a number and pick from your catalog or from every matching S&S and SanMar style. */
-function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: {
+export function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: {
   value: string; catalog: Garment[]; busy: boolean;
   onType: (v: string) => void; onPick: (g: Garment) => void; onPickSS: (h: SSHit) => Promise<void>;
 }) {
@@ -453,7 +453,7 @@ function StylePicker({ value, catalog, busy, onType, onPick, onPickSS }: {
 }
 
 /** Color box: click shows the style's full color list (even when a color is already chosen); typing filters it. */
-function ColorPicker({ value, colors, onChange }: { value: string; colors: string[]; onChange: (v: string) => void }) {
+export function ColorPicker({ value, colors, onChange }: { value: string; colors: string[]; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState(false);
   const [active, setActive] = useState(0);

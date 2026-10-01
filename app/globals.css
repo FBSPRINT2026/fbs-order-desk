@@ -4656,3 +4656,12 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .pf-folder{font-size:12px}
 .pf-setup ol{margin:6px 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;line-height:1.4}
 .pf-setup code{font-size:11.5px}
+/* Mockup Creator: style search in the setup, Export PDF panel */
+.mk-style{display:flex;flex-direction:column;gap:2px;min-width:170px}
+.mk-style .style-pick input{width:100%}
+.mk-style-n{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.mk-color{min-width:150px}
+.mk-pdf{display:flex;flex-direction:column;gap:10px;padding:12px 14px;margin-bottom:14px;max-width:640px}
+.mk-pdf-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.mk-pdf-note{margin:0;font-size:12.5px}
+.mk-pdf-desc textarea{width:100%;resize:vertical;font:inherit}

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { LOCATIONS, METHODS, designLabel, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
+import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, uploadDesign } from "@/lib/designs";
 import { mockupUploadUrls, myLogos, portalCatalog, saveMyMockup } from "@/app/portal/request-actions";
@@ -22,6 +22,8 @@ import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot, basePlacement, maxWidthFor, sideMaxWidth, viewsFor, guessHex, measureGarment, printWidth, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 import { useSticky } from "@/lib/useSticky";
+import { canvasPage, imagePdf } from "@/lib/imagePdf";
+import { ColorPicker, StylePicker } from "@/components/GroupEditor";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -160,6 +162,25 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ title: string; url: string }[]>([]);
   const refreshed = useRef(new Set<number>());
+  // Export PDF: art only, or with the company, description and print details (the choice is remembered)
+  const [pdfOpen, setPdfOpen] = useState(false), [pdfBusy, setPdfBusy] = useState(false), [pdfDesc, setPdfDesc] = useState("");
+  const [pdfMode, setPdfMode] = useSticky<"art" | "details">("mk.pdfMode", "details");
+  // a style picked from S&S / SanMar that isn't in the catalog yet: pulled in (with its color photos)
+  const [lookingUp, setLookingUp] = useState("");
+  const tried = useRef(new Set<string>());
+  async function lookupStyle(style: string, styleID?: number, supplier?: string): Promise<Garment | null> {
+    const key = style.trim().toUpperCase();
+    if (!key) return null;
+    setLookingUp(key);
+    try {
+      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${supplier === "sanmar" ? "&supplier=sanmar" : ""}`);
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.garment) { setMsg(j.error || "Couldn't find that style at S&S or SanMar."); return null; }
+      const g = j.garment as Garment;
+      setCatalog((c) => [...c.filter((x) => x.id !== g.id), g]);
+      return g;
+    } finally { setLookingUp(""); }
+  }
 
   // load the order group (or start blank), catalog and customers
   useEffect(() => {
@@ -381,6 +402,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const garmentFor = (l: Line) => catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase() && (!l.brand || g.brand.toLowerCase() === l.brand.toLowerCase()))
     || catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase());
 
+  // a style on the order that isn't in the catalog yet (so no photos): pull it from S&S / SanMar once
+  useEffect(() => {
+    if (!catalog.length && !orderId) return;
+    lines.forEach((l) => {
+      const st = l.style.trim();
+      if (!st || garmentFor(l) || tried.current.has(st.toUpperCase())) return;
+      tried.current.add(st.toUpperCase());
+      if (orderId) lookupStyle(st);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, catalog]);
+
   // styles pulled from S&S before photos were saved: refresh them once to get the color photos
   useEffect(() => {
     lines.forEach((l) => {
@@ -548,31 +581,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     } catch (e) { setMsg("Upload failed: " + (e instanceof Error ? e.message : String(e))); }
   }
 
-  /** Draw one garment color with every imprint, plus a spec strip, as a PNG. */
-  /** bare = just the shirt photos with the art (the thumbnail on the order), no title or spec lines. */
-  async function render(l: Line, bare = false): Promise<Blob> {
-    const k = bare ? 0.4 : 0.6, pw = PHOTO_W * k, ph = PHOTO_H * k, pad = bare ? 10 : 24, top = bare ? pad : 70;
-    const specLines = imprints.map((im) => { const p = place(im); return `${im.location}: ${p.d ? designLabel(p.d) : "no logo"} · ${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"${im.inks ? " · " + im.inks : ""}`; });
-    const W = pad * 2 + views.length * pw + (views.length - 1) * pad;
-    const H = bare ? ph + pad * 2 : 70 + ph + 30 + specLines.length * 26 + pad;
+  /** The shirt photos (front, then back) side by side with the art on them, each `k` × the photo size, `gap` px apart. */
+  async function photosCanvas(l: Line, k: number, gap: number): Promise<HTMLCanvasElement> {
+    const pw = PHOTO_W * k, ph = PHOTO_H * k, n = Math.max(1, views.length);
     const c = document.createElement("canvas");
-    c.width = W; c.height = H;
-    let x = c.getContext("2d")!;
-    x.fillStyle = "#ffffff"; x.fillRect(0, 0, W, H);
-    if (!bare) {
-      x.fillStyle = "#141D2B"; x.font = "700 24px Helvetica, Arial, sans-serif";
-      x.fillText(`${order ? `#${order.number} ` : ""}${groupName || "Mockup"}`, pad, 36);
-      x.font = "16px Helvetica, Arial, sans-serif"; x.fillStyle = "#4A566B";
-      x.fillText([l.brand, l.style, l.garment].filter(Boolean).join(" ") + (l.color ? ` — ${l.color}` : ""), pad, 60);
-    }
+    c.width = Math.round(n * pw + (n - 1) * gap); c.height = Math.round(ph);
+    const main = c.getContext("2d")!;
+    main.fillStyle = "#ffffff"; main.fillRect(0, 0, c.width, c.height);
     for (let i = 0; i < views.length; i++) {
-      const v = views[i], ox = pad + i * (pw + pad), oy = top;
+      const v = views[i], ox = i * (pw + gap), oy = 0;
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
-      x.drawImage(bg, ox, oy, pw, ph);
+      main.drawImage(bg, ox, oy, pw, ph);
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
       // art goes on its own layer, then gets cut to the shirt outline before it's added to the picture
       const layer = document.createElement("canvas"); layer.width = c.width; layer.height = c.height;
-      const main = x; x = layer.getContext("2d")!;
+      const x = layer.getContext("2d")!;
       for (const im of imprints.filter((m) => viewsFor(m.location).includes(v))) {
         const p = place(im, v, fit);
         if (!p.d || !artUrl(im)) continue;
@@ -590,11 +613,135 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const m = await loadImg(fit.mask).catch(() => null);
         if (m) { x.globalCompositeOperation = "destination-in"; x.drawImage(m, ox, oy, pw, ph); x.globalCompositeOperation = "source-over"; }
       }
-      x = main; x.drawImage(layer, 0, 0);
-      if (!bare) { x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif"; x.fillText(v.toUpperCase(), ox, oy + ph + 18); }
+      main.drawImage(layer, 0, 0);
     }
-    if (!bare) { x.fillStyle = "#141D2B"; x.font = "15px Helvetica, Arial, sans-serif"; specLines.forEach((s, i) => x.fillText(s, pad, 70 + ph + 44 + i * 26)); }
+    return c;
+  }
+
+  /** Draw one garment color with every imprint, plus a spec strip, as a PNG. */
+  /** bare = just the shirt photos with the art (the thumbnail on the order), no title or spec lines. */
+  async function render(l: Line, bare = false): Promise<Blob> {
+    const k = bare ? 0.4 : 0.6, pw = PHOTO_W * k, ph = PHOTO_H * k, pad = bare ? 10 : 24, top = bare ? pad : 70;
+    const specLines = imprints.map((im) => { const p = place(im); return `${im.location}: ${p.d ? designLabel(p.d) : "no logo"} · ${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"${im.inks ? " · " + im.inks : ""}`; });
+    const W = pad * 2 + views.length * pw + (views.length - 1) * pad;
+    const H = bare ? ph + pad * 2 : 70 + ph + 30 + specLines.length * 26 + pad;
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const x = c.getContext("2d")!;
+    x.fillStyle = "#ffffff"; x.fillRect(0, 0, W, H);
+    if (!bare) {
+      x.fillStyle = "#141D2B"; x.font = "700 24px Helvetica, Arial, sans-serif";
+      x.fillText(`${order ? `#${order.number} ` : ""}${groupName || "Mockup"}`, pad, 36);
+      x.font = "16px Helvetica, Arial, sans-serif"; x.fillStyle = "#4A566B";
+      x.fillText([l.brand, l.style, l.garment].filter(Boolean).join(" ") + (l.color ? ` — ${l.color}` : ""), pad, 60);
+    }
+    x.drawImage(await photosCanvas(l, k, pad), pad, top);
+    if (!bare) {
+      x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif";
+      views.forEach((v, i) => x.fillText(v.toUpperCase(), pad + i * (pw + pad), top + ph + 18));
+      x.fillStyle = "#141D2B"; x.font = "15px Helvetica, Arial, sans-serif"; specLines.forEach((s, i) => x.fillText(s, pad, 70 + ph + 44 + i * 26));
+    }
     return await new Promise((res) => c.toBlob((b) => res(b!), "image/png"));
+  }
+
+  /**
+   * The customer PDF: one landscape Letter page per garment color. "art" = just the shirts with the art, nothing
+   * else; "details" = our logo and contact, the customer's company, the mockup name and description, the garment,
+   * and each print (location, logo, size, ink colors).
+   */
+  async function exportPdf(mode: "art" | "details", description: string) {
+    const todo = lines.filter((z) => z.style || z.color);
+    if (!todo.length) return setMsg("Add a garment and color first.");
+    if (!imprints.some((im) => designOf(im))) return setMsg("Put a logo on the shirt first.");
+    setPdfBusy(true); setMsg("Making the PDF…");
+    try {
+      await loadShirtFonts().catch(() => {});
+      let shop = { name: "FBS Print", phone: "", email: "", address: "", logoUrl: "" };
+      if (!portal) { const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle(); if (data?.data) shop = { ...shop, ...(mergeSettings(data.data as Record<string, unknown>).shop || {}) }; }
+      const logo = mode === "details" ? await loadImg(shop.logoUrl || "/brand/fbs-logo.svg").catch(() => null) : null;
+      const cust = customers.find((c) => c.id === customerId);
+      const DPI = 200, PW = 11 * DPI, PH = 8.5 * DPI, M = 0.45 * DPI;
+      const font = (w: number, size: number) => `${w} ${size}px Helvetica, Arial, sans-serif`;
+      const pages = [];
+      for (const l of todo) {
+        const c = document.createElement("canvas"); c.width = PW; c.height = PH;
+        const x = c.getContext("2d")!;
+        x.fillStyle = "#ffffff"; x.fillRect(0, 0, PW, PH);
+        // the shirts: as big as the space allows
+        const n = Math.max(1, views.length), gap = 0.25 * DPI;
+        const box = mode === "art" ? { x: M, y: M, w: PW - 2 * M, h: PH - 2 * M } : { x: M, y: 2.1 * DPI, w: PW - 2 * M, h: 3.7 * DPI };
+        const k = Math.min((box.w - (n - 1) * gap) / (n * PHOTO_W), box.h / PHOTO_H);
+        const shirts = await photosCanvas(l, k, gap);
+        const sx = box.x + (box.w - shirts.width) / 2, sy = box.y + (box.h - shirts.height) / 2;
+        x.drawImage(shirts, sx, sy);
+        if (mode === "details") {
+          const ink = "#141D2B", soft = "#5B6678", faint = "#8A93A3", line = "#DDE2EA";
+          // header: our logo left; the date and order on the right
+          if (logo) { const lh = 0.55 * DPI, lw = Math.min(2.6 * DPI, (logo.naturalWidth / (logo.naturalHeight || 1)) * lh || 2 * DPI); x.drawImage(logo, M, M, lw, lh); }
+          else { x.fillStyle = ink; x.font = font(800, 44); x.fillText(shop.name, M, M + 44); }
+          x.textAlign = "right"; x.fillStyle = faint; x.font = font(700, 24); x.fillText("MOCKUP FOR APPROVAL", PW - M, M + 22);
+          x.fillStyle = soft; x.font = font(400, 26);
+          x.fillText([new Date().toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }), order ? `Order #${order.number}` : ""].filter(Boolean).join("  ·  "), PW - M, M + 60);
+          x.textAlign = "left";
+          x.fillStyle = line; x.fillRect(M, M + 0.75 * DPI, PW - 2 * M, 3);
+          // who it's for and what it is
+          let y = M + 0.75 * DPI + 70;
+          x.fillStyle = ink; x.font = font(800, 54); x.fillText(custLabel(cust) || "", M, y);
+          y += 48; x.fillStyle = soft; x.font = font(600, 32); x.fillText(groupName || "Mockup", M, y);
+          if (description.trim()) {
+            x.font = font(400, 26); x.fillStyle = soft;
+            const words = description.trim().split(/\s+/); let row = "", rows = 0;
+            for (const w of words) { const t = row ? row + " " + w : w; if (x.measureText(t).width > PW - 2 * M && row) { y += 36; x.fillText(row, M, y); row = w; if (++rows >= 2) break; } else row = t; }
+            if (rows < 2 && row) { y += 36; x.fillText(row, M, y); }
+          }
+          // under the shirts: Front / Back
+          x.fillStyle = faint; x.font = font(700, 22); x.textAlign = "center";
+          const pw = PHOTO_W * k;
+          if (views.length > 1) views.forEach((v, i) => x.fillText(v.toUpperCase(), sx + i * (pw + gap) + pw / 2, sy + shirts.height + 26));
+          x.textAlign = "left";
+          // the garment, then a row per print
+          let ty = 6.3 * DPI;
+          x.fillStyle = ink; x.font = font(700, 28);
+          x.fillText([l.brand, l.style].filter(Boolean).join(" ") + (l.garment ? `  —  ${l.garment}` : ""), M, ty);
+          x.fillStyle = soft; x.font = font(400, 28); x.textAlign = "right"; x.fillText(l.color ? `Color: ${l.color}` : "", PW - M, ty); x.textAlign = "left";
+          ty += 22; x.fillStyle = line; x.fillRect(M, ty, PW - 2 * M, 2);
+          const col = [M, M + 2.3 * DPI, M + 5.4 * DPI, M + 6.9 * DPI];
+          ty += 40; x.fillStyle = faint; x.font = font(700, 20);
+          ["LOCATION", "LOGO", "PRINT SIZE", "INK COLORS"].forEach((h, i) => x.fillText(h, col[i], ty));
+          for (const im of imprints.slice(0, 6)) {
+            const p = place(im); if (!p.d && !im.inks) continue;
+            ty += 44; x.fillStyle = ink; x.font = font(600, 26);
+            x.fillText(im.location, col[0], ty);
+            x.font = font(400, 26);
+            const dl = p.d ? designLabel(p.d) : ""; let dlt = dl; while (dlt && x.measureText(dlt).width > col[2] - col[1] - 24) dlt = dlt.slice(0, -2);
+            x.fillText(dlt === dl ? dl : dlt + "…", col[1], ty);
+            x.fillText(`${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"`, col[2], ty);
+            let ix = col[3];
+            for (const t of inkList(im).slice(0, 6)) {
+              if (ix > PW - M - 1.2 * DPI) { x.fillStyle = soft; x.fillText("…", ix, ty); break; }
+              x.fillStyle = t.hex || "#cccccc"; x.beginPath(); x.arc(ix + 12, ty - 9, 12, 0, Math.PI * 2); x.fill();
+              x.strokeStyle = "#B8C0CC"; x.lineWidth = 2; x.stroke();
+              x.fillStyle = ink; x.font = font(400, 24); const nm = t.name.startsWith("As uploaded") ? "" : t.name.length > 18 ? t.name.slice(0, 17) + "…" : t.name;
+              x.fillText(nm, ix + 32, ty); ix += nm ? 32 + x.measureText(nm).width + 26 : 34;
+            }
+          }
+          // footer: how to reach us, and what the mockup is
+          x.fillStyle = line; x.fillRect(M, PH - M - 46, PW - 2 * M, 2);
+          x.fillStyle = soft; x.font = font(600, 22);
+          x.fillText([shop.name, shop.phone, shop.email].filter(Boolean).join("  ·  "), M, PH - M - 10);
+          x.fillStyle = faint; x.font = font(400, 20); x.textAlign = "right";
+          x.fillText("Please check spelling, size, placement and colors. Colors on screen are close to, not exactly, the printed inks.", PW - M, PH - M - 10);
+          x.textAlign = "left";
+        }
+        pages.push(await canvasPage(c, 792, 612));
+      }
+      const pdf = imagePdf(pages, `${groupName || "Mockup"}${cust ? " - " + custLabel(cust) : ""}`);
+      const name = `${[custLabel(cust), groupName || "mockup"].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "mockup"}${mode === "art" ? "-art" : ""}.pdf`;
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([pdf as BlobPart], { type: "application/pdf" })); a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      setMsg(`Downloaded ${name}.`); setPdfOpen(false);
+    } catch (e) { setMsg("Couldn't make the PDF: " + (e instanceof Error ? e.message : String(e))); }
+    setPdfBusy(false);
   }
 
   /** Double-click on a design (on the photo or in a close-up): open the ink menu for the logo color under the cursor. */
@@ -730,18 +877,32 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setSaving(false);
   }
 
-  const garmentOptions = catalog.slice().sort((a, b) => `${a.brand} ${a.style}`.localeCompare(`${b.brand} ${b.style}`));
   // a mockup needs a customer (art and mockups save to their account) and at least one garment
-  const ready = !!customerId && lines.some((l) => l.style.trim());
+  const ready = !!customerId && lines.some((l) => l.style.trim() && garmentFor(l));
   const notReady = !customerId ? "Pick a customer first — their designs and mockups live on their account." : "Pick at least one garment to put the art on."
   return (
     <>
       <Link className="back" href={portal ? backHref || "/portal" : orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {portal ? "Dashboard" : orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
       <div className="page-head mk-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}<button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
+        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}<button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button><button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
       </div>
 
+        {pdfOpen && (
+          <section className="panel mk-pdf">
+            <div className="mk-pdf-h"><b>Export PDF</b><span className="faint">One page per shirt color, ready to send the customer.</span></div>
+            <div className="chips" role="tablist" aria-label="What the PDF shows" style={{ width: "fit-content" }}>
+              <button type="button" className={"chip" + (pdfMode === "art" ? " on" : "")} onClick={() => setPdfMode("art")}>Just the art</button>
+              <button type="button" className={"chip" + (pdfMode === "details" ? " on" : "")} onClick={() => setPdfMode("details")}>With details</button>
+            </div>
+            <p className="faint mk-pdf-note">{pdfMode === "art" ? "The shirts with the art on them, nothing else: no names, sizes or prices." : `Our logo and contact, ${custLabel(customers.find((c) => c.id === customerId)) || "the customer's company"}, the mockup name and description, the garment and color, and each print's location, size and ink colors.`}</p>
+            {pdfMode === "details" && <label className="mk-f mk-pdf-desc"><span>Description (optional)</span><textarea rows={2} placeholder="e.g. Fall fundraiser tee, front chest logo with full back" value={pdfDesc} onChange={(e) => setPdfDesc(e.target.value)} /></label>}
+            <div className="row" style={{ gap: 8 }}>
+              <button type="button" className="btn primary" disabled={pdfBusy} onClick={() => exportPdf(pdfMode, pdfDesc)}>{pdfBusy ? "Making the PDF…" : "Download PDF"}</button>
+              <button type="button" className="btn ghost" onClick={() => setPdfOpen(false)}>Close</button>
+            </div>
+          </section>
+        )}
         {!orderId && (
           <section className="panel mk-setup">
             {!portal && <label className="mk-f"><span>Customer</span><select aria-label="Customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Choose a customer…</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select></label>}
@@ -750,12 +911,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               const g = garmentFor(l);
               return (
                 <div key={l.id} className="mk-f mk-setup-g"><span>{i === 0 ? "Garment & color" : `Color ${i + 1}`}</span><div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
-                  <select aria-label="Garment" value={g?.id || ""} onChange={(e) => { const gg = catalog.find((x) => x.id === e.target.value); setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: gg?.style || "", brand: gg?.brand || "", garment: gg?.description || "", color: gg?.colors?.[0] || "" } : x))); }}>
-                    <option value="">Garment…</option>{garmentOptions.map((gg) => <option key={gg.id} value={gg.id}>{gg.brand} {gg.style} — {gg.description}</option>)}
-                  </select>
-                  <select aria-label="Color" value={l.color} onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))}>
-                    <option value="">Color…</option>{(g?.colors || []).map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  <div className="mk-style">
+                    <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
+                      onType={(v) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: v, brand: "", garment: "" } : x)))}
+                      onPick={(gg) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: gg.style, brand: gg.brand, garment: gg.description, color: gg.colors?.includes(x.color) ? x.color : gg.colors?.[0] || "" } : x)))}
+                      onPickSS={async (h) => { const gg = await lookupStyle(h.style, h.styleID || undefined, h.supplier); if (gg) setLines((ls) => ls.map((x, j) => (j === i ? { ...x, style: gg.style, brand: gg.brand, garment: gg.description, color: gg.colors?.includes(x.color) ? x.color : gg.colors?.[0] || "" } : x))); }} />
+                    <small className="mk-style-n" data-notranslate>{lookingUp ? "Pulling it in…" : g ? `${g.brand} · ${g.description}` : l.style.trim() ? "Pick a style from the list" : "Type a style #, e.g. 6210, 5000, PC54"}</small>
+                  </div>
+                  <div className="mk-color"><ColorPicker value={l.color} colors={g?.colors || []} onChange={(v) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, color: v } : x)))} /></div>
                   {lines.length > 1 && <button type="button" className="btn icon ghost" aria-label="Remove this color" onClick={() => { setLines((ls) => ls.filter((_, j) => j !== i)); setActive(0); }}>✕</button>}
                 </div></div>
               );
