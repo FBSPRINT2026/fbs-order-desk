@@ -548,7 +548,17 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
  * Split the art into plates. `inks` are the colors to print (from findColors, maybe edited), each with the ink
  * name that goes to the press. Plates come back in print order: underbase, colors light → dark, highlight white.
  */
-export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
+/**
+ * What each ink covers, worked out already (vector art: drawn from the shapes themselves, see the Studio's
+ * `vectorCover`): one array per ink in `inks` order, and the white left showing (dark shirt), instead of reading the
+ * pixels' colors. Exact where colors meet: no soft edge pixel can be read as a third color.
+ */
+export type SepCover = { cover: Uint8Array[]; white?: Uint8Array | null;
+  /** each ink knocked out by everything on top of it (when `cover` lets colors run on under black): what the
+   *  underbase and its choke go by, so the base still stops where black is (black never goes on the base) */
+  knock?: Uint8Array[] };
+
+export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover): SepResult {
   const { w, h, data } = px, n = w * h;
   const gLab = labOf(...rgbOf(s.garment));
   const dark = s.underbase === "on" || (s.underbase === "auto" && gLab[0] < 55);
@@ -559,7 +569,10 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   const cover = inks.map(() => new Uint8Array(n));
   // sim on a dark shirt: whatever isn't ink or shirt is the white (underbase + highlight)
   let white: Uint8Array | null = null;
-  if (s.method === "spot") {
+  if (s.method === "spot" && pre) {
+    pre.cover.forEach((a, c) => cover[c].set(a));
+    if (dark) white = pre.white ? pre.white.slice() : new Uint8Array(n);
+  } else if (s.method === "spot") {
     // a color that is one of the inks prints solid; a color with no ink of its own (the gold, when only yellow and
     // orange are left) becomes a halftone mix of the inks that make it, like Separo
     const mix = spotMixer(inks, s), m1 = inks.length + 1;
@@ -673,7 +686,7 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
   const bumps = new Map<string, Uint8Array>();
   if (dark) {
     ub = new Uint8Array(n); const inked = new Uint8Array(n);
-    for (const { k, a } of colorPlates) { if (based(k.hex)) add(ub, a); add(inked, a); }
+    for (const { k, a } of colorPlates) { const kb = pre?.knock?.[inks.indexOf(k)] || a; if (based(k.hex)) add(ub, kb); add(inked, kb); }
     if (white) { add(ub, white); add(inked, white); }
     // choked only where it meets the bare shirt (so white can't peek out past the art); where two colors touch, or a
     // color meets black, it runs straight through (no gap in the white between yellow and orange)

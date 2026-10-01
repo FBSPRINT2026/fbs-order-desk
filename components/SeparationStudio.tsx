@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
-import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
+import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex } from "@/lib/mockup";
@@ -13,7 +13,7 @@ import { ripPdf, rollLayout } from "@/lib/ripPdf";
 import { folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder } from "@/lib/filmFolder";
 import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
-import { parseEps, vartSvg } from "@/lib/epsVector";
+import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
 import { browserInflate, parsePdf } from "@/lib/pdfVector";
 import { deltaE } from "@/lib/inkColors";
 import { mergeProduction, withIssue, type EquipRow, type Machine, type Station } from "@/lib/production";
@@ -41,7 +41,7 @@ export const SEP_STATUS: Record<SepRow["status"], { label: string; c: string }> 
 
 type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean; lib: "auto" | "wilflex" | "pms"; solidOut?: "pixels" | "vector";
   /** underbase choke and color trap, in points at the print size (so they mean the same at any resolution) */
-  chokePt?: number; trapPt?: number;
+  chokePt?: number; trapPt?: number; blackOver?: boolean;
   /** fine detail (small type, thin lines): narrower than finePt (0 = off), the base is choked only fineChokePt and the
    *  color on top is fattened bumpPt onto the shirt instead */
   finePt?: number; fineChokePt?: number; bumpPt?: number;
@@ -81,6 +81,51 @@ const shown = (ink: SepInk) => colorHex(ink.name) || ink.hex;
  * blown up). With removeBg, a white background around the art becomes transparent, and the soft pixels along the
  * art's edge have the white taken back out of them (color-to-alpha), so no pale fringe prints around the outline.
  */
+/**
+ * Vector art: what each ink covers, drawn straight from the shapes at the size of `px` (spot color). Each shape's fill
+ * becomes its inks' shares (an ink's own color = 100% of it; another color = halftone tints of the inks that make it),
+ * and every shape is painted in the art's order, so a shape on top knocks out what's under it on every other ink.
+ * Edges are the shapes' own curves (anti-aliased), never a soft pixel read as a third color: no slivers, no steps.
+ * `blackOver`: black prints on top of the colors (overprint): a black shape doesn't cut the colors printed before it,
+ * so thin black lines leave no cracks and a dot under a black outline stays whole. The knocked-out version of each ink
+ * comes back too, for the underbase (black never goes on the base). The highlight white prints after black, so black
+ * still knocks it out.
+ * Where the art's background was taken out (`px` transparent), nothing prints.
+ */
+function vectorCover(v: VArt, px: Px, inks: SepInk[], s: SepSettings, blackOver: boolean): SepCover {
+  const { w, h } = px, n = w * h, m = inks.length;
+  const mix = spotMixer(inks, s);
+  const rgb = (f: string) => (f.match(/[0-9a-f]{2}/gi) || ["00", "00", "00"]).slice(0, 3).map((x) => parseInt(x, 16)) as [number, number, number];
+  const shares = v.shapes.map((sh) => mix(...rgb(sh.fill), true));
+  const paths = v.shapes.map((sh) => new Path2D(vpathD(sh.ops)));
+  // black inks, and the shapes that print (mostly) black
+  const blackInk = inks.map((k) => neverBase(k.hex));
+  const isBlack = shares.map((sh) => { let b = 0; for (let c = 0; c < m; c++) if (blackInk[c]) b += sh[c]; return b > 0.9; });
+  const whiteInk = inks.map((k) => { const [r, g, b] = rgb(k.hex); return r > 235 && g > 235 && b > 235; });
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d", { willReadFrequently: true })!;
+  const k = w / v.w;
+  const draw = (ch: number, skipBlack: boolean) => {
+    const out = new Uint8Array(n);
+    const first = shares.findIndex((sh) => sh[ch] > 0.02);
+    if (first < 0) return out;
+    x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, w, h);
+    x.setTransform(k, 0, 0, k, -v.x * k, -v.y * k);
+    for (let j = first; j < paths.length; j++) {
+      const t = shares[j][ch] > 0.02 ? Math.round(Math.min(1, shares[j][ch]) * 255) : 0;
+      if (!t && skipBlack && isBlack[j]) continue;
+      x.fillStyle = `rgb(${t},${t},${t})`; x.fill(paths[j], v.shapes[j].evenodd ? "evenodd" : "nonzero");
+    }
+    const d = x.getImageData(0, 0, w, h).data;
+    for (let i = 0; i < n; i++) { const a = d[i * 4 + 3]; if (a && px.data[i * 4 + 3]) out[i] = Math.round((d[i * 4] * a) / 255); }
+    return out;
+  };
+  const knock = inks.map((_, ch) => draw(ch, false));
+  const over = blackOver && isBlack.some(Boolean);
+  const cover = inks.map((_, ch) => (over && !blackInk[ch] && !whiteInk[ch] ? draw(ch, true) : knock[ch]));
+  return { cover, knock, white: draw(m, false) };
+}
+
 function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false, side = MAX_SIDE): Px {
   const nat = Math.max(img.naturalWidth || 1, img.naturalHeight || 1);
   const k = vector ? side / nat : Math.min(1, side / nat);
@@ -304,14 +349,15 @@ export default function SeparationStudio({ id }: { id: string }) {
     const px = pxRef.current; if (!px || !inks.length) return;
     setBusy("Separating…");
     const t = setTimeout(() => {
-      const r = separate(px, inks.map((k) => ({ hex: k.hex, name: k.name })), sepOpts(st, px.w));
+      const ks = inks.map((k) => ({ hex: k.hex, name: k.name })), so = sepOpts(st, px.w);
+      const r = separate(px, ks, so, vart?.ok && st.method === "spot" ? vectorCover(vart, px, ks, so, st.blackOver ?? true) : undefined);
       // show the ink's real color, not the art's
       r.plates.forEach((p) => { const k = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (k) p.hex = shown(k); });
       hiRef.current = null;
       setRes(r); setBusy("");
     }, 60);
     return () => clearTimeout(t);
-  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.widthIn, st.baseFor, st.finePt, st.fineChokePt, st.bumpPt, st.pressGain]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.blackOver, st.widthIn, st.baseFor, st.finePt, st.fineChokePt, st.bumpPt, st.pressGain]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // plates in the chosen print order (new plates keep their default spot)
   const arrange = useCallback((ps: Plate[]) => {
@@ -396,7 +442,8 @@ export default function SeparationStudio({ id }: { id: string }) {
     setBusy("Separating at full size…"); await new Promise((r) => setTimeout(r, 40));
     const { side, ppi } = outSize();
     const px = pixelsOf(img, st.removeBg, !!vart, side);
-    const r = separate(px, inks.map((x) => ({ hex: x.hex, name: x.name })), sepOpts(st, px.w));
+    const ks = inks.map((x) => ({ hex: x.hex, name: x.name })), so = sepOpts(st, px.w);
+    const r = separate(px, ks, so, vart?.ok && st.method === "spot" ? vectorCover(vart, px, ks, so, st.blackOver ?? true) : undefined);
     r.plates.forEach((p) => { const q = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (q) p.hex = shown(q); });
     // a picture under 400 ppi: the plates (not the art) are drawn again at 400 ppi, following the art's own soft
     // edges, so the Illustrator file doesn't step in the art's pixels
@@ -639,6 +686,8 @@ export default function SeparationStudio({ id }: { id: string }) {
                 return <div className={"sep-res " + (low.length ? "warn" : "ok")}>{low.length ? <>Mesh too open for {st.lpi} lpi on {low.map((p) => p.name).join(", ")}: use {Math.ceil((st.lpi * 4) / 10) * 10}+ mesh or a lower LPI.</> : <>Mesh fits {st.lpi} lpi.</>} Smallest dot the mesh holds: {lo === hi ? `${lo}%` : `${lo}–${hi}%`} (lighter tones drop out; the films print whole dots, none too small to hold).</div>;
               })()}</>}
             {st.method === "spot" && <label className="sep-f" title="Each color spreads this far under the darker color printed after it, so colors that touch overlap a hair (no gaps if a screen is a little off). Keep it small on based colors; 0 = colors just touch. Black never spreads onto the white base.">Trap <input type="range" min={0} max={2} step={0.25} value={st.trapPt ?? TRAP_PT} onChange={(e) => set({ trapPt: +e.target.value })} /> <b>{st.trapPt ?? TRAP_PT} pt</b></label>}
+            {st.method === "spot" && vart?.ok && <label className="sep-chk" title="Vector art: black prints on top of the colors (overprint), so the colors under it aren't cut out. Thin black lines leave no cracks in a color's screen, a dot or a stripe under a black outline stays whole, and no slivers of color are left between black lines. The underbase still stops where black is. Off: black knocks out the colors under it (trap only).">
+              <input type="checkbox" checked={st.blackOver ?? true} onChange={(e) => set({ blackOver: e.target.checked })} /> Black prints on top (no knockout under black)</label>}
             {st.method === "spot" && !vart?.ok && <label className="sep-f" title="Pixels: the art's own pixels at full size, like Separo. Smooth vector: traced curves, for low-resolution art.">Solid inks<select value={st.solidOut || "pixels"} onChange={(e) => set({ solidOut: e.target.value as Studio["solidOut"] })}><option value="pixels">Pixels (exact)</option><option value="vector">Smooth vector</option></select></label>}
             {(tonal || plates.some((p) => p.tonal)) && <label className="sep-f" title="Halftone dots print bigger than on the film (at 15% a 50% dot prints about 65%). The halftone plates are made that much lighter so they print as the art, and the proof shows how it prints. Pick None if your RIP adds its own dot gain curve (FilmMaker: a Press Calibration curve that isn't straight). Use one or the other, not both.">Dot gain on press<select value={st.pressGain ?? PRESS_GAIN} onChange={(e) => set({ pressGain: +e.target.value })}>{[0, 0.1, 0.15, 0.2, 0.25, 0.3].map((g) => <option key={g} value={g}>{g ? `${Math.round(g * 100)}%` : "None (RIP does it)"}</option>)}</select></label>}
             <label className="sep-f">Film DPI<select value={st.dpi} onChange={(e) => set({ dpi: +e.target.value })}>{[360, 600, 720, 1200, 1440].map((d) => <option key={d} value={d}>{d}</option>)}</select></label>

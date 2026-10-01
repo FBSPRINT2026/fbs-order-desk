@@ -85,42 +85,18 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
     obj(6 + i, [`[/Separation ${pdfName(plateLabel(p, i))} /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [${c} ${m} ${y} ${k}] /N 1 >>]`]);
   });
 
-  // which plates are pictures (in the multi-ink image) and which are shapes
-  const raster = plates.map((p) => {
-    if (o.vector) return !!(o.tonal && p.kind !== "underbase") || (o.tonal && p.kind === "underbase");
-    return o.tonal || !!p.tonal || o.solid !== "vector";
-  });
+  // which plates are pictures (in the multi-ink image) and which are shapes: solid plates of vector art (and solid
+  // plates traced on request) are smooth curves traced from the plate, which is exact for vector art (drawn from its
+  // shapes, with knockouts, trap and base already worked out); halftone plates stay pictures for the RIP to screen
+  const raster = plates.map((p) => o.tonal || !!p.tonal || (o.solid !== "vector" && !o.vector));
   const ri = plates.map((_, i) => i).filter((i) => raster[i]);
 
   let content = "";
   if (ri.length) content += `q ${W.toFixed(2)} 0 0 ${H.toFixed(2)} 0 0 cm /ImDN Do Q\n`;
   plates.forEach((p, i) => {
     if (raster[i]) return;
-    if (o.vector && p.kind !== "underbase") {
-      // the original vector shapes that print on this plate, at their tint, in SVG coordinates (flipped onto the page)
-      const a = o.vector.art, k = W / a.w;
-      const mine = a.shapes.map((sh) => ({ sh, t: o.vector!.mixOf(sh.fill).find((m) => m.plate === i)?.tint || 0 })).filter((x) => x.t > 0.02);
-      if (mine.length) {
-        content += `q /GS0 gs ${k.toFixed(5)} 0 0 ${(-k).toFixed(5)} ${(-a.x * k).toFixed(3)} ${(H + a.y * k).toFixed(3)} cm /CS${i} cs\n`;
-        for (const { sh, t } of mine) { const v = holdable(Math.min(1, t), o.minDot?.[i] || 0); if (v > 0) content += `${v.toFixed(3)} scn\n` + sh.ops + (sh.evenodd ? "f*\n" : "f\n"); }
-        content += "Q\n";
-      }
-      // fine detail: the color made fatter over the base's edge (small type), traced as curves around those parts
-      if (p.bump) {
-        const near = new Uint8Array(p.alpha.length), R = 3;
-        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-          if (!p.bump[y * w + x]) continue;
-          for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < w && Y < h) near[Y * w + X] = 1; }
-        }
-        const m = new Uint8Array(p.alpha.length); for (let j = 0; j < m.length; j++) if (near[j]) m[j] = p.alpha[j];
-        const path = traceCurves(m, w, h, s, H);
-        if (path) content += `q /GS0 gs /CS${i} cs 1 scn\n${path}f*\nQ\n`;
-      }
-    } else {
-      // smooth curves: vector art's underbase, or a solid plate traced on request
-      const path = traceCurves(p.alpha, w, h, s, H);
-      if (path) content += `q /GS0 gs /CS${i} cs 1 scn\n${path}f*\nQ\n`;
-    }
+    const path = traceCurves(p.alpha, w, h, s, H);
+    if (path) content += `q /GS0 gs /CS${i} cs 1 scn\n${path}f*\nQ\n`;
   });
 
   if (ri.length) {

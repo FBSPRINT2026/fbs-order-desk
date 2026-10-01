@@ -115,8 +115,10 @@ export function parseEps(text: string): VArt {
 }
 
 /** vector art as an SVG file (to draw it as pixels for the separation, and for thumbnails) */
+/** a shape's outline (PDF path operators) as SVG path data, for an SVG or a canvas Path2D */
+export const vpathD = (ops: string) => ops.trim().split("\n").map((l) => { const p = l.trim().split(/\s+/), op = p.pop(); return op === "m" ? `M${p.join(" ")}` : op === "l" ? `L${p.join(" ")}` : op === "c" ? `C${p.join(" ")}` : "Z"; }).join("");
 export function vartSvg(v: VArt): string {
-  const d = (ops: string) => ops.trim().split("\n").map((l) => { const p = l.trim().split(/\s+/), op = p.pop(); return op === "m" ? `M${p.join(" ")}` : op === "l" ? `L${p.join(" ")}` : op === "c" ? `C${p.join(" ")}` : "Z"; }).join("");
+  const d = vpathD;
   const body = v.shapes.map((s) => `<path fill="${s.fill}"${s.evenodd ? ' fill-rule="evenodd"' : ""} d="${d(s.ops)}"/>`).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.x} ${v.y} ${v.w} ${v.h}" width="${v.w}" height="${v.h}">${body}</svg>`;
 }
