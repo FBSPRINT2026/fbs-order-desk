@@ -11,8 +11,9 @@
  * outlined, live text, spot-color swatches it can't read) sets `ok: false` with the reason, and the Studio asks for an
  * SVG or PNG instead.
  *
- * CMYK colors are shown as the press would print them (a blend of the standard coated-ink colors, within about 5 ΔE of
- * a real color profile), not the naive 255·(1−c)(1−k), which turns 0/98/39/0 into a neon pink.
+ * CMYK colors are shown as the press would print them (a blend of the standard coated-ink colors, mixed as halftone
+ * dots do, matching Illustrator's own screen colors to a few units), not the naive 255·(1−c)(1−k), which turns
+ * 0/98/39/0 into a neon pink.
  */
 import type { VArt, VGrad, VShape } from "./svgVector";
 import { readShading, readVal, type PSVal } from "./psShading";
@@ -31,14 +32,17 @@ const lin = (v: number) => (v > 0.04045 ? ((v + 0.055) / 1.055) ** 2.4 : v / 12.
 const gam = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.max(0, v) ** (1 / 2.4) - 0.055);
 const K100 = lin(0x23 / 255);
 const hex = (r: number, g: number, b: number) => "#" + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+// tints mix like halftone dots on paper (Yule–Nielsen, n = 1.6 in light): fitted to Illustrator's own screen colors
+// for its default CMYK profile: 0/0/86/0 → #FFF33B, 2/91/83/0 → #E93E3A, 50% yellow → #FFF799, 50% cyan → #8ED8F8
+const YN = 1.6;
 export function cmykHex(c: number, m: number, y: number, k: number): string {
   const acc = [0, 0, 0];
   for (const [cc, mm, yy, rgb] of CORNERS) {
     const w = (cc ? c : 1 - c) * (mm ? m : 1 - m) * (yy ? y : 1 - y);
-    for (let i = 0; i < 3; i++) acc[i] += w * rgb[i];
+    for (let i = 0; i < 3; i++) acc[i] += w * lin(rgb[i]) ** (1 / YN);
   }
-  const kf = 1 - k + k * K100;
-  return hex(...(acc.map((v) => gam(lin(v) * kf)) as [number, number, number]));
+  const kf = (1 - k + k * K100 ** (1 / YN)) ** YN;
+  return hex(...(acc.map((v) => gam(Math.max(0, v) ** YN * kf)) as [number, number, number]));
 }
 
 /* ---------- the page ---------- */

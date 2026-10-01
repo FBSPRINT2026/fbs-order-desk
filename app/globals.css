@@ -4670,3 +4670,16 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .mk-pdf-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
 .mk-pdf-note{margin:0;font-size:12.5px}
 .mk-pdf-desc textarea{width:100%;resize:vertical;font:inherit}
+/* Separation Studio: fades (gradients) between inks */
+.sep-fades{display:flex;flex-direction:column;gap:6px;margin:-4px 0 10px}
+.sep-fade{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+.sep-fade.warn{background:#FFF7E6;border-color:#F3D08A;color:#6B4700}
+.sep-fade-bar{width:90px;height:14px;border-radius:7px;border:1px solid var(--line);flex:none}
+.sep-fade > span:nth-child(2){flex:1;min-width:200px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sep-fade.warn{background:#3A2C0C;border-color:#6B5215;color:#F3C969}}
+:root[data-theme="dark"] .sep-fade.warn{background:#3A2C0C;border-color:#6B5215;color:#F3C969}
+/* Separation Studio: drag one ink onto another to combine them */
+.sep-chip[draggable="true"]{cursor:grab}
+.sep-chip.dragging{opacity:.45}
+.sep-chip.drop{outline:3px solid var(--accent,#0EA5E9);outline-offset:2px;transform:scale(1.04)}
+.sep-chip-split{position:absolute;top:4px;left:4px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px;border:0;background:rgba(0,0,0,.6);color:#fff;cursor:pointer}

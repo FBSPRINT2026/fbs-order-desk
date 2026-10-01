@@ -8,7 +8,9 @@
  * yellow and orange): in a fade, the art's pixels fill the whole way from one end to the other (nearly every step
  * along the line between the two colors has pixels); flat colors leave the line mostly empty with a few bumps.
  */
-export type RampColor = { lab: number[]; rgb: number[]; share: number; gradient?: boolean };
+export type RampColor = { lab: number[]; rgb: number[]; share: number; gradient?: boolean;
+  /** the colors this one fades into (indices into the returned list) */
+  fadeTo?: number[] };
 
 const sub = (a: number[], b: number[]) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -20,8 +22,11 @@ const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2
  * bends at orange) comes back as two fades sharing orange.
  */
 export function collapseRamps(cols: RampColor[], pts: number[][], rgbs: number[][]): RampColor[] {
-  let out = cols.map((c) => ({ ...c }));
+  let out: RampColor[] = cols.map((c) => ({ ...c }));
   const done = new Set<string>();
+  // the fades found, as pairs of the colors' objects (kept up to date as colors move to their truest end)
+  let links: [RampColor, RampColor][] = [];
+  const swap = (a: RampColor, b: RampColor) => { links = links.map(([x, y]) => [x === a ? b : x, y === a ? b : y]); };
   const key = (a: RampColor, b: RampColor) => [a.rgb.join(","), b.rgb.join(",")].sort().join("|");
   for (let round = 0; round < 6; round++) {
     let best: { i: number; j: number; len: number; near: number[] } | null = null;
@@ -71,10 +76,17 @@ export function collapseRamps(cols: RampColor[], pts: number[][], rgbs: number[]
     });
     done.add(key(out[i], out[j]));
     out[i].gradient = out[j].gradient = true;
-    if (lo) out[i] = { ...out[i], rgb: lo, lab: labOfRgb(lo) };
-    if (hi) out[j] = { ...out[j], rgb: hi, lab: labOfRgb(hi) };
+    if (lo) { const n = { ...out[i], rgb: lo, lab: labOfRgb(lo) }; swap(out[i], n); out[i] = n; }
+    if (hi) { const n = { ...out[j], rgb: hi, lab: labOfRgb(hi) }; swap(out[j], n); out[j] = n; }
     done.add(key(out[i], out[j]));
+    links.push([out[i], out[j]]);
+    const goneSet = new Set(gone.map((k) => out[k]));
+    links = links.filter(([x, y]) => !goneSet.has(x) && !goneSet.has(y));
     out = out.filter((_, k) => !gone.includes(k));
+  }
+  for (const [x, y] of links) {
+    const a = out.indexOf(x), b = out.indexOf(y); if (a < 0 || b < 0) continue;
+    (x.fadeTo ||= []).push(b); (y.fadeTo ||= []).push(a);
   }
   return out;
 }

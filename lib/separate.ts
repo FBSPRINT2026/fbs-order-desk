@@ -91,7 +91,7 @@ export function snapInk(hex: string, lib: "wilflex" | "pms" = "wilflex") {
 }
 
 /* ---------- 1. find the inks ---------- */
-export type Found = { hex: string; share: number; /** an end of a fade (gradient) in the art */ gradient?: boolean };
+export type Found = { hex: string; share: number; /** an end of a fade (gradient) in the art */ gradient?: boolean; /** the found colors it fades into */ fadeTo?: string[] };
 /**
  * The art's main colors: k-means++ in Lab on a sample of opaque pixels, then colors closer than `merge`
  * (CIEDE2000) are joined and anything under `minShare` of the art is dropped. Largest first.
@@ -176,7 +176,10 @@ export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004, garment
   // not inks: keep the two ends, at the truest color of each end (they print as halftones overlapping across it)
   {
     const r2 = collapseRamps(res.map((c) => ({ lab: L(c.hex), rgb: rgbOf(c.hex), share: c.share })), pts, rgbs);
-    if (r2.some((c) => c.gradient)) res = r2.map((c) => ({ hex: hexOf(c.rgb[0], c.rgb[1], c.rgb[2]), share: c.share, gradient: c.gradient }));
+    if (r2.some((c) => c.gradient)) {
+      const hexes = r2.map((c) => hexOf(c.rgb[0], c.rgb[1], c.rgb[2]));
+      res = r2.map((c, i) => ({ hex: hexes[i], share: c.share, gradient: c.gradient, ...(c.fadeTo?.length ? { fadeTo: c.fadeTo.map((j) => hexes[j]) } : {}) }));
+    }
   }
   // still too many: drop the ink that's easiest to do without, one at a time: the one the others mix best
   // (as halftones over the shirt, or over the underbase on a dark shirt, where white comes free), weighed by how much
@@ -209,6 +212,8 @@ export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004, garment
     a.share += b.share; res = res.filter((x) => x !== b);
   }
   groups = [];
+  const left = new Set(res.map((c) => c.hex));
+  res.forEach((c) => { if (c.fadeTo) { c.fadeTo = c.fadeTo.filter((h) => left.has(h)); if (!c.fadeTo.length) delete c.fadeTo; } });
   return res.sort((a, b) => b.share - a.share);
 }
 
@@ -308,7 +313,12 @@ export function gradientShare(px: Px, colors: string[]): number {
 }
 
 /* ---------- 2–5. plates ---------- */
-export type SepInk = { hex: string; name: string };
+export type SepInk = { hex: string; name: string;
+  /** a fade (gradient) in the art runs from this ink to these (their art colors): pixels along it print as the two
+   *  inks' halftones crossing over, never as a mix of other inks */
+  fadeTo?: string[];
+  /** other art colors combined into this ink (the picker's swatches dragged together): they print as this ink, solid */
+  also?: string[] };
 export type SepResult = { plates: Plate[]; w: number; h: number; underbase: boolean; dropped: string[] };
 
 const Q = (r: number, g: number, b: number) => ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
@@ -491,6 +501,9 @@ export const neverBase = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex
 const SNAP = 5;
 /** a color this close (sRGB units) to the line between two inks is an edge between them (anti-aliasing) */
 const EDGE = 22;
+// how far (sRGB units) a color may sit off the straight line between two inks of a fade and still be part of it: art
+// fades blend in a color profile, not in straight sRGB, so their middles sag off the line (yellow → cyan by ~25)
+const FADE = 42;
 /**
  * Spot color: the shares of each ink (and, last, of the white underbase showing) that print a color from the art.
  *   - an ink's own color is 100% that ink
@@ -502,6 +515,21 @@ const EDGE = 22;
  * Also used for vector art, where a shape's fill becomes tints of the inks.
  */
 export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number, b: number, flat?: boolean) => Float32Array {
+  // inks with other art colors combined into them: each of those colors is its own ink while mixing (so its areas are
+  // 100% of it, edges split cleanly), then counted as the ink it was combined into
+  if (!inks.some((k) => k.also?.length)) return spotMixerOne(inks, s);
+  const ex: SepInk[] = [], owner: number[] = [];
+  inks.forEach((k, i) => { ex.push(k); owner.push(i); for (const h of k.also || []) { ex.push({ hex: h, name: k.name }); owner.push(i); } });
+  const raw = spotMixerOne(ex, s), m = inks.length, M = ex.length;
+  return (r, g, b, flat = false) => {
+    const w = raw(r, g, b, flat), out = new Float32Array(m + 1);
+    for (let c = 0; c < M; c++) out[owner[c]] += w[c];
+    for (let c = 0; c < m; c++) if (out[c] > 1) out[c] = 1;
+    out[m] = w[M];
+    return out;
+  };
+}
+function spotMixerOne(inks: SepInk[], s: SepSettings): (r: number, g: number, b: number, flat?: boolean) => Float32Array {
   const gLab = labOf(...rgbOf(s.garment));
   const dark = s.underbase === "on" || (s.underbase === "auto" && gLab[0] < 55);
   const dropped = s.dropGarment ? inks.map((k) => deltaE(k.hex, s.garment) < 12) : inks.map(() => false);
@@ -511,6 +539,9 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
   const K = use.map((j) => rgbOf(inks[j].hex).map((v) => MIX[v]));
   if (dark) K.push(g);
   const m = inks.length;
+  // fades in the art: pairs of inks (by index) a gradient runs between
+  const fades: [number, number][] = [];
+  inks.forEach((k, i) => (k.fadeTo || []).forEach((h) => { const j = inks.findIndex((x) => x.hex.toLowerCase() === h.toLowerCase()); if (j > i) fades.push([i, j]); else if (j >= 0 && j < i && !fades.some(([a, b]) => a === j && b === i)) fades.push([j, i]); }));
   // flat: the pixel is inside an area (its neighbors match), so it's a real color to print, mixed as halftones do (in
   // light); otherwise it's a soft edge pixel the art drew between two colors, split along the line between them
   return (r, gg, b, flat = false) => {
@@ -528,6 +559,22 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
         return out;
       }
       if (!dropped[i1]) out[i1] = 1; return out;
+    }
+    // along a fade: the two inks it runs between, crossing over (one fading out as the other comes in)
+    if (fades.length) {
+      let fi = -1, fj = -1, ft = 0, fd = Infinity;
+      for (const [i, j] of fades) {
+        const A = rgb[i], B = rgb[j], AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], L2 = AB[0] ** 2 + AB[1] ** 2 + AB[2] ** 2; if (!L2) continue;
+        const t = ((r - A[0]) * AB[0] + (gg - A[1]) * AB[1] + (b - A[2]) * AB[2]) / L2; if (t < -0.05 || t > 1.05) continue;
+        const tc = Math.max(0, Math.min(1, t)), d = (r - A[0] - tc * AB[0]) ** 2 + (gg - A[1] - tc * AB[1]) ** 2 + (b - A[2] - tc * AB[2]) ** 2;
+        if (d < fd) { fd = d; fi = i; fj = j; ft = tc; }
+      }
+      if (fi >= 0 && fd < FADE * FADE) {
+        const t = ft < 0.02 ? 0 : ft > 0.98 ? 1 : ft;
+        if (!dropped[fi]) out[fi] = 1 - t;
+        if (!dropped[fj]) out[fj] = t;
+        return out;
+      }
     }
     // the pair of inks whose line passes closest to this color
     let bi = -1, bj = -1, bt = 0, bd = Infinity;
