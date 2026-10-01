@@ -800,7 +800,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         x.fillText("Please check spelling, size, placement and colors.", PW - M, PH - M - 28);
         x.fillText("Screen colors are close to, not exactly, the printed inks.", PW - M, PH - M - 6);
         x.textAlign = "left";
-        pages.push(await canvasPage(c, 612, 792, 0.95));
+        pages.push(await canvasPage(c, 612, 792, 0.97)); // like Illustrator's High Quality Print: 300 ppi, JPEG at Maximum
       }
       const pdf = imagePdf(pages, `${groupName || "Mockup"}${o.company && cust ? " - " + custLabel(cust) : ""}`);
       const name = `${[o.company ? custLabel(cust) : "", groupName || "mockup"].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "mockup"}.pdf`;
