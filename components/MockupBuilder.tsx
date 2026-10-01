@@ -673,7 +673,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
     const p = place(im, v, fit); if (!p.d) return null;
     const k = 1.6, shirt = await photosCanvas(l, k, 0, [v]);
-    const side = Math.max(160, Math.max(p.w, p.h) * (p.rot ? 1.6 : 1.3)) * k;
+    const side = Math.max(120, Math.max(p.w, p.h) * (p.rot ? 1.35 : 1.12)) * k;
     const cx = (p.x + p.w / 2) * k, cy = (p.y + p.h / 2) * k;
     const sx = Math.max(0, Math.min(shirt.width - side, cx - side / 2)), sy = Math.max(0, Math.min(shirt.height - side, cy - side / 2));
     const c = document.createElement("canvas"); c.width = c.height = size;
@@ -698,7 +698,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!portal) { const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle(); if (data?.data) shop = { ...shop, ...(mergeSettings(data.data as Record<string, unknown>).shop || {}) }; }
       const logo = o.ours ? await loadImg(shop.logoUrl || "/brand/fbs-logo.svg").catch(() => null) : null;
       const cust = customers.find((c) => c.id === customerId);
-      const DPI = 200, PW = 11 * DPI, PH = 8.5 * DPI, M = 0.45 * DPI;
+      const DPI = 200, PW = 8.5 * DPI, PH = 11 * DPI, M = 0.45 * DPI;
       const font = (w: number, size: number) => `${w} ${size}px Helvetica, Arial, sans-serif`;
       const ink = "#141D2B", soft = "#5B6678", faint = "#8A93A3", rule = "#DDE2EA";
       const prints = imprints.filter((im) => designOf(im));
@@ -741,55 +741,62 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           for (const w of words) { const t = row ? row + " " + w : w; if (x.measureText(t).width > PW - 2 * M && row) { y += 32; x.fillText(row, M, y); row = w; if (++rows >= 2) break; } else row = t; }
           if (rows < 2 && row) { y += 32; x.fillText(row, M, y); }
         }
-        const bodyTop = y + 0.2 * DPI, bodyBot = PH - M - (o.ours ? 0.3 * DPI : 0);
-        // the shirts (left) and a close-up of each print (right)
-        const n = Math.max(1, views.length), gap = 0.2 * DPI;
-        const cuW = prints.length ? (prints.length === 1 ? 3.4 : prints.length > 3 ? 3.6 : 2.6) * DPI : 0;
-        const box = { x: M, y: bodyTop, w: PW - 2 * M - (cuW ? cuW + 0.3 * DPI : 0), h: bodyBot - bodyTop - 0.3 * DPI };
+        const bodyTop = y + 0.25 * DPI, bodyBot = PH - M - 0.35 * DPI;
+        // below: a card for every print, its close-up (blown up) with its location, logo, size and inks; two across
+        const perRow = prints.length > 4 ? 3 : 2, rowsN = Math.ceil(prints.length / perRow);
+        const cardGap = 0.25 * DPI, cardW = (PW - 2 * M - (perRow - 1) * cardGap) / perRow;
+        const sq = Math.min(perRow === 3 ? 1.55 * DPI : 2.1 * DPI, cardW * 0.58), cardH = sq + 0.2 * DPI;
+        const cardsH = rowsN ? rowsN * cardH + (rowsN - 1) * 0.15 * DPI + 0.45 * DPI : 0;
+        // the shirts across the top, as big as the room left allows
+        const n = Math.max(1, views.length), gap = 0.25 * DPI;
+        const box = { x: M, y: bodyTop, w: PW - 2 * M, h: bodyBot - bodyTop - cardsH - 0.4 * DPI };
         const k = Math.min((box.w - (n - 1) * gap) / (n * PHOTO_W), box.h / PHOTO_H);
         const shirts = await photosCanvas(l, k, gap);
         const sx = box.x + (box.w - shirts.width) / 2, sy = box.y;
         x.drawImage(shirts, sx, sy);
         x.fillStyle = faint; x.font = font(700, 20); x.textAlign = "center";
         const pw = PHOTO_W * k;
-        views.forEach((v, i) => x.fillText(v.toUpperCase(), sx + i * (pw + gap) + pw / 2, sy + shirts.height + 26));
+        views.forEach((v, i) => x.fillText(v.toUpperCase(), sx + i * (pw + gap) + pw / 2, sy + shirts.height + 28));
         x.textAlign = "left";
-        if (cuW) {
-          const cols = prints.length > 3 ? 2 : 1, rowsN = Math.ceil(prints.length / cols);
-          const cx0 = PW - M - cuW, cellW = (cuW - (cols - 1) * 0.2 * DPI) / cols, cellH = (bodyBot - bodyTop) / rowsN;
-          const size = Math.min(cellW, cellH - 0.62 * DPI);
+        if (rowsN) {
+          let cy = sy + shirts.height + 0.4 * DPI;
+          x.fillStyle = rule; x.fillRect(M, cy, PW - 2 * M, 2);
+          cy += 0.12 * DPI;
+          x.fillStyle = faint; x.font = font(700, 20); x.fillText("PRINTS", M, cy + 20);
+          cy += 0.3 * DPI;
           for (let q = 0; q < prints.length; q++) {
-            const im = prints[q], col = q % cols, rw = Math.floor(q / cols);
-            const ox = cx0 + col * (cellW + 0.2 * DPI), oy = bodyTop + rw * cellH;
-            const pl = place(im);
-            x.fillStyle = ink; x.font = font(700, 22); x.fillText(im.location.toUpperCase(), ox, oy + 20);
-            x.fillStyle = soft; x.font = font(400, 20); x.textAlign = "right";
-            x.fillText(`${pl.wIn.toFixed(1)}" × ${(pl.hIn || 0).toFixed(1)}"`, ox + size, oy + 20); x.textAlign = "left";
-            const cu = await closeUpCanvas(l, im, Math.round(size));
-            if (cu) { x.drawImage(cu, ox, oy + 32); x.strokeStyle = rule; x.lineWidth = 2; x.strokeRect(ox, oy + 32, size, size); }
-            // its inks
-            let ix = ox, iy = oy + 32 + size + 26;
-            for (const t of inkList(im).slice(0, 5)) {
-              const nm = t.name.startsWith("As uploaded") ? "" : t.name.length > 16 ? t.name.slice(0, 15) + "…" : t.name;
-              x.font = font(400, 19); const wv = nm ? 28 + x.measureText(nm).width + 18 : 30;
-              if (ix + wv > ox + size + 10) { ix = ox; iy += 26; }
-              x.fillStyle = t.hex || "#cccccc"; x.beginPath(); x.arc(ix + 10, iy - 7, 10, 0, Math.PI * 2); x.fill();
+            const im = prints[q], col = q % perRow, rw = Math.floor(q / perRow);
+            const ox = M + col * (cardW + cardGap), oy = cy + rw * (cardH + 0.15 * DPI);
+            const pl = place(im), d = designOf(im);
+            const cu = await closeUpCanvas(l, im, Math.round(sq));
+            if (cu) { x.drawImage(cu, ox, oy); x.strokeStyle = rule; x.lineWidth = 2; x.strokeRect(ox, oy, sq, sq); }
+            const tx = ox + sq + 0.15 * DPI, tw = cardW - sq - 0.15 * DPI;
+            const fit = (t: string) => { let u = t; while (u && x.measureText(u).width > tw) u = u.slice(0, -2); return u === t ? t : u + "…"; };
+            let ty = oy + 26;
+            x.fillStyle = ink; x.font = font(800, 24); x.fillText(fit(im.location.toUpperCase()), tx, ty);
+            ty += 34; x.fillStyle = soft; x.font = font(400, 21); x.fillText(fit(d ? designLabel(d) : ""), tx, ty);
+            ty += 30; x.fillStyle = ink; x.font = font(600, 22); x.fillText(`${pl.wIn.toFixed(1)}" × ${(pl.hIn || 0).toFixed(1)}"`, tx, ty);
+            ty += 12;
+            for (const t of inkList(im).slice(0, 6)) {
+              ty += 30; if (ty > oy + sq) break;
+              x.fillStyle = t.hex || "#cccccc"; x.beginPath(); x.arc(tx + 10, ty - 7, 10, 0, Math.PI * 2); x.fill();
               x.strokeStyle = "#B8C0CC"; x.lineWidth = 2; x.stroke();
-              x.fillStyle = ink; if (nm) x.fillText(nm, ix + 26, iy);
-              ix += wv;
+              const nm = t.name.startsWith("As uploaded") ? "As uploaded" : t.name;
+              x.fillStyle = ink; x.font = font(400, 20); x.fillText(fit(nm), tx + 28, ty);
             }
           }
         }
         // footer: how to reach us (with our logo on)
         if (o.ours) {
-          x.fillStyle = rule; x.fillRect(M, PH - M - 40, PW - 2 * M, 2);
-          x.fillStyle = soft; x.font = font(600, 20);
+          x.fillStyle = rule; x.fillRect(M, PH - M - 52, PW - 2 * M, 2);
+          x.fillStyle = soft; x.font = font(600, 19);
           x.fillText([shop.name, shop.phone, shop.email].filter(Boolean).join("  ·  "), M, PH - M - 8);
         }
-        x.fillStyle = faint; x.font = font(400, 18); x.textAlign = "right";
-        x.fillText("Please check spelling, size, placement and colors. Colors on screen are close to, not exactly, the printed inks.", PW - M, PH - M - 8);
+        x.fillStyle = faint; x.font = font(400, 17); x.textAlign = "right";
+        x.fillText("Please check spelling, size, placement and colors.", PW - M, PH - M - 28);
+        x.fillText("Screen colors are close to, not exactly, the printed inks.", PW - M, PH - M - 6);
         x.textAlign = "left";
-        pages.push(await canvasPage(c, 792, 612));
+        pages.push(await canvasPage(c, 612, 792));
       }
       const pdf = imagePdf(pages, `${groupName || "Mockup"}${o.company && cust ? " - " + custLabel(cust) : ""}`);
       const name = `${[o.company ? custLabel(cust) : "", groupName || "mockup"].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "mockup"}.pdf`;
