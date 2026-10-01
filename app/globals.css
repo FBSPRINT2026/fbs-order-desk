@@ -4688,3 +4688,9 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mk-plan.sim{background:#3A2C0C;color:#F3C969}}
 :root[data-theme="dark"] .mk-plan.sim{background:#3A2C0C;color:#F3C969}
 .mk-pdf-opts{display:flex;gap:6px 18px;flex-wrap:wrap}
+/* Separation Studio: a tab per print location of the order (front, back, sleeve) */
+.sep-locs{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 12px}
+.sep-loc{display:flex;flex-direction:column;gap:1px;padding:7px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);text-decoration:none;color:var(--ink);min-width:120px}
+.sep-loc small{font-size:11px;color:var(--ink-3)}
+.sep-loc:hover{border-color:var(--accent,#0EA5E9)}
+.sep-loc.on{border-color:var(--accent,#0EA5E9);box-shadow:inset 0 -3px 0 var(--accent,#0EA5E9)}

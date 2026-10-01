@@ -62,6 +62,8 @@ const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, gain: st.press
 /** the working size on screen (fast); the files are separated again at full size (OUT_PPI at the print width) */
 const MAX_SIDE = 2400;
 const OUT_PPI = 400, OUT_MAX_SIDE = 7200, OUT_MAX_PX = 36e6;
+/** print order of locations for the tabs: front ones, then back, then sleeves and the rest */
+const locRank = (loc: string) => { const l = (loc || "").toLowerCase(); return /sleeve/.test(l) ? 3 : /back|yoke|shoulder/.test(l) ? 2 : /front|chest|pocket|vertical/.test(l) ? 1 : 4; };
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "plate";
 /** what an ink name is and how close it is to the art's color: "Standard · very close", "PMS · close", "Custom" */
 function inkKind(name: string, art: string): { kind: string; word: string; dE: number } | null {
@@ -278,6 +280,12 @@ export default function SeparationStudio({ id }: { id: string }) {
       sb.from("production_equipment").select("*"),
     ]);
     setOrder((o as Order) || null);
+    // the other print locations of this order group (front, back, sleeve…): a tab each at the top
+    if (row0.order_id) {
+      const { data: sib } = await sb.from("separations").select("id, location, status, imprint_id, group_id").eq("order_id", row0.order_id).neq("status", "cancelled");
+      const groupSibs = ((sib || []) as Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id">[]).filter((x) => !row0.group_id || x.group_id === row0.group_id);
+      setSiblings(groupSibs.sort((a, b) => locRank(a.location) - locRank(b.location)));
+    }
     const today = new Date().toISOString().slice(0, 10);
     const ps = mergeProduction((s0?.data as { production?: unknown } | null)?.production);
     setPresses(ps.machines.filter((m) => m.type === "screen" && m.active).map((m) => withIssue(m, ((eq0 || []) as EquipRow[]).find((e) => e.machine === m.id), today)));
@@ -490,6 +498,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   /* ---------- full size (for the files) ---------- */
   // the screen works on a copy of at most 2,400 px; the Illustrator file and films are separated again from the art
   // at full size: the art's own pixels (up to OUT_PPI at the print width), vector art drawn at OUT_PPI
+  const [siblings, setSiblings] = useState<Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id">[]>([]);
   const designRef = useRef<(Design & { print_plan?: PrintPlan | null }) | null>(null);
   const hiRef = useRef<{ key: string; plates: Plate[]; w: number; h: number; ppi: number } | null>(null);
   const outSize = useCallback(() => {
@@ -696,6 +705,16 @@ export default function SeparationStudio({ id }: { id: string }) {
       </div>
       {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
       {err && <div className="pv-err">{err}</div>}
+      {siblings.length > 1 && (
+        <nav className="sep-locs" aria-label="Print locations on this order">
+          {siblings.map((x) => {
+            const st0 = SEP_STATUS[x.status];
+            return x.id === row.id
+              ? <span key={x.id} className="sep-loc on" aria-current="page"><b>{x.location}</b><small>{st0?.label}</small></span>
+              : <Link key={x.id} className="sep-loc" href={`/shop/separations/${x.id}`}><b>{x.location}</b><small>{st0?.label}</small></Link>;
+          })}
+        </nav>
+      )}
       <div className="rv-seg sep-tabs">{([["studio", "Separate Here"], ["outside", "Separated Elsewhere (Separo…)"]] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
 
       {tab === "outside" ? <Outside row={row} origUrl={origUrl} onSaved={(r) => { setRow(r); setMsg("Uploaded and sent for review."); }} openFile={openFile} /> : hasArt === false ? <AddArt row={row} onDone={(r) => { setRow(r); load(); }} /> : (

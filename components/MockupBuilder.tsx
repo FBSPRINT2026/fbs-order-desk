@@ -874,6 +874,38 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return true;
   }
 
+  /**
+   * Create Separations: one separation per screen-print location of this group (front, back, sleeve…), each starting
+   * from its logo's print plan, then open the first; the Studio has a tab per location to switch between them.
+   * Locations that already have one are opened, not made again.
+   */
+  async function createSeps() {
+    if (!order || saving) return;
+    const screen = imprints.filter((im) => im.method === "screen" && im.design_id && !isQuick(im.design_id));
+    if (!screen.length) return setMsg("No screen-print location has a logo yet.");
+    setSaving(true); setMsg("Making the separations…");
+    try {
+      if (!(await syncOrder())) throw new Error("Couldn't update the order first.");
+      const { data: od } = await sb.from("orders").select("*").eq("id", order.id).maybeSingle();
+      const o = (od as Order) || order, gs = orderGroups(o), g = gs.find((x) => x.id === groupId) || gs[0];
+      if (!g) throw new Error("Order group not found.");
+      const { data: ex } = await sb.from("separations").select("id, imprint_id, location").eq("order_id", o.id).neq("status", "cancelled");
+      const have = (ex || []) as { id: string; imprint_id: string | null; location: string }[];
+      const { data: { user } } = await sb.auth.getUser(), me = (user?.email || "").toLowerCase();
+      const missing = g.imprints.filter((im) => im.method === "screen" && im.design_id && !have.some((x) => x.imprint_id === im.id));
+      if (missing.length) {
+        const rows = missing.map((im) => ({ order_id: o.id, group_id: g.id, imprint_id: im.id, location: im.location || "Imprint", design_id: im.design_id || null, customer_id: o.customer_id, garment_color: g.lines.find((l) => l.color)?.color || "", due_date: o.due_date, requested_by: me, settings: { garments: [...new Set(g.lines.map((l) => l.color).filter(Boolean))], widthIn: parseFloat(String(im.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || undefined } }));
+        const r = await sb.from("separations").insert(rows).select("id, imprint_id, location");
+        if (r.error) throw new Error(r.error.message);
+        have.push(...((r.data || []) as typeof have));
+      }
+      const mine = have.filter((x) => g.imprints.some((im) => im.id === x.imprint_id));
+      const rank = (loc: string) => { const l = (loc || "").toLowerCase(); return /sleeve/.test(l) ? 3 : /back|yoke|shoulder/.test(l) ? 2 : 1; };
+      const first = mine.sort((a, b) => rank(a.location) - rank(b.location))[0];
+      if (!first) throw new Error("No separation to open.");
+      location.assign(`/shop/separations/${first.id}`);
+    } catch (e) { setMsg("Couldn't make the separations: " + (e instanceof Error ? e.message : String(e))); setSaving(false); }
+  }
   saveRef.current = (f?: boolean) => { saveAll(!!f); };
   async function saveAll(force = false) {
     if (!customerId) return setMsg("Pick a customer so the mockups save to their account.");
@@ -970,7 +1002,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       <Link className="back" href={portal ? backHref || "/portal" : orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {portal ? "Dashboard" : orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
       <div className="page-head mk-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}<button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button><button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
+        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}<button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button><button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
       </div>
 
         {pdfOpen && (
