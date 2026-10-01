@@ -603,12 +603,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
 
   /** The shirt photos (front, then back) side by side with the art on them, each `k` × the photo size, `gap` px apart. */
-  async function photosCanvas(l: Line, k: number, gap: number, vs: View[] = views): Promise<HTMLCanvasElement> {
+  /** `crop` (one view, photo coordinates): draw just that part, at `k`, for a sharp close-up */
+  async function photosCanvas(l: Line, k: number, gap: number, vs: View[] = views, crop?: { x: number; y: number; w: number; h: number }): Promise<HTMLCanvasElement> {
     const pw = PHOTO_W * k, ph = PHOTO_H * k, n = Math.max(1, vs.length);
     const c = document.createElement("canvas");
-    c.width = Math.round(n * pw + (n - 1) * gap); c.height = Math.round(ph);
+    c.width = Math.round(crop ? crop.w * k : n * pw + (n - 1) * gap); c.height = Math.round(crop ? crop.h * k : ph);
     const main = c.getContext("2d")!;
     main.fillStyle = "#ffffff"; main.fillRect(0, 0, c.width, c.height);
+    if (crop) main.translate(-crop.x * k, -crop.y * k);
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], ox = i * (pw + gap), oy = 0;
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
@@ -617,6 +619,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // art goes on its own layer, then gets cut to the shirt outline before it's added to the picture
       const layer = document.createElement("canvas"); layer.width = c.width; layer.height = c.height;
       const x = layer.getContext("2d")!;
+      if (crop) x.translate(-crop.x * k, -crop.y * k);
       for (const im of imprints.filter((m) => viewsFor(m.location).includes(v))) {
         const p = place(im, v, fit);
         if (!p.d || !artUrl(im)) continue;
@@ -634,7 +637,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const m = await loadImg(fit.mask).catch(() => null);
         if (m) { x.globalCompositeOperation = "destination-in"; x.drawImage(m, ox, oy, pw, ph); x.globalCompositeOperation = "source-over"; }
       }
-      main.drawImage(layer, 0, 0);
+      main.save(); main.setTransform(1, 0, 0, 1, 0, 0); main.drawImage(layer, 0, 0); main.restore();
     }
     return c;
   }
@@ -646,9 +649,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const specLines = imprints.map((im) => { const p = place(im); return `${im.location}: ${p.d ? designLabel(p.d) : "no logo"} · ${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"${im.inks ? " · " + im.inks : ""}`; });
     const W = pad * 2 + views.length * pw + (views.length - 1) * pad;
     const H = bare ? ph + pad * 2 : 70 + ph + 30 + specLines.length * 26 + pad;
-    const c = document.createElement("canvas");
-    c.width = W; c.height = H;
+    // the saved proof at twice the size (thumbnails as they were), the photos drawn at that size: sharp when zoomed
+    const S = bare ? 1 : 2, c = document.createElement("canvas");
+    c.width = W * S; c.height = H * S;
     const x = c.getContext("2d")!;
+    x.scale(S, S);
     x.fillStyle = "#ffffff"; x.fillRect(0, 0, W, H);
     if (!bare) {
       x.fillStyle = "#141D2B"; x.font = "700 24px Helvetica, Arial, sans-serif";
@@ -656,7 +661,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       x.font = "16px Helvetica, Arial, sans-serif"; x.fillStyle = "#4A566B";
       x.fillText([l.brand, l.style, l.garment].filter(Boolean).join(" ") + (l.color ? ` — ${l.color}` : ""), pad, 60);
     }
-    x.drawImage(await photosCanvas(l, k, pad), pad, top);
+    { const ph2 = await photosCanvas(l, k * S, pad * S); x.drawImage(ph2, pad, top, ph2.width / S, ph2.height / S); }
     if (!bare) {
       x.fillStyle = "#7A8599"; x.font = "600 13px Helvetica, Arial, sans-serif";
       views.forEach((v, i) => x.fillText(v.toUpperCase(), pad + i * (pw + pad), top + ph + 18));
@@ -672,14 +677,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
     const fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
     const p = place(im, v, fit); if (!p.d) return null;
-    const k = 1.6, shirt = await photosCanvas(l, k, 0, [v]);
-    const side = Math.max(120, Math.max(p.w, p.h) * (p.rot ? 1.35 : 1.12)) * k;
-    const cx = (p.x + p.w / 2) * k, cy = (p.y + p.h / 2) * k;
-    const sx = Math.max(0, Math.min(shirt.width - side, cx - side / 2)), sy = Math.max(0, Math.min(shirt.height - side, cy - side / 2));
-    const c = document.createElement("canvas"); c.width = c.height = size;
-    const x = c.getContext("2d")!; x.fillStyle = "#ffffff"; x.fillRect(0, 0, size, size);
-    x.drawImage(shirt, sx, sy, Math.min(side, shirt.width), Math.min(side, shirt.height), 0, 0, size, size);
-    return c;
+    // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
+    const side = Math.min(PHOTO_W, Math.max(120, Math.max(p.w, p.h) * (p.rot ? 1.35 : 1.12)));
+    const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+    const crop = { x: Math.max(0, Math.min(PHOTO_W - side, cx - side / 2)), y: Math.max(0, Math.min(PHOTO_H - side, cy - side / 2)), w: side, h: side };
+    return photosCanvas(l, size / side, 0, [v], crop);
   }
 
   /**
@@ -704,8 +706,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const prints = imprints.filter((im) => designOf(im));
       const pages = [];
       for (const l of todo) {
-        const c = document.createElement("canvas"); c.width = PW; c.height = PH;
+        // drawn at 300 dpi (R × the 200-dpi layout units), every picture made at that size: sharp when zoomed in
+        const R = 1.5, c = document.createElement("canvas"); c.width = Math.round(PW * R); c.height = Math.round(PH * R);
         const x = c.getContext("2d")!;
+        x.scale(R, R); x.imageSmoothingQuality = "high";
         x.fillStyle = "#ffffff"; x.fillRect(0, 0, PW, PH);
         // header: our logo (left) and/or the customer's company; the date and order on the right
         let top = M;
@@ -751,9 +755,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const n = Math.max(1, views.length), gap = 0.25 * DPI;
         const box = { x: M, y: bodyTop, w: PW - 2 * M, h: bodyBot - bodyTop - cardsH - 0.4 * DPI };
         const k = Math.min((box.w - (n - 1) * gap) / (n * PHOTO_W), box.h / PHOTO_H);
-        const shirts = await photosCanvas(l, k, gap);
+        const shirtsHi = await photosCanvas(l, k * R, gap * R), shirts = { width: shirtsHi.width / R, height: shirtsHi.height / R };
         const sx = box.x + (box.w - shirts.width) / 2, sy = box.y;
-        x.drawImage(shirts, sx, sy);
+        x.drawImage(shirtsHi, sx, sy, shirts.width, shirts.height);
         x.fillStyle = faint; x.font = font(700, 20); x.textAlign = "center";
         const pw = PHOTO_W * k;
         views.forEach((v, i) => x.fillText(v.toUpperCase(), sx + i * (pw + gap) + pw / 2, sy + shirts.height + 28));
@@ -768,8 +772,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             const im = prints[q], col = q % perRow, rw = Math.floor(q / perRow);
             const ox = M + col * (cardW + cardGap), oy = cy + rw * (cardH + 0.15 * DPI);
             const pl = place(im), d = designOf(im);
-            const cu = await closeUpCanvas(l, im, Math.round(sq));
-            if (cu) { x.drawImage(cu, ox, oy); x.strokeStyle = rule; x.lineWidth = 2; x.strokeRect(ox, oy, sq, sq); }
+            const cu = await closeUpCanvas(l, im, Math.round(sq * R));
+            if (cu) { x.drawImage(cu, ox, oy, sq, sq); x.strokeStyle = rule; x.lineWidth = 2; x.strokeRect(ox, oy, sq, sq); }
             const tx = ox + sq + 0.15 * DPI, tw = cardW - sq - 0.15 * DPI;
             const fit = (t: string) => { let u = t; while (u && x.measureText(u).width > tw) u = u.slice(0, -2); return u === t ? t : u + "…"; };
             let ty = oy + 26;
@@ -796,7 +800,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         x.fillText("Please check spelling, size, placement and colors.", PW - M, PH - M - 28);
         x.fillText("Screen colors are close to, not exactly, the printed inks.", PW - M, PH - M - 6);
         x.textAlign = "left";
-        pages.push(await canvasPage(c, 612, 792));
+        pages.push(await canvasPage(c, 612, 792, 0.95));
       }
       const pdf = imagePdf(pages, `${groupName || "Mockup"}${o.company && cust ? " - " + custLabel(cust) : ""}`);
       const name = `${[o.company ? custLabel(cust) : "", groupName || "mockup"].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "mockup"}.pdf`;
