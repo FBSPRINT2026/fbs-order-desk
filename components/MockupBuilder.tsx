@@ -166,7 +166,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const refreshed = useRef(new Set<number>());
   // Export PDF: art only, or with the company, description and print details (the choice is remembered)
   const [pdfOpen, setPdfOpen] = useState(false), [pdfBusy, setPdfBusy] = useState(false), [pdfDesc, setPdfDesc] = useState("");
-  const [pdfMode, setPdfMode] = useSticky<"art" | "details">("mk.pdfMode", "details");
+  const [pdfOurs, setPdfOurs] = useSticky<boolean>("mk.pdfOurs", true), [pdfCompany, setPdfCompany] = useSticky<boolean>("mk.pdfCompany", true);
   // a style picked from S&S / SanMar that isn't in the catalog yet: pulled in (with its color photos)
   const [lookingUp, setLookingUp] = useState("");
   const tried = useRef(new Set<string>());
@@ -603,14 +603,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
 
   /** The shirt photos (front, then back) side by side with the art on them, each `k` × the photo size, `gap` px apart. */
-  async function photosCanvas(l: Line, k: number, gap: number): Promise<HTMLCanvasElement> {
-    const pw = PHOTO_W * k, ph = PHOTO_H * k, n = Math.max(1, views.length);
+  async function photosCanvas(l: Line, k: number, gap: number, vs: View[] = views): Promise<HTMLCanvasElement> {
+    const pw = PHOTO_W * k, ph = PHOTO_H * k, n = Math.max(1, vs.length);
     const c = document.createElement("canvas");
     c.width = Math.round(n * pw + (n - 1) * gap); c.height = Math.round(ph);
     const main = c.getContext("2d")!;
     main.fillStyle = "#ffffff"; main.fillRect(0, 0, c.width, c.height);
-    for (let i = 0; i < views.length; i++) {
-      const v = views[i], ox = i * (pw + gap), oy = 0;
+    for (let i = 0; i < vs.length; i++) {
+      const v = vs[i], ox = i * (pw + gap), oy = 0;
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
       main.drawImage(bg, ox, oy, pw, ph);
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
@@ -665,12 +665,29 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return await new Promise((res) => c.toBlob((b) => res(b!), "image/png"));
   }
 
+  /** A close-up of one print on the shirt: the print area with a little shirt around it, square, `size` px. */
+  async function closeUpCanvas(l: Line, im: Imprint, size: number): Promise<HTMLCanvasElement | null> {
+    const v = viewsFor(im.location)[0]; if (!v) return null;
+    const u = photo(l, v);
+    const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
+    const fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
+    const p = place(im, v, fit); if (!p.d) return null;
+    const k = 1.6, shirt = await photosCanvas(l, k, 0, [v]);
+    const side = Math.max(160, Math.max(p.w, p.h) * (p.rot ? 1.6 : 1.3)) * k;
+    const cx = (p.x + p.w / 2) * k, cy = (p.y + p.h / 2) * k;
+    const sx = Math.max(0, Math.min(shirt.width - side, cx - side / 2)), sy = Math.max(0, Math.min(shirt.height - side, cy - side / 2));
+    const c = document.createElement("canvas"); c.width = c.height = size;
+    const x = c.getContext("2d")!; x.fillStyle = "#ffffff"; x.fillRect(0, 0, size, size);
+    x.drawImage(shirt, sx, sy, Math.min(side, shirt.width), Math.min(side, shirt.height), 0, 0, size, size);
+    return c;
+  }
+
   /**
-   * The customer PDF: one landscape Letter page per garment color. "art" = just the shirts with the art, nothing
-   * else; "details" = our logo and contact, the customer's company, the mockup name and description, the garment,
-   * and each print (location, logo, size, ink colors).
+   * The customer PDF: one landscape Letter page per garment color: the shirts, a close-up of every print (location,
+   * size, inks), and the garment. Our logo and contact, and the customer's company name, are each on or off (an FBS
+   * proof with no company name, or the company's own name with no FBS logo, or both).
    */
-  async function exportPdf(mode: "art" | "details", description: string) {
+  async function exportPdf(o: { ours: boolean; company: boolean; description: string }) {
     const todo = lines.filter((z) => z.style || z.color);
     if (!todo.length) return setMsg("Add a garment and color first.");
     if (!imprints.some((im) => designOf(im))) return setMsg("Put a logo on the shirt first.");
@@ -679,85 +696,103 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       await loadShirtFonts().catch(() => {});
       let shop = { name: "FBS Print", phone: "", email: "", address: "", logoUrl: "" };
       if (!portal) { const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle(); if (data?.data) shop = { ...shop, ...(mergeSettings(data.data as Record<string, unknown>).shop || {}) }; }
-      const logo = mode === "details" ? await loadImg(shop.logoUrl || "/brand/fbs-logo.svg").catch(() => null) : null;
+      const logo = o.ours ? await loadImg(shop.logoUrl || "/brand/fbs-logo.svg").catch(() => null) : null;
       const cust = customers.find((c) => c.id === customerId);
       const DPI = 200, PW = 11 * DPI, PH = 8.5 * DPI, M = 0.45 * DPI;
       const font = (w: number, size: number) => `${w} ${size}px Helvetica, Arial, sans-serif`;
+      const ink = "#141D2B", soft = "#5B6678", faint = "#8A93A3", rule = "#DDE2EA";
+      const prints = imprints.filter((im) => designOf(im));
       const pages = [];
       for (const l of todo) {
         const c = document.createElement("canvas"); c.width = PW; c.height = PH;
         const x = c.getContext("2d")!;
         x.fillStyle = "#ffffff"; x.fillRect(0, 0, PW, PH);
-        // the shirts: as big as the space allows
-        const n = Math.max(1, views.length), gap = 0.25 * DPI;
-        const box = mode === "art" ? { x: M, y: M, w: PW - 2 * M, h: PH - 2 * M } : { x: M, y: 2.1 * DPI, w: PW - 2 * M, h: 3.7 * DPI };
+        // header: our logo (left) and/or the customer's company; the date and order on the right
+        let top = M;
+        const head = o.ours || o.company;
+        if (head) {
+          let lx = M;
+          if (o.ours) {
+            if (logo) { const lh = 0.5 * DPI, lw = Math.min(2.4 * DPI, (logo.naturalWidth / (logo.naturalHeight || 1)) * lh || 2 * DPI); x.drawImage(logo, M, M, lw, lh); lx = M + lw + 0.3 * DPI; }
+            else { x.fillStyle = ink; x.font = font(800, 40); x.fillText(shop.name, M, M + 40); lx = M + x.measureText(shop.name).width + 0.3 * DPI; }
+          }
+          if (o.company) {
+            if (o.ours) { x.fillStyle = rule; x.fillRect(lx - 0.15 * DPI, M + 4, 3, 0.45 * DPI); }
+            x.fillStyle = ink; x.font = font(800, 48); x.fillText(custLabel(cust) || "", lx, M + 44);
+          }
+          x.textAlign = "right"; x.fillStyle = faint; x.font = font(700, 22); x.fillText("MOCKUP FOR APPROVAL", PW - M, M + 20);
+          x.fillStyle = soft; x.font = font(400, 24);
+          x.fillText([new Date().toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }), order ? `Order #${order.number}` : ""].filter(Boolean).join("  ·  "), PW - M, M + 54);
+          x.textAlign = "left";
+          top = M + 0.62 * DPI;
+          x.fillStyle = rule; x.fillRect(M, top, PW - 2 * M, 3);
+          top += 0.12 * DPI;
+        }
+        // the mockup's name, the garment and color, and the description
+        x.fillStyle = ink; x.font = font(700, 30);
+        x.fillText(groupName || "Mockup", M, top + 32);
+        x.fillStyle = soft; x.font = font(400, 26);
+        const gtxt = [[l.brand, l.style].filter(Boolean).join(" "), l.garment, l.color ? `Color: ${l.color}` : ""].filter(Boolean).join("  ·  ");
+        x.fillText(gtxt, M, top + 66);
+        let y = top + 66;
+        if (o.description.trim()) {
+          x.font = font(400, 24); x.fillStyle = soft;
+          const words = o.description.trim().split(/\s+/); let row = "", rows = 0;
+          for (const w of words) { const t = row ? row + " " + w : w; if (x.measureText(t).width > PW - 2 * M && row) { y += 32; x.fillText(row, M, y); row = w; if (++rows >= 2) break; } else row = t; }
+          if (rows < 2 && row) { y += 32; x.fillText(row, M, y); }
+        }
+        const bodyTop = y + 0.2 * DPI, bodyBot = PH - M - (o.ours ? 0.3 * DPI : 0);
+        // the shirts (left) and a close-up of each print (right)
+        const n = Math.max(1, views.length), gap = 0.2 * DPI;
+        const cuW = prints.length ? (prints.length === 1 ? 3.4 : prints.length > 3 ? 3.6 : 2.6) * DPI : 0;
+        const box = { x: M, y: bodyTop, w: PW - 2 * M - (cuW ? cuW + 0.3 * DPI : 0), h: bodyBot - bodyTop - 0.3 * DPI };
         const k = Math.min((box.w - (n - 1) * gap) / (n * PHOTO_W), box.h / PHOTO_H);
         const shirts = await photosCanvas(l, k, gap);
-        const sx = box.x + (box.w - shirts.width) / 2, sy = box.y + (box.h - shirts.height) / 2;
+        const sx = box.x + (box.w - shirts.width) / 2, sy = box.y;
         x.drawImage(shirts, sx, sy);
-        if (mode === "details") {
-          const ink = "#141D2B", soft = "#5B6678", faint = "#8A93A3", line = "#DDE2EA";
-          // header: our logo left; the date and order on the right
-          if (logo) { const lh = 0.55 * DPI, lw = Math.min(2.6 * DPI, (logo.naturalWidth / (logo.naturalHeight || 1)) * lh || 2 * DPI); x.drawImage(logo, M, M, lw, lh); }
-          else { x.fillStyle = ink; x.font = font(800, 44); x.fillText(shop.name, M, M + 44); }
-          x.textAlign = "right"; x.fillStyle = faint; x.font = font(700, 24); x.fillText("MOCKUP FOR APPROVAL", PW - M, M + 22);
-          x.fillStyle = soft; x.font = font(400, 26);
-          x.fillText([new Date().toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }), order ? `Order #${order.number}` : ""].filter(Boolean).join("  ·  "), PW - M, M + 60);
-          x.textAlign = "left";
-          x.fillStyle = line; x.fillRect(M, M + 0.75 * DPI, PW - 2 * M, 3);
-          // who it's for and what it is
-          let y = M + 0.75 * DPI + 70;
-          x.fillStyle = ink; x.font = font(800, 54); x.fillText(custLabel(cust) || "", M, y);
-          y += 48; x.fillStyle = soft; x.font = font(600, 32); x.fillText(groupName || "Mockup", M, y);
-          if (description.trim()) {
-            x.font = font(400, 26); x.fillStyle = soft;
-            const words = description.trim().split(/\s+/); let row = "", rows = 0;
-            for (const w of words) { const t = row ? row + " " + w : w; if (x.measureText(t).width > PW - 2 * M && row) { y += 36; x.fillText(row, M, y); row = w; if (++rows >= 2) break; } else row = t; }
-            if (rows < 2 && row) { y += 36; x.fillText(row, M, y); }
-          }
-          // under the shirts: Front / Back
-          x.fillStyle = faint; x.font = font(700, 22); x.textAlign = "center";
-          const pw = PHOTO_W * k;
-          if (views.length > 1) views.forEach((v, i) => x.fillText(v.toUpperCase(), sx + i * (pw + gap) + pw / 2, sy + shirts.height + 26));
-          x.textAlign = "left";
-          // the garment, then a row per print
-          let ty = 6.3 * DPI;
-          x.fillStyle = ink; x.font = font(700, 28);
-          x.fillText([l.brand, l.style].filter(Boolean).join(" ") + (l.garment ? `  —  ${l.garment}` : ""), M, ty);
-          x.fillStyle = soft; x.font = font(400, 28); x.textAlign = "right"; x.fillText(l.color ? `Color: ${l.color}` : "", PW - M, ty); x.textAlign = "left";
-          ty += 22; x.fillStyle = line; x.fillRect(M, ty, PW - 2 * M, 2);
-          const col = [M, M + 2.3 * DPI, M + 5.4 * DPI, M + 6.9 * DPI];
-          ty += 40; x.fillStyle = faint; x.font = font(700, 20);
-          ["LOCATION", "LOGO", "PRINT SIZE", "INK COLORS"].forEach((h, i) => x.fillText(h, col[i], ty));
-          for (const im of imprints.slice(0, 6)) {
-            const p = place(im); if (!p.d && !im.inks) continue;
-            ty += 44; x.fillStyle = ink; x.font = font(600, 26);
-            x.fillText(im.location, col[0], ty);
-            x.font = font(400, 26);
-            const dl = p.d ? designLabel(p.d) : ""; let dlt = dl; while (dlt && x.measureText(dlt).width > col[2] - col[1] - 24) dlt = dlt.slice(0, -2);
-            x.fillText(dlt === dl ? dl : dlt + "…", col[1], ty);
-            x.fillText(`${p.wIn.toFixed(1)}" × ${(p.hIn || 0).toFixed(1)}"`, col[2], ty);
-            let ix = col[3];
-            for (const t of inkList(im).slice(0, 6)) {
-              if (ix > PW - M - 1.2 * DPI) { x.fillStyle = soft; x.fillText("…", ix, ty); break; }
-              x.fillStyle = t.hex || "#cccccc"; x.beginPath(); x.arc(ix + 12, ty - 9, 12, 0, Math.PI * 2); x.fill();
+        x.fillStyle = faint; x.font = font(700, 20); x.textAlign = "center";
+        const pw = PHOTO_W * k;
+        views.forEach((v, i) => x.fillText(v.toUpperCase(), sx + i * (pw + gap) + pw / 2, sy + shirts.height + 26));
+        x.textAlign = "left";
+        if (cuW) {
+          const cols = prints.length > 3 ? 2 : 1, rowsN = Math.ceil(prints.length / cols);
+          const cx0 = PW - M - cuW, cellW = (cuW - (cols - 1) * 0.2 * DPI) / cols, cellH = (bodyBot - bodyTop) / rowsN;
+          const size = Math.min(cellW, cellH - 0.62 * DPI);
+          for (let q = 0; q < prints.length; q++) {
+            const im = prints[q], col = q % cols, rw = Math.floor(q / cols);
+            const ox = cx0 + col * (cellW + 0.2 * DPI), oy = bodyTop + rw * cellH;
+            const pl = place(im);
+            x.fillStyle = ink; x.font = font(700, 22); x.fillText(im.location.toUpperCase(), ox, oy + 20);
+            x.fillStyle = soft; x.font = font(400, 20); x.textAlign = "right";
+            x.fillText(`${pl.wIn.toFixed(1)}" × ${(pl.hIn || 0).toFixed(1)}"`, ox + size, oy + 20); x.textAlign = "left";
+            const cu = await closeUpCanvas(l, im, Math.round(size));
+            if (cu) { x.drawImage(cu, ox, oy + 32); x.strokeStyle = rule; x.lineWidth = 2; x.strokeRect(ox, oy + 32, size, size); }
+            // its inks
+            let ix = ox, iy = oy + 32 + size + 26;
+            for (const t of inkList(im).slice(0, 5)) {
+              const nm = t.name.startsWith("As uploaded") ? "" : t.name.length > 16 ? t.name.slice(0, 15) + "…" : t.name;
+              x.font = font(400, 19); const wv = nm ? 28 + x.measureText(nm).width + 18 : 30;
+              if (ix + wv > ox + size + 10) { ix = ox; iy += 26; }
+              x.fillStyle = t.hex || "#cccccc"; x.beginPath(); x.arc(ix + 10, iy - 7, 10, 0, Math.PI * 2); x.fill();
               x.strokeStyle = "#B8C0CC"; x.lineWidth = 2; x.stroke();
-              x.fillStyle = ink; x.font = font(400, 24); const nm = t.name.startsWith("As uploaded") ? "" : t.name.length > 18 ? t.name.slice(0, 17) + "…" : t.name;
-              x.fillText(nm, ix + 32, ty); ix += nm ? 32 + x.measureText(nm).width + 26 : 34;
+              x.fillStyle = ink; if (nm) x.fillText(nm, ix + 26, iy);
+              ix += wv;
             }
           }
-          // footer: how to reach us, and what the mockup is
-          x.fillStyle = line; x.fillRect(M, PH - M - 46, PW - 2 * M, 2);
-          x.fillStyle = soft; x.font = font(600, 22);
-          x.fillText([shop.name, shop.phone, shop.email].filter(Boolean).join("  ·  "), M, PH - M - 10);
-          x.fillStyle = faint; x.font = font(400, 20); x.textAlign = "right";
-          x.fillText("Please check spelling, size, placement and colors. Colors on screen are close to, not exactly, the printed inks.", PW - M, PH - M - 10);
-          x.textAlign = "left";
         }
+        // footer: how to reach us (with our logo on)
+        if (o.ours) {
+          x.fillStyle = rule; x.fillRect(M, PH - M - 40, PW - 2 * M, 2);
+          x.fillStyle = soft; x.font = font(600, 20);
+          x.fillText([shop.name, shop.phone, shop.email].filter(Boolean).join("  ·  "), M, PH - M - 8);
+        }
+        x.fillStyle = faint; x.font = font(400, 18); x.textAlign = "right";
+        x.fillText("Please check spelling, size, placement and colors. Colors on screen are close to, not exactly, the printed inks.", PW - M, PH - M - 8);
+        x.textAlign = "left";
         pages.push(await canvasPage(c, 792, 612));
       }
-      const pdf = imagePdf(pages, `${groupName || "Mockup"}${cust ? " - " + custLabel(cust) : ""}`);
-      const name = `${[custLabel(cust), groupName || "mockup"].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "mockup"}${mode === "art" ? "-art" : ""}.pdf`;
+      const pdf = imagePdf(pages, `${groupName || "Mockup"}${o.company && cust ? " - " + custLabel(cust) : ""}`);
+      const name = `${[o.company ? custLabel(cust) : "", groupName || "mockup"].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "mockup"}.pdf`;
       const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([pdf as BlobPart], { type: "application/pdf" })); a.download = name; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       setMsg(`Downloaded ${name}.`); setPdfOpen(false);
@@ -912,14 +947,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         {pdfOpen && (
           <section className="panel mk-pdf">
             <div className="mk-pdf-h"><b>Export PDF</b><span className="faint">One page per shirt color, ready to send the customer.</span></div>
-            <div className="chips" role="tablist" aria-label="What the PDF shows" style={{ width: "fit-content" }}>
-              <button type="button" className={"chip" + (pdfMode === "art" ? " on" : "")} onClick={() => setPdfMode("art")}>Just the art</button>
-              <button type="button" className={"chip" + (pdfMode === "details" ? " on" : "")} onClick={() => setPdfMode("details")}>With details</button>
+            <div className="mk-pdf-opts">
+              <label className="sep-chk"><input type="checkbox" checked={pdfOurs} onChange={(e) => setPdfOurs(e.target.checked)} /> Our logo &amp; contact (FBS)</label>
+              <label className="sep-chk"><input type="checkbox" checked={pdfCompany} onChange={(e) => setPdfCompany(e.target.checked)} /> Company name ({custLabel(customers.find((c) => c.id === customerId)) || "the customer"})</label>
             </div>
-            <p className="faint mk-pdf-note">{pdfMode === "art" ? "The shirts with the art on them, nothing else: no names, sizes or prices." : `Our logo and contact, ${custLabel(customers.find((c) => c.id === customerId)) || "the customer's company"}, the mockup name and description, the garment and color, and each print's location, size and ink colors.`}</p>
-            {pdfMode === "details" && <label className="mk-f mk-pdf-desc"><span>Description (optional)</span><textarea rows={2} placeholder="e.g. Fall fundraiser tee, front chest logo with full back" value={pdfDesc} onChange={(e) => setPdfDesc(e.target.value)} /></label>}
+            <p className="faint mk-pdf-note">Every page has the shirts, a close-up of each print with its size and inks, and the garment and color.{!pdfOurs && !pdfCompany ? " No names on it." : ""}</p>
+            <label className="mk-f mk-pdf-desc"><span>Description (optional)</span><textarea rows={2} placeholder="e.g. Fall fundraiser tee, front chest logo with full back" value={pdfDesc} onChange={(e) => setPdfDesc(e.target.value)} /></label>
             <div className="row" style={{ gap: 8 }}>
-              <button type="button" className="btn primary" disabled={pdfBusy} onClick={() => exportPdf(pdfMode, pdfDesc)}>{pdfBusy ? "Making the PDF…" : "Download PDF"}</button>
+              <button type="button" className="btn primary" disabled={pdfBusy} onClick={() => exportPdf({ ours: pdfOurs, company: pdfCompany, description: pdfDesc })}>{pdfBusy ? "Making the PDF…" : "Download PDF"}</button>
               <button type="button" className="btn ghost" onClick={() => setPdfOpen(false)}>Close</button>
             </div>
           </section>

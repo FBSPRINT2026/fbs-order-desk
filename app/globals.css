@@ -4687,3 +4687,4 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .mk-plan.sim{background:#FFF7E6;color:#6B4700}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mk-plan.sim{background:#3A2C0C;color:#F3C969}}
 :root[data-theme="dark"] .mk-plan.sim{background:#3A2C0C;color:#F3C969}
+.mk-pdf-opts{display:flex;gap:6px 18px;flex-wrap:wrap}
