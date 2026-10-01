@@ -453,7 +453,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     const pages = hr.plates.map((p, i) => {
       const ht = tonal || !!p.tonal;
       const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", mesh: p.mesh, within });
-      return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg ${DOT_NAME[st.dot || "ellipse"]} dot${(st.pressGain ?? PRESS_GAIN) ? ` - ${Math.round((st.pressGain ?? PRESS_GAIN) * 100)}% dot gain allowed for` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
+      return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), ink: `${p.name}  (${i + 1}/${hr.plates.length})`, label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg ${DOT_NAME[st.dot || "ellipse"]} dot${(st.pressGain ?? PRESS_GAIN) ? ` - ${Math.round((st.pressGain ?? PRESS_GAIN) * 100)}% dot gain allowed for` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
     });
     return filmPdf(pages);
   }

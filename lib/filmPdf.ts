@@ -3,7 +3,9 @@
  * label (job, location, plate, ink, mesh, print order). Written by hand (no library): 1-bit images, Flate-compressed,
  * Helvetica for the text. Print it to the film printer at 100% (no "fit to page").
  */
-export type FilmPage = { W: number; H: number; bits: Uint8Array; widthIn: number; heightIn: number; label: string; sub: string };
+export type FilmPage = { W: number; H: number; bits: Uint8Array; widthIn: number; heightIn: number; label: string; sub: string;
+  /** the ink this film prints ("PMS 623 C", "Super Gold"), printed big right next to the top registration mark */
+  ink?: string };
 
 const enc = new TextEncoder();
 const esc = (s: string) => s.replace(/[\\()]/g, (c) => "\\" + c).replace(/[^\x20-\x7e]/g, "?");
@@ -37,7 +39,9 @@ export async function filmPdf(pages: FilmPage[], z: (u8: Uint8Array) => Promise<
       `q ${aw.toFixed(2)} 0 0 ${ah.toFixed(2)} ${M} ${M} cm /Im0 Do Q\n` +
       reg(cx, M - 36) + reg(cx, M + ah + 36) + reg(M - 36, cy) + reg(M + aw + 36, cy) +
       `BT /F1 11 Tf ${M} ${ph - 30} Td (${esc(p.label)}) Tj ET\n` +
-      `BT /F1 8 Tf ${M} ${ph - 44} Td (${esc(p.sub)}) Tj ET\n`;
+      `BT /F1 8 Tf ${M} ${ph - 44} Td (${esc(p.sub)}) Tj ET\n` +
+      // the ink, right of the top registration mark (bold: filled and outlined)
+      (p.ink ? `BT 2 Tr 0.35 w /F1 13 Tf ${(cx + 20).toFixed(2)} ${(M + ah + 31.5).toFixed(2)} Td (${esc(p.ink)}) Tj ET\n` : "");
     obj(n, [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw.toFixed(2)} ${ph.toFixed(2)}] /Resources << /Font << /F1 3 0 R >> /XObject << /Im0 ${n + 2} 0 R >> >> /Contents ${n + 1} 0 R >>`]);
     const cbytes = enc.encode(content);
     obj(n + 1, [`<< /Length ${cbytes.length} >>\nstream\n`, cbytes, "\nendstream"]);

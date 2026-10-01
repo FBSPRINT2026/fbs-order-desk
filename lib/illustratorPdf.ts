@@ -139,11 +139,29 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
   }
   obj(1, ["<< /Type /Catalog /Pages 2 0 R >>"]);
   obj(2, ["<< /Type /Pages /Kids [3 0 R] /Count 1 >>"]);
-  obj(3, [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W.toFixed(2)} ${H.toFixed(2)}] /Resources << /ExtGState << /GS0 5 0 R >> /ColorSpace << ${cs.join(" ")} >>${ri.length ? ` /XObject << /ImDN ${IM_DN} 0 R >>` : ""} >> /Contents 4 0 R >>`]);
+  obj(3, [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${(W + 108).toFixed(2)} ${(H + 108).toFixed(2)}] /TrimBox [54 54 ${(W + 54).toFixed(2)} ${(H + 54).toFixed(2)}] /Resources << /ExtGState << /GS0 5 0 R >> /Font << /FL ${10 + N} 0 R >> /ColorSpace << ${cs.join(" ")} /CSA ${9 + N} 0 R >>${ri.length ? ` /XObject << /ImDN ${IM_DN} 0 R >>` : ""} >> /Contents 4 0 R >>`]);
+  // around the art: registration targets at the four sides and crop marks at the corners, on every film (/All);
+  // each ink's name right of the top target in its own spot color, so it prints on its own film only
+  const MG = 54, PW = W + 2 * MG, PH = H + 2 * MG, CSA = 9 + N, FNT = 10 + N;
+  obj(CSA, ["[/Separation /All /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [1 1 1 1] /N 1 >>]"]);
+  obj(FNT, ["<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"]);
+  const target = (x: number, y: number) => { const r = 7, k = r * 0.5523; return `${x - 14} ${y} m ${x + 14} ${y} l S ${x} ${y - 14} m ${x} ${y + 14} l S ${x + r} ${y} m ${x + r} ${y + k} ${x + k} ${y + r} ${x} ${y + r} c ${x - k} ${y + r} ${x - r} ${y + k} ${x - r} ${y} c ${x - r} ${y - k} ${x - k} ${y - r} ${x} ${y - r} c ${x + k} ${y - r} ${x + r} ${y - k} ${x + r} ${y} c S\n`; };
+  const crop = (x: number, y: number, dx: number, dy: number) => `${x + dx * 6} ${y} m ${x + dx * 30} ${y} l S ${x} ${y + dy * 6} m ${x} ${y + dy * 30} l S\n`;
+  const tx = MG + W / 2, ty = MG + H + MG / 2;
+  let marks = `q /GS0 gs /CSA CS 1 SCN 0.5 w\n` + target(tx, ty) + target(tx, MG / 2) + target(MG / 2, MG + H / 2) + target(MG + W + MG / 2, MG + H / 2)
+    + crop(MG, MG, -1, -1) + crop(MG + W, MG, 1, -1) + crop(MG, MG + H, -1, 1) + crop(MG + W, MG + H, 1, 1) + "Q\n";
+  const esc = (t: string) => t.replace(/[\\()]/g, (c) => "\\" + c).replace(/[^\x20-\x7e]/g, "?");
+  plates.forEach((p, i) => {
+    const text = `${p.name}  (${i + 1}/${N})`, size = 11, tw = text.length * size * 0.6;
+    // right of the top target; to its left when the art is too narrow for the name to fit on the page
+    let x = tx + 20; if (x + tw > PW - 6) x = Math.max(6, tx - 20 - tw);
+    marks += `q /GS0 gs /CS${i} cs 1 scn BT /FL ${size} Tf ${x.toFixed(2)} ${(ty - 4).toFixed(2)} Td (${esc(text)}) Tj ET Q\n`;
+  });
+  content = `q 1 0 0 1 ${MG} ${MG} cm\n${content}Q\n${marks}`;
   const cz = await z(enc.encode(content));
   obj(4, [`<< /Length ${cz.length} /Filter /FlateDecode >>\nstream\n`, cz, "\nendstream"]);
   obj(5, ["<< /Type /ExtGState /OP true /op true /OPM 1 >>"]);
-  const count = ri.length ? IM_DN + 1 : 6 + N, xref = pos;
+  const count = 11 + N, xref = pos;
   let x = `xref\n0 ${count}\n0000000000 65535 f \n`;
   for (let i = 1; i < count; i++) x += offsets[i] != null ? `${String(offsets[i]).padStart(10, "0")} 00000 n \n` : "0000000000 65535 f \n";
   push(x + `trailer\n<< /Size ${count} /Root 1 0 R /Info << /Title (${o.title.replace(/[\\()]/g, "")}) /Creator (FBS Print Separations) >> >>\nstartxref\n${xref}\n%%EOF\n`);
