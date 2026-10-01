@@ -950,7 +950,63 @@ export function filmBits(p: Plate, w: number, h: number, widthIn: number, dpi: n
       if (on) bits[orow + (x >> 3)] |= 0x80 >> (x & 7);
     }
   }
+  // clean-up: ink specks and pinholes smaller than the mesh can hold (a speck under ~1.25 threads across has nothing
+  // to stand on and washes out or prints as a random dot; a pinhole that small fills in): removed / filled. Halftone
+  // films keep anything near the smallest dot (that's what the dots are), only fragments well under it go.
+  if (o.mesh) {
+    const d = 1.25 * (dpi / o.mesh), minA = (Math.PI / 4) * d * d * (halftone ? 0.5 : 1);
+    despeckle(bits, W, H, minA);
+  }
   return { W, H, bits };
+}
+
+/**
+ * Remove ink islands and fill holes smaller than `minArea` film pixels in a 1-bit film (8-connected; done on runs of
+ * pixels, so a whole film at 1200 dpi is fine). Returns how many of each were cleaned.
+ */
+export function despeckle(bits: Uint8Array, W: number, H: number, minArea: number): { specks: number; holes: number } {
+  const rb = Math.ceil(W / 8), out = { specks: 0, holes: 0 };
+  if (minArea < 1) return out;
+  for (const ink of [1, 0]) {
+    // runs of this value: y, x0, x1 (inclusive), and a union-find label each
+    let cap = 1 << 16, n = 0;
+    let RY = new Int32Array(cap), R0 = new Int32Array(cap), R1 = new Int32Array(cap), P = new Int32Array(cap);
+    const grow = () => { cap *= 2; const g = (a: Int32Array) => { const b = new Int32Array(cap); b.set(a); return b; }; RY = g(RY); R0 = g(R0); R1 = g(R1); P = g(P); };
+    const find = (i: number) => { while (P[i] !== i) { P[i] = P[P[i]]; i = P[i]; } return i; };
+    let prevStart = 0, prevEnd = 0;
+    for (let y = 0; y < H; y++) {
+      const row = y * rb, start = n;
+      let x = 0;
+      while (x < W) {
+        // skip whole bytes of the other value
+        if ((x & 7) === 0 && x + 8 <= W) { const b = bits[row + (x >> 3)]; if (b === (ink ? 0 : 255)) { x += 8; continue; } }
+        const v = (bits[row + (x >> 3)] >> (7 - (x & 7))) & 1;
+        if (v !== ink) { x++; continue; }
+        const x0 = x;
+        while (x < W && ((bits[row + (x >> 3)] >> (7 - (x & 7))) & 1) === ink) x++;
+        if (n >= cap) grow();
+        RY[n] = y; R0[n] = x0; R1[n] = x - 1; P[n] = n;
+        // join runs in the row above that touch (diagonals count)
+        for (let j = prevStart; j < prevEnd; j++) {
+          if (R1[j] < x0 - 1) continue; if (R0[j] > x) break;
+          const a = find(j), b = find(n); if (a !== b) P[b] = a;
+        }
+        n++;
+      }
+      prevStart = start; prevEnd = n;
+    }
+    // area per component; components touching the film's edge are never touched (the background, art cut at the edge)
+    const area = new Float64Array(n), edge = new Uint8Array(n);
+    for (let i = 0; i < n; i++) { const r = find(i); area[r] += R1[i] - R0[i] + 1; if (RY[i] === 0 || RY[i] === H - 1 || R0[i] === 0 || R1[i] === W - 1) edge[r] = 1; }
+    const seen = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      const r = find(i); if (edge[r] || area[r] >= minArea) continue;
+      if (!seen[r]) { seen[r] = 1; if (ink) out.specks++; else out.holes++; }
+      const row = RY[i] * rb;
+      for (let xx = R0[i]; xx <= R1[i]; xx++) { const m = 0x80 >> (xx & 7); if (ink) bits[row + (xx >> 3)] &= ~m; else bits[row + (xx >> 3)] |= m; }
+    }
+  }
+  return out;
 }
 
 /**
