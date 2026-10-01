@@ -107,12 +107,16 @@ export function recolor(img: HTMLImageElement, sources: string[], targets: Recor
         if (dd < bd) { bd = dd; best = k; }
       }
       out = dst[best];
-      let pa = -1, pb = -1, pt = 0, pd = Infinity;
+      // the pair of colors this one sits between, measured against how far apart the pair is: a fade drawn in a color
+      // profile bows off the straight line between its ends (yellow → orange by 20–40 units), and a cut-off there
+      // would paint the bow flat and leave steps in the fade
+      let pa = -1, pb = -1, pt = 0, pd = Infinity, pr = Infinity;
       for (let a = 0; a < src.length; a++) for (let b = a + 1; b < src.length; b++) {
-        const r = onLine(p, src[a], src[b]);
-        if (r.d < pd && r.t > 0.02 && r.t < 0.98) { pd = r.d; pa = a; pb = b; pt = r.t; }
+        const r = onLine(p, src[a], src[b]); if (r.t <= 0.02 || r.t >= 0.98) continue;
+        const len = Math.hypot(src[b][0] - src[a][0], src[b][1] - src[a][1], src[b][2] - src[a][2]) || 1, rel = r.d / len;
+        if (rel < pr) { pr = rel; pd = r.d; pa = a; pb = b; pt = r.t; }
       }
-      if (pa >= 0 && pd < 18 && pd * pd < bd * 0.5) {
+      if (pa >= 0 && pd < Math.sqrt(bd) && (pd < 18 || pr < 0.3)) {
         const ta = dst[pa], tb = dst[pb];
         if (ta !== undefined || tb !== undefined) {
           const A = ta === undefined ? src[pa] : ta, B = tb === undefined ? src[pb] : tb;
