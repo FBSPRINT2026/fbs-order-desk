@@ -745,49 +745,67 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           for (const w of words) { const t = row ? row + " " + w : w; if (x.measureText(t).width > PW - 2 * M && row) { y += 32; x.fillText(row, M, y); row = w; if (++rows >= 2) break; } else row = t; }
           if (rows < 2 && row) { y += 32; x.fillText(row, M, y); }
         }
-        const bodyTop = y + 0.25 * DPI, bodyBot = PH - M - 0.35 * DPI;
-        // below: a card for every print, its close-up (blown up) with its location, logo, size and inks; two across
-        const perRow = prints.length > 4 ? 3 : 2, rowsN = Math.ceil(prints.length / perRow);
-        const cardGap = 0.25 * DPI, cardW = (PW - 2 * M - (perRow - 1) * cardGap) / perRow;
-        const sq = Math.min(perRow === 3 ? 1.55 * DPI : 2.1 * DPI, cardW * 0.58), cardH = sq + 0.2 * DPI;
-        const cardsH = rowsN ? rowsN * cardH + (rowsN - 1) * 0.15 * DPI + 0.45 * DPI : 0;
-        // the shirts across the top, as big as the room left allows
-        const n = Math.max(1, views.length), gap = 0.25 * DPI;
-        const box = { x: M, y: bodyTop, w: PW - 2 * M, h: bodyBot - bodyTop - cardsH - 0.4 * DPI };
-        const k = Math.min((box.w - (n - 1) * gap) / (n * PHOTO_W), box.h / PHOTO_H);
+        const bodyTop = y + 0.25 * DPI, bodyBot = PH - M - 0.4 * DPI;
+        // like the Mockup Creator: the shirts across the top, then each print blown up in its print area below them
+        // (the max area dashed, the art at its real size and spot), with its location, size and inks under it
+        const cols = prints.length <= 2 ? 2 : 3, rowsN = Math.max(1, Math.ceil(prints.length / cols));
+        const cGap = 0.3 * DPI, cellW = (PW - 2 * M - (cols - 1) * cGap) / cols;
+        const infoH = 0.7 * DPI;
+        const n = Math.max(1, views.length), gap = 0.3 * DPI;
+        const shirtH = Math.min(3.7 * DPI, (bodyBot - bodyTop) * (rowsN > 1 ? 0.34 : 0.44));
+        const k = Math.min((PW - 2 * M - (n - 1) * gap) / (n * PHOTO_W), shirtH / PHOTO_H);
         const shirtsHi = await photosCanvas(l, k * R, gap * R), shirts = { width: shirtsHi.width / R, height: shirtsHi.height / R };
-        const sx = box.x + (box.w - shirts.width) / 2, sy = box.y;
+        const sx = M + (PW - 2 * M - shirts.width) / 2, sy = bodyTop;
         x.drawImage(shirtsHi, sx, sy, shirts.width, shirts.height);
         x.fillStyle = faint; x.font = font(700, 20); x.textAlign = "center";
         const pw = PHOTO_W * k;
         views.forEach((v, i) => x.fillText(v.toUpperCase(), sx + i * (pw + gap) + pw / 2, sy + shirts.height + 28));
         x.textAlign = "left";
-        if (rowsN) {
-          let cy = sy + shirts.height + 0.4 * DPI;
-          x.fillStyle = rule; x.fillRect(M, cy, PW - 2 * M, 2);
-          cy += 0.12 * DPI;
-          x.fillStyle = faint; x.font = font(700, 20); x.fillText("PRINTS", M, cy + 20);
-          cy += 0.3 * DPI;
-          for (let q = 0; q < prints.length; q++) {
-            const im = prints[q], col = q % perRow, rw = Math.floor(q / perRow);
-            const ox = M + col * (cardW + cardGap), oy = cy + rw * (cardH + 0.15 * DPI);
-            const pl = place(im), d = designOf(im);
-            const cu = await closeUpCanvas(l, im, Math.round(sq * R));
-            if (cu) { x.drawImage(cu, ox, oy, sq, sq); x.strokeStyle = rule; x.lineWidth = 2; x.strokeRect(ox, oy, sq, sq); }
-            const tx = ox + sq + 0.15 * DPI, tw = cardW - sq - 0.15 * DPI;
-            const fit = (t: string) => { let u = t; while (u && x.measureText(u).width > tw) u = u.slice(0, -2); return u === t ? t : u + "…"; };
-            let ty = oy + 26;
-            x.fillStyle = ink; x.font = font(800, 24); x.fillText(fit(im.location.toUpperCase()), tx, ty);
-            ty += 34; x.fillStyle = soft; x.font = font(400, 21); x.fillText(fit(d ? designLabel(d) : ""), tx, ty);
-            ty += 30; x.fillStyle = ink; x.font = font(600, 22); x.fillText(`${pl.wIn.toFixed(1)}" × ${(pl.hIn || 0).toFixed(1)}"`, tx, ty);
-            ty += 12;
-            for (const t of inkList(im).slice(0, 6)) {
-              ty += 30; if (ty > oy + sq) break;
-              x.fillStyle = t.hex || "#cccccc"; x.beginPath(); x.arc(tx + 10, ty - 7, 10, 0, Math.PI * 2); x.fill();
-              x.strokeStyle = "#B8C0CC"; x.lineWidth = 2; x.stroke();
-              const nm = t.name.startsWith("As uploaded") ? "As uploaded" : t.name;
-              x.fillStyle = ink; x.font = font(400, 20); x.fillText(fit(nm), tx + 28, ty);
-            }
+        const cuTop = sy + shirts.height + 0.45 * DPI;
+        const cellH = (bodyBot - cuTop - (rowsN - 1) * 0.2 * DPI) / rowsN, boxH = cellH - infoH - 0.35 * DPI;
+        const shirt = shirtHex(l), darkShirt = deltaE(shirt, "#000000") < 45;
+        for (let q = 0; q < prints.length; q++) {
+          const im = prints[q], col = q % cols, rw = Math.floor(q / cols);
+          // one print alone sits in the middle
+          const ox = prints.length === 1 ? M + (PW - 2 * M - cellW) / 2 : M + col * (cellW + cGap), oy = cuTop + rw * (cellH + 0.2 * DPI);
+          const d = designOf(im), r = ratioOf(d) || 0.6, wIn = printWidth(im.size, im.location, ratioOf(d)), hIn = wIn * r;
+          const sp = spotFor(im.location), o = offsets[im.id] || { dx: 0, dy: 0 };
+          // heading: location and the max print area
+          x.fillStyle = ink; x.font = font(800, 22); x.fillText(im.location.toUpperCase(), ox, oy + 20);
+          x.fillStyle = faint; x.font = font(400, 19); x.textAlign = "right"; x.fillText(`max ${sp.maxW}" × ${sp.maxH}"`, ox + cellW, oy + 20); x.textAlign = "left";
+          // the print area, blown up: the max area plus an inch around it, in the shirt's color
+          const spanW = sp.maxW + 2, spanH = sp.maxH + 2, PXI = Math.min(cellW / spanW, boxH / spanH);
+          const BW = spanW * PXI, BH = spanH * PXI, bx = ox + (cellW - BW) / 2, by = oy + 34;
+          x.save();
+          x.beginPath(); x.rect(bx, by, BW, BH); x.clip();
+          x.fillStyle = shirt; x.fillRect(bx, by, BW, BH);
+          const top0 = (BH - sp.maxH * PXI) / 2, ax = bx + (BW - sp.maxW * PXI) / 2, ay = by + top0;
+          x.setLineDash([10, 7]); x.lineWidth = 2.5;
+          x.strokeStyle = darkShirt ? "rgba(255,255,255,.55)" : "rgba(0,0,0,.35)"; x.strokeRect(ax, ay, sp.maxW * PXI, sp.maxH * PXI);
+          x.setLineDash([]);
+          if (viewsFor(im.location).length > 1) {
+            // sleeves: the fold (front | back) and the hem
+            x.strokeStyle = darkShirt ? "rgba(255,255,255,.4)" : "rgba(0,0,0,.3)"; x.setLineDash([6, 6]); x.beginPath(); x.moveTo(bx + BW / 2, by); x.lineTo(bx + BW / 2, by + BH); x.stroke(); x.setLineDash([]);
+            x.strokeStyle = darkShirt ? "rgba(255,255,255,.75)" : "rgba(0,0,0,.45)"; x.lineWidth = 3; x.beginPath(); x.moveTo(bx, ay + sp.maxH * PXI); x.lineTo(bx + BW, ay + sp.maxH * PXI); x.stroke();
+          }
+          const offX = o.dx / (PX_PER_IN * scale), offY = o.dy / (PX_PER_IN * scale);
+          const cx = bx + BW / 2 + offX * PXI, cy = by + (sp.top || (im.drop && !isNaN(+im.drop)) ? top0 + (hIn * PXI) / 2 : BH / 2) + offY * PXI;
+          const art = artUrl(im) ? await loadImg(artUrl(im)).catch(() => null) : null;
+          if (art) x.drawImage(art, cx - (wIn * PXI) / 2, cy - (hIn * PXI) / 2, wIn * PXI, hIn * PXI);
+          x.restore();
+          x.strokeStyle = rule; x.lineWidth = 2; x.strokeRect(bx, by, BW, BH);
+          // under it: logo, size, inks
+          let ty = by + BH + 30;
+          x.fillStyle = ink; x.font = font(700, 22); x.fillText(`${wIn.toFixed(2)}" W × ${hIn.toFixed(2)}" H`, bx, ty);
+          if (d) { x.fillStyle = soft; x.font = font(400, 19); x.textAlign = "right"; let t = designLabel(d); while (t && x.measureText(t).width > BW * 0.5) t = t.slice(0, -2); x.fillText(t === designLabel(d) ? t : t + "…", bx + BW, ty); x.textAlign = "left"; }
+          let ix = bx; ty += 32;
+          for (const t of inkList(im).slice(0, 8)) {
+            const nm = t.name.startsWith("As uploaded") ? "As uploaded" : t.name.length > 18 ? t.name.slice(0, 17) + "…" : t.name;
+            x.font = font(400, 19); const wv = 26 + x.measureText(nm).width + 22;
+            if (ix + wv > bx + BW && ix > bx) { ix = bx; ty += 28; }
+            if (ty > oy + cellH) break;
+            x.fillStyle = t.hex || "#cccccc"; x.fillRect(ix, ty - 15, 16, 16); x.strokeStyle = "#B8C0CC"; x.lineWidth = 1.5; x.strokeRect(ix, ty - 15, 16, 16);
+            x.fillStyle = ink; x.fillText(nm, ix + 24, ty); ix += wv;
           }
         }
         // footer: how to reach us (with our logo on)
