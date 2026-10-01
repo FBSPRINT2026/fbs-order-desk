@@ -1,4 +1,5 @@
 import { PMS_COATED } from "./pms";
+import { collapseRamps, labOfRgb, onLine } from "./gradients";
 
 /**
  * Screen colors for mockups. These are approximate on-screen colors for previews only;
@@ -44,7 +45,7 @@ export const colorHex = (name: string) => {
 };
 
 /** Main flat colors in a logo (transparent pixels ignored), largest first. */
-export function detectColors(img: HTMLImageElement, max = 8): { hex: string; share: number }[] {
+export function detectColors(img: HTMLImageElement, max = 8): { hex: string; share: number; gradient?: boolean }[] {
   const w = Math.min(400, img.naturalWidth || 400), h = Math.round(w * ((img.naturalHeight || 1) / (img.naturalWidth || 1)));
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
@@ -70,7 +71,12 @@ export function detectColors(img: HTMLImageElement, max = 8): { hex: string; sha
     out.push({ ...e });
   }
   const hex = (v: number) => Math.round(v).toString(16).padStart(2, "0");
-  return out.sort((a, b) => b.n - a.n).map((o) => ({ hex: `#${hex(o.r)}${hex(o.g)}${hex(o.b)}`, share: o.n / (total || 1) }));
+  // fades (gradients): the colors along a fade are one fade between two inks; keep its ends, at their truest color
+  const pts: number[][] = [], rgbs: number[][] = [];
+  const step = Math.max(1, Math.floor(total / 30000)) * 4;
+  for (let i = 0; i < d.length; i += step) { if (d[i + 3] < 200) continue; const c = [d[i], d[i + 1], d[i + 2]]; rgbs.push(c); pts.push(labOfRgb(c)); }
+  const cols = collapseRamps(out.map((o) => { const c = [o.r, o.g, o.b]; return { lab: labOfRgb(c), rgb: c, share: o.n / (total || 1) }; }), pts, rgbs);
+  return cols.sort((a, b) => b.share - a.share).map((o) => ({ hex: `#${hex(o.rgb[0])}${hex(o.rgb[1])}${hex(o.rgb[2])}`, share: o.share, ...(o.gradient ? { gradient: true } : {}) }));
 }
 
 const rgb = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -86,17 +92,41 @@ export function recolor(img: HTMLImageElement, sources: string[], targets: Recor
   const d = data.data;
   const src = sources.map(rgb);
   const dst = sources.map((s) => (targets[s] === "none" ? null : targets[s] ? rgb(targets[s]) : undefined));
+  // a pixel between two of the colors (a fade from one to the other, or the soft edge where they meet) is repainted
+  // the same way between their new colors, so a gradient stays a gradient in the chosen inks
+  const cache = new Map<number, number[] | null | undefined>();
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] === 0) continue;
-    let best = 0, bd = Infinity;
-    for (let k = 0; k < src.length; k++) {
-      const dd = (d[i] - src[k][0]) ** 2 + (d[i + 1] - src[k][1]) ** 2 + (d[i + 2] - src[k][2]) ** 2;
-      if (dd < bd) { bd = dd; best = k; }
+    const key = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+    let out = cache.get(key);
+    if (!cache.has(key)) {
+      const p = [d[i], d[i + 1], d[i + 2]];
+      let best = 0, bd = Infinity;
+      for (let k = 0; k < src.length; k++) {
+        const dd = (p[0] - src[k][0]) ** 2 + (p[1] - src[k][1]) ** 2 + (p[2] - src[k][2]) ** 2;
+        if (dd < bd) { bd = dd; best = k; }
+      }
+      out = dst[best];
+      let pa = -1, pb = -1, pt = 0, pd = Infinity;
+      for (let a = 0; a < src.length; a++) for (let b = a + 1; b < src.length; b++) {
+        const r = onLine(p, src[a], src[b]);
+        if (r.d < pd && r.t > 0.02 && r.t < 0.98) { pd = r.d; pa = a; pb = b; pt = r.t; }
+      }
+      if (pa >= 0 && pd < 18 && pd * pd < bd * 0.5) {
+        const ta = dst[pa], tb = dst[pb];
+        if (ta !== undefined || tb !== undefined) {
+          const A = ta === undefined ? src[pa] : ta, B = tb === undefined ? src[pb] : tb;
+          if (A === null && B === null) out = null;
+          else if (A === null || B === null) { const C = (A || B)!; const w = A === null ? pt : 1 - pt; out = [C[0], C[1], C[2], w]; }
+          else out = [A[0] + pt * (B[0] - A[0]), A[1] + pt * (B[1] - A[1]), A[2] + pt * (B[2] - A[2])];
+        }
+      }
+      cache.set(key, out);
     }
-    const t = dst[best];
-    if (t === undefined) continue;
-    if (t === null) { d[i + 3] = 0; continue; }
-    d[i] = t[0]; d[i + 1] = t[1]; d[i + 2] = t[2];
+    if (out === undefined) continue;
+    if (out === null) { d[i + 3] = 0; continue; }
+    d[i] = out[0]; d[i + 1] = out[1]; d[i + 2] = out[2];
+    if (out.length > 3) d[i + 3] = Math.round(d[i + 3] * out[3]);
   }
   x.putImageData(data, 0, 0);
   return c.toDataURL("image/png");

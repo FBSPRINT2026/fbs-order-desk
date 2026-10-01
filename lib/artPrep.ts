@@ -138,6 +138,20 @@ export async function makePreview(file: File): Promise<File | null> {
       await page.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(0,0,0,0)" }).promise;
       return canvasToFile(c, `${base}.png`);
     }
+    if (/postscript|eps/i.test(file.type) || /\.eps$/i.test(file.name)) {
+      // Illustrator EPS (flat colors and gradients): read its shapes, draw them as a PNG with a clear background
+      const { parseEps, vartSvg } = await import("./epsVector");
+      const v = parseEps(await file.text());
+      if (!v.shapes.length) return null;
+      const url = URL.createObjectURL(new Blob([vartSvg(v)], { type: "image/svg+xml" }));
+      try {
+        const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+        const k = 2400 / Math.max(v.w, v.h), c = document.createElement("canvas");
+        c.width = Math.round(v.w * k); c.height = Math.round(v.h * k);
+        c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+        return canvasToFile(c, `${base}.png`);
+      } finally { URL.revokeObjectURL(url); }
+    }
     // anything else the browser can decode (BMP, TIFF in Safari, AVIF…) becomes a PNG
     if (/^image\//i.test(file.type) && !/^image\/(png|jpe?g|gif|webp|svg\+xml)$/i.test(file.type)) {
       const url = URL.createObjectURL(file);

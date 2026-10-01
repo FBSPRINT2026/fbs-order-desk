@@ -5,14 +5,17 @@
  * Illustrator writes the page with a small, regular set of operators (its AGM procset):
  *   x y mo / li, x1 y1 x2 y2 x3 y3 cv, cp (close), np (new path), f / ef (fill, even-odd fill), clp / eclp (clip),
  *   c m y k cmyk / r g b rgb / g gry (fill color), [a b c d e f] ct (transform), gsave / grestore / pgsv / pgrs
- * after "%%EndPageSetup" and before "%%PageTrailer". This reads just that. Anything it can't turn into flat filled
- * shapes (placed images, gradients, strokes that weren't outlined, live text, spot-color swatches it can't read)
- * sets `ok: false` with the reason, and the Studio asks for an SVG or PNG instead.
+ * after "%%EndPageSetup" and before "%%PageTrailer". This reads just that. Gradients (a clip path, then `shfill` with
+ * an axial or radial shading, inside Illustrator's `level3{ … }if`; its `level3 not{ … }if` fallback is skipped) become
+ * shapes with a gradient fill. Anything else it can't turn into filled shapes (placed images, strokes that weren't
+ * outlined, live text, spot-color swatches it can't read) sets `ok: false` with the reason, and the Studio asks for an
+ * SVG or PNG instead.
  *
  * CMYK colors are shown as the press would print them (a blend of the standard coated-ink colors, within about 5 ΔE of
  * a real color profile), not the naive 255·(1−c)(1−k), which turns 0/98/39/0 into a neon pink.
  */
-import type { VArt, VShape } from "./svgVector";
+import type { VArt, VGrad, VShape } from "./svgVector";
+import { readShading, readVal, type PSVal } from "./psShading";
 
 type M = [number, number, number, number, number, number];
 const mul = (a: M, b: M): M => [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3], a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
@@ -41,7 +44,7 @@ export function cmykHex(c: number, m: number, y: number, k: number): string {
 /* ---------- the page ---------- */
 function tokens(src: string): string[] {
   const out: string[] = [];
-  const re = /%[^\n\r]*|\((?:\\.|[^\\)])*\)|<<|>>|<[0-9A-Fa-f\s]*>|[[\]{}]|\/?[^\s[\]{}()<>/%]+/g;
+  const re = /<~[\s\S]*?~>|%[^\n\r]*|\((?:\\.|[^\\)])*\)|<<|>>|<[0-9A-Fa-f\s]*>|[[\]{}]|\/?[^\s[\]{}()<>/%]+/g;
   for (const m of src.matchAll(re)) if (m[0][0] !== "%") out.push(m[0]);
   return out;
 }
@@ -68,19 +71,52 @@ export function parseEps(text: string): VArt {
   const pt = (x: number, y: number) => { const px = ctm[0] * x + ctm[2] * y + ctm[4], py = ctm[1] * x + ctm[3] * y + ctm[5]; return `${(px - llx).toFixed(3)} ${(ury - py).toFixed(3)}`; };
   let why = "";
   const STROKE = new Set(["@", "S", "s", "stroke", "cstk"]);
-  const IMAGE = new Set(["image", "imagemask", "colorimage", "sh", "shfill", "doimage", "xs", "show", "ashow", "widthshow", "glyphshow"]);
+  const IMAGE = new Set(["image", "imagemask", "colorimage", "doimage", "xs", "show", "ashow", "widthshow", "glyphshow"]);
+  // gradients: the clip path they fill, the last dictionary read (the shading), Illustrator's level-3 blocks
+  let clip: { ops: string; eo: boolean } | null = null, lastDict: PSVal | null = null;
+  const blocks: string[] = [];
+  const artXY = (x: number, y: number): [number, number] => { const px = ctm[0] * x + ctm[2] * y + ctm[4], py = ctm[1] * x + ctm[3] * y + ctm[5]; return [px - llx, ury - py]; };
 
-  for (const t of tk) {
+  for (let ti = 0; ti < tk.length; ti++) {
+    const t = tk[ti];
     if (arrOpen) { if (t === "]") { stack.push(arrOpen); arrOpen = null; } else { const v = Number(t); if (!Number.isNaN(v)) arrOpen.push(v); } continue; }
     if (t === "[") { arrOpen = []; continue; }
     const v = Number(t);
     if (!Number.isNaN(v) && t !== "") { stack.push(v); continue; }
+    // Illustrator: level3{ …shading… }if level3 not{ …fallback for old printers… }if
+    if (t === "level3") {
+      if (tk[ti + 1] === "{") { blocks.push("l3"); ti += 1; continue; }
+      if (tk[ti + 1] === "not" && tk[ti + 2] === "{") {
+        let depth = 0, j = ti + 2;
+        for (; j < tk.length; j++) { if (tk[j] === "{") depth++; else if (tk[j] === "}" && --depth === 0) break; }
+        ti = tk[j + 1] === "if" ? j + 1 : j; stack.length = 0; continue;
+      }
+    }
+    if (t === "}" && blocks.length) { blocks.pop(); if (tk[ti + 1] === "if") ti++; continue; }
+    if (t === "<<") { const [d, j] = readVal(tk, ti); lastDict = d; ti = j - 1; stack.length = 0; continue; }
+    if (t === "{") { let depth = 0, j = ti; for (; j < tk.length; j++) { if (tk[j] === "{") depth++; else if (tk[j] === "}" && --depth === 0) break; } ti = j; continue; }
     switch (t) {
       case "mo": { const [x, y] = nums(2); path += `${pt(x, y)} m\n`; break; }
       case "li": { const [x, y] = nums(2); path += `${pt(x, y)} l\n`; break; }
       case "cv": { const [x1, y1, x2, y2, x3, y3] = nums(6); path += `${pt(x1, y1)} ${pt(x2, y2)} ${pt(x3, y3)} c\n`; break; }
       case "cp": path += "h\n"; break;
-      case "np": case "clp": case "eclp": case "N": path = ""; stack.length = 0; break;
+      case "clp": case "eclp": if (path) clip = { ops: path, eo: t === "eclp" }; path = ""; stack.length = 0; break;
+      case "np": case "N": path = ""; stack.length = 0; break;
+      case "sh": case "shfill": {
+        const sh = lastDict && typeof lastDict === "object" && !Array.isArray(lastDict) && !(lastDict instanceof Uint8Array) ? readShading(lastDict as { [k: string]: PSVal }) : null;
+        if (!sh || !clip) { why ||= "has a gradient it can't read"; stack.length = 0; break; }
+        if (sh.comps !== 4 && sh.comps !== 3) { why ||= "has a gradient in a spot color (make it CMYK or RGB in Illustrator)"; stack.length = 0; break; }
+        const color = (u: number) => { const c = sh.fn(u); return c.length === 4 ? cmykHex(c[0], c[1], c[2], c[3]) : hex(c[0], c[1], c[2]); };
+        const N = 48, stops: VGrad["stops"] = [];
+        for (let k = 0; k <= N; k++) { const tt = k / N; stops.push({ t: tt, hex: color(sh.dom[0] + tt * (sh.dom[1] - sh.dom[0])) }); }
+        const sc = Math.sqrt(Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]));
+        const c = sh.coords;
+        const grad: VGrad = sh.kind === "linear"
+          ? (() => { const [x0, y0] = artXY(c[0], c[1]), [x1, y1] = artXY(c[2], c[3]); return { kind: "linear" as const, x0, y0, x1, y1, stops }; })()
+          : (() => { const [x0, y0] = artXY(c[0], c[1]), [x1, y1] = artXY(c[3], c[4]); return { kind: "radial" as const, x0, y0, r0: c[2] * sc, x1, y1, r1: c[5] * sc, stops }; })();
+        shapes.push({ fill: stops[N >> 1].hex, evenodd: clip.eo, ops: clip.ops, grad });
+        lastDict = null; stack.length = 0; break;
+      }
       case "f": case "ef": {
         if (path) {
           if (!fill) why ||= "uses a color it can't read (a spot-color swatch?)";
@@ -105,7 +141,7 @@ export function parseEps(text: string): VArt {
       }
       default:
         if (STROKE.has(t)) { if (path) why ||= "has strokes (outline them in Illustrator: Object → Path → Outline Stroke)"; path = ""; }
-        else if (IMAGE.has(t)) why ||= t === "sh" || t === "shfill" ? "has gradients" : /show/.test(t) ? "has live text (outline it: Type → Create Outlines)" : "has a placed image";
+        else if (IMAGE.has(t)) why ||= /show/.test(t) ? "has live text (outline it: Type → Create Outlines)" : "has a placed image";
         stack.length = 0;
     }
   }
@@ -118,7 +154,18 @@ export function parseEps(text: string): VArt {
 /** a shape's outline (PDF path operators) as SVG path data, for an SVG or a canvas Path2D */
 export const vpathD = (ops: string) => ops.trim().split("\n").map((l) => { const p = l.trim().split(/\s+/), op = p.pop(); return op === "m" ? `M${p.join(" ")}` : op === "l" ? `L${p.join(" ")}` : op === "c" ? `C${p.join(" ")}` : "Z"; }).join("");
 export function vartSvg(v: VArt): string {
-  const d = vpathD;
-  const body = v.shapes.map((s) => `<path fill="${s.fill}"${s.evenodd ? ' fill-rule="evenodd"' : ""} d="${d(s.ops)}"/>`).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.x} ${v.y} ${v.w} ${v.h}" width="${v.w}" height="${v.h}">${body}</svg>`;
+  const d = vpathD, f = (x: number | undefined) => (x ?? 0).toFixed(3);
+  let defs = "";
+  const body = v.shapes.map((s, i) => {
+    let fill = s.fill;
+    if (s.grad) {
+      const g = s.grad, stops = g.stops.map((st) => `<stop offset="${st.t.toFixed(4)}" stop-color="${st.hex}"/>`).join("");
+      defs += g.kind === "linear"
+        ? `<linearGradient id="g${i}" gradientUnits="userSpaceOnUse" x1="${f(g.x0)}" y1="${f(g.y0)}" x2="${f(g.x1)}" y2="${f(g.y1)}">${stops}</linearGradient>`
+        : `<radialGradient id="g${i}" gradientUnits="userSpaceOnUse" fx="${f(g.x0)}" fy="${f(g.y0)}" fr="${f(g.r0)}" cx="${f(g.x1)}" cy="${f(g.y1)}" r="${f(g.r1)}">${stops}</radialGradient>`;
+      fill = `url(#g${i})`;
+    }
+    return `<path fill="${fill}"${s.evenodd ? ' fill-rule="evenodd"' : ""} d="${d(s.ops)}"/>`;
+  }).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.x} ${v.y} ${v.w} ${v.h}" width="${v.w}" height="${v.h}">${defs ? `<defs>${defs}</defs>` : ""}${body}</svg>`;
 }

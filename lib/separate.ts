@@ -12,6 +12,7 @@
  * Everything here is plain math on RGBA arrays so it runs in the page, a worker, or a test.
  */
 import { WILFLEX_HEX, PMS_HEX, deltaE } from "./inkColors";
+import { collapseRamps } from "./gradients";
 import { edgeRows } from "./edgeField";
 
 export type Px = { w: number; h: number; data: Uint8ClampedArray | Uint8Array };
@@ -90,7 +91,7 @@ export function snapInk(hex: string, lib: "wilflex" | "pms" = "wilflex") {
 }
 
 /* ---------- 1. find the inks ---------- */
-export type Found = { hex: string; share: number };
+export type Found = { hex: string; share: number; /** an end of a fade (gradient) in the art */ gradient?: boolean };
 /**
  * The art's main colors: k-means++ in Lab on a sample of opaque pixels, then colors closer than `merge`
  * (CIEDE2000) are joined and anything under `minShare` of the art is dropped. Largest first.
@@ -152,7 +153,7 @@ export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004, garment
     }
     return near ? inside / near : 0;
   };
-  let res = out.filter((c) => c.n / total >= minShare || (c.n / total >= minShare / 8 && solidInside(c.hex) > 0.3)).map((c) => ({ hex: c.hex, share: c.n / total }));
+  let res: Found[] = out.filter((c) => c.n / total >= minShare || (c.n / total >= minShare / 8 && solidInside(c.hex) > 0.3)).map((c) => ({ hex: c.hex, share: c.n / total }));
   // a small color that sits on the line between two bigger ones is their blend (an edge), not an ink, unless it has
   // a solid inside of its own: a real ink (the tan of a mustache, between orange and black) fills areas; an edge blend
   // is only ever a thin band
@@ -171,6 +172,12 @@ export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004, garment
     }
     return !blend || interior(c.hex) > 0.3;
   });
+  // fades (gradients): the colors in between two others that the art runs through continuously are the fade itself,
+  // not inks: keep the two ends, at the truest color of each end (they print as halftones overlapping across it)
+  {
+    const r2 = collapseRamps(res.map((c) => ({ lab: L(c.hex), rgb: rgbOf(c.hex), share: c.share })), pts, rgbs);
+    if (r2.some((c) => c.gradient)) res = r2.map((c) => ({ hex: hexOf(c.rgb[0], c.rgb[1], c.rgb[2]), share: c.share, gradient: c.gradient }));
+  }
   // still too many: drop the ink that's easiest to do without, one at a time: the one the others mix best
   // (as halftones over the shirt, or over the underbase on a dark shirt, where white comes free), weighed by how much
   // of the art it is. Separo takes the sun from yellow, gold, orange, white, black down to yellow, orange, black:

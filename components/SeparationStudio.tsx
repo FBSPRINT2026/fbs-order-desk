@@ -97,10 +97,13 @@ function vectorCover(v: VArt, px: Px, inks: SepInk[], s: SepSettings, blackOver:
   const mix = spotMixer(inks, s);
   const rgb = (f: string) => (f.match(/[0-9a-f]{2}/gi) || ["00", "00", "00"]).slice(0, 3).map((x) => parseInt(x, 16)) as [number, number, number];
   const shares = v.shapes.map((sh) => mix(...rgb(sh.fill), true));
+  // a gradient shape: each ink's share all along the fade (its halftone ramps up and down with it)
+  const gshares = v.shapes.map((sh) => sh.grad ? sh.grad.stops.map((st) => ({ t: st.t, s: mix(...rgb(st.hex), true) })) : null);
+  gshares.forEach((g, j) => { if (g) { const top = new Float32Array(m + 1); for (const st of g) for (let c = 0; c <= m; c++) top[c] = Math.max(top[c], st.s[c]); shares[j] = top; } });
   const paths = v.shapes.map((sh) => new Path2D(vpathD(sh.ops)));
   // black inks, and the shapes that print (mostly) black
   const blackInk = inks.map((k) => neverBase(k.hex));
-  const isBlack = shares.map((sh) => { let b = 0; for (let c = 0; c < m; c++) if (blackInk[c]) b += sh[c]; return b > 0.9; });
+  const isBlack = shares.map((sh, j) => { if (gshares[j]) return false; let b = 0; for (let c = 0; c < m; c++) if (blackInk[c]) b += sh[c]; return b > 0.9; });
   const whiteInk = inks.map((k) => { const [r, g, b] = rgb(k.hex); return r > 235 && g > 235 && b > 235; });
   const c = document.createElement("canvas"); c.width = w; c.height = h;
   const x = c.getContext("2d", { willReadFrequently: true })!;
@@ -114,7 +117,13 @@ function vectorCover(v: VArt, px: Px, inks: SepInk[], s: SepSettings, blackOver:
     for (let j = first; j < paths.length; j++) {
       const t = shares[j][ch] > 0.02 ? Math.round(Math.min(1, shares[j][ch]) * 255) : 0;
       if (!t && skipBlack && isBlack[j]) continue;
-      x.fillStyle = `rgb(${t},${t},${t})`; x.fill(paths[j], v.shapes[j].evenodd ? "evenodd" : "nonzero");
+      const g = v.shapes[j].grad, gs = gshares[j];
+      if (g && gs && t) {
+        const cg = g.kind === "linear" ? x.createLinearGradient(g.x0, g.y0, g.x1, g.y1) : x.createRadialGradient(g.x0, g.y0, g.r0 || 0, g.x1, g.y1, g.r1 || 0);
+        for (const st of gs) { const u = st.s[ch] > 0.02 ? Math.round(Math.min(1, st.s[ch]) * 255) : 0; cg.addColorStop(st.t, `rgb(${u},${u},${u})`); }
+        x.fillStyle = cg;
+      } else x.fillStyle = `rgb(${t},${t},${t})`;
+      x.fill(paths[j], v.shapes[j].evenodd ? "evenodd" : "nonzero");
     }
     const d = x.getImageData(0, 0, w, h).data;
     for (let i = 0; i < n; i++) { const a = d[i * 4 + 3]; if (a && px.data[i * 4 + 3]) out[i] = Math.round((d[i * 4] * a) / 255); }
