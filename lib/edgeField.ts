@@ -41,7 +41,9 @@ export function edgeRows(a: Uint8Array, w: number, h: number): (y: number) => Ed
       const v = a[y * w + x]; if (v === 0 || v === 255) continue;
       const gx = A(x + 1, y - 1) + 2 * A(x + 1, y) + A(x + 1, y + 1) - A(x - 1, y - 1) - 2 * A(x - 1, y) - A(x - 1, y + 1);
       const gy = A(x - 1, y + 1) + 2 * A(x, y + 1) + A(x + 1, y + 1) - A(x - 1, y - 1) - 2 * A(x, y - 1) - A(x + 1, y - 1);
-      const L = Math.hypot(gx, gy); if (L < 1) continue;
+      // a real edge, not the slight ripple inside a flat area (a full edge gives ~1020; a 16-level ripple ~64): without
+      // this, a flat 90% area would grow edge lines in its middle and the film would get pinholes
+      const L = Math.hypot(gx, gy); if (L < 160) continue;
       r.sd[x] = edgedf(gx, gy, v / 255); r.nx[x] = -gx / L; r.ny[x] = -gy / L; r.e![x] = 1;
     }
     raw.set(y, r); return r;

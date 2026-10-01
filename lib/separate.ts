@@ -510,8 +510,11 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
     const out = new Float32Array(m + 1), l = labOf(r, gg, b);
     let i1 = 0, d1 = Infinity;
     for (let c = 0; c < m; c++) { const d = d2(l, labs[c]); if (d < d1) { d1 = d; i1 = c; } }
-    if (d1 < SNAP * SNAP || !use.length || m === 1 && !dark) {
-      if (m === 1 && !dark && d1 >= SNAP * SNAP) {
+    // (a near-black art color and a black ink: the same ink, solid, even a few shades apart; dark grays read far
+    // apart in Lab, and splitting them into 90% black + 10% white puts tints in a solid black screen)
+    const snap = labs[i1][0] < 20 && l[0] < 25 && Math.hypot(l[1], l[2]) < 10 ? 12 : SNAP;
+    if (d1 < snap * snap || !use.length || m === 1 && !dark) {
+      if (m === 1 && !dark && d1 >= snap * snap) {
         // one ink on a light shirt: how much of it (between the shirt and the ink)
         const A = rgbOf(s.garment), B = rgb[0], AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], L2 = AB[0] ** 2 + AB[1] ** 2 + AB[2] ** 2;
         if (L2 && !dropped[0]) out[0] = Math.max(0, Math.min(1, ((r - A[0]) * AB[0] + (gg - A[1]) * AB[1] + (b - A[2]) * AB[2]) / L2));
@@ -757,7 +760,10 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings): SepResult {
         const g = spread(orig, w, h, trap, later), bare = dark && !seq[j].base && ub;
         for (let i = 0; i < n; i++) {
           if (!later[i] || g[i] <= a[i] || (bare && bare[i])) continue;
-          a[i] = Math.min(g[i], Math.max(a[i], later[i]));
+          // up to what this ink and the later ones cover together (never out onto bare shirt). Not max(this, later):
+          // on the seam, where each is half, that would cap this ink at half and leave a faint line in its film
+          const cap = a[i] + later[i];
+          a[i] = Math.min(g[i], cap > 255 ? 255 : cap);
         }
       }
       for (let i = 0; i < n; i++) { const v = later[i] + orig[i]; later[i] = v > 255 ? 255 : v; }
