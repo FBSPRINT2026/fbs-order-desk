@@ -9,6 +9,7 @@ import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex } from "@/lib/mockup";
 import { filmPdf, deflate } from "@/lib/filmPdf";
+import { ripPdf } from "@/lib/ripPdf";
 import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg } from "@/lib/epsVector";
@@ -444,6 +445,13 @@ export default function SeparationStudio({ id }: { id: string }) {
     setBusy("Making the Illustrator file…"); await new Promise((r) => setTimeout(r, 30));
     return illustratorPdf(hr.plates, hr.w, hr.h, { widthIn: st.widthIn, tonal, title, vector: vectorOut(hr.plates), solid: st.solidOut || "pixels", minDot: hr.plates.map((p) => minDot(p.mesh, st.lpi)) }, deflate);
   }
+  /** for FilmMaker (or any RIP): one page per screen, each its own named spot color; the RIP makes the dots */
+  async function ripFile() {
+    const hr = await fullSep();
+    setBusy("Making the RIP file…"); await new Promise((r) => setTimeout(r, 30));
+    return ripPdf(hr.plates, hr.w, hr.h, { widthIn: st.widthIn, title, tonal, minDot: hr.plates.map((p) => minDot(p.mesh, st.lpi)),
+      sub: (p) => `${p.kind === "underbase" ? "underbase, flash after" : p.kind === "highlight" ? "highlight white" : "color"} - mesh ${p.mesh} - ${tonal || p.tonal ? `halftone: ${st.lpi} lpi ${st.angle} deg` : "solid"} - print ${st.widthIn}" wide at 100%` }, deflate);
+  }
   async function filmsFile() {
     const hr = await fullSep();
     setBusy("Making films…"); await new Promise((r) => setTimeout(r, 30));
@@ -630,8 +638,8 @@ export default function SeparationStudio({ id }: { id: string }) {
               })()}</>}
             {st.method === "spot" && <label className="sep-f" title="Each color spreads this far under the darker color printed after it, so colors that touch overlap a hair (no gaps if a screen is a little off). Keep it small on based colors; 0 = colors just touch. Black never spreads onto the white base.">Trap <input type="range" min={0} max={2} step={0.25} value={st.trapPt ?? TRAP_PT} onChange={(e) => set({ trapPt: +e.target.value })} /> <b>{st.trapPt ?? TRAP_PT} pt</b></label>}
             {st.method === "spot" && !vart?.ok && <label className="sep-f" title="Pixels: the art's own pixels at full size, like Separo. Smooth vector: traced curves, for low-resolution art.">Solid inks<select value={st.solidOut || "pixels"} onChange={(e) => set({ solidOut: e.target.value as Studio["solidOut"] })}><option value="pixels">Pixels (exact)</option><option value="vector">Smooth vector</option></select></label>}
-            {(tonal || plates.some((p) => p.tonal)) && <label className="sep-f" title="Halftone dots print bigger than on the film (at 15% a 50% dot prints about 65%). The halftone plates are made that much lighter so they print as the art, and the proof shows how it prints. Pick None if your RIP adds its own dot gain curve.">Dot gain on press<select value={st.pressGain ?? PRESS_GAIN} onChange={(e) => set({ pressGain: +e.target.value })}>{[0, 0.1, 0.15, 0.2, 0.25, 0.3].map((g) => <option key={g} value={g}>{g ? `${Math.round(g * 100)}%` : "None (RIP does it)"}</option>)}</select></label>}
-            <label className="sep-f">Film DPI<select value={st.dpi} onChange={(e) => set({ dpi: +e.target.value })}>{[360, 600, 720, 1200].map((d) => <option key={d} value={d}>{d}</option>)}</select></label>
+            {(tonal || plates.some((p) => p.tonal)) && <label className="sep-f" title="Halftone dots print bigger than on the film (at 15% a 50% dot prints about 65%). The halftone plates are made that much lighter so they print as the art, and the proof shows how it prints. Pick None if your RIP adds its own dot gain curve (FilmMaker: a Press Calibration curve that isn't straight). Use one or the other, not both.">Dot gain on press<select value={st.pressGain ?? PRESS_GAIN} onChange={(e) => set({ pressGain: +e.target.value })}>{[0, 0.1, 0.15, 0.2, 0.25, 0.3].map((g) => <option key={g} value={g}>{g ? `${Math.round(g * 100)}%` : "None (RIP does it)"}</option>)}</select></label>}
+            <label className="sep-f">Film DPI<select value={st.dpi} onChange={(e) => set({ dpi: +e.target.value })}>{[360, 600, 720, 1200, 1440].map((d) => <option key={d} value={d}>{d}</option>)}</select></label>
           </section>
         </aside>
 
@@ -731,6 +739,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <div className="sep-dl">
               <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await aiFile(), `${slug(title)}-seps.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Illustrator file (spot colors)</button>
               <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await filmsFile(), `${slug(title)}-films.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Films PDF ({st.dpi} dpi{tonal || plates.some((p) => p.tonal) ? `, ${st.lpi} lpi` : ""})</button>
+              <button type="button" className="linkbtn" disabled={!res || !!busy} title="For FilmMaker (or any RIP): one page per screen, each its own spot color, with marks and the ink name. FilmMaker makes the halftone dots with its own settings per ink." onClick={async () => { try { setErr(""); download(await ripFile(), `${slug(title)}-filmmaker.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>FilmMaker / RIP file (one page per screen)</button>
             </div>
             {(row.files || []).length > 0 && <ul className="sep-files">{row.files.filter((f) => f.kind !== "plate").map((f) => <li key={f.path}><button type="button" className="linkbtn" onClick={() => openFile(f.path)}>{f.name}</button></li>)}</ul>}
             <p className="sep-help">The Illustrator file opens straight in Illustrator: each ink is a spot color swatch, so File → Print → Separations prints one film per ink.{img && !vart ? ` Files are made from the art at full size: ${outSize().ppi} pixels per inch at ${st.widthIn}" wide${outSize().ppi < 200 ? " (low: consider Smooth vector for solid inks, or better art)" : ""}.` : vart?.ok ? " Vector art: the original shapes, sharp at any size." : ""}</p>

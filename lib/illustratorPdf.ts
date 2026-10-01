@@ -43,6 +43,28 @@ export type IllustratorOpts = {
  *  same at the dark end (holes) */
 const holdable = (v: number, md: number) => (!md || v <= 0 || v >= 1 ? v : v < md / 2 ? 0 : v < md ? md : v > 1 - md / 2 ? 1 : v > 1 - md ? 1 - md : v);
 
+/**
+ * A plate as the RIP should get it, one byte per pixel (255 = full ink): solid plates 0 or 100%; halftone plates as
+ * gray in tones the mesh holds (`md`, the smallest dot), with a solid part's soft edge against nothing cut sharp (the
+ * RIP would break a soft edge into half dots).
+ */
+export function ripPlate(a: Uint8Array, w: number, h: number, solid: boolean, md: number): Uint8Array {
+  const out = new Uint8Array(w * h);
+  if (solid) { for (let j = 0; j < out.length; j++) out[j] = a[j] >= 128 ? 255 : 0; return out; }
+  const lut = new Uint8Array(256);
+  for (let k = 0; k < 256; k++) lut[k] = Math.round(holdable(k / 255, md) * 255);
+  for (let y = 0, j = 0; y < h; y++) for (let x = 0; x < w; x++, j++) {
+    let v = a[j];
+    if (v > 0 && v < 255) {
+      let hi = 0, lo = 255;
+      for (let dy = -1; dy <= 1; dy++) { const yy = y + dy; if (yy < 0 || yy >= h) { lo = 0; continue; } for (let dx = -1; dx <= 1; dx++) { const xx = x + dx; const u = xx < 0 || xx >= w ? 0 : a[yy * w + xx]; if (u > hi) hi = u; if (u < lo) lo = u; } }
+      v = hi >= 245 && lo <= 10 ? (v >= 128 ? 255 : 0) : lut[v];
+    }
+    out[j] = v;
+  }
+  return out;
+}
+
 /** the plate names as they appear in Illustrator: "1 - Underbase White" … (print order) */
 export const plateLabel = (p: Plate, i: number) => `${i + 1} - ${p.name}`;
 
@@ -106,21 +128,8 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
     // the multi-ink image: one byte per ink per pixel; solid plates are 0 or 255, halftone plates keep their shades
     const data = new Uint8Array(w * h * M);
     ri.forEach((pi, c) => {
-      const a = plates[pi].alpha, solid = !(o.tonal || plates[pi].tonal);
-      if (solid) { for (let j = 0, q = c; j < a.length; j++, q += M) data[q] = a[j] >= 128 ? 255 : 0; return; }
-      // gray for the RIP: holdable tones, and where a solid part meets nothing its soft edge is cut sharp (the RIP
-      // would break a soft edge into half dots)
-      const md = o.minDot?.[pi] || 0, lut = new Uint8Array(256);
-      for (let k = 0; k < 256; k++) lut[k] = Math.round(holdable(k / 255, md) * 255);
-      for (let y = 0, j = 0; y < h; y++) for (let x = 0; x < w; x++, j++) {
-        let v = a[j];
-        if (v > 0 && v < 255) {
-          let hi = 0, lo = 255;
-          for (let dy = -1; dy <= 1; dy++) { const yy = y + dy; if (yy < 0 || yy >= h) { lo = 0; continue; } for (let dx = -1; dx <= 1; dx++) { const xx = x + dx; const u = xx < 0 || xx >= w ? 0 : a[yy * w + xx]; if (u > hi) hi = u; if (u < lo) lo = u; } }
-          v = hi >= 245 && lo <= 10 ? (v >= 128 ? 255 : 0) : lut[v];
-        }
-        data[j * M + c] = v;
-      }
+      const g = ripPlate(plates[pi].alpha, w, h, !(o.tonal || plates[pi].tonal), o.minDot?.[pi] || 0);
+      for (let j = 0, q = c; j < g.length; j++, q += M) data[q] = g[j];
     });
     // how it looks on screen: the inks laid down in print order, each covering what's under it by its amount
     // (acc = acc + t·(ink − acc)), like on the press; it only affects the screen, each ink prints on its own plate
