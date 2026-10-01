@@ -23,6 +23,7 @@ import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recol
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot, basePlacement, maxWidthFor, sideMaxWidth, viewsFor, guessHex, measureGarment, printWidth, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
+import { planPrint, pxOfImage, type PrintPlan } from "@/lib/printPlan";
 import { ColorPicker, StylePicker } from "@/components/GroupEditor";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
@@ -31,6 +32,7 @@ type Offset = { dx: number; dy: number };
 type Side = "front" | "back" | "sleeve";
 const SIDES: { id: Side; label: string }[] = [{ id: "front", label: "Front" }, { id: "back", label: "Back" }, { id: "sleeve", label: "Sleeves" }];
 type Paint = { design: string; sources: { hex: string; share: number }[]; map: Record<string, { name: string; hex: string }>;
+  /** how this logo prints (the same plan the Separation Studio starts from) */ plan?: PrintPlan;
   /** several logo colors set to the same ink: true = print them as one color (one screen), false = keep separate */ unite?: boolean };
 /** Ink names for the imprint from the logo's color choices (same ink twice counts once when the colors are united). */
 const inkNames = (pt: Paint, map = pt.map) => {
@@ -286,8 +288,27 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (paints[im.id]?.design === d.id) return;
       try {
         const img = await logoImg(d);
+        // the print plan: saved on the logo (the separation reads the same one), else worked out now and saved
+        let plan = (d.print_plan as PrintPlan | null | undefined)?.v === 1 ? d.print_plan as PrintPlan : null;
+        if (!plan) {
+          plan = planPrint(pxOfImage(img, 1600), { garment: line ? shirtHex(line) : undefined });
+          const names = [...new Set(plan.inks.map((k) => k.name))];
+          if (!portal) sb.from("designs").update({ print_plan: plan, colors: plan.colors, inks: plan.method === "spot" ? names.join(", ") : `Simulated process (${plan.colors})` }).eq("id", d.id).then(() => {});
+          const pl = plan; setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, print_plan: pl } : x)));
+        }
+        if (plan.method === "spot") {
+          // each color of the logo (fade steps and combined colors too) already set to the ink it prints as
+          const sources = plan.inks.flatMap((k) => [k.hex, ...(k.also || [])].map((hex) => ({ hex, share: 0 })));
+          const map: Paint["map"] = {};
+          for (const k of plan.inks) for (const hex of [k.hex, ...(k.also || [])]) map[hex] = { name: k.name, hex: colorHex(k.name) || k.hex };
+          const names = [...new Set(plan.inks.map((k) => k.name))];
+          setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map, unite: true, plan: plan! } }));
+          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: plan!.colors } : x)));
+          return;
+        }
         const sources = detectColors(img);
-        setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map: {} } }));
+        setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map: {}, plan: plan! } }));
+        setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, colors: plan!.colors, inks: x.inks || `Simulated process (${plan!.colors})` } : x)));
       } catch { /* preview not loadable */ }
     });
   }, [imprints, designs, urls, keepBg, keepInside]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1146,6 +1167,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
                       }} />
                     {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one{portal ? " of your logos" : " of the customer's logos"}, or upload new art.</div>}
+                    {p.d && paints[im.id]?.plan && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {paints[im.id].plan!.why}</div>}
                     {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <LogoColors rows={colorRows(paints[im.id])}
                         onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}

@@ -14,7 +14,7 @@ import { folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder } 
 import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
-import { labOfRgb } from "@/lib/gradients";
+import { adjustInks, colorWord, dropInk, fadesOf, inkName, planFor, planPrint, shown, withMiddle, type PrintPlan } from "@/lib/printPlan";
 import { browserInflate, parsePdf } from "@/lib/pdfVector";
 import { deltaE } from "@/lib/inkColors";
 import { mergeProduction, withIssue, type EquipRow, type Machine, type Station } from "@/lib/production";
@@ -62,77 +62,13 @@ const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, gain: st.press
 /** the working size on screen (fast); the files are separated again at full size (OUT_PPI at the print width) */
 const MAX_SIDE = 2400;
 const OUT_PPI = 400, OUT_MAX_SIDE = 7200, OUT_MAX_PX = 36e6;
-const hexRgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) || 0);
-/** a plain word for a color (green, orange, light blue…) */
-function colorWord(hex: string): string {
-  const [r, g, b] = hexRgb(hex).map((v) => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
-  if (d < 0.08) return l > 0.85 ? "white" : l < 0.15 ? "black" : "gray";
-  let hue = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; hue = (hue * 60 + 360) % 360;
-  const name = hue < 15 || hue >= 340 ? "red" : hue < 40 ? "orange" : hue < 65 ? "yellow" : hue < 165 ? "green" : hue < 195 ? "teal" : hue < 255 ? "blue" : hue < 290 ? "purple" : "pink";
-  return (l > 0.75 && name !== "yellow" ? "light " : l < 0.3 ? "dark " : "") + name;
-}
-type FadeRow = { a: SepInk; b: SepInk; mid: string; midWord: string; risky: boolean; long: boolean };
-/**
- * Each fade between two inks, with the art's own color halfway along it, and whether two screens are enough:
- *   risky: the middle can print muddy (ends far apart around the color wheel, like yellow and blue, whose dots side by
- *          side mix in light toward a dull gray-green instead of the art's green), or two dots mix far off the art's middle
- *   long:  the ends are far apart (yellow to red): a middle screen keeps the fade smooth. Separo recommends five screens
- *          for the Peticolas yellow → red fade (101 C, 7409 C, 7577 C, 2027 C, Warm Red C); the shop prints it in three.
- */
-function fadesOf(inks: SepInk[], px: Px | null): FadeRow[] {
-  const out: FadeRow[] = [];
-  const lin = (v: number) => { v /= 255; return v > 0.04045 ? ((v + 0.055) / 1.055) ** 2.4 : v / 12.92; };
-  const gam = (v: number) => 255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
-  const toHex = (c: number[]) => "#" + c.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("").toUpperCase();
-  inks.forEach((a, i) => (a.fadeTo || []).forEach((h) => {
-    const j = inks.findIndex((x) => x.hex.toLowerCase() === h.toLowerCase()); if (j <= i) return;
-    const b = inks[j], A = hexRgb(a.hex), B = hexRgb(b.hex);
-    // the art's color halfway along the fade
-    let mid = A.map((v, k) => (v + B[k]) / 2);
-    if (px) {
-      const AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], L2 = AB[0] ** 2 + AB[1] ** 2 + AB[2] ** 2, acc = [0, 0, 0];
-      let n = 0; const step = Math.max(1, Math.floor((px.w * px.h) / 120000));
-      for (let q = 0; q < px.w * px.h && L2; q += step) {
-        const o = q * 4; if (px.data[o + 3] < 200) continue;
-        const P = [px.data[o], px.data[o + 1], px.data[o + 2]], t = ((P[0] - A[0]) * AB[0] + (P[1] - A[1]) * AB[1] + (P[2] - A[2]) * AB[2]) / L2;
-        if (t < 0.42 || t > 0.58) continue;
-        const d = Math.hypot(P[0] - A[0] - t * AB[0], P[1] - A[1] - t * AB[1], P[2] - A[2] - t * AB[2]); if (d > 42) continue;
-        acc[0] += P[0]; acc[1] += P[1]; acc[2] += P[2]; n++;
-      }
-      if (n > 20) mid = acc.map((v) => v / n);
-    }
-    const SA = hexRgb(shown(a)), SB = hexRgb(shown(b));
-    const light = SA.map((v, k) => gam((lin(v) + lin(SB[k])) / 2));
-    const la = labOfRgb(SA), lb = labOfRgb(SB), ca = Math.hypot(la[1], la[2]), cb = Math.hypot(lb[1], lb[2]);
-    let dh = Math.abs(Math.atan2(la[2], la[1]) - Math.atan2(lb[2], lb[1])) * 180 / Math.PI; if (dh > 180) dh = 360 - dh;
-    const midHex = toHex(mid), risky = (ca > 25 && cb > 25 && dh > 90) || deltaE(midHex, toHex(light)) > 14;
-    // once a fade has a middle screen (an end that fades two ways), its halves aren't flagged again
-    const split = (a.fadeTo?.length || 0) > 1 || (b.fadeTo?.length || 0) > 1;
-    out.push({ a, b, mid: midHex, midWord: colorWord(midHex), risky: risky && !split, long: deltaE(shown(a), shown(b)) > 45 && !split });
-  }));
-  return out;
-}
-/** a third ink in the middle of a fade: A → middle → B */
-function withMiddle(l: SepInk[], ah: string, bh: string, mid: string, lib: Studio["lib"]): SepInk[] {
-  const at = l.findIndex((x) => x.hex === bh);
-  const n = l.map((x) => x.hex === ah ? { ...x, fadeTo: [...(x.fadeTo || []).filter((h) => h !== bh), mid] } : x.hex === bh ? { ...x, fadeTo: [...(x.fadeTo || []).filter((h) => h !== ah), mid] } : x);
-  n.splice(at < 0 ? n.length : at, 0, { hex: mid, name: inkName(mid, lib), fadeTo: [ah, bh] });
-  return n;
-}
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "plate";
-const inkName = (hex: string, lib: Studio["lib"]) => {
-  const n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  if (r > 238 && g > 238 && b > 238) return "White";
-  if (r < 30 && g < 30 && b < 30) return "Black";
-  return lib === "pms" ? closestPms(hex).name : lib === "wilflex" ? snapInk(hex).name : (({ standard, pms, rec }) => (rec === "pms" ? pms : standard).name)(suggestInk(hex));
-};
 /** what an ink name is and how close it is to the art's color: "Standard · very close", "PMS · close", "Custom" */
 function inkKind(name: string, art: string): { kind: string; word: string; dE: number } | null {
   const hex = colorHex(name); if (!hex) return null;
   const kind = WILFLEX_NAMES[name] ? "Standard" : /^#/.test(name) ? "Custom" : "PMS", dE = Math.round(deltaE(art, hex) * 10) / 10;
   return { kind, word: matchWord(dE), dE };
 }
-const shown = (ink: SepInk) => colorHex(ink.name) || ink.hex;
 
 /**
  * The art as pixels, at most `side` on the long side (vector art is drawn at exactly that size; pictures are never
@@ -358,6 +294,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     if (row0.status === "requested") { await sb.from("separations").update({ status: "in_progress", assigned_to: email, updated_at: new Date().toISOString() }).eq("id", id); setRow({ ...row0, status: "in_progress", assigned_to: email }); }
     // the art: the imprint's design, else art uploaded straight to this separation
     const d0 = d as Design | null, up = (row0.settings as { art?: SepArt }).art;
+    designRef.current = (d0 as (Design & { print_plan?: PrintPlan | null }) | null) || null;
     const des = d0?.file_path ? { file_path: d0.file_path, file_type: d0.file_type, file_name: d0.file_name, preview_path: d0.preview_path } : up?.path ? { file_path: up.path, file_type: up.type, file_name: up.name, preview_path: null as string | null } : null;
     setHasArt(!!des);
     // Illustrator EPS: read its shapes (vector all the way to the Illustrator file)
@@ -420,24 +357,41 @@ export default function SeparationStudio({ id }: { id: string }) {
     setInks((l) => { const k = l[i]; if (!k?.also?.length) return l; const back = k.also.map((h) => ({ hex: h, name: inkName(h, st.lib) })); return [...l.slice(0, i), { ...k, also: undefined }, ...back, ...l.slice(i + 1)]; });
     setSt((x) => ({ ...x, maxColors: Math.min(12, inks.length + (inks[i]?.also?.length || 0)) }));
   }
-  /** take an ink out; if it was the middle of a fade, the fade joins its two neighbors again */
-  function dropInk(l: SepInk[], i: number): SepInk[] {
-    const gone = l[i], nb = gone.fadeTo || [];
-    return l.filter((_, j) => j !== i).map((x) => {
-      if (!x.fadeTo?.includes(gone.hex)) return x;
-      const rest = x.fadeTo.filter((h) => h !== gone.hex), join = nb.filter((h) => h !== x.hex && !rest.includes(h));
-      const f = [...rest, ...join]; return f.length ? { ...x, fadeTo: f } : { hex: x.hex, name: x.name };
-    });
-  }
-
   /* ---------- find inks (first time, or on request) ---------- */
   // auto: find as many inks as the art needs and set the Colors count to that; otherwise use the Colors count (fewer
   // than the art has: the inks easiest to mix from the others are left out and printed as halftones of them)
-  const findInks = useCallback((method = st.method, auto = false) => {
+  const findInks = useCallback((method = st.method, auto = false, fromPlan = false) => {
     const px = pxRef.current; if (!px) return;
     // sim tries every candidate ink against the whole art (a few seconds): let the page say so first
     setBusy("Finding inks…");
     setTimeout(() => {
+      // the print plan: the same one the Mockup Creator shows for this logo (saved on the design), else worked out
+      // here the same way (and saved on the design, so the mockup and the price match the screens)
+      if (auto) {
+        const d0 = designRef.current;
+        let plan = fromPlan ? planFor(d0?.print_plan, px, st.garment, st.lib) : null;
+        const fresh = !plan;
+        if (!plan) plan = planPrint(px, { garment: st.garment, lib: st.lib, method: fromPlan ? undefined : method });
+        const spots = (vart?.shapes || []).filter((sh) => sh.ink && !/%$/.test(sh.ink));
+        const swatch = (hex: string) => { let best = "", bd = 4; for (const sh of spots) { const dd = deltaE(hex, sh.fill); if (dd < bd) { bd = dd; best = sh.ink!; } } return best; };
+        const list = plan.inks.map((k) => ({ ...k, name: swatch(k.hex) || k.name }));
+        setSt((x) => ({ ...x, method: plan!.method, maxColors: Math.max(1, list.length) }));
+        setNatural(list.length);
+        setInks(list);
+        setMsg(fromPlan && !fresh ? `From the logo's print plan (same as the mockup): ${plan.why}` : plan.why);
+        if (fresh && fromPlan && d0?.id) { sb.from("designs").update({ print_plan: plan }).eq("id", d0.id).then(() => {}); d0.print_plan = plan; }
+        setOrderKeys([]); setNames({}); setHidden(new Set()); setMatchAt(null); setBusy("");
+        return;
+      }
+      // Colors + Apply (spot): change how many inks the logo prints in, starting from the inks it has now. Fewer: the
+      // ink easiest to do without goes (a fade's middle screen first; its area prints as the others' halftones).
+      // More: a fade gets another step, else the next color in the art gets its own ink.
+      if (method === "spot" && inks.length) {
+        const r = adjustInks(px, inks, st.maxColors, st.lib);
+        setInks(r.inks); setMsg(r.note); setSt((x) => ({ ...x, maxColors: r.inks.length }));
+        setOrderKeys([]); setMatchAt(null); setBusy("");
+        return;
+      }
       const want = auto ? (method === "sim" ? 8 : 12) : st.maxColors;
       const f = method === "sim" ? findSimInks(px, st.garment, want) : findColors(px, want, 9, 0.004, st.garment);
       if (auto || f.length < want) setSt((x) => ({ ...x, maxColors: Math.max(1, f.length) }));
@@ -446,20 +400,13 @@ export default function SeparationStudio({ id }: { id: string }) {
       // vector art with spot swatches (.ai / PDF): an ink that is one of the art's swatches takes the swatch's name
       const spots = (vart?.shapes || []).filter((sh) => sh.ink && !/%$/.test(sh.ink));
       const swatch = (hex: string) => { let best = "", bd = 4; for (const sh of spots) { const d = deltaE(hex, sh.fill); if (d < bd) { bd = d; best = sh.ink!; } } return best; };
-      let list: SepInk[] = f.map((x) => ({ hex: x.hex, name: swatch(x.hex) || inkName(x.hex, st.lib), ...("fadeTo" in x && x.fadeTo?.length ? { fadeTo: x.fadeTo } : {}) }));
-      // a long fade (yellow to red) or one whose middle prints muddy (yellow to blue): a screen in the middle, as the
-      // shop prints it (A → middle → B); remove it with × to print the fade in two
-      if (auto && method === "spot") {
-        const added: string[] = [];
-        for (const r of fadesOf(list, px)) if ((r.risky || r.long) && list.length < 12) { list = withMiddle(list, r.a.hex, r.b.hex, r.mid, st.lib); added.push(`${r.a.name} → ${r.b.name}`); }
-        if (added.length) { setSt((x) => ({ ...x, maxColors: list.length })); setNatural(list.length); setMsg(`Fade${added.length > 1 ? "s" : ""} in the art (${added.join(", ")}): a screen added in the middle so it prints smooth. Remove it with × to print the fade in two.`); }
-      }
+      const list: SepInk[] = f.map((x) => ({ hex: x.hex, name: swatch(x.hex) || inkName(x.hex, st.lib), ...("fadeTo" in x && x.fadeTo?.length ? { fadeTo: x.fadeTo } : {}) }));
       setInks(list);
       setOrderKeys([]); setNames({}); setHidden(new Set()); setMatchAt(null); setBusy("");
     }, 30);
-  }, [st.method, st.garment, st.maxColors, st.lib, vart]);
+  }, [st.method, st.garment, st.maxColors, st.lib, vart, sb, inks]);
   const hint = useMemo(() => { const px = pxRef.current; if (!px || !inks.length || st.method === "sim") return 0; return gradientShare(px, inks.map((k) => k.hex)); }, [pxTick, inks, st.method]);
-  useEffect(() => { if (pxTick && !inks.length) findInks(st.method, true); }, [pxTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (pxTick && !inks.length) findInks(st.method, true, true); }, [pxTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- separate (a moment after anything changes) ---------- */
   useEffect(() => {
@@ -543,6 +490,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   /* ---------- full size (for the files) ---------- */
   // the screen works on a copy of at most 2,400 px; the Illustrator file and films are separated again from the art
   // at full size: the art's own pixels (up to OUT_PPI at the print width), vector art drawn at OUT_PPI
+  const designRef = useRef<(Design & { print_plan?: PrintPlan | null }) | null>(null);
   const hiRef = useRef<{ key: string; plates: Plate[]; w: number; h: number; ppi: number } | null>(null);
   const outSize = useCallback(() => {
     if (!img) return { side: MAX_SIDE, ppi: 0 };
@@ -658,6 +606,15 @@ export default function SeparationStudio({ id }: { id: string }) {
       const r = await sb.from("separations").update(patch).eq("id", row.id).select("*").single();
       if (r.error) throw new Error(r.error.message);
       setRow(r.data as SepRow);
+      // the logo's print plan follows what the separation settled on (inks, method, colors), so the next mockup and
+      // price for this logo match the screens
+      const d0 = designRef.current;
+      if (d0?.id) {
+        const plan: PrintPlan = { v: 1, method: st.method === "sim" ? "sim" : "spot", inks, colors: inks.length, at: new Date().toISOString(), dark: isDark(st.garment),
+          why: `${st.method === "sim" ? "Simulated process" : "Screen print"}, ${inks.length} ${st.method === "sim" ? "screens" : `color${inks.length === 1 ? "" : "s"}`}${inks.some((k) => k.fadeTo?.length) ? " (with fades)" : ""}, as separated (S-${row.number}).` };
+        sb.from("designs").update({ print_plan: plan, colors: plan.colors, inks: plan.method === "spot" ? [...new Set(inks.map((k) => k.name))].join(", ") : `Simulated process (${plan.colors})` }).eq("id", d0.id).then(() => {});
+        d0.print_plan = plan;
+      }
       setMsg(status === "review" ? "Saved and sent for review." : "Saved.");
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     setBusy("");

@@ -4683,3 +4683,7 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .sep-chip.dragging{opacity:.45}
 .sep-chip.drop{outline:3px solid var(--accent,#0EA5E9);outline-offset:2px;transform:scale(1.04)}
 .sep-chip-split{position:absolute;top:4px;left:4px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px;border:0;background:rgba(0,0,0,.6);color:#fff;cursor:pointer}
+.mk-plan{font-size:12.5px;line-height:1.4;padding:7px 9px;border-radius:8px;background:var(--surface-2);margin:6px 0}
+.mk-plan.sim{background:#FFF7E6;color:#6B4700}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mk-plan.sim{background:#3A2C0C;color:#F3C969}}
+:root[data-theme="dark"] .mk-plan.sim{background:#3A2C0C;color:#F3C969}
