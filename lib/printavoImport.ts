@@ -90,6 +90,12 @@ export async function ensureCustomer(sb: SupabaseClient, printavoCustomerId: str
 
 /** Brings over one Printavo invoice or quote, exactly as it is. Importing again refreshes it (files already copied are kept). */
 export async function importOrder(sb: SupabaseClient, printavoId: string, customerId?: string | null): Promise<{ id: string; visualId: string; filesLeft: number; warnings: string[]; order: PvOrder }> {
+  // history before 2026 is locked (migration 082): kept exactly as imported, never read again or rewritten
+  const { data: locked } = await sb.from("archived_orders").select("id, visual_id, data, files_total, files_copied, files").eq("printavo_id", printavoId).eq("locked", true).maybeSingle();
+  if (locked) {
+    const done = Object.keys((locked.files || {}) as Record<string, string>).length;
+    return { id: locked.id as string, visualId: locked.visual_id as string, filesLeft: Math.max(0, (locked.files_total as number) - done), warnings: ["Locked history (before 2026): kept as imported."], order: locked.data as PvOrder };
+  }
   const o = await getOrder(printavoId);
   const cid = customerId || (o.customer.id ? await ensureCustomer(sb, o.customer.id) : null);
   if (!cid) throw new Error("This order has no customer in Printavo.");
@@ -111,7 +117,6 @@ export async function importOrder(sb: SupabaseClient, printavoId: string, custom
   return { id: data.id, visualId: o.visualId, filesLeft: urls.length - Object.keys(kept).length, warnings: o.warnings || [], order: o };
 }
 
-const MAX = 45 * 1024 * 1024;
 const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg", "application/pdf": "pdf", "application/postscript": "ai", "application/illustrator": "ai", "image/vnd.adobe.photoshop": "psd", "application/zip": "zip" };
 
 /**
@@ -129,6 +134,9 @@ export async function copyFiles(sb: SupabaseClient, archivedId: string, deadline
   o.messages.forEach((m) => (m.attachments || []).forEach((a) => { if (a.name) names.set(a.url, a.name); }));
   const todo = fileUrls(o).filter((u) => !files[u]);
   let storageFull = false;
+  // the biggest file we take (Import page setting; Supabase's own upload limit has to allow it)
+  const { data: cfg } = await sb.from("printavo_sync").select("max_file_mb").eq("id", 1).maybeSingle();
+  const MAX = Math.max(1, Number((cfg as { max_file_mb?: number } | null)?.max_file_mb) || 45) * 1024 * 1024;
   for (const [i, url] of todo.entries()) {
     if (Date.now() > deadline) break;
     try {

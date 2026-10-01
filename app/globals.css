@@ -4629,3 +4629,19 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .sz-entry.on{opacity:1;pointer-events:auto;z-index:2}
 .sz-wait{position:absolute;height:3px;border-radius:2px;background:var(--accent);transform-origin:left center;animation:szwait linear forwards;z-index:2}
 @keyframes szwait{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+/* Printavo: files that didn't copy, history backup */
+.pvk-group{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm,8px)}
+.pvk-group summary{cursor:pointer;font-size:12.5px}
+.pvk-list{list-style:none;margin:6px 0 0;padding:0;max-height:320px;overflow:auto;font-size:12.5px}
+.pvk-list li{display:grid;grid-template-columns:64px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)}
+.pvk-list li:last-child{border-bottom:0}
+.pvk-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pvk-backup{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm,8px)}
+.pvk-backup.old{opacity:.8}
+.pvk-links{display:flex;flex-wrap:wrap;gap:6px}
+.pvk-links .btn small{margin-left:4px}
+.pvk-st{font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface-2)}
+.pvk-st.ready{background:color-mix(in srgb,#2E9D5B 16%,transparent);color:#2E9D5B}
+.pvk-st.failed{background:color-mix(in srgb,#D14343 16%,transparent);color:#D14343}
+@media (max-width:640px){.pvk-list li{grid-template-columns:56px minmax(0,1fr);}.pvk-list li > :nth-child(3),.pvk-list li > :nth-child(4){grid-column:2}}
+.ok-note{padding:8px 12px;border-radius:var(--r-sm,8px);background:color-mix(in srgb,#2E9D5B 12%,transparent);color:var(--ink);font-size:13px}

@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import PrintavoSync from "@/components/PrintavoSync";
+import { PrintavoBackup, PrintavoMissedFiles } from "@/components/PrintavoKeep";
 import SearchInput from "@/components/SearchInput";
 
 type Hit = { id: string; companyName: string; contact: string; email: string; phone: string; orderCount: number; customerId: string | null };
@@ -95,6 +96,8 @@ export default function ImportPage() {
       </p>
 
       <PrintavoSync />
+      <PrintavoMissedFiles />
+      <PrintavoBackup />
 
       <h2 style={{ marginTop: 22, fontSize: 16 }}>Import one customer now</h2>
       <p className="faint" style={{ margin: "2px 0 0", fontSize: 13 }}>Jumps the line for a customer you need right away. The sync would bring them over anyway.</p>
