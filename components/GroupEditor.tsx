@@ -152,18 +152,8 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                 {l.oneSize ? (
                   <div className="os-note">{l.sizeRun?.length === 1 ? "One size. Enter the quantity in Qty." : "One-size item. Clear the Qty to switch back to sizes."}</div>
                 ) : (
-                  <div className="szrow">
-                    {(colsFor(l) as (keyof GLine["sizes"])[]).map((s, si, arr) => {
-                      const up = !gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? l.sizeUp[s] : prices.upcharges[s as keyof typeof prices.upcharges];
-                      return (
-                        <label key={s} className={"szc" + (s === "YXL" && si < arr.length - 1 ? " ysep" : "")}>
-                          <span>{s}</span>
-                          <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (l.sizes?.[s] ? " has" : "")} value={l.sizes?.[s] || ""} onChange={(e) => setQty(s, e.target.value)} />
-                          <small className="upc">{up ? `+${up}` : "\u00a0"}</small>
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <SizeRow cols={colsFor(l) as (keyof GLine["sizes"])[]} sizes={l.sizes || {}} onSet={setQty}
+                    up={(s) => (!gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? l.sizeUp[s] : prices.upcharges[s as keyof typeof prices.upcharges])} />
                 )}
               </div>
             );
@@ -521,6 +511,71 @@ function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onSta
       )}
       {cur && val > 0 && other > 0 && <span className="dp-size">{val}&quot; {given === "W" ? "wide" : "tall"} → <b>{other}&quot; {given === "W" ? "tall" : "wide"}</b></span>}
       {cur && !cur.width_px && <span className="faint" style={{ fontSize: 12 }}>Add a preview image to this logo to get its size</span>}
+    </div>
+  );
+}
+
+
+/** pause after typing a size before the phone moves on to the next size */
+const SIZE_ADVANCE_MS = 900;
+/**
+ * The size boxes for one garment. On a computer: a box per size (Tab moves on). On a phone or tablet the number pad
+ * has no Next key, so one entry box stays open and walks the sizes: type 50, pause a moment (a bar shows it's about
+ * to move), and it slides to the next size with the keypad still up. Tap any size to jump to it; Enter / Next on
+ * keypads that have one moves right away.
+ */
+function SizeRow<K extends string>({ cols, sizes, onSet, up }: { cols: K[]; sizes: Partial<Record<K, number>>; onSet: (s: K, raw: string) => void; up: (s: K) => number | undefined }) {
+  const [touch, setTouch] = useState(false);
+  useEffect(() => { setTouch(typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches); }, []);
+  const [at, setAt] = useState<number | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const [tick, setTick] = useState(0);
+  const row = useRef<HTMLDivElement>(null), box = useRef<HTMLInputElement>(null), timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stop = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } };
+  useEffect(() => stop, []);
+  // keep the entry box over the size it's filling
+  useLayoutEffect(() => {
+    if (!touch || at == null || !row.current) return;
+    const cell = row.current.querySelectorAll<HTMLElement>(".sz")[at]; if (!cell) return;
+    const r = row.current.getBoundingClientRect(), c = cell.getBoundingClientRect();
+    setPos({ left: c.left - r.left, top: c.top - r.top, width: c.width, height: c.height });
+  }, [touch, at, cols.length]);
+  const go = (i: number) => {
+    stop(); setAt(i);
+    // the same box stays focused (the keypad stays up); select what's there so typing replaces it
+    requestAnimationFrame(() => box.current?.select());
+  };
+  const next = (from: number) => { stop(); if (from < cols.length - 1) go(from + 1); else { setAt(null); box.current?.blur(); } };
+  const cells = cols.map((s, si) => {
+    const u = up(s), q = sizes[s];
+    return (
+      <label key={s} className={"szc" + (s === "YXL" && si < cols.length - 1 ? " ysep" : "")}>
+        <span>{s}</span>
+        {touch
+          ? <button type="button" className={"sz sz-tap" + (q ? " has" : "") + (at === si ? " on" : "")} aria-label={`${s} quantity`} onClick={() => { box.current?.focus(); go(si); }}>{q || ""}</button>
+          : <input type="number" min="0" step="1" inputMode="numeric" className={"sz" + (q ? " has" : "")} value={q || ""} onChange={(e) => onSet(s, e.target.value)} />}
+        <small className="upc">{u ? `+${u}` : "\u00a0"}</small>
+      </label>
+    );
+  });
+  if (!touch) return <div className="szrow">{cells}</div>;
+  const cur = at == null ? null : cols[at];
+  return (
+    <div className="szrow sz-walk" ref={row}>
+      {cells}
+      <input ref={box} className={"sz-entry" + (cur ? " on" : "")} type="text" inputMode="numeric" pattern="[0-9]*" enterKeyHint={at != null && at < cols.length - 1 ? "next" : "done"} autoComplete="off"
+        aria-label={cur ? `${cur} quantity` : "Size quantity"} style={pos && cur ? { left: pos.left, top: pos.top, width: pos.width, height: pos.height } : undefined}
+        value={cur ? sizes[cur] || "" : ""}
+        onChange={(e) => {
+          if (at == null || !cur) return;
+          const v = e.target.value.replace(/\D/g, "").slice(0, 5);
+          onSet(cur, v); stop();
+          // a number typed: move on after a short pause (another digit restarts the wait)
+          if (v) { setTick((t) => t + 1); const i = at; timer.current = setTimeout(() => next(i), SIZE_ADVANCE_MS); }
+        }}
+        onKeyDown={(e) => { if (e.key === "Enter" && at != null) { e.preventDefault(); next(at); } }}
+        onBlur={() => { stop(); setAt(null); }} />
+      {cur && pos && timer.current && <i key={tick} className="sz-wait" style={{ left: pos.left, top: pos.top + pos.height + 1, width: pos.width, animationDuration: `${SIZE_ADVANCE_MS}ms` }} />}
     </div>
   );
 }

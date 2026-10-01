@@ -4620,3 +4620,12 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .sep-loupe-hint{width:min(100%,360px);aspect-ratio:3/1;display:grid;place-items:center;border:1px dashed var(--line,#d8dde6);border-radius:8px;color:var(--ink-3,#7c8799);font-size:13px}
 .sep-loupe small{color:var(--ink-3,#7c8799)}
 .sep-canvases canvas.zoom{cursor:zoom-in}
+/* sizes on a phone: one entry box walks the sizes (type, pause, it moves on with the keypad still up) */
+.sz-walk{position:relative}
+.szc .sz-tap{width:100%;min-width:0;box-sizing:border-box;text-align:center;padding:0 2px;height:38px;line-height:36px;border:1px solid var(--line);border-radius:var(--r-sm,6px);background:var(--surface,#fff);font:inherit;font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums}
+.szc .sz-tap.has{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 40%,var(--line));font-weight:600}
+.szc .sz-tap.on{visibility:hidden}
+.sz-entry{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;box-sizing:border-box;text-align:center;font-size:16px;font-weight:600;padding:0 2px;border:2px solid var(--accent);border-radius:var(--r-sm,6px);background:var(--surface,#fff);color:var(--ink);font-variant-numeric:tabular-nums;transition:left .12s ease}
+.sz-entry.on{opacity:1;pointer-events:auto;z-index:2}
+.sz-wait{position:absolute;height:3px;border-radius:2px;background:var(--accent);transform-origin:left center;animation:szwait linear forwards;z-index:2}
+@keyframes szwait{from{transform:scaleX(0)}to{transform:scaleX(1)}}
