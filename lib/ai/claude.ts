@@ -35,6 +35,8 @@ export async function aiState(admin: SupabaseClient = createAdminClient()): Prom
  */
 export async function askClaude<T>(opts: {
   task: string; model: string; system: string; prompt: string; tool: AiTool; maxTokens?: number; ctx?: AiCtx; admin?: SupabaseClient;
+  /** pictures to look at with the prompt (JPEG or PNG, base64 without the data: prefix) */
+  images?: { media_type: "image/jpeg" | "image/png"; data: string; label?: string }[];
 }): Promise<AiResult<T>> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return { ok: false, error: "AI isn't set up yet.", off: true };
@@ -59,7 +61,9 @@ export async function askClaude<T>(opts: {
         model: opts.model,
         max_tokens: opts.maxTokens || 2000,
         system: opts.system,
-        messages: [{ role: "user", content: opts.prompt }],
+        messages: [{ role: "user", content: opts.images?.length
+          ? [...opts.images.flatMap((im) => [...(im.label ? [{ type: "text", text: im.label }] : []), { type: "image", source: { type: "base64", media_type: im.media_type, data: im.data } }]), { type: "text", text: opts.prompt }]
+          : opts.prompt }],
         tools: [opts.tool],
         tool_choice: { type: "tool", name: opts.tool.name },
       }),

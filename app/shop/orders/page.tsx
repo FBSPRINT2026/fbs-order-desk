@@ -12,6 +12,7 @@ import { Due, Pill } from "@/components/bits";
 import AssistantStrip from "@/components/AssistantStrip";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
+import { useSeesMoney } from "@/components/RoleContext";
 
 /** A Printavo status in our words, so the filters work on Printavo orders too. */
 function pvStatus(a: { kind: string; status_name: string }): string {
@@ -29,6 +30,7 @@ type F = "all" | "quotes" | "invoices" | "open" | "unpaid" | "messages";
 
 export default function OrdersPage() {
   const router = useRouter();
+  const cash = useSeesMoney();
   const [creating, setCreating] = useState(false);
   const { orders, customers, loading, error } = useShopData();
   const [type, setType] = useSticky<F>("orders.type", "all");
@@ -122,7 +124,7 @@ export default function OrdersPage() {
     ...archShown.map((a) => ({ n: +a.visual_id || 0, o: null as (typeof list)[number] | null, a })),
   ].sort((x, y) => y.n - x.n), [list, archShown]);
 
-  const chips: [F, string][] = [["all", "All"], ["quotes", "Quotes"], ["invoices", "Invoices"], ["open", "In progress"], ["unpaid", "Unpaid"], ["messages", `Messages${stats.unread ? ` (${stats.unread})` : ""}`]];
+  const chips: [F, string][] = [["all", "All"], ["quotes", "Quotes"], ["invoices", "Invoices"], ["open", "In progress"], ...(cash ? [["unpaid", "Unpaid"]] as [F, string][] : []), ["messages", `Messages${stats.unread ? ` (${stats.unread})` : ""}`]];
 
   return (
     <>
@@ -131,7 +133,7 @@ export default function OrdersPage() {
           <div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
           <h1>Orders</h1>
         </div>
-        <button className="btn primary" type="button" disabled={creating} onClick={async () => {
+        <button className="btn primary money-only" type="button" disabled={creating} onClick={async () => {
           setCreating(true);
           const { data, error } = await createClient().from("orders").insert({ lines: [], status: "quote", type: "quote" }).select("id").single();
           setCreating(false);
@@ -140,12 +142,12 @@ export default function OrdersPage() {
       </div>
       {error && <div className="banner">Couldn&apos;t load orders: {error}</div>}
       <div className="stats">
-        <button className="stat" type="button" onClick={() => { setType("quotes"); setStatus(""); }}><span className="v">{money(stats.quotesValue)}</span><span className="k">{stats.quotes.length} open quote{stats.quotes.length === 1 ? "" : "s"}</span></button>
+        <button className="stat money-only" type="button" onClick={() => { setType("quotes"); setStatus(""); }}><span className="v">{money(stats.quotesValue)}</span><span className="k">{stats.quotes.length} open quote{stats.quotes.length === 1 ? "" : "s"}</span></button>
         <button className="stat" type="button" onClick={() => { setType("open"); setStatus(""); }}><span className="v">{stats.active.length}</span><span className="k">Jobs in progress</span></button>
         <button className="stat" type="button" onClick={() => router.push("/shop/calendar")}><span className={"v" + (stats.late ? " alert" : "")}>{stats.dueWeek.length}</span><span className="k">Due within 7 days{stats.late ? ` · ${stats.late} late` : ""}</span></button>
-        <button className="stat" type="button" onClick={() => { setType("unpaid"); setStatus(""); }}><span className="v">{money(stats.owed)}</span><span className="k">Balance outstanding</span></button>
+        <button className="stat money-only" type="button" onClick={() => { setType("unpaid"); setStatus(""); }}><span className="v">{money(stats.owed)}</span><span className="k">Balance outstanding</span></button>
       </div>
-      <AssistantStrip />
+      <div className="money-only"><AssistantStrip /></div>
       <div className="toolbar">
         <div className="chips">
           {chips.map(([k, l]) => <button key={k} className={"chip" + (type === k ? " on" : "")} type="button" onClick={() => setType(k)}>{l}</button>)}
@@ -158,7 +160,7 @@ export default function OrdersPage() {
       </div>
       <div className="tbl-wrap">
         <table className="tbl">
-          <thead><tr><th>#</th><th>Job</th><th>Customer</th><th>Status</th><th>Due</th><th className="r">Pcs</th><th className="r">Total</th><th className="r">Balance</th></tr></thead>
+          <thead><tr><th>#</th><th>Job</th><th>Customer</th><th>Status</th><th>Due</th><th className="r">Pcs</th><th className="r money-only">Total</th><th className="r money-only">Balance</th></tr></thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr>
@@ -174,8 +176,8 @@ export default function OrdersPage() {
                     <td><Pill status={o.status} /></td>
                     <td><Due date={o.due_date} status={o.status} /></td>
                     <td className="r">{o.qty}</td>
-                    <td className="r">{money(o.total)}</td>
-                    <td className="r"><span className={"bal" + (paid ? " paid" : "")}>{paid ? "Paid" : money(o.balance)}</span></td>
+                    <td className="r money-only">{money(o.total)}</td>
+                    <td className="r money-only"><span className={"bal" + (paid ? " paid" : "")}>{paid ? "Paid" : money(o.balance)}</span></td>
                   </tr>
                 );
               }
@@ -188,8 +190,8 @@ export default function OrdersPage() {
                   <td><span className="pv-dot" style={{ ["--sc" as string]: a!.status_color || "#888" }}>{a!.status_name}</span></td>
                   <td>{pvStatus(a!) === "completed" ? (a!.due_date ? fmtDateLong(a!.due_date) : "—") : <Due date={a!.due_date} status="production" />}</td>
                   <td className="r">{a!.qty}</td>
-                  <td className="r">{money(a!.total)}</td>
-                  <td className="r"><span className={"bal" + (+a!.balance <= 0.004 ? " paid" : "")}>{+a!.balance <= 0.004 ? "Paid" : money(a!.balance)}</span></td>
+                  <td className="r money-only">{money(a!.total)}</td>
+                  <td className="r money-only"><span className={"bal" + (+a!.balance <= 0.004 ? " paid" : "")}>{+a!.balance <= 0.004 ? "Paid" : money(a!.balance)}</span></td>
                 </tr>
               );
             }) : (

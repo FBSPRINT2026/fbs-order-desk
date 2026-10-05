@@ -22,6 +22,7 @@ import { checkOrder } from "@/lib/orderChecks";
 import { withPrivate } from "@/lib/crm/private";
 import { ChecksPanel, FillFromText } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
+import { useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
 import { PAY_TERMS, SIZES } from "@/lib/pricing";
 
@@ -36,6 +37,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const router = useRouter();
   const sb = useMemo(() => createClient(), []);
   const [o, setO] = useState<Order | null>(null);
+  const seesMoney = useSeesMoney(); // crew (production, receiving, shipping): quantities and what's ordered, no money
   const [missing, setMissing] = useState(false);
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -500,14 +502,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                           {cust.email && <div className="sub">{cust.email}</div>}
                           {cust.phone && <div className="sub">{cust.phone}</div>}
                           <div className="cc-extra">
-                            <div className="sub">{PAY_TERMS[cust.payment_terms || "receipt"]}{cust.tax_exempt ? " · tax exempt" : ""}{custOwed?.n ? <> · <b style={{ color: "var(--danger)" }}>owes {money(custOwed.owed)}</b> on {custOwed.n} other order{custOwed.n === 1 ? "" : "s"}</> : null}</div>
+                            <div className="sub money-only">{PAY_TERMS[cust.payment_terms || "receipt"]}{cust.tax_exempt ? " · tax exempt" : ""}{custOwed?.n ? <> · <b style={{ color: "var(--danger)" }}>owes {money(custOwed.owed)}</b> on {custOwed.n} other order{custOwed.n === 1 ? "" : "s"}</> : null}</div>
                             {(cust.tags || []).length > 0 && <div className="row" style={{ gap: 4 }}>{(cust.tags || []).map((t) => <span key={t} className="tag">{t}</span>)}</div>}
                             {cust.notes && <div className="cc-note" title="Customer notes (shop only)">{cust.notes}</div>}
                           </div>
                           <Link href={`/shop/customers/${cust.id}`} style={{ fontSize: 12 }}>Edit customer</Link>
                         </div>
                       ) : <div className="faint" style={{ fontSize: 13, flex: 1 }}>Pick a customer, or add a new one without leaving this order.</div>}
-                      <div className="pt-box">
+                      <div className="pt-box money-only">
                         <div className="chips">
                           <button type="button" className={"chip" + (o.price_type !== "wholesale" ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; }); }}>Retail</button>
                           <button type="button" className={"chip" + (o.price_type === "wholesale" ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; }); }}>Wholesale</button>
@@ -578,7 +580,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <OrderSeparations o={o} />
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
-            <GroupEditor key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
+            <GroupEditor hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
@@ -591,7 +593,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
 
           <div className="grid g2 fees-notes">
-            <section className="panel">
+            <section className="panel money-only">
               <div className="panel-h"><h2>Fees & adjustments</h2></div>
               <div className="panel-b stack">
                 <div className="fee-row fee-head"><span>Description</span><span>Amount</span><span /></div>
@@ -686,7 +688,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
           <ChecksPanel checks={checks} orderId={o.id} save={save} />
 
-          <section className="panel">
+          {!seesMoney && (
+            <section className="panel">
+              <div className="panel-h"><h2>Quantity</h2></div>
+              <div className="panel-b"><div className="totals"><div className="tr big"><span>Total pieces</span><span className="num">{calc.qty}</span></div></div></div>
+            </section>
+          )}
+          <section className="panel money-only">
             <div className="panel-h"><h2>Totals</h2><span className="faint num">{calc.qty} pcs</span></div>
             <div className="panel-b">
               <div className="totals">
@@ -711,7 +719,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel money-only">
             <div className="panel-h"><h2>Payments</h2></div>
             <div className="panel-b stack">
               {payments.length ? <div>{payments.map((p) => (
@@ -736,7 +744,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <section className="panel">
             <div className="panel-h"><h2>History</h2></div>
             <div className="panel-b hist">
-              {events.length ? events.map((e) => (
+              {events.length ? events.filter((e) => seesMoney || e.kind !== "payment").map((e) => (
                 <div key={e.id}>{e.kind === "status" ? <Pill status={e.detail} /> : <b>{EVENT_LABEL[e.kind] || e.kind}</b>}<span>{e.kind !== "status" && e.detail ? e.detail + " · " : ""}{fmtStamp(e.created_at)}</span></div>
               )) : <div>No activity yet.</div>}
             </div>

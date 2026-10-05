@@ -1,5 +1,12 @@
 const fmt$ = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-export const money = (n: number | string | null | undefined) => fmt$.format(+(n ?? 0) || 0);
+/**
+ * Crew (production, receiving, shipping) see no money: every amount shows as "—". Set by the shop layout from the
+ * staff role (only ever in the browser, so one person's view can't leak into another's server render).
+ */
+let hideMoney = false;
+export const setHideMoney = (b: boolean) => { hideMoney = b; };
+export const moneyHidden = () => hideMoney && typeof window !== "undefined";
+export const money = (n: number | string | null | undefined) => (moneyHidden() ? "—" : fmt$.format(+(n ?? 0) || 0));
 
 export function todayISO() {
   const d = new Date();

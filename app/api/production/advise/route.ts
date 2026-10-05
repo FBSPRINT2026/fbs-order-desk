@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
+import { seesMoney } from "@/lib/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
 
@@ -14,7 +15,8 @@ type Opt = { id: string; title: string; detail: string; lateAfter: number; still
 type Late = { job: string; customer: string; inHands: string; why: string; value?: number };
 
 export async function POST(req: Request) {
-  const { user, isStaff } = await getViewer();
+  const { user, isStaff, role } = await getViewer();
+  const crew = !seesMoney(role);
   if (!user || !isStaff) return NextResponse.json({ error: "Staff only." }, { status: 401 });
   const body = await req.json().catch(() => ({})) as { now?: string; lateBefore?: number; late?: Late[]; options?: Opt[]; labor?: { crewSize: number; wage: number; otMultiplier: number }; machines?: string; overtime?: string };
   const opts = (body.options || []).slice(0, 14), late = (body.late || []).slice(0, 40);
@@ -44,6 +46,7 @@ export async function POST(req: Request) {
       "You get the late jobs and a set of options the scheduling software already simulated, each with how many jobs would still be late and what it costs in extra labor.",
       "Recommend the option that gets everything (or the most important jobs) done for the least money and disruption. Prefer: splitting when it clears the late jobs cheaply; a little overtime over a Saturday when it's enough; a Saturday when several nights of overtime would be needed. Missing an in-hands date is usually worse than a few hundred dollars of overtime. If nothing clears everything, say which jobs are still at risk and what to do about them (call the customer about a new date, partial ship, outsource, move a flexible job).",
       "Use only the numbers given; don't invent jobs or costs. Refer to options by their plain title, not their id, in the text. Be short and direct, like a note to the owner.",
+      crew ? "This note goes to the production manager, who doesn't see money: weigh the costs, but never write dollar amounts, wages or order values; say 'cheapest' or 'about N extra hours' instead." : "",
     ].join("\n"),
     prompt,
     tool: {

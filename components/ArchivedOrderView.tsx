@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { addressLines, plain, sizeLabel, sizeOrder, type PvFile, type PvGroup, type PvOrder } from "@/lib/archive";
 import { fmtDateLong, money } from "@/lib/format";
 import ProductionPanel from "@/components/ProductionPanel";
+import { useSeesMoney } from "@/components/RoleContext";
 
 const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "—");
 const stamp = (x?: string | null) => (x ? new Date(x).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
@@ -19,6 +20,8 @@ const inkOn = (hex: string) => { const m = hex.replace("#", "").match(/^([0-9a-f
  */
 export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref, audience = "shop" }: { o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string; /** "customer": the portal view (no internal details) */ audience?: "shop" | "customer" }) {
   const [zoom, setZoom] = useState<PvFile | null>(null);
+  // crew (production, receiving, shipping): the no-money view, quantities and what's ordered only
+  const cash = useSeesMoney();
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(null); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, []);
 
   const open = (f: PvFile) => { if (isImg(f)) setZoom(f); else window.open(fileUrl(f.full), "_blank", "noopener"); };
@@ -57,8 +60,8 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
           <div className="pv-head-r">
             {o.status.name && <span className="pv-status" style={{ background: o.status.color || "#888", color: inkOn(o.status.color || "#888") }}>{o.status.name}</span>}
             {approval && <span className={"pv-appr " + approval.cls} title={approval.title}>{approval.label}</span>}
-            <div className="pv-bal"><span>Total</span><b>{money(o.total)}</b></div>
-            <div className="pv-bal"><span>Balance</span><b className={o.amountOutstanding > 0.004 ? "due" : ""}>{money(o.amountOutstanding)}</b></div>
+            {cash && <div className="pv-bal"><span>Total</span><b>{money(o.total)}</b></div>}
+            {cash && <div className="pv-bal"><span>Balance</span><b className={o.amountOutstanding > 0.004 ? "due" : ""}>{money(o.amountOutstanding)}</b></div>}
           </div>
         </header>
 
@@ -77,10 +80,10 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             {o.kind === "invoice" && o.invoiceAt && <><dt>Invoice date</dt><dd>{d(o.invoiceAt)}</dd></>}
             <dt>Production due</dt><dd>{d(o.dueAt)}</dd>
             <dt>Customer due</dt><dd>{d(o.customerDueAt)}</dd>
-            <dt>Payment due</dt><dd>{d(o.paymentDueAt)}</dd>
+            {cash && <><dt>Payment due</dt><dd>{d(o.paymentDueAt)}</dd></>}
             {o.poNumber && <><dt>PO #</dt><dd>{o.poNumber}</dd></>}
             {o.deliveryMethod && <><dt>Delivery</dt><dd>{o.deliveryMethod}</dd></>}
-            {o.paymentTerm && <><dt>Terms</dt><dd>{o.paymentTerm}</dd></>}
+            {cash && o.paymentTerm && <><dt>Terms</dt><dd>{o.paymentTerm}</dd></>}
             {o.owner && <><dt>Owner</dt><dd>{o.owner}</dd></>}
           </dl>
         </section>
@@ -94,7 +97,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
               <div className="pv-card"><h3>{audience === "shop" ? "Customer note" : "Note"}</h3><p className="pv-pre">{plain(o.customerNote)}</p></div>
             )}
           </div>
-          <div className="pv-card pv-totals">
+          {!cash ? <div className="pv-card pv-totals"><div className="pvt-big"><span>Total pieces</span><b>{o.totalQuantity}</b></div></div> : <div className="pv-card pv-totals">
             <div><span>Item total</span><b>{money(itemTotal)}</b></div>
             {o.fees.map((f) => <div key={f.id}><span>{plain(f.description) || "Fee"}{f.quantity && f.quantity !== 1 && f.unitPrice != null && !f.pct ? ` (${f.quantity} × ${money(f.unitPrice)})` : f.pct && f.unitPrice != null ? ` (${f.unitPrice}%)` : ""}</span><b>{money(f.amount)}</b></div>)}
             {o.fees.length > 1 && <div className="pvt-sub"><span>Fees</span><b>{money(feeTotal)}</b></div>}
@@ -105,7 +108,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             <div><span>Amount paid</span><b>{money(o.amountPaid)}</b></div>
             <div className={"pvt-big" + (o.amountOutstanding > 0.004 ? " pvt-due" : "")}><span>Amount outstanding</span><b>{money(o.amountOutstanding)}</b></div>
             <div className="faint" style={{ fontSize: 12 }}>{o.totalQuantity} item{o.totalQuantity === 1 ? "" : "s"}{o.paidInFull ? " · Paid in full" : ""}</div>
-          </div>
+          </div>}
         </div>
         </div>
         <aside className="ed-aside pv-aside">
@@ -113,7 +116,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
           <ProductionPanel compact note={plain(o.productionNote)}
             files={o.files.map((f) => ({ id: f.id, name: f.name || (f.full.split("?")[0].split("/").pop() || "File"), url: fileUrl(f.full) || undefined, thumb: (f.thumb && fileUrl(f.thumb)) || undefined, mime: f.mime }))} />
         )}
-        {o.transactions.length > 0 && (
+        {cash && o.transactions.length > 0 && (
           <section className="panel">
             <div className="panel-h"><h2>Payments</h2><span className="faint" style={{ fontSize: 12 }}>{money(o.amountPaid)} paid</span></div>
             <div className="panel-b pv-pays">
@@ -138,7 +141,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
           </div></section>
         )}
 
-        {o.expenses.length > 0 && (
+        {cash && o.expenses.length > 0 && (
           <section className="panel"><div className="panel-h"><h2>Expenses</h2></div><div className="panel-b">
             <table className="pv-tbl"><tbody>{o.expenses.map((x) => <tr key={x.id}><td>{d(x.at)}</td><td>{x.name}</td><td className="r num">{money(x.amount)}</td></tr>)}</tbody></table>
           </div></section>
@@ -174,7 +177,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             <thead><tr>
               {show.category && <th>Category</th>}{show.itemNumber && <th>Item #</th>}{show.color && <th>Color</th>}<th className="desc">Description</th>
               {sizes.map((s) => <th key={s} className="c sz">{sizeLabel(s)}</th>)}
-              <th className="c">Items</th>{show.markup && <th className="r">Markup</th>}<th className="r">Price</th><th className="c">Taxed</th><th className="r">Total</th>
+              <th className="c">Items</th>{cash && <>{show.markup && <th className="r">Markup</th>}<th className="r">Price</th><th className="c">Taxed</th><th className="r">Total</th></>}
             </tr></thead>
             <tbody>{g.lines.map((l) => (
               <tr key={l.id}>
@@ -185,11 +188,11 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
                     {l.personalizations.length > 0 && <div className="pv-pers">{l.personalizations.map((p, i) => <span key={i}>{[p.name, p.value].filter(Boolean).join(": ")}</span>)}</div>}</div></div>
                 </td>
                 {sizes.map((s) => <td key={s} className="c num">{l.sizes[s] || ""}</td>)}
-                <td className="c num b">{l.items}</td>{show.markup && <td className="r num">{l.markup != null ? `${l.markup}%` : ""}</td>}
-                <td className="r num">{money(l.price)}</td><td className="c">{l.taxed ? "✓" : ""}</td><td className="r num b">{money(l.items * l.price)}</td>
+                <td className="c num b">{l.items}</td>{cash && <>{show.markup && <td className="r num">{l.markup != null ? `${l.markup}%` : ""}</td>}
+                <td className="r num">{money(l.price)}</td><td className="c">{l.taxed ? "✓" : ""}</td><td className="r num b">{money(l.items * l.price)}</td></>}
               </tr>
             ))}</tbody>
-            {g.lines.length > 1 && <tfoot><tr><td colSpan={(show.category ? 1 : 0) + (show.itemNumber ? 1 : 0) + (show.color ? 1 : 0) + 1 + sizes.length} className="r faint">Group total</td><td className="c num b">{qty}</td>{show.markup && <td />}<td /><td /><td className="r num b">{money(tot)}</td></tr></tfoot>}
+            {g.lines.length > 1 && <tfoot><tr><td colSpan={(show.category ? 1 : 0) + (show.itemNumber ? 1 : 0) + (show.color ? 1 : 0) + 1 + sizes.length} className="r faint">Group total</td><td className="c num b">{qty}</td>{cash && <>{show.markup && <td />}<td /><td /><td className="r num b">{money(tot)}</td></>}</tr></tfoot>}
           </table>
         </div>
         {g.imprints.map((im) => (

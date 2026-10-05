@@ -7,6 +7,9 @@ import { mergeSettings } from "@/lib/pricing";
 import { saveShortcuts, type Shortcut } from "@/app/shop/shortcut-actions";
 import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 import SearchInput from "@/components/SearchInput";
+import { useRole } from "@/components/RoleContext";
+import { crewBlocked, ROLES, seesMoney } from "@/lib/roles";
+import { setViewAs } from "@/app/shop/view-as-actions";
 
 const ICONS: Record<string, React.ReactNode> = {
   home: <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>,
@@ -36,8 +39,10 @@ const SHORT: Record<string, string> = { "Incoming Orders": "Incoming", "Shipping
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
 
-export default function ShopNav({ email, firstName, brand, shortcuts }: { email: string; firstName: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string }; shortcuts: Shortcut[] }) {
+export default function ShopNav({ email, firstName, brand, shortcuts, people = [] }: { email: string; firstName: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string }; shortcuts: Shortcut[]; people?: { email: string; name: string; role: string }[] }) {
   const path = usePathname();
+  const { role, realRole, viewAs } = useRole();
+  const crew = !seesMoney(role);
   const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [incoming, setIncoming] = useState(0);
@@ -127,7 +132,9 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
 
-  const link = ([href, icon, label]: [string, string, string]) => (
+  const link = ([href, icon, label]: [string, string, string]) => crew && crewBlocked(href) ? (
+    <a key={href} className="nav-off" title={`${label}: owners and admins only`} aria-disabled="true">{ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}</a>
+  ) : (
     <Link key={href} href={href} className={active(href) ? "on" : ""} title={label}>
       {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
@@ -155,7 +162,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
       </form>
       <nav className="nav">
         {link(["/shop", "home", "Dashboard"])}
-        {GROUPS.map((g) => (
+        {(crew ? [GROUPS[1], GROUPS[2], GROUPS[0]] : GROUPS).map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>
             {g.items.map(link)}
@@ -195,6 +202,16 @@ export default function ShopNav({ email, firstName, brand, shortcuts }: { email:
       </div>
       )}
       <nav className="nav nav-foot">{link(["/shop/settings", "settings", "Settings"])}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} title="Your own quick links: customers, reports, anything you open all the time">+ Add Shortcut</button>}</nav>
+      {realRole === "owner" && (
+        <label className="side-viewas" title="See the shop the way someone else does (you stay signed in as you)">
+          <span>View as</span>
+          <select value={viewAs} onChange={async (e) => { await setViewAs(e.target.value); window.location.reload(); }} data-notranslate>
+            <option value="">My view (Owner)</option>
+            {people.filter((p) => p.email !== email).length > 0 && <optgroup label="People">{people.filter((p) => p.email !== email).map((p) => <option key={p.email} value={p.email}>{p.name || p.email} · {ROLES.find((r) => r.v === p.role)?.label || p.role}</option>)}</optgroup>}
+            <optgroup label="Roles">{ROLES.filter((r) => r.v !== "owner").map((r) => <option key={r.v} value={r.v}>{r.label} ({r.note})</option>)}</optgroup>
+          </select>
+        </label>
+      )}
       <div className="side-user">
         <span>{email}</span>
         <form action="/auth/signout" method="post"><button className="btn ghost sm" style={{ color: "inherit", padding: 0 }} type="submit">Sign out</button></form>

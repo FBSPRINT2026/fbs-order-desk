@@ -19,6 +19,9 @@ import { browserInflate, parsePdf } from "@/lib/pdfVector";
 import { deltaE } from "@/lib/inkColors";
 import { mergeProduction, withIssue, type EquipRow, type Machine, type Station } from "@/lib/production";
 import PressLayout from "@/components/PressLayout";
+import SepCoach from "@/components/SepCoach";
+import { useRole } from "@/components/RoleContext";
+import { lessonFits, type CoachChange, type LessonDefault } from "@/lib/sepCoach";
 
 /**
  * Separation Studio: our own separations, in the browser. Pick the method (spot color or simulated process), the
@@ -263,6 +266,10 @@ export default function SeparationStudio({ id }: { id: string }) {
   const pxRef = useRef<Px | null>(null);
   const [pxTick, setPxTick] = useState(0);
   const set = (p: Partial<Studio>) => setSt((s) => ({ ...s, ...p }));
+  // "Make Separations Better": the production manager (and the owner) talk to the coach
+  const { role, realRole } = useRole();
+  const coachOn = role === "production" || realRole === "owner";
+  const lessonNote = useRef("");
 
   /* ---------- load ---------- */
   const load = useCallback(async () => {
@@ -295,6 +302,16 @@ export default function SeparationStudio({ id }: { id: string }) {
     const im = orderGroups((o as Order) || { groups: [], lines: [] } as never).flatMap((g) => g.imprints).find((x) => x.id === row0.imprint_id);
     const widthIn = saved.widthIn || parseFloat(String(im?.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || 11;
     setSt((s) => ({ ...s, ...saved, garment, widthIn, method: (saved.method as SepSettings["method"]) || s.method }));
+    // a new separation starts from what the coach has learned (Make Separations Better, last 30 days)
+    if (!saved.inks?.length) {
+      const { data: ls } = await sb.from("sep_lessons").select("lesson, default_setting").eq("active", true).gt("expires_at", new Date().toISOString()).not("default_setting", "is", null).order("created_at");
+      const meth = (saved.method as string) || "spot", dk = isDark(garment), p: Partial<Studio> = {}, used: string[] = [];
+      for (const l of (ls || []) as { lesson: string; default_setting: LessonDefault }[]) {
+        const d = l.default_setting; if (!d || !lessonFits(d, meth, dk) || d.setting === "method" || d.setting === "addMiddle" || d.setting === "colors") continue;
+        (p as Record<string, unknown>)[d.setting] = d.value; used.push(l.lesson);
+      }
+      if (used.length) { setSt((s) => ({ ...s, ...p })); lessonNote.current = `Started from what the coach learned: ${used.join(" · ")}`; setMsg(lessonNote.current); }
+    }
     if (saved.inks?.length) setInks(saved.inks);
     if (saved.order) setOrderKeys(saved.order);
     if (saved.mesh) setMesh(saved.mesh);
@@ -365,6 +382,52 @@ export default function SeparationStudio({ id }: { id: string }) {
     setInks((l) => { const k = l[i]; if (!k?.also?.length) return l; const back = k.also.map((h) => ({ hex: h, name: inkName(h, st.lib) })); return [...l.slice(0, i), { ...k, also: undefined }, ...back, ...l.slice(i + 1)]; });
     setSt((x) => ({ ...x, maxColors: Math.min(12, inks.length + (inks[i]?.also?.length || 0)) }));
   }
+  /* ---------- Make Separations Better (the coach) ---------- */
+  const pendingFind = useRef(false);
+  function applyCoach(changes: CoachChange[]) {
+    const p: Partial<Studio> = {}, notes: string[] = [];
+    for (const c of changes) {
+      if (c.setting === "method") { const m = c.value === "sim" ? "sim" : "spot"; set({ method: m }); findInks(m, true); continue; }
+      if (c.setting === "colors") { p.maxColors = +c.value; pendingFind.current = true; continue; }
+      if (c.setting === "addMiddle") {
+        const [a, b] = String(c.value).split("|").map((x) => x.trim().toLowerCase());
+        const f = fadeRows.find((r) => [r.a.name.toLowerCase(), r.b.name.toLowerCase()].sort().join("|") === [a, b].sort().join("|"));
+        if (f) addMiddle(f.a.hex, f.b.hex, f.mid); else notes.push(`no fade between ${c.value.toString().replace("|", " and ")}`);
+        continue;
+      }
+      (p as Record<string, unknown>)[c.setting] = c.value;
+    }
+    if (Object.keys(p).length) set(p);
+    setMsg(notes.length ? `Applied, except: ${notes.join("; ")}.` : "Applied. Save Draft to keep it.");
+  }
+  useEffect(() => { if (pendingFind.current) { pendingFind.current = false; findInks(); } }); // eslint-disable-line react-hooks/exhaustive-deps
+  const coachContext = () => ({
+    order_id: row?.order_id || undefined, separation: row ? `S-${row.number}` : undefined, location: row?.location, status: row?.status,
+    shirt: { color: st.garment, name: row?.garment_color, dark: isDark(st.garment) },
+    method: st.method, art: vart?.ok ? "vector" : img ? `picture ${img.naturalWidth}×${img.naturalHeight} px (${Math.round((img.naturalWidth || 0) / st.widthIn)} ppi at the print size)` : "none",
+    print_width_in: st.widthIn,
+    settings: { colors: st.maxColors, underbase: st.underbase, highlight: st.highlight, chokePt: st.chokePt ?? CHOKE_PT, trapPt: st.trapPt ?? TRAP_PT, finePt: st.finePt ?? FINE_PT, fineChokePt: st.fineChokePt ?? FINE_CHOKE_PT, bumpPt: st.bumpPt ?? BUMP_PT, blackOver: st.blackOver ?? true, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", pressGain: st.pressGain ?? PRESS_GAIN, dpi: st.dpi },
+    inks: inks.map((k) => ({ name: k.name, art_color: k.hex, ...(k.also?.length ? { combined_with: k.also } : {}), ...(k.fadeTo?.length ? { fades_to: k.fadeTo.map((h) => inks.find((q) => q.hex === h)?.name || h) } : {}) })),
+    plates: plates.map((p, i) => ({ order: i + 1, name: p.name, kind: p.kind, coverage: `${(p.coverage * 100).toFixed(1)}%`, mesh: p.mesh, halftone: st.method === "sim" || !!p.tonal })),
+    fades: fadeRows.map((f) => ({ from: f.a.name, to: f.b.name, middle: f.midWord, muddy_middle_risk: !!f.risky })),
+    shading_between_colors: hint ? `${Math.round(hint * 100)}%` : undefined,
+  });
+  const coachImages = () => {
+    const out: { label: string; data: string }[] = [];
+    const grab = (c: HTMLCanvasElement | null, label: string) => {
+      if (!c || !c.width) return;
+      try {
+        const k = Math.min(1, 1100 / Math.max(c.width, c.height)), t = document.createElement("canvas");
+        t.width = Math.round(c.width * k); t.height = Math.round(c.height * k);
+        const g = t.getContext("2d")!; g.fillStyle = st.garment; g.fillRect(0, 0, t.width, t.height); g.drawImage(c, 0, 0, t.width, t.height);
+        out.push({ label, data: t.toDataURL("image/jpeg", 0.85).split(",")[1] });
+      } catch { /* a canvas that can't be read is just left out */ }
+    };
+    grab(cv.current, solo ? "The film for one screen (black = ink):" : "Soft proof: how the separation prints on the shirt:");
+    grab(cvOrig.current, "The original art:");
+    return out;
+  };
+
   /* ---------- find inks (first time, or on request) ---------- */
   // auto: find as many inks as the art needs and set the Colors count to that; otherwise use the Colors count (fewer
   // than the art has: the inks easiest to mix from the others are left out and printed as halftones of them)
@@ -386,7 +449,8 @@ export default function SeparationStudio({ id }: { id: string }) {
         setSt((x) => ({ ...x, method: plan!.method, maxColors: Math.max(1, list.length) }));
         setNatural(list.length);
         setInks(list);
-        setMsg(fromPlan && !fresh ? `From the logo's print plan (same as the mockup): ${plan.why}` : plan.why);
+        setMsg((fromPlan && !fresh ? `From the logo's print plan (same as the mockup): ${plan.why}` : plan.why) + (lessonNote.current ? ` ${lessonNote.current}` : ""));
+        lessonNote.current = "";
         if (fresh && fromPlan && d0?.id) { sb.from("designs").update({ print_plan: plan }).eq("id", d0.id).then(() => {}); d0.print_plan = plan; }
         setOrderKeys([]); setNames({}); setHidden(new Set()); setMatchAt(null); setBusy("");
         return;
@@ -858,6 +922,7 @@ export default function SeparationStudio({ id }: { id: string }) {
 
         {/* plates, press, save */}
         <aside className="sep-side">
+          {coachOn && res && <SepCoach sepId={row.id} designId={row.design_id} context={coachContext} images={coachImages} onApply={applyCoach} />}
           <section className="sep-card">
             <h3>Print order</h3>
             <ol className="sep-plates">{plates.map((p, i) => (

@@ -21,12 +21,12 @@ export async function createClient() {
   });
 }
 
-/** The signed-in user plus whether they are shop staff. */
+/** The signed-in user plus whether they are shop staff, and their staff role (owner, admin, production, receiving, shipping). */
 export async function getViewer() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, email: "", isStaff: false };
+  if (!user) return { supabase, user: null, email: "", isStaff: false, role: "" };
   const email = (user.email || "").toLowerCase();
-  const { data } = await supabase.from("staff").select("email").eq("email", email).maybeSingle();
-  return { supabase, user, email, isStaff: !!data };
+  const { data } = await supabase.from("staff").select("email, role").eq("email", email).maybeSingle();
+  return { supabase, user, email, isStaff: !!data, role: ((data?.role as string) || "") };
 }

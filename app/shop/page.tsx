@@ -10,6 +10,8 @@ import SalesAnalytics from "@/components/SalesAnalytics";
 import { Pill } from "@/components/bits";
 import { money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
+import { useRole } from "@/components/RoleContext";
+import { seesMoney } from "@/lib/roles";
 
 /**
  * The daily dashboard: the first thing every admin sees. Everything that needs someone today, in one place:
@@ -23,6 +25,8 @@ type Cust = { id: string; company: string; name: string };
 type Job = { id: string; href: string; number: number; nickname: string; customer_id: string | null; due: string | null; status: string; statusLabel: string; printavo: boolean; total: number; owner: string; ship: boolean };
 type Msg = { id: string; order_id: string | null; customer_id: string | null; author_name: string; author_email: string; body: string; created_at: string; topic: string | null };
 type Mail = { id: string; customer_id: string | null; order_id: string | null; subject: string; body: string; from_email: string; occurred_at: string; meta: Record<string, unknown> };
+type SepLite = { id: string; number: number; order_id: string | null; location: string; garment_color: string; status: string; due_date: string | null; customer_id: string | null; channels: unknown[]; updated_at: string };
+const SEP_ST: Record<string, [string, string]> = { requested: ["Requested", "#6477D6"], in_progress: ["In progress", "#A152C9"], review: ["Ready for review", "#C98A0C"], approved: ["Approved: make film", "#2E9D5B"] };
 type Reorder = { customer_id: string; number: string; nickname: string; date: string; total: number; href: string; owner: string };
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -34,7 +38,10 @@ const pvKind = (s: string) => /ship|delivery/i.test(s) ? "ship" : /^quote/i.test
 
 export default function Dashboard() {
   const [me, setMe] = useState("");
-  const [boss, setBoss] = useState(false); // owners / admins see the sales numbers
+  const { role } = useRole();
+  const boss = seesMoney(role); // owners / admins see the sales numbers; crew (production, receiving, shipping) get the production dashboard
+  const crew = !boss;
+  const [seps, setSeps] = useState<SepLite[]>([]);
   const [msgTab, setMsgTab] = useState<"reply" | "email">("reply");
   const [prodTab, setProdTab] = useState<string | null>(null);
   const [owed, setOwed] = useState<{ id: string; number: string; nickname: string; customer_id: string | null; balance: number; due: string | null }[]>([]);
@@ -51,7 +58,7 @@ export default function Dashboard() {
     const sb = createClient();
     (async () => {
       const { data: { user } } = await sb.auth.getUser();
-      if (user?.email) { const { data: st } = await sb.from("staff").select("name, role").eq("email", user.email.toLowerCase()).maybeSingle(); setBoss(["owner", "admin"].includes((st?.role as string) || "")); setMe(((st?.name as string) || user.email.split("@")[0]).split(/[\s._-]+/)[0].toLowerCase()); }
+      if (user?.email) { const { data: st } = await sb.from("staff").select("name, role").eq("email", user.email.toLowerCase()).maybeSingle(); setMe(((st?.name as string) || user.email.split("@")[0]).split(/[\s._-]+/)[0].toLowerCase()); }
       const lastYearFrom = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); d.setDate(d.getDate() - 7); return iso(d); })();
       const lastYearTo = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); d.setDate(d.getDate() + 21); return iso(d); })();
       const [o, a, m, e, ly, recent, sml, bal] = await Promise.all([
@@ -64,6 +71,8 @@ export default function Dashboard() {
         sb.from("supplier_manifest_lines").select("tracking, track_status, est_delivery, delivered_at, ship_date, method").neq("kind", "ignored").gte("created_at", new Date(Date.now() - 20 * 86400000).toISOString()).limit(3000),
         sb.from("archived_orders").select("id, visual_id, nickname, customer_id, balance, due_date").eq("kind", "invoice").gt("balance", 0.5).order("balance", { ascending: false }).limit(60),
       ]);
+      const { data: sp } = await sb.from("separations").select("id, number, order_id, location, garment_color, status, due_date, customer_id, channels, updated_at").not("status", "in", "(cancelled,films)").order("due_date", { ascending: true, nullsFirst: false }).limit(200);
+      setSeps((sp || []) as SepLite[]);
       setOwed(((bal.data || []) as { id: string; visual_id: string; nickname: string; customer_id: string | null; balance: number; due_date: string | null }[]).map((b) => ({ id: b.id, number: b.visual_id, nickname: b.nickname, customer_id: b.customer_id, balance: +b.balance || 0, due: b.due_date })));
       // account owners: the owner on the customer's latest Printavo order
       const own: Record<string, string> = {};
@@ -105,7 +114,7 @@ export default function Dashboard() {
       }
       setGoods({ today, arrived });
       // customer names for everything on the page
-      const ids = [...new Set([...js.map((x) => x.customer_id), ...((m.data || []) as Msg[]).map((x) => x.customer_id), ...((e.data || []) as Mail[]).map((x) => x.customer_id), ...((ly.data || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...((bal.data || []) as { customer_id: string | null }[]).map((x) => x.customer_id)].filter(Boolean))] as string[];
+      const ids = [...new Set([...js.map((x) => x.customer_id), ...((m.data || []) as Msg[]).map((x) => x.customer_id), ...((e.data || []) as Mail[]).map((x) => x.customer_id), ...((ly.data || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...((bal.data || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...((sp || []) as SepLite[]).map((x) => x.customer_id)].filter(Boolean))] as string[];
       const out: Record<string, Cust> = {};
       for (let i = 0; i < ids.length; i += 300) {
         const { data } = await sb.from("customers").select("id, company, name").in("id", ids.slice(i, i + 300));
@@ -177,6 +186,91 @@ export default function Dashboard() {
   const cur = buckets.find((b2) => b2.k === pk) || buckets[1];
   const stageOf = (j: Job) => (j.printavo ? <span className="db-st">{j.statusLabel}</span> : <Pill status={j.status as never} />);
   const owedMine = owed.filter((b) => isMine(b.customer_id));
+
+  const prodSection = (
+            <section className="db-card db-salmon db-prod" id="dash-prod">
+              <div className="db-card-h"><h2>Production</h2><span className="faint db-h-note">{openN} open jobs</span><span className="spacer" /><Link href="/shop/board" className="linkbtn">Production calendar →</Link></div>
+              {openN > 0 && <div className="pd-stack" role="img" aria-label={stageN.map((s2) => `${s2.label} ${s2.n}`).join(", ")}>{stageN.filter((s2) => s2.n).map((s2) => (
+                <Link key={s2.k} href="/shop/board" className={"pd-seg pd-" + s2.k} style={{ flexGrow: s2.n }} title={`${s2.label}: ${s2.n}`} />
+              ))}</div>}
+              <div className="pd-legend">{stageN.map((s2) => (
+                <Link key={s2.k} href="/shop/board" className={"pd-lg" + (s2.n ? "" : " zero") + (s2.k === "issue" && s2.n ? " bad" : "")}><i className={"pd-" + s2.k} />{s2.label}<b>{s2.n}</b></Link>
+              ))}</div>
+              <div className="aa-sub pd-tabs" role="tablist">{buckets.map((b2) => (
+                <button key={b2.k} type="button" role="tab" aria-selected={pk === b2.k} className={(pk === b2.k ? "on" : "") + (b2.k === "late" && b2.jobs.length ? " bad" : "")} onClick={() => setProdTab(b2.k)}><span className="t-full">{b2.label}</span><span className="t-short">{b2.short}</span><span className="aa-n">{b2.jobs.length}</span></button>
+              ))}</div>
+              <div className="db-scroll pd-scroll">{list(cur.jobs.length, (
+                <table className="rv-tbl pd-tbl">
+                  <thead><tr><th>Order</th><th>Customer</th><th>Job</th><th>Stage</th><th className="r">Due</th></tr></thead>
+                  <tbody>{cur.jobs.slice(0, 80).map((j) => (
+                    <tr key={(j.printavo ? "p" : "o") + j.id}>
+                      <td className="pd-o"><Link href={j.href} className="db-num">#{j.number}</Link></td>
+                      <td className="pd-c"><b>{who(j.customer_id) || "—"}</b></td>
+                      <td className="pd-n faint">{j.nickname || "Untitled Job"}</td>
+                      <td className="pd-s">{stageOf(j)}</td>
+                      <td className={"r pd-due" + (j.due && j.due < t0 && !j.ship ? " bad" : "")}>{day(j.due)}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              ), cur.empty)}</div>
+              {pk === "ship" && cur.jobs.length > 0 && <div className="pd-foot"><Link href="/shop/shipping" className="btn sm primary">Open Shipping Center</Link></div>}
+            </section>
+  );
+
+  // crew (production, receiving, shipping): the production dashboard. No sales, balances or customer money anywhere.
+  if (crew) {
+    const sepN = (k: string) => seps.filter((x) => x.status === k).length;
+    const sepsSorted = [...seps].sort((a, b) => (a.status === "approved" ? 0 : 1) - (b.status === "approved" ? 0 : 1) || (a.due_date || "9999").localeCompare(b.due_date || "9999"));
+    return (
+      <>
+        <div className="page-head">
+          <div><div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div><h1>Production Dashboard</h1></div>
+        </div>
+        <div className="dash-top"><AiSearch /></div>
+        {!v ? <div className="empty">Loading your day…</div> : (
+          <div className="dash">
+            <div className="dash-row dash-2-1 dash-fill">
+              <section className="db-card db-blue db-seps">
+                <div className="db-card-h"><h2>Separations &amp; Film</h2><span className="db-n">{seps.length}</span><span className="faint db-h-note">approved ones are ready to make film</span><span className="spacer" /><Link href="/shop/separations" className="linkbtn">All separations →</Link></div>
+                <div className="pd-legend">{Object.entries(SEP_ST).map(([k, [l, c]]) => (
+                  <Link key={k} href="/shop/separations" className={"pd-lg" + (sepN(k) ? "" : " zero")}><i style={{ background: c }} />{l}<b>{sepN(k)}</b></Link>
+                ))}</div>
+                <div className="db-scroll">{list(sepsSorted.length, (
+                  <table className="rv-tbl db-sep-tbl">
+                    <thead><tr><th>Sep</th><th>Customer</th><th>Location</th><th>Status</th><th className="r">Due</th></tr></thead>
+                    <tbody>{sepsSorted.slice(0, 60).map((x) => (
+                      <tr key={x.id}>
+                        <td><Link href={`/shop/separations/${x.id}`} className="db-num">S-{x.number}</Link></td>
+                        <td className="pd-c"><b>{who(x.customer_id) || "—"}</b></td>
+                        <td className="pd-n faint">{x.location}{x.garment_color ? ` · ${x.garment_color}` : ""}{x.channels?.length ? ` · ${x.channels.length} screens` : ""}</td>
+                        <td className="pd-s"><span className="pill" style={{ ["--sc" as string]: (SEP_ST[x.status] || ["", "#888"])[1] }}>{(SEP_ST[x.status] || [x.status])[0]}</span></td>
+                        <td className={"r pd-due" + (x.due_date && x.due_date < t0 ? " bad" : "")}>{day(x.due_date)}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                ), "No separations waiting. New requests from orders land here.")}</div>
+              </section>
+              {panel("Today", "orange", null, (
+                <div className="db-kpis db-kpis-2">
+                  <a href="#dash-prod"><span>Due today · late</span><b>{v.today.length}<small> · {v.late.length}</small></b></a>
+                  <Link href="/shop/shipping"><span>Ready to ship</span><b>{v.ship.length}</b></Link>
+                  <Link href="/shop/receiving"><span>Goods arriving</span><b>{goods.today}</b></Link>
+                  <Link href="/shop/receiving"><span>Goods arrived</span><b>{goods.arrived}</b></Link>
+                  <Link href="/shop/separations"><span>Films to make</span><b>{sepN("approved")}</b></Link>
+                  <Link href="/shop/board"><span>In production</span><b>{v.production.length}</b></Link>
+                </div>
+              ))}
+            </div>
+            {prodSection}
+            <section className="db-card db-blue db-pipe">
+              <div className="db-card-h"><h2>Order Pipeline</h2><span className="faint db-h-note">every job by stage · quantities only</span></div>
+              <OrderBoard />
+            </section>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <>
@@ -253,33 +347,7 @@ export default function Dashboard() {
 
           {/* 4. production (2/3) · open balances (1/3) */}
           <div className="dash-row dash-2-1">
-            <section className="db-card db-salmon db-prod" id="dash-prod">
-              <div className="db-card-h"><h2>Production</h2><span className="faint db-h-note">{openN} open jobs</span><span className="spacer" /><Link href="/shop/board" className="linkbtn">Production calendar →</Link></div>
-              {openN > 0 && <div className="pd-stack" role="img" aria-label={stageN.map((s2) => `${s2.label} ${s2.n}`).join(", ")}>{stageN.filter((s2) => s2.n).map((s2) => (
-                <Link key={s2.k} href="/shop/board" className={"pd-seg pd-" + s2.k} style={{ flexGrow: s2.n }} title={`${s2.label}: ${s2.n}`} />
-              ))}</div>}
-              <div className="pd-legend">{stageN.map((s2) => (
-                <Link key={s2.k} href="/shop/board" className={"pd-lg" + (s2.n ? "" : " zero") + (s2.k === "issue" && s2.n ? " bad" : "")}><i className={"pd-" + s2.k} />{s2.label}<b>{s2.n}</b></Link>
-              ))}</div>
-              <div className="aa-sub pd-tabs" role="tablist">{buckets.map((b2) => (
-                <button key={b2.k} type="button" role="tab" aria-selected={pk === b2.k} className={(pk === b2.k ? "on" : "") + (b2.k === "late" && b2.jobs.length ? " bad" : "")} onClick={() => setProdTab(b2.k)}><span className="t-full">{b2.label}</span><span className="t-short">{b2.short}</span><span className="aa-n">{b2.jobs.length}</span></button>
-              ))}</div>
-              <div className="db-scroll pd-scroll">{list(cur.jobs.length, (
-                <table className="rv-tbl pd-tbl">
-                  <thead><tr><th>Order</th><th>Customer</th><th>Job</th><th>Stage</th><th className="r">Due</th></tr></thead>
-                  <tbody>{cur.jobs.slice(0, 80).map((j) => (
-                    <tr key={(j.printavo ? "p" : "o") + j.id}>
-                      <td className="pd-o"><Link href={j.href} className="db-num">#{j.number}</Link></td>
-                      <td className="pd-c"><b>{who(j.customer_id) || "—"}</b></td>
-                      <td className="pd-n faint">{j.nickname || "Untitled Job"}</td>
-                      <td className="pd-s">{stageOf(j)}</td>
-                      <td className={"r pd-due" + (j.due && j.due < t0 && !j.ship ? " bad" : "")}>{day(j.due)}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              ), cur.empty)}</div>
-              {pk === "ship" && cur.jobs.length > 0 && <div className="pd-foot"><Link href="/shop/shipping" className="btn sm primary">Open Shipping Center</Link></div>}
-            </section>
+            {prodSection}
             {panel("Open balances", "salmon", owedMine.length, <div className="db-scroll">{list(owedMine.length, (
               <>
                 <div className="db-owed-t">{money(owedMine.reduce((a, b) => a + b.balance, 0))} owed</div>

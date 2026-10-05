@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
+import { seesMoney } from "@/lib/roles";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
 
@@ -54,9 +55,16 @@ export async function POST(req: Request) {
   for (const x of (bal.data || []) as unknown as ({ id: string; visual_id: string; nickname: string; balance: number } & C)[]) lines.push(`a:${x.id} | #${x.visual_id} | ${cn(x)} | ${x.nickname || ""} | $${Math.round(+x.balance)}`);
   if (found?.length) { lines.push("\nWHAT THE KEYWORD SEARCH FOUND (ref | text):"); for (const f of found.slice(0, 60)) lines.push(`${String(f.ref).slice(0, 60)} | ${String(f.text).slice(0, 200)}`); }
 
+  // crew (production, receiving, shipping) see no money: take the amounts and the balances list out before asking
+  const crew = !seesMoney(v.role);
+  if (crew) {
+    const b = lines.findIndex((l) => l.includes("BIGGEST OPEN BALANCES"));
+    if (b >= 0) { let e = b + 1; while (e < lines.length && !lines[e].startsWith("\n")) e++; lines.splice(b, e - b); }
+    for (let i = 0; i < lines.length; i++) lines[i] = lines[i].replace(/-?\$\s?-?[\d,]+(\.\d+)?/g, "-");
+  }
   const r = await askClaude<{ answer: string; refs: Ref[] }>({
     task: "search", model: st.settings.assistant.ai.fastModel || st.settings.assistant.ai.model, maxTokens: 700, admin, ctx: { by: v.email },
-    system: `You are the search assistant inside ${st.settings.shop.name}'s shop software (a Dallas-area screen printing and embroidery shop). Today is ${today}. Answer the staff member's question using ONLY the data given. Be brief and specific: one to four short sentences or a very short list, with order numbers, customers, dates and amounts. If the data doesn't answer it, say so plainly and suggest where to look. Never invent orders or numbers. Point to the records you used with their ref codes (o:… a:… c:…).`,
+    system: `You are the search assistant inside ${st.settings.shop.name}'s shop software (a Dallas-area screen printing and embroidery shop). Today is ${today}. Answer the staff member's question using ONLY the data given. Be brief and specific: one to four short sentences or a very short list, with order numbers, customers, dates and amounts. If the data doesn't answer it, say so plainly and suggest where to look. Never invent orders or numbers. Point to the records you used with their ref codes (o:… a:… c:…).${crew ? " This staff member works in production and doesn't see money: never mention prices, totals, balances, payments or sales figures; if asked, say that's for the owner or an admin." : ""}`,
     prompt: `Question: ${question}\n\nSHOP DATA\n${lines.join("\n")}`,
     tool: { name: "answer", description: "The answer for the search bar.", input_schema: { type: "object", properties: {
       answer: { type: "string", description: "Short plain-English answer." },

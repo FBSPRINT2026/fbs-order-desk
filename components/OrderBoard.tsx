@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ST, STATUSES, isMe, type StatusKey } from "@/lib/pricing";
-import { custLabel, money } from "@/lib/format";
+import { custLabel, money, moneyHidden } from "@/lib/format";
 import { useShopData, type OrderRow } from "@/lib/shopData";
 import { Due } from "@/components/bits";
 import SearchInput from "@/components/SearchInput";
@@ -100,7 +100,7 @@ export default function OrderBoard({ mine: mineProp }: { mine?: boolean }) {
 function Card({ o, cust, owner, onOpen, onMove, setDragId, dragging }: { o: OrderRow; cust: string; owner: string; onOpen: () => void; onMove: (id: string, k: StatusKey) => void; setDragId: (id: string | null) => void; dragging: boolean }) {
   const idx = STATUSES.findIndex((s) => s.k === o.status);
   const nxt = STATUSES[idx + 1];
-  const owes = o.type === "invoice" && o.balance > 0.004;
+  const owes = o.type === "invoice" && o.balance > 0.004 && !moneyHidden();
   return (
     <article className={"card-job cj" + (dragging ? " dragging" : "")} draggable tabIndex={0}
       title={`#${o.number} ${o.nickname || ""}\n${cust} · ${o.qty} pcs${owner ? `\nAccount: ${owner}` : ""}${owes ? `\nOwes ${money(o.balance)}` : ""}`}
