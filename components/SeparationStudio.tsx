@@ -7,7 +7,7 @@ import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing"
 import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
-import { guessHex } from "@/lib/mockup";
+import { guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
 import { filmPdf, filmRollPdf, deflate } from "@/lib/filmPdf";
 import { ripPdf, rollLayout } from "@/lib/ripPdf";
 import { folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder } from "@/lib/filmFolder";
@@ -326,7 +326,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     // saved settings win; otherwise the garment from the order
     const saved = row0.settings as Partial<Studio> & { inks?: SepInk[]; order?: string[]; mesh?: Record<string, number>; names?: Record<string, string> };
     // the shirt: saved, else the order's garment color; none picked = every color prints
-    const garment = (saved.garment as string) ?? (row0.garment_color ? colorHex(row0.garment_color) || guessHex(row0.garment_color) || "" : "");
+    const garment = (saved.garment as string) ?? (row0.garment_color ? shirtHex(row0.garment_color) || colorHex(row0.garment_color) || guessHex(row0.garment_color) || "" : "");
     const im = orderGroups((o as Order) || { groups: [], lines: [] } as never).flatMap((g) => g.imprints).find((x) => x.id === row0.imprint_id);
     const widthIn = saved.widthIn || parseFloat(String(im?.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || 11;
     setSt((s) => ({ ...s, ...saved, garment, widthIn, method: (saved.method as SepSettings["method"]) || s.method }));
@@ -523,7 +523,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     const px = pxRef.current; if (!px || !inks.length) return;
     setBusy("Separating…");
     const t = setTimeout(() => {
-      const ks = inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also })), so = sepOpts(st, px.w);
+      const ks = inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also, shirt: k.shirt })), so = sepOpts(st, px.w);
       const r = separate(px, ks, so, vart?.ok && st.method === "spot" ? vectorCover(vart, px, ks, so, st.blackOver ?? true) : undefined);
       // show the ink's real color, not the art's
       r.plates.forEach((p) => { const k = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (k) p.hex = shown(k); });
@@ -618,7 +618,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     setBusy("Separating at full size…"); await new Promise((r) => setTimeout(r, 40));
     const { side, ppi } = outSize();
     const px = pixelsOf(img, st.removeBg, !!vart, side);
-    const ks = inks.map((x) => ({ hex: x.hex, name: x.name, fadeTo: x.fadeTo, also: x.also })), so = sepOpts(st, px.w);
+    const ks = inks.map((x) => ({ hex: x.hex, name: x.name, fadeTo: x.fadeTo, also: x.also, shirt: x.shirt })), so = sepOpts(st, px.w);
     const r = separate(px, ks, so, vart?.ok && st.method === "spot" ? vectorCover(vart, px, ks, so, st.blackOver ?? true) : undefined);
     r.plates.forEach((p) => { const q = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (q) p.hex = shown(q); });
     // a picture under 400 ppi: the plates (not the art) are drawn again at 400 ppi, following the art's own soft
@@ -645,7 +645,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const vectorOut = (ps: Plate[]) => (vart?.ok && !tonal ? {
     art: vart,
     mixOf: (fill: string) => {
-      const ws = spotMixer(inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also })), sepOpts(st, 1000))(...(fill.match(/[0-9a-f]{2}/gi) || ["00", "00", "00"]).map((h) => parseInt(h, 16)) as [number, number, number]);
+      const ws = spotMixer(inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also, shirt: k.shirt })), sepOpts(st, 1000))(...(fill.match(/[0-9a-f]{2}/gi) || ["00", "00", "00"]).map((h) => parseInt(h, 16)) as [number, number, number]);
       const out: { plate: number; tint: number }[] = [];
       inks.forEach((k, j) => {
         if (ws[j] <= 0.02) return;
@@ -920,11 +920,11 @@ export default function SeparationStudio({ id }: { id: string }) {
               <label className={"sep-shirt-sw" + (noShirt ? " none" : "")} style={noShirt ? undefined : { background: st.garment }} title={noShirt ? "No shirt picked: every color prints. Tap for any color." : `Shirt ${st.garment}. Tap for any color.`}>
                 <input type="color" value={st.garment || "#ffffff"} onChange={(e) => set({ garment: e.target.value.toUpperCase() })} aria-label="Shirt color" />
               </label>
-              <select value={noShirt ? "" : "_"} onChange={(e) => { const v = e.target.value; if (v === "_") return; set({ garment: v ? colorHex(v) || guessHex(v) : "" }); }} aria-label="Shirt color">
+              <select value={noShirt ? "" : "_"} onChange={(e) => { const v = e.target.value; if (v === "_") return; set({ garment: v ? shirtHex(v) || colorHex(v) || guessHex(v) : "" }); }} aria-label="Shirt color">
                 <option value="">All colors printed</option>
-                {!noShirt && <option value="_">{[row.garment_color, ...garments, "Black", "White", "Navy", "Red", "Royal", "Charcoal", "Sport Grey", "Forest Green", "Maroon"].find((c) => c && (colorHex(c) || guessHex(c)) === st.garment) || st.garment}</option>}
+                {!noShirt && <option value="_">{[row.garment_color, ...garments, ...SHIRT_COLORS.flatMap((g) => g.colors.map(([c]) => c))].find((c) => c && (shirtHex(c) || colorHex(c) || guessHex(c)) === st.garment) || st.garment}</option>}
                 {garments.length > 0 && <optgroup label="From the order">{garments.map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>}
-                <optgroup label="Shirts">{["Black", "White", "Navy", "Red", "Royal", "Charcoal", "Sport Grey", "Forest Green", "Maroon"].filter((x) => !garments.includes(x)).map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>
+                {SHIRT_COLORS.map((g) => <optgroup key={g.group} label={g.group}>{g.colors.map(([c]) => <option key={c} value={c}>{c}</option>)}</optgroup>)}
               </select>
             </div>
             {noShirt ? <p className="sep-help">No shirt picked yet: every color prints. Pick the shirt to leave the colors that match it to the shirt (and to get an underbase on dark shirts).</p>
@@ -1004,6 +1004,13 @@ export default function SeparationStudio({ id }: { id: string }) {
                     {m ? <>{m.kind} · {m.word}</> : "Pick an ink"}
                   </button>
                 ); })()}
+                {(() => {
+                  // this color IS the shirt: knocked out (the shirt shows there); unchecking one that matches the shirt prints it anyway
+                  const on = !!res?.dropped.includes(k.hex);
+                  return <label className={"sep-chip-shirt" + (on ? " on" : "")} title={on ? "Knocked out: the shirt shows here. Uncheck to print this color." : "Check if this color is the shirt color: it's knocked out and the shirt shows there."}>
+                    <input type="checkbox" checked={on} onChange={(e) => setInks((l) => l.map((x, j) => (j === i ? { ...x, shirt: e.target.checked } : x)))} /> Shirt color
+                  </label>;
+                })()}
                 <button type="button" className="sep-chip-x" onClick={() => { setMatchAt(null); setInks((l) => dropInk(l, i)); }} aria-label={`Remove ${k.name}`} title="Remove (its part of the art goes to the nearest other ink)">×</button>
               </div>
             ))}

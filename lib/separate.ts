@@ -318,7 +318,13 @@ export type SepInk = { hex: string; name: string;
    *  inks' halftones crossing over, never as a mix of other inks */
   fadeTo?: string[];
   /** other art colors combined into this ink (the picker's swatches dragged together): they print as this ink, solid */
-  also?: string[] };
+  also?: string[];
+  /** this color IS the shirt (true: knocked out, the shirt shows there, whatever the shirt is set to); false: always
+   *  printed even when it matches the shirt; unset: left to the shirt only when it matches it ("Let the shirt be
+   *  colors that match it") */
+  shirt?: boolean };
+/** colors the shirt shows through (not printed) */
+export const isShirtInk = (k: SepInk, s: Pick<SepSettings, "dropGarment" | "garment">) => k.shirt === true || (k.shirt !== false && s.dropGarment && deltaE(k.hex, s.garment) < 12);
 export type SepResult = { plates: Plate[]; w: number; h: number; underbase: boolean; dropped: string[] };
 
 const Q = (r: number, g: number, b: number) => ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
@@ -519,7 +525,7 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
   // 100% of it, edges split cleanly), then counted as the ink it was combined into
   if (!inks.some((k) => k.also?.length)) return spotMixerOne(inks, s);
   const ex: SepInk[] = [], owner: number[] = [];
-  inks.forEach((k, i) => { ex.push(k); owner.push(i); for (const h of k.also || []) { ex.push({ hex: h, name: k.name }); owner.push(i); } });
+  inks.forEach((k, i) => { ex.push(k); owner.push(i); for (const h of k.also || []) { ex.push({ hex: h, name: k.name, shirt: k.shirt }); owner.push(i); } });
   const raw = spotMixerOne(ex, s), m = inks.length, M = ex.length;
   return (r, g, b, flat = false) => {
     const w = raw(r, g, b, flat), out = new Float32Array(m + 1);
@@ -532,7 +538,7 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
 function spotMixerOne(inks: SepInk[], s: SepSettings): (r: number, g: number, b: number, flat?: boolean) => Float32Array {
   const gLab = labOf(...rgbOf(s.garment));
   const dark = s.underbase === "on" || (s.underbase === "auto" && gLab[0] < 55);
-  const dropped = s.dropGarment ? inks.map((k) => deltaE(k.hex, s.garment) < 12) : inks.map(() => false);
+  const dropped = inks.map((k) => isShirtInk(k, s));
   const labs = inks.map((k) => labOf(...rgbOf(k.hex))), rgb = inks.map((k) => rgbOf(k.hex));
   const g = rgbOf(s.garment).map((v) => MIX[v]), base = dark ? [1, 1, 1] : g;
   const use = inks.map((_, j) => j).filter((j) => !dropped[j]);
@@ -617,7 +623,7 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
   const gLab = labOf(...rgbOf(s.garment));
   const dark = s.underbase === "on" || (s.underbase === "auto" && gLab[0] < 55);
   // inks that match the shirt aren't printed (the shirt shows through)
-  const dropped = s.dropGarment ? inks.filter((k) => deltaE(k.hex, s.garment) < 12).map((k) => k.hex) : [];
+  const dropped = inks.filter((k) => isShirtInk(k, s)).map((k) => k.hex);
   const print = inks.filter((k) => !dropped.includes(k.hex));
   const isWhite = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return L > 90 && Math.hypot(a, b) < 10; };
   const cover = inks.map(() => new Uint8Array(n));

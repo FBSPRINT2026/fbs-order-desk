@@ -242,12 +242,22 @@ export function basePlacement(location: string, wIn: number, ratio: number, drop
   return { view: spot.view, x: mx(cx - w / 2), y: my(artY), w: w * k, h: h * k, rot: 0, clip: "" as "" | "left" | "right", area: { x: mx(cx - aw / 2), y: my(top), w: aw * k, h: ah * k }, k };
 }
 
-const NAMED: Record<string, string> = {
-  black: "#1b1b1b", white: "#f7f7f5", navy: "#1f2a44", red: "#c8102e", royal: "#1d4f9c", maroon: "#6b1f33", "forest green": "#1f3d2b",
-  "sport grey": "#b9bcbf", "dark heather": "#4b4d52", charcoal: "#44464a", gold: "#f1a91c", orange: "#f26522", purple: "#4b2a7b",
-  "irish green": "#1f9a4f", "kelly green": "#1f9a4f", "light blue": "#a9c9e8", "carolina blue": "#77a7d8", sand: "#d8c9a8", natural: "#efe6d2", ash: "#dcdcd8",
-};
-export const guessHex = (color: string) => NAMED[(color || "").toLowerCase().trim()] || "#9aa1ab";
+/**
+ * Shirt colors (Gildan / Bella+Canvas / Next Level names), close to the blanks: the shirt pickers and mockups use
+ * these. Grouped for the pickers.
+ */
+export const SHIRT_COLORS: { group: string; colors: [string, string][] }[] = [
+  { group: "Whites & neutrals", colors: [["White", "#f7f7f5"], ["Natural", "#efe6d2"], ["Cream", "#f3ead2"], ["Sand", "#d8c9a8"], ["Tan", "#c3a77f"], ["Ash", "#dcdcd8"], ["Ice Grey", "#c9cbc9"], ["Sport Grey", "#b9bcbf"], ["Athletic Heather", "#a8aaad"], ["Graphite Heather", "#6f7175"], ["Dark Heather", "#4b4d52"], ["Charcoal", "#44464a"], ["Black", "#1b1b1b"]] },
+  { group: "Yellows & oranges", colors: [["Cornsilk", "#f3e7a1"], ["Yellow Haze", "#f1df7c"], ["Daisy", "#f7d117"], ["Safety Green (neon)", "#d6ef3c"], ["Gold", "#f1a91c"], ["Old Gold", "#c4a15a"], ["Safety Orange", "#ff6a13"], ["Orange", "#f26522"], ["Texas Orange", "#bf5700"], ["Burnt Orange", "#cc5500"]] },
+  { group: "Reds & pinks", colors: [["Light Pink", "#f4c6d1"], ["Azalea", "#f27aa9"], ["Safety Pink", "#ff5aa5"], ["Heliconia", "#e03c8a"], ["Coral Silk", "#f56f6c"], ["Red", "#c8102e"], ["Cherry Red", "#b5182c"], ["Cardinal Red", "#8c1d2b"], ["Antique Cherry Red", "#97233f"], ["Garnet", "#7a1d2e"], ["Maroon", "#6b1f33"]] },
+  { group: "Blues", colors: [["Light Blue", "#a9c9e8"], ["Carolina Blue", "#77a7d8"], ["Sky", "#7fc3e8"], ["Sapphire", "#0f80c1"], ["Iris", "#3b6db3"], ["Royal", "#1d4f9c"], ["Indigo Blue", "#3a5a78"], ["Heather Navy", "#3b4256"], ["Navy", "#1f2a44"], ["Teal", "#00808a"], ["Jade Dome", "#14806f"]] },
+  { group: "Greens", colors: [["Mint Green", "#a9dcc0"], ["Lime", "#8cc63f"], ["Electric Green", "#3dbb4a"], ["Irish Green", "#1f9a4f"], ["Kelly Green", "#1f9a4f"], ["Military Green", "#5e6145"], ["Forest Green", "#1f3d2b"]] },
+  { group: "Purples & browns", colors: [["Orchid", "#c9a3cf"], ["Violet", "#8a74b5"], ["Purple", "#4b2a7b"], ["Brown Savana", "#8b6f56"], ["Russet", "#6d3b2b"], ["Dark Chocolate", "#3b2a24"]] },
+];
+const NAMED: Record<string, string> = Object.fromEntries(SHIRT_COLORS.flatMap((g) => g.colors.map(([n, h]) => [n.toLowerCase(), h])));
+export const guessHex = (color: string) => NAMED[(color || "").toLowerCase().trim()] || NAMED[(color || "").toLowerCase().replace(/\s*\(.*\)|heather\s*/g, "").trim()] || "#9aa1ab";
+/** a shirt color name's color, when it's one we know (else null) */
+export const shirtHex = (color: string): string | null => NAMED[(color || "").toLowerCase().trim()] || null;
 
 /** Plain tee outline for garments without S&S photos. */
 export function teeSvg(hex: string, view: View) {
