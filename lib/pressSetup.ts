@@ -104,7 +104,7 @@ export function checkSetup(heads: Slot[], lay: Station[], plates: SetupPlate[], 
       const before = heads.slice(0, b).map(plateOf).filter(Boolean);
       if (before.length) warn.push(`${before.length === 1 ? "A color prints" : `${before.length} colors print`} before the underbase.`);
       const next = heads.findIndex((s, i) => i > b && (plateOf(s) || s === "flash"));
-      if (dark && next >= 0 && heads[next] !== "flash") warn.push("No flash between the underbase and the next color.");
+      if (next >= 0 && heads[next] !== "flash") warn.push("No flash between the underbase and the next color: the underbase always gets flashed.");
     }
   }
   return { moves, warn };

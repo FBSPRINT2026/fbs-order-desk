@@ -23,6 +23,9 @@ const lum = (hex: string) => {
   return 116 * (Y > 0.008856 ? Math.cbrt(Y) : 7.787 * Y + 16 / 116) - 16; // L* 0–100
 };
 
+/** specialty inks (by name): printed near the end, on a flashed print */
+const SPECIAL = /metal|glitter|shimmer|puff|high.?density|\bhd\b|glow|foil|reflect|suede|gel\b/i;
+
 /** how much of each screen's ink sits on another's: ov[i][j] = share of j's ink area that is also i's ink */
 export function overlaps(alphas: Uint8Array[], step = 4): number[][] {
   const n = alphas.length, len = alphas[0]?.length || 0, area = new Array(n).fill(0), both = alphas.map(() => new Array(n).fill(0));
@@ -43,7 +46,7 @@ export function printSequence(plates: PlanPlate[], ov?: number[][], all: PlanPla
   const base = plates.filter((p) => p.kind === "underbase"), top = plates.filter((p) => p.kind === "highlight");
   const colors = plates.filter((p) => p.kind !== "underbase" && p.kind !== "highlight");
   // (a White ink in spot color goes after the colors, just before black, as Separo prints it)
-  const key = (p: PlanPlate) => (lum(p.hex) < 18 ? 200 : lum(p.hex) > 93 ? 150 : 0) + (100 - lum(p.hex)) + 25 * Math.min(1, p.coverage * 2.5);
+  const key = (p: PlanPlate) => (lum(p.hex) < 18 ? 200 : SPECIAL.test(p.name) ? 190 : lum(p.hex) > 93 ? 150 : 0) + (100 - lum(p.hex)) + 25 * Math.min(1, p.coverage * 2.5);
   const at = (p: PlanPlate) => all.indexOf(p);
   // a before b when b sits on a
   const on = (a: PlanPlate, b: PlanPlate) => !!ov && (ov[at(a)]?.[at(b)] || 0) > 0.5 && b.coverage < a.coverage;
@@ -56,32 +59,49 @@ export function printSequence(plates: PlanPlate[], ov?: number[][], all: PlanPla
   return [...base, ...out, ...top];
 }
 
-export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: boolean; ov?: number[][]; allPlates?: PlanPlate[] }): PressPlan {
+export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: boolean; noShirt?: boolean; ov?: number[][]; allPlates?: PlanPlate[] }): PressPlan {
   const N = lay.length, why: string[] = [];
   const seq = printSequence(plates, o.ov, o.allPlates || plates);
   const hasBase = seq.some((p) => p.kind === "underbase");
   const idx = (p: PlanPlate) => (o.allPlates || plates).indexOf(p);
   const units = lay.filter((s) => s === "flash" || s === "flashdown").length;
   // the items to place in order: screens and the flashes they need
-  type Item = { t: "screen"; p: PlanPlate } | { t: "flash"; why: string; must: boolean };
+  // pri: which flashes stay when the press runs out of units (higher stays): underbase 4 (always), before the
+  // highlight white 3, before a specialty ink 2, light over dark wet 1, a big wet area the next screen would pick up 0
+  type Item = { t: "screen"; p: PlanPlate } | { t: "flash"; why: string; must: boolean; pri: number };
   const items: Item[] = [];
+  const special = (p: PlanPlate) => SPECIAL.test(p.name);
   seq.forEach((p, k) => {
     if (k > 0) {
       const prev = seq[k - 1];
-      if (prev.kind === "underbase") items.push({ t: "flash", why: `Flash after the underbase so the colors print on a dry, bright base${o.dark ? " (dark shirt)" : ""}.`, must: true });
-      else if (p.kind !== "highlight" && o.ov) {
+      const sinceFlash = items.slice(items.map((x) => x.t).lastIndexOf("flash") + 1).filter((x) => x.t === "screen").map((x) => (x as { p: PlanPlate }).p);
+      if (prev.kind === "underbase") items.push({ t: "flash", why: `Flash after the underbase, always: the colors print on a dry, bright base instead of mixing into wet white${o.dark ? " (dark shirt)" : ""}.`, must: true, pri: 4 });
+      else if (p.kind === "highlight") items.push({ t: "flash", why: `Flash before the highlight white: it sets up every color under it so the last white prints clean and bright.`, must: false, pri: 3 });
+      else if (special(p) && sinceFlash.length) items.push({ t: "flash", why: `Flash before ${p.name}: specialty inks go near the end, on a dry print.`, must: false, pri: 2 });
+      else if (o.ov) {
         // a lighter color printed on top of a darker one still wet: flash before it
         const wet = seq.slice(0, k).filter((q) => q.kind !== "underbase" && lum(q.hex) + 15 < lum(p.hex) && (o.ov![idx(q)]?.[idx(p)] || 0) > 0.25);
-        const sinceFlash = items.slice(items.map((x) => x.t).lastIndexOf("flash") + 1).filter((x) => x.t === "screen").map((x) => (x as { p: PlanPlate }).p);
         const hit = wet.find((q) => sinceFlash.includes(q));
-        if (hit) items.push({ t: "flash", why: `Flash before ${p.name}: it prints on top of ${hit.name} while that's still wet (light over dark goes muddy).`, must: false });
+        // a color landing mostly on a big wet area of an earlier one (no underbase under them): the screen picks
+        // that ink up and drags it; a flash keeps the edges crisp
+        const big = !hit && !hasBase ? sinceFlash.find((q) => q.kind !== "underbase" && q.coverage > 0.12 && (o.ov![idx(q)]?.[idx(p)] || 0) > 0.5) : undefined;
+        if (hit) items.push({ t: "flash", why: `Flash before ${p.name}: it prints on top of ${hit.name} while that's still wet (light over dark goes muddy).`, must: false, pri: 1 });
+        else if (big) items.push({ t: "flash", why: `Flash before ${p.name}: most of it lands on ${big.name}'s big wet area, and the screen would pick that ink up (if the press is short a flash, wet-on-wet works with light pressure).`, must: false, pri: 0 });
       }
     }
     items.push({ t: "screen", p });
   });
-  // more flashes than the press has: keep the underbase flash, drop the others (and say so)
+  // more flashes than the press has: keep the underbase flash, then the most important ones (and say so)
   let fl = items.filter((x) => x.t === "flash").length;
-  for (let i = items.length - 1; i >= 0 && fl > units; i--) { const x = items[i]; if (x.t === "flash" && !x.must) { why.push(`Wanted a flash before the next color (${x.why.split(":")[0].replace("Flash before ", "")}) but the press has ${units} flash unit${units === 1 ? "" : "s"}: print it wet-on-wet with light pressure, or two passes.`); items.splice(i, 1); fl--; } }
+  while (fl > Math.max(units, 1)) {
+    let drop = -1;
+    items.forEach((x, i) => { if (x.t === "flash" && !x.must && (drop < 0 || x.pri <= (items[drop] as { pri: number }).pri)) drop = i; });
+    if (drop < 0) break;
+    const x = items[drop] as { why: string };
+    why.push(`Would flash before ${x.why.split(":")[0].replace(/^Flash (before|after) /, "")} too, but the press has ${units} flash unit${units === 1 ? "" : "s"}: print it wet-on-wet with light pressure, or in two passes.`);
+    items.splice(drop, 1); fl--;
+  }
+  if (!units && fl) why.push(`This press has no flash unit set in its defaults; the job needs ${fl === 1 ? "one" : fl}.`);
 
   // place them on the heads: the press's flashes, roller and cool-down stations stay; screens near load / unload
   const roller = lay.indexOf("roller");
@@ -98,10 +118,12 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
     for (const s of layer.values()) {
       const base = { prev: s, h, moved: s.mv, skipped: s.sk };
       const it = items[s.k];
+      // the underbase's flash waits for nothing: passing a head with the base still wet costs a lot
+      const wait = it?.t === "flash" && it.must ? 20 : 0;
       if (st === "down") { add(next, { ...base, cost: s.cost, put: "down", k: s.k, mv: s.mv, sk: s.sk, pf: 0 }); continue; }
       if (st === "roller" || st === "cool") {
         // a dead head right after a flash is the cool-down the base needs
-        add(next, { ...base, cost: s.cost - (s.pf ? 3 : 0), put: st, k: s.k, mv: s.mv, sk: s.sk, pf: 0 });
+        add(next, { ...base, cost: s.cost - (s.pf ? 3 : 0) + wait, put: st, k: s.k, mv: s.mv, sk: s.sk, pf: 0 });
         // a big job can use it for a screen (the roller comes off / no cool-down there), when there's no other room
         if (it?.t === "screen") add(next, { ...base, cost: s.cost + vis(h) + (st === "roller" ? 12 : 8) + (s.pf ? 3 : 0), put: "p:" + it.p.key, k: s.k + 1, mv: s.mv, sk: s.sk, pf: 0 });
         continue;
@@ -109,12 +131,12 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
       if (st === "flash" || st === "flashdown") {
         if (it?.t === "flash") add(next, { ...base, cost: s.cost, put: "flash", k: s.k + 1, mv: s.mv, sk: s.sk, pf: 1 });
         // not needed here: the flash stays on the press (turned off), or takes a screen
-        add(next, { ...base, cost: s.cost + 1 - (s.pf ? 3 : 0), put: "flash-idle", k: s.k, mv: s.mv, sk: s.sk + 1, pf: 0 });
+        add(next, { ...base, cost: s.cost + 1 - (s.pf ? 3 : 0) + wait, put: "flash-idle", k: s.k, mv: s.mv, sk: s.sk + 1, pf: 0 });
         if (it?.t === "screen") add(next, { ...base, cost: s.cost + vis(h) + 5 + (s.pf ? 3 : 0), put: "p:" + it.p.key, k: s.k + 1, mv: s.mv, sk: s.sk + 1, pf: 0 });
         continue;
       }
       // a free head: leave it empty, or put the next item on it
-      add(next, { ...base, cost: s.cost - (s.pf ? 3 : 0), put: "", k: s.k, mv: s.mv, sk: s.sk, pf: 0 });
+      add(next, { ...base, cost: s.cost - (s.pf ? 3 : 0) + wait, put: "", k: s.k, mv: s.mv, sk: s.sk, pf: 0 });
       if (it?.t === "screen") {
         const beforeRoller = hasBase && roller >= 0 && h < roller && it.p.kind !== "underbase" ? 4 : 0;
         // (a hair more for later heads: on a tie, the screens stay together)
@@ -140,7 +162,8 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
   // why, in shop words
   const names = (ps: PlanPlate[]) => ps.map((p) => p.name).join(", ");
   const cols = seq.filter((p) => p.kind !== "underbase" && p.kind !== "highlight");
-  if (seq[0]?.kind === "underbase") why.unshift(`Underbase on head ${heads.indexOf("p:" + seq[0].key) + 1}, then the flash.`);
+  if (!hasBase) why.unshift(o.noShirt ? "No shirt picked yet, so there's no underbase and every color prints. Pick the shirt: on a dark shirt the underbase goes on first with a flash right after it, always." : "Light shirt, no underbase: the colors print wet-on-wet, darker over lighter; a flash only where a color would smear into a wet one.");
+  if (seq[0]?.kind === "underbase") why.unshift(`Underbase on head ${heads.indexOf("p:" + seq[0].key) + 1}, then the flash on head ${heads.findIndex((x, i) => x === "flash" && i > heads.indexOf("p:" + seq[0].key)) + 1}: the underbase always gets flashed before the colors.`);
   const fh = heads.findIndex((x) => x === "flash");
   if (fh >= 0 && fh + 1 < N && !heads[fh + 1].startsWith("p:")) why.push(`Head ${fh + 2} stays empty after the flash so the pallet and base cool before the next screen (a hot, tacky base builds ink up on the screens).`);
   if (cols.length > 1) why.push(`Colors lightest to darkest, smaller areas before bigger ones, black last: ${names(cols)}${seq.some((p) => p.kind === "highlight") ? "; highlight white last" : ""}.`);
@@ -151,7 +174,7 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
   for (const x of items) if (x.t === "flash" && !x.must) why.push(x.why);
   const mv = heads.map((x, i) => (x === "flash" && lay[i] !== "flash" && lay[i] !== "flashdown" ? i + 1 : 0)).filter(Boolean);
   if (mv.length) why.push(`Moves a flash to head ${mv.join(" and ")} for this job.`);
-  if (idleKept.length) why.push(`This job doesn't need the flash on ${idleKept.length === 1 ? `head ${idleKept[0] + 1}` : `heads ${idleKept.map((i) => i + 1).join(" and ")}`}: leave it there, turned off.`);
+  if (idleKept.length) why.push(`This job doesn't need the flash on ${idleKept.length === 1 ? `head ${idleKept[0] + 1}` : `heads ${idleKept.map((i) => i + 1).join(" and ")}`}: leave ${idleKept.length === 1 ? "it" : "them"} there, turned off.`);
   if (roller >= 0 && heads[roller] === "roller" && hasBase) why.push(`Roller stays on head ${roller + 1}: it flattens the flashed base before the colors.`);
   const took = heads.map((x, i) => (x.startsWith("p:") && lay[i] !== "print" ? `head ${i + 1} (${lay[i] === "roller" ? "roller off" : lay[i] === "cool" ? "no cool-down there" : "flash off"})` : "")).filter(Boolean);
   if (took.length) why.push(`Not enough open heads, so a screen goes on ${took.join(" and ")}.`);

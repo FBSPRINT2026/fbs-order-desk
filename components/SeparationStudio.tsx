@@ -805,7 +805,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     const sp = plates.map((p) => ({ key: p.key, name: p.name, hex: p.hex, kind: p.kind, mesh: p.mesh }));
     // automatic: the suggested layout (print order, flashes, cool-down, inks by the load / unload stations)
     const all = res ? res.plates.map((p) => { const q = plates.find((x) => x.key === p.key); return { key: p.key, name: q?.name || p.name, hex: p.hex, kind: p.kind, coverage: p.coverage, tonal: !!p.tonal }; }) : [];
-    const rec = !setup && all.length ? recommendSetup(lay, all, { dark: isDark(shirtOf(st)), ov: ovm || undefined, allPlates: all }) : null;
+    const rec = !setup && all.length ? recommendSetup(lay, all, { dark: isDark(shirtOf(st)), noShirt: !st.garment, ov: ovm || undefined, allPlates: all }) : null;
     const { heads, off } = rec?.ok ? { heads: rec.heads, off: [] as typeof sp } : fitSetup(setup, lay, sp);
     const out = heads.map((x) => { const k = plateOf(x); const p = k ? plates.find((q) => q.key === k) : null; return p ? { hex: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex, name: `${plates.indexOf(p) + 1} · ${p.name}` } : null; });
     const chk = checkSetup(heads, lay, sp, isDark(shirtOf(st)));
