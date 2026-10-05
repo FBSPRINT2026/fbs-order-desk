@@ -23,6 +23,7 @@ import PressDefaults, { pressLayOf } from "@/components/PressDefaults";
 import { autoSetup, checkSetup, drawLayout, fitSetup, plateOf, printOrder, type Slot } from "@/lib/pressSetup";
 import { overlaps, recommendSetup } from "@/lib/pressPlan";
 import SepCoach from "@/components/SepCoach";
+import { holdsUm, meshFor, smallestDetail } from "@/lib/meshPlan";
 import { inkNamesFromFiles } from "@/lib/sepInkNames";
 import { useRole } from "@/components/RoleContext";
 import { lessonFits, type CoachChange, type LessonDefault } from "@/lib/sepCoach";
@@ -534,11 +535,36 @@ export default function SeparationStudio({ id }: { id: string }) {
   }, [pxTick, inks, st.method, st.garment, st.underbase, st.chokePt, st.highlight, st.dropGarment, st.trapPt, st.blackOver, st.widthIn, st.baseFor, st.finePt, st.fineChokePt, st.bumpPt, st.pressGain]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // plates in the chosen print order (new plates keep their default spot)
+  // suggested mesh per screen from its smallest detail (156 unless the detail is very small; the base matches the
+  // finest color on it)
+  const [meshSug, setMeshSug] = useState<Record<string, { mesh: number; why: string }>>({});
+  useEffect(() => {
+    if (!res) return;
+    const t = setTimeout(() => {
+      const out: Record<string, { mesh: number; why: string }> = {};
+      for (const p of res.plates) {
+        if (p.tonal || st.method === "sim" || p.kind === "highlight") continue;
+        if (p.kind === "underbase") { out[p.key] = { mesh: 156, why: "Underbase: 156, or as fine as the finest color printed on it." }; continue; }
+        const d = smallestDetail(p.alpha, res.w, res.h, st.widthIn);
+        const m = d ? meshFor(d.smallestUm, d.kind) : 156;
+        out[p.key] = { mesh: m, why: d ? `Smallest detail: ${d.what} ${(d.smallestUm / 1000).toFixed(2)} mm at ${st.widthIn}" wide. ${m} mesh holds ${d.kind === "dot" ? "dots" : "lines"} about ${(holdsUm(m, d.kind) / 1000).toFixed(2)} mm and up.` : "No fine detail: 156." };
+      }
+      const base = res.plates.find((p) => p.kind === "underbase");
+      if (base && out[base.key]) {
+        // the base prints under the colors' dots too: as fine as the finest based color
+        const based = res.plates.filter((p) => p.kind === "color" && !neverBase("#" + p.key.slice(1)) && (st.baseFor?.[p.key] ?? baseByDefault("#" + p.key.slice(1))) && out[p.key]);
+        const finest = based.reduce((a, p) => (out[p.key].mesh > a.mesh ? { mesh: out[p.key].mesh, name: p.name } : a), { mesh: out[base.key].mesh, name: "" });
+        if (finest.name && finest.mesh > out[base.key].mesh) out[base.key] = { mesh: finest.mesh, why: `${finest.name} needs ${finest.mesh} for its small detail, and the base prints under it, so the base is ${finest.mesh} too.` };
+      }
+      setMeshSug(out);
+    }, 120);
+    return () => clearTimeout(t);
+  }, [res, st.widthIn, st.method, st.baseFor]);
   const arrange = useCallback((ps: Plate[]) => {
-    const list = ps.map((p) => ({ ...p, name: names[p.key] || p.name, mesh: mesh[p.key] ?? p.mesh }));
+    const list = ps.map((p) => ({ ...p, name: names[p.key] || p.name, mesh: mesh[p.key] ?? meshSug[p.key]?.mesh ?? p.mesh }));
     if (!orderKeys.length) return list;
     return [...list].sort((a, b) => { const x = orderKeys.indexOf(a.key), y = orderKeys.indexOf(b.key); return (x < 0 ? 999 : x) - (y < 0 ? 999 : y); });
-  }, [orderKeys, names, mesh]);
+  }, [orderKeys, names, mesh, meshSug]);
   const plates = useMemo(() => (res ? arrange(res.plates) : []), [res, arrange]);
 
   /* ---------- draw ---------- */
@@ -1101,7 +1127,10 @@ export default function SeparationStudio({ id }: { id: string }) {
                     const on = st.baseFor?.[p.key] ?? baseByDefault(art);
                     return <button type="button" className={"sep-base" + (on ? " on" : "")} title={on ? "White underbase prints under this ink. Click to leave it off (the ink prints straight on the shirt)" : "No underbase under this ink (prints straight on the shirt). Click to put base under it"} onClick={() => set({ baseFor: { ...(st.baseFor || {}), [p.key]: !on } })}>{on ? "Base" : "No base"}</button>;
                   })()}
-                  {" "}· mesh <select className="sep-mesh" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh">{[...new Set([...SHOP_MESH, p.mesh])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v}</option>)}</select></small>
+                  {" "}· mesh <select className="sep-mesh" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh">{[...new Set([...SHOP_MESH, p.mesh])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v}</option>)}</select>
+                  {meshSug[p.key] && (mesh[p.key] == null || mesh[p.key] === meshSug[p.key].mesh
+                    ? <span className="sep-meshsug" title={meshSug[p.key].why}>suggested</span>
+                    : <button type="button" className="linkbtn sep-meshsug" title={meshSug[p.key].why} onClick={() => setMesh((m) => { const n = { ...m }; delete n[p.key]; return n; })}>suggests {meshSug[p.key].mesh}</button>)}</small>
                 <span className="sep-pa">
                   <button type="button" className="btn icon ghost sm" title="Show / hide on the shirt" onClick={() => setHidden((h) => { const n = new Set(h); if (n.has(p.key)) n.delete(p.key); else n.add(p.key); return n; })}>{hidden.has(p.key) ? "◌" : "●"}</button>
                   <button type="button" className="btn icon ghost sm" title="See this film" onClick={() => setSolo(solo === p.key ? null : p.key)}>▣</button>
