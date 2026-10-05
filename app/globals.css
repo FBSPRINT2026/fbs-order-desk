@@ -4867,3 +4867,4 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ps-headmenu{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--accent);border-radius:8px;font-size:12.5px;margin:4px 0}
 .ps-headmenu .pl-opt{padding:4px 8px;font-size:12px}
 .sep-meshsug{font-size:10.5px;color:var(--accent);margin-left:4px;cursor:help}
+.sep-plates .sep-lpi{width:66px!important}

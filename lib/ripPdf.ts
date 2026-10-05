@@ -19,6 +19,10 @@ const esc = (t: string) => t.replace(/[\\()]/g, (c) => "\\" + c).replace(/[^\x20
 export type RipOpts = { widthIn: number; title: string; tonal: boolean; minDot?: number[]; sub?: (p: Plate, i: number) => string;
   /** film on a roll this wide (inches): every screen on one sheet, turned and placed side by side to use the least film */
   rollIn?: number;
+  /** each screen's halftone (frequency lpi, angle, dot): written into the file as the page's halftone screen, so a RIP
+   *  set to take the application's halftones (FilmMaker / CADlink: Print Mode Overrides → Halftones → "Override print
+   *  mode halftoning" + "Enable application halftoning") uses these instead of its own defaults. null = solid. */
+  screens?: ({ lpi: number; angle: number; dot?: "ellipse" | "round" | "square" } | null)[];
   /** marks around each screen: crop marks / registration targets (default on) */
   marks?: { crop?: boolean; targets?: boolean } };
 
@@ -105,15 +109,18 @@ export async function ripPdf(plates: Plate[], w: number, h: number, o: RipOpts, 
     const p = plates[i], tx = m + W / 2, ty = m + H + m / 2;
     const ink = `${p.name}  (${i + 1}/${N})${roll ? "  " + o.title.split(" ")[0] : ""}`, size = roll ? 11 : 13, tw = ink.length * size * 0.6;
     let lx = tx + 20; if (lx + tw > iw - 4) lx = Math.max(4, tx - 20 - tw);
-    return `q ${W.toFixed(2)} 0 0 ${H.toFixed(2)} ${m} ${m} cm /Im${i} Do Q\n` +
+    return `q ${o.screens?.[i] ? `/HT${i} gs ` : ""}${W.toFixed(2)} 0 0 ${H.toFixed(2)} ${m} ${m} cm /Im${i} Do Q\n` +
       `q /CSA CS 1 SCN /CSA cs 1 scn 0.5 w\n` + (o.marks?.targets === false ? "" : target(tx, ty) + target(tx, m / 2) + target(m / 2, m + H / 2) + target(m + W + m / 2, m + H / 2)) +
       (o.marks?.crop === false ? "" : crop(m, m, -1, -1) + crop(m + W, m, 1, -1) + crop(m, m + H, -1, 1) + crop(m + W, m + H, 1, 1)) +
       `BT /F1 ${size} Tf ${lx.toFixed(2)} ${(ty - size / 3).toFixed(2)} Td (${esc(ink)}) Tj ET\nQ\n`;
   };
   const xobjects = plates.map((_, i) => `/Im${i} ${imgObj(i)} 0 R`).join(" ");
+  // the halftone screens (PDF type 1 halftone: frequency, angle, spot function), one graphics state per screen
+  const SPOT = { ellipse: "EllipseA", round: "Round", square: "Square" } as const;
+  const gstates = (o.screens || []).map((sc, i) => (sc ? `/HT${i} << /Type /ExtGState /HT << /Type /Halftone /HalftoneType 1 /Frequency ${sc.lpi} /Angle ${sc.angle} /SpotFunction /${SPOT[sc.dot || "ellipse"]} >> >>` : "")).filter(Boolean).join(" ");
   const page = async (k: number, PW: number, PH: number, content: string, trim?: string) => {
     const n = pageObj(k), cz = await z(enc.encode(content));
-    obj(n, [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW.toFixed(2)} ${PH.toFixed(2)}]${trim ? ` /TrimBox [${trim}]` : ""} /Resources << /Font << /F1 3 0 R >> /ColorSpace << /CSA 4 0 R >> /XObject << ${xobjects} >> >> /Contents ${n + 1} 0 R >>`]);
+    obj(n, [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW.toFixed(2)} ${PH.toFixed(2)}]${trim ? ` /TrimBox [${trim}]` : ""} /Resources << /Font << /F1 3 0 R >> /ColorSpace << /CSA 4 0 R >> /XObject << ${xobjects} >>${gstates ? ` /ExtGState << ${gstates} >>` : ""} >> /Contents ${n + 1} 0 R >>`]);
     obj(n + 1, [`<< /Length ${cz.length} /Filter /FlateDecode >>\nstream\n`, cz, "\nendstream"]);
   };
   if (L) {

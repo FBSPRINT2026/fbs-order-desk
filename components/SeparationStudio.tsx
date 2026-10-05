@@ -56,6 +56,8 @@ type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: 
   finePt?: number; fineChokePt?: number; bumpPt?: number;
   /** films: halftone dot shape */
   dot?: "ellipse" | "round" | "square";
+  /** halftone frequency per screen (lpi), when it differs from the job's LPI */
+  lpiFor?: Record<string, number>;
   /** films: crop marks at the corners / registration targets on the four sides (default on) */
   cropMarks?: boolean; regMarks?: boolean;
   /** dot gain on press, taken off the halftone plates ahead of time (Illustrator file and films); 0 if the RIP does it.
@@ -69,6 +71,8 @@ const ptPx = (pt: number, w: number, widthIn: number) => (pt * w) / (widthIn * 7
 /** the separation settings in pixels of a copy `w` px wide */
 /** no shirt picked yet (garment ""): every color prints (nothing is left to the shirt); worked out as on a white shirt */
 const shirtOf = (st: Studio) => st.garment || "#FFFFFF";
+/** a screen's halftone frequency: its own, else the job's */
+const lpiOf = (st: Studio, key: string) => st.lpiFor?.[key] ?? st.lpi;
 const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, garment: shirtOf(st), dropGarment: !!st.garment && st.dropGarment, gain: st.pressGain ?? PRESS_GAIN, choke: ptPx(st.chokePt ?? CHOKE_PT, w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, w, st.widthIn),
   fine: ptPx(st.finePt ?? FINE_PT, w, st.widthIn), fineChoke: ptPx(st.fineChokePt ?? FINE_CHOKE_PT, w, st.widthIn), bump: ptPx(st.bumpPt ?? BUMP_PT, w, st.widthIn) });
 /** the working size on screen (fast); the files are separated again at full size (OUT_PPI at the print width) */
@@ -594,12 +598,12 @@ export default function SeparationStudio({ id }: { id: string }) {
       let m = 0; for (const q of plates) if (q.alpha[j] > m) m = q.alpha[j]; within[y * cw + x] = m;
     }
     const ht = st.method === "sim" || !!p.tonal;
-    const f = filmBits({ ...p, alpha: a }, cw, ch, cw / ppi, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", mesh: p.mesh, within });
+    const f = filmBits({ ...p, alpha: a }, cw, ch, cw / ppi, st.dpi, { halftone: ht, lpi: lpiOf(st, p.key), angle: st.angle, dot: st.dot || "ellipse", mesh: p.mesh, within });
     c.width = f.W; c.height = f.H;
     const x = c.getContext("2d")!, d = x.createImageData(f.W, f.H), rb = Math.ceil(f.W / 8);
     for (let yy = 0; yy < f.H; yy++) for (let xx = 0; xx < f.W; xx++) { const on = f.bits[yy * rb + (xx >> 3)] & (0x80 >> (xx & 7)), o = (yy * f.W + xx) * 4; d.data[o] = d.data[o + 1] = d.data[o + 2] = on ? 0 : 255; d.data[o + 3] = 255; }
     x.putImageData(d, 0, 0);
-  }, [loupe, solo, plates, res, st.widthIn, st.dpi, st.lpi, st.angle, st.dot, st.method]);
+  }, [loupe, solo, plates, res, st.widthIn, st.dpi, st.lpi, st.lpiFor, st.angle, st.dot, st.method]);
 
   useEffect(() => {
     const c = cvOrig.current, px = pxRef.current; if (!c || !px) return;
@@ -695,14 +699,15 @@ export default function SeparationStudio({ id }: { id: string }) {
   async function aiFile() {
     const hr = await fullSep();
     setBusy("Making the Illustrator file…"); await new Promise((r) => setTimeout(r, 30));
-    return illustratorPdf(hr.plates, hr.w, hr.h, { marks: { crop: st.cropMarks !== false, targets: st.regMarks !== false }, widthIn: st.widthIn, tonal, title, vector: vectorOut(hr.plates), solid: st.solidOut || "pixels", minDot: hr.plates.map((p) => minDot(p.mesh, st.lpi)) }, deflate);
+    return illustratorPdf(hr.plates, hr.w, hr.h, { marks: { crop: st.cropMarks !== false, targets: st.regMarks !== false }, widthIn: st.widthIn, tonal, title, vector: vectorOut(hr.plates), solid: st.solidOut || "pixels", minDot: hr.plates.map((p) => minDot(p.mesh, lpiOf(st, p.key))) }, deflate);
   }
   /** for FilmMaker (or any RIP): one page per screen, each its own named spot color; the RIP makes the dots */
   async function ripFile() {
     const hr = await fullSep();
     setBusy("Making the RIP file…"); await new Promise((r) => setTimeout(r, 30));
-    return ripPdf(hr.plates, hr.w, hr.h, { marks: { crop: st.cropMarks !== false, targets: st.regMarks !== false }, widthIn: st.widthIn, title, tonal, minDot: hr.plates.map((p) => minDot(p.mesh, st.lpi)),
-      sub: (p) => `${p.kind === "underbase" ? "underbase, flash after" : p.kind === "highlight" ? "highlight white" : "color"} - mesh ${p.mesh} - ${tonal || p.tonal ? `halftone: ${st.lpi} lpi ${st.angle} deg` : "solid"} - print ${st.widthIn}" wide at 100%` }, deflate);
+    return ripPdf(hr.plates, hr.w, hr.h, { marks: { crop: st.cropMarks !== false, targets: st.regMarks !== false }, widthIn: st.widthIn, title, tonal, minDot: hr.plates.map((p) => minDot(p.mesh, lpiOf(st, p.key))),
+      screens: hr.plates.map((p) => (tonal || p.tonal ? { lpi: lpiOf(st, p.key), angle: st.angle, dot: st.dot || "ellipse" } : null)),
+      sub: (p) => `${p.kind === "underbase" ? "underbase, flash after" : p.kind === "highlight" ? "highlight white" : "color"} - mesh ${p.mesh} - ${tonal || p.tonal ? `halftone: ${lpiOf(st, p.key)} lpi ${st.angle} deg` : "solid"} - print ${st.widthIn}" wide at 100%` }, deflate);
   }
   /** the films, black and finished (our dots): a page each, or all on one sheet for a roll printer */
   async function filmsFile(rollIn = 0) {
@@ -713,7 +718,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     for (const p of hr.plates) for (let j = 0; j < within.length; j++) if (p.alpha[j] > within[j]) within[j] = p.alpha[j];
     const pages = hr.plates.map((p, i) => {
       const ht = tonal || !!p.tonal;
-      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", mesh: p.mesh, within });
+      const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, { halftone: ht, lpi: lpiOf(st, p.key), angle: st.angle, dot: st.dot || "ellipse", mesh: p.mesh, within });
       return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), ink: `${p.name}  (${i + 1}/${hr.plates.length})`, label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg ${DOT_NAME[st.dot || "ellipse"]} dot${(st.pressGain ?? PRESS_GAIN) ? ` - ${Math.round((st.pressGain ?? PRESS_GAIN) * 100)}% dot gain allowed for` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
     });
     return rollIn ? filmRollPdf(pages, rollIn, title, deflate, { crop: st.cropMarks !== false, targets: st.regMarks !== false }) : filmPdf(pages);
@@ -1010,12 +1015,13 @@ export default function SeparationStudio({ id }: { id: string }) {
               const lvl = ppi >= 250 ? "ok" : ppi >= 150 ? "warn" : "bad";
               return <div className={"sep-res " + lvl}>Art is {img.naturalWidth} px wide: <b>{ppi} ppi</b> at {st.widthIn}&quot;. {lvl === "ok" ? "Sharp." : lvl === "warn" ? `Usable; edges soften a little past ${best}" (300 ppi).` : `Too small for ${st.widthIn}": it will print pixelated. Up to ${best}" is sharp; get bigger art or vector (SVG / EPS)${st.method === "spot" ? ", or try Smooth vector for solid inks" : ""}.`}</div>;
             })()}
-            {(tonal || plates.some((p) => p.tonal)) && <><label className="sep-f">Halftone LPI<input type="number" min={25} max={85} value={st.lpi} onChange={(e) => set({ lpi: +e.target.value || 55 })} /></label><label className="sep-f">Angle<input type="number" min={0} max={90} step={0.5} value={st.angle} onChange={(e) => set({ angle: +e.target.value })} /></label>
+            {(tonal || plates.some((p) => p.tonal)) && <><label className="sep-f" title="Halftone frequency (lines per inch) for every halftone screen; lower = bigger dots that hold better on coarser mesh. One screen can differ: pick its LPI in Screens.">Halftone LPI<select value={st.lpi} onChange={(e) => set({ lpi: +e.target.value })}>{[...new Set([...LPIS, st.lpi])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v}</option>)}</select></label>
+              <p className="sep-help">Films from here have the dots made at this frequency. The FilmMaker / RIP file carries each screen&apos;s frequency, angle and dot too: FilmMaker uses them when its queue has Print Mode Overrides → Halftones → &quot;Override print mode halftoning&quot; and &quot;Enable application halftoning&quot; checked; otherwise it uses its own ink settings.</p><label className="sep-f">Angle<input type="number" min={0} max={90} step={0.5} value={st.angle} onChange={(e) => set({ angle: +e.target.value })} /></label>
               <label className="sep-f" title="Elliptical: neighbors join near 40% one way and 60% the other, so midtones don't jump (the usual pick for screen printing). Round: joins at 78%. Square: all four corners join at 50%.">Dot<select value={st.dot || "ellipse"} onChange={(e) => set({ dot: e.target.value as Studio["dot"] })}><option value="ellipse">Elliptical</option><option value="round">Round</option><option value="square">Square</option></select></label>
               {(() => {
                 // a halftone needs about 4 threads per dot (mesh ≥ 4 × LPI), and dots smaller than a thread and an opening wash out
-                const ht = plates.filter((p) => tonal || p.tonal), low = ht.filter((p) => p.mesh < st.lpi * 4);
-                const mds = ht.map((p) => Math.round(minDot(p.mesh, st.lpi) * 100)), lo = Math.min(...mds), hi = Math.max(...mds);
+                const ht = plates.filter((p) => tonal || p.tonal), low = ht.filter((p) => p.mesh < lpiOf(st, p.key) * 4);
+                const mds = ht.map((p) => Math.round(minDot(p.mesh, lpiOf(st, p.key)) * 100)), lo = Math.min(...mds), hi = Math.max(...mds);
                 return <div className={"sep-res " + (low.length ? "warn" : "ok")}>{low.length ? <>Mesh too open for {st.lpi} lpi on {low.map((p) => p.name).join(", ")}: use {Math.ceil((st.lpi * 4) / 10) * 10}+ mesh or a lower LPI.</> : <>Mesh fits {st.lpi} lpi.</>} Smallest dot the mesh holds: {lo === hi ? `${lo}%` : `${lo}–${hi}%`} (lighter tones drop out; the films print whole dots, none too small to hold).</div>;
               })()}</>}
             {st.method === "spot" && <label className="sep-f" title="Each color spreads this far under the darker color printed after it, so colors that touch overlap a hair (no gaps if a screen is a little off). Keep it small on based colors; 0 = colors just touch. Black never spreads onto the white base.">Trap <input type="range" min={0} max={2} step={0.25} value={st.trapPt ?? TRAP_PT} onChange={(e) => set({ trapPt: +e.target.value })} /> <b>{st.trapPt ?? TRAP_PT} pt</b></label>}
@@ -1128,6 +1134,9 @@ export default function SeparationStudio({ id }: { id: string }) {
                     return <button type="button" className={"sep-base" + (on ? " on" : "")} title={on ? "White underbase prints under this ink. Click to leave it off (the ink prints straight on the shirt)" : "No underbase under this ink (prints straight on the shirt). Click to put base under it"} onClick={() => set({ baseFor: { ...(st.baseFor || {}), [p.key]: !on } })}>{on ? "Base" : "No base"}</button>;
                   })()}
                   {" "}· mesh <select className="sep-mesh" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh">{[...new Set([...SHOP_MESH, p.mesh])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v}</option>)}</select>
+                  {(tonal || p.tonal) && <>{" "}· <select className="sep-mesh sep-lpi" value={lpiOf(st, p.key)} title="Halftone frequency for this screen (lines per inch): lower = bigger dots" aria-label="Halftone LPI"
+                    onChange={(e) => { const v = +e.target.value, n = { ...(st.lpiFor || {}) }; if (v === st.lpi) delete n[p.key]; else n[p.key] = v; set({ lpiFor: n }); }}>
+                    {[...new Set([...LPIS, lpiOf(st, p.key)])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v} lpi</option>)}</select></>}
                   {meshSug[p.key] && (mesh[p.key] == null || mesh[p.key] === meshSug[p.key].mesh
                     ? <span className="sep-meshsug" title={meshSug[p.key].why}>suggested</span>
                     : <button type="button" className="linkbtn sep-meshsug" title={meshSug[p.key].why} onClick={() => setMesh((m) => { const n = { ...m }; delete n[p.key]; return n; })}>suggests {meshSug[p.key].mesh}</button>)}</small>
@@ -1379,6 +1388,8 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
  */
 /** the shop's screen meshes (the mesh picker on each screen) */
 const SHOP_MESH = [80, 110, 156, 195, 230, 305];
+/** halftone frequencies to pick from (lines per inch) */
+const LPIS = [35, 40, 45, 50, 55, 60, 65, 75, 85];
 /** the film printer's roll (Epson, 17"): every film goes on it */
 const ROLL_IN = 17;
 function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
