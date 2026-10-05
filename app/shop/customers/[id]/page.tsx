@@ -1,5 +1,6 @@
 "use client";
 import TestAccount from "@/components/TestAccount";
+import CustomerProductionFiles from "@/components/CustomerProductionFiles";
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -158,6 +159,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       <AccountAreas mode="shop" goodsCount={goodsOpen}
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} onCount={setProjOpen} />} projectsCount={projOpen}
           programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
+          productionPanel={<CustomerProductionFiles customerId={id} />}
           statementHref={`/portal/statement?as=${id}`} onEmailStatement={() => emailStatement(id)}
           onRecordPayment={async (p) => { const r = await recordLumpPayment(id, p); if (r.ok && !p.preview) { reloadShop(); setReload((n) => n + 1); } return r; }}
           goodsPanel={c.price_type === "wholesale" || os.some((o) => o.price_type === "wholesale") ? <ShopGoods orderIds={os.filter(needsGoods).map((o) => o.id)} customerId={id} onCount={setGoodsOpen} /> : undefined}

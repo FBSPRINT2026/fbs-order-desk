@@ -7,6 +7,7 @@ import { useSticky } from "@/lib/useSticky";
 import { fmtDate } from "@/lib/format";
 import { ARCHIVE_DAYS, ART_ACCEPT, ART_KINDS, SEP_STATUS, sepStage, artProblem, readVector, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
 import { vartSvg } from "@/lib/epsVector";
+import CustomerPick from "@/components/CustomerPick";
 
 /**
  * Separations queue (Production → Separations): every imprint waiting for films, from "Request Separations" on an
@@ -24,6 +25,12 @@ export default function SeparationsPage() {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [tab, setTab] = useSticky<Tab>("sep.tab.list2", "working");
   const [q, setQ] = useState("");
+  // archive / restore straight from the list (the row moves tabs)
+  async function setStage(r: SepRow, status: SepRow["status"]) {
+    setRows((xs) => (xs || []).map((x) => (x.id === r.id ? { ...x, status, updated_at: new Date().toISOString() } : x)));
+    const { error } = await sb.from("separations").update({ status, updated_at: new Date().toISOString() }).eq("id", r.id);
+    if (error) setRows((xs) => (xs || []).map((x) => (x.id === r.id ? r : x)));
+  }
 
   useEffect(() => { (async () => {
     // archived ones show for ARCHIVE_DAYS days after they were archived
@@ -76,7 +83,14 @@ export default function SeparationsPage() {
                 <span>{o ? <>{cust[r.customer_id || ""] || ""}{o.nickname ? ` · ${o.nickname}` : ""}</> : cust[r.customer_id || ""] || <span className="faint">Uploaded art · no order</span>}</span>
                 <small className="faint">{r.garment_color || "—"}{r.channels.length ? ` · ${r.channels.length} screen${r.channels.length === 1 ? "" : "s"}` : ""}{due ? ` · due ${fmtDate(due)}` : ""}</small>
               </span>
-              <span className="pill" style={{ ["--sc" as string]: st.c }}>{st.label}</span>
+              <span className="sep-qr">
+                <span className="pill" style={{ ["--sc" as string]: st.c }}>{st.label}</span>
+                {sepStage(r.status) === "archived"
+                  ? <button type="button" className="btn sm ghost sep-qa" title="Back to Working" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setStage(r, "in_progress"); }}>Restore</button>
+                  : <button type="button" className="btn icon ghost sm sep-qa" title="Archive (not using it): kept in Archived for 30 days" aria-label={`Archive S-${r.number}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setStage(r, "cancelled"); }}>
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg>
+                  </button>}
+              </span>
             </Link>
           );
         })}</div>
@@ -92,6 +106,9 @@ function NewFromArt() {
   const sb = useMemo(() => createClient(), []);
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null), [thumb, setThumb] = useState("");
+  // the customer it's for (from a customer's Artwork: ?customer=…); it shows in their Artwork, under Separations
+  const [cust, setCust] = useState<string | null>(null), [custLabel, setCustLabel] = useState("");
+  useEffect(() => { const c = new URLSearchParams(location.search).get("customer"); if (c) setCust(c); }, []);
   const [name, setName] = useState(""), [shirt, setShirt] = useState(""); // none yet: every color prints
   // the print size comes first: a picture can only be made so big before it prints pixelated (vector art: any size)
   const [widthIn, setWidthIn] = useState(11), [dims, setDims] = useState<{ w: number; h: number; vector: boolean } | null>(null);
@@ -110,7 +127,7 @@ function NewFromArt() {
     if (!file) return;
     setBusy(true); setErr("");
     const { data: { user } } = await sb.auth.getUser(), me = (user?.email || "").toLowerCase();
-    const ins = await sb.from("separations").insert({ location: name.trim() || "Uploaded art", garment_color: shirt.trim(), status: "in_progress", requested_by: me, assigned_to: me }).select("*").single();
+    const ins = await sb.from("separations").insert({ location: name.trim() || "Uploaded art", garment_color: shirt.trim(), status: "in_progress", requested_by: me, assigned_to: me, customer_id: cust }).select("*").single();
     if (ins.error) { setErr(ins.error.message); setBusy(false); return; }
     const row = ins.data as SepRow;
     try {
@@ -136,7 +153,7 @@ function NewFromArt() {
           <span className="sep-new-ic" aria-hidden>
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
           </span>
-          <span className="sep-new-t"><b>Separate an image</b><small className="faint">No order needed. Drop art here or choose a file: {ART_KINDS}.</small></span>
+          <span className="sep-new-t"><b>Separate an image</b><small className="faint">No order needed. Drop art here or choose a file: {ART_KINDS}.{cust ? " It's saved to the customer you came from." : ""}</small></span>
           <span className="btn sm">Choose File</span>
         </label>
       ) : (
@@ -144,6 +161,7 @@ function NewFromArt() {
           <span className="sep-new-th">{thumb && <img src={thumb} alt="" />}</span>
           <label className="sep-f">Name<input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="What is it?" autoFocus /></label>
           <label className="sep-f">Shirt color<input type="text" list="sep-shirts" value={shirt} placeholder="None yet: all colors print" onChange={(e) => setShirt(e.target.value)} /></label>
+          <div className="sep-f">Customer <span className="faint">(optional)</span><CustomerPick value={cust} label={custLabel || undefined} placeholder="Save to a customer…" onPick={(id, l) => { setCust(id); setCustLabel(l); }} /></div>
           <label className="sep-f" title="How wide the print is on the shirt">Print width (in)<input type="number" min={1} max={20} step={0.25} value={widthIn} onChange={(e) => setWidthIn(+e.target.value || 1)} /></label>
           <datalist id="sep-shirts">{SHIRTS.map((c) => <option key={c} value={c} />)}</datalist>
           <span className="sep-new-go">

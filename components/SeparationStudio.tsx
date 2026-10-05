@@ -15,6 +15,7 @@ import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
 import { findBackdrop, withoutBackdrop } from "@/lib/vectorBg";
+import CustomerPick from "@/components/CustomerPick";
 import { adjustInks, colorWord, dropInk, fadesOf, inkName, planFor, planPrint, shown, withMiddle, type PrintPlan } from "@/lib/printPlan";
 import { browserInflate, parsePdf } from "@/lib/pdfVector";
 import { deltaE } from "@/lib/inkColors";
@@ -44,19 +45,8 @@ export type SepRow = {
 };
 export type Channel = { key: string; name: string; hex: string; kind: Plate["kind"]; order: number; mesh: number; coverage: number; file?: string };
 export type SepFile = { path: string; name: string; kind: "plate" | "preview" | "illustrator" | "films" | "upload"; size?: number };
-/**
- * Three stages, as the shop works: Working (getting it right), Printed (films printed: Print Films moves it here) and
- * Archived (not used; kept 30 days in the Archived tab). The database keeps its older values: requested / in_progress /
- * review / approved all show as Working, films is Printed, cancelled is Archived.
- */
-export type SepStage = "working" | "printed" | "archived";
-export const sepStage = (status: SepRow["status"]): SepStage => (status === "films" ? "printed" : status === "cancelled" ? "archived" : "working");
-const STAGE = { working: { label: "Working", c: "#A152C9" }, printed: { label: "Printed", c: "#0A8FC0" }, archived: { label: "Archived", c: "#7C8799" } };
-export const SEP_STATUS: Record<SepRow["status"], { label: string; c: string }> = {
-  requested: STAGE.working, in_progress: STAGE.working, review: STAGE.working, approved: STAGE.working, films: STAGE.printed, cancelled: STAGE.archived,
-};
-/** archived separations stay in the Archived tab this many days */
-export const ARCHIVE_DAYS = 30;
+export { ARCHIVE_DAYS, SEP_STATUS, sepStage, type SepStage } from "@/lib/sepStatus";
+import { ARCHIVE_DAYS, SEP_STATUS } from "@/lib/sepStatus";
 
 type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean;
   /** vector art: take out the background layer (a page-size box of cream / white behind the art); unset = not asked yet */
@@ -827,6 +817,13 @@ export default function SeparationStudio({ id }: { id: string }) {
     if (on) { if (shirtBefore.current === null) shirtBefore.current = st.garment; set({ garment: k.hex }); }
     else if (st.garment === k.hex) { set({ garment: shirtBefore.current ?? "" }); shirtBefore.current = null; }
   }
+  /** save this separation to a customer (it shows in their Artwork, under Separations) */
+  async function setCustomer(cid: string | null) {
+    if (!row) return;
+    const r = await sb.from("separations").update({ customer_id: cid, updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
+    if (r.error) { setErr(r.error.message); return; }
+    setRow(r.data as SepRow); setMsg(cid ? "Saved to the customer: it's in their Artwork, under Separations." : "Taken off the customer.");
+  }
   function setBackdrop(drop: boolean) {
     if (!!st.dropBackdrop !== drop) refind.current = img;
     set({ dropBackdrop: drop });
@@ -960,7 +957,10 @@ export default function SeparationStudio({ id }: { id: string }) {
     <div className="sep">
       <div className="page-head">
         <div>
-          <div className="eyebrow"><Link href="/shop/separations">Separations</Link> · S-{row.number}</div>
+          <div className="eyebrow sep-eyebrow"><Link href="/shop/separations">Separations</Link> · S-{row.number}
+            {/* whose art this is: an order's separation belongs to the order's customer; any other can be saved to one */}
+            {(!row.order_id || row.customer_id) && <span className="sep-cust">· <CustomerPick compact disabled={!!row.order_id} value={row.customer_id} placeholder="Save to a customer…" onPick={(cid) => setCustomer(cid)} /></span>}
+            {row.customer_id && <Link className="sep-cust-l" href={`/shop/customers/${row.customer_id}?area=artwork`} title="This customer's production files (staff only)">Production files ↗</Link>}</div>
           <h1>{row.location || "Separation"}{order ? <span className="faint"> · #{order.number} {order.nickname || ""}</span> : null}</h1>
         </div>
         <div className="row" style={{ gap: 8, alignItems: "center" }}>

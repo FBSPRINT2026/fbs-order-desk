@@ -56,7 +56,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ mode, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the printable statement (open invoices + aging + pay it all) */
   statementHref?: string;
@@ -68,6 +68,8 @@ export default function AccountAreas({ mode, projectsPanel, projectsCount, progr
   onPaySelect?: (text: string) => Promise<{ ok: boolean; error?: string; filter?: PayFilter; explain?: string; off?: boolean }>;
   /** the Messages hub (the dashboard's centerpiece in the portal, and the Messages area) */
   messagesPanel?: ReactNode;
+  /** staff only: the customer's production files (separations, digitized files…), under Artwork; never in the portal */
+  productionPanel?: ReactNode;
   /** projects (a conference, a season: several orders, dates, tasks, one conversation) */
   projectsPanel?: ReactNode; projectsCount?: number;
   /** program pricing: the customer's flat-price items and order form; grayed out when they don't have one */
@@ -605,6 +607,7 @@ export default function AccountAreas({ mode, projectsPanel, projectsCount, progr
           </div>{pager("mock", mRows.length, P.p, P.n)}</>; })()
         : <div className="aa-empty">{mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
       </div>
+      {mode === "shop" && productionPanel}
       </div>
       <aside className="aa-attn aa-favs">
         <div className="aa-attn-h">★ Favorites</div>
