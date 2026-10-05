@@ -11,7 +11,6 @@ import { Pill } from "@/components/bits";
 import { money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import { useRole } from "@/components/RoleContext";
-import { seesMoney } from "@/lib/roles";
 
 /**
  * The daily dashboard: the first thing every admin sees. Everything that needs someone today, in one place:
@@ -38,8 +37,8 @@ const pvKind = (s: string) => /ship|delivery/i.test(s) ? "ship" : /^quote/i.test
 
 export default function Dashboard() {
   const [me, setMe] = useState("");
-  const { role } = useRole();
-  const boss = seesMoney(role); // owners / admins see the sales numbers; crew (production, receiving, shipping) get the production dashboard
+  const { perms } = useRole();
+  const boss = perms.money; // owners / admins see the sales numbers; crew (production, receiving, shipping) get the production dashboard
   const crew = !boss;
   const [seps, setSeps] = useState<SepLite[]>([]);
   const [msgTab, setMsgTab] = useState<"reply" | "email">("reply");

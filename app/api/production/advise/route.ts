@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
-import { seesMoney } from "@/lib/roles";
+import { viewerPerms } from "@/lib/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
 
@@ -15,8 +15,8 @@ type Opt = { id: string; title: string; detail: string; lateAfter: number; still
 type Late = { job: string; customer: string; inHands: string; why: string; value?: number };
 
 export async function POST(req: Request) {
-  const { user, isStaff, role } = await getViewer();
-  const crew = !seesMoney(role);
+  const { user, isStaff, role, email, supabase } = await getViewer();
+  const crew = !!user && isStaff && !(await viewerPerms(supabase, email, role)).money;
   if (!user || !isStaff) return NextResponse.json({ error: "Staff only." }, { status: 401 });
   const body = await req.json().catch(() => ({})) as { now?: string; lateBefore?: number; late?: Late[]; options?: Opt[]; labor?: { crewSize: number; wage: number; otMultiplier: number }; machines?: string; overtime?: string };
   const opts = (body.options || []).slice(0, 14), late = (body.late || []).slice(0, 40);

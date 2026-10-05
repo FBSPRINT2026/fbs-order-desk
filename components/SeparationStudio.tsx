@@ -294,8 +294,8 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [pxTick, setPxTick] = useState(0);
   const set = (p: Partial<Studio>) => setSt((s) => ({ ...s, ...p }));
   // "Make Separations Better": the production manager (and the owner) talk to the coach
-  const { role, realRole } = useRole();
-  const coachOn = role === "production" || realRole === "owner";
+  const { perms } = useRole();
+  const coachOn = perms.coach;
   const lessonNote = useRef("");
 
   /* ---------- load ---------- */
@@ -306,7 +306,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     const { data: { user } } = await sb.auth.getUser();
     const email = (user?.email || "").toLowerCase();
     const { data: sf } = await sb.from("staff").select("role").eq("email", email).maybeSingle();
-    setMe({ email, boss: ["owner", "admin", "production"].includes((sf?.role as string) || "") });
+    setMe({ email, boss: !!sf });
     const [{ data: o }, { data: d }, { data: s0 }, { data: eq0 }] = await Promise.all([
       row0.order_id ? sb.from("orders").select("*").eq("id", row0.order_id).maybeSingle() : Promise.resolve({ data: null }),
       row0.design_id ? sb.from("designs").select("*").eq("id", row0.design_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -867,7 +867,7 @@ export default function SeparationStudio({ id }: { id: string }) {
           <span className="pill" style={{ ["--sc" as string]: s0.c }}>{s0.label}</span>
           {tab === "studio" && <>
             <button type="button" className="btn" disabled={!res || !!busy} onClick={() => save("in_progress")}>Save Draft</button>
-            {me.boss && row.status === "review" ? <button type="button" className="btn primary" disabled={!!busy} onClick={approve}>Approve</button>
+            {me.boss && perms.approveSeps && row.status === "review" ? <button type="button" className="btn primary" disabled={!!busy} onClick={approve}>Approve</button>
               : row.status === "approved" ? <button type="button" className="btn primary" onClick={() => setStatus("films")}>Films Printed</button>
               : <button type="button" className="btn primary" disabled={!res || !!busy} onClick={() => save("review")}>Save &amp; Send for Review</button>}
           </>}
@@ -1087,7 +1087,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <h3>Press Setup <small className="faint">{setup ? "set by hand" : "suggested"}</small></h3>
               <div className="sep-row">
                 <select value={press.id} onChange={(e) => { setPressId(e.target.value); setSetup(null); }} aria-label="Press">{presses.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
-                <button type="button" className="btn sm" onClick={() => setDefOpen(true)} title="What always sits on each head of this press: flashes, the roller">Press Defaults</button>
+                {perms.pressDefaults && <button type="button" className="btn sm" onClick={() => setDefOpen(true)} title="What always sits on each head of this press: flashes, the roller">Press Defaults</button>}
               </div>
               <div className="sep-press"><PressLayout layout={drawLayout(onPress.heads)} size={250} mirror={!!press.mirror} inks={onPress.out} selected={selHead} onPick={pickHead}
                 onDropHead={dragPlate ? dropOnHead : undefined} dropAt={dropHead} onDragHead={(i) => setDropHead(i)} /></div>

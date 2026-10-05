@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
-import { seesMoney } from "@/lib/roles";
+import { viewerPerms } from "@/lib/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
 
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   if (found?.length) { lines.push("\nWHAT THE KEYWORD SEARCH FOUND (ref | text):"); for (const f of found.slice(0, 60)) lines.push(`${String(f.ref).slice(0, 60)} | ${String(f.text).slice(0, 200)}`); }
 
   // crew (production, receiving, shipping) see no money: take the amounts and the balances list out before asking
-  const crew = !seesMoney(v.role);
+  const crew = !(await viewerPerms(admin, v.email, v.role)).money;
   if (crew) {
     const b = lines.findIndex((l) => l.includes("BIGGEST OPEN BALANCES"));
     if (b >= 0) { let e = b + 1; while (e < lines.length && !lines[e].startsWith("\n")) e++; lines.splice(b, e - b); }

@@ -22,7 +22,7 @@ import { checkOrder } from "@/lib/orderChecks";
 import { withPrivate } from "@/lib/crm/private";
 import { ChecksPanel, FillFromText } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
-import { useSeesMoney } from "@/components/RoleContext";
+import { useCan, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
 import { PAY_TERMS, SIZES } from "@/lib/pricing";
 
@@ -37,6 +37,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const router = useRouter();
   const sb = useMemo(() => createClient(), []);
   const [o, setO] = useState<Order | null>(null);
+  const canPay = useCan("payments");
   const seesMoney = useSeesMoney(); // crew (production, receiving, shipping): quantities and what's ordered, no money
   const [missing, setMissing] = useState(false);
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
@@ -724,15 +725,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="panel-b stack">
               {payments.length ? <div>{payments.map((p) => (
                 <div key={p.id} className="pay-row"><span>{fmtDate(p.paid_on)} · {p.method}{p.stripe_session_id ? " (online)" : ""}</span>
-                  <span className="row"><b className="num">{money(p.amount)}</b><button className={"btn icon ghost sm" + (armed === "pay" + p.id ? " danger armed" : "")} type="button" aria-label="Remove payment" onClick={() => delPayment(p.id)}>✕</button></span></div>
+                  <span className="row"><b className="num">{money(p.amount)}</b>{canPay && <button className={"btn icon ghost sm" + (armed === "pay" + p.id ? " danger armed" : "")} type="button" aria-label="Remove payment" onClick={() => delPayment(p.id)}>✕</button>}</span></div>
               ))}</div> : <div className="faint" style={{ fontSize: 13 }}>No payments recorded.</div>}
-              <div className="pay-add">
+              {canPay && <div className="pay-add">
                 <input type="number" step="0.01" placeholder="Amount" aria-label="Payment amount" value={payAmt} onChange={(e) => setPayAmt(e.target.value)} />
                 <select aria-label="Payment method" value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>{PAY_METHODS.map((m) => <option key={m}>{m}</option>)}</select>
                 <input type="date" aria-label="Payment date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
                 <button className="btn" type="button" onClick={addPayment}>Record</button>
-              </div>
-              {calc.balance > 0.004 && calc.total > 0 && (
+              </div>}
+              {canPay && calc.balance > 0.004 && calc.total > 0 && (
                 <div className="row">
                   <button className="btn sm" type="button" onClick={() => setPayAmt(((calc.total * settings.depositPct) / 100).toFixed(2))}>{settings.depositPct}% deposit</button>
                   <button className="btn sm" type="button" onClick={() => setPayAmt(calc.balance.toFixed(2))}>Full balance</button>

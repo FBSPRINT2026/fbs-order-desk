@@ -4830,3 +4830,20 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 /* print films: the button up top */
 .pf-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .pf-head .btn{padding-top:6px;padding-bottom:6px}
+/* Settings → User Access: a card per person, like Printavo's user settings */
+.ua-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;align-items:start}
+.ua-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.ua-head{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.ua-av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px;flex:none}
+.ua-who{display:flex;flex-direction:column;min-width:0;flex:1}
+.ua-who b{color:var(--accent);font-size:15px}
+.ua-who small{color:var(--ink-3);font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
+.ua-head select{font-size:12.5px;padding:4px 6px;width:auto!important;flex:none;max-width:130px}
+.ua-note{font-size:12.5px;color:var(--ink-3)}
+.ua-group{display:flex;flex-direction:column;gap:3px}
+.ua-gh{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:2px 0}
+.ua-perm{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.35;cursor:pointer}
+.ua-perm input{margin-top:2px}
+.ua-perm.changed span{font-weight:600}
+.ua-perm.changed span::after{content:" \2022";color:var(--accent)}
+.ua-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--line)}

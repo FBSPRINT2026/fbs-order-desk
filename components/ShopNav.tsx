@@ -8,7 +8,7 @@ import { saveShortcuts, type Shortcut } from "@/app/shop/shortcut-actions";
 import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 import SearchInput from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
-import { crewBlocked, ROLES, seesMoney } from "@/lib/roles";
+import { canOpen, ROLES } from "@/lib/roles";
 import { setViewAs } from "@/app/shop/view-as-actions";
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -41,8 +41,8 @@ const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((
 
 export default function ShopNav({ email, firstName, brand, shortcuts, people = [] }: { email: string; firstName: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string }; shortcuts: Shortcut[]; people?: { email: string; name: string; role: string }[] }) {
   const path = usePathname();
-  const { role, realRole, viewAs } = useRole();
-  const crew = !seesMoney(role);
+  const { realRole, viewAs, perms } = useRole();
+  const crew = !perms.money;
   const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [incoming, setIncoming] = useState(0);
@@ -132,8 +132,8 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
 
-  const link = ([href, icon, label]: [string, string, string]) => crew && crewBlocked(href) ? (
-    <a key={href} className="nav-off" title={`${label}: owners and admins only`} aria-disabled="true">{ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}</a>
+  const link = ([href, icon, label]: [string, string, string]) => !canOpen(href, perms) ? (
+    <a key={href} className="nav-off" title={`${label}: not on for you (Settings → User Access)`} aria-disabled="true">{ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}</a>
   ) : (
     <Link key={href} href={href} className={active(href) ? "on" : ""} title={label}>
       {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}

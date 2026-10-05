@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getViewer } from "@/lib/supabase/server";
 import { mergeSettings } from "@/lib/pricing";
-import { ROLES } from "@/lib/roles";
+import { accessOf, permsFor, ROLES } from "@/lib/roles";
 import ShopNav from "@/components/ShopNav";
 import MobileTables from "@/components/MobileTables";
 import Translate from "@/components/Translate";
@@ -34,9 +34,12 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const full = (viewAs && viewAs.includes("@") ? viewName : (me?.name || meta.full_name || meta.name || email.split("@")[0] || "")).trim();
   const first = full.split(/[\s._-]+/)[0] || "";
   const firstName = first ? first[0].toUpperCase() + first.slice(1) : "";
+  // permissions: the role's defaults with the person's own changes (Settings → User Access)
+  const access = accessOf(st?.data);
+  const perms = permsFor(role, viewAs ? (viewAs.includes("@") ? access[viewAs] : null) : access[email]);
   const people = (team || []).map((t) => ({ email: (t.email as string).toLowerCase(), name: (t.name as string) || "", role: (t.role as string) || "" }));
   return (
-    <RoleProvider value={{ role, realRole, viewAs, viewName }}>
+    <RoleProvider value={{ role, realRole, viewAs, viewName, perms }}>
       <div className="app">
         <ShopNav email={email} firstName={firstName} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} people={people} />
         <main className="main"><div className="top-r"><Translate /></div><CrewGuard />{children}</main>

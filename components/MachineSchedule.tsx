@@ -6,6 +6,7 @@ import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, sugge
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 import PressLayout from "@/components/PressLayout";
+import { useCan } from "@/components/RoleContext";
 
 /**
  * The production calendar, on the shop's real hours.
@@ -271,6 +272,7 @@ function layoutAll(cards: Card[], nowAbs: number) {
 }
 
 export default function MachineSchedule() {
+  const canEquip = useCan("pressDefaults");
   const [now, setNow] = useState(() => shopTime(new Date())!);
   useEffect(() => { const t = setInterval(() => setNow(shopTime(new Date())!), 60000); return () => clearInterval(t); }, []);
   const today = now.day;
@@ -1526,7 +1528,7 @@ export default function MachineSchedule() {
               <span className="ms-tb-l">Shifts &amp; equipment</span>
               <button type="button" className="ms-tb" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}>+ Shift</button>
               <button type="button" className="ms-tb" title="Maintenance, repairs, an employee out" onClick={() => setDownEdit({})}>+ Downtime</button>
-              <button type="button" className={"ms-tb" + (eqIssues.length ? " warn" : "")} title="Heads out, running slow, or down" onClick={() => setEqOpen(true)}>Equipment{eqIssues.length ? <span className="ms-tb-n">{eqIssues.length}</span> : null}</button>
+              <button type="button" className={"ms-tb" + (eqIssues.length ? " warn" : "")} title="Heads out, running slow, or down" disabled={!canEquip} onClick={() => setEqOpen(true)}>Equipment{eqIssues.length ? <span className="ms-tb-n">{eqIssues.length}</span> : null}</button>
             </div>
             <div className="ms-tb-g ms-tb-sales">
               <span className="ms-tb-l">Sales</span>
@@ -1607,7 +1609,7 @@ export default function MachineSchedule() {
             </div>
           ) : null}
 
-            {eqIssues.length > 0 && <div className="ms-otline"><span className="ms-ot-i" aria-hidden>⚙</span><span className="ms-idle-t"><b>{eqIssues.map((m) => shortName(m)).join(", ")}</b> {eqIssues.length === 1 ? "has" : "have"} an equipment issue<span className="faint"> · {eqIssues.map((m) => m.issue!.down ? `${shortName(m)} down` : [m.issue!.colors != null ? `${shortName(m)} ${m.issue!.colors}/${m.issue!.full} ${m.type === "screen" ? "colors" : "heads"}` : "", m.issue!.flashes != null ? `${m.issue!.flashes}/${m.issue!.fullFlashes} flashes` : "", m.issue!.speed != null ? `${m.issue!.speed}% speed` : ""].filter(Boolean).join(" ")).join(" · ")}</span></span><span className="spacer" /><button type="button" className="btn sm ghost" onClick={() => setEqOpen(true)}>Details</button></div>}
+            {eqIssues.length > 0 && <div className="ms-otline"><span className="ms-ot-i" aria-hidden>⚙</span><span className="ms-idle-t"><b>{eqIssues.map((m) => shortName(m)).join(", ")}</b> {eqIssues.length === 1 ? "has" : "have"} an equipment issue<span className="faint"> · {eqIssues.map((m) => m.issue!.down ? `${shortName(m)} down` : [m.issue!.colors != null ? `${shortName(m)} ${m.issue!.colors}/${m.issue!.full} ${m.type === "screen" ? "colors" : "heads"}` : "", m.issue!.flashes != null ? `${m.issue!.flashes}/${m.issue!.fullFlashes} flashes` : "", m.issue!.speed != null ? `${m.issue!.speed}% speed` : ""].filter(Boolean).join(" ")).join(" · ")}</span></span><span className="spacer" /><button type="button" className="btn sm ghost" onClick={() => canEquip && setEqOpen(true)}>Details</button></div>}
             </div>
           </div>
           <div className="ms-ready">

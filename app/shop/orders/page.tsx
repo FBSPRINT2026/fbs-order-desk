@@ -12,7 +12,7 @@ import { Due, Pill } from "@/components/bits";
 import AssistantStrip from "@/components/AssistantStrip";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
-import { useSeesMoney } from "@/components/RoleContext";
+import { useCan, useSeesMoney } from "@/components/RoleContext";
 
 /** A Printavo status in our words, so the filters work on Printavo orders too. */
 function pvStatus(a: { kind: string; status_name: string }): string {
@@ -30,7 +30,7 @@ type F = "all" | "quotes" | "invoices" | "open" | "unpaid" | "messages";
 
 export default function OrdersPage() {
   const router = useRouter();
-  const cash = useSeesMoney();
+  const cash = useSeesMoney(), canQuote = useCan("quotes");
   const [creating, setCreating] = useState(false);
   const { orders, customers, loading, error } = useShopData();
   const [type, setType] = useSticky<F>("orders.type", "all");
@@ -133,12 +133,12 @@ export default function OrdersPage() {
           <div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
           <h1>Orders</h1>
         </div>
-        <button className="btn primary money-only" type="button" disabled={creating} onClick={async () => {
+        {canQuote && <button className="btn primary" type="button" disabled={creating} onClick={async () => {
           setCreating(true);
           const { data, error } = await createClient().from("orders").insert({ lines: [], status: "quote", type: "quote" }).select("id").single();
           setCreating(false);
           if (!error && data) router.push(`/shop/orders/${data.id}?new=1`); else alert("Couldn't create the quote: " + (error?.message || ""));
-        }}>{creating ? "Creating…" : "+ New quote"}</button>
+        }}>{creating ? "Creating…" : "+ New quote"}</button>}
       </div>
       {error && <div className="banner">Couldn&apos;t load orders: {error}</div>}
       <div className="stats">

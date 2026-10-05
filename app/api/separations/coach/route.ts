@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
+import { viewerPerms } from "@/lib/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
 import { cleanChange, COACH_SETTINGS, type CoachSetting, type LessonDefault } from "@/lib/sepCoach";
@@ -28,7 +29,7 @@ type Answer = {
 export async function POST(req: Request) {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  if (!["owner", "admin", "production"].includes(v.role)) return NextResponse.json({ error: "This is for production." }, { status: 403 });
+  if (!(await viewerPerms(v.supabase, v.email, v.role)).coach) return NextResponse.json({ error: "The separation coach isn't on for you (Settings → User Access)." }, { status: 403 });
   const b = (await req.json().catch(() => ({}))) as Body;
   const message = String(b.message || "").trim().slice(0, 3000);
   if (!message) return NextResponse.json({ error: "Say how it came out." }, { status: 400 });
