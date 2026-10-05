@@ -261,7 +261,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [selPlate, setSelPlate] = useState<string | null>(null), [selHead, setSelHead] = useState<number | null>(null);
   const [defOpen, setDefOpen] = useState(false);
   // the two side panes are tabbed so the whole studio fits the window: left = how it separates, right = what comes out
-  const [ltab, setLtab] = useSticky<"inks" | "base" | "output">("sep.ltab", "inks");
+  const [ltab0, setLtab] = useSticky<"inks" | "base" | "output">("sep.ltab", "inks");
+  // two tabs: the inks, and the underbase with the output settings
+  const ltab = ltab0 === "base" ? "output" : ltab0;
   const [rtab0, setRtab] = useSticky<"screens" | "press" | "films" | "coach">("sep.rtab", "screens");
   // two tabs: screens with their films, the press with the coach
   const rtab = rtab0 === "films" ? "screens" : rtab0 === "coach" ? "press" : rtab0;
@@ -881,7 +883,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       <div className="sep-grid">
         {/* settings */}
         <aside className="sep-side">
-          <div className="rv-seg sep-ptabs" role="tablist">{([["inks", "Inks"], ["base", dark ? "Underbase" : "Base"], ["output", "Output"]] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={ltab === k} className={ltab === k ? "on" : ""} onClick={() => setLtab(k)}>{l}</button>)}</div>
+          <div className="rv-seg sep-ptabs" role="tablist">{([["inks", "Inks"], ["output", "Underbase & Output"]] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={ltab === k} className={ltab === k ? "on" : ""} onClick={() => setLtab(k)}>{l}</button>)}</div>
           <div className="sep-pane">
           {ltab === "inks" && <>
           <section className="sep-card">
@@ -909,7 +911,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <button type="button" className="btn sm" onClick={() => findInks(st.method, true)} title="Start over: find the inks the art needs">Find Inks Again</button>
           </section>
           </>}
-          {ltab === "base" && <section className="sep-card">
+          {ltab === "output" && <section className="sep-card">
             <h3>Underbase{dark ? "" : " (light shirt)"}</h3>
             <div className="rv-seg sep-full">{([["auto", "Auto"], ["on", "On"], ["off", "Off"]] as const).map(([k, l]) => <button key={k} type="button" className={st.underbase === k ? "on" : ""} onClick={() => set({ underbase: k })}>{l}</button>)}</div>
             <label className="sep-f" title="How far the underbase is pulled in from the edges of the colors, so it never peeks out">Choke <input type="range" min={0} max={3} step={0.25} value={st.chokePt ?? CHOKE_PT} onChange={(e) => set({ chokePt: +e.target.value })} /> <b>{st.chokePt ?? CHOKE_PT} pt</b></label>
