@@ -4795,3 +4795,31 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ps-why{font-size:12.5px;background:color-mix(in srgb,var(--accent) 6%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 25%,var(--surface));border-radius:8px;padding:6px 9px;margin:6px 0}
 .ps-why summary{font-weight:700;cursor:pointer}
 .ps-why ul{margin:4px 0 0;padding-left:16px;display:flex;flex-direction:column;gap:3px}
+/* press setup: one row per head, a dropdown each; drag a color onto another head to trade places */
+.ps-rows{list-style:none;margin:6px 0;padding:0;display:flex;flex-direction:column;gap:3px}
+.ps-row{display:grid;grid-template-columns:12px 22px 14px minmax(0,1fr) auto;align-items:center;gap:6px;padding:2px 6px 2px 2px;border:1px solid transparent;border-radius:7px;font-size:12.5px}
+.ps-row.screen{cursor:grab}
+.ps-row.screen:active{cursor:grabbing}
+.ps-row.sel{background:color-mix(in srgb,var(--accent) 8%,var(--surface));border-color:color-mix(in srgb,var(--accent) 40%,var(--surface))}
+.ps-row.drop{border-color:var(--accent);border-style:dashed;background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.ps-row.dragging{opacity:.45}
+.ps-grip{color:var(--ink-3);font-size:11px;letter-spacing:-2px;user-select:none}
+.ps-no{text-align:right;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ps-sw{width:12px;height:12px;border-radius:3px;border:1px dashed var(--line)}
+.ps-row.screen .ps-sw{border:1px solid color-mix(in srgb,var(--ink) 30%,transparent)}
+.ps-row select{font-size:12.5px;padding:3px 6px;min-width:0;width:100%}
+.ps-row.flash select{color:#C25E14;font-weight:700}
+.ps-row.roller select{color:#55657B;font-weight:700}
+.ps-row.cool select{color:#2F86D6}
+.ps-row.free select{color:var(--ink-3)}
+.ps-row.screen select{font-weight:600}
+.ps-down{color:var(--danger);font-weight:600}
+.ps-mesh{color:var(--ink-3);font-size:11px}
+.ps-off{font-size:12.5px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:4px 0}
+.ps-off .ps-chip{cursor:grab}
+.pl-st.drop rect{stroke:var(--accent)!important;stroke-width:3.5!important;stroke-dasharray:4 3}
+/* Coach & Learning tab: the coach beside learning from Separo */
+.sep-learn{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+.sep-learn .sep-coach .sc-thread{max-height:calc(100vh - 380px)}
+.sep-learn-out .sep-outside{display:flex;flex-direction:column;gap:12px}
+@media (max-width:1000px){.sep-learn{grid-template-columns:minmax(0,1fr)}}

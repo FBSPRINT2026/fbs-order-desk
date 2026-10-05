@@ -7,7 +7,9 @@ import type { Station } from "@/lib/production";
  * down, a flash that isn't heating. Tap a head to pick it (Equipment Status → press layout).
  * A 12-color press has 14 stations: load + 12 heads + unload.
  */
-export default function PressLayout({ layout, size = 300, selected = null, onPick, label, sub, mirror = false, inks }: { /** "cool": a job leaves the head empty so the print cools between hits */ layout: (Station | "cool")[]; size?: number; selected?: number | null; onPick?: (i: number) => void; label?: string; sub?: string; mirror?: boolean; /** a separation laid on the press: per head, the ink's color and name */ inks?: ({ hex: string; name: string } | null)[] }) {
+export default function PressLayout({ layout, size = 300, selected = null, onPick, label, sub, mirror = false, inks, onDropHead, onDragHead, dropAt = null }: {
+  /** drag and drop: a screen dragged over a head (onDragHead) and dropped on it (onDropHead) */
+  onDropHead?: (head: number) => void; onDragHead?: (head: number) => void; dropAt?: number | null; /** "cool": a job leaves the head empty so the print cools between hits */ layout: (Station | "cool")[]; size?: number; selected?: number | null; onPick?: (i: number) => void; label?: string; sub?: string; mirror?: boolean; /** a separation laid on the press: per head, the ink's color and name */ inks?: ({ hex: string; name: string } | null)[] }) {
   const heads = layout.length, n = heads + 2, c = size / 2, step = 360 / n;
   const rp = size * 0.34, len = size * 0.2, w = Math.min(((2 * Math.PI * rp) / n) * 0.72, size * 0.15), hub = size * 0.15;
   const small = size < 160;
@@ -34,7 +36,9 @@ export default function PressLayout({ layout, size = 300, selected = null, onPic
         const ink = head != null ? inks?.[head] : null;
         const title = kind === "load" ? "Load (pallets come on here)" : kind === "unload" ? "Unload (off the press)" : `Head ${head! + 1}: ${ink ? ink.name : kind === "print" ? "printing" : kind === "flash" ? "flash" : kind === "roller" ? "roller (dead screen)" : kind === "cool" ? "empty: cool down" : kind === "down" ? "head down" : "flash not heating"}`;
         return (
-          <g key={k} className={`pl-st ${kind}${head != null && head === selected ? " sel" : ""}${pick ? " can" : ""}`} onClick={pick} role={pick ? "button" : undefined} tabIndex={pick ? 0 : undefined} aria-label={title} aria-pressed={pick ? head === selected : undefined} onKeyDown={pick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } } : undefined}>
+          <g key={k} className={`pl-st ${kind}${head != null && head === selected ? " sel" : ""}${head != null && head === dropAt && onDropHead ? " drop" : ""}${pick ? " can" : ""}`} onClick={pick}
+            onDragOver={head != null && onDropHead && kind !== "down" ? (e) => { e.preventDefault(); onDragHead?.(head); } : undefined}
+            onDrop={head != null && onDropHead && kind !== "down" ? (e) => { e.preventDefault(); onDropHead(head); } : undefined} role={pick ? "button" : undefined} tabIndex={pick ? 0 : undefined} aria-label={title} aria-pressed={pick ? head === selected : undefined} onKeyDown={pick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } } : undefined}>
             <title>{title}</title>
             <rect x={c + rp - len / 2} y={c - w / 2} width={len} height={w} rx={small ? 2 : 5} transform={`rotate(${a} ${c} ${c})`} style={ink ? { fill: ink.hex } : undefined} />
             {(kind === "down" || kind === "flashdown") && <g transform={`rotate(${a} ${c} ${c})`} className="pl-x"><line x1={c + rp - len / 2 + 4} y1={c - w / 2 + 4} x2={c + rp + len / 2 - 4} y2={c + w / 2 - 4} /><line x1={c + rp - len / 2 + 4} y1={c + w / 2 - 4} x2={c + rp + len / 2 - 4} y2={c - w / 2 + 4} /></g>}

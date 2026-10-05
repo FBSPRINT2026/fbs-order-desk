@@ -451,8 +451,15 @@ export default function SeparationStudio({ id }: { id: string }) {
         out.push({ label, data: t.toDataURL("image/jpeg", 0.85).split(",")[1] });
       } catch { /* a canvas that can't be read is just left out */ }
     };
-    grab(cv.current, solo ? "The film for one screen (black = ink):" : "Soft proof: how the separation prints on the shirt:");
-    grab(cvOrig.current, "The original art:");
+    if (cv.current) grab(cv.current, solo ? "The film for one screen (black = ink):" : "Soft proof: how the separation prints on the shirt:");
+    else if (res) {
+      // the Coach tab: the proof canvas isn't on screen, so draw the proof here
+      const c = document.createElement("canvas"); c.width = res.w; c.height = res.h;
+      const x = c.getContext("2d")!, id = x.createImageData(res.w, res.h);
+      id.data.set(composite({ plates, w: res.w, h: res.h }, st.garment, undefined, st.pressGain ?? PRESS_GAIN)); x.putImageData(id, 0, 0); grab(c, "Soft proof: how the separation prints on the shirt:");
+    }
+    if (cvOrig.current) grab(cvOrig.current, "The original art:");
+    else if (img) { const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext("2d")!.drawImage(img, 0, 0); grab(c, "The original art:"); }
     return out;
   };
 
@@ -793,8 +800,10 @@ export default function SeparationStudio({ id }: { id: string }) {
   function putPlate(key: string, head: number) {
     if (!onPress) return;
     const n = [...onPress.heads], from = n.indexOf("p:" + key), prev = n[head];
+    if (prev === "down") return;
     n[head] = "p:" + key;
-    if (from >= 0 && from !== head) n[from] = plateOf(prev) ? prev : "";
+    // whatever was on that head (a screen, a flash, the roller, a cool-down) trades places with it
+    if (from >= 0 && from !== head) n[from] = prev;
     commitSetup(n); setSelPlate(null); setSelHead(null);
   }
   function setHeadTo(head: number, v: Slot) {
@@ -809,11 +818,16 @@ export default function SeparationStudio({ id }: { id: string }) {
     for (let i = head + 1; i < n.length && moving.length; i++) if (n[i] === "") n[i] = moving.shift()!;
     commitSetup(n);
   }
+  // tap a head on the drawing: its row in the list below lights up and its dropdown opens for a choice
   function pickHead(i: number) {
     if (!onPress) return;
     if (onPress.heads[i] === "down") { setMsg(`Head ${i + 1} is down (Production → Equipment Status).`); return; }
-    if (selPlate) putPlate(selPlate, i); else setSelHead(selHead === i ? null : i);
+    setSelHead(i);
+    setTimeout(() => { const el = document.getElementById(`ps-head-${i}`) as HTMLSelectElement | null; el?.scrollIntoView({ block: "nearest" }); el?.focus(); }, 0);
   }
+  /** drag a screen (from a head or the not-on-the-press list) onto a head: it goes there, and they trade places */
+  const [dragPlate, setDragPlate] = useState<string | null>(null), [dropHead, setDropHead] = useState<number | null>(null);
+  function dropOnHead(i: number) { if (dragPlate) putPlate(dragPlate, i); setDragPlate(null); setDropHead(null); }
   /** a sheet for the press operator: the press drawn with every head, and the list */
   function printSetup() {
     if (!onPress || !press || !row) return;
@@ -874,12 +888,15 @@ export default function SeparationStudio({ id }: { id: string }) {
           })}
         </nav>
       )}
-      <div className="rv-seg sep-tabs">{([["studio", "Separate Here"], ["outside", "Separated Elsewhere (Separo…)"]] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
+      <div className="rv-seg sep-tabs">{([["studio", "Separations"], ["outside", "✦ Coach & Learning"]] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
       </div>
 
-      {tab === "outside" ? <Outside row={row} origUrl={origUrl} onSaved={(r) => { setRow(r); setMsg("Uploaded and sent for review."); }} openFile={openFile}
+      {tab === "outside" ? <div className="sep-learn">
+        {coachOn && <div className="sep-learn-coach">{res ? <SepCoach sepId={row.id} designId={row.design_id} context={coachContext} images={coachImages} onApply={applyCoach} /> : <div className="sep-card faint">Loading the separation…</div>}</div>}
+        <div className="sep-learn-out"><Outside row={row} origUrl={origUrl} onSaved={(r) => { setRow(r); setMsg("Uploaded and sent for review."); }} openFile={openFile}
         ours={() => ({ ours: { method: st.method, natural, inks: inks.map((k) => ({ name: k.name, hex: k.hex, ...(k.fadeTo?.length ? { fadeTo: k.fadeTo.map((h) => inks.find((q) => q.hex === h)?.name || h) } : {}), ...(k.also?.length ? { also: k.also } : {}) })), settings: coachContext().settings }, art: { vector: !!vart?.ok, shirt: row.garment_color || st.garment, dark: isDark(st.garment), width_in: st.widthIn, location: row.location } })}
-        artImage={() => { try { if (!img) return null; const k = Math.min(1, 1100 / Math.max(img.naturalWidth, img.naturalHeight)), t = document.createElement("canvas"); t.width = Math.round(img.naturalWidth * k); t.height = Math.round(img.naturalHeight * k); const g = t.getContext("2d")!; g.fillStyle = "#fff"; g.fillRect(0, 0, t.width, t.height); g.drawImage(img, 0, 0, t.width, t.height); return t.toDataURL("image/jpeg", 0.85).split(",")[1]; } catch { return null; } }} /> : hasArt === false ? <AddArt row={row} onDone={(r) => { setRow(r); load(); }} /> : (
+        artImage={() => { try { if (!img) return null; const k = Math.min(1, 1100 / Math.max(img.naturalWidth, img.naturalHeight)), t = document.createElement("canvas"); t.width = Math.round(img.naturalWidth * k); t.height = Math.round(img.naturalHeight * k); const g = t.getContext("2d")!; g.fillStyle = "#fff"; g.fillRect(0, 0, t.width, t.height); g.drawImage(img, 0, 0, t.width, t.height); return t.toDataURL("image/jpeg", 0.85).split(",")[1]; } catch { return null; } }} /></div>
+      </div> : hasArt === false ? <AddArt row={row} onDone={(r) => { setRow(r); load(); }} /> : (
       <div className="sep-grid">
         {/* settings */}
         <aside className="sep-side">
@@ -1029,7 +1046,7 @@ export default function SeparationStudio({ id }: { id: string }) {
 
         {/* screens, press, films, coach */}
         <aside className="sep-side">
-          <div className="rv-seg sep-ptabs" role="tablist">{([["screens", `Screens ${plates.length || ""} & Films`], ["press", coachOn ? "Press & ✦ Coach" : "Press"]] as [typeof rtab, string][]).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={rtab === k} className={rtab === k ? "on" : ""} onClick={() => setRtab(k)}>{l}</button>)}</div>
+          <div className="rv-seg sep-ptabs" role="tablist">{([["screens", `Screens ${plates.length || ""} & Films`], ["press", "Press"]] as [typeof rtab, string][]).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={rtab === k} className={rtab === k ? "on" : ""} onClick={() => setRtab(k)}>{l}</button>)}</div>
           <div className="sep-pane">
           {rtab === "screens" && <section className="sep-card">
             <h3>Print order</h3>
@@ -1063,26 +1080,45 @@ export default function SeparationStudio({ id }: { id: string }) {
                 <select value={press.id} onChange={(e) => { setPressId(e.target.value); setSetup(null); }} aria-label="Press">{presses.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
                 <button type="button" className="btn sm" onClick={() => setDefOpen(true)} title="What always sits on each head of this press: flashes, the roller">Press Defaults</button>
               </div>
-              <div className="sep-press"><PressLayout layout={drawLayout(onPress.heads)} size={250} mirror={!!press.mirror} inks={onPress.out} selected={selHead} onPick={pickHead} /></div>
-              <div className="ps-chips">{plates.map((p, i) => { const h = onPress.heads.indexOf("p:" + p.key); return (
-                <button key={p.key} type="button" className={"ps-chip" + (selPlate === p.key ? " on" : "") + (h < 0 ? " off" : "")} onClick={() => { setSelHead(null); setSelPlate(selPlate === p.key ? null : p.key); }} title="Pick it, then tap the head it goes on">
-                  <i style={{ background: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex }} /><span>{i + 1} · {p.name}</span><small>{h < 0 ? "not on" : `head ${h + 1}`}</small>
-                </button>); })}</div>
-              {selPlate ? <p className="sep-help"><b>Now tap the head</b> {plates.find((p) => p.key === selPlate)?.name} goes on (a screen already there trades places).</p>
-                : selHead != null ? (
-                  <div className="pl-pick ps-pick">
-                    <div className="pl-pick-h">Head {selHead + 1}</div>
-                    {([["flash", "Flash"], ["roller", "Roller (dead screen)"], ["cool", "Cool down"], ["", "Empty"]] as const).map(([k, l]) => <button key={k || "free"} type="button" className={"pl-opt " + (k || "print") + (onPress.heads[selHead] === k ? " on" : "")} onClick={() => setHeadTo(selHead, k)}><i aria-hidden />{l}</button>)}
-                    <select value="" onChange={(e) => e.target.value && setHeadTo(selHead, "p:" + e.target.value)} aria-label="Put a screen on this head"><option value="">Put a screen here…</option>{plates.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select>
-                  </div>
-                ) : <p className="sep-help">Tap a color, then the head it goes on. Tap a head to put a flash, the roller or an empty cool-down head there (ink gets too hot hit after hit).</p>}
+              <div className="sep-press"><PressLayout layout={drawLayout(onPress.heads)} size={250} mirror={!!press.mirror} inks={onPress.out} selected={selHead} onPick={pickHead}
+                onDropHead={dragPlate ? dropOnHead : undefined} dropAt={dropHead} onDragHead={(i) => setDropHead(i)} /></div>
+              <p className="sep-help">Pick what goes on each head, or drag a color to another head (onto the list or the press): the two trade places.</p>
+              <ol className="ps-rows">{onPress.heads.map((x, i) => {
+                const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null, down = x === "down";
+                return (
+                  <li key={i} className={"ps-row " + (p ? "screen" : x || "free") + (selHead === i ? " sel" : "") + (dropHead === i && dragPlate && dragPlate !== k ? " drop" : "") + (dragPlate && dragPlate === k ? " dragging" : "")}
+                    draggable={!!p} onDragStart={(e) => { if (!k) return; setDragPlate(k); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", k); }}
+                    onDragEnd={() => { setDragPlate(null); setDropHead(null); }}
+                    onDragOver={(e) => { if (dragPlate && !down) { e.preventDefault(); setDropHead(i); } }}
+                    onDragLeave={() => setDropHead((d) => (d === i ? null : d))}
+                    onDrop={(e) => { e.preventDefault(); if (!down) dropOnHead(i); }}>
+                    <span className="ps-grip" aria-hidden>{p ? "⋮⋮" : ""}</span>
+                    <b className="ps-no">{i + 1}</b>
+                    <i className="ps-sw" style={p ? { background: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex } : undefined} />
+                    {down ? <span className="ps-down">Head down</span> : (
+                      <select id={`ps-head-${i}`} value={x} aria-label={`Head ${i + 1}`} onFocus={() => setSelHead(i)} onBlur={() => setSelHead((h) => (h === i ? null : h))}
+                        onChange={(e) => { const v = e.target.value; if (plateOf(v)) putPlate(plateOf(v)!, i); else setHeadTo(i, v); }}>
+                        <option value="">Empty</option>
+                        <option value="cool">Cool down</option>
+                        <option value="flash">Flash</option>
+                        <option value="roller">Roller (dead screen)</option>
+                        <optgroup label="Screens">{plates.map((q, j) => { const at = onPress.heads.indexOf("p:" + q.key); return <option key={q.key} value={"p:" + q.key}>{j + 1} · {q.name}{at >= 0 && at !== i ? ` (now head ${at + 1})` : at < 0 ? " (not on)" : ""}</option>; })}</optgroup>
+                      </select>
+                    )}
+                    {p && <small className="ps-mesh">{p.mesh}</small>}
+                  </li>
+                );
+              })}</ol>
+              {onPress.off.length > 0 && (
+                <div className="ps-off"><b>Not on the press:</b> {onPress.off.map((p) => (
+                  <span key={p.key} className="ps-chip" draggable onDragStart={(e) => { setDragPlate(p.key); e.dataTransfer.setData("text/plain", p.key); }} onDragEnd={() => { setDragPlate(null); setDropHead(null); }}><i style={{ background: p.hex }} />{p.name}</span>
+                ))} <span className="faint">drag onto a head, or pick it in a head&apos;s list</span></div>
+              )}
               {onPress.note && <div className="sep-tip">{onPress.note}</div>}
               {onPress.recNote && <div className="sep-tip">{onPress.recNote}</div>}
               {!setup && onPress.why.length > 0 && <details className="ps-why" open><summary>Why this layout</summary><ul>{onPress.why.map((w) => <li key={w}>{w}</li>)}</ul></details>}
               {onPress.warn.map((w) => <div key={w} className="sep-tip">{w}</div>)}
               {onPress.moves.length > 0 && <div className="ps-moves"><b>Set up the press:</b><ul>{onPress.moves.map((m) => <li key={m}>{m}</li>)}</ul></div>}
-              <ol className="ps-heads">{onPress.heads.map((x, i) => { const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null; return (
-                <li key={i} className={x === "" ? "free" : x}><b>{i + 1}</b>{p ? <><i style={{ background: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex }} />{p.name}<small> · {p.mesh}</small></> : x === "flash" ? "Flash" : x === "roller" ? "Roller" : x === "cool" ? "Cool down" : x === "down" ? "Down" : <span className="faint">empty</span>}</li>); })}</ol>
               <div className="ps-acts">
                 <button type="button" className="linkbtn" onClick={() => { const n = autoSetup(onPress.lay, plates.map((p) => ({ key: p.key, name: p.name, hex: p.hex, kind: p.kind })), true); commitSetup(n); }} title="Leave an empty head between colors where there's room, so each hit cools before the next">Space colors out</button>
                 {setup && <button type="button" className="linkbtn" onClick={() => { setSetup(null); setSelHead(null); setSelPlate(null); }}>Use the suggested layout</button>}
@@ -1090,7 +1126,6 @@ export default function SeparationStudio({ id }: { id: string }) {
               </div>
             </section>
           )}
-          {rtab === "press" && coachOn && (res ? <SepCoach sepId={row.id} designId={row.design_id} context={coachContext} images={coachImages} onApply={applyCoach} /> : <div className="sep-card faint">Loading the separation…</div>)}
           {defOpen && <PressDefaults presses={presses} start={press?.id} me={me.email} onClose={() => setDefOpen(false)} onSaved={(m, lay) => { const lc = layoutCounts(lay); setPresses((ps) => ps.map((p) => (p.id === m.id ? { ...p, layout: lay, flashes: lc.units, rollers: lc.rollers || undefined } : p))); setDefOpen(false); setMsg(`${m.name.split(" · ")[0]} defaults saved. Every job's setup on it starts from these.`); }} />}
           {rtab === "screens" && res && <PrintFilms n={plates.length} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
             make={async (rollIn) => { try { return await filmsFile(rollIn); } finally { setBusy(""); } }}
@@ -1217,7 +1252,8 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
   return (
     <div className="sep-outside">
       <section className="sep-card">
-        <h3>1. Get the art</h3>
+        <h3>Learn from Separo · 1. Get the art</h3>
+        <p className="sep-help">When a job has to be separated in Separo, upload what comes back here: it&apos;s compared with ours and the differences teach our separations.</p>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           {origUrl ? <a className="btn" href={origUrl} target="_blank" rel="noreferrer">Download the Art</a> : <span className="faint">No art on this imprint.</span>}
           <a className="btn" href="https://separo.io" target="_blank" rel="noreferrer">Open Separo ↗</a>
