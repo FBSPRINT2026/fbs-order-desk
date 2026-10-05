@@ -162,7 +162,7 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
   // why, in shop words
   const names = (ps: PlanPlate[]) => ps.map((p) => p.name).join(", ");
   const cols = seq.filter((p) => p.kind !== "underbase" && p.kind !== "highlight");
-  if (!hasBase) why.unshift(o.noShirt ? "No shirt picked yet, so there's no underbase and every color prints. Pick the shirt: on a dark shirt the underbase goes on first with a flash right after it, always." : "Light shirt, no underbase: the colors print wet-on-wet, darker over lighter; a flash only where a color would smear into a wet one.");
+  if (!hasBase) why.unshift("No underbase on this job (light shirt, or turned off): the colors print wet-on-wet, darker over lighter; a flash only where a color would smear into a wet one.");
   if (seq[0]?.kind === "underbase") why.unshift(`Underbase on head ${heads.indexOf("p:" + seq[0].key) + 1}, then the flash on head ${heads.findIndex((x, i) => x === "flash" && i > heads.indexOf("p:" + seq[0].key)) + 1}: the underbase always gets flashed before the colors.`);
   const fh = heads.findIndex((x) => x === "flash");
   if (fh >= 0 && fh + 1 < N && !heads[fh + 1].startsWith("p:")) why.push(`Head ${fh + 2} stays empty after the flash so the pallet and base cool before the next screen (a hot, tacky base builds ink up on the screens).`);

@@ -72,8 +72,9 @@ const CHOKE_PT = 0.5, TRAP_PT = 0.25, FINE_PT = 2, FINE_CHOKE_PT = 0.15, BUMP_PT
 /** points at the print size → pixels of a copy `w` px wide (fractions kept: edges move by exact sub-pixel amounts) */
 const ptPx = (pt: number, w: number, widthIn: number) => (pt * w) / (widthIn * 72);
 /** the separation settings in pixels of a copy `w` px wide */
-/** no shirt picked yet (garment ""): every color prints (nothing is left to the shirt); worked out as on a white shirt */
-const shirtOf = (st: Studio) => st.garment || "#FFFFFF";
+/** no shirt picked yet (garment ""): every color prints (nothing is left to the shirt); worked out as on a dark (black)
+ * shirt with an underbase, the shop's usual job (head 1 is the underbase on almost every job), never as white */
+const shirtOf = (st: Studio) => st.garment || "#000000";
 /** a screen's halftone frequency: its own, else the job's */
 const lpiOf = (st: Studio, key: string) => st.lpiFor?.[key] ?? st.lpi;
 const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, garment: shirtOf(st), dropGarment: !!st.garment && st.dropGarment, gain: st.pressGain ?? PRESS_GAIN, choke: ptPx(st.chokePt ?? CHOKE_PT, w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, w, st.widthIn),
@@ -809,6 +810,15 @@ export default function SeparationStudio({ id }: { id: string }) {
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     setBusy("");
   }
+  // "Shirt color" on an ink: that color is the shirt (knocked out), and the viewer's shirt turns that color; unchecking
+  // goes back to the shirt it was
+  const shirtBefore = useRef<string | null>(null);
+  function shirtInk(i: number, on: boolean) {
+    const k = inks[i]; if (!k) return;
+    setInks((l) => l.map((x, j) => (j === i ? { ...x, shirt: on } : on && x.shirt === true ? { ...x, shirt: undefined } : x)));
+    if (on) { if (shirtBefore.current === null) shirtBefore.current = st.garment; set({ garment: k.hex }); }
+    else if (st.garment === k.hex) { set({ garment: shirtBefore.current ?? "" }); shirtBefore.current = null; }
+  }
   function setBackdrop(drop: boolean) {
     if (!!st.dropBackdrop !== drop) refind.current = img;
     set({ dropBackdrop: drop });
@@ -827,7 +837,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     const all = res ? res.plates.map((p) => { const q = plates.find((x) => x.key === p.key); return { key: p.key, name: q?.name || p.name, hex: p.hex, kind: p.kind, coverage: p.coverage, tonal: !!p.tonal }; }) : [];
     const rec = !setup && all.length ? recommendSetup(lay, all, { dark: isDark(shirtOf(st)), noShirt: !st.garment, ov: ovm || undefined, allPlates: all }) : null;
     const { heads, off } = rec?.ok ? { heads: rec.heads, off: [] as typeof sp } : fitSetup(setup, lay, sp);
-    const out = heads.map((x) => { const k = plateOf(x); const p = k ? plates.find((q) => q.key === k) : null; return p ? { hex: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex, name: `${plates.indexOf(p) + 1} · ${p.name}` } : null; });
+    const out = heads.map((x) => { const k = plateOf(x); const p = k ? plates.find((q) => q.key === k) : null; return p ? { hex: p.kind === "underbase" || p.kind === "highlight" ? "#FFFFFF" : p.hex, name: `${plates.indexOf(p) + 1} · ${p.name}` } : null; });
     const chk = checkSetup(heads, lay, sp, isDark(shirtOf(st)));
     const note = off.length ? `${off.length} screen${off.length === 1 ? "" : "s"} won't fit on ${press.name.split(" · ")[0]} (${off.map((p) => p.name).join(", ")}): free a head, print in two rounds, or pick another press.` : "";
     return { lay, heads, out, off, note, ...chk, why: rec?.why || [], recOrder: rec?.ok ? rec.order : null, recNote: rec && !rec.ok ? rec.why[0] : "" };
@@ -935,6 +945,8 @@ export default function SeparationStudio({ id }: { id: string }) {
   const s0 = SEP_STATUS[row.status];
   const dark = isDark(shirtOf(st)), noShirt = !st.garment;
   const garments = [...new Set(order ? orderGroups(order).find((g) => g.id === row.group_id)?.lines.map((l) => l.color).filter(Boolean) || [] : [])];
+  // the shirt's name: from the order, the garment list, the shirt colors, or the ink picked as the shirt color
+  const shirtLabel = noShirt ? "" : [row.garment_color, ...garments, ...SHIRT_COLORS.flatMap((g) => g.colors.map(([c]) => c))].find((c) => c && (shirtHex(c) || colorHex(c) || guessHex(c)) === st.garment) || inks.find((k) => k.hex === st.garment)?.name || st.garment;
 
   return (
     <div className="sep">
@@ -1019,12 +1031,12 @@ export default function SeparationStudio({ id }: { id: string }) {
               </label>
               <select value={noShirt ? "" : "_"} onChange={(e) => { const v = e.target.value; if (v === "_") return; set({ garment: v ? shirtHex(v) || colorHex(v) || guessHex(v) : "" }); }} aria-label="Shirt color">
                 <option value="">All colors printed</option>
-                {!noShirt && <option value="_">{[row.garment_color, ...garments, ...SHIRT_COLORS.flatMap((g) => g.colors.map(([c]) => c))].find((c) => c && (shirtHex(c) || colorHex(c) || guessHex(c)) === st.garment) || st.garment}</option>}
+                {!noShirt && <option value="_">{shirtLabel}</option>}
                 {garments.length > 0 && <optgroup label="From the order">{garments.map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>}
                 {SHIRT_COLORS.map((g) => <optgroup key={g.group} label={g.group}>{g.colors.map(([c]) => <option key={c} value={c}>{c}</option>)}</optgroup>)}
               </select>
             </div>
-            {noShirt ? <p className="sep-help">No shirt picked yet: every color prints. Pick the shirt to leave the colors that match it to the shirt (and to get an underbase on dark shirts).</p>
+            {noShirt ? <p className="sep-help">No shirt picked yet: worked out as a dark shirt with an underbase (head 1), and every color prints. Pick the shirt to leave the colors that match it to the shirt.</p>
               : <label className="sep-chk"><input type="checkbox" checked={st.dropGarment} onChange={(e) => set({ dropGarment: e.target.checked })} /> Let the shirt be colors that match it</label>}
           </section>
           <section className="sep-card">
@@ -1086,6 +1098,18 @@ export default function SeparationStudio({ id }: { id: string }) {
         <section className="sep-main">
           {/* the inks, big, like Separo: art color → ink, click the name to change it */}
           <div className="sep-inkbar">
+            {/* the underbase is a screen like the colors: always shown, first (head 1) */}
+            {(() => {
+              const ub = plates.find((p) => p.kind === "underbase");
+              return (
+                <div className={"sep-chip sep-chip-ub" + (ub ? "" : " off")} title={ub ? "The underbase: a white screen that prints first (head 1) and gets flashed, under the colors." : "No underbase on this job (light shirt). Check Print it to add one."}>
+                  <span className="sep-chip-sw" style={{ background: "#FFFFFF" }}><i style={{ background: "#FFFFFF" }} /></span>
+                  <input value={ub ? ub.name : "Underbase White"} onChange={(e) => { if (ub) setNames((m) => ({ ...m, [ub.key]: e.target.value })); }} readOnly={!ub} aria-label="Underbase" data-notranslate />
+                  <span className="sep-chip-m q-exact">{ub ? "Underbase · head 1" : "Underbase · off"}</span>
+                  <label className={"sep-chip-shirt" + (ub ? " on" : "")} title="Print a white underbase under the colors"><input type="checkbox" checked={!!ub} onChange={(e) => set({ underbase: e.target.checked ? "on" : "off" })} /> Print it</label>
+                </div>
+              );
+            })()}
             {inks.map((k, i) => (
               <div key={k.hex + i} className={"sep-chip" + (res?.dropped.includes(k.hex) ? " shirt" : "") + (dragInk === i ? " dragging" : "") + (dropOn === i && dragInk !== null && dragInk !== i ? " drop" : "")}
                 title={res?.dropped.includes(k.hex) ? "Matches the shirt: not printed (the shirt shows through)" : "Drag onto another ink to combine them into one screen"}
@@ -1106,7 +1130,7 @@ export default function SeparationStudio({ id }: { id: string }) {
                   // this color IS the shirt: knocked out (the shirt shows there); unchecking one that matches the shirt prints it anyway
                   const on = !!res?.dropped.includes(k.hex);
                   return <label className={"sep-chip-shirt" + (on ? " on" : "")} title={on ? "Knocked out: the shirt shows here. Uncheck to print this color." : "Check if this color is the shirt color: it's knocked out and the shirt shows there."}>
-                    <input type="checkbox" checked={on} onChange={(e) => setInks((l) => l.map((x, j) => (j === i ? { ...x, shirt: e.target.checked } : x)))} /> Shirt color
+                    <input type="checkbox" checked={on} onChange={(e) => shirtInk(i, e.target.checked)} /> Shirt color
                   </label>;
                 })()}
                 <button type="button" className="sep-chip-x" onClick={() => { setMatchAt(null); setInks((l) => dropInk(l, i)); }} aria-label={`Remove ${k.name}`} title="Remove (its part of the art goes to the nearest other ink)">×</button>
@@ -1155,7 +1179,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <small>{loupe ? <>{LOUPE_IN}&quot; of film at {st.dpi} dpi{(st.method === "sim" || plates.find((p) => p.key === solo)?.tonal) ? `, ${st.lpi} lpi ${DOT_NAME[st.dot || "ellipse"]} dots` : ", solid"}. Click elsewhere to move.</> : "Film close-up"}</small>
             </div>
           )}
-          <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). Click it for a close-up of the real film. <button type="button" className="linkbtn" onClick={() => { setSolo(null); setLoupe(null); }}>Back to the proof</button></> : view === "compare" ? <>Left of the line: the original art. Right: how it prints.</> : <>{view === "original" ? "The original art" : "Soft proof: how it prints"}{noShirt ? " (no shirt picked: every color prints)" : bg === "shirt" ? ` on a ${st.garment} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
+          <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). Click it for a close-up of the real film. <button type="button" className="linkbtn" onClick={() => { setSolo(null); setLoupe(null); }}>Back to the proof</button></> : view === "compare" ? <>Left of the line: the original art. Right: how it prints.</> : <>{view === "original" ? "The original art" : "Soft proof: how it prints"}{noShirt ? " (no shirt picked: every color prints)" : bg === "shirt" ? ` on a ${shirtLabel} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
         </section>
 
         {/* screens, press, films, coach */}
@@ -1177,10 +1201,10 @@ export default function SeparationStudio({ id }: { id: string }) {
                     const on = st.baseFor?.[p.key] ?? baseByDefault(art);
                     return <button type="button" className={"sep-base" + (on ? " on" : "")} title={on ? "White underbase prints under this ink. Click to leave it off (the ink prints straight on the shirt)" : "No underbase under this ink (prints straight on the shirt). Click to put base under it"} onClick={() => set({ baseFor: { ...(st.baseFor || {}), [p.key]: !on } })}>{on ? "Base" : "No base"}</button>;
                   })()}
-                  {" "}· mesh <select className="sep-mesh" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh">{[...new Set([...SHOP_MESH, p.mesh])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v}</option>)}</select>
-                  {(tonal || p.tonal) && <>{" "}· <select className="sep-mesh sep-lpi" value={lpiOf(st, p.key)} title="Halftone frequency for this screen (lines per inch): lower = bigger dots" aria-label="Halftone LPI"
+                  {" "}<span className="sep-nw">· mesh <select className="sep-mesh" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh">{[...new Set([...SHOP_MESH, p.mesh])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v}</option>)}</select></span>
+                  {(tonal || p.tonal) && <>{" "}<span className="sep-nw">· <select className="sep-mesh sep-lpi" value={lpiOf(st, p.key)} title="Halftone frequency for this screen (lines per inch): lower = bigger dots" aria-label="Halftone LPI"
                     onChange={(e) => { const v = +e.target.value, n = { ...(st.lpiFor || {}) }; if (v === st.lpi) delete n[p.key]; else n[p.key] = v; set({ lpiFor: n }); }}>
-                    {[...new Set([...LPIS, lpiOf(st, p.key)])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v} lpi</option>)}</select></>}
+                    {[...new Set([...LPIS, lpiOf(st, p.key)])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v} lpi</option>)}</select></span></>}
                   {meshSug[p.key] && (mesh[p.key] == null || mesh[p.key] === meshSug[p.key].mesh
                     ? <span className="sep-meshsug" title={meshSug[p.key].why}>suggested</span>
                     : <button type="button" className="linkbtn sep-meshsug" title={meshSug[p.key].why} onClick={() => setMesh((m) => { const n = { ...m }; delete n[p.key]; return n; })}>suggests {meshSug[p.key].mesh}</button>)}</small>
@@ -1226,7 +1250,7 @@ export default function SeparationStudio({ id }: { id: string }) {
                   <li key={p.key} className={"ps-color" + (dragPlate === p.key ? " dragging" : "") + (a ? " asking" : "")}
                     draggable onDragStart={(e) => { setDragPlate(p.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", p.key); }} onDragEnd={() => { setDragPlate(null); setDropHead(null); }}>
                     <div className="ps-color-r">
-                      <i className="ps-sw" style={{ background: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex }} />
+                      <i className="ps-sw" style={{ background: p.hex }} />
                       <span className="ps-cname"><b>{i + 1} · {p.name}</b><small>mesh {p.mesh}</small></span>
                       <span className="ps-ud">
                         <button type="button" className="btn icon ghost sm" title="Print earlier (trades heads with the color before it)" disabled={!i || at < 0} onClick={() => swapWith(p.key, plates[i - 1]?.key)}>↑</button>

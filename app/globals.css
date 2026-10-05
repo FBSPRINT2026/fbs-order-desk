@@ -4875,3 +4875,18 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .sep-bgask{display:flex;gap:12px;align-items:flex-start}
 .sep-bgask-sw{flex:0 0 auto;width:38px;height:38px;border-radius:8px;border:1px solid var(--line);box-shadow:inset 0 0 0 3px rgba(255,255,255,.4)}
 .sep-bgask-sw.sm{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;box-shadow:none}
+
+/* Screens list: the meta line wraps (mesh, LPI, "suggests 195" never run over the boxes) */
+.sep-plates .sep-meta{white-space:normal;line-height:22px}
+.sep-plates .sep-meta select,.sep-plates .sep-meta .sep-base{vertical-align:middle}
+.sep-meshsug{display:inline-block;white-space:nowrap;margin-left:6px;vertical-align:middle;line-height:1.2}
+/* right column: no scroll inside the page's scroll; it runs as long as it needs */
+@media (min-width:1251px){
+  .sep-grid>.sep-side:last-child{height:auto;min-height:0}
+  .sep-grid>.sep-side:last-child .sep-pane{flex:none;overflow:visible}
+}
+/* the underbase chip in the inks bar */
+.sep-chip-ub .sep-chip-sw{box-shadow:inset 0 -1px 0 var(--line-2)}
+.sep-chip-ub .sep-chip-m{cursor:default}
+.sep-chip-ub.off{opacity:.65}
+.sep-nw{white-space:nowrap}
