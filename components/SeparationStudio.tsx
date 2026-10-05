@@ -830,7 +830,29 @@ export default function SeparationStudio({ id }: { id: string }) {
   }
   /** drag a screen (from a head or the not-on-the-press list) onto a head: it goes there, and they trade places */
   const [dragPlate, setDragPlate] = useState<string | null>(null), [dropHead, setDropHead] = useState<number | null>(null);
-  function dropOnHead(i: number) { if (dragPlate) putPlate(dragPlate, i); setDragPlate(null); setDropHead(null); }
+  function dropOnHead(i: number) { if (dragPlate) chooseHead(dragPlate, i); setDragPlate(null); setDropHead(null); }
+  /**
+   * A color picks its head. A free head: it moves there. A head with another color on it: ask where that color goes
+   * (back to this color's head, or any open head). A flash / roller / cool-down head: ask before covering it.
+   */
+  const [ask, setAsk] = useState<{ key: string; to: number; other?: string; station?: string } | null>(null);
+  function chooseHead(key: string, to: number) {
+    if (!onPress) return;
+    const n = onPress.heads, there = n[to];
+    if (there === "down" || n.indexOf("p:" + key) === to) return;
+    if (plateOf(there)) { setAsk({ key, to, other: plateOf(there)! }); return; }
+    if (there === "flash" || there === "roller" || there === "cool") { setAsk({ key, to, station: there }); return; }
+    moveColor(key, to);
+  }
+  /** move it, and the color that was there to `otherTo` (a head), or back where the moving one came from */
+  function moveColor(key: string, to: number, otherTo?: number) {
+    if (!onPress) return;
+    const n = [...onPress.heads], from = n.indexOf("p:" + key), there = n[to], other = plateOf(there);
+    n[to] = "p:" + key;
+    if (from >= 0) n[from] = "";
+    if (other) { const dest = otherTo ?? from; if (dest >= 0 && (n[dest] === "" || dest === from)) n[dest] = "p:" + other; }
+    commitSetup(n); setAsk(null); setSelHead(null);
+  }
   /** a sheet for the press operator: the press drawn with every head, and the list */
   function printSetup() {
     if (!onPress || !press || !row) return;
@@ -1098,38 +1120,61 @@ export default function SeparationStudio({ id }: { id: string }) {
               </div>
               <div className="sep-press"><PressLayout layout={drawLayout(onPress.heads)} size={250} mirror={!!press.mirror} inks={onPress.out} selected={selHead} onPick={pickHead}
                 onDropHead={dragPlate ? dropOnHead : undefined} dropAt={dropHead} onDragHead={(i) => setDropHead(i)} /></div>
-              <p className="sep-help">Pick what goes on each head, or drag a color to another head (onto the list or the press): the two trade places.</p>
-              <ol className="ps-rows">{onPress.heads.map((x, i) => {
-                const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null, down = x === "down";
+              {selHead != null && (() => {
+                // tapped a head on the drawing: what's on it (a color's head is picked in the list below)
+                const x = onPress.heads[selHead], k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null;
                 return (
-                  <li key={i} className={"ps-row " + (p ? "screen" : x || "free") + (selHead === i ? " sel" : "") + (dropHead === i && dragPlate && dragPlate !== k ? " drop" : "") + (dragPlate && dragPlate === k ? " dragging" : "")}
-                    draggable={!!p} onDragStart={(e) => { if (!k) return; setDragPlate(k); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", k); }}
-                    onDragEnd={() => { setDragPlate(null); setDropHead(null); }}
-                    onDragOver={(e) => { if (dragPlate && !down) { e.preventDefault(); setDropHead(i); } }}
-                    onDragLeave={() => setDropHead((d) => (d === i ? null : d))}
-                    onDrop={(e) => { e.preventDefault(); if (!down) dropOnHead(i); }}>
-                    <span className="ps-grip" aria-hidden>{p ? "⋮⋮" : ""}</span>
-                    <b className="ps-no">{i + 1}</b>
-                    <i className="ps-sw" style={p ? { background: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex } : undefined} />
-                    {down ? <span className="ps-down">Head down</span> : (
-                      <select id={`ps-head-${i}`} value={x} aria-label={`Head ${i + 1}`} onFocus={() => setSelHead(i)} onBlur={() => setSelHead((h) => (h === i ? null : h))}
-                        onChange={(e) => { const v = e.target.value; if (plateOf(v)) putPlate(plateOf(v)!, i); else setHeadTo(i, v); }}>
-                        <option value="">Empty</option>
-                        <option value="cool">Cool down</option>
-                        <option value="flash">Flash</option>
-                        <option value="roller">Roller (dead screen)</option>
-                        <optgroup label="Screens">{plates.map((q, j) => { const at = onPress.heads.indexOf("p:" + q.key); return <option key={q.key} value={"p:" + q.key}>{j + 1} · {q.name}{at >= 0 && at !== i ? ` (now head ${at + 1})` : at < 0 ? " (not on)" : ""}</option>; })}</optgroup>
+                  <div className="ps-headmenu">
+                    <b>Head {selHead + 1}</b>
+                    {p ? <span>{p.name}: pick a different head for it in the list below.</span> : <>
+                      {([["", "Empty"], ["cool", "Cool down"], ["flash", "Flash"], ["roller", "Roller"]] as const).map(([v, l]) => <button key={v || "e"} type="button" className={"pl-opt " + (v || "print") + (x === v ? " on" : "")} onClick={() => { setHeadTo(selHead, v); setSelHead(null); }}><i aria-hidden />{l}</button>)}
+                    </>}
+                    <button type="button" className="btn icon ghost sm" aria-label="Close" onClick={() => setSelHead(null)}>✕</button>
+                  </div>
+                );
+              })()}
+              <p className="sep-help">Each color: pick the head it goes on. Tap a head on the press for a flash, the roller or a cool-down.</p>
+              <ol className="ps-colors">{plates.map((p, i) => {
+                const at = onPress.heads.indexOf("p:" + p.key);
+                const what = (x: Slot) => { const k = plateOf(x); return k ? (plates.find((q) => q.key === k)?.name || "a screen") : x === "flash" ? "Flash" : x === "roller" ? "Roller" : x === "cool" ? "Cool down" : x === "down" ? "down" : "open"; };
+                const a = ask && ask.key === p.key ? ask : null;
+                const otherName = a?.other ? plates.find((q) => q.key === a.other)?.name : "";
+                const open = onPress.heads.map((x, h) => (x === "" && h !== a?.to ? h : -1)).filter((h) => h >= 0);
+                return (
+                  <li key={p.key} className={"ps-color" + (dragPlate === p.key ? " dragging" : "") + (a ? " asking" : "")}
+                    draggable onDragStart={(e) => { setDragPlate(p.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", p.key); }} onDragEnd={() => { setDragPlate(null); setDropHead(null); }}>
+                    <div className="ps-color-r">
+                      <i className="ps-sw" style={{ background: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex }} />
+                      <span className="ps-cname"><b>{i + 1} · {p.name}</b><small>mesh {p.mesh}</small></span>
+                      <select value={at} aria-label={`Head for ${p.name}`} onChange={(e) => chooseHead(p.key, +e.target.value)}>
+                        {at < 0 && <option value={-1}>Not on the press</option>}
+                        {onPress.heads.map((x, h) => <option key={h} value={h} disabled={x === "down"}>Head {h + 1}{h === at ? "" : ` · ${what(x)}`}</option>)}
                       </select>
+                    </div>
+                    {a && (
+                      <div className="ps-ask">
+                        {a.other ? <>
+                          <span>Head {a.to + 1} has <b>{otherName}</b>. Where should {otherName} go?</span>
+                          <div className="ps-ask-b">
+                            {at >= 0 && <button type="button" className="btn sm primary" onClick={() => moveColor(p.key, a.to, at)}>Head {at + 1} (trade places)</button>}
+                            <select value="" aria-label={`Another head for ${otherName}`} onChange={(e) => e.target.value !== "" && moveColor(p.key, a.to, +e.target.value)}>
+                              <option value="">Another open head…</option>
+                              {open.map((h) => <option key={h} value={h}>Head {h + 1}</option>)}
+                            </select>
+                            <button type="button" className="btn sm" onClick={() => setAsk(null)}>Cancel</button>
+                          </div>
+                        </> : <>
+                          <span>Head {a.to + 1} is {a.station === "flash" ? "a flash" : a.station === "roller" ? "the roller" : "a cool-down head"}. Put {p.name} there instead?</span>
+                          <div className="ps-ask-b">
+                            <button type="button" className="btn sm primary" onClick={() => moveColor(p.key, a.to)}>Yes, use head {a.to + 1}</button>
+                            <button type="button" className="btn sm" onClick={() => setAsk(null)}>Cancel</button>
+                          </div>
+                        </>}
+                      </div>
                     )}
-                    {p && <small className="ps-mesh">{p.mesh}</small>}
                   </li>
                 );
               })}</ol>
-              {onPress.off.length > 0 && (
-                <div className="ps-off"><b>Not on the press:</b> {onPress.off.map((p) => (
-                  <span key={p.key} className="ps-chip" draggable onDragStart={(e) => { setDragPlate(p.key); e.dataTransfer.setData("text/plain", p.key); }} onDragEnd={() => { setDragPlate(null); setDropHead(null); }}><i style={{ background: p.hex }} />{p.name}</span>
-                ))} <span className="faint">drag onto a head, or pick it in a head&apos;s list</span></div>
-              )}
               {onPress.note && <div className="sep-tip">{onPress.note}</div>}
               {onPress.recNote && <div className="sep-tip">{onPress.recNote}</div>}
               {!setup && onPress.why.length > 0 && <details className="ps-why" open><summary>Why this layout</summary><ul>{onPress.why.map((w) => <li key={w}>{w}</li>)}</ul></details>}
