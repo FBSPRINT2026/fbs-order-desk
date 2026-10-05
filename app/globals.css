@@ -4870,3 +4870,8 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ps-headmenu .pl-opt{padding:4px 8px;font-size:12px}
 .sep-meshsug{font-size:10.5px;color:var(--accent);margin-left:4px;cursor:help}
 .sep-plates .sep-lpi{width:66px!important}
+
+/* vector art: remove its background layer */
+.sep-bgask{display:flex;gap:12px;align-items:flex-start}
+.sep-bgask-sw{flex:0 0 auto;width:38px;height:38px;border-radius:8px;border:1px solid var(--line);box-shadow:inset 0 0 0 3px rgba(255,255,255,.4)}
+.sep-bgask-sw.sm{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;box-shadow:none}

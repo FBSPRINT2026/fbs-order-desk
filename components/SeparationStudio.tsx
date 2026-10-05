@@ -14,6 +14,7 @@ import { folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder } 
 import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
+import { findBackdrop, withoutBackdrop } from "@/lib/vectorBg";
 import { adjustInks, colorWord, dropInk, fadesOf, inkName, planFor, planPrint, shown, withMiddle, type PrintPlan } from "@/lib/printPlan";
 import { browserInflate, parsePdf } from "@/lib/pdfVector";
 import { deltaE } from "@/lib/inkColors";
@@ -48,7 +49,9 @@ export const SEP_STATUS: Record<SepRow["status"], { label: string; c: string }> 
   approved: { label: "Approved", c: "#2E9D5B" }, films: { label: "Films printed", c: "#0A8FC0" }, cancelled: { label: "Cancelled", c: "#7C8799" },
 };
 
-type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean; lib: "auto" | "wilflex" | "pms"; solidOut?: "pixels" | "vector";
+type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean;
+  /** vector art: take out the background layer (a page-size box of cream / white behind the art); unset = not asked yet */
+  dropBackdrop?: boolean; lib: "auto" | "wilflex" | "pms"; solidOut?: "pixels" | "vector";
   /** underbase choke and color trap, in points at the print size (so they mean the same at any resolution) */
   chokePt?: number; trapPt?: number; blackOver?: boolean;
   /** fine detail (small type, thin lines): narrower than finePt (0 = off), the base is choked only fineChokePt and the
@@ -247,10 +250,17 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [hasArt, setHasArt] = useState<boolean | null>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   // SVG art: its shapes, kept as vector for the Illustrator file
-  const [vart, setVart] = useState<VArt | null>(null);
+  const [vraw, setVart] = useState<VArt | null>(null);
   const [me, setMe] = useState({ email: "", boss: false });
   const [err, setErr] = useState(""), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
   const [st, setSt] = useState<Studio>({ ...DEFAULT_SEP, widthIn: 11, lpi: 55, angle: 22.5, dpi: 720, removeBg: true, lib: "auto" });
+  // vector art's background layer (stock art's cream / white page box): asked once, then kept in the settings
+  const backdrop = useMemo(() => findBackdrop(vraw), [vraw]);
+  const vart = useMemo(() => (vraw && backdrop && st.dropBackdrop ? withoutBackdrop(vraw, backdrop) : vraw), [vraw, backdrop, st.dropBackdrop]);
+  // after the background comes out (or goes back), the inks are found again once the new art is drawn
+  const refind = useRef<HTMLImageElement | null | false>(false);
+  // EPS / PDF art: the Studio's picture of it is drawn from its shapes
+  const fromShapes = useRef(false);
   const [inks, setInks] = useState<SepInk[]>([]);
   const [res, setRes] = useState<SepResult | null>(null);
   const [orderKeys, setOrderKeys] = useState<string[]>([]);
@@ -363,7 +373,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       const [{ data: ev }, { data: su }] = await Promise.all([sb.storage.from("proofs").download(des.file_path), sb.storage.from("proofs").createSignedUrl(des.file_path, 3600)]);
       setOrigUrl(su?.signedUrl || "");
       const v = ev ? await readVector(ev, des.file_name || des.file_path, des.file_type || "") : null;
-      if (v?.ok) { setVart(v); setArtUrl(URL.createObjectURL(new Blob([vartSvg(v)], { type: "image/svg+xml" }))); return; }
+      if (v?.ok) { fromShapes.current = true; setVart(v); return; } // (the picture of it is drawn from the shapes, below)
       if (!des.preview_path) { setErr(`This art file ${v?.why || "couldn't be read"}. Fix that in Illustrator, or upload a PNG at the print size.`); setHasArt(false); return; }
       if (v) setVart(v); // shows why, and the preview picture is separated instead
       const { data: pb } = await sb.storage.from("proofs").download(des.preview_path);
@@ -383,6 +393,8 @@ export default function SeparationStudio({ id }: { id: string }) {
     }
   }, [sb, id]);
   useEffect(() => { load(); }, [load]);
+  // vector art: the picture the Studio works from is drawn from its shapes (without the background, when removed)
+  useEffect(() => { if (vart?.ok && (fromShapes.current || vart !== vraw)) setArtUrl(URL.createObjectURL(new Blob([vartSvg(vart)], { type: "image/svg+xml" }))); }, [vart]);
   useEffect(() => { if (!artUrl) return; loadImg(artUrl).then(setImg).catch((e) => setErr(e.message)); }, [artUrl]);
   useEffect(() => { if (!img) return; pxRef.current = pixelsOf(img, st.removeBg, !!vart); setPxTick((t) => t + 1); }, [img, st.removeBg, vart]);
 
@@ -521,7 +533,11 @@ export default function SeparationStudio({ id }: { id: string }) {
     }, 30);
   }, [st.method, st.garment, st.maxColors, st.lib, vart, sb, inks]);
   const hint = useMemo(() => { const px = pxRef.current; if (!px || !inks.length || st.method === "sim") return 0; return gradientShare(px, inks.map((k) => k.hex)); }, [pxTick, inks, st.method]);
-  useEffect(() => { if (pxTick && !inks.length) findInks(st.method, true, true); }, [pxTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!pxTick) return;
+    if (refind.current !== false && img !== refind.current) { refind.current = false; findInks(st.method, true, false); return; }
+    if (!inks.length) findInks(st.method, true, true);
+  }, [pxTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- separate (a moment after anything changes) ---------- */
   useEffect(() => {
@@ -793,6 +809,10 @@ export default function SeparationStudio({ id }: { id: string }) {
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     setBusy("");
   }
+  function setBackdrop(drop: boolean) {
+    if (!!st.dropBackdrop !== drop) refind.current = img;
+    set({ dropBackdrop: drop });
+  }
   async function openFile(path: string) { const { data } = await sb.storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
 
   /* ---------- press setup: the plates on a press, in print order, the underbase just before a flash ---------- */
@@ -954,6 +974,22 @@ export default function SeparationStudio({ id }: { id: string }) {
       <div className="rv-seg sep-tabs">{([["studio", "Separations"], ["outside", "✦ Coach & Learning"]] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
       </div>
 
+      {backdrop && st.dropBackdrop === undefined && vraw?.ok && (
+        <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="bg-t">
+          <div className="mk-modal">
+            <h2 id="bg-t">Remove the {backdrop.name} background?</h2>
+            <div className="sep-bgask">
+              <span className="sep-bgask-sw" style={{ background: backdrop.hex }} />
+              <p>I noticed this vector art has a <b>{backdrop.name}</b> background ({backdrop.hex}): {backdrop.what}, the size of the whole page. As it is, it would print as a {backdrop.name} box on the shirt.</p>
+            </div>
+            <p className="muted">Removing it takes out just that background layer. The art itself stays vector, exactly as it was, and any {backdrop.name} inside the design (highlights, details) still prints. You can change this later under the art.</p>
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn ghost" onClick={() => setBackdrop(false)}>Keep it (it prints)</button>
+              <button type="button" className="btn primary" autoFocus onClick={() => setBackdrop(true)}>Remove background</button>
+            </div>
+          </div>
+        </div>
+      )}
       {tab === "outside" ? <div className="sep-learn">
         {coachOn && <div className="sep-learn-coach">{res ? <SepCoach sepId={row.id} designId={row.design_id} context={coachContext} images={coachImages} onApply={applyCoach} /> : <div className="sep-card faint">Loading the separation…</div>}</div>}
         <div className="sep-learn-out"><Outside row={row} origUrl={origUrl} onSaved={(r) => { setRow(r); setMsg("Uploaded and sent for review."); }} openFile={openFile}
@@ -971,6 +1007,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <div className="rv-seg sep-full">{([["spot", "Spot color"], ["sim", "Simulated process"]] as const).map(([k, l]) => <button key={k} type="button" className={st.method === k ? "on" : ""} onClick={() => { set({ method: k }); findInks(k, true); }}>{l}</button>)}</div>
             <p className="sep-help">{st.method === "spot" ? "Flat colors, solid screens. Logos, text, cartoon art." : "Photos and painted art: a few bright inks in halftones, mixed on the shirt."}</p>
             {vart && <div className={vart.ok ? "sep-ok" : "sep-tip"}>{vart.ok ? `Vector art (${vart.shapes.length} shapes): the Illustrator file keeps the original shapes for each ink.` : `Vector art, but it ${vart.why}: the plates are traced from a picture of it instead.`}</div>}
+            {backdrop && vraw?.ok && <label className="sep-chk" title={`The art sits on ${backdrop.what} in ${backdrop.name} (${backdrop.hex}), the size of the page. Checked: that background layer is taken out and doesn't print; the rest of the art is untouched.`}><input type="checkbox" checked={!!st.dropBackdrop} onChange={(e) => setBackdrop(e.target.checked)} /> <span className="sep-bgask-sw sm" style={{ background: backdrop.hex }} /> Remove the {backdrop.name} background layer</label>}
             {st.method === "spot" && hint > 0.18 && inks.length >= natural && !inks.some((k) => k.fadeTo?.length) && <div className="sep-tip">This art has a lot of shading ({Math.round(hint * 100)}% between colors). <button type="button" className="linkbtn" onClick={() => { set({ method: "sim" }); findInks("sim", true); }}>Try simulated process</button></div>}
           </section>
           <section className="sep-card">
