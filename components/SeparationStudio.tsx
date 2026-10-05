@@ -883,7 +883,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       <div className="sep-grid">
         {/* settings */}
         <aside className="sep-side">
-          <div className="rv-seg sep-ptabs" role="tablist">{([["inks", "Inks"], ["output", "Underbase & Output"]] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={ltab === k} className={ltab === k ? "on" : ""} onClick={() => setLtab(k)}>{l}</button>)}</div>
+          <div className="rv-seg sep-ptabs" role="tablist">{([["inks", "Inks"], ["output", "Underbase & Size"]] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={ltab === k} className={ltab === k ? "on" : ""} onClick={() => setLtab(k)}>{l}</button>)}</div>
           <div className="sep-pane">
           {ltab === "inks" && <>
           <section className="sep-card">
@@ -927,7 +927,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <label className="sep-chk"><input type="checkbox" checked={st.removeBg} onChange={(e) => set({ removeBg: e.target.checked })} /> White background isn&apos;t printed</label>
           </section>}
           {ltab === "output" && <section className="sep-card">
-            <h3>Output</h3>
+            <h3>Size &amp; Film</h3>
             <label className="sep-f">Print width (in)<input type="number" min={1} max={20} step={0.25} value={st.widthIn} onChange={(e) => set({ widthIn: +e.target.value || 1 })} /></label>
             {img && (() => {
               // pictures can't be blown up (Separo can't either): say how sharp the art is at this print size
