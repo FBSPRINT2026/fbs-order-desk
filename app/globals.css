@@ -4823,3 +4823,10 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .sep-learn .sep-coach .sc-thread{max-height:calc(100vh - 380px)}
 .sep-learn-out .sep-outside{display:flex;flex-direction:column;gap:12px}
 @media (max-width:1000px){.sep-learn{grid-template-columns:minmax(0,1fr)}}
+/* shirt swatch: empty (dashed, crossed) when no shirt is picked; tap it for any color */
+.sep-shirt-sw{position:relative;width:38px;height:32px;flex:none;border-radius:6px;border:1px solid var(--line);cursor:pointer;overflow:hidden}
+.sep-shirt-sw input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.sep-shirt-sw.none{border-style:dashed;background:linear-gradient(to top right,transparent calc(50% - 1px),var(--ink-3) 50%,transparent calc(50% + 1px)) var(--surface)}
+/* print films: the button up top */
+.pf-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pf-head .btn{padding-top:6px;padding-bottom:6px}

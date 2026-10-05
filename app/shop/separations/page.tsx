@@ -88,7 +88,7 @@ function NewFromArt() {
   const sb = useMemo(() => createClient(), []);
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null), [thumb, setThumb] = useState("");
-  const [name, setName] = useState(""), [shirt, setShirt] = useState("Black");
+  const [name, setName] = useState(""), [shirt, setShirt] = useState(""); // none yet: every color prints
   // the print size comes first: a picture can only be made so big before it prints pixelated (vector art: any size)
   const [widthIn, setWidthIn] = useState(11), [dims, setDims] = useState<{ w: number; h: number; vector: boolean } | null>(null);
   const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState("");
@@ -139,7 +139,7 @@ function NewFromArt() {
         <div className="sep-new-form">
           <span className="sep-new-th">{thumb && <img src={thumb} alt="" />}</span>
           <label className="sep-f">Name<input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="What is it?" autoFocus /></label>
-          <label className="sep-f">Shirt color<input type="text" list="sep-shirts" value={shirt} onChange={(e) => setShirt(e.target.value)} /></label>
+          <label className="sep-f">Shirt color<input type="text" list="sep-shirts" value={shirt} placeholder="None yet: all colors print" onChange={(e) => setShirt(e.target.value)} /></label>
           <label className="sep-f" title="How wide the print is on the shirt">Print width (in)<input type="number" min={1} max={20} step={0.25} value={widthIn} onChange={(e) => setWidthIn(+e.target.value || 1)} /></label>
           <datalist id="sep-shirts">{SHIRTS.map((c) => <option key={c} value={c} />)}</datalist>
           <span className="sep-new-go">

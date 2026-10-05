@@ -66,7 +66,9 @@ const CHOKE_PT = 0.5, TRAP_PT = 0.25, FINE_PT = 2, FINE_CHOKE_PT = 0.15, BUMP_PT
 /** points at the print size → pixels of a copy `w` px wide (fractions kept: edges move by exact sub-pixel amounts) */
 const ptPx = (pt: number, w: number, widthIn: number) => (pt * w) / (widthIn * 72);
 /** the separation settings in pixels of a copy `w` px wide */
-const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, gain: st.pressGain ?? PRESS_GAIN, choke: ptPx(st.chokePt ?? CHOKE_PT, w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, w, st.widthIn),
+/** no shirt picked yet (garment ""): every color prints (nothing is left to the shirt); worked out as on a white shirt */
+const shirtOf = (st: Studio) => st.garment || "#FFFFFF";
+const sepOpts = (st: Studio, w: number): SepSettings => ({ ...st, garment: shirtOf(st), dropGarment: !!st.garment && st.dropGarment, gain: st.pressGain ?? PRESS_GAIN, choke: ptPx(st.chokePt ?? CHOKE_PT, w, st.widthIn), trap: ptPx(st.trapPt ?? TRAP_PT, w, st.widthIn),
   fine: ptPx(st.finePt ?? FINE_PT, w, st.widthIn), fineChoke: ptPx(st.fineChokePt ?? FINE_CHOKE_PT, w, st.widthIn), bump: ptPx(st.bumpPt ?? BUMP_PT, w, st.widthIn) });
 /** the working size on screen (fast); the files are separated again at full size (OUT_PPI at the print width) */
 const MAX_SIDE = 2400;
@@ -323,7 +325,8 @@ export default function SeparationStudio({ id }: { id: string }) {
     setPresses(ps.machines.filter((m) => m.type === "screen" && m.active).map((m) => withIssue(m, ((eq0 || []) as EquipRow[]).find((e) => e.machine === m.id), today)));
     // saved settings win; otherwise the garment from the order
     const saved = row0.settings as Partial<Studio> & { inks?: SepInk[]; order?: string[]; mesh?: Record<string, number>; names?: Record<string, string> };
-    const garment = (saved.garment as string) || colorHex(row0.garment_color) || guessHex(row0.garment_color) || "#FFFFFF";
+    // the shirt: saved, else the order's garment color; none picked = every color prints
+    const garment = (saved.garment as string) ?? (row0.garment_color ? colorHex(row0.garment_color) || guessHex(row0.garment_color) || "" : "");
     const im = orderGroups((o as Order) || { groups: [], lines: [] } as never).flatMap((g) => g.imprints).find((x) => x.id === row0.imprint_id);
     const widthIn = saved.widthIn || parseFloat(String(im?.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || 11;
     setSt((s) => ({ ...s, ...saved, garment, widthIn, method: (saved.method as SepSettings["method"]) || s.method }));
@@ -431,7 +434,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   useEffect(() => { if (pendingFind.current) { pendingFind.current = false; findInks(); } }); // eslint-disable-line react-hooks/exhaustive-deps
   const coachContext = () => ({
     order_id: row?.order_id || undefined, separation: row ? `S-${row.number}` : undefined, location: row?.location, status: row?.status,
-    shirt: { color: st.garment, name: row?.garment_color, dark: isDark(st.garment) },
+    shirt: st.garment ? { color: st.garment, name: row?.garment_color, dark: isDark(st.garment) } : "none picked: every color prints",
     method: st.method, art: vart?.ok ? "vector" : img ? `picture ${img.naturalWidth}×${img.naturalHeight} px (${Math.round((img.naturalWidth || 0) / st.widthIn)} ppi at the print size)` : "none",
     print_width_in: st.widthIn,
     settings: { colors: st.maxColors, underbase: st.underbase, highlight: st.highlight, chokePt: st.chokePt ?? CHOKE_PT, trapPt: st.trapPt ?? TRAP_PT, finePt: st.finePt ?? FINE_PT, fineChokePt: st.fineChokePt ?? FINE_CHOKE_PT, bumpPt: st.bumpPt ?? BUMP_PT, blackOver: st.blackOver ?? true, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", pressGain: st.pressGain ?? PRESS_GAIN, dpi: st.dpi },
@@ -447,7 +450,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       try {
         const k = Math.min(1, 1100 / Math.max(c.width, c.height)), t = document.createElement("canvas");
         t.width = Math.round(c.width * k); t.height = Math.round(c.height * k);
-        const g = t.getContext("2d")!; g.fillStyle = st.garment; g.fillRect(0, 0, t.width, t.height); g.drawImage(c, 0, 0, t.width, t.height);
+        const g = t.getContext("2d")!; g.fillStyle = shirtOf(st); g.fillRect(0, 0, t.width, t.height); g.drawImage(c, 0, 0, t.width, t.height);
         out.push({ label, data: t.toDataURL("image/jpeg", 0.85).split(",")[1] });
       } catch { /* a canvas that can't be read is just left out */ }
     };
@@ -456,7 +459,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       // the Coach tab: the proof canvas isn't on screen, so draw the proof here
       const c = document.createElement("canvas"); c.width = res.w; c.height = res.h;
       const x = c.getContext("2d")!, id = x.createImageData(res.w, res.h);
-      id.data.set(composite({ plates, w: res.w, h: res.h }, st.garment, undefined, st.pressGain ?? PRESS_GAIN)); x.putImageData(id, 0, 0); grab(c, "Soft proof: how the separation prints on the shirt:");
+      id.data.set(composite({ plates, w: res.w, h: res.h }, shirtOf(st), undefined, st.pressGain ?? PRESS_GAIN)); x.putImageData(id, 0, 0); grab(c, "Soft proof: how the separation prints on the shirt:");
     }
     if (cvOrig.current) grab(cvOrig.current, "The original art:");
     else if (img) { const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext("2d")!.drawImage(img, 0, 0); grab(c, "The original art:"); }
@@ -475,9 +478,9 @@ export default function SeparationStudio({ id }: { id: string }) {
       // here the same way (and saved on the design, so the mockup and the price match the screens)
       if (auto) {
         const d0 = designRef.current;
-        let plan = fromPlan ? planFor(d0?.print_plan, px, st.garment, st.lib) : null;
+        let plan = fromPlan ? planFor(d0?.print_plan, px, shirtOf(st), st.lib) : null;
         const fresh = !plan;
-        if (!plan) plan = planPrint(px, { garment: st.garment, lib: st.lib, method: fromPlan ? undefined : method });
+        if (!plan) plan = planPrint(px, { garment: shirtOf(st), lib: st.lib, method: fromPlan ? undefined : method });
         const spots = (vart?.shapes || []).filter((sh) => sh.ink && !/%$/.test(sh.ink));
         const swatch = (hex: string) => { let best = "", bd = 4; for (const sh of spots) { const dd = deltaE(hex, sh.fill); if (dd < bd) { bd = dd; best = sh.ink!; } } return best; };
         const list = plan.inks.map((k) => ({ ...k, name: swatch(k.hex) || k.name }));
@@ -500,7 +503,7 @@ export default function SeparationStudio({ id }: { id: string }) {
         return;
       }
       const want = auto ? (method === "sim" ? 8 : 12) : st.maxColors;
-      const f = method === "sim" ? findSimInks(px, st.garment, want) : findColors(px, want, 9, 0.004, st.garment);
+      const f = method === "sim" ? findSimInks(px, shirtOf(st), want) : findColors(px, want, 9, 0.004, shirtOf(st));
       if (auto || f.length < want) setSt((x) => ({ ...x, maxColors: Math.max(1, f.length) }));
       if (auto) setNatural(f.length);
       if (!auto && f.length < want) setMsg(`This art has ${f.length} color${f.length === 1 ? "" : "s"}. More inks would print almost nothing, so it stays at ${f.length}.`);
@@ -549,7 +552,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       const p = plates.find((q) => q.key === solo);
       if (p) for (let i = 0; i < p.alpha.length; i++) { const v = 255 - p.alpha[i]; imgData.data[i * 4] = imgData.data[i * 4 + 1] = imgData.data[i * 4 + 2] = v; imgData.data[i * 4 + 3] = 255; }
     } else {
-      imgData.data.set(composite({ plates, w: res.w, h: res.h }, st.garment, new Set(plates.filter((p) => !hidden.has(p.key)).map((p) => p.key)), st.pressGain ?? PRESS_GAIN, bg === "checker"));
+      imgData.data.set(composite({ plates, w: res.w, h: res.h }, shirtOf(st), new Set(plates.filter((p) => !hidden.has(p.key)).map((p) => p.key)), st.pressGain ?? PRESS_GAIN, bg === "checker" || !st.garment));
     }
     x.putImageData(imgData, 0, 0);
   }, [res, plates, hidden, solo, st.garment, bg]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -642,7 +645,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const vectorOut = (ps: Plate[]) => (vart?.ok && !tonal ? {
     art: vart,
     mixOf: (fill: string) => {
-      const ws = spotMixer(inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also })), st)(...(fill.match(/[0-9a-f]{2}/gi) || ["00", "00", "00"]).map((h) => parseInt(h, 16)) as [number, number, number]);
+      const ws = spotMixer(inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also })), sepOpts(st, 1000))(...(fill.match(/[0-9a-f]{2}/gi) || ["00", "00", "00"]).map((h) => parseInt(h, 16)) as [number, number, number]);
       const out: { plate: number; tint: number }[] = [];
       inks.forEach((k, j) => {
         if (ws[j] <= 0.02) return;
@@ -720,7 +723,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       // price for this logo match the screens
       const d0 = designRef.current;
       if (d0?.id) {
-        const plan: PrintPlan = { v: 1, method: st.method === "sim" ? "sim" : "spot", inks, colors: inks.length, at: new Date().toISOString(), dark: isDark(st.garment),
+        const plan: PrintPlan = { v: 1, method: st.method === "sim" ? "sim" : "spot", inks, colors: inks.length, at: new Date().toISOString(), dark: isDark(shirtOf(st)),
           why: `${st.method === "sim" ? "Simulated process" : "Screen print"}, ${inks.length} ${st.method === "sim" ? "screens" : `color${inks.length === 1 ? "" : "s"}`}${inks.some((k) => k.fadeTo?.length) ? " (with fades)" : ""}, as separated (S-${row.number}).` };
         sb.from("designs").update({ print_plan: plan, colors: plan.colors, inks: plan.method === "spot" ? [...new Set(inks.map((k) => k.name))].join(", ") : `Simulated process (${plan.colors})` }).eq("id", d0.id).then(() => {});
         d0.print_plan = plan;
@@ -771,10 +774,10 @@ export default function SeparationStudio({ id }: { id: string }) {
     const sp = plates.map((p) => ({ key: p.key, name: p.name, hex: p.hex, kind: p.kind, mesh: p.mesh }));
     // automatic: the suggested layout (print order, flashes, cool-down, inks by the load / unload stations)
     const all = res ? res.plates.map((p) => { const q = plates.find((x) => x.key === p.key); return { key: p.key, name: q?.name || p.name, hex: p.hex, kind: p.kind, coverage: p.coverage, tonal: !!p.tonal }; }) : [];
-    const rec = !setup && all.length ? recommendSetup(lay, all, { dark: isDark(st.garment), ov: ovm || undefined, allPlates: all }) : null;
+    const rec = !setup && all.length ? recommendSetup(lay, all, { dark: isDark(shirtOf(st)), ov: ovm || undefined, allPlates: all }) : null;
     const { heads, off } = rec?.ok ? { heads: rec.heads, off: [] as typeof sp } : fitSetup(setup, lay, sp);
     const out = heads.map((x) => { const k = plateOf(x); const p = k ? plates.find((q) => q.key === k) : null; return p ? { hex: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex, name: `${plates.indexOf(p) + 1} · ${p.name}` } : null; });
-    const chk = checkSetup(heads, lay, sp, isDark(st.garment));
+    const chk = checkSetup(heads, lay, sp, isDark(shirtOf(st)));
     const note = off.length ? `${off.length} screen${off.length === 1 ? "" : "s"} won't fit on ${press.name.split(" · ")[0]} (${off.map((p) => p.name).join(", ")}): free a head, print in two rounds, or pick another press.` : "";
     return { lay, heads, out, off, note, ...chk, why: rec?.why || [], recOrder: rec?.ok ? rec.order : null, recNote: rec && !rec.ok ? rec.why[0] : "" };
   }, [press, plates, setup, st.garment, res, ovm]);
@@ -840,7 +843,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     const w = window.open("", "_blank"); if (!w) return;
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Press setup S-${row.number}</title>${css}<style>body{background:#fff;color:#111;font:14px system-ui;padding:24px}table{border-collapse:collapse}tr:nth-child(odd){background:#f4f5f7}.pl{width:360px;height:auto}</style></head><body>
       <h2 style="margin:0">Press setup · ${esc(row.location || "")}${order ? ` · #${order.number} ${esc(order.nickname || "")}` : ""}</h2>
-      <div style="color:#555;margin:4px 0 14px">${esc(press.name)} · S-${row.number} · ${plates.length} screens · shirt ${esc(row.garment_color || st.garment)}</div>
+      <div style="color:#555;margin:4px 0 14px">${esc(press.name)} · S-${row.number} · ${plates.length} screens · shirt ${esc(row.garment_color || st.garment || "not picked")}</div>
       <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap">${svg}<table>${rows}</table></div>
       ${onPress.moves.length ? `<h3>Before you start</h3><ul>${onPress.moves.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
       <script>setTimeout(()=>print(),400)</script></body></html>`);
@@ -850,7 +853,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   if (err && !row) return <div className="empty">{err}</div>;
   if (!row) return <div className="empty">Loading…</div>;
   const s0 = SEP_STATUS[row.status];
-  const dark = isDark(st.garment);
+  const dark = isDark(shirtOf(st)), noShirt = !st.garment;
   const garments = [...new Set(order ? orderGroups(order).find((g) => g.id === row.group_id)?.lines.map((l) => l.color).filter(Boolean) || [] : [])];
 
   return (
@@ -894,7 +897,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       {tab === "outside" ? <div className="sep-learn">
         {coachOn && <div className="sep-learn-coach">{res ? <SepCoach sepId={row.id} designId={row.design_id} context={coachContext} images={coachImages} onApply={applyCoach} /> : <div className="sep-card faint">Loading the separation…</div>}</div>}
         <div className="sep-learn-out"><Outside row={row} origUrl={origUrl} onSaved={(r) => { setRow(r); setMsg("Uploaded and sent for review."); }} openFile={openFile}
-        ours={() => ({ ours: { method: st.method, natural, inks: inks.map((k) => ({ name: k.name, hex: k.hex, ...(k.fadeTo?.length ? { fadeTo: k.fadeTo.map((h) => inks.find((q) => q.hex === h)?.name || h) } : {}), ...(k.also?.length ? { also: k.also } : {}) })), settings: coachContext().settings }, art: { vector: !!vart?.ok, shirt: row.garment_color || st.garment, dark: isDark(st.garment), width_in: st.widthIn, location: row.location } })}
+        ours={() => ({ ours: { method: st.method, natural, inks: inks.map((k) => ({ name: k.name, hex: k.hex, ...(k.fadeTo?.length ? { fadeTo: k.fadeTo.map((h) => inks.find((q) => q.hex === h)?.name || h) } : {}), ...(k.also?.length ? { also: k.also } : {}) })), settings: coachContext().settings }, art: { vector: !!vart?.ok, shirt: row.garment_color || st.garment, dark: isDark(shirtOf(st)), width_in: st.widthIn, location: row.location } })}
         artImage={() => { try { if (!img) return null; const k = Math.min(1, 1100 / Math.max(img.naturalWidth, img.naturalHeight)), t = document.createElement("canvas"); t.width = Math.round(img.naturalWidth * k); t.height = Math.round(img.naturalHeight * k); const g = t.getContext("2d")!; g.fillStyle = "#fff"; g.fillRect(0, 0, t.width, t.height); g.drawImage(img, 0, 0, t.width, t.height); return t.toDataURL("image/jpeg", 0.85).split(",")[1]; } catch { return null; } }} /></div>
       </div> : hasArt === false ? <AddArt row={row} onDone={(r) => { setRow(r); load(); }} /> : (
       <div className="sep-grid">
@@ -913,13 +916,19 @@ export default function SeparationStudio({ id }: { id: string }) {
           <section className="sep-card">
             <h3>Shirt</h3>
             <div className="sep-row">
-              <input type="color" value={st.garment} onChange={(e) => set({ garment: e.target.value.toUpperCase() })} aria-label="Shirt color" />
-              <select value="" onChange={(e) => e.target.value && set({ garment: colorHex(e.target.value) || guessHex(e.target.value) })} aria-label="Shirt color from the order">
-                <option value="">{garments.length ? "From the order…" : "Pick a color…"}</option>
-                {[...garments, "Black", "White", "Navy", "Red", "Royal", "Charcoal", "Sport Grey", "Forest Green", "Maroon"].filter((x, i, a) => a.indexOf(x) === i).map((c) => <option key={c} value={c}>{c}</option>)}
+              {/* no shirt picked: an empty swatch (every color prints); tap it for any color */}
+              <label className={"sep-shirt-sw" + (noShirt ? " none" : "")} style={noShirt ? undefined : { background: st.garment }} title={noShirt ? "No shirt picked: every color prints. Tap for any color." : `Shirt ${st.garment}. Tap for any color.`}>
+                <input type="color" value={st.garment || "#ffffff"} onChange={(e) => set({ garment: e.target.value.toUpperCase() })} aria-label="Shirt color" />
+              </label>
+              <select value={noShirt ? "" : "_"} onChange={(e) => { const v = e.target.value; if (v === "_") return; set({ garment: v ? colorHex(v) || guessHex(v) : "" }); }} aria-label="Shirt color">
+                <option value="">All colors printed</option>
+                {!noShirt && <option value="_">{[row.garment_color, ...garments, "Black", "White", "Navy", "Red", "Royal", "Charcoal", "Sport Grey", "Forest Green", "Maroon"].find((c) => c && (colorHex(c) || guessHex(c)) === st.garment) || st.garment}</option>}
+                {garments.length > 0 && <optgroup label="From the order">{garments.map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>}
+                <optgroup label="Shirts">{["Black", "White", "Navy", "Red", "Royal", "Charcoal", "Sport Grey", "Forest Green", "Maroon"].filter((x) => !garments.includes(x)).map((c) => <option key={c} value={c}>{c}</option>)}</optgroup>
               </select>
             </div>
-            <label className="sep-chk"><input type="checkbox" checked={st.dropGarment} onChange={(e) => set({ dropGarment: e.target.checked })} /> Let the shirt be colors that match it</label>
+            {noShirt ? <p className="sep-help">No shirt picked yet: every color prints. Pick the shirt to leave the colors that match it to the shirt (and to get an underbase on dark shirts).</p>
+              : <label className="sep-chk"><input type="checkbox" checked={st.dropGarment} onChange={(e) => set({ dropGarment: e.target.checked })} /> Let the shirt be colors that match it</label>}
           </section>
           <section className="sep-card">
             <h3>Finding inks</h3>
@@ -1026,7 +1035,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <div className="rv-seg">{([["proof", "Proof"], ["compare", "Compare"], ["original", "Original"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => { setView(k); setSolo(null); }}>{l}</button>)}</div>
             <div className="rv-seg">{([["shirt", "On the shirt"], ["checker", "Transparent"]] as const).map(([k, l]) => <button key={k} type="button" className={bg === k ? "on" : ""} onClick={() => setBg(k)}>{l}</button>)}</div>
           </div>
-          <div className={"sep-stage" + (bg === "checker" && !solo ? " checker" : "")} style={{ background: solo ? "#fff" : bg === "shirt" ? st.garment : undefined }}>
+          <div className={"sep-stage" + ((bg === "checker" || noShirt) && !solo ? " checker" : "")} style={{ background: solo ? "#fff" : bg === "shirt" && !noShirt ? st.garment : undefined }}>
             <div className="sep-canvases">
               <canvas ref={cv} className={(pick ? "pick " : solo ? "zoom " : "") + (view === "original" && !solo ? "gone" : "")} onClick={onPick} />
               <canvas ref={cvOrig} className={"sep-orig" + (view === "proof" || solo ? " gone" : "")} style={view === "compare" && !solo ? { clipPath: `inset(0 ${100 - split}% 0 0)` } : undefined} onClick={onPick} />
@@ -1041,7 +1050,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <small>{loupe ? <>{LOUPE_IN}&quot; of film at {st.dpi} dpi{(st.method === "sim" || plates.find((p) => p.key === solo)?.tonal) ? `, ${st.lpi} lpi ${DOT_NAME[st.dot || "ellipse"]} dots` : ", solid"}. Click elsewhere to move.</> : "Film close-up"}</small>
             </div>
           )}
-          <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). Click it for a close-up of the real film. <button type="button" className="linkbtn" onClick={() => { setSolo(null); setLoupe(null); }}>Back to the proof</button></> : view === "compare" ? <>Left of the line: the original art. Right: how it prints.</> : <>{view === "original" ? "The original art" : "Soft proof: how it prints"}{bg === "shirt" ? ` on a ${st.garment} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
+          <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). Click it for a close-up of the real film. <button type="button" className="linkbtn" onClick={() => { setSolo(null); setLoupe(null); }}>Back to the proof</button></> : view === "compare" ? <>Left of the line: the original art. Right: how it prints.</> : <>{view === "original" ? "The original art" : "Soft proof: how it prints"}{noShirt ? " (no shirt picked: every color prints)" : bg === "shirt" ? ` on a ${st.garment} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
         </section>
 
         {/* screens, press, films, coach */}
@@ -1340,7 +1349,7 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
   })();
   return (
     <section className="sep-card">
-      <h3>Print films</h3>
+      <div className="pf-head"><h3>Print films</h3><button type="button" className="btn primary" disabled={busy || working || (!!L && !L.fits)} onClick={print}>{working ? "Making films…" : "Print Films"}</button></div>
       {L ? (
         <div className="pf-lay">
           {pic}
@@ -1354,7 +1363,6 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
         </div>
       ) : <p className="sep-help">One page per screen, each the art at {widthIn}&quot; wide with its marks: for a sheet printer.</p>}
       <p className="sep-help">Black films, finished: solid and halftone dots made here at {dpi} dpi (Film DPI under Output; set it to the printer&apos;s resolution). FilmMaker just prints black: no separating, no converting colors to black.</p>
-      <button type="button" className="btn primary" disabled={busy || working || (!!L && !L.fits)} onClick={print}>{working ? "Making films…" : "Print films"}</button>
       {canFolder && !folder && <div className="pf-folder faint">The first time on the film PC, it asks for FilmMaker&apos;s hot folder.</div>}
       {!canFolder && <div className="pf-folder faint">This browser downloads the file (Chrome or Edge on the film PC sends it straight to FilmMaker).</div>}
       {canFolder && folder && <div className="pf-folder faint">Sends to the folder <b data-notranslate>{folder}</b> on this computer · <button type="button" className="linkbtn" onClick={choose}>Change folder</button></div>}
