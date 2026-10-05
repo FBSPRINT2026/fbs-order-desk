@@ -1101,7 +1101,7 @@ export default function SeparationStudio({ id }: { id: string }) {
                     const on = st.baseFor?.[p.key] ?? baseByDefault(art);
                     return <button type="button" className={"sep-base" + (on ? " on" : "")} title={on ? "White underbase prints under this ink. Click to leave it off (the ink prints straight on the shirt)" : "No underbase under this ink (prints straight on the shirt). Click to put base under it"} onClick={() => set({ baseFor: { ...(st.baseFor || {}), [p.key]: !on } })}>{on ? "Base" : "No base"}</button>;
                   })()}
-                  {" "}· mesh <input className="sep-mesh" type="number" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh" /></small>
+                  {" "}· mesh <select className="sep-mesh" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh">{[...new Set([...SHOP_MESH, p.mesh])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v}</option>)}</select></small>
                 <span className="sep-pa">
                   <button type="button" className="btn icon ghost sm" title="Show / hide on the shirt" onClick={() => setHidden((h) => { const n = new Set(h); if (n.has(p.key)) n.delete(p.key); else n.add(p.key); return n; })}>{hidden.has(p.key) ? "◌" : "●"}</button>
                   <button type="button" className="btn icon ghost sm" title="See this film" onClick={() => setSolo(solo === p.key ? null : p.key)}>▣</button>
@@ -1348,6 +1348,8 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
  * the film roll (turned when that uses less film), sent straight to FilmMaker's hot folder, which prints it as one
  * black composite job. Nobody opens Illustrator.
  */
+/** the shop's screen meshes (the mesh picker on each screen) */
+const SHOP_MESH = [80, 110, 156, 195, 230, 305];
 /** the film printer's roll (Epson, 17"): every film goes on it */
 const ROLL_IN = 17;
 function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {

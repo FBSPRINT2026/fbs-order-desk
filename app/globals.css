@@ -4553,7 +4553,7 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .sep-meta{grid-area:meta;font-size:11px;color:var(--ink-3);white-space:nowrap}
 .sep-chip.shirt{opacity:.55}
 .sep-chip.shirt::after{content:"shirt";position:absolute;top:4px;left:4px;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.85);color:#333}
-.sep-plates .sep-mesh{width:46px!important;min-width:0;display:inline-block;padding:0 3px;height:18px;font-size:11px}
+.sep-plates .sep-mesh{width:54px!important;min-width:0;display:inline-block;padding:0 2px;height:20px;font-size:11px}
 .sep-pname{text-overflow:ellipsis}
 .sep-ok{font-size:12.5px;padding:7px 9px;border-radius:8px;background:var(--ok-soft);color:var(--ok);border:1px solid color-mix(in srgb,var(--ok) 30%,transparent)}
 .sep-chip{width:104px}.sep-chip input{font-size:11px;text-overflow:ellipsis}
