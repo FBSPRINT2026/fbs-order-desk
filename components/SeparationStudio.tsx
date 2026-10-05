@@ -21,6 +21,7 @@ import { layoutCounts, mergeProduction, withIssue, type EquipRow, type Machine, 
 import PressLayout from "@/components/PressLayout";
 import PressDefaults, { pressLayOf } from "@/components/PressDefaults";
 import { autoSetup, checkSetup, drawLayout, fitSetup, plateOf, printOrder, type Slot } from "@/lib/pressSetup";
+import { overlaps, recommendSetup } from "@/lib/pressPlan";
 import SepCoach from "@/components/SepCoach";
 import { inkNamesFromFiles } from "@/lib/sepInkNames";
 import { useRole } from "@/components/RoleContext";
@@ -741,16 +742,26 @@ export default function SeparationStudio({ id }: { id: string }) {
 
   /* ---------- press setup: the plates on a press, in print order, the underbase just before a flash ---------- */
   const press = presses.find((m) => m.id === pressId) || presses[0];
+  // which screens print on top of which (for wet-on-wet: a light color over a dark one still wet wants a flash)
+  const ovm = useMemo(() => (res ? overlaps(res.plates.map((p) => p.alpha)) : null), [res]);
   const onPress = useMemo(() => {
     if (!press) return null;
     const lay = pressLayOf(press);
     const sp = plates.map((p) => ({ key: p.key, name: p.name, hex: p.hex, kind: p.kind, mesh: p.mesh }));
-    const { heads, off } = fitSetup(setup, lay, sp);
+    // automatic: the suggested layout (print order, flashes, cool-down, inks by the load / unload stations)
+    const all = res ? res.plates.map((p) => { const q = plates.find((x) => x.key === p.key); return { key: p.key, name: q?.name || p.name, hex: p.hex, kind: p.kind, coverage: p.coverage, tonal: !!p.tonal }; }) : [];
+    const rec = !setup && all.length ? recommendSetup(lay, all, { dark: isDark(st.garment), ov: ovm || undefined, allPlates: all }) : null;
+    const { heads, off } = rec?.ok ? { heads: rec.heads, off: [] as typeof sp } : fitSetup(setup, lay, sp);
     const out = heads.map((x) => { const k = plateOf(x); const p = k ? plates.find((q) => q.key === k) : null; return p ? { hex: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex, name: `${plates.indexOf(p) + 1} · ${p.name}` } : null; });
     const chk = checkSetup(heads, lay, sp, isDark(st.garment));
     const note = off.length ? `${off.length} screen${off.length === 1 ? "" : "s"} won't fit on ${press.name.split(" · ")[0]} (${off.map((p) => p.name).join(", ")}): free a head, print in two rounds, or pick another press.` : "";
-    return { lay, heads, out, off, note, ...chk };
-  }, [press, plates, setup, st.garment]);
+    return { lay, heads, out, off, note, ...chk, why: rec?.why || [], recOrder: rec?.ok ? rec.order : null, recNote: rec && !rec.ok ? rec.why[0] : "" };
+  }, [press, plates, setup, st.garment, res, ovm]);
+  // automatic: the Screens tab's print order is the suggested one
+  useEffect(() => {
+    const o = onPress?.recOrder; if (!o || setup) return;
+    if (o.join("|") !== plates.map((p) => p.key).join("|")) setOrderKeys(o);
+  }, [onPress?.recOrder?.join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
   // the screens' print order follows the heads they're on (a pallet reaches head 1 first)
   function commitSetup(n: Slot[]) {
     setSetup(n);
@@ -1026,7 +1037,7 @@ export default function SeparationStudio({ id }: { id: string }) {
                 <span className="sep-pa">
                   <button type="button" className="btn icon ghost sm" title="Show / hide on the shirt" onClick={() => setHidden((h) => { const n = new Set(h); if (n.has(p.key)) n.delete(p.key); else n.add(p.key); return n; })}>{hidden.has(p.key) ? "◌" : "●"}</button>
                   <button type="button" className="btn icon ghost sm" title="See this film" onClick={() => setSolo(solo === p.key ? null : p.key)}>▣</button>
-                  <button type="button" className="btn icon ghost sm" title="Print earlier" disabled={!i} onClick={() => { const k = plates.map((q) => q.key); [k[i - 1], k[i]] = [k[i], k[i - 1]]; setOrderKeys(k); }}>↑</button>
+                  <button type="button" className="btn icon ghost sm" title="Print earlier" disabled={!i} onClick={() => { if (!setup && onPress) setSetup(onPress.heads); const k = plates.map((q) => q.key); [k[i - 1], k[i]] = [k[i], k[i - 1]]; setOrderKeys(k); }}>↑</button>
                 </span>
               </li>
             ))}</ol>
@@ -1034,7 +1045,7 @@ export default function SeparationStudio({ id }: { id: string }) {
           {rtab === "press" && !onPress && <div className="sep-card faint">No screen presses set up (Settings → Production).</div>}
           {rtab === "press" && onPress && press && (
             <section className="sep-card sep-pressup">
-              <h3>Press Setup <small className="faint">{setup ? "set by hand" : "automatic"}</small></h3>
+              <h3>Press Setup <small className="faint">{setup ? "set by hand" : "suggested"}</small></h3>
               <div className="sep-row">
                 <select value={press.id} onChange={(e) => { setPressId(e.target.value); setSetup(null); }} aria-label="Press">{presses.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
                 <button type="button" className="btn sm" onClick={() => setDefOpen(true)} title="What always sits on each head of this press: flashes, the roller">Press Defaults</button>
@@ -1053,13 +1064,15 @@ export default function SeparationStudio({ id }: { id: string }) {
                   </div>
                 ) : <p className="sep-help">Tap a color, then the head it goes on. Tap a head to put a flash, the roller or an empty cool-down head there (ink gets too hot hit after hit).</p>}
               {onPress.note && <div className="sep-tip">{onPress.note}</div>}
+              {onPress.recNote && <div className="sep-tip">{onPress.recNote}</div>}
+              {!setup && onPress.why.length > 0 && <details className="ps-why" open><summary>Why this layout</summary><ul>{onPress.why.map((w) => <li key={w}>{w}</li>)}</ul></details>}
               {onPress.warn.map((w) => <div key={w} className="sep-tip">{w}</div>)}
               {onPress.moves.length > 0 && <div className="ps-moves"><b>Set up the press:</b><ul>{onPress.moves.map((m) => <li key={m}>{m}</li>)}</ul></div>}
               <ol className="ps-heads">{onPress.heads.map((x, i) => { const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null; return (
                 <li key={i} className={x === "" ? "free" : x}><b>{i + 1}</b>{p ? <><i style={{ background: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex }} />{p.name}<small> · {p.mesh}</small></> : x === "flash" ? "Flash" : x === "roller" ? "Roller" : x === "cool" ? "Cool down" : x === "down" ? "Down" : <span className="faint">empty</span>}</li>); })}</ol>
               <div className="ps-acts">
                 <button type="button" className="linkbtn" onClick={() => { const n = autoSetup(onPress.lay, plates.map((p) => ({ key: p.key, name: p.name, hex: p.hex, kind: p.kind })), true); commitSetup(n); }} title="Leave an empty head between colors where there's room, so each hit cools before the next">Space colors out</button>
-                {setup && <button type="button" className="linkbtn" onClick={() => { setSetup(null); setSelHead(null); setSelPlate(null); }}>Back to automatic</button>}
+                {setup && <button type="button" className="linkbtn" onClick={() => { setSetup(null); setSelHead(null); setSelPlate(null); }}>Use the suggested layout</button>}
                 <button type="button" className="linkbtn" onClick={printSetup}>Print setup sheet</button>
               </div>
             </section>

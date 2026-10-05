@@ -4790,3 +4790,6 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .sep-chip-sw{height:34px!important}
 @media (max-width:1250px){.sep-grid{grid-template-columns:250px minmax(0,1fr)}.sep-grid>.sep-side:last-child{height:auto;grid-column:1/-1}.sep-grid>.sep-side:last-child .sep-pane{overflow:visible}}
 @media (max-width:760px){.sep-grid>.sep-side,.sep-grid>.sep-main{height:auto}.sep-pane{overflow:visible}}
+.ps-why{font-size:12.5px;background:color-mix(in srgb,var(--accent) 6%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 25%,var(--surface));border-radius:8px;padding:6px 9px;margin:6px 0}
+.ps-why summary{font-weight:700;cursor:pointer}
+.ps-why ul{margin:4px 0 0;padding-left:16px;display:flex;flex-direction:column;gap:3px}
