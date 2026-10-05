@@ -4771,3 +4771,22 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .nav-g{margin-top:6px}
 .nav a{padding-top:7px;padding-bottom:7px}
 .sep-marks{display:flex;flex-direction:column;gap:2px;margin-top:4px}.sep-marks>span{font-size:12.5px;font-weight:700}
+/* Separation Studio, fit to the window (Oct 5): save in the header, location + studio tabs on one line, the two side
+   panes tabbed and each scrolling on its own, the proof sized to the space left (no page scrolling on a laptop) */
+.sep .page-head{margin-bottom:8px}
+.sep-topbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:10px}
+.sep-topbar .sep-locs{margin:0}
+.sep-topbar .sep-tabs{margin:0}
+.sep-grid{grid-template-columns:260px minmax(0,1fr) 320px;gap:12px;--sep-h:calc(100vh - 206px);align-items:stretch}
+.sep-grid>.sep-side{height:var(--sep-h);min-height:420px;display:flex;flex-direction:column;gap:8px}
+.sep-ptabs{display:flex;width:100%;flex:none}
+.sep-ptabs button{flex:1;padding-left:4px;padding-right:4px;white-space:nowrap}
+.sep-pane{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;padding-bottom:4px}
+.sep-grid>.sep-main{height:var(--sep-h);min-height:420px}
+.sep-main .sep-stage{flex:1;min-height:200px}
+.sep-main .sep-canvases{height:100%;max-height:100%;align-items:center;justify-items:center}
+.sep-main .sep-canvases canvas{max-height:100%;max-width:100%}
+.sep-stage{padding:10px}
+.sep-chip-sw{height:34px!important}
+@media (max-width:1250px){.sep-grid{grid-template-columns:250px minmax(0,1fr)}.sep-grid>.sep-side:last-child{height:auto;grid-column:1/-1}.sep-grid>.sep-side:last-child .sep-pane{overflow:visible}}
+@media (max-width:760px){.sep-grid>.sep-side,.sep-grid>.sep-main{height:auto}.sep-pane{overflow:visible}}

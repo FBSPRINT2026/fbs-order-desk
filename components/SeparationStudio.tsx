@@ -259,6 +259,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [setup, setSetup] = useState<Slot[] | null>(null);
   const [selPlate, setSelPlate] = useState<string | null>(null), [selHead, setSelHead] = useState<number | null>(null);
   const [defOpen, setDefOpen] = useState(false);
+  // the two side panes are tabbed so the whole studio fits the window: left = how it separates, right = what comes out
+  const [ltab, setLtab] = useSticky<"inks" | "base" | "output">("sep.ltab", "inks");
+  const [rtab, setRtab] = useSticky<"screens" | "press" | "films" | "coach">("sep.rtab", "screens");
   const [pick, setPick] = useState(false);
   const [cancelAsk, setCancelAsk] = useState(false);
   // how many inks the art itself needs (from the last automatic find): fewer is a choice, not "shading"
@@ -820,6 +823,12 @@ export default function SeparationStudio({ id }: { id: string }) {
         </div>
         <div className="row" style={{ gap: 8, alignItems: "center" }}>
           <span className="pill" style={{ ["--sc" as string]: s0.c }}>{s0.label}</span>
+          {tab === "studio" && <>
+            <button type="button" className="btn" disabled={!res || !!busy} onClick={() => save("in_progress")}>Save Draft</button>
+            {me.boss && row.status === "review" ? <button type="button" className="btn primary" disabled={!!busy} onClick={approve}>Approve</button>
+              : row.status === "approved" ? <button type="button" className="btn primary" onClick={() => setStatus("films")}>Films Printed</button>
+              : <button type="button" className="btn primary" disabled={!res || !!busy} onClick={() => save("review")}>Save &amp; Send for Review</button>}
+          </>}
           {order && <Link className="btn" href={`/shop/orders/${order.id}`}>Open Order</Link>}
           {!!(row.settings as { art?: SepArt }).art && row.status !== "approved" && row.status !== "films" && <label className="btn" title="Upload a different file (the inks are found again)"><input type="file" accept={ART_ACCEPT} hidden onChange={(e) => { replaceArt(e.target.files?.[0]); e.target.value = ""; }} />Replace Art</label>}
           {!row.order_id && row.status !== "cancelled" && row.status !== "films" && (cancelAsk
@@ -829,6 +838,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       </div>
       {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
       {err && <div className="pv-err">{err}</div>}
+      <div className="sep-topbar">
       {siblings.length > 1 && (
         <nav className="sep-locs" aria-label="Print locations on this order">
           {siblings.map((x) => {
@@ -840,6 +850,7 @@ export default function SeparationStudio({ id }: { id: string }) {
         </nav>
       )}
       <div className="rv-seg sep-tabs">{([["studio", "Separate Here"], ["outside", "Separated Elsewhere (Separo…)"]] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
+      </div>
 
       {tab === "outside" ? <Outside row={row} origUrl={origUrl} onSaved={(r) => { setRow(r); setMsg("Uploaded and sent for review."); }} openFile={openFile}
         ours={() => ({ ours: { method: st.method, natural, inks: inks.map((k) => ({ name: k.name, hex: k.hex, ...(k.fadeTo?.length ? { fadeTo: k.fadeTo.map((h) => inks.find((q) => q.hex === h)?.name || h) } : {}), ...(k.also?.length ? { also: k.also } : {}) })), settings: coachContext().settings }, art: { vector: !!vart?.ok, shirt: row.garment_color || st.garment, dark: isDark(st.garment), width_in: st.widthIn, location: row.location } })}
@@ -847,6 +858,9 @@ export default function SeparationStudio({ id }: { id: string }) {
       <div className="sep-grid">
         {/* settings */}
         <aside className="sep-side">
+          <div className="rv-seg sep-ptabs" role="tablist">{([["inks", "Inks"], ["base", dark ? "Underbase" : "Base"], ["output", "Output"]] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={ltab === k} className={ltab === k ? "on" : ""} onClick={() => setLtab(k)}>{l}</button>)}</div>
+          <div className="sep-pane">
+          {ltab === "inks" && <>
           <section className="sep-card">
             <h3>Method</h3>
             <div className="rv-seg sep-full">{([["spot", "Spot color"], ["sim", "Simulated process"]] as const).map(([k, l]) => <button key={k} type="button" className={st.method === k ? "on" : ""} onClick={() => { set({ method: k }); findInks(k, true); }}>{l}</button>)}</div>
@@ -871,7 +885,8 @@ export default function SeparationStudio({ id }: { id: string }) {
             <p className="sep-help">{st.lib === "auto" ? "Suggested: a standard (stock) ink when one is very close, a PMS when only the PMS is. Tap an ink's match line to see both." : st.lib === "wilflex" ? "Every ink named as the closest Wilflex RFU stock ink." : "Every ink named as the closest PMS coated color."}</p>
             <button type="button" className="btn sm" onClick={() => findInks(st.method, true)} title="Start over: find the inks the art needs">Find Inks Again</button>
           </section>
-          <section className="sep-card">
+          </>}
+          {ltab === "base" && <section className="sep-card">
             <h3>Underbase{dark ? "" : " (light shirt)"}</h3>
             <div className="rv-seg sep-full">{([["auto", "Auto"], ["on", "On"], ["off", "Off"]] as const).map(([k, l]) => <button key={k} type="button" className={st.underbase === k ? "on" : ""} onClick={() => set({ underbase: k })}>{l}</button>)}</div>
             <label className="sep-f" title="How far the underbase is pulled in from the edges of the colors, so it never peeks out">Choke <input type="range" min={0} max={3} step={0.25} value={st.chokePt ?? CHOKE_PT} onChange={(e) => set({ chokePt: +e.target.value })} /> <b>{st.chokePt ?? CHOKE_PT} pt</b></label>
@@ -885,8 +900,8 @@ export default function SeparationStudio({ id }: { id: string }) {
             </div>); })()}
             <label className="sep-chk"><input type="checkbox" checked={st.highlight} onChange={(e) => set({ highlight: e.target.checked })} /> Highlight white on top</label>
             <label className="sep-chk"><input type="checkbox" checked={st.removeBg} onChange={(e) => set({ removeBg: e.target.checked })} /> White background isn&apos;t printed</label>
-          </section>
-          <section className="sep-card">
+          </section>}
+          {ltab === "output" && <section className="sep-card">
             <h3>Output</h3>
             <label className="sep-f">Print width (in)<input type="number" min={1} max={20} step={0.25} value={st.widthIn} onChange={(e) => set({ widthIn: +e.target.value || 1 })} /></label>
             {img && (() => {
@@ -914,7 +929,8 @@ export default function SeparationStudio({ id }: { id: string }) {
               <label className="sep-chk"><input type="checkbox" checked={st.cropMarks !== false} onChange={(e) => set({ cropMarks: e.target.checked })} /> Crop marks</label>
               <label className="sep-chk"><input type="checkbox" checked={st.regMarks !== false} onChange={(e) => set({ regMarks: e.target.checked })} /> Registration targets</label>
             </div>
-          </section>
+          </section>}
+          </div>
         </aside>
 
         {/* preview */}
@@ -986,10 +1002,12 @@ export default function SeparationStudio({ id }: { id: string }) {
           <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). Click it for a close-up of the real film. <button type="button" className="linkbtn" onClick={() => { setSolo(null); setLoupe(null); }}>Back to the proof</button></> : view === "compare" ? <>Left of the line: the original art. Right: how it prints.</> : <>{view === "original" ? "The original art" : "Soft proof: how it prints"}{bg === "shirt" ? ` on a ${st.garment} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
         </section>
 
-        {/* plates, press, save */}
+        {/* screens, press, films, coach */}
         <aside className="sep-side">
-          {coachOn && res && <SepCoach sepId={row.id} designId={row.design_id} context={coachContext} images={coachImages} onApply={applyCoach} />}
-          <section className="sep-card">
+          <div className="rv-seg sep-ptabs" role="tablist">{([["screens", `Screens ${plates.length || ""}`], ["press", "Press"], ["films", "Films"], ...(coachOn ? [["coach", "✦ Coach"]] : [])] as [typeof rtab, string][]).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={rtab === k} className={rtab === k ? "on" : ""} onClick={() => setRtab(k)}>{l}</button>)}</div>
+          <div className="sep-pane">
+          {rtab === "coach" && coachOn && (res ? <SepCoach sepId={row.id} designId={row.design_id} context={coachContext} images={coachImages} onApply={applyCoach} /> : <div className="sep-card faint">Loading the separation…</div>)}
+          {rtab === "screens" && <section className="sep-card">
             <h3>Print order</h3>
             <ol className="sep-plates">{plates.map((p, i) => (
               <li key={p.key} className={(hidden.has(p.key) ? "off" : "") + (solo === p.key ? " solo" : "")}>
@@ -1012,8 +1030,9 @@ export default function SeparationStudio({ id }: { id: string }) {
                 </span>
               </li>
             ))}</ol>
-          </section>
-          {onPress && press && (
+          </section>}
+          {rtab === "press" && !onPress && <div className="sep-card faint">No screen presses set up (Settings → Production).</div>}
+          {rtab === "press" && onPress && press && (
             <section className="sep-card sep-pressup">
               <h3>Press Setup <small className="faint">{setup ? "set by hand" : "automatic"}</small></h3>
               <div className="sep-row">
@@ -1046,17 +1065,11 @@ export default function SeparationStudio({ id }: { id: string }) {
             </section>
           )}
           {defOpen && <PressDefaults presses={presses} start={press?.id} me={me.email} onClose={() => setDefOpen(false)} onSaved={(m, lay) => { const lc = layoutCounts(lay); setPresses((ps) => ps.map((p) => (p.id === m.id ? { ...p, layout: lay, flashes: lc.units, rollers: lc.rollers || undefined } : p))); setDefOpen(false); setMsg(`${m.name.split(" · ")[0]} defaults saved. Every job's setup on it starts from these.`); }} />}
-          {res && <PrintFilms n={plates.length} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
+          {rtab === "films" && res && <PrintFilms n={plates.length} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
             make={async (rollIn) => { try { return await filmsFile(rollIn); } finally { setBusy(""); } }}
             onSent={() => { if (row.status === "approved") setStatus("films"); }} />}
-          <section className="sep-card">
-            <h3>Save</h3>
-            <div className="sep-actions">
-              <button type="button" className="btn" disabled={!res || !!busy} onClick={() => save("in_progress")}>Save Draft</button>
-              <button type="button" className="btn primary" disabled={!res || !!busy} onClick={() => save("review")}>Save &amp; Send for Review</button>
-              {me.boss && row.status === "review" && <button type="button" className="btn primary" disabled={!!busy} onClick={approve}>Approve</button>}
-              {row.status === "approved" && <button type="button" className="btn" onClick={() => setStatus("films")}>Films Printed</button>}
-            </div>
+          {rtab === "films" && <section className="sep-card">
+            <h3>Files</h3>
             <div className="sep-dl">
               <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await aiFile(), `${slug(title)}-seps.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Illustrator file (spot colors)</button>
               <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await filmsFile(ROLL_IN), `${slug(title)}-films-${ROLL_IN}in.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Films PDF ({ROLL_IN}&quot; roll, {st.dpi} dpi{tonal || plates.some((p) => p.tonal) ? `, ${st.lpi} lpi` : ""})</button>
@@ -1064,7 +1077,8 @@ export default function SeparationStudio({ id }: { id: string }) {
             </div>
             {(row.files || []).length > 0 && <ul className="sep-files">{row.files.filter((f) => f.kind !== "plate").map((f) => <li key={f.path}><button type="button" className="linkbtn" onClick={() => openFile(f.path)}>{f.name}</button></li>)}</ul>}
             <p className="sep-help">The Illustrator file opens straight in Illustrator: each ink is a spot color swatch, so File → Print → Separations prints one film per ink.{img && !vart ? ` Files are made from the art at full size: ${outSize().ppi} pixels per inch at ${st.widthIn}" wide${outSize().ppi < 200 ? " (low: consider Smooth vector for solid inks, or better art)" : ""}.` : vart?.ok ? " Vector art: the original shapes, sharp at any size." : ""}</p>
-          </section>
+          </section>}
+          </div>
         </aside>
       </div>
       )}
