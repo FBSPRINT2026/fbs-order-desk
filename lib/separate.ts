@@ -26,7 +26,7 @@ export type SepSettings = {
   garment: string;
   /** most inks to find (the art may need fewer) */
   maxColors: number;
-  /** white underbase: "auto" = on dark garments */
+  /** white underbase: "auto" = on every shirt but white (the shop's rule) */
   underbase: "auto" | "on" | "off";
   /** how far the underbase is pulled in from the edges, in pixels of the working image */
   choke: number;
@@ -80,6 +80,10 @@ function labOf(r: number, g: number, b: number): [number, number, number] {
 }
 export const lightness = (hex: string) => labOf(...rgbOf(hex))[0];
 export const isDark = (hex: string) => lightness(hex) < 55;
+/** a white shirt (the only one printed without an underbase, by default) */
+export const isWhiteShirt = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return L > 90 && Math.hypot(a, b) < 10; };
+/** the shop's rule (Nicholas, Oct 5): every shirt gets a white underbase except a white one */
+export const baseShirt = (hex: string) => !isWhiteShirt(hex);
 const d2 = (a: number[], b: number[]) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 
 /** the standard ink closest to a color, and how close (CIEDE2000) */
@@ -186,7 +190,7 @@ export function findColors(px: Px, max = 8, merge = 9, minShare = 0.004, garment
   // of the art it is. Separo takes the sun from yellow, gold, orange, white, black down to yellow, orange, black:
   // gold is yellow + orange, white is the underbase.
   if (res.length > max && garment) {
-    const gl = rgbOf(garment).map((v) => MIX[v]), dark = labOf(...rgbOf(garment))[0] < 55, base = dark ? [1, 1, 1] : gl;
+    const gl = rgbOf(garment).map((v) => MIX[v]), dark = baseShirt(garment), base = dark ? [1, 1, 1] : gl;
     const linOf = (h: string) => rgbOf(h).map((v) => MIX[v]);
     const cost = (i: number) => {
       const t = linOf(res[i].hex), K = res.filter((_, j) => j !== i).map((c) => linOf(c.hex)); if (dark) K.push(gl);
@@ -257,7 +261,7 @@ export function findSimInks(px: Px, garment: string, max = 8): Found[] {
     if (C >= 18 && L >= 10) pts.push({ L, a, b, C, h: (Math.atan2(b, a) * 180 / Math.PI + 360) % 360 });
   }
   if (!tot) return [];
-  const g = rgbOf(garment).map((v) => MIX[v]), gL = lightness(garment), dark = gL < 55;
+  const g = rgbOf(garment).map((v) => MIX[v]), gL = lightness(garment), dark = baseShirt(garment);
   const base = dark ? [1, 1, 1] : g;
   // the colors to match: the heaviest 5-bit colors, weighted by how much of the art they are
   const tg = [...cnt].sort((x, y) => y[1] - x[1]).slice(0, 600).map(([q, w]) => { const c = unQ(q), l = c.map((v) => MIX[v]); return { l, lab: labOf(c[0], c[1], c[2]), w }; });
@@ -536,8 +540,7 @@ export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number
   };
 }
 function spotMixerOne(inks: SepInk[], s: SepSettings): (r: number, g: number, b: number, flat?: boolean) => Float32Array {
-  const gLab = labOf(...rgbOf(s.garment));
-  const dark = s.underbase === "on" || (s.underbase === "auto" && gLab[0] < 55);
+  const dark = s.underbase === "on" || (s.underbase === "auto" && baseShirt(s.garment));
   const dropped = inks.map((k) => isShirtInk(k, s));
   const labs = inks.map((k) => labOf(...rgbOf(k.hex))), rgb = inks.map((k) => rgbOf(k.hex));
   const g = rgbOf(s.garment).map((v) => MIX[v]), base = dark ? [1, 1, 1] : g;
@@ -620,8 +623,7 @@ export type SepCover = { cover: Uint8Array[]; white?: Uint8Array | null;
 
 export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover): SepResult {
   const { w, h, data } = px, n = w * h;
-  const gLab = labOf(...rgbOf(s.garment));
-  const dark = s.underbase === "on" || (s.underbase === "auto" && gLab[0] < 55);
+  const dark = s.underbase === "on" || (s.underbase === "auto" && baseShirt(s.garment));
   // inks that match the shirt aren't printed (the shirt shows through)
   const dropped = inks.filter((k) => isShirtInk(k, s)).map((k) => k.hex);
   const print = inks.filter((k) => !dropped.includes(k.hex));

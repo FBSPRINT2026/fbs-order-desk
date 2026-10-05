@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
-import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
+import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, baseShirt, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
@@ -843,10 +843,10 @@ export default function SeparationStudio({ id }: { id: string }) {
     const sp = plates.map((p) => ({ key: p.key, name: p.name, hex: p.hex, kind: p.kind, mesh: p.mesh }));
     // automatic: the suggested layout (print order, flashes, cool-down, inks by the load / unload stations)
     const all = res ? res.plates.map((p) => { const q = plates.find((x) => x.key === p.key); return { key: p.key, name: q?.name || p.name, hex: p.hex, kind: p.kind, coverage: p.coverage, tonal: !!p.tonal }; }) : [];
-    const rec = !setup && all.length ? recommendSetup(lay, all, { dark: isDark(shirtOf(st)), noShirt: !st.garment, ov: ovm || undefined, allPlates: all }) : null;
+    const rec = !setup && all.length ? recommendSetup(lay, all, { dark: baseShirt(shirtOf(st)), noShirt: !st.garment, ov: ovm || undefined, allPlates: all }) : null;
     const { heads, off } = rec?.ok ? { heads: rec.heads, off: [] as typeof sp } : fitSetup(setup, lay, sp);
     const out = heads.map((x) => { const k = plateOf(x); const p = k ? plates.find((q) => q.key === k) : null; return p ? { hex: p.kind === "underbase" || p.kind === "highlight" ? "#FFFFFF" : p.hex, name: `${plates.indexOf(p) + 1} · ${p.name}` } : null; });
-    const chk = checkSetup(heads, lay, sp, isDark(shirtOf(st)));
+    const chk = checkSetup(heads, lay, sp, baseShirt(shirtOf(st)));
     const note = off.length ? `${off.length} screen${off.length === 1 ? "" : "s"} won't fit on ${press.name.split(" · ")[0]} (${off.map((p) => p.name).join(", ")}): free a head, print in two rounds, or pick another press.` : "";
     return { lay, heads, out, off, note, ...chk, why: rec?.why || [], recOrder: rec?.ok ? rec.order : null, recNote: rec && !rec.ok ? rec.why[0] : "" };
   }, [press, plates, setup, st.garment, res, ovm]);
@@ -951,7 +951,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   if (err && !row) return <div className="empty">{err}</div>;
   if (!row) return <div className="empty">Loading…</div>;
   const s0 = SEP_STATUS[row.status];
-  const dark = isDark(shirtOf(st)), noShirt = !st.garment;
+  const dark = baseShirt(shirtOf(st)), noShirt = !st.garment;
   const garments = [...new Set(order ? orderGroups(order).find((g) => g.id === row.group_id)?.lines.map((l) => l.color).filter(Boolean) || [] : [])];
   // the shirt's name: from the order, the garment list, the shirt colors, or the ink picked as the shirt color
   const shirtLabel = noShirt ? "" : [row.garment_color, ...garments, ...SHIRT_COLORS.flatMap((g) => g.colors.map(([c]) => c))].find((c) => c && (shirtHex(c) || colorHex(c) || guessHex(c)) === st.garment) || inks.find((k) => k.hex === st.garment)?.name || st.garment;
@@ -1055,7 +1055,7 @@ export default function SeparationStudio({ id }: { id: string }) {
           </section>
           </>}
           {ltab === "output" && <section className="sep-card">
-            <h3>Underbase{dark ? "" : " (light shirt)"}</h3>
+            <h3>Underbase{dark ? "" : " (white shirt)"}</h3>
             <div className="rv-seg sep-full">{([["auto", "Auto"], ["on", "On"], ["off", "Off"]] as const).map(([k, l]) => <button key={k} type="button" className={st.underbase === k ? "on" : ""} onClick={() => set({ underbase: k })}>{l}</button>)}</div>
             <label className="sep-f" title="How far the underbase is pulled in from the edges of the colors, so it never peeks out">Choke <input type="range" min={0} max={3} step={0.25} value={st.chokePt ?? CHOKE_PT} onChange={(e) => set({ chokePt: +e.target.value })} /> <b>{st.chokePt ?? CHOKE_PT} pt</b></label>
             {(() => { const on = (st.finePt ?? FINE_PT) > 0; return (<div className="sep-fine">

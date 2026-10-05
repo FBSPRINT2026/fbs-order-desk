@@ -11,7 +11,7 @@
  *   - Ink names: the suggested ink for each color (stock ink when it's very close, PMS when only a PMS is).
  * The plan is saved on the design (`designs.print_plan`), so both screens read the same one.
  */
-import { findColors, findSimInks, type Px, type SepInk } from "./separate";
+import { baseShirt, findColors, findSimInks, type Px, type SepInk } from "./separate";
 import { closestPms, colorHex, deltaE, suggestInk } from "./inkColors";
 import { snapInk } from "./separate";
 import { labOfRgb } from "./gradients";
@@ -144,7 +144,7 @@ export function planPrint(px: Px, opts: { garment?: string; lib?: InkLib; /** a 
   const shade = unexplained(px, inks);
   const at = new Date().toISOString();
   if (opts.method === "sim" || (opts.method !== "spot" && (shade > 0.18 || inks.length > 10))) {
-    const garment = opts.garment || "#000000", dark = labOfRgb(hexRgb(garment))[0] < 55;
+    const garment = opts.garment || "#000000", dark = baseShirt(garment);
     const sim = findSimInks(px, garment, 8);
     return { v: 1, method: "sim", inks: sim.map((x) => ({ hex: x.hex, name: inkName(x.hex, lib) })), colors: sim.length, dark, at,
       why: opts.method === "sim" ? `Simulated process, ${sim.length} screens.` : `Simulated process, ${sim.length} screens: ${Math.round(shade * 100)}% of the art is shading no spot ink makes${inks.length > 10 ? ` (and it has ${inks.length} colors)` : ""}.` };
@@ -160,7 +160,7 @@ export function planPrint(px: Px, opts: { garment?: string; lib?: InkLib; /** a 
 export function planFor(plan: PrintPlan | null | undefined, px: Px, garment: string, lib: InkLib = "auto"): PrintPlan | null {
   if (!plan || plan.v !== 1 || !plan.inks?.length) return null;
   if (plan.method !== "sim") return plan;
-  const dark = labOfRgb(hexRgb(garment))[0] < 55;
+  const dark = baseShirt(garment);
   if (plan.dark === dark) return plan;
   const sim = findSimInks(px, garment, Math.max(plan.colors, 1));
   return { ...plan, inks: sim.map((x) => ({ hex: x.hex, name: inkName(x.hex, lib) })), colors: sim.length, dark };
