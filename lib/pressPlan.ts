@@ -108,8 +108,8 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
       }
       if (st === "flash" || st === "flashdown") {
         if (it?.t === "flash") add(next, { ...base, cost: s.cost, put: "flash", k: s.k + 1, mv: s.mv, sk: s.sk, pf: 1 });
-        // not needed here: the flash comes off (or is turned off) and the head stays empty, or takes a screen
-        add(next, { ...base, cost: s.cost + 1 - (s.pf ? 3 : 0), put: "", k: s.k, mv: s.mv, sk: s.sk + 1, pf: 0 });
+        // not needed here: the flash stays on the press (turned off), or takes a screen
+        add(next, { ...base, cost: s.cost + 1 - (s.pf ? 3 : 0), put: "flash-idle", k: s.k, mv: s.mv, sk: s.sk + 1, pf: 0 });
         if (it?.t === "screen") add(next, { ...base, cost: s.cost + vis(h) + 5 + (s.pf ? 3 : 0), put: "p:" + it.p.key, k: s.k + 1, mv: s.mv, sk: s.sk + 1, pf: 0 });
         continue;
       }
@@ -130,6 +130,12 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
   if (!best) return { heads: [], order: seq.map((p) => p.key), why: [`${seq.length} screens and ${fl} flash${fl === 1 ? "" : "es"} don't fit on ${N} heads: two rounds, or another press.`], ok: false };
   const heads: Slot[] = new Array(N).fill("");
   for (let s: St | null = best; s && s.h >= 0; s = s.prev) heads[s.h] = s.put ?? "";
+  // flashes the job doesn't use stay where the press has them (turned off), unless one had to move for this job:
+  // that unit comes from an idle one
+  const movedN = heads.filter((x, i) => x === "flash" && lay[i] !== "flash" && lay[i] !== "flashdown").length;
+  const idle = heads.map((x, i) => (x === "flash-idle" ? i : -1)).filter((i) => i >= 0);
+  idle.forEach((i, j) => { heads[i] = j >= idle.length - movedN ? "" : "flash"; });
+  const idleKept = idle.slice(0, Math.max(0, idle.length - movedN));
 
   // why, in shop words
   const names = (ps: PlanPlate[]) => ps.map((p) => p.name).join(", ");
@@ -145,10 +151,11 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
   for (const x of items) if (x.t === "flash" && !x.must) why.push(x.why);
   const mv = heads.map((x, i) => (x === "flash" && lay[i] !== "flash" && lay[i] !== "flashdown" ? i + 1 : 0)).filter(Boolean);
   if (mv.length) why.push(`Moves a flash to head ${mv.join(" and ")} for this job.`);
+  if (idleKept.length) why.push(`This job doesn't need the flash on ${idleKept.length === 1 ? `head ${idleKept[0] + 1}` : `heads ${idleKept.map((i) => i + 1).join(" and ")}`}: leave it there, turned off.`);
   if (roller >= 0 && heads[roller] === "roller" && hasBase) why.push(`Roller stays on head ${roller + 1}: it flattens the flashed base before the colors.`);
   const took = heads.map((x, i) => (x.startsWith("p:") && lay[i] !== "print" ? `head ${i + 1} (${lay[i] === "roller" ? "roller off" : lay[i] === "cool" ? "no cool-down there" : "flash off"})` : "")).filter(Boolean);
   if (took.length) why.push(`Not enough open heads, so a screen goes on ${took.join(" and ")}.`);
-  const empty = heads.map((x, i) => (x === "" && (lay[i] === "print" || lay[i] === "flash") ? i + 1 : 0)).filter(Boolean);
+  const empty = heads.map((x, i) => (x === "" && lay[i] === "print" ? i + 1 : 0)).filter(Boolean);
   if (empty.length) why.push(`Screens kept by the load and unload stations where the operator can see the inks; ${empty.length === 1 ? `head ${empty[0]}` : `heads ${empty.slice(0, -1).join(", ")} and ${empty[empty.length - 1]}`} left open on the far side.`);
   return { heads, order: seq.map((p) => p.key), why, ok: true };
 }

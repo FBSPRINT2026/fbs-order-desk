@@ -875,6 +875,13 @@ export default function SeparationStudio({ id }: { id: string }) {
     if (there === "flash" || there === "roller" || there === "cool") { setAsk({ key, to, station: there }); return; }
     moveColor(key, to);
   }
+  /** two colors trade heads (↑ / ↓ in the press list: print one earlier or later) */
+  function swapWith(a: string, b?: string) {
+    if (!onPress || !b) return;
+    const n = [...onPress.heads], ha = n.indexOf("p:" + a), hb = n.indexOf("p:" + b);
+    if (ha < 0 || hb < 0) return;
+    n[ha] = "p:" + b; n[hb] = "p:" + a; commitSetup(n); setAsk(null);
+  }
   /** move it, and the color that was there to `otherTo` (a head), or back where the moving one came from */
   function moveColor(key: string, to: number, otherTo?: number) {
     if (!onPress) return;
@@ -1143,7 +1150,7 @@ export default function SeparationStudio({ id }: { id: string }) {
                 <span className="sep-pa">
                   <button type="button" className="btn icon ghost sm" title="Show / hide on the shirt" onClick={() => setHidden((h) => { const n = new Set(h); if (n.has(p.key)) n.delete(p.key); else n.add(p.key); return n; })}>{hidden.has(p.key) ? "◌" : "●"}</button>
                   <button type="button" className="btn icon ghost sm" title="See this film" onClick={() => setSolo(solo === p.key ? null : p.key)}>▣</button>
-                  <button type="button" className="btn icon ghost sm" title="Print earlier" disabled={!i} onClick={() => { if (!setup && onPress) setSetup(onPress.heads); const k = plates.map((q) => q.key); [k[i - 1], k[i]] = [k[i], k[i - 1]]; setOrderKeys(k); }}>↑</button>
+                  
                 </span>
               </li>
             ))}</ol>
@@ -1184,6 +1191,10 @@ export default function SeparationStudio({ id }: { id: string }) {
                     <div className="ps-color-r">
                       <i className="ps-sw" style={{ background: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex }} />
                       <span className="ps-cname"><b>{i + 1} · {p.name}</b><small>mesh {p.mesh}</small></span>
+                      <span className="ps-ud">
+                        <button type="button" className="btn icon ghost sm" title="Print earlier (trades heads with the color before it)" disabled={!i || at < 0} onClick={() => swapWith(p.key, plates[i - 1]?.key)}>↑</button>
+                        <button type="button" className="btn icon ghost sm" title="Print later (trades heads with the color after it)" disabled={i === plates.length - 1 || at < 0} onClick={() => swapWith(p.key, plates[i + 1]?.key)}>↓</button>
+                      </span>
                       <select value={at} aria-label={`Head for ${p.name}`} onChange={(e) => chooseHead(p.key, +e.target.value)}>
                         {at < 0 && <option value={-1}>Not on the press</option>}
                         {onPress.heads.map((x, h) => <option key={h} value={h} disabled={x === "down"}>Head {h + 1}{h === at ? "" : ` · ${what(x)}`}</option>)}
