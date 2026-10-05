@@ -105,7 +105,7 @@ export default function SepCoach({ sepId, designId, context, images, onApply }: 
       {showLessons && lessons.length > 0 && (
         <ul className="sc-lessons">{lessons.map((l) => (
           <li key={l.id}><span>{l.lesson}{l.default_setting ? <small> · new {l.default_setting.when === "all" ? "" : `${l.default_setting.when} `}seps start at {changeText({ setting: l.default_setting.setting, value: l.default_setting.value })}</small> : null}</span>
-            <small className="faint">{days(l.expires_at)}d left</small><button type="button" className="linkbtn" onClick={() => forget(l.id)}>Forget</button></li>
+            <small className="faint">{l.tags?.includes("preset") ? "preset" : l.tags?.includes("separo") ? `from Separo · ${days(l.expires_at)}d` : `${days(l.expires_at)}d left`}</small><button type="button" className="linkbtn" onClick={() => forget(l.id)}>Forget</button></li>
         ))}</ul>
       )}
     </section>

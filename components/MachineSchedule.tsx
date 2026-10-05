@@ -2148,14 +2148,14 @@ function EquipmentPanel({ machines, rows, today, me, crewOf, stuck, booked, onCl
                           <div className="pl-ed">
                             <PressLayout layout={f.lay} mirror={!!m.mirror} selected={pick} onPick={(i) => setPick(pick === i ? null : i)} label={`${fl - lc.down} colors`} sub={`${fl + 2} stations`} />
                             <div className="pl-side">
-                              <div className="pl-sum"><b>{fl} heads + load &amp; unload</b><span>{lc.units ? `Flash${lc.units === 1 ? "" : "es"} at ${headsTxt(fx)}` : "No flashes on the press"}{lc.down ? ` · ${lc.down} head${lc.down === 1 ? "" : "s"} down` : ""}{lc.broken ? ` · ${lc.broken} flash${lc.broken === 1 ? "" : "es"} not heating` : ""}</span></div>
+                              <div className="pl-sum"><b>{fl} heads + load &amp; unload</b><span>{lc.units ? `Flash${lc.units === 1 ? "" : "es"} at ${headsTxt(fx)}` : "No flashes on the press"}{lc.rollers ? ` · roller at ${headsTxt(f.lay.flatMap((s, i) => (s === "roller" ? [i + 1] : [])))}` : ""}{lc.down ? ` · ${lc.down} head${lc.down === 1 ? "" : "s"} down` : ""}{lc.broken ? ` · ${lc.broken} flash${lc.broken === 1 ? "" : "es"} not heating` : ""}</span></div>
                               {pick == null ? <div className="faint pl-hint">Tap a head to move a flash there, or to report it down.</div> : (
                                 <div className="pl-pick">
                                   <div className="pl-pick-h">Head {pick + 1}</div>
-                                  {([["print", "Printing"], ["flash", "Flash"], ["down", "Head down"], ["flashdown", "Flash not heating"]] as const).map(([k, l]) => <button key={k} type="button" className={"pl-opt " + k + (f.lay![pick] === k ? " on" : "")} onClick={() => setHead(pick, k)}><i aria-hidden />{l}</button>)}
+                                  {([["print", "Printing"], ["flash", "Flash"], ["roller", "Roller (dead screen)"], ["down", "Head down"], ["flashdown", "Flash not heating"]] as const).map(([k, l]) => <button key={k} type="button" className={"pl-opt " + k + (f.lay![pick] === k ? " on" : "")} onClick={() => setHead(pick, k)}><i aria-hidden />{l}</button>)}
                                 </div>
                               )}
-                              <div className="pl-key"><span><i className="print" />Printing</span><span><i className="flash" />Flash</span><span><i className="down" />Down</span><span><i className="load" />Load / unload</span></div>
+                              <div className="pl-key"><span><i className="print" />Printing</span><span><i className="flash" />Flash</span><span><i className="roller" />Roller</span><span><i className="down" />Down</span><span><i className="load" />Load / unload</span></div>
                               <button type="button" className="linkbtn" onClick={() => { setF({ ...f, lay: defaultLayout(fl, Math.max(1, lc.units)), state: f.state === "issue" && f.speed === 100 ? "ok" : f.state }); setPick(null); }}>Reset to the usual layout</button>
                             </div>
                           </div>

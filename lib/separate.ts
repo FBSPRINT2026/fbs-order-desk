@@ -849,7 +849,8 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
  * underbase (same-angle dots: the base's dot under the inks'); the base no ink covers shows white, the rest is the
  * shirt. Mixed in gamma values, as halftones mix on fabric (see MIX).
  */
-export function composite(res: { plates: Plate[]; w: number; h: number }, garment: string, show?: Set<string>, gain = 0): Uint8ClampedArray {
+/** `clear`: no shirt: where nothing prints is transparent (the Transparent view shows the checkerboard through it) */
+export function composite(res: { plates: Plate[]; w: number; h: number }, garment: string, show?: Set<string>, gain = 0, clear = false): Uint8ClampedArray {
   const { w, h } = res, n = w * h, out = new Uint8ClampedArray(n * 4);
   const g = rgbOf(garment);
   const on = res.plates.filter((p) => !show || show.has(p.key));
@@ -864,8 +865,15 @@ export function composite(res: { plates: Plate[]; w: number; h: number }, garmen
       const v = t * rest; r += v * k.c[0]; gg += v * k.c[1]; b += v * k.c[2]; rest -= v;
     }
     const U = 1 - rest, u = ubL ? ubL[ub!.alpha[i]] : 0, white = u > U ? u - U : 0, shirt = 1 - (u > U ? u : U);
+    const o = i * 4;
+    if (clear) {
+      // just the inks: their color, as see-through as the shirt would show between them
+      const cov = 1 - shirt; r += white * 255; gg += white * 255; b += white * 255;
+      if (cov > 1e-4) { out[o] = r / cov; out[o + 1] = gg / cov; out[o + 2] = b / cov; out[o + 3] = cov * 255; }
+      continue;
+    }
     r += white * 255 + shirt * g[0]; gg += white * 255 + shirt * g[1]; b += white * 255 + shirt * g[2];
-    const o = i * 4; out[o] = r; out[o + 1] = gg; out[o + 2] = b; out[o + 3] = 255;
+    out[o] = r; out[o + 1] = gg; out[o + 2] = b; out[o + 3] = 255;
   }
   return out;
 }

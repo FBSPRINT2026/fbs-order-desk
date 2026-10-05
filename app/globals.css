@@ -4699,11 +4699,12 @@ button.ms-sa-c:hover{border-color:var(--ink-3)}
 .nav a.nav-off{opacity:.38;cursor:not-allowed}
 .nav a.nav-off:hover{background:none;color:var(--side-ink)}
 html[data-nomoney] .money-only{display:none!important}
-/* owner: "View as" someone else */
-.side-viewas{display:flex;flex-direction:column;gap:3px;padding:0 10px 8px;font-size:11px;color:var(--side-ink)}
-.side-viewas span{text-transform:uppercase;letter-spacing:.06em;opacity:.75;font-weight:600}
-.side-viewas select{font-size:12.5px;padding:5px 6px;border-radius:6px;background:var(--side-hover);color:var(--side-ink-strong);border:1px solid rgba(255,255,255,.14);width:100%}
-.side-viewas select option,.side-viewas select optgroup{color:#111;background:#fff}
+/* owner: "View as" someone else: a small tab on the Sign out line */
+.side-user-r{display:flex;align-items:center;gap:10px}
+.side-viewas{all:unset;box-sizing:border-box;cursor:pointer;font-size:11px;font-weight:600;color:var(--side-ink);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:1px 8px;width:96px!important;max-width:96px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-viewas:hover{color:#fff;border-color:rgba(255,255,255,.4)}
+.side-viewas.on{background:#f0c75e;color:#3d2c00;border-color:#f0c75e}
+.side-viewas option,.side-viewas optgroup{color:#111;background:#fff}
 .viewas-bar{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:8px 12px;border-radius:8px;background:#fff4d6;border:1px solid #f0c75e;color:#5c4200;font-size:13.5px}
 /* Separation Studio: Make Separations Better (the coach) */
 .sep-coach{border-color:#b9a6e6;background:linear-gradient(180deg,rgba(161,82,201,.07),transparent 60%)}
@@ -4727,3 +4728,46 @@ html[data-nomoney] .money-only{display:none!important}
 .db-sep-tbl td:last-child{white-space:nowrap}
 .db-sep-tbl td.bad{color:var(--danger);font-weight:600}
 html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* press layout: the roller (a dead screen that rolls the print flat) and a head left empty for the print to cool */
+.pl{--pl-roll:#6B7A90}
+.pl-st.roller rect{fill:color-mix(in srgb,var(--pl-roll) 22%,var(--surface));stroke:var(--pl-roll);stroke-width:2}
+.pl-st.roller .pl-badge{fill:var(--pl-roll)}
+.pl-tag.r{fill:var(--pl-roll)}
+.pl-st.cool rect{fill:color-mix(in srgb,#2F86D6 8%,var(--surface));stroke:#2F86D6;stroke-width:1.5;stroke-dasharray:3 3}
+.pl-opt.roller i,.pl-key i.roller{border-color:#6B7A90;background:color-mix(in srgb,#6B7A90 22%,var(--surface))}
+.pl-opt.cool i,.pl-key i.cool{border-color:#2F86D6;border-style:dashed}
+/* Separation Studio: press setup (which screen on which head) */
+.sep-pressup h3 small{font-weight:600;text-transform:none;letter-spacing:0;margin-left:6px}
+.sep-pressup .sep-row{display:flex;gap:6px;align-items:center}
+.sep-pressup .sep-row select{flex:1;min-width:0}
+.ps-chips{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}
+.ps-chip{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px;font-weight:600;background:var(--surface);max-width:100%}
+.ps-chip i{width:12px;height:12px;border-radius:3px;border:1px solid color-mix(in srgb,var(--ink) 30%,transparent);flex:none}
+.ps-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ps-chip small{color:var(--ink-3);font-weight:600}
+.ps-chip:hover{border-color:var(--ink-3)}
+.ps-chip.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.ps-chip.off small{color:var(--danger)}
+.ps-pick{max-width:none;margin:4px 0 8px}
+.ps-pick select{font-size:12.5px}
+.ps-moves{font-size:12.5px;background:color-mix(in srgb,#E8792B 10%,var(--surface));border:1px solid color-mix(in srgb,#E8792B 40%,var(--surface));border-radius:8px;padding:6px 9px;margin:6px 0}
+.ps-moves ul{margin:3px 0 0;padding-left:16px}
+.ps-heads{list-style:none;margin:8px 0 4px;padding:0;display:grid;grid-template-columns:1fr;gap:2px;font-size:12.5px}
+.ps-heads li{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps-heads li b{width:18px;text-align:right;color:var(--ink-3);flex:none}
+.ps-heads li i{width:10px;height:10px;border-radius:2px;border:1px solid color-mix(in srgb,var(--ink) 30%,transparent);flex:none}
+.ps-heads li.flash{color:#C25E14;font-weight:700}
+.ps-heads li.roller{color:#55657B;font-weight:700}
+.ps-heads li.cool{color:#2F86D6}
+.ps-heads li.down{color:var(--danger)}
+.ps-acts{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;margin-top:4px}
+.pd-sheet{max-width:640px}
+.pd-b{padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px}
+.pd-b select{max-width:320px}
+
+/* left menu: tighter to the top (Oct 5) */
+.side{padding-top:10px;gap:8px}
+.brand.brand-logo{padding:2px 10px 4px;gap:5px}
+.nav-g{margin-top:6px}
+.nav a{padding-top:7px;padding-bottom:7px}
+.sep-marks{display:flex;flex-direction:column;gap:2px;margin-top:4px}.sep-marks>span{font-size:12.5px;font-weight:700}

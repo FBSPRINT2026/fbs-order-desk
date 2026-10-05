@@ -18,24 +18,61 @@ const esc = (t: string) => t.replace(/[\\()]/g, (c) => "\\" + c).replace(/[^\x20
 
 export type RipOpts = { widthIn: number; title: string; tonal: boolean; minDot?: number[]; sub?: (p: Plate, i: number) => string;
   /** film on a roll this wide (inches): every screen on one sheet, turned and placed side by side to use the least film */
-  rollIn?: number };
+  rollIn?: number;
+  /** marks around each screen: crop marks / registration targets (default on) */
+  marks?: { crop?: boolean; targets?: boolean } };
 
-/** how the screens go on a roll: each turned or not (all the same way), side by side across, as few rows as possible */
-export type RollLayout = { rotate: boolean; cols: number; rows: number; widthIn: number; lengthIn: number; fits: boolean; savedIn: number };
+/**
+ * How the screens go on a roll: where each one sits (pt from the top-left, below the job line) and whether it's turned a
+ * quarter turn. Rows (shelves) across the roll; a row can mix upright and turned screens, and a short screen can stack
+ * two-high beside a tall one, whatever uses the least film. `rotate` / `cols` / `rows` describe it for people.
+ */
+export type RollPlace = { x: number; y: number; rot: boolean };
+export type RollLayout = { rotate: boolean; mixed: boolean; cols: number; rows: number; widthIn: number; lengthIn: number; fits: boolean; savedIn: number; place: RollPlace[] };
 const HEADER = 22, GAP = 18, ROLL_EDGE = 0.4; // pt, pt, in (left for the printer's own margins)
+
 export function rollLayout(n: number, artW: number, artH: number, rollIn: number, m = 36): RollLayout {
   const iw = artW + 2 * m, ih = artH + 2 * m, P = (rollIn - ROLL_EDGE) * 72;
-  const opts = [false, true].map((rotate) => {
-    const w = rotate ? ih : iw, h = rotate ? iw : ih;
-    const cols = Math.min(n, Math.floor((P + GAP) / (w + GAP)));
-    if (cols < 1) return null;
-    const rows = Math.ceil(n / cols);
-    return { rotate, cols, rows, widthIn: (cols * w + (cols - 1) * GAP) / 72, lengthIn: (HEADER + rows * h + (rows - 1) * GAP) / 72, fits: true, savedIn: 0 };
-  }).filter((x): x is RollLayout => !!x);
-  if (!opts.length) return { rotate: false, cols: 1, rows: n, widthIn: iw / 72, lengthIn: (HEADER + n * ih + (n - 1) * GAP) / 72, fits: false, savedIn: 0 };
-  opts.sort((x, y) => x.lengthIn - y.lengthIn || +x.rotate - +y.rotate);
-  const best = opts[0], straight = (HEADER + n * ih + (n - 1) * GAP) / 72;
-  return { ...best, savedIn: Math.max(0, straight - best.lengthIn) };
+  const dims = [{ rot: false, w: iw, h: ih }, { rot: true, w: ih, h: iw }];
+  const straight = (HEADER + n * ih + (n - 1) * GAP) / 72;
+  // every way to fill one row: a columns upright, b columns turned; each column stacks as many as fit the row's height
+  type Row = { a: number; b: number; h: number; su: number; sr: number; cap: number; w: number };
+  const rowsOpts: Row[] = [];
+  for (let a = 0; a <= n; a++) for (let b = 0; a + b <= n; b++) {
+    if (!a && !b) continue;
+    const w = a * dims[0].w + b * dims[1].w + (a + b - 1) * GAP; if (w > P) continue;
+    const h = Math.max(a ? dims[0].h : 0, b ? dims[1].h : 0);
+    const su = a ? Math.floor((h + GAP) / (dims[0].h + GAP)) : 0, sr = b ? Math.floor((h + GAP) / (dims[1].h + GAP)) : 0;
+    rowsOpts.push({ a, b, h, su, sr, cap: a * su + b * sr, w });
+  }
+  if (!rowsOpts.length) return { rotate: false, mixed: false, cols: 1, rows: n, widthIn: iw / 72, lengthIn: straight, fits: false, savedIn: 0, place: Array.from({ length: n }, (_, i) => ({ x: 0, y: i * (ih + GAP), rot: false })) };
+  // fewest inches of film for r screens left: try every row, then the best for what's left
+  const best: { len: number; row: Row | null }[] = [{ len: 0, row: null }];
+  for (let r = 1; r <= n; r++) {
+    let pick: { len: number; row: Row | null } = { len: Infinity, row: null };
+    for (const o of rowsOpts) {
+      const put = Math.min(o.cap, r), len = o.h + (r - put > 0 ? GAP : 0) + best[r - put].len;
+      // the same film: full rows first, then fewer turned screens, then fewer columns (easier to cut)
+      const was = pick.row ? Math.min(pick.row.cap, r) : 0;
+      if (len < pick.len - 0.01 || (Math.abs(len - pick.len) <= 0.01 && pick.row && (put > was || (put === was && (o.b < pick.row.b || (o.b === pick.row.b && o.a + o.b < pick.row.a + pick.row.b)))))) pick = { len, row: o };
+    }
+    best[r] = pick;
+  }
+  const place: RollPlace[] = [];
+  let r = n, y = 0, rows = 0, maxW = 0, cols = 0, anyRot = false, anyUp = false;
+  while (r > 0) {
+    const o = best[r].row!; let left = Math.min(o.cap, r), x = 0;
+    for (const [d, k, stack] of [[dims[0], o.a, o.su], [dims[1], o.b, o.sr]] as const) {
+      for (let c = 0; c < k && left > 0; c++) {
+        for (let s2 = 0; s2 < stack && left > 0; s2++) { place.push({ x, y: y + s2 * (d.h + GAP), rot: d.rot }); left--; if (d.rot) anyRot = true; else anyUp = true; }
+        x += d.w + GAP;
+      }
+    }
+    maxW = Math.max(maxW, x - GAP); cols = Math.max(cols, o.a + o.b);
+    r -= Math.min(o.cap, r); y += o.h + GAP; rows++;
+  }
+  const lengthIn = (HEADER + y - GAP) / 72;
+  return { rotate: anyRot && !anyUp, mixed: anyRot && anyUp, cols, rows, widthIn: maxW / 72, lengthIn, fits: true, savedIn: Math.max(0, straight - lengthIn), place };
 }
 
 export async function ripPdf(plates: Plate[], w: number, h: number, o: RipOpts, z: (u8: Uint8Array) => Promise<Uint8Array>): Promise<Uint8Array> {
@@ -69,8 +106,8 @@ export async function ripPdf(plates: Plate[], w: number, h: number, o: RipOpts, 
     const ink = `${p.name}  (${i + 1}/${N})${roll ? "  " + o.title.split(" ")[0] : ""}`, size = roll ? 11 : 13, tw = ink.length * size * 0.6;
     let lx = tx + 20; if (lx + tw > iw - 4) lx = Math.max(4, tx - 20 - tw);
     return `q ${W.toFixed(2)} 0 0 ${H.toFixed(2)} ${m} ${m} cm /Im${i} Do Q\n` +
-      `q /CSA CS 1 SCN /CSA cs 1 scn 0.5 w\n` + target(tx, ty) + target(tx, m / 2) + target(m / 2, m + H / 2) + target(m + W + m / 2, m + H / 2) +
-      crop(m, m, -1, -1) + crop(m + W, m, 1, -1) + crop(m, m + H, -1, 1) + crop(m + W, m + H, 1, 1) +
+      `q /CSA CS 1 SCN /CSA cs 1 scn 0.5 w\n` + (o.marks?.targets === false ? "" : target(tx, ty) + target(tx, m / 2) + target(m / 2, m + H / 2) + target(m + W + m / 2, m + H / 2)) +
+      (o.marks?.crop === false ? "" : crop(m, m, -1, -1) + crop(m + W, m, 1, -1) + crop(m, m + H, -1, 1) + crop(m + W, m + H, 1, 1)) +
       `BT /F1 ${size} Tf ${lx.toFixed(2)} ${(ty - size / 3).toFixed(2)} Td (${esc(ink)}) Tj ET\nQ\n`;
   };
   const xobjects = plates.map((_, i) => `/Im${i} ${imgObj(i)} 0 R`).join(" ");
@@ -81,12 +118,12 @@ export async function ripPdf(plates: Plate[], w: number, h: number, o: RipOpts, 
   };
   if (L) {
     // every screen on one sheet for the roll, row by row from the top; turned a quarter turn when that's shorter
-    const bw = L.rotate ? ih : iw, bh = L.rotate ? iw : ih, PW = L.widthIn * 72, PH = L.lengthIn * 72;
+    const PW = L.widthIn * 72, PH = L.lengthIn * 72;
     let content = `q /CSA cs 1 scn BT /F1 8 Tf 2 ${(PH - 12).toFixed(2)} Td (${esc(`${o.title} - ${N} screen${N === 1 ? "" : "s"} - print at 100% - ${o.widthIn}" wide art`)}) Tj ET Q\n`;
     for (let i = 0; i < N; i++) {
-      const c = i % L.cols, r = Math.floor(i / L.cols), x = c * (bw + GAP), y = PH - HEADER - (r + 1) * bh - r * GAP;
+      const p = L.place[i], x = p.x, y = PH - HEADER - p.y - (p.rot ? iw : ih);
       // a quarter turn: (u, v) → (x + ih − v, y + u)
-      content += (L.rotate ? `q 0 1 -1 0 ${(x + ih).toFixed(2)} ${y.toFixed(2)} cm\n` : `q 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} cm\n`) + box(i) + "Q\n";
+      content += (p.rot ? `q 0 1 -1 0 ${(x + ih).toFixed(2)} ${y.toFixed(2)} cm\n` : `q 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} cm\n`) + box(i) + "Q\n";
     }
     await page(0, PW, PH, content);
   } else {

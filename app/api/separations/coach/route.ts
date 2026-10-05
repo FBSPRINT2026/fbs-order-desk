@@ -21,7 +21,7 @@ type Body = {
 type Answer = {
   reply: string;
   changes?: { setting: string; value: unknown; why?: string }[];
-  lesson?: { text: string; tags?: string[]; default?: { setting: string; value: unknown; when: string } } | null;
+  lesson?: { text: string; tags?: string[]; default?: { setting: string; value: unknown; when: string }; preset?: boolean } | null;
   engine_note?: string;
 };
 
@@ -72,6 +72,7 @@ export async function POST(req: Request) {
       settingsDoc,
       "Suggest 0–4 changes, only ones that address what he said. If the fix is on press or in the RIP (mesh, squeegee, flash, off-contact, the RIP's curve, the art itself), say so in the reply instead of inventing a setting.",
       "lesson: when his note teaches something that should carry over to other separations (a preference, how our presses / inks / films behave, what works for gradients, small type, dark shirts…), write it as one short rule in his terms, e.g. 'Gradients on dark shirts: 45 lpi and 20% dot gain hold better on our 156 mesh.' Give it a starting setting (default) only when it should apply to every new separation of that kind. Leave lesson out for one-off notes about this art. Don't repeat a lesson already listed; refine it instead (say so in the reply).",
+      "Presets: when he says to change a preset or a default for good ('always…', 'never put crop marks on films', 'change the preset to 45 lpi'), make it a lesson with a default and preset: true (it stays until someone turns it off, not 30 days). 'Don't do crop marks on this' is just this separation: a change, no lesson.",
       "engine_note: one or two sentences for the developer who maintains the separation software, when his note points at something the software itself should do better (e.g. 'fade detection split the orange into two inks'). Leave it out otherwise.",
       "Never mention prices or money.",
     ].join("\n"),
@@ -87,6 +88,7 @@ export async function POST(req: Request) {
           lesson: { type: "object", properties: {
             text: { type: "string" }, tags: { type: "array", items: { type: "string" }, description: "1–3 short topics: gradients, dark shirts, small type, sim process, halftones, underbase, black, trap…" },
             default: { type: "object", properties: { setting: { type: "string", enum: Object.keys(COACH_SETTINGS).filter((k) => k !== "addMiddle" && k !== "colors") }, value: {}, when: { type: "string", enum: ["all", "spot", "sim", "dark", "light"] } }, required: ["setting", "value", "when"] },
+            preset: { type: "boolean", description: "true when he asked to change a preset / default for good: kept until turned off instead of 30 days" },
           }, required: ["text"] },
           engine_note: { type: "string" },
         },
@@ -105,7 +107,9 @@ export async function POST(req: Request) {
     const d = L.default ? cleanChange({ setting: L.default.setting, value: L.default.value }) : null;
     const when = ["all", "spot", "sim", "dark", "light"].includes(L.default?.when || "") ? L.default!.when : "all";
     const def = d && d.setting !== "addMiddle" && d.setting !== "colors" ? { setting: d.setting, value: d.value, when } : null;
-    const ins = await admin.from("sep_lessons").insert({ lesson: L.text.trim().slice(0, 400), tags: (L.tags || []).map((t) => String(t).toLowerCase().slice(0, 30)).slice(0, 3), default_setting: def, by: v.email, feedback_id: fb.data?.id || null })
+    const tags = (L.tags || []).map((t) => String(t).toLowerCase().slice(0, 30)).slice(0, 3);
+    // a preset stays until someone turns it off (ten years); everything else is learned for 30 days
+    const ins = await admin.from("sep_lessons").insert({ lesson: L.text.trim().slice(0, 400), tags: L.preset ? ["preset", ...tags.slice(0, 2)] : tags, default_setting: def, by: v.email, feedback_id: fb.data?.id || null, ...(L.preset ? { expires_at: new Date(Date.now() + 3650 * 86400000).toISOString() } : {}) })
       .select("id, lesson, tags, default_setting, expires_at").single();
     if (ins.data) { lesson = ins.data as typeof lesson; if (fb.data?.id) await admin.from("sep_feedback").update({ lesson_id: ins.data.id }).eq("id", fb.data.id); }
   }

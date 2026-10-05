@@ -17,9 +17,12 @@ import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
 import { adjustInks, colorWord, dropInk, fadesOf, inkName, planFor, planPrint, shown, withMiddle, type PrintPlan } from "@/lib/printPlan";
 import { browserInflate, parsePdf } from "@/lib/pdfVector";
 import { deltaE } from "@/lib/inkColors";
-import { mergeProduction, withIssue, type EquipRow, type Machine, type Station } from "@/lib/production";
+import { layoutCounts, mergeProduction, withIssue, type EquipRow, type Machine, type Station } from "@/lib/production";
 import PressLayout from "@/components/PressLayout";
+import PressDefaults, { pressLayOf } from "@/components/PressDefaults";
+import { autoSetup, checkSetup, drawLayout, fitSetup, plateOf, printOrder, type Slot } from "@/lib/pressSetup";
 import SepCoach from "@/components/SepCoach";
+import { inkNamesFromFiles } from "@/lib/sepInkNames";
 import { useRole } from "@/components/RoleContext";
 import { lessonFits, type CoachChange, type LessonDefault } from "@/lib/sepCoach";
 
@@ -51,6 +54,8 @@ type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: 
   finePt?: number; fineChokePt?: number; bumpPt?: number;
   /** films: halftone dot shape */
   dot?: "ellipse" | "round" | "square";
+  /** films: crop marks at the corners / registration targets on the four sides (default on) */
+  cropMarks?: boolean; regMarks?: boolean;
   /** dot gain on press, taken off the halftone plates ahead of time (Illustrator file and films); 0 if the RIP does it.
    *  (`gain` from SepSettings is filled from this; an old saved films-only `gain` is ignored.) */
   pressGain?: number };
@@ -250,6 +255,10 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [names, setNames] = useState<Record<string, string>>({});
   const [presses, setPresses] = useState<Machine[]>([]);
   const [pressId, setPressId] = useSticky("sep.press", "");
+  // press setup for this job: what goes on each head (null = automatic, from the press defaults)
+  const [setup, setSetup] = useState<Slot[] | null>(null);
+  const [selPlate, setSelPlate] = useState<string | null>(null), [selHead, setSelHead] = useState<number | null>(null);
+  const [defOpen, setDefOpen] = useState(false);
   const [pick, setPick] = useState(false);
   const [cancelAsk, setCancelAsk] = useState(false);
   // how many inks the art itself needs (from the last automatic find): fewer is a choice, not "shading"
@@ -316,6 +325,9 @@ export default function SeparationStudio({ id }: { id: string }) {
     if (saved.order) setOrderKeys(saved.order);
     if (saved.mesh) setMesh(saved.mesh);
     if (saved.names) setNames(saved.names);
+    const ps0 = (saved as { pressSetup?: { press: string; heads: Slot[]; manual?: boolean } }).pressSetup;
+    if (ps0?.press) setPressId(ps0.press);
+    setSetup(ps0?.manual && Array.isArray(ps0.heads) ? ps0.heads : null);
     if (row0.status === "requested") { await sb.from("separations").update({ status: "in_progress", assigned_to: email, updated_at: new Date().toISOString() }).eq("id", id); setRow({ ...row0, status: "in_progress", assigned_to: email }); }
     // the art: the imprint's design, else art uploaded straight to this separation
     const d0 = d as Design | null, up = (row0.settings as { art?: SepArt }).art;
@@ -514,10 +526,10 @@ export default function SeparationStudio({ id }: { id: string }) {
       const p = plates.find((q) => q.key === solo);
       if (p) for (let i = 0; i < p.alpha.length; i++) { const v = 255 - p.alpha[i]; imgData.data[i * 4] = imgData.data[i * 4 + 1] = imgData.data[i * 4 + 2] = v; imgData.data[i * 4 + 3] = 255; }
     } else {
-      imgData.data.set(composite({ plates, w: res.w, h: res.h }, st.garment, new Set(plates.filter((p) => !hidden.has(p.key)).map((p) => p.key)), st.pressGain ?? PRESS_GAIN));
+      imgData.data.set(composite({ plates, w: res.w, h: res.h }, st.garment, new Set(plates.filter((p) => !hidden.has(p.key)).map((p) => p.key)), st.pressGain ?? PRESS_GAIN, bg === "checker"));
     }
     x.putImageData(imgData, 0, 0);
-  }, [res, plates, hidden, solo, st.garment]);
+  }, [res, plates, hidden, solo, st.garment, bg]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // film close-up: about 0.6" of the real film around the clicked spot, at the film settings (dots, dpi, mesh)
   const LOUPE_IN = 0.6;
@@ -629,13 +641,13 @@ export default function SeparationStudio({ id }: { id: string }) {
   async function aiFile() {
     const hr = await fullSep();
     setBusy("Making the Illustrator file…"); await new Promise((r) => setTimeout(r, 30));
-    return illustratorPdf(hr.plates, hr.w, hr.h, { widthIn: st.widthIn, tonal, title, vector: vectorOut(hr.plates), solid: st.solidOut || "pixels", minDot: hr.plates.map((p) => minDot(p.mesh, st.lpi)) }, deflate);
+    return illustratorPdf(hr.plates, hr.w, hr.h, { marks: { crop: st.cropMarks !== false, targets: st.regMarks !== false }, widthIn: st.widthIn, tonal, title, vector: vectorOut(hr.plates), solid: st.solidOut || "pixels", minDot: hr.plates.map((p) => minDot(p.mesh, st.lpi)) }, deflate);
   }
   /** for FilmMaker (or any RIP): one page per screen, each its own named spot color; the RIP makes the dots */
   async function ripFile() {
     const hr = await fullSep();
     setBusy("Making the RIP file…"); await new Promise((r) => setTimeout(r, 30));
-    return ripPdf(hr.plates, hr.w, hr.h, { widthIn: st.widthIn, title, tonal, minDot: hr.plates.map((p) => minDot(p.mesh, st.lpi)),
+    return ripPdf(hr.plates, hr.w, hr.h, { marks: { crop: st.cropMarks !== false, targets: st.regMarks !== false }, widthIn: st.widthIn, title, tonal, minDot: hr.plates.map((p) => minDot(p.mesh, st.lpi)),
       sub: (p) => `${p.kind === "underbase" ? "underbase, flash after" : p.kind === "highlight" ? "highlight white" : "color"} - mesh ${p.mesh} - ${tonal || p.tonal ? `halftone: ${st.lpi} lpi ${st.angle} deg` : "solid"} - print ${st.widthIn}" wide at 100%` }, deflate);
   }
   /** the films, black and finished (our dots): a page each, or all on one sheet for a roll printer */
@@ -650,7 +662,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, { halftone: ht, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", mesh: p.mesh, within });
       return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), ink: `${p.name}  (${i + 1}/${hr.plates.length})`, label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg ${DOT_NAME[st.dot || "ellipse"]} dot${(st.pressGain ?? PRESS_GAIN) ? ` - ${Math.round((st.pressGain ?? PRESS_GAIN) * 100)}% dot gain allowed for` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
     });
-    return rollIn ? filmRollPdf(pages, rollIn, title) : filmPdf(pages);
+    return rollIn ? filmRollPdf(pages, rollIn, title, deflate, { crop: st.cropMarks !== false, targets: st.regMarks !== false }) : filmPdf(pages);
   }
   async function save(status: SepRow["status"]) {
     if (!row || !res) return;
@@ -675,7 +687,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       const fname = `${slug(title)}-seps.pdf`;
       await up(`${base}/${fname}`, new Blob([await aiFile() as BlobPart], { type: "application/pdf" }), "illustrator", `${title} seps (Illustrator).pdf`);
       const keep = (row.files || []).filter((f) => f.kind === "upload");
-      const patch = { status, method: st.method, source: "studio", channels, files: [...keep, ...files], preview_path: `${base}/preview.png`, settings: { ...row.settings, ...st, inks, order: plates.map((p) => p.key), mesh, names }, updated_at: new Date().toISOString() };
+      const patch = { status, method: st.method, source: "studio", channels, files: [...keep, ...files], preview_path: `${base}/preview.png`, settings: { ...row.settings, ...st, inks, order: plates.map((p) => p.key), mesh, names, ...(onPress && press ? { pressSetup: { press: press.id, heads: onPress.heads, manual: !!setup, at: new Date().toISOString() } } : {}) }, updated_at: new Date().toISOString() };
       const r = await sb.from("separations").update(patch).eq("id", row.id).select("*").single();
       if (r.error) throw new Error(r.error.message);
       setRow(r.data as SepRow);
@@ -728,22 +740,70 @@ export default function SeparationStudio({ id }: { id: string }) {
   const press = presses.find((m) => m.id === pressId) || presses[0];
   const onPress = useMemo(() => {
     if (!press) return null;
-    const heads = press.colors + (press.issue?.full && press.issue.full > press.colors ? press.issue.full - press.colors : 0);
-    const lay: Station[] = press.layout || Array.from({ length: heads }, (_, i): Station => (i === 1 ? "flash" : "print"));
-    const out: ({ hex: string; name: string } | null)[] = lay.map(() => null);
-    const printable = (i: number) => lay[i] === "print";
-    let at = 0, note = "";
-    const seq = [...plates];
-    if (seq[0]?.kind === "underbase") {
-      const f = lay.findIndex((s, i) => s === "flash" && i > 0 && printable(i - 1));
-      if (f < 0) note = "No flash on this press: the underbase needs one right after it.";
-      else { out[f - 1] = { hex: "#E9ECEF", name: `1 · ${seq[0].name} → flash on head ${f + 1}` }; seq.shift(); at = f + 1; }
-    }
-    let placed = 0;
-    for (let k = 0; k < lay.length && seq.length; k++) { const i = (at + k) % lay.length; if (printable(i) && !out[i]) { const p = seq.shift()!; out[i] = { hex: p.hex, name: `${plates.indexOf(p) + 1} · ${p.name}` }; placed++; } }
-    if (seq.length) note = `${plates.length} screens won't fit: ${lay.filter((s) => s === "print").length} print heads on ${press.name.split(" · ")[0]} (two rounds, or another press).`;
-    return { lay, out, note, placed };
-  }, [press, plates]);
+    const lay = pressLayOf(press);
+    const sp = plates.map((p) => ({ key: p.key, name: p.name, hex: p.hex, kind: p.kind, mesh: p.mesh }));
+    const { heads, off } = fitSetup(setup, lay, sp);
+    const out = heads.map((x) => { const k = plateOf(x); const p = k ? plates.find((q) => q.key === k) : null; return p ? { hex: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex, name: `${plates.indexOf(p) + 1} · ${p.name}` } : null; });
+    const chk = checkSetup(heads, lay, sp, isDark(st.garment));
+    const note = off.length ? `${off.length} screen${off.length === 1 ? "" : "s"} won't fit on ${press.name.split(" · ")[0]} (${off.map((p) => p.name).join(", ")}): free a head, print in two rounds, or pick another press.` : "";
+    return { lay, heads, out, off, note, ...chk };
+  }, [press, plates, setup, st.garment]);
+  // the screens' print order follows the heads they're on (a pallet reaches head 1 first)
+  function commitSetup(n: Slot[]) {
+    setSetup(n);
+    setOrderKeys([...printOrder(n), ...plates.map((p) => p.key).filter((k) => !n.includes("p:" + k))]);
+  }
+  // …and moving a screen up in Print Order moves it to the earlier head
+  useEffect(() => {
+    if (!setup) return;
+    const placed = printOrder(setup), want = plates.map((p) => p.key).filter((k) => placed.includes(k));
+    if (want.join("|") === placed.join("|")) return;
+    const at = setup.map((x, i) => (plateOf(x) ? i : -1)).filter((i) => i >= 0), n = [...setup];
+    at.forEach((i, j) => { n[i] = "p:" + want[j]; });
+    setSetup(n);
+  }, [plates]); // eslint-disable-line react-hooks/exhaustive-deps
+  function putPlate(key: string, head: number) {
+    if (!onPress) return;
+    const n = [...onPress.heads], from = n.indexOf("p:" + key), prev = n[head];
+    n[head] = "p:" + key;
+    if (from >= 0 && from !== head) n[from] = plateOf(prev) ? prev : "";
+    commitSetup(n); setSelPlate(null); setSelHead(null);
+  }
+  function setHeadTo(head: number, v: Slot) {
+    if (!onPress) return;
+    if (plateOf(v)) { putPlate(plateOf(v)!, head); return; }
+    const n = [...onPress.heads];
+    // a flash, the roller or a cool-down head put where a screen is: that screen and the ones after it move down a head
+    // (flashes, rollers and cool-down heads after it stay put)
+    const moving = plateOf(n[head]) ? n.slice(head).filter((x) => plateOf(x)) : [];
+    if (moving.length) for (let i = head; i < n.length; i++) if (plateOf(n[i])) n[i] = "";
+    n[head] = v;
+    for (let i = head + 1; i < n.length && moving.length; i++) if (n[i] === "") n[i] = moving.shift()!;
+    commitSetup(n);
+  }
+  function pickHead(i: number) {
+    if (!onPress) return;
+    if (onPress.heads[i] === "down") { setMsg(`Head ${i + 1} is down (Production → Equipment Status).`); return; }
+    if (selPlate) putPlate(selPlate, i); else setSelHead(selHead === i ? null : i);
+  }
+  /** a sheet for the press operator: the press drawn with every head, and the list */
+  function printSetup() {
+    if (!onPress || !press || !row) return;
+    const svg = document.querySelector(".sep-pressup .sep-press svg")?.outerHTML || "";
+    const css = [...document.querySelectorAll('link[rel="stylesheet"], style')].map((x) => x.outerHTML).join("");
+    const esc = (t: string) => t.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]!));
+    const rows = onPress.heads.map((x, i) => { const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null;
+      const what = p ? `<b>${esc(p.name)}</b>${p.kind === "underbase" ? " (underbase)" : p.kind === "highlight" ? " (highlight white)" : ""} · mesh ${p.mesh}` : x === "flash" ? "<b>FLASH</b>" : x === "roller" ? "<b>ROLLER</b> (dead screen)" : x === "cool" ? "<i>empty: cool down</i>" : x === "down" ? "<i>head down</i>" : "<span style=\"color:#999\">empty</span>";
+      return `<tr><td style="padding:5px 10px;font-weight:800">Head ${i + 1}</td><td style="padding:5px 10px">${p ? `<span style="display:inline-block;width:14px;height:14px;border:1px solid #999;vertical-align:-2px;margin-right:6px;background:${p.hex}"></span>` : ""}${what}</td></tr>`; }).join("");
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Press setup S-${row.number}</title>${css}<style>body{background:#fff;color:#111;font:14px system-ui;padding:24px}table{border-collapse:collapse}tr:nth-child(odd){background:#f4f5f7}.pl{width:360px;height:auto}</style></head><body>
+      <h2 style="margin:0">Press setup · ${esc(row.location || "")}${order ? ` · #${order.number} ${esc(order.nickname || "")}` : ""}</h2>
+      <div style="color:#555;margin:4px 0 14px">${esc(press.name)} · S-${row.number} · ${plates.length} screens · shirt ${esc(row.garment_color || st.garment)}</div>
+      <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap">${svg}<table>${rows}</table></div>
+      ${onPress.moves.length ? `<h3>Before you start</h3><ul>${onPress.moves.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
+      <script>setTimeout(()=>print(),400)</script></body></html>`);
+    w.document.close();
+  }
 
   if (err && !row) return <div className="empty">{err}</div>;
   if (!row) return <div className="empty">Loading…</div>;
@@ -781,7 +841,9 @@ export default function SeparationStudio({ id }: { id: string }) {
       )}
       <div className="rv-seg sep-tabs">{([["studio", "Separate Here"], ["outside", "Separated Elsewhere (Separo…)"]] as const).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
 
-      {tab === "outside" ? <Outside row={row} origUrl={origUrl} onSaved={(r) => { setRow(r); setMsg("Uploaded and sent for review."); }} openFile={openFile} /> : hasArt === false ? <AddArt row={row} onDone={(r) => { setRow(r); load(); }} /> : (
+      {tab === "outside" ? <Outside row={row} origUrl={origUrl} onSaved={(r) => { setRow(r); setMsg("Uploaded and sent for review."); }} openFile={openFile}
+        ours={() => ({ ours: { method: st.method, natural, inks: inks.map((k) => ({ name: k.name, hex: k.hex, ...(k.fadeTo?.length ? { fadeTo: k.fadeTo.map((h) => inks.find((q) => q.hex === h)?.name || h) } : {}), ...(k.also?.length ? { also: k.also } : {}) })), settings: coachContext().settings }, art: { vector: !!vart?.ok, shirt: row.garment_color || st.garment, dark: isDark(st.garment), width_in: st.widthIn, location: row.location } })}
+        artImage={() => { try { if (!img) return null; const k = Math.min(1, 1100 / Math.max(img.naturalWidth, img.naturalHeight)), t = document.createElement("canvas"); t.width = Math.round(img.naturalWidth * k); t.height = Math.round(img.naturalHeight * k); const g = t.getContext("2d")!; g.fillStyle = "#fff"; g.fillRect(0, 0, t.width, t.height); g.drawImage(img, 0, 0, t.width, t.height); return t.toDataURL("image/jpeg", 0.85).split(",")[1]; } catch { return null; } }} /> : hasArt === false ? <AddArt row={row} onDone={(r) => { setRow(r); load(); }} /> : (
       <div className="sep-grid">
         {/* settings */}
         <aside className="sep-side">
@@ -848,6 +910,10 @@ export default function SeparationStudio({ id }: { id: string }) {
             {st.method === "spot" && !vart?.ok && <label className="sep-f" title="Pixels: the art's own pixels at full size, like Separo. Smooth vector: traced curves, for low-resolution art.">Solid inks<select value={st.solidOut || "pixels"} onChange={(e) => set({ solidOut: e.target.value as Studio["solidOut"] })}><option value="pixels">Pixels (exact)</option><option value="vector">Smooth vector</option></select></label>}
             {(tonal || plates.some((p) => p.tonal)) && <label className="sep-f" title="Halftone dots print bigger than on the film (at 15% a 50% dot prints about 65%). The halftone plates are made that much lighter so they print as the art, and the proof shows how it prints. Pick None if your RIP adds its own dot gain curve (FilmMaker: a Press Calibration curve that isn't straight). Use one or the other, not both.">Dot gain on press<select value={st.pressGain ?? PRESS_GAIN} onChange={(e) => set({ pressGain: +e.target.value })}>{[0, 0.1, 0.15, 0.2, 0.25, 0.3].map((g) => <option key={g} value={g}>{g ? `${Math.round(g * 100)}%` : "None (RIP does it)"}</option>)}</select></label>}
             <label className="sep-f">Film DPI<select value={st.dpi} onChange={(e) => set({ dpi: +e.target.value })}>{[360, 600, 720, 1200, 1440].map((d) => <option key={d} value={d}>{d}</option>)}</select></label>
+            <div className="sep-marks"><span>Film marks</span>
+              <label className="sep-chk"><input type="checkbox" checked={st.cropMarks !== false} onChange={(e) => set({ cropMarks: e.target.checked })} /> Crop marks</label>
+              <label className="sep-chk"><input type="checkbox" checked={st.regMarks !== false} onChange={(e) => set({ regMarks: e.target.checked })} /> Registration targets</label>
+            </div>
           </section>
         </aside>
 
@@ -948,13 +1014,38 @@ export default function SeparationStudio({ id }: { id: string }) {
             ))}</ol>
           </section>
           {onPress && press && (
-            <section className="sep-card">
-              <h3>On the press</h3>
-              <select value={press.id} onChange={(e) => setPressId(e.target.value)} aria-label="Press">{presses.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
-              <div className="sep-press"><PressLayout layout={onPress.lay} size={220} mirror={!!press.mirror} inks={onPress.out} /></div>
-              {onPress.note ? <div className="sep-tip">{onPress.note}</div> : <p className="sep-help">Colored heads show which screen goes where (hover for the plate). Move flashes in Equipment Status.</p>}
+            <section className="sep-card sep-pressup">
+              <h3>Press Setup <small className="faint">{setup ? "set by hand" : "automatic"}</small></h3>
+              <div className="sep-row">
+                <select value={press.id} onChange={(e) => { setPressId(e.target.value); setSetup(null); }} aria-label="Press">{presses.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
+                <button type="button" className="btn sm" onClick={() => setDefOpen(true)} title="What always sits on each head of this press: flashes, the roller">Press Defaults</button>
+              </div>
+              <div className="sep-press"><PressLayout layout={drawLayout(onPress.heads)} size={250} mirror={!!press.mirror} inks={onPress.out} selected={selHead} onPick={pickHead} /></div>
+              <div className="ps-chips">{plates.map((p, i) => { const h = onPress.heads.indexOf("p:" + p.key); return (
+                <button key={p.key} type="button" className={"ps-chip" + (selPlate === p.key ? " on" : "") + (h < 0 ? " off" : "")} onClick={() => { setSelHead(null); setSelPlate(selPlate === p.key ? null : p.key); }} title="Pick it, then tap the head it goes on">
+                  <i style={{ background: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex }} /><span>{i + 1} · {p.name}</span><small>{h < 0 ? "not on" : `head ${h + 1}`}</small>
+                </button>); })}</div>
+              {selPlate ? <p className="sep-help"><b>Now tap the head</b> {plates.find((p) => p.key === selPlate)?.name} goes on (a screen already there trades places).</p>
+                : selHead != null ? (
+                  <div className="pl-pick ps-pick">
+                    <div className="pl-pick-h">Head {selHead + 1}</div>
+                    {([["flash", "Flash"], ["roller", "Roller (dead screen)"], ["cool", "Empty: cool down"], ["", "Empty"]] as const).map(([k, l]) => <button key={k || "free"} type="button" className={"pl-opt " + (k || "print") + (onPress.heads[selHead] === k ? " on" : "")} onClick={() => setHeadTo(selHead, k)}><i aria-hidden />{l}</button>)}
+                    <select value="" onChange={(e) => e.target.value && setHeadTo(selHead, "p:" + e.target.value)} aria-label="Put a screen on this head"><option value="">Put a screen here…</option>{plates.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select>
+                  </div>
+                ) : <p className="sep-help">Tap a color, then the head it goes on. Tap a head to put a flash, the roller or an empty cool-down head there (ink gets too hot hit after hit).</p>}
+              {onPress.note && <div className="sep-tip">{onPress.note}</div>}
+              {onPress.warn.map((w) => <div key={w} className="sep-tip">{w}</div>)}
+              {onPress.moves.length > 0 && <div className="ps-moves"><b>Set up the press:</b><ul>{onPress.moves.map((m) => <li key={m}>{m}</li>)}</ul></div>}
+              <ol className="ps-heads">{onPress.heads.map((x, i) => { const k = plateOf(x), p = k ? plates.find((q) => q.key === k) : null; return (
+                <li key={i} className={x === "" ? "free" : x}><b>{i + 1}</b>{p ? <><i style={{ background: p.kind === "underbase" || p.kind === "highlight" ? "#E9ECEF" : p.hex }} />{p.name}<small> · {p.mesh}</small></> : x === "flash" ? "Flash" : x === "roller" ? "Roller" : x === "cool" ? "Cool down" : x === "down" ? "Down" : <span className="faint">empty</span>}</li>); })}</ol>
+              <div className="ps-acts">
+                <button type="button" className="linkbtn" onClick={() => { const n = autoSetup(onPress.lay, plates.map((p) => ({ key: p.key, name: p.name, hex: p.hex, kind: p.kind })), true); commitSetup(n); }} title="Leave an empty head between colors where there's room, so each hit cools before the next">Space colors out</button>
+                {setup && <button type="button" className="linkbtn" onClick={() => { setSetup(null); setSelHead(null); setSelPlate(null); }}>Back to automatic</button>}
+                <button type="button" className="linkbtn" onClick={printSetup}>Print setup sheet</button>
+              </div>
             </section>
           )}
+          {defOpen && <PressDefaults presses={presses} start={press?.id} me={me.email} onClose={() => setDefOpen(false)} onSaved={(m, lay) => { const lc = layoutCounts(lay); setPresses((ps) => ps.map((p) => (p.id === m.id ? { ...p, layout: lay, flashes: lc.units, rollers: lc.rollers || undefined } : p))); setDefOpen(false); setMsg(`${m.name.split(" · ")[0]} defaults saved. Every job's setup on it starts from these.`); }} />}
           {res && <PrintFilms n={plates.length} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
             make={async (rollIn) => { try { return await filmsFile(rollIn); } finally { setBusy(""); } }}
             onSent={() => { if (row.status === "approved") setStatus("films"); }} />}
@@ -968,7 +1059,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             </div>
             <div className="sep-dl">
               <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await aiFile(), `${slug(title)}-seps.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Illustrator file (spot colors)</button>
-              <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await filmsFile(), `${slug(title)}-films.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Films PDF ({st.dpi} dpi{tonal || plates.some((p) => p.tonal) ? `, ${st.lpi} lpi` : ""})</button>
+              <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await filmsFile(ROLL_IN), `${slug(title)}-films-${ROLL_IN}in.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Films PDF ({ROLL_IN}&quot; roll, {st.dpi} dpi{tonal || plates.some((p) => p.tonal) ? `, ${st.lpi} lpi` : ""})</button>
               <button type="button" className="linkbtn" disabled={!res || !!busy} title="For FilmMaker (or any RIP): one page per screen, each its own spot color, with marks and the ink name. FilmMaker makes the halftone dots with its own settings per ink." onClick={async () => { try { setErr(""); download(await ripFile(), `${slug(title)}-filmmaker.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>FilmMaker / RIP file (one page per screen)</button>
             </div>
             {(row.files || []).length > 0 && <ul className="sep-files">{row.files.filter((f) => f.kind !== "plate").map((f) => <li key={f.path}><button type="button" className="linkbtn" onClick={() => openFile(f.path)}>{f.name}</button></li>)}</ul>}
@@ -984,6 +1075,17 @@ export default function SeparationStudio({ id }: { id: string }) {
 import { WILFLEX_HEX as WILFLEX_NAMES } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 const PMS_NAMES = Object.keys(PMS_COATED);
+
+/** a picture file as a JPEG (base64, at most 1100 px) for Claude to look at */
+async function jpegOf(f: File): Promise<string | null> {
+  try {
+    const u = URL.createObjectURL(f), im = await loadImg(u);
+    const k = Math.min(1, 1100 / Math.max(im.naturalWidth, im.naturalHeight)), t = document.createElement("canvas");
+    t.width = Math.round(im.naturalWidth * k); t.height = Math.round(im.naturalHeight * k);
+    const g = t.getContext("2d")!; g.fillStyle = "#fff"; g.fillRect(0, 0, t.width, t.height); g.drawImage(im, 0, 0, t.width, t.height);
+    URL.revokeObjectURL(u); return t.toDataURL("image/jpeg", 0.85).split(",")[1];
+  } catch { return null; }
+}
 
 /** No art yet: upload a picture or SVG straight to this separation. */
 function AddArt({ row, onDone }: { row: SepRow; onDone: (r: SepRow) => void }) {
@@ -1018,9 +1120,34 @@ function AddArt({ row, onDone }: { row: SepRow; onDone: (r: SepRow) => void }) {
 }
 
 /** Separated somewhere else: download the art, upload what came back, list the inks. */
-function Outside({ row, origUrl, onSaved, openFile }: { row: SepRow; origUrl: string; onSaved: (r: SepRow) => void; openFile: (p: string) => void }) {
+function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: SepRow; origUrl: string; onSaved: (r: SepRow) => void; openFile: (p: string) => void;
+  /** what our Studio picked for this art, to learn from the difference */
+  ours: () => Record<string, unknown>; artImage: () => string | null }) {
   const sb = useMemo(() => createClient(), []);
   const [files, setFiles] = useState<File[]>([]);
+  // why it went to Separo (what was wrong with ours), and what was learned from it
+  const [why, setWhy] = useState("");
+  const [learned, setLearned] = useState<{ summary: string; lessons: { id: string; lesson: string }[] } | null>(null), [learning, setLearning] = useState(false);
+  const [readInks, setReadInks] = useState(0);
+  async function pickFiles(fs: File[]) {
+    setFiles(fs);
+    const names = await inkNamesFromFiles(fs);
+    if (names.length && !inkText.trim()) { setInkText(names.join("\n")); setReadInks(names.length); }
+  }
+  /** Separo's result next to ours → lessons for our separations (and notes for the engine) */
+  async function learn(chs: Channel[]) {
+    setLearning(true);
+    try {
+      const imgs: { label: string; data: string }[] = [];
+      const art = artImage(); if (art) imgs.push({ label: "The original art:", data: art });
+      const comp = files.find((f) => /^image\/(png|jpe?g)$/i.test(f.type) && f.size < 15e6);
+      if (comp) { const d = await jpegOf(comp); if (d) imgs.push({ label: `What came back from ${src} (${comp.name}):`, data: d }); }
+      const r = await fetch("/api/separations/learn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ separation_id: row.id, design_id: row.design_id, source: src, why, theirs: { inks: chs.map((c) => ({ name: c.name, hex: c.hex })), files: files.map((f) => f.name) }, ...ours(), images: imgs }) });
+      const j = await r.json().catch(() => ({}));
+      if (j.summary) setLearned({ summary: j.summary, lessons: j.lessons || [] });
+    } catch { /* learning is extra: the upload already saved */ }
+    setLearning(false);
+  }
   const [inkText, setInkText] = useState(row.channels.map((c) => c.name).join("\n"));
   const [src, setSrc] = useState(row.source && row.source !== "studio" ? row.source : "Separo");
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
@@ -1035,10 +1162,14 @@ function Outside({ row, origUrl, onSaved, openFile }: { row: SepRow; origUrl: st
         added.push({ path, name: f.name, kind: "upload", size: f.size });
       }
       const names = inkText.split(/\n|,/).map((x) => x.trim()).filter(Boolean);
-      const channels: Channel[] = names.map((n, i) => ({ key: "u" + i, name: n, hex: colorHex(n) || "#999999", kind: /base|underbase/i.test(n) ? "underbase" : /highlight/i.test(n) ? "highlight" : "color", order: i + 1, mesh: /base/i.test(n) ? 156 : 230, coverage: 0 }));
+      // Separo names inks "7405 C", "Base", "White": a PMS number gets its color, a white after the base is the highlight
+      const hasBase = names.some((n) => /base/i.test(n));
+      const channels: Channel[] = names.map((n, i) => ({ key: "u" + i, name: n, hex: colorHex(n) || colorHex("PMS " + n) || (/^white$/i.test(n) || /base/i.test(n) ? "#FFFFFF" : "#999999"), kind: /base|underbase/i.test(n) ? "underbase" : /highlight/i.test(n) || (hasBase && /^white$/i.test(n.trim())) ? "highlight" : "color", order: i + 1, mesh: /base/i.test(n) ? 156 : 230, coverage: 0 }));
       const r = await sb.from("separations").update({ status: "review", method: "outside", source: src, channels, files: [...(row.files || []), ...added], updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
       if (r.error) throw new Error(r.error.message);
-      setFiles([]); onSaved(r.data as SepRow);
+      onSaved(r.data as SepRow);
+      await learn(channels);
+      setFiles([]);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     setBusy(false);
   }
@@ -1054,11 +1185,21 @@ function Outside({ row, origUrl, onSaved, openFile }: { row: SepRow; origUrl: st
       <section className="sep-card">
         <h3>2. Upload what came back</h3>
         <label className="sep-f">From<input value={src} onChange={(e) => setSrc(e.target.value)} /></label>
-        <label className="tmx-drop"><input type="file" multiple accept=".eps,.pdf,.ai,.psd,.tif,.tiff,.png,.zip" onChange={(e) => setFiles([...(e.target.files || [])])} /><b>{files.length ? files.map((f) => f.name).join(", ") : "Choose files (EPS, PDF, AI, PSD, TIFF, PNG, ZIP)"}</b></label>
+        <label className="tmx-drop"><input type="file" multiple accept=".eps,.pdf,.ai,.psd,.tif,.tiff,.png,.jpg,.zip" onChange={(e) => pickFiles([...(e.target.files || [])])} /><b>{files.length ? files.map((f) => f.name).join(", ") : "Choose files (EPS, PDF, AI, PSD, TIFF, PNG, ZIP)"}</b></label>
+        {readInks > 0 && <div className="sep-ok">Read {readInks} ink{readInks === 1 ? "" : "s"} from the file. Check the print order.</div>}
         <label className="sep-f">Inks, in print order (one per line)<textarea rows={6} value={inkText} onChange={(e) => setInkText(e.target.value)} placeholder={"Underbase\n7405 C\n2347 C\n288 C\nHighlight White\nBlack"} /></label>
+        <label className="sep-f">Why Separo this time? What was wrong with ours? (it learns from this)<textarea rows={3} value={why} onChange={(e) => setWhy(e.target.value)} placeholder="e.g. ours used 5 colors for the gradient, Separo did it in 3; our underbase was too heavy" /></label>
         {err && <div className="pv-err">{err}</div>}
-        <button type="button" className="btn primary" disabled={busy || (!files.length && !inkText.trim())} onClick={save}>{busy ? "Uploading…" : "Save & Send for Review"}</button>
+        <button type="button" className="btn primary" disabled={busy || learning || (!files.length && !inkText.trim())} onClick={save}>{busy ? "Uploading…" : learning ? "Learning from it…" : "Save & Send for Review"}</button>
       </section>
+      {learned && (
+        <section className="sep-card sep-coach">
+          <h3>What we learned from {src}</h3>
+          <p style={{ fontSize: 13, margin: "4px 0 8px" }}>{learned.summary}</p>
+          {learned.lessons.length > 0 && <ul className="sc-lessons">{learned.lessons.map((l) => <li key={l.id}><span>{l.lesson}</span></li>)}</ul>}
+          <p className="sep-help">Our separations use these for the next 30 days (Make Separations Better shows them). The differences are also kept to improve the separation engine itself.</p>
+        </section>
+      )}
       {(row.files || []).some((f) => f.kind === "upload") && <section className="sep-card"><h3>Uploaded</h3><ul className="sep-files">{row.files.filter((f) => f.kind === "upload").map((f) => <li key={f.path}><button type="button" className="linkbtn" onClick={() => openFile(f.path)}>{f.name}</button></li>)}</ul></section>}
     </div>
   );
@@ -1069,12 +1210,13 @@ function Outside({ row, origUrl, onSaved, openFile }: { row: SepRow; origUrl: st
  * the film roll (turned when that uses less film), sent straight to FilmMaker's hot folder, which prints it as one
  * black composite job. Nobody opens Illustrator.
  */
-const ROLLS = [13, 17, 24, 44];
+/** the film printer's roll (Epson, 17"): every film goes on it */
+const ROLL_IN = 17;
 function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
   n: number; aspect: number; widthIn: number; dpi: number; title: string; busy: boolean;
   make: (rollIn: number) => Promise<Uint8Array>; onSent: () => void;
 }) {
-  const [rollIn, setRollIn] = useSticky<number>("sep.rollIn", 17);
+  const rollIn = ROLL_IN;
   const [folder, setFolder] = useState<string | null>(null), [canFolder, setCanFolder] = useState(false);
   const [msg, setMsg] = useState(""), [err, setErr] = useState(""), [working, setWorking] = useState(false);
   useEffect(() => { setCanFolder(folderPrintable()); savedFolder().then((h) => setFolder(h?.name || null)); }, []);
@@ -1107,13 +1249,13 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
   // the roll, drawn: each screen a box, the ones turned shown turned
   const pic = (() => {
     if (!L || !rollIn) return null;
-    const m = 36, iw = W + 2 * m, ih = H + 2 * m, bw = L.rotate ? ih : iw, bh = L.rotate ? iw : ih;
+    const m = 36, iw = W + 2 * m, ih = H + 2 * m;
     const RW = rollIn * 72, RL = Math.max(L.lengthIn * 72, 72), k = Math.min(150 / RW, 210 / RL);
     return (
       <svg className="pf-roll" width={RW * k + 2} height={RL * k + 2} viewBox={`-1 -1 ${RW + 2 / k} ${RL + 2 / k}`} aria-hidden>
         <rect x={0} y={0} width={RW} height={RL} className="pf-film" />
-        {Array.from({ length: n }, (_, i) => {
-          const c = i % L.cols, r = Math.floor(i / L.cols), x = 0.2 * 72 + c * (bw + 18), y = 22 + r * (bh + 18);
+        {L.place.map((p, i) => {
+          const bw = p.rot ? ih : iw, bh = p.rot ? iw : ih, x = 0.2 * 72 + p.x, y = 22 + p.y;
           return <g key={i}><rect x={x} y={y} width={bw} height={bh} className={"pf-box" + (L.fits ? "" : " bad")} /><text x={x + bw / 2} y={y + bh / 2} className="pf-n" fontSize={Math.min(bw, bh) * 0.32}>{i + 1}</text></g>;
         })}
       </svg>
@@ -1122,19 +1264,15 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
   return (
     <section className="sep-card">
       <h3>Print films</h3>
-      <label className="sep-f">Film<select value={rollIn} onChange={(e) => setRollIn(+e.target.value)}>
-        {ROLLS.map((r) => <option key={r} value={r}>{r}&quot; roll</option>)}
-        <option value={0}>Sheets (a page per screen)</option>
-      </select></label>
       {L ? (
         <div className="pf-lay">
           {pic}
           <div className="pf-txt">
             {L.fits ? <>
               <b>{n} screen{n === 1 ? "" : "s"} · {L.lengthIn.toFixed(1)}&quot; of film</b>
-              <span>{L.rotate ? "Turned sideways" : "Upright"}, {L.cols === 1 ? "one across" : `${L.cols} across`}{L.rows > 1 ? `, ${L.rows} rows` : ""}</span>
+              <span>{L.mixed ? "Some turned sideways to fit more across" : L.rotate ? "Turned sideways" : "Upright"}, {L.cols === 1 ? "one across" : `up to ${L.cols} across`}{L.rows > 1 ? `, ${L.rows} rows` : ""}</span>
               <span className="faint">{L.widthIn.toFixed(1)}&quot; of the {rollIn}&quot; roll used{L.savedIn >= 0.5 ? ` · saves ${L.savedIn.toFixed(1)}" over one under another` : ""}</span>
-            </> : <span className="pv-err">The art with its marks is {((W + 72) / 72).toFixed(1)}&quot; × {((H + 72) / 72).toFixed(1)}&quot;: too big for the {rollIn}&quot; roll either way. Pick a wider roll or Sheets.</span>}
+            </> : <span className="pv-err">The art with its marks is {((W + 72) / 72).toFixed(1)}&quot; × {((H + 72) / 72).toFixed(1)}&quot;: too big for the {rollIn}&quot; roll either way. Make the print smaller, or download the Films PDF (a page per screen).</span>}
           </div>
         </div>
       ) : <p className="sep-help">One page per screen, each the art at {widthIn}&quot; wide with its marks: for a sheet printer.</p>}

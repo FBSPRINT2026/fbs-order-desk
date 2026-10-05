@@ -64,10 +64,12 @@ export async function filmPdf(pages: FilmPage[], z: (u8: Uint8Array) => Promise<
  * separate or screen), each with its marks and ink name, turned a quarter turn when that uses less film, side by side
  * across the roll (see `rollLayout`). Print it as one composite black job at 100%.
  */
-export async function filmRollPdf(pages: FilmPage[], rollIn: number, title: string, z: (u8: Uint8Array) => Promise<Uint8Array> = deflate): Promise<Uint8Array> {
+/** which marks go around each film (the shop can turn them off) */
+export type FilmMarks = { crop?: boolean; targets?: boolean };
+export async function filmRollPdf(pages: FilmPage[], rollIn: number, title: string, z: (u8: Uint8Array) => Promise<Uint8Array> = deflate, marks: FilmMarks = {}): Promise<Uint8Array> {
   const N = pages.length, m = 36, aw = pages[0].widthIn * 72, ah = pages[0].heightIn * 72, iw = aw + 2 * m, ih = ah + 2 * m;
   const L = rollLayout(N, aw, ah, rollIn, m);
-  const bw = L.rotate ? ih : iw, bh = L.rotate ? iw : ih, PW = L.widthIn * 72, PH = L.lengthIn * 72;
+  const PW = L.widthIn * 72, PH = L.lengthIn * 72;
   const parts: Uint8Array[] = [], offsets: number[] = []; let pos = 0;
   const push = (x: Uint8Array | string) => { const b = typeof x === "string" ? enc.encode(x) : x; parts.push(b); pos += b.length; };
   const obj = (n: number, body: (Uint8Array | string)[]) => { offsets[n] = pos; push(`${n} 0 obj\n`); for (const b of body) push(b); push("\nendobj\n"); };
@@ -81,13 +83,13 @@ export async function filmRollPdf(pages: FilmPage[], rollIn: number, title: stri
   const job = title.split(" ")[0];
   let content = `q 0 g BT /F1 8 Tf 2 ${(PH - 12).toFixed(2)} Td (${esc(`${title} - ${N} film${N === 1 ? "" : "s"} - print at 100%, no fit to page - art ${pages[0].widthIn}" wide`)}) Tj ET Q\n`;
   for (let i = 0; i < N; i++) {
-    const c = i % L.cols, r = Math.floor(i / L.cols), x = c * (bw + 18), y = PH - 22 - (r + 1) * bh - r * 18;
+    const p = L.place[i], x = p.x, y = PH - 22 - p.y - (p.rot ? iw : ih);
     const tx = m + aw / 2, ty = m + ah + m / 2, ink = `${pages[i].ink || pages[i].label}  ${job}`, tw = ink.length * 11 * 0.6;
     let lx = tx + 20; if (lx + tw > iw - 4) lx = Math.max(4, tx - 20 - tw);
-    content += (L.rotate ? `q 0 1 -1 0 ${(x + ih).toFixed(2)} ${y.toFixed(2)} cm\n` : `q 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} cm\n`) +
+    content += (p.rot ? `q 0 1 -1 0 ${(x + ih).toFixed(2)} ${y.toFixed(2)} cm\n` : `q 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} cm\n`) +
       `q ${aw.toFixed(2)} 0 0 ${ah.toFixed(2)} ${m} ${m} cm /Im${i} Do Q\n` +
-      `0 G 0 g 0.5 w\n` + target(tx, ty) + target(tx, m / 2) + target(m / 2, m + ah / 2) + target(m + aw + m / 2, m + ah / 2) +
-      crop(m, m, -1, -1) + crop(m + aw, m, 1, -1) + crop(m, m + ah, -1, 1) + crop(m + aw, m + ah, 1, 1) +
+      `0 G 0 g 0.5 w\n` + (marks.targets === false ? "" : target(tx, ty) + target(tx, m / 2) + target(m / 2, m + ah / 2) + target(m + aw + m / 2, m + ah / 2)) +
+      (marks.crop === false ? "" : crop(m, m, -1, -1) + crop(m + aw, m, 1, -1) + crop(m, m + ah, -1, 1) + crop(m + aw, m + ah, 1, 1)) +
       `BT /F1 11 Tf ${lx.toFixed(2)} ${(ty - 11 / 3).toFixed(2)} Td (${esc(ink)}) Tj ET\nQ\n`;
   }
   const cz = await z(enc.encode(content));

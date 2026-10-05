@@ -5,7 +5,7 @@
  */
 export type CoachSetting =
   | "method" | "colors" | "addMiddle" | "underbase" | "highlight" | "chokePt" | "trapPt" | "finePt" | "fineChokePt" | "bumpPt"
-  | "blackOver" | "lpi" | "angle" | "dot" | "pressGain" | "dpi";
+  | "blackOver" | "lpi" | "angle" | "dot" | "pressGain" | "dpi" | "cropMarks" | "regMarks";
 export type CoachChange = { setting: CoachSetting; value: string | number | boolean; why?: string };
 export type LessonDefault = { setting: CoachSetting; value: string | number | boolean; when: "all" | "spot" | "sim" | "dark" | "light" };
 export type Lesson = { id: string; lesson: string; tags: string[]; default_setting: LessonDefault | null; by: string; created_at: string; expires_at: string; active: boolean };
@@ -28,6 +28,8 @@ export const COACH_SETTINGS: Record<CoachSetting, { about: string; check: (v: un
   dot: { about: "halftone dot shape: \"ellipse\" (smoothest midtones, the usual pick), \"round\", \"square\"", check: (v) => (v === "ellipse" || v === "round" || v === "square" ? v : null) },
   pressGain: { about: "dot gain on press, 0–0.3 (0.15 = a 50% dot prints ~65%): the halftone plates are made lighter by that much. Fades that print too dark / blocked up in the middle need more; too light / washed out need less. 0 if the RIP adds its own curve", check: (v) => num(v, 0, 0.3, 0.05) },
   dpi: { about: "film resolution: 360, 600, 720, 1200 or 1440", check: (v) => ([360, 600, 720, 1200, 1440].includes(+(v as number)) ? +(v as number) : null) },
+  cropMarks: { about: "true/false: crop marks at the corners of each film (and the Illustrator / RIP files)", check: bool },
+  regMarks: { about: "true/false: registration targets on the four sides of each film", check: bool },
 };
 function num(v: unknown, lo: number, hi: number, step: number) { const n = typeof v === "string" ? parseFloat(v) : typeof v === "number" ? v : NaN; if (!Number.isFinite(n)) return null; return Math.round(Math.min(hi, Math.max(lo, n)) / step) * step; }
 function bool(v: unknown) { return v === true || v === "true" ? true : v === false || v === "false" ? false : null; }
@@ -46,7 +48,7 @@ export const lessonFits = (d: LessonDefault, method: string, dark: boolean) =>
 export const COACH_LABEL: Record<CoachSetting, string> = {
   method: "Method", colors: "Colors", addMiddle: "Middle screen", underbase: "Underbase", highlight: "Highlight white", chokePt: "Choke",
   trapPt: "Trap", finePt: "Fine detail", fineChokePt: "Fine base choke", bumpPt: "Color fatter", blackOver: "Black on top", lpi: "LPI",
-  angle: "Angle", dot: "Dot", pressGain: "Dot gain", dpi: "Film DPI",
+  angle: "Angle", dot: "Dot", pressGain: "Dot gain", dpi: "Film DPI", cropMarks: "Crop marks", regMarks: "Registration targets",
 };
 export const changeText = (c: CoachChange) => {
   const v = c.setting === "addMiddle" ? String(c.value).split("|").join(" → middle → ") : c.setting === "pressGain" ? `${Math.round(+c.value * 100)}%`

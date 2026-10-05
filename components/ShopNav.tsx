@@ -202,19 +202,20 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       </div>
       )}
       <nav className="nav nav-foot">{link(["/shop/settings", "settings", "Settings"])}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} title="Your own quick links: customers, reports, anything you open all the time">+ Add Shortcut</button>}</nav>
-      {realRole === "owner" && (
-        <label className="side-viewas" title="See the shop the way someone else does (you stay signed in as you)">
-          <span>View as</span>
-          <select value={viewAs} onChange={async (e) => { await setViewAs(e.target.value); window.location.reload(); }} data-notranslate>
-            <option value="">My view (Owner)</option>
-            {people.filter((p) => p.email !== email).length > 0 && <optgroup label="People">{people.filter((p) => p.email !== email).map((p) => <option key={p.email} value={p.email}>{p.name || p.email} · {ROLES.find((r) => r.v === p.role)?.label || p.role}</option>)}</optgroup>}
-            <optgroup label="Roles">{ROLES.filter((r) => r.v !== "owner").map((r) => <option key={r.v} value={r.v}>{r.label} ({r.note})</option>)}</optgroup>
-          </select>
-        </label>
-      )}
       <div className="side-user">
         <span>{email}</span>
-        <form action="/auth/signout" method="post"><button className="btn ghost sm" style={{ color: "inherit", padding: 0 }} type="submit">Sign out</button></form>
+        <div className="side-user-r">
+          <form action="/auth/signout" method="post"><button className="btn ghost sm" style={{ color: "inherit", padding: 0 }} type="submit">Sign out</button></form>
+          {realRole === "owner" && (
+            <select className={"side-viewas" + (viewAs ? " on" : "")} value={viewAs} title="View as: see the shop the way someone else does (you stay signed in as you)" aria-label="View as"
+              onChange={async (e) => { await setViewAs(e.target.value); window.location.reload(); }} data-notranslate>
+              <option value="">View as…</option>
+              {people.filter((p) => p.email !== email).length > 0 && <optgroup label="People">{people.filter((p) => p.email !== email).map((p) => <option key={p.email} value={p.email}>{p.name || p.email} · {ROLES.find((r) => r.v === p.role)?.label || p.role}</option>)}</optgroup>}
+              <optgroup label="Roles">{ROLES.filter((r) => r.v !== "owner").map((r) => <option key={r.v} value={r.v}>{r.label}</option>)}</optgroup>
+              {viewAs && <option value="">← My view (Owner)</option>}
+            </select>
+          )}
+        </div>
       </div>
       </div>
       </div>

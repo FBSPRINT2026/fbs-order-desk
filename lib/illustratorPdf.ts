@@ -30,6 +30,8 @@ function cmyk(hex: string, kind: Plate["kind"]): [number, number, number, number
 }
 
 export type IllustratorOpts = {
+  /** marks around the art: crop marks / registration targets (default on) */
+  marks?: { crop?: boolean; targets?: boolean };
   widthIn: number; tonal: boolean; title: string;
   /** solid plates from a picture: "pixels" (default, exact) or "vector" (traced curves) */
   solid?: "pixels" | "vector";
@@ -133,8 +135,8 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
   const target = (x: number, y: number) => { const r = 7, k = r * 0.5523; return `${x - 14} ${y} m ${x + 14} ${y} l S ${x} ${y - 14} m ${x} ${y + 14} l S ${x + r} ${y} m ${x + r} ${y + k} ${x + k} ${y + r} ${x} ${y + r} c ${x - k} ${y + r} ${x - r} ${y + k} ${x - r} ${y} c ${x - r} ${y - k} ${x - k} ${y - r} ${x} ${y - r} c ${x + k} ${y - r} ${x + r} ${y - k} ${x + r} ${y} c S\n`; };
   const crop = (x: number, y: number, dx: number, dy: number) => `${x + dx * 6} ${y} m ${x + dx * 30} ${y} l S ${x} ${y + dy * 6} m ${x} ${y + dy * 30} l S\n`;
   const tx = MG + W / 2, ty = MG + H + MG / 2;
-  let marks = `q /GS0 gs /CSA CS 1 SCN 0.5 w\n` + target(tx, ty) + target(tx, MG / 2) + target(MG / 2, MG + H / 2) + target(MG + W + MG / 2, MG + H / 2)
-    + crop(MG, MG, -1, -1) + crop(MG + W, MG, 1, -1) + crop(MG, MG + H, -1, 1) + crop(MG + W, MG + H, 1, 1) + "Q\n";
+  let marks = `q /GS0 gs /CSA CS 1 SCN 0.5 w\n` + (o.marks?.targets === false ? "" : target(tx, ty) + target(tx, MG / 2) + target(MG / 2, MG + H / 2) + target(MG + W + MG / 2, MG + H / 2))
+    + (o.marks?.crop === false ? "" : crop(MG, MG, -1, -1) + crop(MG + W, MG, 1, -1) + crop(MG, MG + H, -1, 1) + crop(MG + W, MG + H, 1, 1)) + "Q\n";
   const esc = (t: string) => t.replace(/[\\()]/g, (c) => "\\" + c).replace(/[^\x20-\x7e]/g, "?");
   plates.forEach((p, i) => {
     const text = `${p.name}  (${i + 1}/${N})`, size = 11, tw = text.length * size * 0.6;
