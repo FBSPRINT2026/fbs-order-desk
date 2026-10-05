@@ -262,7 +262,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [defOpen, setDefOpen] = useState(false);
   // the two side panes are tabbed so the whole studio fits the window: left = how it separates, right = what comes out
   const [ltab, setLtab] = useSticky<"inks" | "base" | "output">("sep.ltab", "inks");
-  const [rtab, setRtab] = useSticky<"screens" | "press" | "films" | "coach">("sep.rtab", "screens");
+  const [rtab0, setRtab] = useSticky<"screens" | "press" | "films" | "coach">("sep.rtab", "screens");
+  // two tabs: screens with their films, the press with the coach
+  const rtab = rtab0 === "films" ? "screens" : rtab0 === "coach" ? "press" : rtab0;
   const [pick, setPick] = useState(false);
   const [cancelAsk, setCancelAsk] = useState(false);
   // how many inks the art itself needs (from the last automatic find): fewer is a choice, not "shading"
@@ -275,6 +277,14 @@ export default function SeparationStudio({ id }: { id: string }) {
   // like Separo's soft proof: the print, the original art, or the two side by side with a slider
   const [view, setView] = useSticky<"proof" | "original" | "compare">("sep.view", "proof");
   const [split, setSplit] = useState(50);
+  // where the art sits in the stage (it's shrunk to fit), so the compare slider runs exactly across it
+  const [artBox, setArtBox] = useState<{ l: number; w: number } | null>(null);
+  useEffect(() => {
+    const c = cv.current, box = c?.parentElement; if (!c || !box || typeof ResizeObserver === "undefined") return;
+    const run = () => { const a = c.getBoundingClientRect(), b = box.getBoundingClientRect(); setArtBox((o) => (o && Math.abs(o.l - (a.left - b.left)) < 1 && Math.abs(o.w - a.width) < 1 ? o : { l: a.left - b.left, w: a.width })); };
+    const ro = new ResizeObserver(run); ro.observe(c); ro.observe(box); run();
+    return () => ro.disconnect();
+  }, [res, tab, hasArt]);
   const [bg, setBg] = useSticky<"shirt" | "checker">("sep.bg", "shirt");
   const pxRef = useRef<Px | null>(null);
   const [pxTick, setPxTick] = useState(0);
@@ -628,7 +638,9 @@ export default function SeparationStudio({ id }: { id: string }) {
       inks.forEach((k, j) => {
         if (ws[j] <= 0.02) return;
         const white = /^#F[A-F0-9]F[A-F0-9]F[A-F0-9]$/i.test(k.hex) || k.name === "White";
-        const at = ps.findIndex((p) => p.key === (white && res?.underbase && st.highlight ? "hw" : "c" + k.hex.slice(1)));
+        // (simulated process: the art's white is the highlight white; spot: its own White plate)
+        let at = white && res?.underbase && st.highlight ? ps.findIndex((p) => p.key === "hw") : -1;
+        if (at < 0) at = ps.findIndex((p) => p.key === "c" + k.hex.slice(1));
         if (at >= 0) out.push({ plate: at, tint: ws[j] });
       });
       if (ws[inks.length] > 0.02) { const at = ps.findIndex((p) => p.key === "hw"); if (at >= 0) out.push({ plate: at, tint: ws[inks.length] }); }
@@ -902,14 +914,14 @@ export default function SeparationStudio({ id }: { id: string }) {
             <div className="rv-seg sep-full">{([["auto", "Auto"], ["on", "On"], ["off", "Off"]] as const).map(([k, l]) => <button key={k} type="button" className={st.underbase === k ? "on" : ""} onClick={() => set({ underbase: k })}>{l}</button>)}</div>
             <label className="sep-f" title="How far the underbase is pulled in from the edges of the colors, so it never peeks out">Choke <input type="range" min={0} max={3} step={0.25} value={st.chokePt ?? CHOKE_PT} onChange={(e) => set({ chokePt: +e.target.value })} /> <b>{st.chokePt ?? CHOKE_PT} pt</b></label>
             {(() => { const on = (st.finePt ?? FINE_PT) > 0; return (<div className="sep-fine">
-              <label className="sep-chk" title="Small type and thin lines (sponsor backs): the full choke would thin their base to nothing. There the base is choked only a little and the color on top is made a little fatter instead, so it still covers the white."><input type="checkbox" checked={on} onChange={(e) => set({ finePt: e.target.checked ? FINE_PT : 0 })} /> Small type &amp; thin lines</label>
+              <label className="sep-chk" title="Small type and thin lines (sponsor backs): the full choke would thin their base to nothing. There the base is choked only a little and the color on top gets a small stroke instead, so it still covers the white."><input type="checkbox" checked={on} onChange={(e) => set({ finePt: e.target.checked ? FINE_PT : 0 })} /> Small type &amp; thin lines</label>
               {on && <>
                 <label className="sep-f" title="Parts of the art thinner than this count as fine detail">Thinner than <input type="range" min={0.5} max={4} step={0.25} value={st.finePt ?? FINE_PT} onChange={(e) => set({ finePt: +e.target.value })} /> <b>{st.finePt ?? FINE_PT} pt</b></label>
                 <label className="sep-f" title="How far the base is pulled in on fine detail (instead of the full choke)">Base choke there <input type="range" min={0} max={Math.max(0.25, st.chokePt ?? CHOKE_PT)} step={0.05} value={Math.min(st.fineChokePt ?? FINE_CHOKE_PT, st.chokePt ?? CHOKE_PT)} onChange={(e) => set({ fineChokePt: +e.target.value })} /> <b>{Math.min(st.fineChokePt ?? FINE_CHOKE_PT, st.chokePt ?? CHOKE_PT)} pt</b></label>
-                <label className="sep-f" title="How much fatter the color on top is made on fine detail (a stroke on the top color), so it covers the white's edge">Color fatter <input type="range" min={0} max={1} step={0.05} value={st.bumpPt ?? BUMP_PT} onChange={(e) => set({ bumpPt: +e.target.value })} /> <b>{st.bumpPt ?? BUMP_PT} pt</b></label>
+                <label className="sep-f" title="A stroke on the top color on fine detail, so it covers the white's edge">Color stroke <input type="range" min={0} max={1} step={0.05} value={st.bumpPt ?? BUMP_PT} onChange={(e) => set({ bumpPt: +e.target.value })} /> <b>{st.bumpPt ?? BUMP_PT} pt</b></label>
               </>}
             </div>); })()}
-            <label className="sep-chk"><input type="checkbox" checked={st.highlight} onChange={(e) => set({ highlight: e.target.checked })} /> Highlight white on top</label>
+            {st.method === "sim" && <label className="sep-chk"><input type="checkbox" checked={st.highlight} onChange={(e) => set({ highlight: e.target.checked })} /> Highlight white on top</label>}
             <label className="sep-chk"><input type="checkbox" checked={st.removeBg} onChange={(e) => set({ removeBg: e.target.checked })} /> White background isn&apos;t printed</label>
           </section>}
           {ltab === "output" && <section className="sep-card">
@@ -999,7 +1011,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <div className="sep-canvases">
               <canvas ref={cv} className={(pick ? "pick " : solo ? "zoom " : "") + (view === "original" && !solo ? "gone" : "")} onClick={onPick} />
               <canvas ref={cvOrig} className={"sep-orig" + (view === "proof" || solo ? " gone" : "")} style={view === "compare" && !solo ? { clipPath: `inset(0 ${100 - split}% 0 0)` } : undefined} onClick={onPick} />
-              {view === "compare" && !solo && <input className="sep-split" type="range" min={0} max={100} value={split} onChange={(e) => setSplit(+e.target.value)} aria-label="Original | proof" />}
+              {view === "compare" && !solo && <input className="sep-split" type="range" min={0} max={100} value={split} onChange={(e) => setSplit(+e.target.value)} aria-label="Original | proof" style={artBox ? { left: artBox.l, width: artBox.w, right: "auto" } : undefined} />}
             </div>
             {busy && <div className="sep-busy">{busy}</div>}
             {!img && !err && <div className="sep-busy">Loading the art…</div>}
@@ -1015,9 +1027,8 @@ export default function SeparationStudio({ id }: { id: string }) {
 
         {/* screens, press, films, coach */}
         <aside className="sep-side">
-          <div className="rv-seg sep-ptabs" role="tablist">{([["screens", `Screens ${plates.length || ""}`], ["press", "Press"], ["films", "Films"], ...(coachOn ? [["coach", "✦ Coach"]] : [])] as [typeof rtab, string][]).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={rtab === k} className={rtab === k ? "on" : ""} onClick={() => setRtab(k)}>{l}</button>)}</div>
+          <div className="rv-seg sep-ptabs" role="tablist">{([["screens", `Screens ${plates.length || ""} & Films`], ["press", coachOn ? "Press & ✦ Coach" : "Press"]] as [typeof rtab, string][]).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={rtab === k} className={rtab === k ? "on" : ""} onClick={() => setRtab(k)}>{l}</button>)}</div>
           <div className="sep-pane">
-          {rtab === "coach" && coachOn && (res ? <SepCoach sepId={row.id} designId={row.design_id} context={coachContext} images={coachImages} onApply={applyCoach} /> : <div className="sep-card faint">Loading the separation…</div>)}
           {rtab === "screens" && <section className="sep-card">
             <h3>Print order</h3>
             <ol className="sep-plates">{plates.map((p, i) => (
@@ -1077,11 +1088,12 @@ export default function SeparationStudio({ id }: { id: string }) {
               </div>
             </section>
           )}
+          {rtab === "press" && coachOn && (res ? <SepCoach sepId={row.id} designId={row.design_id} context={coachContext} images={coachImages} onApply={applyCoach} /> : <div className="sep-card faint">Loading the separation…</div>)}
           {defOpen && <PressDefaults presses={presses} start={press?.id} me={me.email} onClose={() => setDefOpen(false)} onSaved={(m, lay) => { const lc = layoutCounts(lay); setPresses((ps) => ps.map((p) => (p.id === m.id ? { ...p, layout: lay, flashes: lc.units, rollers: lc.rollers || undefined } : p))); setDefOpen(false); setMsg(`${m.name.split(" · ")[0]} defaults saved. Every job's setup on it starts from these.`); }} />}
-          {rtab === "films" && res && <PrintFilms n={plates.length} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
+          {rtab === "screens" && res && <PrintFilms n={plates.length} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
             make={async (rollIn) => { try { return await filmsFile(rollIn); } finally { setBusy(""); } }}
             onSent={() => { if (row.status === "approved") setStatus("films"); }} />}
-          {rtab === "films" && <section className="sep-card">
+          {rtab === "screens" && <section className="sep-card">
             <h3>Files</h3>
             <div className="sep-dl">
               <button type="button" className="linkbtn" disabled={!res || !!busy} onClick={async () => { try { setErr(""); download(await aiFile(), `${slug(title)}-seps.pdf`); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(""); }}>Illustrator file (spot colors)</button>

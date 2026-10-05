@@ -19,9 +19,9 @@ export const COACH_SETTINGS: Record<CoachSetting, { about: string; check: (v: un
   highlight: { about: "true/false: print the art's white again on top (dark shirts)", check: bool },
   chokePt: { about: "underbase choke in points (0–3, default 0.5): how far the base is pulled in from the colors' edges so it never peeks out", check: (v) => num(v, 0, 3, 0.05) },
   trapPt: { about: "spot color trap in points (0–2, default 0.25): each color spreads under the darker color printed after it so neighbors overlap a hair (no gaps when a screen is a little off)", check: (v) => num(v, 0, 2, 0.05) },
-  finePt: { about: "fine detail threshold in points (0–4, 0 = off): parts thinner than this (small type, thin lines) get a smaller base choke and the color on top is made fatter instead", check: (v) => num(v, 0, 4, 0.05) },
+  finePt: { about: "fine detail threshold in points (0–4, 0 = off): parts thinner than this (small type, thin lines) get a smaller base choke and the color on top gets a stroke instead", check: (v) => num(v, 0, 4, 0.05) },
   fineChokePt: { about: "base choke on fine detail, points (0–3)", check: (v) => num(v, 0, 3, 0.05) },
-  bumpPt: { about: "how much fatter the top color is made on fine detail, points (0–1)", check: (v) => num(v, 0, 1, 0.05) },
+  bumpPt: { about: "color stroke: the stroke added to the top color on fine detail, points (0–1)", check: (v) => num(v, 0, 1, 0.05) },
   blackOver: { about: "true/false (vector art, spot): black prints on top of the colors (overprint) instead of knocking them out", check: bool },
   lpi: { about: "halftone lines per inch (25–85, usually 45–65): lower = bigger dots that hold on the screen and print smoother fades on coarse mesh; higher = finer detail but needs finer mesh (mesh ≥ 4 × lpi)", check: (v) => num(v, 25, 85, 1) },
   angle: { about: "halftone angle in degrees (0–90, usually 22.5)", check: (v) => num(v, 0, 90, 0.5) },
@@ -47,7 +47,7 @@ export const lessonFits = (d: LessonDefault, method: string, dark: boolean) =>
 
 export const COACH_LABEL: Record<CoachSetting, string> = {
   method: "Method", colors: "Colors", addMiddle: "Middle screen", underbase: "Underbase", highlight: "Highlight white", chokePt: "Choke",
-  trapPt: "Trap", finePt: "Fine detail", fineChokePt: "Fine base choke", bumpPt: "Color fatter", blackOver: "Black on top", lpi: "LPI",
+  trapPt: "Trap", finePt: "Fine detail", fineChokePt: "Fine base choke", bumpPt: "Color stroke", blackOver: "Black on top", lpi: "LPI",
   angle: "Angle", dot: "Dot", pressGain: "Dot gain", dpi: "Film DPI", cropMarks: "Crop marks", regMarks: "Registration targets",
 };
 export const changeText = (c: CoachChange) => {

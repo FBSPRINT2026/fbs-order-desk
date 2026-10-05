@@ -6,7 +6,7 @@
  *        spot   every pixel goes to its nearest ink (solid plates; soft edges keep their alpha)
  *        sim    simulated process: each pixel is unmixed into the inks over the garment (halftone plates)
  *   4. dark garment: a white underbase under everything that isn't the shirt color or near-black, choked a
- *      little so it doesn't peek out; the art's white prints again last as the highlight white
+ *      little so it doesn't peek out; simulated process prints the art's white again last as the highlight white (spot color doesn't: its White is an ink like the others, before black)
  *   5. colors that match the shirt are dropped (the shirt shows through)
  * Plates are 0–255 ink coverage per pixel. Films come from them in lib/filmPdf.ts (solid or halftoned).
  * Everything here is plain math on RGBA arrays so it runs in the page, a worker, or a test.
@@ -600,7 +600,7 @@ function spotMixerOne(inks: SepInk[], s: SepSettings): (r: number, g: number, b:
 
 /**
  * Split the art into plates. `inks` are the colors to print (from findColors, maybe edited), each with the ink
- * name that goes to the press. Plates come back in print order: underbase, colors light → dark, highlight white.
+ * name that goes to the press. Plates come back in print order: underbase, colors light → dark (spot: White just before black), highlight white (simulated process only).
  */
 /**
  * What each ink covers, worked out already (vector art: drawn from the shapes themselves, see the Studio's
@@ -694,20 +694,23 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
   const colorPlates = print.map((k) => ({ k, a: cover[inks.indexOf(k)] }));
   const add = (t: Uint8Array, a: Uint8Array) => { for (let i = 0; i < n; i++) { const v = t[i] + a[i]; t[i] = v > 255 ? 255 : v; } };
   const based = (hex: string) => !neverBase(hex) && (s.baseFor?.["c" + hex.slice(1)] ?? baseByDefault(hex));
-  const body = colorPlates.filter(({ k }) => !(dark && s.highlight && isWhite(k.hex)));
-  // highlight white: the art's white (and, in simulated process, the white left over after the inks)
-  // (spot color: only when white is one of the chosen inks, as Separo counts it; the white left over in mixes is
-  // already in the underbase. Simulated process: the leftover white is the highlight.)
+  // highlight white (a top white): simulated process only. Spot color never has one (shop rule, as Separo does it):
+  // the art's white is a White ink like any color, printed after the other colors and before black.
+  const sim = s.method !== "spot";
+  const body = colorPlates.filter(({ k }) => !(sim && dark && s.highlight && isWhite(k.hex)));
+  // highlight white: the art's white plus the white left over after the inks
   let hw: Uint8Array | null = null;
-  if (dark && s.highlight && (s.method !== "spot" || print.some((k) => isWhite(k.hex)))) {
+  if (sim && dark && s.highlight) {
     hw = new Uint8Array(n);
     for (const { k, a } of colorPlates) if (isWhite(k.hex)) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + a[i]);
-    if (white && s.method !== "spot") for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + white[i]);
+    if (white) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + white[i]);
   }
   // print order after the base: colors light → dark (black, the darkest, last of them), then the highlight white on
   // top: the usual order for spot color and simulated process on dark shirts (T-Biz: "light to dark… black next to
   // last… highlight white last")
   body.sort((x, y) => lightness(y.k.hex) - lightness(x.k.hex));
+  // spot: White goes after the colors, just before black (Separo's order: …, White, Black)
+  if (!sim) { const w = body.filter(({ k }) => isWhite(k.hex)), rest = body.filter(({ k }) => !isWhite(k.hex)); const b0 = rest.findIndex(({ k }) => neverBase(k.hex)); body.splice(0, body.length, ...(b0 < 0 ? [...rest, ...w] : [...rest.slice(0, b0), ...w, ...rest.slice(b0)])); }
   type Step = { key: string; name: string; hex: string; kind: PlateKind; a: Uint8Array; base: boolean };
   const seq: Step[] = [
     ...body.map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a, base: dark && based(k.hex) })),

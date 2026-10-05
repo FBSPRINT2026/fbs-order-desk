@@ -35,14 +35,15 @@ export function overlaps(alphas: Uint8Array[], step = 4): number[][] {
 }
 
 /**
- * The print order: underbase, colors light → dark (bigger areas a little later), black last of the colors, highlight
- * white last. A color that sits on top of another in the art (most of it lands on the other's ink, and it's the
+ * The print order: underbase, colors light → dark (bigger areas a little later), a spot White after them, black last of
+ * the colors, highlight white (simulated process only) last. A color that sits on top of another in the art (most of it lands on the other's ink, and it's the
  * smaller of the two: white type on a red block) prints after it, whatever its shade.
  */
 export function printSequence(plates: PlanPlate[], ov?: number[][], all: PlanPlate[] = plates): PlanPlate[] {
   const base = plates.filter((p) => p.kind === "underbase"), top = plates.filter((p) => p.kind === "highlight");
   const colors = plates.filter((p) => p.kind !== "underbase" && p.kind !== "highlight");
-  const key = (p: PlanPlate) => (lum(p.hex) < 18 ? 200 : 0) + (100 - lum(p.hex)) + 25 * Math.min(1, p.coverage * 2.5);
+  // (a White ink in spot color goes after the colors, just before black, as Separo prints it)
+  const key = (p: PlanPlate) => (lum(p.hex) < 18 ? 200 : lum(p.hex) > 93 ? 150 : 0) + (100 - lum(p.hex)) + 25 * Math.min(1, p.coverage * 2.5);
   const at = (p: PlanPlate) => all.indexOf(p);
   // a before b when b sits on a
   const on = (a: PlanPlate, b: PlanPlate) => !!ov && (ov[at(a)]?.[at(b)] || 0) > 0.5 && b.coverage < a.coverage;

@@ -4783,9 +4783,11 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .sep-ptabs button{flex:1;padding-left:4px;padding-right:4px;white-space:nowrap}
 .sep-pane{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;padding-bottom:4px}
 .sep-grid>.sep-main{height:var(--sep-h);min-height:420px}
-.sep-main .sep-stage{flex:1;min-height:200px}
-.sep-main .sep-canvases{height:100%;max-height:100%;align-items:center;justify-items:center}
-.sep-main .sep-canvases canvas{max-height:100%;max-width:100%}
+.sep-main .sep-stage{flex:1;min-height:200px;position:relative}
+/* the whole art, always: the canvases sit in a box the stage's size and shrink to fit it */
+.sep-main .sep-canvases{position:absolute;inset:10px;display:block;max-width:none}
+.sep-main .sep-canvases canvas{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:100%;max-height:100%;width:auto;height:auto}
+.sep-main .sep-canvases .sep-split{position:absolute;left:0;right:0;bottom:4px;width:100%}
 .sep-stage{padding:10px}
 .sep-chip-sw{height:34px!important}
 @media (max-width:1250px){.sep-grid{grid-template-columns:250px minmax(0,1fr)}.sep-grid>.sep-side:last-child{height:auto;grid-column:1/-1}.sep-grid>.sep-side:last-child .sep-pane{overflow:visible}}
