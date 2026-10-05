@@ -47,16 +47,17 @@ export type Machine = {
   issue?: EquipIssue;
   /** screen: what sits at each print head, head 1 first (after the load station), from Equipment Status → press layout */
   layout?: Station[];
-  /** screen: heads the roller screen takes for every job (from the press layout) */
+  /** screen: heads taken on every job by the roller screen and cool-down stations (from the press layout) */
   rollers?: number;
 };
 /**
  * One print head on a screen press: printing, a flash-cure unit parked there (it takes the head's spot), the head out
  * of service, a flash that's there but not heating, or the roller (a dead screen that rolls the print flat so the
- * shirt's fibers don't show; on the 12-color Gauntlet it lives on head 5). Load and unload are the two extra stations
- * (not in the list), so a 12-color press has 14 stations.
+ * shirt's fibers don't show; on the 12-color Gauntlet it lives on head 5), or a cool-down station (a head left empty
+ * after a color so the ink cools before the next hit). Load and unload are the two extra stations (not in the list),
+ * so a 12-color press has 14 stations.
  */
-export type Station = "print" | "flash" | "down" | "flashdown" | "roller";
+export type Station = "print" | "flash" | "down" | "flashdown" | "roller" | "cool";
 /** the usual setup: a flash after head 1 (the underbase) and the rest spread across the press */
 export function defaultLayout(heads: number, flashes: number): Station[] {
   const out: Station[] = Array.from({ length: heads }, () => "print");
@@ -64,10 +65,10 @@ export function defaultLayout(heads: number, flashes: number): Station[] {
   for (let i = 0; i < f; i++) { let k = i === 0 ? 1 : Math.round(1 + (i * (heads - 1)) / f); while (k < heads && out[k] !== "print") k++; if (k < heads) out[k] = "flash"; }
   return out;
 }
-const STATIONS = new Set(["print", "flash", "down", "flashdown", "roller"]);
+const STATIONS = new Set(["print", "flash", "down", "flashdown", "roller", "cool"]);
 export const validLayout = (x: unknown, heads: number): x is Station[] => Array.isArray(x) && x.length === heads && x.every((s) => STATIONS.has(s as string));
 /** heads out, flashes working, flash units on the press */
-export const layoutCounts = (l: Station[]) => ({ down: l.filter((s) => s === "down").length, flashes: l.filter((s) => s === "flash").length, units: l.filter((s) => s === "flash" || s === "flashdown").length, broken: l.filter((s) => s === "flashdown").length, rollers: l.filter((s) => s === "roller").length });
+export const layoutCounts = (l: Station[]) => ({ down: l.filter((s) => s === "down").length, flashes: l.filter((s) => s === "flash").length, units: l.filter((s) => s === "flash" || s === "flashdown").length, broken: l.filter((s) => s === "flashdown").length, rollers: l.filter((s) => s === "roller").length, cools: l.filter((s) => s === "cool").length });
 export type EquipIssue = { full: number; fullFlashes: number; flashes: number | null; colors: number | null; speed: number | null; down: boolean; note: string; since: string | null; until: string | null; by: string; at: string };
 export type EquipRow = { machine: string; colors_working: number | null; flashes_working?: number | null; stations?: Station[] | null; speed: number | null; down: boolean; note: string; since: string | null; until: string | null; updated_by: string; updated_at: string };
 /** a machine with its Equipment Status applied: fewer colors / heads, slower, or down (days off) from `today` until it's back */
@@ -76,7 +77,7 @@ export function withIssue(m: Machine, r: EquipRow | undefined, today: string): M
   if (r && m.type === "screen" && validLayout(r.stations, m.colors)) {
     const over = !!(r.until && r.until <= today), lay = over ? r.stations.map((s) => (s === "down" ? "print" : s === "flashdown" ? "flash" : s)) : r.stations;
     const lc = layoutCounts(lay);
-    m = { ...m, layout: lay, flashes: lc.units, ...(lc.rollers ? { rollers: lc.rollers } : {}) };
+    m = { ...m, layout: lay, flashes: lc.units, ...(lc.rollers + lc.cools ? { rollers: lc.rollers + lc.cools } : {}) };
   }
   if (!r || (!r.down && r.colors_working == null && r.speed == null && r.flashes_working == null)) return m;
   if (r.until && r.until <= today) return m;
@@ -494,7 +495,7 @@ export const stationsFor = (st: Step) => st.screens + flashesFor(st);
  */
 export function roundsOn(st: Step, mach: Machine): number {
   if (st.method !== "screen") return 1;
-  // the roller takes a head on every job
+  // the roller and cool-down stations take a head on every job
   const fl = flashesFor(st), have = flashesOf(mach), heads = Math.max(1, mach.colors - (mach.rollers || 0));
   if (fl > 0 && have === 0) return Infinity;
   if (st.screens + fl <= heads && fl <= have) return 1;

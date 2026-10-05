@@ -11,6 +11,7 @@ const OPTS: [Station, string, string][] = [
   ["print", "Printing", "A free head for screens"],
   ["flash", "Flash", "A flash-cure unit always parked here"],
   ["roller", "Roller (dead screen)", "Rolls the print flat so the fibers don't show"],
+  ["cool", "Cool down", "Left empty after a color so the ink cools before the next hit"],
 ];
 
 /**
@@ -40,13 +41,13 @@ export default function PressDefaults({ presses, start, me, onClose, onSaved }: 
       <div className="pp-sheet pd-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Press defaults">
         <div className="pp-sheet-h"><b>Press Defaults</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
         <div className="pd-b">
-          <p className="sep-help">What always sits on each head of this press. Every job&apos;s press setup starts from this; you can still change it for one job in its setup.</p>
+          <p className="sep-help">What always sits on each head of this press: flashes, the roller, cool-down stations. Every job&apos;s press setup starts from this; you can still change it for one job in its setup.</p>
           <select value={m.id} onChange={(e) => choose(e.target.value)} aria-label="Press">{presses.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
           <div className="pl-ed">
             <PressLayout layout={lay} mirror={!!m.mirror} selected={pick} onPick={(i) => setPick(pick === i ? null : i)} label={`${lay.length} heads`} sub={`${lc.units} flash${lc.units === 1 ? "" : "es"}${lc.rollers ? " + roller" : ""}`} />
             <div className="pl-side">
-              <div className="pl-sum"><b>{m.name.split(" · ")[0]}</b><span>{lc.units ? `Flash${lc.units === 1 ? "" : "es"} on ${heads("flash") || heads("flashdown")}` : "No flashes"}{lc.rollers ? ` · roller on ${heads("roller")}` : ""}</span></div>
-              {pick == null ? <div className="faint pl-hint">Tap a head to put a flash or the roller there.</div> : (
+              <div className="pl-sum"><b>{m.name.split(" · ")[0]}</b><span>{lc.units ? `Flash${lc.units === 1 ? "" : "es"} on ${heads("flash") || heads("flashdown")}` : "No flashes"}{lc.rollers ? ` · roller on ${heads("roller")}` : ""}{lc.cools ? ` · cool down on ${heads("cool")}` : ""}</span></div>
+              {pick == null ? <div className="faint pl-hint">Tap a head to put a flash, the roller or a cool-down station there.</div> : (
                 <div className="pl-pick">
                   <div className="pl-pick-h">Head {pick + 1}</div>
                   {lay[pick] === "down" || lay[pick] === "flashdown"
@@ -54,7 +55,7 @@ export default function PressDefaults({ presses, start, me, onClose, onSaved }: 
                     : OPTS.map(([k, l, t]) => <button key={k} type="button" title={t} className={"pl-opt " + k + (lay[pick] === k ? " on" : "")} onClick={() => setLay(lay.map((x, j) => (j === pick ? k : x)))}><i aria-hidden />{l}</button>)}
                 </div>
               )}
-              <div className="pl-key"><span><i className="print" />Printing</span><span><i className="flash" />Flash</span><span><i className="roller" />Roller</span><span><i className="down" />Down</span></div>
+              <div className="pl-key"><span><i className="print" />Printing</span><span><i className="flash" />Flash</span><span><i className="roller" />Roller</span><span><i className="cool" />Cool down</span><span><i className="down" />Down</span></div>
             </div>
           </div>
           {err && <div className="pv-err">{err}</div>}

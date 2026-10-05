@@ -1029,7 +1029,7 @@ export default function SeparationStudio({ id }: { id: string }) {
                 : selHead != null ? (
                   <div className="pl-pick ps-pick">
                     <div className="pl-pick-h">Head {selHead + 1}</div>
-                    {([["flash", "Flash"], ["roller", "Roller (dead screen)"], ["cool", "Empty: cool down"], ["", "Empty"]] as const).map(([k, l]) => <button key={k || "free"} type="button" className={"pl-opt " + (k || "print") + (onPress.heads[selHead] === k ? " on" : "")} onClick={() => setHeadTo(selHead, k)}><i aria-hidden />{l}</button>)}
+                    {([["flash", "Flash"], ["roller", "Roller (dead screen)"], ["cool", "Cool down"], ["", "Empty"]] as const).map(([k, l]) => <button key={k || "free"} type="button" className={"pl-opt " + (k || "print") + (onPress.heads[selHead] === k ? " on" : "")} onClick={() => setHeadTo(selHead, k)}><i aria-hidden />{l}</button>)}
                     <select value="" onChange={(e) => e.target.value && setHeadTo(selHead, "p:" + e.target.value)} aria-label="Put a screen on this head"><option value="">Put a screen here…</option>{plates.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select>
                   </div>
                 ) : <p className="sep-help">Tap a color, then the head it goes on. Tap a head to put a flash, the roller or an empty cool-down head there (ink gets too hot hit after hit).</p>}

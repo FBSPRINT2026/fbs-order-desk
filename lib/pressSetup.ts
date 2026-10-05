@@ -14,7 +14,7 @@ export type PressSetup = { press: string; heads: Slot[]; at?: string };
 export type SetupPlate = { key: string; name: string; hex: string; kind: string; mesh?: number };
 
 export const plateOf = (s: Slot) => (s.startsWith("p:") ? s.slice(2) : null);
-const fixedOf = (st: Station): Slot => (st === "flash" || st === "flashdown" ? "flash" : st === "roller" ? "roller" : st === "down" ? "down" : "");
+const fixedOf = (st: Station): Slot => (st === "flash" || st === "flashdown" ? "flash" : st === "roller" ? "roller" : st === "cool" ? "cool" : st === "down" ? "down" : "");
 
 /**
  * The automatic setup: the press's flashes and roller where they live, the underbase on the free head just before the
@@ -77,9 +77,15 @@ export const drawLayout = (heads: Slot[]): (Station | "cool")[] => heads.map((s)
 export function checkSetup(heads: Slot[], lay: Station[], plates: SetupPlate[], dark: boolean) {
   const moves: string[] = [], warn: string[] = [];
   const list = (xs: number[]) => (xs.length === 1 ? `head ${xs[0]}` : `heads ${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
-  for (const kind of ["flash", "roller"] as const) {
+  for (const kind of ["flash", "roller", "cool"] as const) {
     const usual = lay.flatMap((s, i) => (fixedOf(s) === kind ? [i + 1] : [])), now = heads.flatMap((s, i) => (s === kind ? [i + 1] : []));
     const add = now.filter((h) => !usual.includes(h)), take = usual.filter((h) => !now.includes(h));
+    if (kind === "cool") {
+      // nothing to move for an empty head: just say which heads stay empty this job, or get a screen
+      if (add.length) moves.push(`Leave ${list(add)} empty (cool down)`);
+      if (take.length) moves.push(`${list(take).replace(/^./, (ch) => ch.toUpperCase())}: usually a cool-down station, used for a screen this job`);
+      continue;
+    }
     const word = kind === "flash" ? "flash" : "roller screen";
     if (add.length && take.length && add.length === take.length) moves.push(`Move the ${word}${add.length > 1 ? "es" : ""} from ${list(take)} to ${list(add)}`);
     else {
