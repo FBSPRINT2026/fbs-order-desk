@@ -25,7 +25,8 @@ type Job = { id: string; href: string; number: number; nickname: string; custome
 type Msg = { id: string; order_id: string | null; customer_id: string | null; author_name: string; author_email: string; body: string; created_at: string; topic: string | null };
 type Mail = { id: string; customer_id: string | null; order_id: string | null; subject: string; body: string; from_email: string; occurred_at: string; meta: Record<string, unknown> };
 type SepLite = { id: string; number: number; order_id: string | null; location: string; garment_color: string; status: string; due_date: string | null; customer_id: string | null; channels: unknown[]; updated_at: string };
-const SEP_ST: Record<string, [string, string]> = { requested: ["Requested", "#6477D6"], in_progress: ["In progress", "#A152C9"], review: ["Ready for review", "#C98A0C"], approved: ["Approved: make film", "#2E9D5B"] };
+// separations on the dashboard are the ones being worked on (Printed and Archived aren't listed)
+const SEP_ST: Record<string, [string, string]> = { working: ["Working", "#A152C9"] };
 type Reorder = { customer_id: string; number: string; nickname: string; date: string; total: number; href: string; owner: string };
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -218,8 +219,8 @@ export default function Dashboard() {
 
   // crew (production, receiving, shipping): the production dashboard. No sales, balances or customer money anywhere.
   if (crew) {
-    const sepN = (k: string) => seps.filter((x) => x.status === k).length;
-    const sepsSorted = [...seps].sort((a, b) => (a.status === "approved" ? 0 : 1) - (b.status === "approved" ? 0 : 1) || (a.due_date || "9999").localeCompare(b.due_date || "9999"));
+    const sepN = (k: string) => (k === "working" ? seps.length : 0);
+    const sepsSorted = [...seps].sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"));
     return (
       <>
         <div className="page-head">
@@ -230,7 +231,7 @@ export default function Dashboard() {
           <div className="dash">
             <div className="dash-row dash-2-1 dash-fill">
               <section className="db-card db-blue db-seps">
-                <div className="db-card-h"><h2>Separations &amp; Film</h2><span className="db-n">{seps.length}</span><span className="faint db-h-note">approved ones are ready to make film</span><span className="spacer" /><Link href="/shop/separations" className="linkbtn">All separations →</Link></div>
+                <div className="db-card-h"><h2>Separations &amp; Film</h2><span className="db-n">{seps.length}</span><span className="faint db-h-note">being worked on; Print Films moves one to Printed</span><span className="spacer" /><Link href="/shop/separations" className="linkbtn">All separations →</Link></div>
                 <div className="pd-legend">{Object.entries(SEP_ST).map(([k, [l, c]]) => (
                   <Link key={k} href="/shop/separations" className={"pd-lg" + (sepN(k) ? "" : " zero")}><i style={{ background: c }} />{l}<b>{sepN(k)}</b></Link>
                 ))}</div>
@@ -242,7 +243,7 @@ export default function Dashboard() {
                         <td><Link href={`/shop/separations/${x.id}`} className="db-num">S-{x.number}</Link></td>
                         <td className="pd-c"><b>{who(x.customer_id) || "—"}</b></td>
                         <td className="pd-n faint">{x.location}{x.garment_color ? ` · ${x.garment_color}` : ""}{x.channels?.length ? ` · ${x.channels.length} screens` : ""}</td>
-                        <td className="pd-s"><span className="pill" style={{ ["--sc" as string]: (SEP_ST[x.status] || ["", "#888"])[1] }}>{(SEP_ST[x.status] || [x.status])[0]}</span></td>
+                        <td className="pd-s"><span className="pill" style={{ ["--sc" as string]: SEP_ST.working[1] }}>{SEP_ST.working[0]}</span></td>
                         <td className={"r pd-due" + (x.due_date && x.due_date < t0 ? " bad" : "")}>{day(x.due_date)}</td>
                       </tr>
                     ))}</tbody>
@@ -255,7 +256,7 @@ export default function Dashboard() {
                   <Link href="/shop/shipping"><span>Ready to ship</span><b>{v.ship.length}</b></Link>
                   <Link href="/shop/receiving"><span>Goods arriving</span><b>{goods.today}</b></Link>
                   <Link href="/shop/receiving"><span>Goods arrived</span><b>{goods.arrived}</b></Link>
-                  <Link href="/shop/separations"><span>Films to make</span><b>{sepN("approved")}</b></Link>
+                  <Link href="/shop/separations"><span>Separations in work</span><b>{seps.length}</b></Link>
                   <Link href="/shop/board"><span>In production</span><b>{v.production.length}</b></Link>
                 </div>
               ))}

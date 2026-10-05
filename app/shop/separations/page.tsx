@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { fmtDate } from "@/lib/format";
-import { ART_ACCEPT, ART_KINDS, SEP_STATUS, artProblem, readVector, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
+import { ARCHIVE_DAYS, ART_ACCEPT, ART_KINDS, SEP_STATUS, sepStage, artProblem, readVector, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
 import { vartSvg } from "@/lib/epsVector";
 
 /**
@@ -13,7 +13,7 @@ import { vartSvg } from "@/lib/epsVector";
  * order, or from art uploaded right here (no order needed). Open one to separate it here, or upload what came back
  * from Separo.
  */
-const TABS = [["open", "To do"], ["review", "Ready for review"], ["approved", "Approved"], ["all", "All"]] as const;
+const TABS = [["working", "Working"], ["printed", "Printed"], ["archived", "Archived"], ["all", "All"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 export default function SeparationsPage() {
@@ -22,11 +22,13 @@ export default function SeparationsPage() {
   const [orders, setOrders] = useState<Record<string, { number: number; nickname: string; due_date: string | null }>>({});
   const [cust, setCust] = useState<Record<string, string>>({});
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
-  const [tab, setTab] = useSticky<Tab>("sep.tab.list", "open");
+  const [tab, setTab] = useSticky<Tab>("sep.tab.list2", "working");
   const [q, setQ] = useState("");
 
   useEffect(() => { (async () => {
-    const { data } = await sb.from("separations").select("*").neq("status", "cancelled").order("created_at", { ascending: false }).limit(500);
+    // archived ones show for ARCHIVE_DAYS days after they were archived
+    const since = new Date(Date.now() - ARCHIVE_DAYS * 86400000).toISOString();
+    const { data } = await sb.from("separations").select("*").or(`status.neq.cancelled,updated_at.gte.${since}`).order("created_at", { ascending: false }).limit(500);
     const list = (data || []) as SepRow[];
     setRows(list);
     const oids = [...new Set(list.map((r) => r.order_id).filter(Boolean))] as string[], cids = [...new Set(list.map((r) => r.customer_id).filter(Boolean))] as string[];
@@ -46,9 +48,10 @@ export default function SeparationsPage() {
     if (paths.length) { const { data: sg } = await sb.storage.from("proofs").createSignedUrls(paths, 3600); const m = new Map(paths.map((p, i) => [p, sg?.[i]?.signedUrl || ""])); setThumbs(Object.fromEntries([...pathOf].map(([id, p]) => [id, m.get(p) || ""]))); }
   })(); }, [sb]);
 
-  const shown = (rows || []).filter((r) => (tab === "all" ? true : tab === "open" ? r.status === "requested" || r.status === "in_progress" : tab === "review" ? r.status === "review" : r.status === "approved" || r.status === "films"))
+  const inTab = (r: SepRow, t: Tab) => (t === "all" ? sepStage(r.status) !== "archived" : sepStage(r.status) === t);
+  const shown = (rows || []).filter((r) => inTab(r, tab))
     .filter((r) => { const s = q.trim().toLowerCase(); if (!s) return true; const o = r.order_id ? orders[r.order_id] : null; return [`s-${r.number}`, o ? `#${o.number} ${o.nickname}` : "", cust[r.customer_id || ""] || "", r.location, r.garment_color].join(" ").toLowerCase().includes(s); });
-  const count = (t: Tab) => (rows || []).filter((r) => (t === "all" ? true : t === "open" ? r.status === "requested" || r.status === "in_progress" : t === "review" ? r.status === "review" : r.status === "approved" || r.status === "films")).length;
+  const count = (t: Tab) => (rows || []).filter((r) => inTab(r, t)).length;
 
   return (
     <>
@@ -57,10 +60,11 @@ export default function SeparationsPage() {
       </div>
       <NewFromArt />
       <div className="tmx-vbar">
+        {tab === "archived" && <span className="faint" style={{ fontSize: 12.5 }}>Separations you&apos;re not using. They stay here {ARCHIVE_DAYS} days after they&apos;re archived; open one and Restore to work on it again.</span>}
         <div className="rv-seg">{TABS.map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}{rows ? <span className="sep-cnt">{count(k)}</span> : null}</button>)}</div>
         <input className="tmx-q" type="search" placeholder="Order, customer, location…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search separations" />
       </div>
-      {!rows ? <div className="empty">Loading…</div> : !shown.length ? <div className="empty">{tab === "open" ? "Nothing waiting. Request separations from an approved order, or upload an image above." : "Nothing here."}</div> : (
+      {!rows ? <div className="empty">Loading…</div> : !shown.length ? <div className="empty">{tab === "working" ? "Nothing being worked on. Request separations from an approved order, or upload an image above." : tab === "archived" ? `Nothing archived in the last ${ARCHIVE_DAYS} days.` : "Nothing here."}</div> : (
         <div className="sep-q">{shown.map((r) => {
           const o = r.order_id ? orders[r.order_id] : null, st = SEP_STATUS[r.status];
           const due = r.due_date || o?.due_date;

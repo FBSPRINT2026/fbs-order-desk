@@ -25,7 +25,6 @@ export const PERMS = [
   { k: "assistant", group: "Sales", label: "Can open the Assistant (follow-ups)" },
   { k: "artwork", group: "Production", label: "Can open Artwork" },
   { k: "separations", group: "Production", label: "Can open Separations" },
-  { k: "approveSeps", group: "Production", label: "Can approve separations" },
   { k: "coach", group: "Production", label: "Can use the separation coach (Make Separations Better)" },
   { k: "schedule", group: "Production", label: "Can open the Production calendar" },
   { k: "pressDefaults", group: "Production", label: "Can change press defaults and equipment status" },
@@ -46,8 +45,8 @@ const CREW: Perms = { ...ALL, money: false, payments: false, quotes: false, cust
 export const roleDefaults = (role?: string | null): Perms => {
   if (!role || role === "owner" || role === "admin") return { ...ALL };
   if (role === "production") return { ...CREW };
-  // receiving / shipping: the shop tools, no separation approvals, coach or press changes
-  return { ...CREW, approveSeps: false, coach: false, pressDefaults: false };
+  // receiving / shipping: the shop tools, no separation coach or press changes
+  return { ...CREW, coach: false, pressDefaults: false };
 };
 /** a person's permissions: their role's defaults with their own changes (owners: everything, always) */
 export const permsFor = (role?: string | null, own?: Partial<Perms> | null): Perms => (role === "owner" ? { ...ALL } : { ...roleDefaults(role), ...(own || {}) });

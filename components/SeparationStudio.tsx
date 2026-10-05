@@ -44,10 +44,19 @@ export type SepRow = {
 };
 export type Channel = { key: string; name: string; hex: string; kind: Plate["kind"]; order: number; mesh: number; coverage: number; file?: string };
 export type SepFile = { path: string; name: string; kind: "plate" | "preview" | "illustrator" | "films" | "upload"; size?: number };
+/**
+ * Three stages, as the shop works: Working (getting it right), Printed (films printed: Print Films moves it here) and
+ * Archived (not used; kept 30 days in the Archived tab). The database keeps its older values: requested / in_progress /
+ * review / approved all show as Working, films is Printed, cancelled is Archived.
+ */
+export type SepStage = "working" | "printed" | "archived";
+export const sepStage = (status: SepRow["status"]): SepStage => (status === "films" ? "printed" : status === "cancelled" ? "archived" : "working");
+const STAGE = { working: { label: "Working", c: "#A152C9" }, printed: { label: "Printed", c: "#0A8FC0" }, archived: { label: "Archived", c: "#7C8799" } };
 export const SEP_STATUS: Record<SepRow["status"], { label: string; c: string }> = {
-  requested: { label: "Requested", c: "#6477D6" }, in_progress: { label: "In progress", c: "#A152C9" }, review: { label: "Ready for review", c: "#C98A0C" },
-  approved: { label: "Approved", c: "#2E9D5B" }, films: { label: "Films printed", c: "#0A8FC0" }, cancelled: { label: "Cancelled", c: "#7C8799" },
+  requested: STAGE.working, in_progress: STAGE.working, review: STAGE.working, approved: STAGE.working, films: STAGE.printed, cancelled: STAGE.archived,
 };
+/** archived separations stay in the Archived tab this many days */
+export const ARCHIVE_DAYS = 30;
 
 type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean;
   /** vector art: take out the background layer (a page-size box of cream / white behind the art); unset = not asked yet */
@@ -740,8 +749,9 @@ export default function SeparationStudio({ id }: { id: string }) {
     });
     return rollIn ? filmRollPdf(pages, rollIn, title, deflate, { crop: st.cropMarks !== false, targets: st.regMarks !== false }) : filmPdf(pages);
   }
-  async function save(status: SepRow["status"]) {
-    if (!row || !res) return;
+  async function save(status: SepRow["status"], done = "Saved."): Promise<SepRow | null> {
+    if (!row || !res) return null;
+    let saved: SepRow | null = null;
     setBusy("Saving…"); setErr("");
     try {
       const base = `separations/${row.id}`, files: SepFile[] = [];
@@ -766,7 +776,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       const patch = { status, method: st.method, source: "studio", channels, files: [...keep, ...files], preview_path: `${base}/preview.png`, settings: { ...row.settings, ...st, inks, order: plates.map((p) => p.key), mesh, names, ...(onPress && press ? { pressSetup: { press: press.id, heads: onPress.heads, manual: !!setup, at: new Date().toISOString() } } : {}) }, updated_at: new Date().toISOString() };
       const r = await sb.from("separations").update(patch).eq("id", row.id).select("*").single();
       if (r.error) throw new Error(r.error.message);
-      setRow(r.data as SepRow);
+      setRow(r.data as SepRow); saved = r.data as SepRow;
       // the logo's print plan follows what the separation settled on (inks, method, colors), so the next mockup and
       // price for this logo match the screens
       const d0 = designRef.current;
@@ -776,23 +786,21 @@ export default function SeparationStudio({ id }: { id: string }) {
         sb.from("designs").update({ print_plan: plan, colors: plan.colors, inks: plan.method === "spot" ? [...new Set(inks.map((k) => k.name))].join(", ") : `Simulated process (${plan.colors})` }).eq("id", d0.id).then(() => {});
         d0.print_plan = plan;
       }
-      setMsg(status === "review" ? "Saved and sent for review." : "Saved.");
+      setMsg(done);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     setBusy("");
+    return saved;
   }
-  async function approve() {
-    if (!row) return;
-    setBusy("Approving…");
-    const now = new Date().toISOString();
-    const r = await sb.from("separations").update({ status: "approved", approved_by: me.email, approved_at: now, updated_at: now }).eq("id", row.id).select("*").single();
+  /** films printed: save it as Printed, and put its screens and inks back on the order's imprint */
+  async function markPrinted() {
+    const r = await save("films", "Films printed: saved as Printed.");
+    if (!r) return;
     // screens and inks back on the order's imprint (the underbase is added by the schedule on dark shirts)
-    if (row.order_id && row.imprint_id) {
-      const { data: o } = await sb.from("orders").select("groups").eq("id", row.order_id).maybeSingle();
-      const groups = ((o?.groups || []) as Group[]).map((g) => ({ ...g, imprints: g.imprints.map((im) => im.id !== row.imprint_id ? im : { ...im, colors: row.channels.filter((c) => c.kind !== "underbase").length || im.colors, inks: row.channels.filter((c) => c.kind !== "underbase").map((c) => c.name).join(", ") || im.inks }) }));
-      if (groups.length) await sb.from("orders").update({ groups }).eq("id", row.order_id);
+    if (r.order_id && r.imprint_id) {
+      const { data: o } = await sb.from("orders").select("groups").eq("id", r.order_id).maybeSingle();
+      const groups = ((o?.groups || []) as Group[]).map((g) => ({ ...g, imprints: g.imprints.map((im) => im.id !== r.imprint_id ? im : { ...im, colors: r.channels.filter((c) => c.kind !== "underbase").length || im.colors, inks: r.channels.filter((c) => c.kind !== "underbase").map((c) => c.name).join(", ") || im.inks }) }));
+      if (groups.length) await sb.from("orders").update({ groups }).eq("id", r.order_id);
     }
-    if (!r.error) setRow(r.data as SepRow);
-    setBusy(""); setMsg(r.error ? r.error.message : "Approved. The order's imprint now shows these inks.");
   }
   async function setStatus(status: SepRow["status"]) { if (!row) return; const r = await sb.from("separations").update({ status, updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single(); if (!r.error) setRow(r.data as SepRow); }
   /** uploaded art: swap in a new file (the inks are found again) */
@@ -958,16 +966,16 @@ export default function SeparationStudio({ id }: { id: string }) {
         <div className="row" style={{ gap: 8, alignItems: "center" }}>
           <span className="pill" style={{ ["--sc" as string]: s0.c }}>{s0.label}</span>
           {tab === "studio" && <>
-            <button type="button" className="btn" disabled={!res || !!busy} onClick={() => save("in_progress")}>Save Draft</button>
-            {me.boss && perms.approveSeps && row.status === "review" ? <button type="button" className="btn primary" disabled={!!busy} onClick={approve}>Approve</button>
-              : row.status === "approved" ? <button type="button" className="btn primary" onClick={() => setStatus("films")}>Films Printed</button>
-              : <button type="button" className="btn primary" disabled={!res || !!busy} onClick={() => save("review")}>Save &amp; Send for Review</button>}
+            {row.status !== "cancelled" && <button type="button" className="btn primary" disabled={!res || !!busy} onClick={() => save(row.status === "films" ? "films" : "in_progress")}>Save</button>}
+            {row.status === "films" && <button type="button" className="btn" disabled={!!busy} title="Films need redoing: back to Working" onClick={() => setStatus("in_progress")}>Back to Working</button>}
           </>}
           {order && <Link className="btn" href={`/shop/orders/${order.id}`}>Open Order</Link>}
-          {!!(row.settings as { art?: SepArt }).art && row.status !== "approved" && row.status !== "films" && <label className="btn" title="Upload a different file (the inks are found again)"><input type="file" accept={ART_ACCEPT} hidden onChange={(e) => { replaceArt(e.target.files?.[0]); e.target.value = ""; }} />Replace Art</label>}
-          {!row.order_id && row.status !== "cancelled" && row.status !== "films" && (cancelAsk
-            ? <span className="sep-ask">Cancel this separation? <button type="button" className="btn sm" onClick={() => { setCancelAsk(false); setStatus("cancelled").then(() => location.assign("/shop/separations")); }}>Yes, Cancel</button> <button type="button" className="btn sm" onClick={() => setCancelAsk(false)}>No</button></span>
-            : <button type="button" className="btn" onClick={() => setCancelAsk(true)}>Cancel</button>)}
+          {!!(row.settings as { art?: SepArt }).art && row.status !== "films" && row.status !== "cancelled" && <label className="btn" title="Upload a different file (the inks are found again)"><input type="file" accept={ART_ACCEPT} hidden onChange={(e) => { replaceArt(e.target.files?.[0]); e.target.value = ""; }} />Replace Art</label>}
+          {row.status === "cancelled"
+            ? <button type="button" className="btn primary" onClick={() => setStatus("in_progress")} title="Back to Working">Restore</button>
+            : cancelAsk
+              ? <span className="sep-ask">Archive this separation? It stays in Archived for {ARCHIVE_DAYS} days. <button type="button" className="btn sm" onClick={() => { setCancelAsk(false); setStatus("cancelled").then(() => location.assign("/shop/separations")); }}>Yes, Archive</button> <button type="button" className="btn sm" onClick={() => setCancelAsk(false)}>No</button></span>
+              : <button type="button" className="btn" onClick={() => setCancelAsk(true)} title="Not using it: move it to Archived">Archive</button>}
         </div>
       </div>
       {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
@@ -1300,7 +1308,7 @@ export default function SeparationStudio({ id }: { id: string }) {
           {defOpen && <PressDefaults presses={presses} start={press?.id} me={me.email} onClose={() => setDefOpen(false)} onSaved={(m, lay) => { const lc = layoutCounts(lay); setPresses((ps) => ps.map((p) => (p.id === m.id ? { ...p, layout: lay, flashes: lc.units, rollers: lc.rollers || undefined } : p))); setDefOpen(false); setMsg(`${m.name.split(" · ")[0]} defaults saved. Every job's setup on it starts from these.`); }} />}
           {rtab === "screens" && res && <PrintFilms n={plates.length} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
             make={async (rollIn) => { try { return await filmsFile(rollIn); } finally { setBusy(""); } }}
-            onSent={() => { if (row.status === "approved") setStatus("films"); }} />}
+            onSent={() => { if (row.status !== "cancelled") markPrinted(); }} />}
           {rtab === "screens" && <section className="sep-card">
             <h3>Files</h3>
             <div className="sep-dl">
