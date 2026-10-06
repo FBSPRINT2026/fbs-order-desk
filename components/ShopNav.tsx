@@ -124,12 +124,12 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       .then(({ count }) => setIncoming(count || 0));
   }, [path]);
 
-  // the menu, in groups
+  // the menu, in groups — each group's items are kept in alphabetical order
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
-    { title: "Sales", items: [["/shop/orders", "orders", "Orders"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/projects", "projects", "Projects"], ["/shop/customers", "customers", "Customers"]] },
-    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/separations", "seps", "Separations"], ["/shop/board", "board", "Production"], ["/shop/employees", "team", "Employees"]] },
-    { title: "Shop Tools", items: [["/shop/shipping", "shipping", "Shipping Center"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/time", "clock", "Time Clock"]] },
-  ];
+    { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
+    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/separations", "seps", "Separations"]] },
+    { title: "Shop Tools", items: [["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"]] },
+  ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
 
