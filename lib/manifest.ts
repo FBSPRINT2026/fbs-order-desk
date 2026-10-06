@@ -232,6 +232,9 @@ function coversJob(ship: { style: string; color: string; qty: number }[], items:
   return over <= extras;
 }
 
+/** numbers of 5+ digits in a text, even glued to letters ("PeterMEI93298390" → 93298390; "12341-90246" → 12341, 90246) */
+const numRuns = (t: string) => [...new Set((t.match(/\d{5,}/g) || []))];
+
 /** pieces per style + color (style and color compared loosely: "TundraBlu" = "Tundra Blue", "pc54" = "PC54") */
 function sumByStyleColor(xs: { style: string; color: string; qty: number }[]) {
   const out: { style: string; color: string; qty: number }[] = [];
@@ -395,6 +398,21 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
     // some lines aren't on any of the PO's orders: look at their other open orders for those (to OK)
     const rest = allocate(a.unplaced, orders.filter((o) => !exact.includes(o)));
     return { customerId, alloc: [...a.alloc, ...rest.alloc], unplaced: rest.unplaced, auto: false, how: `PO on ${exact.length} orders; some items matched other orders` };
+  }
+  // the PO's number (5+ digits, even glued to letters: "PeterMEI93298390", "AMS 42992 CLEVELAND") on exactly one of the
+  // customer's orders ("MEI Store … Cart #93298390", "42992 ALL MY SONS CLEVELAND"): that order
+  const pr = numRuns(g.customer_po);
+  if (pr.length) {
+    const byNum = orders.filter((o) => numRuns(`${o.nickname} ${o.po_number}`).some((r) => pr.includes(r)));
+    if (byNum.length === 1) {
+      const r = pr.find((x) => numRuns(`${byNum[0].nickname} ${byNum[0].po_number}`).includes(x));
+      return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: byNum[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `PO number ${r} is on #${byNum[0].number}` };
+    }
+    // the customer numbers their jobs this way, but no open job has this number yet (the job isn't entered yet):
+    // wait for it instead of guessing another job
+    const numbered = orders.filter((o) => numRuns(`${o.nickname} ${o.po_number}`).length).length;
+    if (!byNum.length && numbered >= Math.max(2, orders.length * 0.5) && !orders.some((o) => nearPoHit(o, g.customer_po)))
+      return { ...empty, how: `PO number ${pr.join(", ")} isn't on any of their open jobs yet` };
   }
   // a PO one typo off one order's ("LYL 092425" for "LYL 092426"), and the goods fit it: that order
   const near = orders.filter((o) => nearPoHit(o, g.customer_po));
@@ -599,6 +617,8 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
     const had = g.lines.some((l) => l.suggest_order_id || l.suggest_archived_id);
     const p = await planShipment(admin, g).catch(() => null);
     if (!p) continue;
+    // nothing fits any more (e.g. the PO's job number isn't entered yet): drop an old guess so nobody OKs a wrong job
+    if (!p.alloc.length && had) { await admin.from("supplier_manifest_lines").update({ suggest_order_id: null, suggest_archived_id: null, suggest_how: p.how || "" }).in("id", g.lines.map((l) => l.id)); continue; }
     if (p.customerId && g.lines.some((l) => !l.customer_id)) await admin.from("supplier_manifest_lines").update({ customer_id: p.customerId }).in("id", g.lines.map((l) => l.id));
     if (p.auto && !p.unplaced.length) {
       const rows: { line: Line; orderId: string }[] = [];
