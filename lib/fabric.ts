@@ -45,7 +45,7 @@ export function fabricLines(html: string): string {
   const text = (html || "").replace(/<\/(li|p|div|br)>|<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&#174;|®|™/g, "");
   const parts = text.split(/\n|•|;|(?<=\.)\s+(?=[A-Z])/).map((x) => x.replace(/\s+/g, " ").trim()).filter(Boolean);
   const keep = parts.filter((x) => FIBER_RE.test(x) && /\d\s*%|\d{2,3}\s*\/\s*\d{1,2}\b|\btri[- ]?blend\b/i.test(x) && !/\bthread|label|tear|tape|drawcord|cord\b/i.test(x));
-  return [...new Set(keep)].slice(0, 8).join("\n").slice(0, 600);
+  return [...new Set(keep)].slice(0, 8).join("\n").slice(0, 2000);
 }
 
 /** percent of each fiber in one statement: "60% cotton, 40% polyester", "50/50 cotton/polyester", "100% ring spun cotton" */
@@ -57,7 +57,7 @@ function fibersIn(s: string): Record<string, number> | null {
     fib.forEach((f, i) => { const k = /^poly/i.test(f) ? "polyester" : f.toLowerCase(); out[k] = (out[k] || 0) + (nums[i] || 0); });
     return out;
   }
-  const re = new RegExp(`(\\d{1,3}(?:\\.\\d)?)\\s*%\\s*(?:[a-z\\-®™ ]{0,40}?)\\b(${FIBER})\\b`, "gi");
+  const re = new RegExp(`(\\d{1,3}(?:\\.\\d)?)\\s*%\\s*(?:[a-z.\\-®™ ]{0,40}?)\\b(${FIBER})\\b`, "gi");
   let m: RegExpExecArray | null, any = false;
   while ((m = re.exec(s))) { const k = /^poly/i.test(m[2]) ? "polyester" : m[2].toLowerCase(); out[k] = (out[k] || 0) + +m[1]; any = true; }
   if (any) return out;
@@ -89,7 +89,15 @@ function colorScope(s: string, color: string): number | null {
 export function fabricFromText(text: string, color: string, supplier = "supplier"): Fabric | null {
   if (!text) return null;
   let base: Fabric | null = null, hit: { f: Fabric; score: number } | null = null;
-  for (const line of text.split("\n")) {
+  // SanMar writes color exceptions after the blend in parentheses: "98/2 cotton/poly (Ash) 50/50 cotton/poly (Black
+  // Heather, Heather Navy…)"; turn each into its own "<colors> are <blend>" statement, and keep what's left as the base
+  const lines = text.split("\n").flatMap((line) => {
+    const out: string[] = [];
+    const re = /(\d{1,3}\s*\/\s*\d{1,3}(?:\s*\/\s*\d{1,3})?\s*%?\s*[a-z][a-z\/\- ]*?)\s*\(([^)]*)\)?/gi;
+    const rest = line.replace(re, (_m, blend: string, colors: string) => { out.push(`${colors.replace(/[,.]\s*[A-Z]\.?$/, "")} are ${blend.trim()}`); return " "; });
+    return out.length ? [rest, ...out] : [line];
+  });
+  for (const line of lines) {
     const f = fibersIn(line); if (!f) continue;
     const scope = colorScope(line, color), fab = { polyPct: Math.round(f.polyester || 0), why: `${supplier}: “${line}”` };
     if (scope == null) { if (!base) base = fab; }
