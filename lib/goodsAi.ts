@@ -273,6 +273,12 @@ export async function aiMatchPending(admin: SupabaseClient, deadline: number, op
       }
       out.linked++; return;
     }
+    // the PO names a number / place no job has yet (Nine18 "AMS 43030 FT WORTH" while only the Dallas job is entered):
+    // not close, the job isn't entered yet. Wait, and say which job came nearest.
+    if (numberMismatch) {
+      if (!w.g.lines.some((l) => l.suggest_order_id || l.suggest_archived_id)) await admin.from("supplier_manifest_lines").update({ suggest_how: `${AI_TAG}: PO ${w.g.customer_po} isn't on any job yet (nearest: #${c.number} ${c.nickname}). Waiting for the job to be entered.`.slice(0, 500) }).in("id", ids);
+      out.none++; return;
+    }
     for (const j of jobsUsed) {
       const lids = w.g.lines.filter((l) => target.get(l.id) === j).map((l) => l.id);
       const sugHow = (j === c ? `${AI_TAG} thinks #${c.number}: ${a.reason}` : `${AI_TAG} thinks #${j.number} for these (#${c.number} for the rest): ${a.reason}`).slice(0, 500);
