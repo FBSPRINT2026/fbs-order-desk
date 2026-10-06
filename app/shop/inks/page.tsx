@@ -2,12 +2,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
-import { RIO_RFU, rfuForPms } from "@/lib/rioRfu";
 
 /**
  * Ink Room: every Epic Rio coated PMS color from Avient IMS 3.0, and a mixing calculator. Pick a color, say how much
  * (quarts, gallons, grams, kilos, pounds), get the grams of each Rio mixing ink to weigh out. Formulas are read from
  * IMS at 1 quart; any amount scales from the percentages (quarts use that formula's own weight per quart).
+ * Stock colors: the ready-to-use inks on the shelf (Wilflex Rio RFU, Monarch Color, any brand), from stock_inks, each
+ * with its nearest PMS so a PMS formula can say "we have this in stock". Added, edited and archived here (never deleted).
  */
 /** pct: as IMS shows it (2 decimals); g: grams for 1 quart (IMS shows them to 0.01 g, so scaling from them is exact) */
 type Line = { type: string; code: string; desc: string; pct: number; g?: number };
@@ -22,12 +23,22 @@ const fmtG = (g: number) => g.toFixed(2);
  *  from the percent (IMS rounds those to 2 decimals, so small ingredients can be a little off) */
 const gramsOf = (l: Line, perQt: number, totalG: number) => (l.g != null && perQt ? (l.g / perQt) * totalG : (l.pct / 100) * totalG);
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+type Stock = { id: string; brand: string; line: string; name: string; product: string; pms: string; hex: string; notes: string; sort: number };
+type Draft = Omit<Stock, "id" | "sort"> & { id?: string };
+const BLANK: Draft = { brand: "", line: "", name: "", product: "", pms: "", hex: "#cccccc", notes: "" };
+/** "186" / "186c" / "186 c" → "186 C"; anything else (Cool Gray 7 C, 072 C Blue) is kept, with spaces tidied */
+const tidyPms = (s: string) => { const t = s.replace(/^(pms|pantone)\s*/i, "").replace(/\s+/g, " ").trim(); const m = t.match(/^(\d{3,4})\s*c?$/i); return m ? `${m[1]} C` : t; };
+const stockLabel = (x: Stock) => [x.brand, x.line].filter(Boolean).join(" ");
+
 
 export default function InkRoom() {
   const [inks, setInks] = useState<Ink[] | null>(null), [err, setErr] = useState("");
+  const [stock, setStock] = useState<Stock[] | null>(null);
   const [q, setQ] = useState(""), [only, setOnly] = useSticky<"ready" | "all">("inks.only", "all");
+  const [sq, setSq] = useState("");
   const [tab, setTab] = useSticky<"pms" | "stock">("inks.tab", "pms");
-  const [sel, setSel] = useState<Ink | null>(null);
+  const [sel, setSel] = useState<Ink | null>(null), [selStock, setSelStock] = useState<Stock | null>(null);
+  const [edit, setEdit] = useState<Draft | null>(null), [busy, setBusy] = useState(false), [formErr, setFormErr] = useState("");
   const [amt, setAmt] = useSticky<string>("inks.amt", "1"), [unit, setUnit] = useSticky<Unit>("inks.unit", "qt");
 
   useEffect(() => {
@@ -51,7 +62,18 @@ export default function InkRoom() {
       }
       setInks([...one.values()]);
     })();
+    loadStock();
   }, []);
+
+  async function loadStock() {
+    const { data, error } = await createClient().from("stock_inks").select("id, brand, line, name, product, pms, hex, notes, sort").is("archived_at", null).order("brand").order("sort").order("name");
+    if (error) setErr(error.message); else setStock((data || []) as Stock[]);
+  }
+
+  /** Epic Rio standard formula for a PMS code */
+  const formulaFor = (pms: string) => (pms ? (inks || []).find((i) => i.rec_type === "S" && norm(i.code) === norm(pms)) || null : null);
+  /** stock inks that are about this PMS */
+  const stockFor = (code: string) => (stock || []).filter((x) => x.pms && norm(x.pms) === norm(code));
 
   const ready = useMemo(() => (inks || []).filter((i) => i.lines?.length).length, [inks]);
   const list = useMemo(() => {
@@ -66,16 +88,62 @@ export default function InkRoom() {
     return xs.slice(0, 240);
   }, [inks, q, only]);
 
+  // stock colors, grouped by brand and line, filtered by the search
+  const groups = useMemo(() => {
+    const t = norm(sq).replace(/^(pms|pantone)\s*/, "");
+    const xs = (stock || []).filter((x) => !t || [x.name, x.brand, x.line, x.product, x.pms].some((v) => norm(v).includes(t)));
+    const m = new Map<string, Stock[]>();
+    for (const x of xs) { const k = stockLabel(x) || "Other"; m.set(k, [...(m.get(k) || []), x]); }
+    return [...m.entries()];
+  }, [stock, sq]);
+  const brands = useMemo(() => [...new Set((stock || []).map((x) => x.brand).filter(Boolean))].sort(), [stock]);
+  const lines = useMemo(() => [...new Set((stock || []).filter((x) => !edit?.brand || x.brand === edit.brand).map((x) => x.line).filter(Boolean))].sort(), [stock, edit?.brand]);
+
+  function pickStock(x: Stock) { setSelStock(x); setSel(formulaFor(x.pms)); setEdit(null); }
+  function pickInk(i: Ink) { setSel(i); setSelStock(null); setEdit(null); }
+  function startAdd() { setFormErr(""); setEdit({ ...BLANK, brand: selStock?.brand || "", line: selStock?.line || "" }); }
+  function startEdit(x: Stock) { setFormErr(""); setEdit({ id: x.id, brand: x.brand, line: x.line, name: x.name, product: x.product, pms: x.pms, hex: x.hex || "#cccccc", notes: x.notes }); }
+
+  async function save() {
+    if (!edit) return;
+    const row = { brand: edit.brand.trim(), line: edit.line.trim(), name: edit.name.trim(), product: edit.product.trim(), pms: tidyPms(edit.pms), hex: /^#[0-9a-f]{6}$/i.test(edit.hex) ? edit.hex.toUpperCase() : "", notes: edit.notes.trim() };
+    if (!row.name) { setFormErr("Give the color a name."); return; }
+    setBusy(true); setFormErr("");
+    const sb = createClient();
+    let res;
+    if (edit.id) res = await sb.from("stock_inks").update({ ...row, updated_at: new Date().toISOString() }).eq("id", edit.id).select("id, brand, line, name, product, pms, hex, notes, sort").single();
+    else {
+      const { data: u } = await sb.auth.getUser();
+      const sort = Math.max(0, ...(stock || []).filter((x) => x.brand === row.brand && x.line === row.line).map((x) => x.sort)) + 1;
+      res = await sb.from("stock_inks").insert({ ...row, sort, created_by: u.user?.email || "" }).select("id, brand, line, name, product, pms, hex, notes, sort").single();
+    }
+    setBusy(false);
+    if (res.error) { setFormErr(res.error.message); return; }
+    await loadStock();
+    const x = res.data as Stock;
+    setEdit(null); setTab("stock"); setSelStock(x); setSel(formulaFor(x.pms));
+  }
+
+  async function archive() {
+    if (!edit?.id) return;
+    setBusy(true);
+    const { error } = await createClient().from("stock_inks").update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", edit.id);
+    setBusy(false);
+    if (error) { setFormErr(error.message); return; }
+    setEdit(null); setSelStock(null); setSel(null); loadStock();
+  }
+
   // total grams for the amount asked for
   const n = Math.max(0, parseFloat(amt) || 0);
   const totalG = !sel?.grams_per_qt ? 0 : unit === "qt" ? n * sel.grams_per_qt : unit === "gal" ? n * 4 * sel.grams_per_qt : n * PER_G[unit];
   const qts = sel?.grams_per_qt ? totalG / sel.grams_per_qt : 0;
+  const draftPms = edit ? tidyPms(edit.pms) : "", draftF = edit && draftPms ? formulaFor(draftPms) : null;
 
   return (
     <>
       <div className="page-head">
         <div><div className="eyebrow">Production</div><h1>Ink Room</h1></div>
-        <div className="faint" style={{ fontSize: 13 }}>{inks ? `${inks.length.toLocaleString()} Epic Rio coated colors · ${ready} with formulas` : "Loading colors…"}</div>
+        <div className="faint" style={{ fontSize: 13 }}>{inks ? `${inks.length.toLocaleString()} Epic Rio coated colors · ${ready} with formulas` : "Loading colors…"}{stock ? ` · ${stock.length} stock colors` : ""}</div>
       </div>
       {err && <div className="pv-err">{err}</div>}
       <div className="ink-wrap">
@@ -83,21 +151,27 @@ export default function InkRoom() {
           <div className="panel-b stack" style={{ gap: 10 }}>
             <div className="row" style={{ gap: 6 }} role="tablist">
               <button type="button" role="tab" aria-selected={tab === "pms"} className={"chip" + (tab === "pms" ? " on" : "")} onClick={() => setTab("pms")}>PMS formulas</button>
-              <button type="button" role="tab" aria-selected={tab === "stock"} className={"chip" + (tab === "stock" ? " on" : "")} onClick={() => setTab("stock")}>Rio RFU stock colors ({RIO_RFU.length})</button>
+              <button type="button" role="tab" aria-selected={tab === "stock"} className={"chip" + (tab === "stock" ? " on" : "")} onClick={() => setTab("stock")}>Stock colors{stock ? ` (${stock.length})` : ""}</button>
             </div>
             {tab === "stock" ? (
               <>
-                <div className="faint" style={{ fontSize: 13 }}>Ready-for-use inks, no mixing. The PMS is Avient&apos;s approximate match from the Rio RFU color card.</div>
-                <div className="ink-grid">{RIO_RFU.map((r) => {
-                  const f = (inks || []).find((i) => i.rec_type === "S" && norm(i.code) === norm(r.pms));
-                  return (
-                    <button key={r.name} type="button" className={"ink-tile stock" + (sel && f && sel.id === f.id ? " on" : "")} onClick={() => f && setSel(f)} disabled={!f} title={`${r.name}${r.product ? ` (${r.product})` : ""} ≈ PMS ${r.pms}`}>
-                      <i style={{ background: r.hex }} />
-                      <b>{r.name}</b>
-                      <small data-notranslate>{r.product ? `${r.product} · ` : ""}≈ PMS {r.pms}</small>
-                    </button>
-                  );
-                })}</div>
+                <div className="row" style={{ gap: 8, alignItems: "center" }}>
+                  <input className="ink-q" type="search" value={sq} onChange={(e) => setSq(e.target.value)} placeholder="Find a stock color: Bora Bora, Monarch, 186…" aria-label="Find a stock color" style={{ flex: 1 }} />
+                  <button type="button" className="btn primary" onClick={startAdd}>+ Add stock color</button>
+                </div>
+                <div className="faint" style={{ fontSize: 13 }}>Ready-to-use inks on the shelf, no mixing. The PMS is the maker&apos;s nearest match from their color chart.</div>
+                {!stock ? <div className="faint">Loading…</div> : !groups.length ? <div className="faint">{sq ? `No stock color matches “${sq}”.` : "No stock colors yet. Add the first one."}</div> : groups.map(([g, xs]) => (
+                  <div key={g} className="ink-group">
+                    <h3>{g} <span className="faint">{xs.length}</span></h3>
+                    <div className="ink-grid">{xs.map((x) => (
+                      <button key={x.id} type="button" className={"ink-tile stock" + (selStock?.id === x.id ? " on" : "")} onClick={() => pickStock(x)} title={`${x.name}${x.product ? ` (${x.product})` : ""}${x.pms ? ` ≈ PMS ${x.pms}` : ""}`}>
+                        <i style={{ background: x.hex || "#ddd" }} />
+                        <b>{x.name}</b>
+                        <small data-notranslate>{x.product ? `${x.product} · ` : ""}{x.pms ? `≈ PMS ${x.pms}` : "No PMS"}</small>
+                      </button>
+                    ))}</div>
+                  </div>
+                ))}
               </>
             ) : (<>
             <input className="ink-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a color: 186, 7527, Cool Gray 7, Warm Red…" aria-label="Find a color" autoFocus />
@@ -106,14 +180,14 @@ export default function InkRoom() {
               <button type="button" className={"chip" + (only === "ready" ? " on" : "")} onClick={() => setOnly("ready")}>With formulas ({ready})</button>
             </div>
             {!inks ? <div className="faint">Loading…</div> : !list.length ? <div className="faint">No color matches “{q}”.</div> : (
-              <div className="ink-grid">{list.map((i) => (
-                <button key={i.id} type="button" className={"ink-tile" + (sel?.id === i.id ? " on" : "") + (i.lines?.length ? " has" : "")} onClick={() => setSel(i)} title={i.name}>
+              <div className="ink-grid">{list.map((i) => { const st = i.rec_type === "S" ? stockFor(i.code) : []; return (
+                <button key={i.id} type="button" className={"ink-tile" + (sel?.id === i.id ? " on" : "") + (i.lines?.length ? " has" : "")} onClick={() => pickInk(i)} title={i.name}>
                   <i style={{ background: i.hex || "#ddd" }} />
                   <b data-notranslate>{i.code}</b>
                   <small>{i.rec_type === "U" ? (i.lines?.length ? "Shop mix ✓" : "Shop mix · not read") : i.lines?.length ? "Formula ✓" : "Not read yet"}</small>
-                  {i.rec_type === "S" && rfuForPms(i.code) && <small className="ink-instock">Stock: {rfuForPms(i.code)!.name}</small>}
+                  {st.length > 0 && <small className="ink-instock">Stock: {st[0].name}{st.length > 1 ? ` +${st.length - 1}` : ""}</small>}
                 </button>
-              ))}</div>
+              ); })}</div>
             )}
             {inks && list.length === 240 && <div className="faint" style={{ fontSize: 12.5 }}>Showing the first 240. Type more of the number to narrow it down.</div>}
             </>)}
@@ -121,15 +195,60 @@ export default function InkRoom() {
         </section>
 
         <section className="panel ink-calc" aria-live="polite">
-          {!sel ? <div className="panel-b faint">Pick a color to see its formula and how much of each ink to weigh out.</div> : (
-            <div className="panel-b stack" style={{ gap: 14 }}>
-              <div className="ink-head">
-                <i style={{ background: sel.hex || "#ddd" }} />
-                <div><h2 data-notranslate>{sel.code}</h2><div className="faint" data-notranslate>{sel.name}{sel.rec_type === "U" ? " · our own mix (IMS user formula)" : " · Epic Rio"}{(sel.copies || 1) > 1 ? ` · IMS has ${sel.copies} formulas with this code` : ""}</div></div>
+          {edit ? (
+            <form className="panel-b stack ink-form" style={{ gap: 12 }} onSubmit={(e) => { e.preventDefault(); save(); }}>
+              <h2 style={{ margin: 0 }}>{edit.id ? "Edit stock color" : "Add a stock color"}</h2>
+              <label>Color name<input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="Bora Bora Sand" autoFocus required /></label>
+              <div className="ink-form-2">
+                <label>Brand<input value={edit.brand} onChange={(e) => setEdit({ ...edit, brand: e.target.value })} list="ink-brands" placeholder="Monarch Color" /></label>
+                <label>Line<input value={edit.line} onChange={(e) => setEdit({ ...edit, line: e.target.value })} list="ink-lines" placeholder="Standard & Athletic" /></label>
               </div>
-              {(() => { const r = sel.rec_type === "S" ? rfuForPms(sel.code) : null; return r ? (
-                <div className="ink-stock"><i style={{ background: r.hex }} /><span><b>In stock: Rio RFU {r.name}{r.product ? ` (${r.product})` : ""}</b>Avient&apos;s ready-for-use {r.name} is about PMS {r.pms}. Use it straight from the can, or mix below for an exact match.</span></div>
-              ) : null; })()}
+              <datalist id="ink-brands">{brands.map((b) => <option key={b} value={b} />)}</datalist>
+              <datalist id="ink-lines">{lines.map((b) => <option key={b} value={b} />)}</datalist>
+              <div className="ink-form-2">
+                <label>Product #<input value={edit.product} onChange={(e) => setEdit({ ...edit, product: e.target.value })} placeholder="Optional" data-notranslate /></label>
+                <label>Nearest PMS<input value={edit.pms} onChange={(e) => setEdit({ ...edit, pms: e.target.value })} placeholder="9224 C" data-notranslate /></label>
+              </div>
+              {draftPms && <div className={"faint ink-pmsnote" + (draftF ? " ok" : "")} style={{ fontSize: 12.5 }}>{draftF ? `PMS ${draftF.code} is in the Epic Rio library${draftF.lines?.length ? " with a formula" : ""}.` : `No Epic Rio formula for “${draftPms}”. That's fine; it just won't link to a mix.`}</div>}
+              <label>Color
+                <span className="row" style={{ gap: 8, alignItems: "center" }}>
+                  <input type="color" value={/^#[0-9a-f]{6}$/i.test(edit.hex) ? edit.hex : "#cccccc"} onChange={(e) => setEdit({ ...edit, hex: e.target.value })} aria-label="Pick the color" className="ink-colorpick" />
+                  <input value={edit.hex} onChange={(e) => setEdit({ ...edit, hex: e.target.value })} aria-label="Hex color" style={{ width: 110 }} data-notranslate />
+                  {draftF?.hex && <button type="button" className="btn sm" onClick={() => setEdit({ ...edit, hex: draftF.hex })}>Use the PMS color</button>}
+                </span>
+              </label>
+              <label>Notes<textarea value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} rows={2} placeholder="Where it's kept, what it's good for…" /></label>
+              {formErr && <div className="pv-err">{formErr}</div>}
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <button type="submit" className="btn primary" disabled={busy}>{busy ? "Saving…" : edit.id ? "Save changes" : "Add color"}</button>
+                <button type="button" className="btn" onClick={() => setEdit(null)} disabled={busy}>Cancel</button>
+                {edit.id && <button type="button" className="btn ghost" style={{ marginLeft: "auto" }} onClick={archive} disabled={busy}>Archive (no longer stocked)</button>}
+              </div>
+            </form>
+          ) : !sel && !selStock ? <div className="panel-b faint">Pick a color to see its formula and how much of each ink to weigh out.</div> : (
+            <div className="panel-b stack" style={{ gap: 14 }}>
+              {selStock && (
+                <div className="stack" style={{ gap: 8 }}>
+                  <div className="ink-head">
+                    <i style={{ background: selStock.hex || "#ddd" }} />
+                    <div style={{ flex: 1 }}><h2>{selStock.name}</h2><div className="faint" data-notranslate>{stockLabel(selStock) || "Stock ink"}{selStock.product ? ` · ${selStock.product}` : ""}{selStock.pms ? ` · ≈ PMS ${selStock.pms}` : ""}</div></div>
+                    <button type="button" className="btn sm" onClick={() => startEdit(selStock)}>Edit</button>
+                  </div>
+                  {selStock.notes && <div className="faint" style={{ fontSize: 13 }}>{selStock.notes}</div>}
+                  <div className="ink-stock"><i style={{ background: selStock.hex || "#ddd" }} /><span><b>Stock ink, use it straight from the can</b>{!selStock.pms ? "No PMS on file. Edit it to add the nearest PMS so it links to a Rio mix." : sel ? `To match PMS ${sel.code} exactly, mix it from the Rio formula below.` : `There's no Epic Rio formula for PMS ${selStock.pms}.`}</span></div>
+                </div>
+              )}
+              {sel && (<>
+              {!selStock && (
+                <div className="ink-head">
+                  <i style={{ background: sel.hex || "#ddd" }} />
+                  <div><h2 data-notranslate>{sel.code}</h2><div className="faint" data-notranslate>{sel.name}{sel.rec_type === "U" ? " · our own mix (IMS user formula)" : " · Epic Rio"}{(sel.copies || 1) > 1 ? ` · IMS has ${sel.copies} formulas with this code` : ""}</div></div>
+                </div>
+              )}
+              {selStock && <h3 className="ink-sub" data-notranslate>Mix PMS {sel.code} from Epic Rio</h3>}
+              {!selStock && sel.rec_type === "S" && stockFor(sel.code).map((r) => (
+                <button key={r.id} type="button" className="ink-stock as-btn" onClick={() => pickStock(r)}><i style={{ background: r.hex }} /><span><b>In stock: {stockLabel(r)} {r.name}{r.product ? ` (${r.product})` : ""}</b>Ready to use and about PMS {r.pms}. Use it straight from the can, or mix below for an exact match.</span></button>
+              ))}
               {!sel.lines?.length ? (
                 <div className="ink-none">
                   <b>This formula hasn’t been read from IMS yet.</b>
@@ -156,6 +275,7 @@ export default function InkRoom() {
                   <div className="faint" style={{ fontSize: 12.5 }}>{sel.grams_per_qt} g per quart for this color. {sel.captured_note}{sel.captured_at ? ` (${new Date(sel.captured_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})` : ""}.</div>
                 </>
               )}
+              </>)}
             </div>
           )}
         </section>

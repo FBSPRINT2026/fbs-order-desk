@@ -5218,3 +5218,16 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ink-stock{display:flex;gap:10px;align-items:center;background:#EAF6FB;border:1px solid #9CCFE3;border-radius:10px;padding:10px 12px;font-size:13.5px}
 .ink-stock i{width:34px;height:34px;border-radius:8px;flex:none;border:1px solid rgba(0,0,0,.1)}
 .ink-stock span{display:flex;flex-direction:column;gap:2px}
+.ink-group{display:flex;flex-direction:column;gap:6px}
+.ink-group h3{margin:4px 0 0;font-size:14px;font-weight:700}
+.ink-group h3 .faint{font-weight:500;margin-left:4px}
+.ink-sub{margin:4px 0 0;font-size:15px}
+.ink-stock.as-btn{width:100%;text-align:left;font:inherit;cursor:pointer;color:inherit}
+.ink-stock.as-btn:hover{border-color:#0A8FC0}
+.ink-form label{display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:13px}
+.ink-form input:not([type=color]),.ink-form textarea{font:inherit;font-weight:400;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:0}
+.ink-form-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:480px){.ink-form-2{grid-template-columns:1fr}}
+.ink-colorpick{width:48px;height:38px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
+.ink-pmsnote{margin-top:-6px}
+.ink-pmsnote.ok{color:#1F7A47}
