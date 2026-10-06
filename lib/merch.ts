@@ -37,6 +37,8 @@ export type MerchOrder = {
   status: "pending" | "paid" | "cancelled" | "refunded" | "packed" | "delivered" | "picked_up" | "shipped";
   paid_at: string | null; processor_id: string; pay_method: string; packed_at: string | null; packed_by: string; tracking: string;
   changes: { at: string; by: string; what: string }[]; note: string; created_at: string; items?: OrderItem[];
+  /** orders checked out together (siblings: one payment, one bag each) share this */
+  checkout_id?: string | null;
 };
 
 export const r2 = (n: number) => Math.round((+n || 0) * 100) / 100;
@@ -44,6 +46,14 @@ export const SIZE_ORDER = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", 
 export const bySize = (a: string, b: string) => { const i = SIZE_ORDER.indexOf(a), j = SIZE_ORDER.indexOf(b); return (i < 0 ? 99 : i) - (j < 0 ? 99 : j) || a.localeCompare(b); };
 export const isYouthSize = (z: string) => /^Y/.test(z);
 export const sizeName = (z: string) => ({ YXS: "Youth XS", YS: "Youth S", YM: "Youth M", YL: "Youth L", YXL: "Youth XL", OS: "One size" } as Record<string, string>)[z] || `Adult ${z}`;
+
+/** a quick size guide for parents (typical youth ages and adult chest sizes; brands vary a little) */
+export const SIZE_GUIDE: Record<string, string> = {
+  YXS: "Ages 4–5", YS: "Ages 6–8", YM: "Ages 10–12", YL: "Ages 14–16", YXL: "Ages 18–20",
+  XS: "Chest 31–33″", S: "Chest 34–36″", M: "Chest 38–40″", L: "Chest 42–44″", XL: "Chest 46–48″", "2XL": "Chest 50–52″", "3XL": "Chest 54–56″", "4XL": "Chest 58–60″", "5XL": "Chest 62–64″",
+};
+/** the size on its own, without "Youth" ("YM" → "M") */
+export const shortSize = (z: string) => z.replace(/^Y(?=XS|S|M|L|XL)/, "");
 
 /** what a shopper pays for one piece in this size (FBS's price + the give-back + the size's upcharge) */
 export const unitPrice = (p: Pick<Product, "base_price" | "giveback" | "upcharges">, size: string) => r2(+p.base_price + +p.giveback + +(p.upcharges?.[size] || 0));

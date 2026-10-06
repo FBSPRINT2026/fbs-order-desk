@@ -2,74 +2,97 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { askForChange, changeMyOrder } from "@/app/s/actions";
-import { StoreHeader, brandVars } from "@/components/merch/Storefront";
 import type { PublicStore } from "@/lib/merchServer";
-import { bySize, fmtDate, fmtDateTime, orderCode, sizeName, storeImg, unitPrice, type Field, type MerchOrder, type Product } from "@/lib/merch";
+import { bySize, fmtDateTime, isYouthSize, orderCode, shortSize, sizeName, storeImg, unitPrice, type Field, type MerchOrder, type Product } from "@/lib/merch";
+import { brandVars, day, money } from "./sf/kit";
+import { Footer, TopBar } from "./sf/Chrome";
 
-const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 type P = Pick<Product, "id" | "name" | "colors" | "sizes" | "base_price" | "giveback" | "upcharges" | "imprint" | "active">;
+type Sib = { code: string; token: string; student: string };
 
 /**
- * The shopper's own page for their order (from the link in their email; no sign-in): where it is, what's in it, and
- * changes. They can swap a size or color, or fix the student's info, until we order the goods; after that it's a
- * request to FBS.
+ * The shopper's own page for an order (the link in their email; no sign-in): where it is, what's in it, and changes.
+ * They can swap a size or color, or fix the student's info, until we order the goods; after that it's a request to FBS.
  */
-export default function OrderStatus({ store, order, products, canChange, isNew }: { store: PublicStore; order: MerchOrder; products: P[]; canChange: boolean; isNew: boolean }) {
+export default function OrderStatus({ store, order, products, canChange, isNew, siblings = [] }: { store: PublicStore; order: MerchOrder; products: P[]; canChange: boolean; isNew: boolean; siblings?: Sib[] }) {
   const router = useRouter();
   const fields = (store.fields || []) as Field[];
   const code = orderCode(store, order.number);
   const where = store.delivery?.org?.on ? store.delivery.org.label || store.brand?.school || "the school" : "";
-  const st = store.status;
-  const reached = (s: string) => ["closed", "ordered", "production", "packing", "ready", "delivered", "archived"].indexOf(st) >= ["closed", "ordered", "production", "packing", "ready", "delivered", "archived"].indexOf(s);
+  const flow = ["closed", "ordered", "production", "packing", "ready", "delivered", "archived"];
+  const reached = (s: string) => flow.indexOf(store.status) >= flow.indexOf(s);
   const packed = ["packed", "delivered", "picked_up", "shipped"].includes(order.status) || reached("ready");
   const done = ["delivered", "picked_up", "shipped"].includes(order.status) || reached("delivered");
+  const cancelled = order.status === "cancelled" || order.status === "refunded";
   const steps = [
-    { t: "Order placed", s: fmtDateTime(order.created_at), on: true },
-    { t: "Store closes", s: store.closes_at ? fmtDate(store.closes_at) : "", on: reached("closed") },
-    { t: "Goods ordered", s: "We order the shirts once the store closes", on: reached("ordered") },
-    { t: "Printing", s: "Everything is printed together", on: reached("production") },
-    { t: "Packed in its own bag", s: order.answers?.student ? `Labeled for ${order.answers.student}` : "Labeled with your order", on: packed },
-    { t: order.delivery === "org" ? `Delivered to ${where}` : order.delivery === "pickup" ? "Ready for pickup at FBS Print" : "Shipped to you", s: order.delivery === "org" ? "Sorted by homeroom; the school hands the bags out" : order.delivery === "ship" ? (order.tracking ? `Tracking ${order.tracking}` : "We'll email the tracking number") : "We'll email you when it's ready", on: done },
+    { t: "Ordered", s: day(order.created_at, false), on: true },
+    { t: "Store closes", s: store.closes_at ? day(store.closes_at, false) : "", on: reached("closed") },
+    { t: "Shirts ordered", s: "From our suppliers", on: reached("ordered") },
+    { t: "Printing", s: "Everything together", on: reached("production") },
+    { t: "Packed", s: order.answers?.student ? `In a bag for ${order.answers.student.split(" ")[0]}` : "In its own bag", on: packed },
+    { t: order.delivery === "org" ? "At school" : order.delivery === "pickup" ? "Ready for pickup" : "Shipped", s: order.delivery === "org" ? where : order.delivery === "ship" ? (order.tracking ? `Tracking ${order.tracking}` : "To your door") : "At FBS Print", on: done },
   ];
-  const nowIdx = steps.findIndex((x) => !x.on);
+  const now = steps.findIndex((x) => !x.on);
 
   const [items, setItems] = useState((order.items || []).map((i) => ({ id: i.id!, color: i.color, size: i.size })));
   const [answers, setAnswers] = useState<Record<string, string>>({ ...order.answers });
   const [editing, setEditing] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [ask, setAsk] = useState(""), [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState(""), [busy, setBusy] = useState(false), [asked, setAsked] = useState(false);
+  const first = (order.shopper?.name || "").split(" ")[0];
 
   return (
-    <div style={brandVars(store.brand)}>
-      <StoreHeader store={store} />
-      <main className="sf-wrap" style={{ maxWidth: 880 }}>
-        {isNew && <div className="sf-ok" style={{ marginTop: 20 }}>Thank you! Your order {code} is in. A receipt is on its way to {order.shopper.email}.</div>}
-        {order.status === "cancelled" && <div className="sf-closed">This order was cancelled.</div>}
-        <div className="sf-co" style={{ gridTemplateColumns: "1fr" }}>
-          <section className="sf-sec">
-            <h3>Order {code}</h3>
-            <p>{order.answers?.student ? `For ${order.answers.student}. ` : ""}This is a pre-order{store.deliver_by ? `: we expect it ${order.delivery === "org" ? `at ${where}` : "ready"} around ${fmtDate(store.deliver_by)}` : ""}.</p>
-            <ol className="sf-steps">
-              {steps.map((x, i) => <li key={x.t} className={x.on ? "done" : i === nowIdx ? "now" : "later"}><span className="dot">{x.on ? "✓" : i + 1}</span><div><b>{x.t}</b><span>{x.s}</span></div></li>)}
-            </ol>
-          </section>
+    <div className="sf-page" style={brandVars(store.brand)}>
+      <TopBar store={store} count={0} onHome={() => router.push(`/s/${store.slug}`)} />
+      <main className="sf-wrap sf-main sf-order">
+        {isNew && (
+          <div className="sf-thanks" role="status">
+            <span className="sf-thanks-mark" aria-hidden>✓</span>
+            <div>
+              <h1>Thank you{first ? `, ${first}` : ""}! Your order is in.</h1>
+              <p>Your receipt is on its way to <b>{order.shopper.email}</b>.{siblings.length ? ` Each student's things are in their own bag: ${[order.answers?.student, ...siblings.map((s) => s.student)].filter(Boolean).join(", ")}.` : ""}</p>
+            </div>
+          </div>
+        )}
 
+        <section className="sf-ohead">
+          <div>
+            <p className="sf-kicker2">Order {code}</p>
+            <h2 data-notranslate>{order.answers?.student ? `${order.answers.student}` : order.shopper.name}</h2>
+            {fields.filter((f) => f.key !== "student" && order.answers?.[f.key]).length > 0 && <p className="sf-ohead-sub">{fields.filter((f) => f.key !== "student" && order.answers?.[f.key]).map((f) => order.answers[f.key]).join(" · ")}</p>}
+          </div>
+          {!cancelled && store.deliver_by && !done && <div className="sf-eta"><span>Expected {order.delivery === "org" ? "at school" : order.delivery === "ship" ? "to ship" : "ready"}</span><b>{day(store.deliver_by)}</b></div>}
+        </section>
+
+        {cancelled ? <div className="sf-alert">This order was {order.status === "refunded" ? "refunded" : "cancelled"}.</div> : (
+          <ol className="sf-track" aria-label="Where your order is">
+            {steps.map((x, i) => <li key={x.t} className={x.on ? "done" : i === now ? "now" : ""}><i aria-hidden>{x.on ? "✓" : ""}</i><b>{x.t}</b><span>{x.s}</span></li>)}
+          </ol>
+        )}
+
+        {siblings.length > 0 && (
+          <div className="sf-sibs">
+            <span>Also from this checkout:</span>
+            {siblings.map((s) => <a key={s.token} href={`/s/${store.slug}/o/${s.token}`}>{s.student ? `${s.student}'s bag` : s.code} <small>{s.code}</small></a>)}
+          </div>
+        )}
+
+        <div className="sf-order-grid">
           <section className="sf-sec">
-            <h3>What&apos;s in it</h3>
-            {fields.length > 0 && !editing && <p>{fields.map((f) => answers[f.key] ? `${f.label}: ${answers[f.key]}` : "").filter(Boolean).join(" · ")}</p>}
-            {editing && (
-              <div className="sf-fields" style={{ marginBottom: 12 }}>
+            <div className="sf-summary-h"><h2>In this bag</h2>{canChange && !cancelled && !editing && <button type="button" className="sf-link" onClick={() => { setEditing(true); setMsg(null); }}>Change sizes or info</button>}</div>
+            {editing && fields.length > 0 && (
+              <div className="sf-fields sf-edit-fields">
                 {fields.map((f) => (
                   <div key={f.key} className={"sf-f" + (f.kind === "text" ? " full" : "")}>
-                    <label>{f.label}</label>
+                    <label htmlFor={`sf-ea-${f.key}`}>{f.label}</label>
                     {f.kind === "select" && f.options.length
-                      ? <select value={answers[f.key] || ""} onChange={(e) => setAnswers({ ...answers, [f.key]: e.target.value })}><option value="">Choose…</option>{f.options.map((o) => <option key={o}>{o}</option>)}</select>
-                      : <input value={answers[f.key] || ""} onChange={(e) => setAnswers({ ...answers, [f.key]: e.target.value })} />}
+                      ? <select id={`sf-ea-${f.key}`} value={answers[f.key] || ""} onChange={(e) => setAnswers({ ...answers, [f.key]: e.target.value })}><option value="">Choose…</option>{f.options.map((o) => <option key={o}>{o}</option>)}</select>
+                      : <input id={`sf-ea-${f.key}`} value={answers[f.key] || ""} onChange={(e) => setAnswers({ ...answers, [f.key]: e.target.value })} />}
                   </div>
                 ))}
               </div>
             )}
-            <div className="sf-lines">
+            <div className="sf-olines">
               {(order.items || []).map((it, i) => {
                 const p = products.find((x) => x.id === it.product_id);
                 const cur = items[i];
@@ -77,62 +100,63 @@ export default function OrderStatus({ store, order, products, canChange, isNew }
                 const sizes = (col?.sizes?.length ? col.sizes : p?.sizes || []).slice().sort(bySize);
                 const extra = p ? it.unit_price - unitPrice(p as Product, it.size) : 0;
                 return (
-                  <div key={it.id} className="sf-line">
-                    {col && (col.image || col.photo) ? <img src={storeImg(col.image || col.photo)} alt="" /> : <span />}
-                    <div>
+                  <div key={it.id} className="sf-oline">
+                    <span className="sf-sumline-img">{col && (col.image || col.photo) ? <img src={storeImg(col.image || col.photo)} alt="" /> : null}{it.qty > 1 && <i>{it.qty}</i>}</span>
+                    <div className="sf-oline-t">
                       <b data-notranslate>{it.name}</b>
                       {editing && p ? (
-                        <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                          {p.colors.length > 1 && <select style={{ width: "auto" }} value={cur.color} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))}>{p.colors.map((c) => <option key={c.name}>{c.name}</option>)}</select>}
-                          <select style={{ width: "auto" }} value={cur.size} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, size: e.target.value } : x)))}>
-                            {sizes.map((z) => { const d = unitPrice(p as Product, z) + extra - it.unit_price; return <option key={z} value={z}>{sizeName(z)}{Math.abs(d) > 0.004 ? ` (${d > 0 ? "+" : ""}${money(d)}: ask us)` : ""}</option>; })}
+                        <div className="sf-oline-edit">
+                          {p.colors.length > 1 && <select aria-label="Color" value={cur.color} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))}>{p.colors.map((c) => <option key={c.name}>{c.name}</option>)}</select>}
+                          <select aria-label="Size" value={cur.size} onChange={(e) => setItems(items.map((x, j) => (j === i ? { ...x, size: e.target.value } : x)))}>
+                            {sizes.map((z) => { const d = unitPrice(p as Product, z) + extra - it.unit_price; return <option key={z} value={z} disabled={Math.abs(d) > 0.004}>{sizeName(z)}{Math.abs(d) > 0.004 ? ` (${d > 0 ? "+" : ""}${money(d)}: ask us below)` : ""}</option>; })}
                           </select>
                         </div>
-                      ) : <small>{it.color} · {sizeName(it.size)} · qty {it.qty}{Object.values(it.personalization || {}).length ? ` · ${Object.values(it.personalization).join(", ")}` : ""}</small>}
+                      ) : <span>{it.color} · {isYouthSize(it.size) ? "Youth" : "Adult"} {shortSize(it.size)}{Object.values(it.personalization || {}).length ? ` · “${Object.values(it.personalization).join(" · ")}”` : ""}</span>}
                     </div>
-                    <b>{money(it.qty * it.unit_price)}</b>
+                    <span>{money(it.qty * it.unit_price)}</span>
                   </div>
                 );
               })}
             </div>
-            <div className="sf-sum">
+            {editing && (
+              <div className="sf-row">
+                <button type="button" className="sf-btn" disabled={busy} onClick={async () => {
+                  setBusy(true); setMsg(null);
+                  const r = await changeMyOrder(order.token, { items, answers });
+                  setBusy(false);
+                  if (!r.ok) return setMsg({ ok: false, text: r.error || "Couldn't save that." });
+                  setEditing(false); setMsg({ ok: true, text: "Saved. Your order is updated." }); router.refresh();
+                }}>{busy ? "Saving…" : "Save changes"}</button>
+                <button type="button" className="sf-btn ghost" onClick={() => { setEditing(false); setItems((order.items || []).map((i) => ({ id: i.id!, color: i.color, size: i.size }))); setAnswers({ ...order.answers }); }}>Cancel</button>
+              </div>
+            )}
+            {msg && <p className={msg.ok ? "sf-okmsg" : "sf-err"} role="status">{msg.text}</p>}
+            <div className="sf-totals">
               <span>Items</span><span>{money(order.subtotal)}</span>
               {order.shipping > 0 && <><span>Shipping</span><span>{money(order.shipping)}</span></>}
               <span>Tax</span><span>{money(order.tax)}</span>
-              <span className="tot">Paid</span><span className="tot">{money(order.total)}</span>
+              <span className="tot">{order.pay_method === "Test (no charge)" ? "Test order" : "Paid"}</span><span className="tot">{money(order.total)}</span>
             </div>
-            <div className="sf-fine">Charged to your card as <b>FBS Print</b> on {fmtDate(order.paid_at || order.created_at, false)}.</div>
-            {msg && <div className={msg.ok ? "sf-ok" : "sf-err"} style={{ marginTop: 12 }} role="status">{msg.text}</div>}
-            {canChange && order.status !== "cancelled" && (
-              <div className="sf-row" style={{ marginTop: 14, flexWrap: "wrap" }}>
-                {!editing ? <button type="button" className="sf-btn ghost" onClick={() => { setEditing(true); setMsg(null); }}>Change sizes or student info</button> : <>
-                  <button type="button" className="sf-btn" disabled={busy} onClick={async () => {
-                    setBusy(true); setMsg(null);
-                    const r = await changeMyOrder(order.token, { items, answers });
-                    setBusy(false);
-                    if (!r.ok) return setMsg({ ok: false, text: r.error || "Couldn't save that." });
-                    setEditing(false); setMsg({ ok: true, text: "Saved. Your order is updated." }); router.refresh();
-                  }}>{busy ? "Saving…" : "Save changes"}</button>
-                  <button type="button" className="sf-btn ghost" onClick={() => { setEditing(false); setItems((order.items || []).map((i) => ({ id: i.id!, color: i.color, size: i.size }))); setAnswers({ ...order.answers }); }}>Cancel</button>
-                </>}
-              </div>
-            )}
-            {!canChange && <div className="sf-fine">The goods for this store have been ordered, so changes go through FBS Print now.</div>}
+            <p className="sf-fine">{order.pay_method === "Test (no charge)" ? "Test order: no card was charged." : <>Charged as <b>FBS Print</b> on {day(order.paid_at || order.created_at, false)}.</>} {order.delivery === "org" ? `Delivered to ${where}.` : order.delivery === "pickup" ? "Pick up at FBS Print, Richardson TX." : order.ship_to?.street1 ? `Ships to ${order.ship_to.street1}, ${order.ship_to.city}.` : ""}</p>
+            {!canChange && !cancelled && <p className="sf-fine">The shirts for this store have been ordered, so changes go through FBS Print now (below).</p>}
           </section>
 
-          <section className="sf-sec">
-            <h3>Ask for a change</h3>
-            <p>Wrong size you can&apos;t change above, a different item, or something else? Tell us and we&apos;ll work it out with {store.brand?.school || "the organizer"}.</p>
-            <textarea rows={3} value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="For example: I ordered an adult small but need a youth large." />
-            <button type="button" className="sf-btn" style={{ marginTop: 10 }} disabled={busy || ask.trim().length < 3} onClick={async () => {
-              setBusy(true); const r = await askForChange(order.token, ask); setBusy(false);
-              if (!r.ok) return setMsg({ ok: false, text: r.error || "Couldn't send that." });
-              setAsk(""); setMsg({ ok: true, text: "Sent. FBS Print will email you back." });
-            }}>Send to FBS Print</button>
-          </section>
+          <aside className="sf-sec sf-ask">
+            <h2>Need something else?</h2>
+            <p className="sf-sec-p">A size that costs a different amount, a different item, or a question? Tell us and we&apos;ll sort it out{store.brand?.school ? ` with ${store.brand.school}` : ""}.</p>
+            {asked ? <p className="sf-okmsg" role="status">Sent. FBS Print will email you back.</p> : <>
+              <textarea rows={4} value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="For example: I ordered an adult small but need a youth large." aria-label="Your message to FBS Print" />
+              <button type="button" className="sf-btn" disabled={busy || ask.trim().length < 3} onClick={async () => {
+                setBusy(true); const r = await askForChange(order.token, ask); setBusy(false);
+                if (!r.ok) return setMsg({ ok: false, text: r.error || "Couldn't send that." });
+                setAsk(""); setAsked(true);
+              }}>Send to FBS Print</button>
+            </>}
+            <p className="sf-fine">Ordered {fmtDateTime(order.created_at)}. Keep this page&apos;s link: it always shows where your order is.</p>
+          </aside>
         </div>
       </main>
-      <footer className="sf-foot"><div className="sf-wrap">This store is run and fulfilled by FBS Print, Richardson, Texas. Keep this page&apos;s link: it always shows where your order is.</div></footer>
+      <Footer store={store} />
     </div>
   );
 }

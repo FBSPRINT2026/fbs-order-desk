@@ -104,7 +104,7 @@ export async function loadOrders(admin: SupabaseClient, storeId: string): Promis
 
 /* ------------------------------------------------------------------ the public store */
 
-export type PublicStore = Omit<Store, "password" | "notes" | "created_by" | "order_id" | "contact"> & { locked: boolean; open: boolean; contactName: string };
+export type PublicStore = Omit<Store, "password" | "notes" | "created_by" | "order_id" | "contact"> & { locked: boolean; open: boolean; contactName: string; /** give-back raised so far (paid orders) */ raised: number };
 export type PublicProduct = Omit<Product, "cost" | "base_price" | "giveback"> & { prices: Record<string, number> };
 
 /** The store as a shopper sees it (no costs, FBS prices or notes). With a password, products come only after it's given. */
@@ -124,18 +124,28 @@ export async function publicStore(slug: string, pass = ""): Promise<{ store: Pub
     const { cost: _c, base_price: _b, giveback: _g, ...rest } = p;
     return { ...rest, prices: Object.fromEntries((p.sizes || []).map((z) => [z, unitPrice(p, z)])) } as PublicProduct;
   });
-  return { store: shape(st, locked), products };
+  // the fundraiser meter (only when the store has a goal)
+  let raised = 0;
+  if (!locked && +(st.giveback?.goal || 0) > 0) {
+    const { data: gs } = await admin.from("merch_orders").select("giveback").eq("store_id", st.id).not("status", "in", "(cancelled,refunded,pending)");
+    raised = r2(((gs || []) as { giveback: number }[]).reduce((a, x) => a + +x.giveback, 0));
+  }
+  return { store: shape(st, locked, raised), products };
 }
-function shape(st: Store, locked: boolean): PublicStore {
+function shape(st: Store, locked: boolean, raised = 0): PublicStore {
   const { password: _p, notes: _n, created_by: _c, order_id: _o, contact, ...rest } = st;
-  return { ...rest, locked, open: isOpen(st), contactName: contact?.name || "" };
+  return { ...rest, locked, open: isOpen(st), contactName: contact?.name || "", raised };
 }
 
 /* ------------------------------------------------------------------ checkout */
 
 export type CartLine = { product_id: string; color: string; size: string; qty: number; personalization?: Record<string, string> };
+/** one student's bag in a checkout: the store's questions (student, grade, teacher…) and what goes in it */
+export type StudentCart = { answers: Record<string, string>; cart: CartLine[] };
 export type CheckoutInput = {
-  slug: string; pass?: string; cart: CartLine[]; shopper: { name: string; email: string; phone?: string }; answers: Record<string, string>;
+  slug: string; pass?: string; shopper: { name: string; email: string; phone?: string };
+  /** one entry per student (siblings check out together: one payment, one bag each). Older clients send answers + cart. */
+  students?: StudentCart[]; answers?: Record<string, string>; cart?: CartLine[];
   delivery: "org" | "pickup" | "ship"; ship_to?: MerchOrder["ship_to"];
   /** Stax payment method (from Stax.js), or "test" (staff only: a test order, no charge) */
   paymentMethodId: string; method: "card" | "bank" | "test";
@@ -152,7 +162,7 @@ async function priceCart(admin: SupabaseClient, st: Store, cart: CartLine[]) {
   const products = (ps || []) as Product[];
   const items: OrderItem[] = cart.map((c) => {
     const p = products.find((x) => x.id === c.product_id && x.active);
-    if (!p) throw new Error("Something in your cart isn't in this store anymore. Please remove it and add it again.");
+    if (!p) throw new Error("Something in your bag isn't in this store anymore. Please remove it and add it again.");
     const color = p.colors.find((x) => x.name === c.color) || (p.colors.length === 1 ? p.colors[0] : null);
     if (!color) throw new Error(`Pick a color for ${p.name}.`);
     const sizes = color.sizes?.length ? color.sizes : p.sizes;
@@ -167,25 +177,37 @@ async function priceCart(admin: SupabaseClient, st: Store, cart: CartLine[]) {
   return items;
 }
 
-export async function placeOrder(input: CheckoutInput): Promise<{ ok: true; token: string; code: string; total: number } | { ok: false; error: string }> {
+/** the store's questions, checked (required, from the list) */
+function checkAnswers(st: Store, raw: Record<string, string> | undefined, who: string) {
+  const answers: Record<string, string> = {};
+  for (const f of (st.fields || DEFAULT_FIELDS) as Field[]) {
+    const v = clean(raw?.[f.key], 80);
+    if (f.required && !v) throw new Error(`${who}${f.label} is required.`);
+    if (v && f.kind === "select" && f.options.length && !f.options.includes(v)) throw new Error(`${who}pick ${f.label.toLowerCase()} from the list.`);
+    if (v) answers[f.key] = v;
+  }
+  return answers;
+}
+
+/**
+ * A shopper checks out: one payment for everything, and one order (one bag, labeled and sorted for hand-out) per
+ * student. Brothers and sisters in different homerooms each get their own bag.
+ */
+export async function placeOrder(input: CheckoutInput): Promise<{ ok: true; token: string; code: string; total: number; orders: { token: string; code: string }[] } | { ok: false; error: string }> {
   try {
     const admin = createAdminClient();
     const { data: sd } = await admin.from("merch_stores").select("*").eq("slug", input.slug).maybeSingle();
     if (!sd) return { ok: false, error: "This store doesn't exist." };
     const [st] = await autoClose(admin, [sd as Store]);
-    if (!isOpen(st)) return { ok: false, error: st.status === "open" && st.opens_at && Date.parse(st.opens_at) > Date.now() ? `This store opens ${fmtDate(st.opens_at)}.` : "This store is closed and isn't taking orders." };
-    if (st.password && clean(input.pass).toLowerCase() !== st.password.trim().toLowerCase()) return { ok: false, error: "Enter the store's password." };
-    // who's buying, and the questions the store asks (student, grade, teacher…)
+    const test = input.method === "test";
+    const { isStaff } = test ? await getViewer().catch(() => ({ isStaff: false })) : { isStaff: false };
+    if (test && !isStaff) return { ok: false, error: "Pick a payment method." };
+    // staff can place test orders in any store (to try it out); shoppers only while it's open
+    if (!isOpen(st) && !(test && isStaff)) return { ok: false, error: st.status === "open" && st.opens_at && Date.parse(st.opens_at) > Date.now() ? `This store opens ${fmtDate(st.opens_at)}.` : "This store is closed and isn't taking orders." };
+    if (st.password && !isStaff && clean(input.pass).toLowerCase() !== st.password.trim().toLowerCase()) return { ok: false, error: "Enter the store's password." };
     const shopper = { name: clean(input.shopper?.name, 80), email: clean(input.shopper?.email, 120).toLowerCase(), phone: clean(input.shopper?.phone, 30) };
     if (!shopper.name) return { ok: false, error: "Enter your name." };
     if (!okEmail(shopper.email)) return { ok: false, error: "Enter a good email address: your receipt and order updates go there." };
-    const answers: Record<string, string> = {};
-    for (const f of (st.fields || DEFAULT_FIELDS) as Field[]) {
-      const v = clean(input.answers?.[f.key], 80);
-      if (f.required && !v) return { ok: false, error: `${f.label} is required.` };
-      if (v && f.kind === "select" && f.options.length && !f.options.includes(v)) return { ok: false, error: `Pick ${f.label.toLowerCase()} from the list.` };
-      if (v) answers[f.key] = v;
-    }
     const delivery = input.delivery;
     if (!(st.delivery as Store["delivery"])?.[delivery]?.on) return { ok: false, error: "Pick how you'll get your order." };
     let ship_to: MerchOrder["ship_to"] = {};
@@ -194,26 +216,39 @@ export async function placeOrder(input: CheckoutInput): Promise<{ ok: true; toke
       ship_to = { name: clean(s.name, 80) || shopper.name, street1: clean(s.street1, 120), street2: clean(s.street2, 120), city: clean(s.city, 60), state: clean(s.state, 2).toUpperCase(), zip: clean(s.zip, 10) };
       if (!ship_to.street1 || !ship_to.city || !/^[A-Z]{2}$/.test(ship_to.state || "") || !/^\d{5}(-\d{4})?$/.test(ship_to.zip || "")) return { ok: false, error: "Enter the full shipping address." };
     }
-    const items = await priceCart(admin, st, input.cart || []);
-    const t = orderTotals(items, { taxRate: st.tax_rate, taxExempt: st.tax_exempt, shipping: delivery === "ship" ? +st.delivery.ship.flat || 0 : 0 });
+
+    // one bag per student (empty ones are dropped)
+    const raw = (input.students?.length ? input.students : [{ answers: input.answers || {}, cart: input.cart || [] }]).filter((s) => (s.cart || []).some((c) => +c.qty > 0)).slice(0, 8);
+    if (!raw.length) return { ok: false, error: "Your bag is empty." };
+    const many = raw.length > 1;
+    const bags: { answers: Record<string, string>; items: OrderItem[]; t: ReturnType<typeof orderTotals> }[] = [];
+    for (const [i, s] of raw.entries()) {
+      const who = many ? `Student ${i + 1}: ` : "";
+      const answers = checkAnswers(st, s.answers, who);
+      const items = await priceCart(admin, st, s.cart.filter((c) => +c.qty > 0));
+      // shipping is charged once per checkout (on the first bag)
+      const t = orderTotals(items, { taxRate: st.tax_rate, taxExempt: st.tax_exempt, shipping: delivery === "ship" && i === 0 ? +st.delivery.ship.flat || 0 : 0 });
+      bags.push({ answers, items, t });
+    }
+    const total = r2(bags.reduce((a, b) => a + b.t.total, 0));
+    const forWho = bags.map((b) => b.answers.student || "").filter(Boolean).join(" & ") || shopper.name;
 
     // payment (Stax), or a staff test order
     let processor = "", payMethod = "";
-    if (input.method === "test") {
-      const { isStaff } = await getViewer().catch(() => ({ isStaff: false }));
-      if (!isStaff) return { ok: false, error: "Pick a payment method." };
-      payMethod = "Test (no charge)";
-    } else {
+    if (test) payMethod = "Test (no charge)";
+    else {
       if (!process.env.STAX_API_KEY) return { ok: false, error: "Online payments aren't set up yet. Please contact FBS Print." };
       if (!/^[\w-]{6,}$/.test(input.paymentMethodId || "")) return { ok: false, error: "Enter your payment details again." };
+      const all = bags.flatMap((b) => b.items);
       const res = await fetch("https://apiprod.fattlabs.com/charge", {
         method: "POST",
         headers: { Authorization: `Bearer ${process.env.STAX_API_KEY}`, "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
-          payment_method_id: input.paymentMethodId, total: t.total, pre_auth: 0,
+          payment_method_id: input.paymentMethodId, total, pre_auth: 0,
           meta: {
-            reference: `${st.name} online store`.slice(0, 200), memo: `${st.name} order for ${answers.student || shopper.name}`.slice(0, 200), subtotal: r2(t.subtotal + t.shipping), tax: t.tax,
-            lineItems: items.map((i) => ({ item: `${i.name} (${i.color}, ${i.size})`.slice(0, 100), details: Object.values(i.personalization).join(" ").slice(0, 100), quantity: i.qty, price: i.unit_price })),
+            reference: `${st.name} online store`.slice(0, 200), memo: `${st.name} order for ${forWho}`.slice(0, 200),
+            subtotal: r2(bags.reduce((a, b) => a + b.t.subtotal + b.t.shipping, 0)), tax: r2(bags.reduce((a, b) => a + b.t.tax, 0)),
+            lineItems: all.map((i) => ({ item: `${i.name} (${i.color}, ${i.size})`.slice(0, 100), details: Object.values(i.personalization).join(" ").slice(0, 100), quantity: i.qty, price: i.unit_price })),
             transaction_initiation_type: "CIT", transaction_schedule_type: "unscheduled",
           },
         }),
@@ -227,22 +262,28 @@ export async function placeOrder(input: CheckoutInput): Promise<{ ok: true; toke
       payMethod = input.method === "card" ? "Credit card" : "ACH";
     }
 
-    // save it (the number is the next one in this store; retried if two shoppers check out at the same moment)
-    let order: MerchOrder | null = null;
-    for (let i = 0; i < 5 && !order; i++) {
-      const { data: n } = await admin.rpc("merch_next_number", { p_store: st.id });
-      const { data, error } = await admin.from("merch_orders").insert({
-        store_id: st.id, number: (n as number) + i, token: randomBytes(16).toString("hex"), shopper, answers, delivery, ship_to,
-        subtotal: t.subtotal, tax: t.tax, shipping: t.shipping, total: t.total, giveback: t.giveback, status: "paid", paid_at: new Date().toISOString(), processor_id: processor, pay_method: payMethod,
-      }).select("*").single();
-      if (!error) order = data as MerchOrder;
-      else if (!/duplicate|unique/i.test(error.message)) throw new Error(error.message);
+    // save each bag as its own order (the number is the next one in this store; retried if two shoppers check out at once)
+    const checkout_id = many ? crypto.randomUUID() : null;
+    const saved: MerchOrder[] = [];
+    for (const b of bags) {
+      let order: MerchOrder | null = null;
+      for (let i = 0; i < 6 && !order; i++) {
+        const { data: n } = await admin.rpc("merch_next_number", { p_store: st.id });
+        const { data, error } = await admin.from("merch_orders").insert({
+          store_id: st.id, number: (n as number) + i, token: randomBytes(16).toString("hex"), shopper, answers: b.answers, delivery, ship_to, checkout_id,
+          subtotal: b.t.subtotal, tax: b.t.tax, shipping: b.t.shipping, total: b.t.total, giveback: b.t.giveback, status: "paid", paid_at: new Date().toISOString(), processor_id: processor, pay_method: payMethod,
+        }).select("*").single();
+        if (!error) order = data as MerchOrder;
+        else if (!/duplicate|unique/i.test(error.message)) throw new Error(error.message);
+      }
+      if (!order) throw new Error(saved.length || !test ? "We couldn't save your order, but your card was charged. Please call FBS Print and we'll fix it." : "We couldn't save your order. Try again.");
+      const { error: ie } = await admin.from("merch_order_items").insert(b.items.map((i) => ({ ...i, order_id: order!.id })));
+      if (ie) throw new Error(ie.message);
+      order.items = b.items;
+      saved.push(order);
     }
-    if (!order) throw new Error("We couldn't save your order. Your card was charged: please call FBS Print.");
-    await admin.from("merch_order_items").insert(items.map((i) => ({ ...i, order_id: order!.id })));
-    order.items = items;
-    await sendConfirmation(st, order).catch(() => false);
-    return { ok: true, token: order.token, code: orderCode(st, order.number), total: t.total };
+    await sendConfirmation(st, saved).catch(() => false);
+    return { ok: true, token: saved[0].token, code: orderCode(st, saved[0].number), total, orders: saved.map((o) => ({ token: o.token, code: orderCode(st, o.number) })) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." };
   }
@@ -260,7 +301,10 @@ export async function orderByToken(token: string) {
   const [st] = await autoClose(admin, [s as Store]);
   const { data: items } = await admin.from("merch_order_items").select("*").eq("order_id", o.id).order("created_at");
   const { data: ps } = await admin.from("merch_products").select("id, name, colors, sizes, base_price, giveback, upcharges, imprint, active").eq("store_id", st.id);
-  return { store: shape(st, false), order: { ...(o as MerchOrder), items: (items || []) as OrderItem[] }, products: (ps || []) as Pick<Product, "id" | "name" | "colors" | "sizes" | "base_price" | "giveback" | "upcharges" | "imprint" | "active">[], canChange: canChange(st) };
+  // brothers and sisters from the same checkout (their own bags)
+  const { data: sib } = o.checkout_id ? await admin.from("merch_orders").select("number, token, answers").eq("checkout_id", o.checkout_id).neq("id", o.id).order("number") : { data: [] };
+  const siblings = ((sib || []) as Pick<MerchOrder, "number" | "token" | "answers">[]).map((x) => ({ code: orderCode(st, x.number), token: x.token, student: x.answers?.student || "" }));
+  return { store: shape(st, false), order: { ...(o as MerchOrder), items: (items || []) as OrderItem[] }, products: (ps || []) as Pick<Product, "id" | "name" | "colors" | "sizes" | "base_price" | "giveback" | "upcharges" | "imprint" | "active">[], canChange: canChange(st), siblings };
 }
 
 /**
@@ -332,21 +376,58 @@ function shell(st: Pick<Store, "name" | "brand">, heading: string, body: string,
   <p style="color:#7A8599;font-size:12px;margin-top:22px">This store is run and fulfilled by FBS Print · Richardson, TX</p></div></div>`;
 }
 
-export async function sendConfirmation(st: Store, o: MerchOrder) {
-  const code = orderCode(st, o.number), url = `${siteUrl()}/s/${st.slug}/o/${o.token}`;
-  const rows = (o.items || []).map((i) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eef1f4">${esc(i.name)}<div style="color:#7A8599;font-size:12px">${esc(i.color)} · ${esc(i.size)}${Object.values(i.personalization || {}).length ? " · " + esc(Object.values(i.personalization).join(", ")) : ""}</div></td><td style="padding:6px 0;border-bottom:1px solid #eef1f4;text-align:center">${i.qty}</td><td style="padding:6px 0;border-bottom:1px solid #eef1f4;text-align:right">${money(i.qty * i.unit_price)}</td></tr>`).join("");
-  const ans = Object.entries(o.answers || {}).map(([k, v]) => `<b>${esc(((st.fields || []) as Field[]).find((f) => f.key === k)?.label || k)}:</b> ${esc(v)}`).join("<br>");
-  const html = shell(st, `Thank you! Your order ${code} is in.`, `
-    <div style="background:#FFF7E0;border:1px solid #F0D58A;border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:14px"><b>${esc(preorderLine(st))}</b></div>
-    ${ans ? `<p style="font-size:14px;line-height:1.5">${ans}</p>` : ""}
-    <table style="width:100%;border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding:4px 0">Item</th><th>Qty</th><th style="text-align:right">Price</th></tr>${rows}
-    <tr><td colspan="2" style="padding:6px 0;text-align:right;color:#7A8599">Subtotal</td><td style="text-align:right">${money(o.subtotal)}</td></tr>
-    ${o.shipping ? `<tr><td colspan="2" style="padding:2px 0;text-align:right;color:#7A8599">Shipping</td><td style="text-align:right">${money(o.shipping)}</td></tr>` : ""}
-    <tr><td colspan="2" style="padding:2px 0;text-align:right;color:#7A8599">Tax</td><td style="text-align:right">${money(o.tax)}</td></tr>
-    <tr><td colspan="2" style="padding:6px 0;text-align:right;font-weight:700">Total</td><td style="text-align:right;font-weight:700">${money(o.total)}</td></tr></table>
+/** a size as people say it in an email ("Youth M", "Adult XL") */
+const sizeWords = (z: string) => ({ YXS: "Youth XS", YS: "Youth S", YM: "Youth M", YL: "Youth L", YXL: "Youth XL", OS: "One size" } as Record<string, string>)[z] || `Adult ${z}`;
+
+/** The receipt: every bag in the checkout (one per student), each with its own "see / change your order" link. */
+export async function sendConfirmation(st: Store, orders: MerchOrder[]) {
+  if (!orders.length) return false;
+  const fields = (st.fields || []) as Field[];
+  const c = st.brand?.primary || "#1F3A8A";
+  const many = orders.length > 1;
+  const bag = (o: MerchOrder) => {
+    const code = orderCode(st, o.number), url = `${siteUrl()}/s/${st.slug}/o/${o.token}`;
+    const rows = (o.items || []).map((i) => `<tr><td style="padding:7px 0;border-bottom:1px solid #eef1f4">${esc(i.name)}<div style="color:#7A8599;font-size:12px">${esc(i.color)} · ${esc(sizeWords(i.size))}${Object.values(i.personalization || {}).length ? " · " + esc(Object.values(i.personalization).join(", ")) : ""}</div></td><td style="padding:7px 0;border-bottom:1px solid #eef1f4;text-align:center">${i.qty}</td><td style="padding:7px 0;border-bottom:1px solid #eef1f4;text-align:right">${money(i.qty * i.unit_price)}</td></tr>`).join("");
+    const ans = fields.map((f) => (o.answers?.[f.key] ? `${esc(f.label)}: <b>${esc(o.answers[f.key])}</b>` : "")).filter(Boolean).join(" &nbsp;·&nbsp; ");
+    return `<div style="border:1px solid #e3e7ee;border-radius:10px;padding:14px 16px;margin:0 0 14px">
+      <div style="font-weight:800;font-size:16px">${many && o.answers?.student ? `${esc(o.answers.student)}'s bag` : "Your bag"} <span style="color:#7A8599;font-weight:600;font-size:13px">· ${code}</span></div>
+      ${ans ? `<div style="font-size:13px;color:#4A5568;margin-top:4px">${ans}</div>` : ""}
+      <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:8px">${rows}
+      <tr><td colspan="2" style="padding:6px 0 0;text-align:right;color:#7A8599">Items</td><td style="padding:6px 0 0;text-align:right">${money(o.subtotal)}</td></tr>
+      ${o.shipping ? `<tr><td colspan="2" style="text-align:right;color:#7A8599">Shipping</td><td style="text-align:right">${money(o.shipping)}</td></tr>` : ""}
+      <tr><td colspan="2" style="text-align:right;color:#7A8599">Tax</td><td style="text-align:right">${money(o.tax)}</td></tr></table>
+      <p style="margin:12px 0 0"><a href="${esc(url)}" style="color:${esc(c)};font-weight:700">${many ? `See or change ${esc(o.answers?.student || code)}'s order` : "See or change your order"} →</a></p></div>`;
+  };
+  const total = r2(orders.reduce((a, o) => a + o.total, 0));
+  const first = orders[0];
+  const html = shell(st, many ? `Thank you! Your ${orders.length} orders are in.` : `Thank you! Your order ${orderCode(st, first.number)} is in.`, `
+    <div style="background:#FFF7E0;border:1px solid #F0D58A;border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:16px"><b>${esc(preorderLine(st))}</b></div>
+    ${many ? `<p style="font-size:14px;margin:0 0 12px">Each student's things are packed in their own labeled bag.</p>` : ""}
+    ${orders.map(bag).join("")}
+    <table style="width:100%;font-size:15px"><tr><td style="font-weight:700">${first.pay_method === "Test (no charge)" ? "Test order (no charge)" : "Charged"}</td><td style="text-align:right;font-weight:800">${money(total)}</td></tr></table>
     <p style="font-size:13px;color:#4A5568;margin-top:14px"><b>The charge on your statement will say FBS Print</b>: we print and fulfill this store for ${esc(st.brand?.school || st.name)}.</p>
-    <p style="font-size:13px;color:#4A5568">Need to change a size or the student's info? You can change your order online until we order the goods for this store.</p>`, { label: "See your order or change it", url });
-  return sendEmail({ to: o.shopper.email, subject: `Order ${code} confirmed: ${st.name}`, html, replyTo: SHOP_NOTIFY_EMAIL || undefined });
+    <p style="font-size:13px;color:#4A5568">Need a different size, or to fix a student's info? Use the link${many ? "s" : ""} above: you can change it yourself until we order the goods${st.closes_at ? ` (after the store closes ${fmtDate(st.closes_at, false)})` : ""}. Keep this email: the link${many ? "s" : ""} always show${many ? "" : "s"} where your order is.</p>`);
+  return sendEmail({ to: first.shopper.email, subject: many ? `${orders.length} orders confirmed: ${st.name}` : `Order ${orderCode(st, first.number)} confirmed: ${st.name}`, html, replyTo: SHOP_NOTIFY_EMAIL || undefined });
+}
+
+/**
+ * "Email me my order links": everything this email address ordered in the store, one email. It always answers the same
+ * way, so nobody can use it to find out who ordered.
+ */
+export async function emailOrderLinks(slug: string, email: string): Promise<{ ok: boolean; error?: string }> {
+  const e = clean(email, 120).toLowerCase();
+  if (!okEmail(e)) return { ok: false, error: "Enter the email you ordered with." };
+  const admin = createAdminClient();
+  const { data: sd } = await admin.from("merch_stores").select("*").eq("slug", slug).maybeSingle();
+  if (!sd) return { ok: false, error: "This store doesn't exist." };
+  const st = sd as Store;
+  const { data: os } = await admin.from("merch_orders").select("number, token, answers, created_at, status").eq("store_id", st.id).ilike("shopper->>email", e).order("number").limit(20);
+  const list = (os || []) as Pick<MerchOrder, "number" | "token" | "answers" | "created_at" | "status">[];
+  if (list.length) {
+    const rows = list.map((o) => `<li style="margin:0 0 8px"><a href="${siteUrl()}/s/${st.slug}/o/${o.token}" style="color:${esc(st.brand?.primary || "#1F3A8A")};font-weight:700">${orderCode(st, o.number)}${o.answers?.student ? ` · ${esc(o.answers.student)}` : ""}</a> <span style="color:#7A8599;font-size:12px">ordered ${fmtDate(o.created_at, false)}${o.status === "cancelled" ? " · cancelled" : ""}</span></li>`).join("");
+    await sendEmail({ to: e, subject: `Your orders: ${st.name}`, html: shell(st, "Here are your orders", `<p style="font-size:14px">Tap an order to see where it is or change it.</p><ul style="padding-left:18px;font-size:14px">${rows}</ul>`), replyTo: SHOP_NOTIFY_EMAIL || undefined }).catch(() => false);
+  }
+  return { ok: true };
 }
 
 /** a short update to every shopper in the store (goods ordered, packed, delivered…) */

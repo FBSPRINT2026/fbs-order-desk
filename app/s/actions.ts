@@ -1,6 +1,6 @@
 "use server";
 import { cookies } from "next/headers";
-import { changeOrder, placeOrder, publicStore, requestChange, type CheckoutInput } from "@/lib/merchServer";
+import { changeOrder, emailOrderLinks, placeOrder, publicStore, requestChange, type CheckoutInput } from "@/lib/merchServer";
 
 /** Shoppers (no sign-in): place an order, change it, or ask FBS for a change. Everything is checked again on the server. */
 export async function checkout(input: CheckoutInput) {
@@ -22,4 +22,9 @@ export async function unlockStore(slug: string, pass: string): Promise<{ ok: boo
   if (!got || got.store.locked) return { ok: false, error: "That password isn't right." };
   (await cookies()).set(`sp_${slug}`, pass.trim(), { httpOnly: true, sameSite: "lax", secure: true, path: `/s/${slug}`, maxAge: 60 * 60 * 24 * 30 });
   return { ok: true };
+}
+
+/** "Email me my order links" (the answer is the same whether or not that email ordered) */
+export async function findMyOrders(slug: string, email: string) {
+  return emailOrderLinks(slug, email);
 }

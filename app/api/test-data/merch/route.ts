@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { makeSampleStore } from "@/lib/merchSample";
+import { makeSampleStore, polishSampleStores } from "@/lib/merchSample";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 /**
  * Make the sample merch store on the test school (Oak Hollow Elementary PTA): owner / admin, or the sync key.
@@ -23,7 +23,9 @@ async function allowed(req: Request) {
 
 async function go(req: Request) {
   if (!(await allowed(req))) return NextResponse.json({ error: "Owner or admin only." }, { status: 403 });
-  try { return NextResponse.json({ ok: true, ...(await makeSampleStore(createAdminClient())) }); }
+  // ?do=polish builds / refreshes the open "Owls Spirit Shop" and the Fall store's pictures; no ?do makes another closed store + job
+  const what = new URL(req.url).searchParams.get("do");
+  try { return NextResponse.json({ ok: true, ...(what === "polish" ? await polishSampleStores(createAdminClient()) : await makeSampleStore(createAdminClient())) }); }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
 }
 export const GET = go;

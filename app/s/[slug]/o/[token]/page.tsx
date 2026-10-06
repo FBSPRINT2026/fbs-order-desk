@@ -18,5 +18,5 @@ export default async function OrderPage({ params, searchParams }: P) {
   const { slug, token } = await params;
   const got = await orderByToken(token);
   if (!got || got.store.slug !== slug) notFound();
-  return <OrderStatus store={got.store} order={got.order} products={got.products} canChange={got.canChange} isNew={(await searchParams).new === "1"} />;
+  return <OrderStatus store={got.store} order={got.order} products={got.products} canChange={got.canChange} siblings={got.siblings} isNew={(await searchParams).new === "1"} />;
 }
