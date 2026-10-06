@@ -61,7 +61,7 @@ export const seesMoney = (role?: string | null, own?: Partial<Perms> | null) => 
 
 /** pages and the permission that opens them (anything else, like Orders and the dashboard, everyone opens) */
 export const PAGE_PERMS: [string, PermKey][] = [
-  ["/shop/customers", "customers"], ["/shop/incoming", "incoming"], ["/shop/projects", "projects"], ["/shop/stores", "stores"], ["/shop/assistant", "assistant"],
+  ["/shop/customers", "customers"], ["/shop/inbox", "customers"], ["/shop/incoming", "incoming"], ["/shop/projects", "projects"], ["/shop/stores", "stores"], ["/shop/assistant", "assistant"],
   ["/shop/settings", "settings"], ["/shop/catalog", "settings"], ["/shop/artwork", "artwork"], ["/shop/separations", "separations"],
   ["/shop/board", "schedule"], ["/shop/calendar", "schedule"], ["/shop/employees", "employees"], ["/shop/shipping", "shipping"],
   ["/shop/receiving", "receiving"], ["/shop/time", "timeclock"],

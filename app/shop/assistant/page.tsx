@@ -8,6 +8,7 @@ import { applyDecisions, computeFollowUps, KIND_INFO, loadAssistantData, loadDec
 import { custLabel, fmtStamp } from "@/lib/format";
 import { staffCustomerMessage, staffMessage } from "@/app/shop/actions";
 import { addEmailToTimeline, aiRewriteDraft, getAiStatus, quoteFromSuggestion } from "@/app/shop/ai-actions";
+import { sendEmailReply } from "../mail-actions";
 import { useSticky } from "@/lib/useSticky";
 
 type Group = "All" | "Reply" | "Quotes" | "Artwork" | "Money" | "Production" | "Relationships" | "AI & to-dos";
@@ -196,13 +197,16 @@ function Card({ it, ai, onDecide, onSent, onQuote }: { it: Item; ai: boolean; on
   const [draft, setDraft] = useState<null | { subject: string; body: string }>(null);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
-  const canSend = it.channel !== "none" && (it.channel === "order" ? !!it.order_id : !!it.customer_id);
+  const isEmail = it.saved?.kind === "email_reply" && !!(it.saved as unknown as { activity_id?: string | null }).activity_id;
+  const canSend = isEmail || (it.channel !== "none" && (it.channel === "order" ? !!it.order_id : !!it.customer_id));
   const hasOrder = it.kind === "draft_order" && Array.isArray((it.saved?.payload as { groups?: unknown[] })?.groups);
 
   async function send() {
     if (!draft?.body.trim()) return;
     setBusy("send"); setErr("");
-    const r = it.channel === "order" && it.order_id ? await staffMessage(it.order_id, draft.body) : await staffCustomerMessage(it.customer_id || "", draft.body);
+    const emailAct = it.saved?.kind === "email_reply" ? (it.saved as unknown as { activity_id?: string | null }).activity_id : null;
+    const r = emailAct ? await sendEmailReply({ activityId: emailAct, subject: draft.subject, body: draft.body, suggestionId: it.saved?.id })
+      : it.channel === "order" && it.order_id ? await staffMessage(it.order_id, draft.body) : await staffCustomerMessage(it.customer_id || "", draft.body);
     setBusy("");
     if (!r.ok) return setErr(r.error || "Couldn't send.");
     onSent();
@@ -232,13 +236,13 @@ function Card({ it, ai, onDecide, onSent, onQuote }: { it: Item; ai: boolean; on
             <input type="text" aria-label="Subject" value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} />
             <textarea rows={7} aria-label="Message" value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} />
             <div className="row">
-              {canSend && <button type="button" className="btn primary sm" disabled={!!busy || !draft.body.trim()} onClick={send}>{busy === "send" ? "Sending…" : "Send to customer"}</button>}
+              {canSend && <button type="button" className="btn primary sm" disabled={!!busy || !draft.body.trim()} onClick={send}>{busy === "send" ? "Sending…" : isEmail ? "Send email reply" : "Send to customer"}</button>}
               <button type="button" className="btn sm" onClick={() => navigator.clipboard?.writeText(draft.body)}>Copy</button>
               {it.fromEmail && <a className="btn sm" href={`mailto:${it.fromEmail}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`}>Open in email</a>}
               <button type="button" className="btn sm ghost" disabled={!!busy} onClick={rewrite} title={ai ? "Rewrite with Claude using this order's details" : "Turn on AI in Pricing & shop to use this"}>{busy === "ai" ? "Writing…" : "✦ Rewrite with AI"}</button>
               <button type="button" className="btn sm ghost" onClick={() => setDraft(null)}>Close</button>
             </div>
-            {canSend && <span className="sub">{it.channel === "order" ? "Posts on the order's message thread in their portal and emails them." : "Posts in their portal messages and emails them."}</span>}
+            {canSend && <span className="sub">{isEmail ? "Sends from the shop mailbox as a reply in their email thread (saved to Sent Items)." : it.channel === "order" ? "Posts on the order's message thread in their portal and emails them." : "Posts in their portal messages and emails them."}</span>}
           </div>
         )}
         {err && <div className="err">{err}</div>}
