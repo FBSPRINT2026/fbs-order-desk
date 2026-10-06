@@ -114,6 +114,9 @@ export default function GoodsReceiving() {
   const [pending, setPending] = useState<PendingShipment[] | null>(null);
   const [pvGoods, setPvGoods] = useState<PrintavoGoods[]>([]);
   const [upBusy, setUpBusy] = useState(false), [refreshKey, setRefreshKey] = useState(0);
+  // Check-In: this week's jobs ready to count, and open check-in problems (badges on the Check-In button)
+  const [ck, setCk] = useState<{ ready: number; issue: number } | null>(null);
+  useEffect(() => { fetch("/api/goods/checkin", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.jobs) setCk({ ready: (j.jobs as { state: string }[]).filter((x) => x.state === "ready").length, issue: (j.problems || []).length }); }).catch(() => {}); }, [refreshKey]);
   useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "fbs" || v === "customer" || v === "resolve") setViewState(v); }, []);
   const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "today") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
   const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); if (j.error) setNote(`Couldn't load everything: ${j.error}`); }, []);
@@ -328,7 +331,8 @@ export default function GoodsReceiving() {
         <div><div className="eyebrow">Receiving</div><h1>Goods &amp; Receiving</h1></div>
 
         <div className="rv-head-r"><div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" className="btn primary" onClick={() => setTruck(true)}>Receive S&amp;S Truck</button>
+          <Link className="btn primary rv-ck" href="/shop/receiving/checkin" title="Count jobs' goods in, size by size">✓ Check-In{ck && (ck.ready + ck.issue) > 0 && <span className="rv-ck-n">{ck.ready ? <i className="rd">{ck.ready} ready</i> : null}{ck.issue ? <i className="pb">{ck.issue} problem{ck.issue === 1 ? "" : "s"}</i> : null}</span>}</Link>
+          <button type="button" className="btn" onClick={() => setTruck(true)}>Receive S&amp;S Truck</button>
           <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import Supplier Manifests"}<input type="file" hidden accept=".xlsx,.csv" multiple onChange={(e) => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ""; upload(fs); }} /></label>
         </div>
 </div>
