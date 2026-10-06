@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import rx from "@/data/ims/RX.json";
+import rxLines from "@/data/ims/RX-lines.json";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,6 +11,8 @@ export const maxDuration = 60;
  * data/ims/<system>.json) into ink_formulas. Ingredient lines already captured are kept. Sync token only.
  */
 const SETS: Record<string, { system: string; cols: string[]; rows: unknown[][] }> = { RX: rx as never };
+type Read = { rec_type: string; code: string; ims_id?: number; grams_per_qt: number; lines: unknown[]; note?: string };
+const READS: Record<string, { formulas: Read[] }> = { RX: rxLines as never };
 
 export async function GET(req: Request) {
   const admin = createAdminClient();
@@ -24,5 +27,16 @@ export async function GET(req: Request) {
     if (error) return NextResponse.json({ error: error.message, done: n }, { status: 500 });
     n += Math.min(500, rows.length - i);
   }
-  return NextResponse.json({ ok: true, system: set.system, rows: n });
+  // ingredient lines read from the IMS screen (data/ims/<system>-lines.json); a formula's lines already in the
+  // database from a later read aren't replaced
+  let lines = 0;
+  for (const f of READS[set.system]?.formulas || []) {
+    let q = admin.from("ink_formulas").update({ lines: f.lines, grams_per_qt: f.grams_per_qt, captured_at: new Date().toISOString(), captured_note: f.note || "Read from IMS 3.0 screen (1 qt)" }).eq("system", set.system).is("lines", null);
+    q = f.ims_id ? q.eq("ims_id", f.ims_id) : q.eq("rec_type", f.rec_type).eq("code", f.code);
+    if (f.rec_type === "S" && !f.ims_id) q = q.eq("base", set.system);
+    const { error, data } = await q.select("id");
+    if (error) return NextResponse.json({ error: error.message, rows: n, lines }, { status: 500 });
+    lines += (data || []).length;
+  }
+  return NextResponse.json({ ok: true, system: set.system, rows: n, lines });
 }
