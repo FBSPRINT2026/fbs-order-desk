@@ -275,6 +275,23 @@ async function guessCustomerByGoods(admin: SupabaseClient, g: Group) {
     how: `"${g.customer_name}" isn't a customer we know, but these ${pcs} pcs (${what}) are exactly what #${pick.number} ${pick.nickname} for ${pick.customer} needs${why}. Is ${g.customer_name} ${pick.customer}?` };
 }
 
+/**
+ * One of the customer's jobs completed in the last 60 days with exactly the same count in every size as the shipment
+ * (Agape's "VLC Serve Day" 134 pcs for the completed #34328 "Serve Day Order"). Goods for it link there, then drop off.
+ */
+async function doneTwin(admin: SupabaseClient, custIds: string[], lines: Line[]) {
+  const pcs = lines.reduce((x, l) => x + l.qty_shipped, 0);
+  if (pcs < 12) return null;
+  const ss = bySizeOf(lines.map((l) => ({ size: l.size, qty: l.qty_shipped })));
+  const since = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+  const { data: done } = await admin.from("archived_orders").select("id, visual_id, nickname, data").in("customer_id", custIds).gte("due_date", since).ilike("status_name", "%job completed%").limit(300);
+  const twins = ((done || []) as { id: string; visual_id: string | number; nickname: string; data: { groups?: { lines?: { sizes?: Record<string, number> }[] }[] } }[])
+    .filter((o) => sameSizes(ss, bySizeOf((o.data?.groups || []).flatMap((gr) => (gr.lines || []).flatMap((l) => Object.entries(l.sizes || {}).map(([k, q]) => ({ size: pvSize(k), qty: +q || 0 })))))));
+  if (twins.length !== 1) return null;
+  return { alloc: lines.map((line) => ({ line, parts: [{ orderId: PV + twins[0].id, qty: line.qty_shipped }] })), unplaced: [] as Line[], auto: true,
+    how: `same count in every size as #${twins[0].visual_id} ${twins[0].nickname} (already completed; ${pcs} pcs: ${sizeLine(ss)})` };
+}
+
 /** pieces per size ("L" → 310) */
 const bySizeOf = (xs: { size: string; qty: number }[]) => { const m = new Map<string, number>(); for (const x of xs) if (x.qty) m.set(sizeKey(x.size), (m.get(sizeKey(x.size)) || 0) + x.qty); return m; };
 /** the same count in every size (S 95, M 280, L 310, XL 60, 2XL 12 = S 95, M 280 …) */
@@ -442,7 +459,11 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
     return { customerId: null, alloc: lines.map((line) => ({ line, parts: [{ orderId: gs.orderId, qty: line.qty_shipped }] })), unplaced: [], auto: false, how: gs.how };
   }
   const orders = await openOrders(admin, custIds);
-  if (!orders.length) return empty;
+  if (!orders.length) {
+    // no open jobs at all (Agape: the job already printed): a recently completed one with the same count in every size
+    const d = await doneTwin(admin, custIds, lines);
+    return d ? { customerId, ...d } : empty;
+  }
   const exact = orders.filter((o) => poHit(o, g));
   if (exact.length === 1) {
     // one order carries this PO: it all goes there (anything it didn't list may be spares or a later change)
@@ -496,16 +517,8 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
   const sizeTwins = orders.filter((o) => sameSizes(shipSizes, bySizeOf(o.items.map((it) => ({ size: it.size, qty: it.need })))));
   if (sizeTwins.length === 1 && pcsIn >= 12)
     return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: sizeTwins[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `same count in every size as #${sizeTwins[0].number} (${pcsIn} pcs: ${sizeLine(shipSizes)})` };
-  // nothing open fits: a job of theirs that's already been printed (goods often show on a manifest after the job ran,
-  // e.g. Agape's "VLC Serve Day" 134 pcs for the completed #34328 "Serve Day Order"): same count in every size → that job
-  if (!sizeTwins.length && pcsIn >= 12) {
-    const since = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
-    const { data: done } = await admin.from("archived_orders").select("id, visual_id, nickname, data").in("customer_id", custIds).gte("due_date", since).ilike("status_name", "%job completed%").limit(300);
-    const twinsDone = ((done || []) as { id: string; visual_id: string | number; nickname: string; data: { groups?: { lines?: { sizes?: Record<string, number> }[] }[] } }[])
-      .filter((o) => sameSizes(shipSizes, bySizeOf((o.data?.groups || []).flatMap((gr) => (gr.lines || []).flatMap((l) => Object.entries(l.sizes || {}).map(([k, q]) => ({ size: pvSize(k), qty: +q || 0 })))))));
-    if (twinsDone.length === 1)
-      return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: PV + twinsDone[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `same count in every size as #${twinsDone[0].visual_id} ${twinsDone[0].nickname} (already completed; ${pcsIn} pcs: ${sizeLine(shipSizes)})` };
-  }
+  // nothing open fits: a job of theirs that's already been printed (goods often show on a manifest after the job ran)
+  if (!sizeTwins.length) { const d = await doneTwin(admin, custIds, lines); if (d) return { customerId, ...d }; }
   // the customer's only open order, and the pieces add up exactly
   if (orders.length === 1 && pcsIn >= 12 && orders[0].items.reduce((x, it) => x + it.need, 0) === pcsIn)
     return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: orders[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `their only open order, and the pieces add up exactly (${pcsIn})` };
