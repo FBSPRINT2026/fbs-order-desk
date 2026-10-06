@@ -3,12 +3,12 @@ import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, hasAiKey } from "@/lib/ai/claude";
-import { draftMessage, orderFromText, replyOptions, reviewOrder } from "@/lib/ai/tasks";
+import { draftMessage, orderFromText, reviewOrder } from "@/lib/ai/tasks";
+import { emailContext, orderFacts, writeReplyOptions } from "@/lib/ai/replies";
 import { describeGroups, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
 import { processEmailActivity } from "@/lib/ai/email";
 import { storeInboundEmail } from "@/lib/crm/inbound";
-import { calcOrder, mergeSettings, orderGroups, PAY_TERMS, ST, type Group, type Order, type Payment } from "@/lib/pricing";
-import { custLabel, fmtDateLong, money } from "@/lib/format";
+import { orderGroups, type Group, type Order } from "@/lib/pricing";
 
 // Staff-only server actions for the Assistant, the CRM timeline and the AI helpers.
 // AI helpers return { ok:false, off:true } until AI is turned on, so the UI can say how to turn it on.
@@ -29,36 +29,6 @@ export async function getAiStatus() {
   } catch (e) { return fail(e); }
 }
 
-/** Facts about an order (and its customer) for the AI to write from. Never includes costs. */
-async function orderFacts(admin: ReturnType<typeof createAdminClient>, orderId?: string | null, customerId?: string | null) {
-  const lines: string[] = [];
-  let history = "";
-  const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
-  const settings = mergeSettings(s?.data);
-  if (orderId) {
-    const { data: o } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
-    if (o) {
-      const { data: pays } = await admin.from("payments").select("amount").eq("order_id", orderId);
-      const c = calcOrder(o as Order, settings, (pays || []) as Payment[]);
-      customerId = customerId || o.customer_id;
-      lines.push(`Order #${o.number}${o.nickname ? ` "${o.nickname}"` : ""}, status: ${ST[o.status]?.portal || o.status}, ${c.qty} pieces, total ${money(c.total)}, paid ${money(c.paid)}, balance ${money(c.balance)}.`);
-      if (o.due_date) lines.push(`In-hands date: ${fmtDateLong(o.due_date)}.`);
-      if (o.sent_at) lines.push(`Quote sent: ${fmtDateLong(o.sent_at.slice(0, 10))}.`);
-      if (o.delivery_method) lines.push(`Delivery: ${o.delivery_method}${o.tracking ? `, tracking ${o.tracking}` : ""}.`);
-      const { data: pr } = await admin.from("proofs").select("status,title").eq("order_id", orderId);
-      if (pr?.length) lines.push(`Proofs: ${pr.map((p) => `${p.title} (${p.status})`).join(", ")}.`);
-      const { data: msgs } = await admin.from("messages").select("author_type,body,created_at").eq("order_id", orderId).order("created_at", { ascending: false }).limit(6);
-      history = (msgs || []).reverse().map((m) => `${m.author_type === "staff" ? "Shop" : "Customer"}: ${m.body.slice(0, 600)}`).join("\n");
-    }
-  }
-  if (customerId) {
-    const { data: c } = await admin.from("customers").select("company,name,payment_terms").eq("id", customerId).maybeSingle();
-    if (c) lines.unshift(`Customer: ${custLabel(c)}${c.name ? `, contact ${c.name}` : ""}. Payment terms: ${PAY_TERMS[(c.payment_terms || "receipt") as keyof typeof PAY_TERMS]}.`);
-  }
-  lines.push(`Shop: ${settings.shop.name}${settings.shop.phone ? `, ${settings.shop.phone}` : ""}. Customers approve quotes, review proofs and pay in their online portal.`);
-  return { facts: lines.join("\n"), history, settings };
-}
-
 /** Rewrite a follow-up / reply in the shop's voice. */
 export async function aiRewriteDraft(input: { purpose: string; orderId?: string | null; customerId?: string | null; subject?: string; body?: string }) {
   try {
@@ -71,50 +41,16 @@ export async function aiRewriteDraft(input: { purpose: string; orderId?: string 
   } catch (e) { return fail(e); }
 }
 
-/** what the AI needs to answer an email: the email, the thread so far, the order and customer (or their open orders) */
-async function emailContext(admin: ReturnType<typeof createAdminClient>, activityId: string) {
-  const { data: a } = await admin.from("activities").select("id, customer_id, order_id, subject, body, from_email, occurred_at, thread_id, external_id, meta").eq("id", activityId).maybeSingle();
-  if (!a) return null;
-  const meta = (a.meta || {}) as { from_name?: string };
-  const { facts, history: msgHistory } = await orderFacts(admin, a.order_id as string | null, a.customer_id as string | null);
-  const lines = [facts];
-  if (!a.order_id && a.customer_id) {
-    const { data: os } = await admin.from("orders").select("number, nickname, status, due_date").eq("customer_id", a.customer_id).not("status", "in", "(completed,cancelled)").order("number", { ascending: false }).limit(6);
-    if (os?.length) lines.push(`Their open orders: ${os.map((o) => `#${o.number}${o.nickname ? ` "${o.nickname}"` : ""} (${ST[o.status as keyof typeof ST]?.portal || o.status}${o.due_date ? `, in-hands ${fmtDateLong(o.due_date as string)}` : ""})`).join("; ")}.`);
-  }
-  // the email thread so far (both directions), oldest first: the emails this one references that we have on file
-  const refs = (((a.meta || {}) as { references?: string[] }).references || []).slice(-10);
-  let thread = "";
-  if (refs.length) {
-    const { data: t } = await admin.from("activities").select("direction, body, occurred_at").eq("kind", "email").in("external_id", refs).order("occurred_at", { ascending: false }).limit(5);
-    thread = (t || []).reverse().map((m) => `${m.direction === "out" ? "Shop" : "Customer"}: ${String(m.body || "").slice(0, 700)}`).join("\n");
-  }
-  const email = `From: ${meta.from_name ? `${meta.from_name} <${a.from_email}>` : a.from_email}\nSubject: ${a.subject || ""}\n\n${String(a.body || "").slice(0, 6000)}`;
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
-  return { a, email, facts: lines.join("\n"), history: [msgHistory, thread].filter(Boolean).join("\n"), today };
-}
-
 /**
  * 3 or 4 different answers to a customer's email ("Yes, we can make it", "Can't, offer Monday", …), each written out.
- * Kept with the email so they're only written once; "Other answers" (fresh) writes a new set.
+ * Usually already written by the mailbox check; "Other answers" (fresh) writes a new set.
  */
 export async function aiReplyOptions(activityId: string, fresh = false) {
   try {
     const { admin, email } = await staff();
-    const { data: row } = await admin.from("activities").select("meta").eq("id", activityId).maybeSingle();
-    const kept = ((row?.meta || {}) as { reply_options?: { options: { label: string; subject: string; body: string }[] } }).reply_options;
-    if (!fresh && kept?.options?.length) return { ok: true as const, options: kept.options };
     const st = await aiState(admin);
-    if (!st.ready) return { ok: false as const, off: true, error: st.reason };
-    const c = await emailContext(admin, activityId);
-    if (!c) return { ok: false as const, error: "That email isn't on file." };
-    const r = await replyOptions(st.settings, { email: c.email, facts: c.facts, history: c.history, today: c.today }, { admin, order_id: c.a.order_id as string | null, customer_id: c.a.customer_id as string | null, by: email });
-    if (!r.ok) return { ok: false as const, error: r.error };
-    const subj = String(c.a.subject || "");
-    const re = subj.toLowerCase().startsWith("re:") ? subj : `Re: ${subj}`;
-    const options = (r.data.options || []).slice(0, 4).map((o) => ({ label: o.label, subject: re, body: o.body }));
-    await admin.from("activities").update({ meta: { ...((c.a.meta || {}) as object), reply_options: { at: new Date().toISOString(), options } } }).eq("id", activityId);
-    return { ok: true as const, options };
+    const r = await writeReplyOptions(admin, activityId, st, email || "staff", fresh);
+    return r.ok ? { ok: true as const, options: r.options } : { ok: false as const, off: r.off, error: r.error };
   } catch (e) { return fail(e); }
 }
 
