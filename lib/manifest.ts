@@ -120,16 +120,55 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
   const fit = (o: C) => { const a = allocate(g.lines as Line[], [o]); const pcs = g.lines.reduce((x, l) => x + l.qty_shipped, 0) || 1; return a.alloc.reduce((x, r) => x + r.line.qty_shipped, 0) / pcs; };
   const exact = list.filter((o) => poHit(o, g));
   const nameHit = (o: C) => { const key = core || po; return key.length >= 4 && o.who.split("|").some((n) => { const c = norm(n); return c.length >= 4 && (c.includes(key) || key.includes(c)); }) || (key.length >= 5 && norm(o.nickname).includes(key)); };
-  const byName = exact.length ? [] : list.filter(nameHit);
-  const pool = exact.length ? exact : byName;
-  if (!pool.length) return null;
-  const scored = pool.map((o) => ({ o, f: o.items.length ? fit(o) : 0.5 })).sort((a, b) => b.f - a.f);
+  // shortened POs: "COR Softball" = City of Richardson's softball job (the customer's initials), "COR Huffines" =
+  // the "Huffine Shirts" job (a word of the job name, give or take an s)
+  const shortHit = (o: C) => abbrevHit(g.customer_po, o.who.split("|"), o.nickname);
+  const byName = exact.length ? [] : list.filter((o) => nameHit(o) || shortHit(o));
+  let pool = exact.length ? exact : byName, via = exact.length ? "PO / job name" : byName.some(nameHit) ? "customer name in PO" : "short name in the PO (customer's initials or a word of the job name)";
+  const pcsShipped = g.lines.reduce((x, l) => x + l.qty_shipped, 0);
+  const pcsOf = (o: C) => o.items.reduce((x, it) => x + it.need, 0);
+  // nothing in the PO points anywhere: the garments decide (same styles, colors and sizes, the same number of pieces)
+  if (!pool.length) {
+    const close = list.filter((o) => o.items.length && Math.abs(pcsOf(o) - pcsShipped) <= Math.max(2, pcsShipped * 0.05)).map((o) => ({ o, f: fit(o) })).filter((x) => x.f >= 0.95);
+    if (close.length !== 1) return null;
+    pool = [close[0].o]; via = `the garments match (${pcsShipped} pcs, same styles and sizes)`;
+  }
+  const scored = pool.map((o) => ({ o, f: o.items.length ? fit(o) : 0.5 })).sort((a, b) => b.f - a.f || Math.abs(pcsOf(a.o) - pcsShipped) - Math.abs(pcsOf(b.o) - pcsShipped));
   const best = scored[0], next = scored[1];
   if (best.f < 0.5 && pool.length > 1) return null;
   const clear = !next || best.f - next.f >= 0.25;
-  const how = `${exact.length ? "PO / job name" : "customer name in PO"}${best.o.items.length ? `; ${Math.round(best.f * 100)}% of the pieces are on #${best.o.number}` : ""}`;
+  const how = `${via}${best.o.items.length ? `; ${Math.round(best.f * 100)}% of the pieces are on #${best.o.number}` : ""}`;
+  // matched on the garments alone: a suggestion to OK, never linked on its own
+  if (!exact.length && !byName.length) return { orderId: best.o.id, kind: "blanks", how, sure: false };
   // sure: one clear order whose garments cover (almost) everything that shipped
   return { orderId: best.o.id, kind: "blanks", how, sure: clear && (best.f >= 0.9 || (!best.o.items.length && pool.length === 1 && exact.length === 1)) };
+}
+
+/**
+ * A shortened PO pointing at a job: the customer's initials as a word of the PO ("COR" = City Of Richardson, "DFD" =
+ * Dallas Fire Department; at least 3 letters), or a word of the job name or customer name, give or take a plural s or a
+ * letter ("Huffines" ~ "Huffine Shirts"; words of 5+ letters).
+ */
+const STOP = new Set(["of", "the", "and", "for", "a", "an", "at", "in", "&"]);
+/** words too common to point at one job */
+const GENERIC = /^(t?shirts?|tees?|hoodies?|sweatshirts?|polos?|hats?|caps?|beanies?|jackets?|jerseys?|shorts|pants|tanks?|orders?|reorders?|staff|event|events|teams?|crews?|logos?|front|back|prints?|printing|embroidery|apparel|company|blanks?|goods|sample|samples|extras?|order|new|helper)$/;
+export function abbrevHit(po: string, names: string[], nickname: string): boolean {
+  const pw = words(po).filter((w) => !/^(po|p|o|order|purchase|so)$/.test(w));
+  if (!pw.length) return false;
+  const inits = new Set<string>();
+  for (const n of names) {
+    const ws = words(n.replace(/&/g, " and "));
+    if (ws.length < 2) continue;
+    inits.add(ws.map((w) => w[0]).join(""));
+    const sig = ws.filter((w) => !STOP.has(w));
+    if (sig.length >= 2) inits.add(sig.map((w) => w[0]).join(""));
+    // "City of Richardson Parks" → "cor" too (the first words)
+    for (let k = 3; k < ws.length; k++) inits.add(ws.slice(0, k).map((w) => w[0]).join(""));
+  }
+  if (pw.some((w) => w.length >= 3 && inits.has(w))) return true;
+  const near = (a: string, b: string) => a === b || a + "s" === b || b + "s" === a || (Math.min(a.length, b.length) >= 6 && (a.startsWith(b) || b.startsWith(a)));
+  const theirs = [...words(nickname), ...names.flatMap((n) => words(n))].filter((w) => w.length >= 5 && !STOP.has(w) && !GENERIC.test(w));
+  return pw.some((w) => w.length >= 5 && !GENERIC.test(w) && theirs.some((t) => near(w, t)));
 }
 
 /** The PO without "PO", "#" and spaces: "PO 207" → "207". */
@@ -639,7 +678,7 @@ async function applyBlanks(admin: SupabaseClient, supplier: string, g: Group, or
     if (row && trk) { const f = await startTracker(trk, carrier).catch(() => null); if (f) await admin.from("blank_shipments").update(f).eq("id", row.id); }
   }
 }
-export const __test = { allocate, styleEq, colorEq };
+export const __test = { allocate, styleEq, colorEq, matchBlanks };
 
 export type PrintavoGoods = { kind: "goods" | "blanks"; lineIds: string[]; ship_date: string | null; po: string; archivedId: string; number: number; nickname: string; customer: string; due_date: string | null; supplier: string; supplier_order: string; pcs: number; boxes: number; tracking: PendingShipment["tracking"]; delivered: boolean; eta: string | null };
 /** a Printavo job that's been printed (or closed): its goods drop off Goods & Receiving */
