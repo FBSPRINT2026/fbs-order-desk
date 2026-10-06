@@ -6,7 +6,7 @@ import { useSticky } from "@/lib/useSticky";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
 import {
   DEFAULT_INK_PLAN, densityOf, fmtVol, gramsFrom, inkStatus, jobsFromOrders, jobsFromPrintavo, mergeInkPlan, planUsage,
-  type CountLite, type FormulaLite, type InkPlanSettings, type InkStatus, type Job, type StockLite,
+  type CountLite, type FormulaLite, type GarmentFabric, type InkPlanSettings, type InkStatus, type Job, type StockLite,
 } from "@/lib/inkPlan";
 
 /**
@@ -64,10 +64,12 @@ export default function InkInventory({ stock, formulas, canStock }: { stock: Sto
       const seps = (sp.data || []) as Parameters<typeof jobsFromOrders>[2];
       const dIds = [...new Set([...seps.map((x) => x.design_id), ...orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.imprints || []).map((i) => i.design_id)))].filter(Boolean))] as string[];
       const { data: designs } = dIds.length ? await sb.from("designs").select("id, width_px, height_px").in("id", dIds) : { data: [] };
+      const styles = [...new Set(orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.lines || []).map((l) => (l as { style?: string }).style || ""))).filter(Boolean))];
+      const { data: gar } = styles.length ? await sb.from("garments").select("style, brand, fabric, supplier").in("style", styles) : { data: [] };
       const ps = mergeProduction(d.production);
       type Arch = Parameters<typeof jobsFromPrintavo>[1][number] & { qty: number | null; status_name: string };
       const pv = jobsFromPrintavo(sl, (ar.data || []) as Arch[], (r) => needsForPrintavo(ps, { ...(r as Arch), nickname: r.nickname || "" } as Parameters<typeof needsForPrintavo>[1]).filter((n) => n.type === "screen").flatMap((n) => n.steps), s);
-      setJobs([...jobsFromOrders(sl, orders, seps, (designs || []) as Parameters<typeof jobsFromOrders>[3], s), ...pv]);
+      setJobs([...jobsFromOrders(sl, orders, seps, (designs || []) as Parameters<typeof jobsFromOrders>[3], s, (gar || []) as GarmentFabric[]), ...pv]);
     })();
   }, [counts]); // eslint-disable-line react-hooks/exhaustive-deps
 

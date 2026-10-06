@@ -1,5 +1,6 @@
 import "server-only";
 import { SIZES } from "@/lib/pricing";
+import { fabricLines } from "@/lib/fabric";
 
 /** S&S Activewear API v2 (https://api.ssactivewear.com/V2/Default.aspx). Basic auth: account number / API key. */
 const BASE = "https://api.ssactivewear.com/v2";
@@ -17,7 +18,7 @@ async function ssGet<T>(path: string): Promise<T> {
   return (await r.json()) as T;
 }
 
-type SSStyle = { styleID: number; partNumber: string; brandName: string; styleName: string; title: string; baseCategory: string; styleImage: string };
+type SSStyle = { styleID: number; partNumber: string; brandName: string; styleName: string; title: string; baseCategory: string; styleImage: string; description?: string };
 type SSProduct = { colorName: string; sizeName: string; sizeOrder: string; customerPrice: number; piecePrice: number; qty: number; colorFrontImage?: string; colorBackImage?: string; colorSideImage?: string; colorSwatchImage?: string; color1?: string };
 
 // S&S size names -> our size codes
@@ -86,7 +87,7 @@ async function findStyle(q: string): Promise<SSStyle | null> {
   return null;
 }
 
-export type SSGarment = { style: string; brand: string; description: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; ss_style_id: number; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }> };
+export type SSGarment = { style: string; brand: string; description: string; fabric: string; fabric_at: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; ss_style_id: number; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }> };
 
 /** Look up a style on S&S and shape it like a catalog garment. Cost = your price (customerPrice). */
 export async function ssLookup(q: string, styleID?: number): Promise<SSGarment | null> {
@@ -125,6 +126,8 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
     style: st.styleName,
     brand: st.brandName,
     description: st.title || st.styleName,
+    fabric: fabricLines(st.description || ""),
+    fabric_at: new Date().toISOString(),
     colors,
     cost: Number.isFinite(cost) ? cost : 0,
     sizes,
@@ -133,6 +136,12 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
     color_images,
     image: st.styleImage ? `https://www.ssactivewear.com/${st.styleImage}` : "",
   };
+}
+
+/** just the fabric content lines of an S&S style (cheap: the style record only) */
+export async function ssFabric(styleIdOrQuery: number | string): Promise<{ styleID: number; fabric: string } | null> {
+  const st = typeof styleIdOrQuery === "number" ? (await ssGet<SSStyle[]>(`/styles/?styleid=${styleIdOrQuery}`))[0] : await findStyle(styleIdOrQuery);
+  return st ? { styleID: st.styleID, fabric: fabricLines(st.description || "") } : null;
 }
 
 /* ---------- ordering blanks ---------- */

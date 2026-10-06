@@ -1,4 +1,5 @@
 import "server-only";
+import { fabricLines } from "@/lib/fabric";
 
 /**
  * SanMar web services (SOAP, https://ws.sanmar.com:8080). Product data only for now (styles, colors, sizes, our
@@ -86,7 +87,7 @@ export async function sanmarSkus(style: string): Promise<SanMarSku[]> {
   });
 }
 
-export type SanMarGarment = { style: string; brand: string; description: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }>; supplier: "sanmar"; supplier_style: string };
+export type SanMarGarment = { style: string; brand: string; description: string; fabric: string; fabric_at: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }>; supplier: "sanmar"; supplier_style: string };
 
 /** Look up a SanMar style ("PC61", "K500", "NKDC1963") and shape it like a catalog garment. Cost = our price. */
 export async function sanmarLookup(style: string): Promise<SanMarGarment | null> {
@@ -105,6 +106,7 @@ export async function sanmarLookup(style: string): Promise<SanMarGarment | null>
   const first = skus[0];
   return {
     style: t, brand: first.brand || "SanMar", description: first.title || first.description.replace(/<[^>]+>/g, " ").slice(0, 200),
+    fabric: fabricLines([...new Set(skus.map((x) => x.description).filter(Boolean))].join("\n")), fabric_at: new Date().toISOString(),
     colors, cost: isFinite(base) ? base : 0, sizes, size_costs, image: first.front || first.image, color_images, supplier: "sanmar", supplier_style: t,
   };
 }

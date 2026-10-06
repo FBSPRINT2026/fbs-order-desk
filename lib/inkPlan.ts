@@ -161,7 +161,10 @@ const sameLoc = (a: string, b: string) => a.trim().toLowerCase() === b.trim().to
 /** union of the colors' coverage (they overlap some): 1 − Π(1 − c) */
 const unionCov = (cs: number[]) => 100 * (1 - cs.reduce((a, c) => a * (1 - Math.min(99, c) / 100), 1));
 
-export function jobsFromOrders(slots: SlotLite[], orders: OrderLite[], seps: SepLite[], designs: DesignLite[], s: InkPlanSettings): Job[] {
+export type GarmentFabric = { style: string; brand: string; fabric: string; supplier: string | null };
+export function jobsFromOrders(slots: SlotLite[], orders: OrderLite[], seps: SepLite[], designs: DesignLite[], s: InkPlanSettings, garments: GarmentFabric[] = []): Job[] {
+  const gKey = (brand?: string, style?: string) => `${(brand || "").toLowerCase().replace(/[^a-z0-9]/g, "")}|${(style || "").toLowerCase()}`;
+  const gByKey = new Map(garments.map((g) => [gKey(g.brand, g.style), g])), gByStyle = new Map(garments.map((g) => [(g.style || "").toLowerCase(), g]));
   const byId = new Map(orders.map((o) => [o.id, o])), dById = new Map(designs.map((d) => [d.id, d]));
   const jobs: Job[] = [];
   const bySlotOrder = new Map<string, SlotLite[]>();
@@ -194,7 +197,8 @@ export function jobsFromOrders(slots: SlotLite[], orders: OrderLite[], seps: Sep
           screens = Array.from({ length: n }, (_, i) => ({ name: names[i] || "", kind: "color" as const, mesh: s.colorMesh, coverage: s.coverage, known: false }));
           if (dark && !screens.every((x) => isWhite(x.name))) screens.unshift({ name: "Underbase", kind: "underbase", mesh: s.baseMesh, coverage: unionCov(screens.map((x) => x.coverage)), known: false });
         }
-        const fabric = fabricOf({ style: line.style, brand: line.brand, garment: line.garment, color });
+        const cat = gByKey.get(gKey(line.brand, line.style)) || gByStyle.get((line.style || "").toLowerCase());
+        const fabric = fabricOf({ style: line.style, brand: line.brand, garment: line.garment, color, fabric: cat?.fabric, supplier: cat?.supplier || undefined });
         const pr: Print = { location: im.location, pieces, garmentColor: color, fabric, wIn: w, hIn: h, screens, note: sep ? "" : "no separation yet" };
         perSlot.set(sl, [...(perSlot.get(sl) || []), pr]);
       }

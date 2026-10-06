@@ -36,7 +36,71 @@ const KEYWORDS: [RegExp, number, string][] = [
   [/100\s*%\s*cotton|ring[- ]?spun|heavy\s*cotton|ultra\s*cotton|softstyle|garment[- ]dyed|comfort\s*colors|airlume/i, 0, "cotton"],
 ];
 
-export function fabricOf(g: { style?: string; brand?: string; garment?: string; color?: string }): Fabric {
+// ---------- the supplier's own words (S&S style description, SanMar product description) ----------
+const FIBER = "cotton|polyester|poly|rayon|viscose|spandex|elastane|lycra|nylon|acrylic|modal|linen|tencel|bamboo|hemp|wool";
+const FIBER_RE = new RegExp(`\\b(${FIBER})\\b`, "i");
+
+/** the lines of a supplier description that state fiber content ("100% cotton", "Heather colors are 50/50 cotton/polyester") */
+export function fabricLines(html: string): string {
+  const text = (html || "").replace(/<\/(li|p|div|br)>|<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&#174;|®|™/g, "");
+  const parts = text.split(/\n|•|;|(?<=\.)\s+(?=[A-Z])/).map((x) => x.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const keep = parts.filter((x) => FIBER_RE.test(x) && /\d\s*%|\d{2,3}\s*\/\s*\d{1,2}\b|\btri[- ]?blend\b/i.test(x) && !/\bthread|label|tear|tape|drawcord|cord\b/i.test(x));
+  return [...new Set(keep)].slice(0, 8).join("\n").slice(0, 600);
+}
+
+/** percent of each fiber in one statement: "60% cotton, 40% polyester", "50/50 cotton/polyester", "100% ring spun cotton" */
+function fibersIn(s: string): Record<string, number> | null {
+  const out: Record<string, number> = {};
+  const slash = s.match(new RegExp(`(\\d{1,3})\\s*\\/\\s*(\\d{1,3})(?:\\s*\\/\\s*(\\d{1,3}))?\\s*%?\\s*(?:[a-z\\- ]{0,30}?)\\b(${FIBER})\\b\\s*\\/\\s*(?:[a-z\\- ]{0,20}?)\\b(${FIBER})\\b(?:\\s*\\/\\s*(?:[a-z\\- ]{0,20}?)\\b(${FIBER})\\b)?`, "i"));
+  if (slash) {
+    const nums = [slash[1], slash[2], slash[3]].filter(Boolean).map(Number), fib = [slash[4], slash[5], slash[6]].filter(Boolean);
+    fib.forEach((f, i) => { const k = /^poly/i.test(f) ? "polyester" : f.toLowerCase(); out[k] = (out[k] || 0) + (nums[i] || 0); });
+    return out;
+  }
+  const re = new RegExp(`(\\d{1,3}(?:\\.\\d)?)\\s*%\\s*(?:[a-z\\-®™ ]{0,40}?)\\b(${FIBER})\\b`, "gi");
+  let m: RegExpExecArray | null, any = false;
+  while ((m = re.exec(s))) { const k = /^poly/i.test(m[2]) ? "polyester" : m[2].toLowerCase(); out[k] = (out[k] || 0) + +m[1]; any = true; }
+  if (any) return out;
+  if (/\btri[- ]?blend\b/i.test(s)) return { polyester: 50, cotton: 25, rayon: 25 };
+  return null;
+}
+
+/**
+ * Is a statement about some colors only ("Sport Grey and Antique colors are 90/10…", "Heather colors: 52/48…"), and
+ * how well does it name this color: 2 = by name, 1 = as "heather colors", 0 = not this color. null = the base fabric.
+ */
+function colorScope(s: string, color: string): number | null {
+  const m = s.match(/^(.*?)\b(?:is|are)\b\s*(?:\d|made|a\b)/i) || s.match(/^([A-Za-z][A-Za-z ,&\/]+?):\s*\d/);
+  if (!m) return null;
+  const names = m[1].replace(/[.:;()\-–—]+/g, ",").split(/,|\band\b|&|\//i).map((x) => x.replace(/\bcolou?rs?\b|\ball\b|\bthe\b/gi, " ").replace(/\s+/g, " ").trim().toLowerCase()).filter((x) => x.length > 1);
+  if (!names.length) return null;
+  const c = ` ${color.toLowerCase().replace(/\s+/g, " ").trim()} `;
+  let best = 0;
+  for (const n of names) {
+    if (n === "heather" || n === "heathers") { if (/heather/.test(c)) best = Math.max(best, 1); continue; }
+    // the color contains the listed name ("Heather Navy" ⊃ "heather navy"; "Safety Orange" ⊃ "safety"),
+    // or the listed name is the color plus grey ("Ash Grey" for "Ash")
+    if (c.includes(` ${n} `) || c.includes(` ${n}`) && c.trim().startsWith(n) || n.replace(/\s+gr[ae]y$/, "") === c.trim()) best = 2;
+  }
+  return best;
+}
+
+/** polyester % for this color from the supplier's fabric lines; null when they don't say */
+export function fabricFromText(text: string, color: string, supplier = "supplier"): Fabric | null {
+  if (!text) return null;
+  let base: Fabric | null = null, hit: { f: Fabric; score: number } | null = null;
+  for (const line of text.split("\n")) {
+    const f = fibersIn(line); if (!f) continue;
+    const scope = colorScope(line, color), fab = { polyPct: Math.round(f.polyester || 0), why: `${supplier}: “${line}”` };
+    if (scope == null) { if (!base) base = fab; }
+    else if (scope > 0 && (!hit || scope > hit.score)) hit = { f: fab, score: scope };
+  }
+  return hit?.f || base;
+}
+
+export function fabricOf(g: { style?: string; brand?: string; garment?: string; color?: string; fabric?: string; supplier?: string }): Fabric {
+  const fromSupplier = g.fabric ? fabricFromText(g.fabric, g.color || "", g.supplier === "sanmar" ? "SanMar" : "S&S") : null;
+  if (fromSupplier) return fromSupplier;
   const style = (g.style || "").trim().replace(/\s+/g, ""), color = g.color || "", name = `${g.brand || ""} ${g.garment || ""}`;
   const heather = HEATHER.test(color);
   for (const [re, solid, heath, note] of STYLES) if (re.test(style)) return { polyPct: heather ? heath : solid, why: `${note}${heather ? ` (${color} is a heather)` : ""}` };
