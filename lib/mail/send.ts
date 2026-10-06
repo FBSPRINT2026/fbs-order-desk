@@ -8,10 +8,13 @@ import { imapClient, sentFolder } from "./imap";
  * Send an email from a staff member's own mailbox over SMTP, as a reply in the customer's thread when
  * inReplyTo/references are given, and put a copy in Sent Items so it shows in Outlook like any other reply.
  */
-export async function sendFromMailbox(c: MailCfg, o: { to: string; cc?: string; subject: string; text: string; inReplyTo?: string; references?: string[] }) {
+export async function sendFromMailbox(c: MailCfg, o: {
+  to: string; cc?: string; subject: string; text: string; html?: string; inReplyTo?: string; references?: string[];
+  attachments?: { filename: string; content: Buffer; contentType: string; cid?: string; contentDisposition?: "inline" | "attachment" }[];
+}) {
   const messageId = `<${crypto.randomUUID()}@fbsprint.com>`;
   const mail = {
-    from: { name: c.fromName, address: c.user }, to: o.to, cc: o.cc || undefined, subject: o.subject, text: o.text,
+    from: { name: c.fromName, address: c.user }, to: o.to, cc: o.cc || undefined, subject: o.subject, text: o.text, html: o.html || undefined, attachments: o.attachments?.length ? o.attachments : undefined,
     inReplyTo: o.inReplyTo || undefined, references: o.references?.length ? o.references : undefined, messageId, date: new Date(),
   };
   const smtp = nodemailer.createTransport({ host: c.smtpHost, port: c.smtpPort, secure: c.smtpPort === 465, requireTLS: c.smtpPort !== 465, auth: { user: c.user, pass: c.pass } });

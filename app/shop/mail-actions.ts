@@ -4,7 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { accountById, accountForUser, cfgOf, DEFAULT_MAIL_HOST, encryptSecret, publicAccount, type MailAccount } from "@/lib/mail/config";
 import { sendFromMailbox } from "@/lib/mail/send";
 import { imapClient } from "@/lib/mail/imap";
-import { addContact, closeAnswered } from "@/lib/mail/process";
+import { addContact, closeAnswered, saveBody } from "@/lib/mail/process";
+import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
+import { detectSignature } from "@/lib/mail/signature";
 import { runAccount } from "@/lib/mail/run";
 
 // Staff actions for the mailboxes: connect your own, reply from the mailbox an email came to, sort a sender, check now.
@@ -57,30 +59,75 @@ export async function disconnectMailbox() {
   } catch (e) { return fail(e); }
 }
 
-/** reply to a customer's email from the shop mailbox, in the same thread; it lands in Sent Items and on the timeline */
+/**
+ * Reply to a customer's email from your mailbox, the way Outlook would: what you wrote, your Outlook signature
+ * (logo and all), then their email quoted under From/Sent/To/Subject. Same thread; a copy lands in Sent Items and
+ * on the timeline.
+ */
 export async function sendEmailReply(input: { activityId: string; subject: string; body: string; suggestionId?: string }) {
   try {
     const { admin, email, user } = await staff();
     if (!input.body.trim()) return { ok: false as const, error: "Write the reply first." };
     const { data: a } = await admin.from("activities").select("*").eq("id", input.activityId).maybeSingle();
     if (!a?.from_email) return { ok: false as const, error: "That email isn't on file." };
-    const meta = (a.meta || {}) as { references?: string[]; from_name?: string };
+    const meta = (a.meta || {}) as { references?: string[]; from_name?: string; account_id?: string; cc?: string[]; html?: string };
     const refs = [...(meta.references || []), a.external_id].filter(Boolean) as string[];
-    const when = new Date(a.occurred_at as string).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" });
-    const quoted = String(a.body || "").split("\n").slice(0, 60).map((l) => `> ${l}`).join("\n");
-    const text = `${input.body.trim()}\n\nOn ${when}, ${meta.from_name || a.from_email} wrote:\n${quoted}`;
     // from the mailbox the email came to (the thread stays in that person's Outlook), else your own
-    const acct = (meta as { account_id?: string }).account_id ? await accountById(admin, (meta as { account_id?: string }).account_id!) : null;
+    const acct = meta.account_id ? await accountById(admin, meta.account_id) : null;
     const from = acct?.enabled ? acct : await accountForUser(admin, user!.id);
     if (!from?.enabled) return { ok: false as const, error: "Connect your email in the Inbox first, so the reply can go out from your address." };
-    const { messageId } = await sendFromMailbox(cfgOf(from), { to: a.from_email as string, subject: input.subject || `Re: ${a.subject || ""}`, text, inReplyTo: (a.external_id as string) || undefined, references: refs });
+    const subject = input.subject || `Re: ${a.subject || ""}`;
+    const sent = new Date(a.occurred_at as string).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" at ", " ");
+    let origHtml = "";
+    if (meta.html) { const { data: blob } = await admin.storage.from("proofs").download(meta.html); if (blob && blob.size < 1_500_000) origHtml = await blob.text(); }
+    const quote = { from: meta.from_name ? `${meta.from_name} <${a.from_email}>` : (a.from_email as string), sent, to: String(a.to_email || from.email), cc: (meta.cc || []).join("; "), subject: String(a.subject || ""), html: origHtml, text: String(a.body || "") };
+    const signature = from.signature_on !== false ? from.signature_html || "" : "";
+    const page = replyHtml({ body: input.body, signature, css: signature ? from.signature_css : "", quote });
+    const { html, attachments } = inlineImages(page);
+    const text = replyText({ body: input.body, signature, quote });
+    const { messageId } = await sendFromMailbox(cfgOf(from), { to: a.from_email as string, subject, text, html, attachments, inReplyTo: (a.external_id as string) || undefined, references: refs });
+    const body = await saveBody(admin, { html: page, attachments: [] }, (a.customer_id as string) || "leads").catch(() => ({}));
     await admin.from("activities").insert({
-      customer_id: a.customer_id, order_id: a.order_id, kind: "email", direction: "out", subject: (input.subject || `Re: ${a.subject || ""}`).slice(0, 500), body: input.body.trim(),
+      customer_id: a.customer_id, order_id: a.order_id, kind: "email", direction: "out", subject: subject.slice(0, 500), body: input.body.trim(),
       from_email: from.email, to_email: a.from_email, external_id: messageId, thread_id: a.thread_id || a.external_id, occurred_at: new Date().toISOString(),
-      created_by: email || "staff", ai_processed_at: new Date().toISOString(), meta: { references: refs.slice(-20), mailbox: "sent", via: "portal", account_id: from.id, account: from.email },
+      created_by: email || "staff", ai_processed_at: new Date().toISOString(), meta: { references: refs.slice(-20), mailbox: "sent", via: "portal", account_id: from.id, account: from.email, ...body, html_checked: true },
     });
     await closeAnswered(admin, { inReplyTo: (a.external_id as string) || "", references: refs }, email || "staff");
     if (input.suggestionId) await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: email || "staff" }).eq("id", input.suggestionId);
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** your signature as it'll go on replies (and whether it's on) */
+export async function getSignature() {
+  try {
+    const { admin, user } = await staff();
+    const a = await accountForUser(admin, user!.id);
+    if (!a) return { ok: true as const, html: "", css: "", on: false, at: null as string | null, connected: false };
+    return { ok: true as const, html: a.signature_html || "", css: a.signature_css || "", on: a.signature_on !== false, at: a.signature_at || null, connected: a.enabled };
+  } catch (e) { return fail(e); }
+}
+
+/** read your signature again from the emails you've sent from Outlook */
+export async function refreshSignature() {
+  try {
+    const { admin, user } = await staff();
+    const a = await accountForUser(admin, user!.id);
+    if (!a?.enabled) return { ok: false as const, error: "Connect your email first." };
+    const r = await detectSignature(admin, a.id);
+    if (!r.sig) return { ok: false as const, error: r.looked < 2
+      ? "There aren't enough emails you've sent to customers from Outlook yet. Send a couple from Outlook (with your signature), give it a few minutes, and try again."
+      : "Couldn't find a signature your recent Outlook emails share. Check that Outlook adds it to replies (File → Options → Mail → Signatures), send one more, and try again." };
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** signature on replies sent from the portal: on or off */
+export async function setSignatureOn(on: boolean) {
+  try {
+    const { admin, user } = await staff();
+    const a = await accountForUser(admin, user!.id);
+    if (a) await admin.from("mail_accounts").update({ signature_on: on }).eq("id", a.id);
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }

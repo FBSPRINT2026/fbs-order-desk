@@ -32,6 +32,7 @@ export type MailAccount = {
   id: string; user_id: string; email: string; name: string; imap_host: string; smtp_host: string; enc_password: string; enabled: boolean;
   inbox_validity: number | null; inbox_uid: number | null; sent_folder: string | null; sent_validity: number | null; sent_uid: number | null;
   last_run_at: string | null; last_ok_at: string | null; last_error: string | null; last_error_at: string | null; stats: Record<string, Record<string, number>>;
+  signature_html?: string | null; signature_css?: string | null; signature_on?: boolean; signature_at?: string | null; signature_checked_at?: string | null;
 };
 export type MailCfg = { user: string; pass: string; imapHost: string; smtpHost: string; imapPort: number; smtpPort: number; fromName: string };
 

@@ -68,7 +68,7 @@ export function draftMessage(s: Settings, input: { purpose: string; facts: strin
   return askClaude<{ subject: string; body: string }>({
     task: "draft_message", model: s.assistant.ai.model, maxTokens: 800, ctx, admin: ctx.admin,
     tool: { name: "message", description: "The message to send the customer.", input_schema: { type: "object", properties: { subject: { type: "string" }, body: { type: "string", description: "Plain text, no markdown, under 120 words" } }, required: ["subject", "body"] } },
-    system: `${SHOP_CONTEXT(s)}\n\nYour job: write a short message from the shop to a customer. Voice: ${s.assistant.ai.voice}\nUse only the facts given. Plain text. No markdown, no placeholders in brackets.`,
+    system: `${SHOP_CONTEXT(s)}\n\nYour job: write a short message from the shop to a customer. Voice: ${s.assistant.ai.voice}\nUse only the facts given. Plain text. No markdown, no placeholders in brackets. End with a short sign-off line (e.g. "Thanks,") but no name, title, phone or company block: the sender's signature is added when it's sent.`,
     prompt: `Purpose: ${input.purpose}\n\nFacts:\n${input.facts}\n${input.history ? `\nRecent conversation (oldest first):\n${input.history}\n` : ""}${input.starting?.body ? `\nStarting draft to improve:\nSubject: ${input.starting.subject || ""}\n${input.starting.body}` : ""}`,
   });
 }
@@ -105,7 +105,7 @@ export function triageEmail(s: Settings, email: { from: string; subject: string;
       urgency: { type: "string", enum: ["high", "normal", "low"] },
       order_number: { type: ["integer", "null"] },
       needs_reply: { type: "boolean" },
-      suggested_reply: { type: "string", description: `A short reply in this voice: ${s.assistant.ai.voice}. Empty if no reply is needed.` },
+      suggested_reply: { type: "string", description: `A short reply in this voice: ${s.assistant.ai.voice}. End with a short sign-off (e.g. "Thanks,") but no name, title or phone block; the sender's email signature is added. Empty if no reply is needed.` },
     }, required: ["intent", "summary", "urgency", "needs_reply", "suggested_reply"] } },
     system: `${SHOP_CONTEXT(s)}\n\nYour job: sort an email that came into the shop's inbox. Spam, vendors and newsletters are "not_customer".`,
     prompt: `From: ${email.from}\nSubject: ${email.subject}\n${email.customer ? `Known customer: ${email.customer}\n` : "Not a known customer.\n"}${email.openOrders ? `Their open orders: ${email.openOrders}\n` : ""}\n"""\n${email.body.slice(0, 15000)}\n"""`,

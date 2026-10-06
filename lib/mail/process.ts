@@ -102,7 +102,7 @@ async function saveAttachments(admin: SupabaseClient, m: MailMsg, folder: string
  * The email as it looks in Outlook: its HTML (formatting, signatures) saved privately, with the pictures that are
  * part of the message (cid: images: logos, pasted screenshots) saved beside it so the Inbox can show them.
  */
-export async function saveBody(admin: SupabaseClient, m: MailMsg, folder: string): Promise<{ html?: string; inline?: Record<string, string> }> {
+export async function saveBody(admin: SupabaseClient, m: Pick<MailMsg, "html" | "attachments">, folder: string): Promise<{ html?: string; inline?: Record<string, string> }> {
   if (!m.html || m.html.length > 3_000_000) return {};
   const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   const inline: Record<string, string> = {};
