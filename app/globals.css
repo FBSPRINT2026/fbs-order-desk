@@ -5237,3 +5237,8 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ink-check{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:#fff;border:1px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:800;color:#1F7A47}
 .ink-tile.pick.in small{color:#1F7A47;font-weight:600}
 .ink-form label.ink-check-row{flex-direction:row;align-items:center;gap:8px;font-weight:500}
+.ink-mixsys{margin-top:10px;padding:14px;border-radius:12px;background:#F2F6FA;border:1px dashed #8FB3CC}
+.ink-mixsys h3{font-size:15px}
+.ink-mixsys-sub{font-size:12.5px;color:var(--ink-3);margin:-2px 0 4px}
+.ink-mixsys .ink-tile{background:#fff}
+.ink-form select{font:inherit;font-weight:400;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}

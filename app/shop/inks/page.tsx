@@ -26,9 +26,17 @@ const fmtG = (g: number) => g.toFixed(2);
  *  from the percent (IMS rounds those to 2 decimals, so small ingredients can be a little off) */
 const gramsOf = (l: Line, perQt: number, totalG: number) => (l.g != null && perQt ? (l.g / perQt) * totalG : (l.pct / 100) * totalG);
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
-type Stock = { id: string; brand: string; line: string; name: string; product: string; pms: string; hex: string; notes: string; sort: number; stocked: boolean };
+/** where a stock ink shows on the Stock colors tab, top to bottom */
+type Section = "rfu" | "color" | "base" | "mixing";
+const SECTIONS: { k: Section; title: string; pick: string }[] = [
+  { k: "rfu", title: "Wilflex Rio RFU", pick: "Wilflex Rio RFU" },
+  { k: "color", title: "Other stock colors", pick: "Other stock colors (InkTek, Monarch, shimmers…)" },
+  { k: "base", title: "Whites, bases & additives", pick: "Whites, bases & additives" },
+  { k: "mixing", title: "Ink mixing system", pick: "Ink mixing system (Rio Mix)" },
+];
+type Stock = { id: string; brand: string; line: string; name: string; product: string; pms: string; hex: string; notes: string; sort: number; stocked: boolean; section: Section };
 type Draft = Omit<Stock, "id" | "sort"> & { id?: string };
-const BLANK: Draft = { brand: "", line: "", name: "", product: "", pms: "", hex: "#cccccc", notes: "", stocked: true };
+const BLANK: Draft = { brand: "", line: "", name: "", product: "", pms: "", hex: "#cccccc", notes: "", stocked: true, section: "color" };
 /** "186" / "186c" / "186 c" → "186 C"; anything else (Cool Gray 7 C, 072 C Blue) is kept, with spaces tidied */
 const tidyPms = (s: string) => { const t = s.replace(/^(pms|pantone)\s*/i, "").replace(/\s+/g, " ").trim(); const m = t.match(/^(\d{3,4})\s*c?$/i); return m ? `${m[1]} C` : t; };
 const stockLabel = (x: Stock) => [x.brand, x.line].filter(Boolean).join(" ");
@@ -70,7 +78,7 @@ export default function InkRoom() {
   }, []);
 
   async function loadStock() {
-    const { data, error } = await createClient().from("stock_inks").select("id, brand, line, name, product, pms, hex, notes, sort, stocked").is("archived_at", null).order("brand").order("sort").order("name");
+    const { data, error } = await createClient().from("stock_inks").select("id, brand, line, name, product, pms, hex, notes, sort, stocked, section").is("archived_at", null).order("brand").order("sort").order("name");
     if (error) setErr(error.message); else setStock((data || []) as Stock[]);
   }
 
@@ -97,10 +105,19 @@ export default function InkRoom() {
   // stock colors, grouped by brand and line, filtered by the search
   const groups = useMemo(() => {
     const t = norm(sq).replace(/^(pms|pantone)\s*/, "");
-    const m = new Map<string, Stock[]>();
-    for (const x of stock || []) { const k = stockLabel(x) || "Other"; m.set(k, [...(m.get(k) || []), x]); }
+    const order = (x: Stock) => SECTIONS.findIndex((s) => s.k === x.section);
+    // whites, then bases, then additives in their section; every other section by maker
+    const sub = (x: Stock) => (x.section !== "base" ? 0 : /white/i.test(x.name + " " + x.line) ? 0 : /base/i.test(x.name + " " + x.line) ? 1 : 2);
+    const all = [...(stock || [])].sort((a, b) => order(a) - order(b) || sub(a) - sub(b) || a.brand.localeCompare(b.brand) || a.sort - b.sort || a.name.localeCompare(b.name));
+    // on the shelf: one group per section (Rio RFU, every other color together, whites/bases/additives, the Rio Mix
+    // mixing system); while choosing: one group per maker's line, so a whole line can be gone through at once
+    const m = new Map<string, { section: Section; xs: Stock[] }>();
+    for (const x of all) {
+      const k = choosing ? stockLabel(x) || "Other" : SECTIONS.find((s) => s.k === x.section)?.title || "Other";
+      const g = m.get(k) || { section: x.section, xs: [] }; g.xs.push(x); m.set(k, g);
+    }
     // each group: the colors to show (all of them while choosing, else only what's on the shelf), and how many are stocked
-    return [...m.entries()].map(([g, all]) => ({ g, on: all.filter((x) => x.stocked).length, total: all.length, xs: all.filter((x) => (choosing || x.stocked) && (!t || [x.name, x.brand, x.line, x.product, x.pms].some((v) => norm(v).includes(t)))) })).filter((x) => x.xs.length);
+    return [...m.entries()].map(([g, { section, xs }]) => ({ g, section, on: xs.filter((x) => x.stocked).length, total: xs.length, xs: xs.filter((x) => (choosing || x.stocked) && (!t || [x.name, x.brand, x.line, x.product, x.pms].some((v) => norm(v).includes(t)))) })).filter((x) => x.xs.length);
   }, [stock, sq, choosing]);
   const stockedN = (stock || []).filter((x) => x.stocked).length;
   const brands = useMemo(() => [...new Set((stock || []).map((x) => x.brand).filter(Boolean))].sort(), [stock]);
@@ -109,20 +126,20 @@ export default function InkRoom() {
   function pickStock(x: Stock) { setSelStock(x); setSel(formulaFor(x.pms)); setEdit(null); }
   function pickInk(i: Ink) { setSel(i); setSelStock(null); setEdit(null); }
   function startAdd() { setFormErr(""); setEdit({ ...BLANK, brand: selStock?.brand || "", line: selStock?.line || "" }); }
-  function startEdit(x: Stock) { setFormErr(""); setEdit({ id: x.id, brand: x.brand, line: x.line, name: x.name, product: x.product, pms: x.pms, hex: x.hex || "#cccccc", notes: x.notes, stocked: x.stocked }); }
+  function startEdit(x: Stock) { setFormErr(""); setEdit({ id: x.id, brand: x.brand, line: x.line, name: x.name, product: x.product, pms: x.pms, hex: x.hex || "#cccccc", notes: x.notes, stocked: x.stocked, section: x.section }); }
 
   async function save() {
     if (!edit) return;
-    const row = { brand: edit.brand.trim(), line: edit.line.trim(), name: edit.name.trim(), product: edit.product.trim(), pms: tidyPms(edit.pms), hex: /^#[0-9a-f]{6}$/i.test(edit.hex) ? edit.hex.toUpperCase() : "", notes: edit.notes.trim(), stocked: edit.stocked };
+    const row = { brand: edit.brand.trim(), line: edit.line.trim(), name: edit.name.trim(), product: edit.product.trim(), pms: tidyPms(edit.pms), hex: /^#[0-9a-f]{6}$/i.test(edit.hex) ? edit.hex.toUpperCase() : "", notes: edit.notes.trim(), stocked: edit.stocked, section: edit.section };
     if (!row.name) { setFormErr("Give the color a name."); return; }
     setBusy(true); setFormErr("");
     const sb = createClient();
     let res;
-    if (edit.id) res = await sb.from("stock_inks").update({ ...row, updated_at: new Date().toISOString() }).eq("id", edit.id).select("id, brand, line, name, product, pms, hex, notes, sort, stocked").single();
+    if (edit.id) res = await sb.from("stock_inks").update({ ...row, updated_at: new Date().toISOString() }).eq("id", edit.id).select("id, brand, line, name, product, pms, hex, notes, sort, stocked, section").single();
     else {
       const { data: u } = await sb.auth.getUser();
       const sort = Math.max(0, ...(stock || []).filter((x) => x.brand === row.brand && x.line === row.line).map((x) => x.sort)) + 1;
-      res = await sb.from("stock_inks").insert({ ...row, sort, created_by: u.user?.email || "" }).select("id, brand, line, name, product, pms, hex, notes, sort, stocked").single();
+      res = await sb.from("stock_inks").insert({ ...row, sort, created_by: u.user?.email || "" }).select("id, brand, line, name, product, pms, hex, notes, sort, stocked, section").single();
     }
     setBusy(false);
     if (res.error) { setFormErr(res.error.message); return; }
@@ -176,9 +193,10 @@ export default function InkRoom() {
                   {canStock && !choosing && <button type="button" className="btn" onClick={startAdd}>+ Add stock color</button>}
                 </div>
                 <div className="faint" style={{ fontSize: 13 }}>{choosing ? "Every color on file from each maker. Tap a color to switch it on or off the shelf; only the ones switched on show for everyone else and in the PMS formulas." : "Ready-to-use inks on our shelf, no mixing. The PMS is the maker's nearest match from their color chart."}</div>
-                {!stock ? <div className="faint">Loading…</div> : !groups.length ? <div className="faint">{sq ? `No stock color matches “${sq}”.` : canStock ? "Nothing is switched on yet. Use “Choose what we stock”." : "No stock colors yet."}</div> : groups.map(({ g, xs, on, total }) => (
-                  <div key={g} className="ink-group">
+                {!stock ? <div className="faint">Loading…</div> : !groups.length ? <div className="faint">{sq ? `No stock color matches “${sq}”.` : canStock ? "Nothing is switched on yet. Use “Choose what we stock”." : "No stock colors yet."}</div> : groups.map(({ g, section, xs, on, total }) => (
+                  <div key={g} className={"ink-group" + (section === "mixing" && !choosing ? " ink-mixsys" : "")}>
                     <h3>{g} <span className="faint">{choosing ? `${on} of ${total} stocked` : on}</span></h3>
+                    {section === "mixing" && !choosing && <div className="ink-mixsys-sub">Wilflex Epic Rio Mix. These are the inks the PMS formulas weigh out.</div>}
                     <div className="ink-grid">{xs.map((x) => choosing ? (
                       <button key={x.id} type="button" role="switch" aria-checked={x.stocked} className={"ink-tile stock pick" + (x.stocked ? " in" : "")} onClick={() => toggleStocked(x)} title={x.stocked ? `${x.name}: on the shelf (tap to switch off)` : `${x.name}: not stocked (tap to switch on)`}>
                         <i style={{ background: x.hex || "#ddd" }}><span className="ink-check" aria-hidden>{x.stocked ? "✓" : ""}</span></i>
@@ -237,6 +255,9 @@ export default function InkRoom() {
                   <input value={edit.hex} onChange={(e) => setEdit({ ...edit, hex: e.target.value })} aria-label="Hex color" style={{ width: 110 }} data-notranslate />
                   {draftF?.hex && <button type="button" className="btn sm" onClick={() => setEdit({ ...edit, hex: draftF.hex })}>Use the PMS color</button>}
                 </span>
+              </label>
+              <label>Shows under
+                <select value={edit.section} onChange={(e) => setEdit({ ...edit, section: e.target.value as Section })}>{SECTIONS.map((x) => <option key={x.k} value={x.k}>{x.pick}</option>)}</select>
               </label>
               <label className="ink-check-row"><input type="checkbox" checked={edit.stocked} onChange={(e) => setEdit({ ...edit, stocked: e.target.checked })} /> We stock this color (shows for everyone and in the PMS formulas)</label>
               <label>Notes<textarea value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} rows={2} placeholder="Where it's kept, what it's good for…" /></label>
