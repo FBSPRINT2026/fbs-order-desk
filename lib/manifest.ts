@@ -369,7 +369,7 @@ function poHit(o: Candidate, g: { customer_po: string; supplier_order: string })
 
 /* ---------- reading the goods: which of the customer's orders each style / color / size belongs to ---------- */
 
-const SIZE_ALIAS: Record<string, string> = { xsmall: "XS", xs: "XS", small: "S", s: "S", medium: "M", med: "M", m: "M", large: "L", lg: "L", l: "L", xlarge: "XL", xl: "XL", xxl: "2XL", xxlarge: "2XL", "2xlarge": "2XL", xxxlarge: "3XL", "3xlarge": "3XL", "4xlarge": "4XL", "5xlarge": "5XL", xxsmall: "XS", "2x": "2XL", "2xl": "2XL", xxxl: "3XL", "3x": "3XL", "3xl": "3XL", xxxxl: "4XL", "4x": "4XL", "4xl": "4XL", "5x": "5XL", "5xl": "5XL", osfa: "OS", os: "OS", onesize: "OS", adjustable: "OS", ys: "YS", ym: "YM", yl: "YL", yxs: "YXS", yxl: "YXL", youthsmall: "YS", youthmedium: "YM", youthlarge: "YL", youthxs: "YXS", youthxl: "YXL" };
+const SIZE_ALIAS: Record<string, string> = { xsmall: "XS", xs: "XS", small: "S", s: "S", medium: "M", med: "M", m: "M", large: "L", lg: "L", l: "L", xlarge: "XL", xl: "XL", xxl: "2XL", xxlarge: "2XL", "2xlarge": "2XL", xxxlarge: "3XL", "3xlarge": "3XL", "4xlarge": "4XL", "5xlarge": "5XL", xxsmall: "XS", "2x": "2XL", "2xl": "2XL", xxxl: "3XL", "3x": "3XL", "3xl": "3XL", xxxxl: "4XL", "4x": "4XL", "4xl": "4XL", "5x": "5XL", "5xl": "5XL", osfa: "OS", os: "OS", onesize: "OS", adjustable: "OS", adj: "OS", other: "OS", onesizefitsall: "OS", osfm: "OS", ys: "YS", ym: "YM", yl: "YL", yxs: "YXS", yxl: "YXL", youthsmall: "YS", youthmedium: "YM", youthlarge: "YL", youthxs: "YXS", youthxl: "YXL" };
 export const sizeKey = (z: string) => SIZE_ALIAS[norm(z)] || z.toUpperCase().replace(/\s+/g, "");
 const styleEq = (a: string, b: string) => {
   const x = norm(a), y = norm(b);

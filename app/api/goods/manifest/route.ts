@@ -89,12 +89,23 @@ export async function POST(req: Request) {
         const it = b.items as { lineIds?: string[]; tracking?: string[] };
         const ids = (it.lineIds || []).filter(Boolean).slice(0, 1000), trk = (it.tracking || []).filter(Boolean).slice(0, 100);
         if (!ids.length && !trk.length) return NextResponse.json({ lines: [] });
-        const cols = "id, supplier, customer_name, customer_po, supplier_order, tracking, box, mill, style, color, size, qty_ordered, qty_shipped, kind, match_how, suggest_how, linked_by, ship_date, delivered_at";
+        const cols = "id, supplier, customer_name, customer_po, supplier_order, tracking, box, mill, style, color, size, qty_ordered, qty_shipped, kind, match_how, suggest_how, linked_by, ship_date, delivered_at, order_id, archived_order_id";
         const { data, error } = ids.length
           ? await admin.from("supplier_manifest_lines").select(cols).in("id", ids)
           : await admin.from("supplier_manifest_lines").select(cols).in("tracking", trk);
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-        return NextResponse.json({ lines: data || [] });
+        // which job each line is on (a mixed box: some items for one job, some for another)
+        const ls = (data || []) as { order_id: string | null; archived_order_id: string | null }[];
+        const pv = [...new Set(ls.map((l) => l.archived_order_id).filter(Boolean))] as string[], lv = [...new Set(ls.map((l) => l.order_id).filter(Boolean))] as string[];
+        const [{ data: a1 }, { data: a2 }] = await Promise.all([
+          pv.length ? admin.from("archived_orders").select("id, visual_id, nickname").in("id", pv) : Promise.resolve({ data: [] }),
+          lv.length ? admin.from("orders").select("id, number, nickname").in("id", lv) : Promise.resolve({ data: [] }),
+        ]);
+        const job = new Map<string, { number: number; nickname: string }>([
+          ...((a1 || []) as { id: string; visual_id: number; nickname: string }[]).map((o) => [o.id, { number: +o.visual_id, nickname: o.nickname || "" }] as const),
+          ...((a2 || []) as { id: string; number: number; nickname: string }[]).map((o) => [o.id, { number: o.number, nickname: o.nickname || "" }] as const),
+        ]);
+        return NextResponse.json({ lines: ls.map((l) => ({ ...l, job: job.get(l.archived_order_id || l.order_id || "") || null })) });
       }
       if (b.retry) return NextResponse.json({ ok: true, ...(await resolvePending(admin, Date.now() + 45000)) });
       if (Array.isArray(b.ignore)) { await admin.from("supplier_manifest_lines").update({ kind: "ignored", match_how: "ignored by staff" }).in("id", b.ignore); return NextResponse.json({ ok: true }); }

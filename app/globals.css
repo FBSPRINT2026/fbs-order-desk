@@ -5069,3 +5069,8 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .rv-unl.ask{color:#b42318;border-color:#f3b8b2;background:#fff1f0}
 .rv-results{font-size:13.5px;color:var(--ink-2);padding:2px 2px 8px}
 .rv-ign-list{opacity:.75}
+.rv-mixed{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px;font-size:13px}
+.rv-mix{background:#efe7ff;color:#5b3fb4;margin-right:4px}
+.it-sec{border:1px solid var(--line-2);border-radius:10px;padding:8px 10px}
+.it-sec-h{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:4px;font-size:14px}
+.it-boxes{margin-left:auto;font-size:12px}

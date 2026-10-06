@@ -28,8 +28,10 @@ type Row = { key: string; /** a job's shipments shown separately (Uncombine): th
   trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean; /** the vendor, on a row that combines several */ src?: string }[]; lineIds?: string[];
   /** a combined row: the shipments it's made of (one job, several vendors / supplier orders) */
   parts?: string[];
-  /** a combined row's job key (Uncombine) */
-  jobKey?: string;
+  /** a combined row's job keys (Uncombine) */
+  jobKeys?: string[];
+  /** a mixed shipment: the jobs sharing its boxes */
+  jobs?: { number: number; href: string }[];
   link?: LinkInfo; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
 type LinkInfo = { lineIds: string[]; customerId: string | null; customerName: string; us: boolean; supplier: string; name: string; account: string; suggest: string | null; styles: string;
   /** an unknown account whose goods fit one customer's job: who we think it is, and why */
@@ -299,20 +301,39 @@ export default function GoodsReceiving() {
   // ignored by hand: out of every list (the Ignored tab shows them)
   // one job's goods from several vendors / supplier orders (Gear Go Live PO 10212: part SanMar, part S&S) are one row;
   // each tracking number says which vendor it came from
+  // one row per job, and per box: shipments for the same job (several vendors / supplier orders) are one row, and so are
+  // jobs that share a box (a "mixed" shipment: Nine18's PO 42998 box holds goods for #34476 and its embroidery job #34477)
   const combine = (list: Row[]): Row[] => {
-    const out: Row[] = [], byJob = new Map<string, Row[]>();
-    for (const r of list) { if (r.unlinked || !r.href) { out.push(r); continue; } const k = `${r.href}|${r.side}`; byJob.set(k, [...(byJob.get(k) || []), r]); }
-    for (const [jk, rs] of byJob) {
+    const out: Row[] = [], linked = list.filter((r) => !r.unlinked && !!r.href);
+    for (const r of list) if (r.unlinked || !r.href) out.push(r);
+    const up = linked.map((_, i) => i);
+    const find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i])));
+    const join = (a: number, b: number) => { up[find(a)] = find(b); };
+    const jobOf = (r: Row) => `${r.href}|${r.side}`;
+    const firstBy = new Map<string, number>();
+    linked.forEach((r, i) => {
+      for (const k of [jobOf(r), ...r.trks.map((t) => t.tracking).filter(Boolean).map((t) => "t:" + t)]) { const j = firstBy.get(k); if (j === undefined) firstBy.set(k, i); else join(i, j); }
+    });
+    const groups = new Map<number, Row[]>();
+    linked.forEach((r, i) => { const g = find(i); groups.set(g, [...(groups.get(g) || []), r]); });
+    for (const rs of groups.values()) {
       if (rs.length === 1) { out.push(rs[0]); continue; }
+      const jobKeys = [...new Set(rs.map(jobOf))];
       // uncombined by hand: each supplier order its own row
-      if (separate[jk]) { out.push(...rs.map((x) => ({ ...x, splitOf: jk }))); continue; }
+      if (jobKeys.some((k) => separate[k])) { out.push(...rs.map((x) => ({ ...x, splitOf: jobKeys.join("§") }))); continue; }
       const f = rs[0], subs = [...new Set(rs.map((x) => x.sub))];
+      const jobs = [...new Map(rs.map((x) => [x.href, { number: x.number, href: x.href }])).values()].sort((a, b) => a.number - b.number);
       const state: Row["state"] = rs.every((x) => x.state === "arrived") ? "arrived" : rs.some((x) => x.state === "problem") ? "problem" : "way";
       const latest = (xs: (string | null)[]) => (xs.filter(Boolean) as string[]).sort().pop() || null;
-      out.push({ ...f, splitOf: undefined, key: rs.map((x) => x.key).join("+"), parts: rs.map((x) => x.key), jobKey: jk, sub: subs.join(" + "), po: [...new Set(rs.map((x) => x.po).filter(Boolean))].join(" / "), so: rs.map((x) => x.so).filter(Boolean).join(" · "),
-        boxes: rs.reduce((a, x) => a + (x.boxes || 0), 0), pcs: rs.reduce((a, x) => a + (x.pcs || 0), 0),
-        trks: rs.flatMap((x) => x.trks.map((k) => ({ ...k, src: subs.length > 1 ? x.sub : undefined }))), lineIds: rs.flatMap((x) => x.lineIds || []),
+      // the same box counted once (a box shared by two jobs shows up under each)
+      const perOrder = new Map<string, number>();
+      for (const x of rs) { const k = `${x.sub}|${x.so}`; perOrder.set(k, Math.max(perOrder.get(k) || 0, x.boxes || 0)); }
+      const trks = [...new Map(rs.flatMap((x) => x.trks.map((k) => ({ ...k, src: subs.length > 1 ? x.sub : undefined }))).map((k) => [k.tracking || Math.random().toString(), k])).values()];
+      out.push({ ...f, splitOf: undefined, number: jobs[0].number, href: jobs[0].href, jobs: jobs.length > 1 ? jobs : undefined, key: rs.map((x) => x.key).join("+"), parts: rs.map((x) => x.key), jobKeys, sub: subs.join(" + "), po: [...new Set(rs.map((x) => x.po).filter(Boolean))].join(" / "), so: [...new Set(rs.map((x) => x.so).filter(Boolean))].join(" · "),
+        boxes: [...perOrder.values()].reduce((a, n) => a + n, 0), pcs: rs.reduce((a, x) => a + (x.pcs || 0), 0),
+        trks, lineIds: rs.flatMap((x) => x.lineIds || []),
         state, late: rs.some((x) => x.late), noScan: rs.some((x) => x.noScan), at: latest(rs.map((x) => x.at)), deliveredAt: state === "arrived" ? latest(rs.map((x) => x.deliveredAt)) : null,
+        need: (rs.map((x) => x.need).filter(Boolean) as string[]).sort()[0] || null,
         shipped: (rs.map((x) => x.shipped).filter(Boolean) as string[]).sort()[0] || null });
     }
     return out;
@@ -380,9 +401,10 @@ export default function GoodsReceiving() {
           {r.link?.sugNo
             ? <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{(r.link.sugHow || "").startsWith("🤖") ? "🤖 " : ""}#{r.link.sugNo}?</button>
             : r.link?.sugCust && !r.link.customerId && !r.link.us && <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{r.link.sugCust.name}?</button>}</>
+        : r.jobs ? <span className="rv-mixed" title="A mixed shipment: the same boxes hold goods for each of these jobs. Click the row to see which items go where."><span className="rv-tag rv-mix">mixed</span>{r.jobs.map((j, i) => <span key={j.href}>{i ? " + " : ""}<Link href={j.href} className="rv-linked">#{j.number}</Link></span>)}</span>
         : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}
-        {r.parts && r.jobKey && <button type="button" className="rv-ign" onClick={() => setSeparated(r.jobKey!, true, `${r.who} #${r.number}`)} title="These supplier orders were put together because they're linked to the same job. Show each one on its own row (then Unlink the one that's wrong).">Uncombine</button>}
-        {r.splitOf && <button type="button" className="rv-ign" onClick={() => setSeparated(r.splitOf!, false, `${r.who} #${r.number}`)} title="Show this job's supplier orders as one row again">Combine</button>}
+        {r.parts && r.jobKeys && <button type="button" className="rv-ign" onClick={async () => { for (const k of r.jobKeys!) await setSeparated(k, true, `${r.who} #${r.number}`); }} title="These supplier orders were put together because they're linked to the same job. Show each one on its own row (then Unlink the one that's wrong).">Uncombine</button>}
+        {r.splitOf && <button type="button" className="rv-ign" onClick={async () => { for (const k of r.splitOf!.split("§")) await setSeparated(k, false, `${r.who} #${r.number}`); }} title="Show this job's supplier orders as one row again">Combine</button>}
         {!r.unlinked && !!r.lineIds?.length && <button type="button" className={"rv-ign rv-unl" + (unlinkAsk === r.key ? " ask" : "")} onClick={() => unlink(r)} title="Linked to the wrong job? Unlink it: the goods go back to not linked, and that job is remembered as wrong">{unlinkAsk === r.key ? "Sure? Unlink" : "Unlink"}</button>}
         {!r.key.startsWith("h") && ((r.parts || [r.key]).every((k) => ignored[k])
           ? <button type="button" className="rv-ign on" onClick={() => ignore(r, false)} title="Put it back in the lists">Restore</button>
@@ -927,9 +949,9 @@ function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone
   );
 }
 
-type ItemLine = { id: string; supplier: string; customer_name: string; customer_po: string; supplier_order: string; tracking: string; box: string; mill: string; style: string; color: string; size: string; qty_ordered: number; qty_shipped: number; kind: string; match_how: string; suggest_how: string; linked_by: string | null };
+type ItemLine = { id: string; supplier: string; customer_name: string; customer_po: string; supplier_order: string; tracking: string; box: string; mill: string; style: string; color: string; size: string; qty_ordered: number; qty_shipped: number; kind: string; match_how: string; suggest_how: string; linked_by: string | null; job?: { number: number; nickname: string } | null };
 const SIZE_SEQ = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "OS"];
-const SIZE_FIX: Record<string, string> = { SM: "S", SMALL: "S", MD: "M", MED: "M", MEDIUM: "M", LG: "L", LARGE: "L", XXL: "2XL", XXXL: "3XL", "2X": "2XL", "3X": "3XL", OSFA: "OS" };
+const SIZE_FIX: Record<string, string> = { SM: "S", SMALL: "S", MD: "M", MED: "M", MEDIUM: "M", LG: "L", LARGE: "L", XXL: "2XL", XXXL: "3XL", "2X": "2XL", "3X": "3XL", OSFA: "OS", OTHER: "OS", ADJ: "OS" };
 const sz = (z: string) => { const k = z.toUpperCase().replace(/\s+/g, ""); return SIZE_FIX[k] || k; };
 const sizeRank = (z: string) => { const i = SIZE_SEQ.indexOf(z); return i < 0 ? 100 : i; };
 
@@ -943,38 +965,58 @@ function ItemsModal({ r, onClose, onLink }: { r: Row; onClose: () => void; onLin
   }, [r]);
   const ls = lines || [];
   const sizes = [...new Set(ls.map((l) => sz(l.size)))].sort((a, b) => sizeRank(a) - sizeRank(b) || a.localeCompare(b));
-  const byItem = new Map<string, { mill: string; style: string; color: string; got: Record<string, number>; ord: Record<string, number> }>();
-  for (const l of ls) {
-    const k = `${l.mill}|${l.style}|${l.color}`;
-    const x = byItem.get(k) || { mill: l.mill, style: l.style, color: l.color, got: {}, ord: {} };
-    const z = sz(l.size);
-    x.got[z] = (x.got[z] || 0) + (l.qty_shipped || 0); x.ord[z] = (x.ord[z] || 0) + (l.qty_ordered || 0);
-    byItem.set(k, x);
-  }
-  const items = [...byItem.values()].sort((a, b) => `${a.style} ${a.color}`.localeCompare(`${b.style} ${b.color}`));
+  type It = { mill: string; style: string; color: string; got: Record<string, number>; ord: Record<string, number> };
+  const itemsOf = (xs: ItemLine[]) => {
+    const byItem = new Map<string, It>();
+    for (const l of xs) {
+      const k = `${l.mill}|${l.style}|${l.color}`;
+      const x = byItem.get(k) || { mill: l.mill, style: l.style, color: l.color, got: {}, ord: {} };
+      const z = sz(l.size);
+      x.got[z] = (x.got[z] || 0) + (l.qty_shipped || 0); x.ord[z] = (x.ord[z] || 0) + (l.qty_ordered || 0);
+      byItem.set(k, x);
+    }
+    return [...byItem.values()].sort((a, b) => `${a.style} ${a.color}`.localeCompare(`${b.style} ${b.color}`));
+  };
+  // a mixed shipment: one table per job, so it's clear which items in the box go where
+  const jobKey = (l: ItemLine) => (l.job ? String(l.job.number) : "");
+  const jobNos = [...new Set(ls.map(jobKey))];
+  const sections = jobNos.map((k) => ({ k, job: ls.find((l) => jobKey(l) === k)?.job || null, lines: ls.filter((l) => jobKey(l) === k) }))
+    .sort((a, b) => (a.job?.number || 1e9) - (b.job?.number || 1e9));
+  const mixed = sections.length > 1;
+  const items = itemsOf(ls);
   const tot = (m: Record<string, number>) => Object.values(m).reduce((a, n) => a + n, 0);
   const short = items.some((it) => sizes.some((z) => (it.ord[z] || 0) > (it.got[z] || 0)));
   const how = ls.find((l) => l.match_how)?.match_how || ls.find((l) => l.suggest_how)?.suggest_how || "";
   const pos = [...new Set(ls.map((l) => l.customer_po).filter(Boolean))].join(" / ") || r.po;
+  const grid = (its: It[]) => (
+    <div className="it-wrap"><table className="it-grid">
+      <thead><tr><th>Style</th><th>Color</th>{sizes.map((z) => <th key={z} className="r">{z}</th>)}<th className="r">Total</th></tr></thead>
+      <tbody>{its.map((it) => (
+        <tr key={`${it.mill}|${it.style}|${it.color}`}>
+          <td><b>{it.style}</b>{it.mill ? <div className="faint" style={{ fontSize: 11.5 }}>{it.mill}</div> : null}</td>
+          <td>{it.color}</td>
+          {sizes.map((z) => { const g = it.got[z] || 0, o = it.ord[z] || 0; return <td key={z} className={"r" + (o > g ? " it-short" : "")} title={o > g ? `ordered ${o}, shipped ${g}` : ""}>{g || (o ? 0 : "")}{o > g ? <sup>/{o}</sup> : null}</td>; })}
+          <td className="r"><b>{tot(it.got)}</b></td>
+        </tr>
+      ))}</tbody>
+      <tfoot><tr><td colSpan={2}>Total</td>{sizes.map((z) => <td key={z} className="r">{its.reduce((a, it) => a + (it.got[z] || 0), 0) || ""}</td>)}<td className="r"><b>{its.reduce((a, it) => a + tot(it.got), 0)}</b></td></tr></tfoot>
+    </table></div>
+  );
+  const boxesOf = (xs: ItemLine[]) => [...new Set(xs.map((l) => `${l.supplier === "sanmar" ? "SanMar" : "S&S"} ${l.tracking || "truck"}`))];
   return (
     <div className="pp-modal" role="dialog" aria-modal="true" aria-label="What's in this shipment" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="pp-sheet it-sheet">
-        <div className="pp-sheet-h"><div><b>{r.who}</b>{r.number ? <> · <Link href={r.href}>#{r.number}</Link></> : null} <span className="faint" style={{ fontSize: 14 }}>· {r.sub} {r.so}{pos ? ` · PO ${pos}` : ""} · {r.boxes} box{r.boxes === 1 ? "" : "es"}</span></div><button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>✕</button></div>
+        <div className="pp-sheet-h"><div><b>{r.who}</b>{r.jobs ? <> · {r.jobs.map((j, i) => <span key={j.href}>{i ? " + " : ""}<Link href={j.href}>#{j.number}</Link></span>)}</> : r.number ? <> · <Link href={r.href}>#{r.number}</Link></> : null} <span className="faint" style={{ fontSize: 14 }}>· {r.sub} {r.so}{pos ? ` · PO ${pos}` : ""} · {r.boxes} box{r.boxes === 1 ? "" : "es"}</span></div><button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>✕</button></div>
         <div className="lk-body">
-          {!lines ? <div className="faint">Loading the manifest…</div> : !items.length ? <div className="gb-empty">{err || "This shipment isn't on a supplier manifest, so there's no style / size breakdown for it."}</div> : (
-            <div className="it-wrap"><table className="it-grid">
-              <thead><tr><th>Style</th><th>Color</th>{sizes.map((z) => <th key={z} className="r">{z}</th>)}<th className="r">Total</th></tr></thead>
-              <tbody>{items.map((it) => (
-                <tr key={`${it.mill}|${it.style}|${it.color}`}>
-                  <td><b>{it.style}</b>{it.mill ? <div className="faint" style={{ fontSize: 11.5 }}>{it.mill}</div> : null}</td>
-                  <td>{it.color}</td>
-                  {sizes.map((z) => { const g = it.got[z] || 0, o = it.ord[z] || 0; return <td key={z} className={"r" + (o > g ? " it-short" : "")} title={o > g ? `ordered ${o}, shipped ${g}` : ""}>{g || (o ? 0 : "")}{o > g ? <sup>/{o}</sup> : null}</td>; })}
-                  <td className="r"><b>{tot(it.got)}</b></td>
-                </tr>
-              ))}</tbody>
-              <tfoot><tr><td colSpan={2}>Total</td>{sizes.map((z) => <td key={z} className="r">{items.reduce((a, it) => a + (it.got[z] || 0), 0) || ""}</td>)}<td className="r"><b>{items.reduce((a, it) => a + tot(it.got), 0)}</b></td></tr></tfoot>
-            </table></div>
-          )}
+          {mixed && <div className="lk-ai"><b>Mixed shipment: {sections.filter((x) => x.job).length} jobs share these boxes.</b><p>Split the box when you count it: each table below is what goes to that job.</p></div>}
+          {!lines ? <div className="faint">Loading the manifest…</div> : !items.length ? <div className="gb-empty">{err || "This shipment isn't on a supplier manifest, so there's no style / size breakdown for it."}</div> : mixed ? (
+            sections.map((sec) => (
+              <div key={sec.k} className="it-sec">
+                <div className="it-sec-h">{sec.job ? <><b>For #{sec.job.number}</b> <span className="faint">{sec.job.nickname}</span></> : <b>Not linked yet</b>}<span className="faint it-boxes">{boxesOf(sec.lines).join(" · ")}</span></div>
+                {grid(itemsOf(sec.lines))}
+              </div>
+            ))
+          ) : grid(items)}
           {short && <div className="faint" style={{ fontSize: 12.5 }}><span className="it-short">Red</span> sizes shipped short: shipped / <sup>ordered</sup>.</div>}
           {how && <div className="faint" style={{ fontSize: 12.5 }}>{ls.some((l) => l.match_how) ? "Linked: " : "Guess: "}{how}</div>}
           <div className="row" style={{ gap: 8 }}><span className="spacer" />{onLink && <button type="button" className="btn primary" onClick={onLink}>Link order</button>}<button type="button" className="btn ghost" onClick={onClose}>Close</button></div>
