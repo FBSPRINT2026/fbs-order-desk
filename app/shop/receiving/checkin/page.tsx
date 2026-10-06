@@ -51,9 +51,11 @@ export default function CheckInPage() {
   }, [data]);
   const match = (j: CheckJob) => { const s = q.trim().toLowerCase(); return !s || [`#${j.number}`, j.customer, j.nickname, j.po].join(" ").toLowerCase().includes(s); };
   const counts = useMemo(() => Object.fromEntries(ORDER.map((k) => [k, (k === "issue" ? data?.problems || [] : data?.jobs || []).filter((j) => j.state === k).length])) as Record<JobState, number>, [data]);
-  // with no filter, ready and problem jobs are listed once, in their own sections up top
-  const shown = (data?.jobs || []).filter(match).filter((j) => (filter === "all" ? j.state !== "ready" && j.state !== "issue" : j.state === filter));
-  const ready = (data?.jobs || []).filter((j) => j.state === "ready" && match(j));
+  // every job stays on its own day (nothing gets counted early just because it's here); within a day the ones ready
+  // to count go first. Problems have their own section up top (they can be from any day), so they aren't repeated.
+  const RANK: Record<JobState, number> = { ready: 0, partial: 1, way: 2, none: 3, checked: 4, issue: 5 };
+  const shown = (data?.jobs || []).filter(match).filter((j) => (filter === "all" ? j.state !== "issue" : j.state === filter))
+    .sort((a, b) => a.day.localeCompare(b.day) || RANK[a.state] - RANK[b.state] || a.number - b.number);
   const problems = (data?.problems || []).filter(match);
   const days = [...new Set(shown.map((j) => j.day))].sort();
   const thisWeek = data && data.today >= data.from && data.today <= data.to;
@@ -105,12 +107,6 @@ export default function CheckInPage() {
       </div>
 
       {!data ? (!err && <div className="empty">Loading the week…</div>) : <>
-        {filter === "all" && ready.length > 0 && (
-          <section className="ck-sec ck-ready">
-            <h2>Ready to count <span className="faint">everything on the manifest has been delivered</span></h2>
-            {ready.map(row)}
-          </section>
-        )}
         {(filter === "all" || filter === "issue") && problems.length > 0 && (
           <section className="ck-sec ck-problems">
             <h2>Problems <span className="faint">counted in short, damaged, wrong or extra: resolve each one</span></h2>
@@ -119,7 +115,7 @@ export default function CheckInPage() {
         )}
         {filter !== "issue" && (days.length ? days.map((d) => (
           <section key={d} className="ck-sec">
-            <h2>{d === data.today ? "Today · " : ""}{dayName(d)} <span className="faint">{shown.filter((j) => j.day === d).length} job{shown.filter((j) => j.day === d).length === 1 ? "" : "s"}</span></h2>
+            <h2>{d === data.today ? "Today · " : ""}{dayName(d)} <span className="faint">{shown.filter((j) => j.day === d).length} job{shown.filter((j) => j.day === d).length === 1 ? "" : "s"}{(() => { const n = shown.filter((j) => j.day === d && j.state === "ready").length; return n ? ` · ${n} ready to count` : ""; })()}</span></h2>
             {shown.filter((j) => j.day === d).map(row)}
           </section>
         )) : <div className="empty">{q ? `Nothing matches “${q}” this week.` : filter === "all" ? "No jobs on the schedule this week." : `No jobs "${STATE[filter as JobState].label}" this week.`}</div>)}
