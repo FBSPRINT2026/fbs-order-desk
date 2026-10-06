@@ -5184,3 +5184,31 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ms-seps{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:var(--panel, #fff)}
 .ms-seps-h{display:flex;flex-direction:column;gap:1px}
 .srq .btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* Ink Room: Rio formulas + mixing calculator */
+.ink-wrap{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.ink-wrap{grid-template-columns:1fr}.ink-calc{order:-1}}
+.ink-calc{position:sticky;top:12px}
+.ink-q{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.ink-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.ink-tile{display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer;text-align:left;font:inherit}
+.ink-tile i{display:block;height:44px;border-radius:6px;border:1px solid rgba(0,0,0,.08)}
+.ink-tile b{font-size:13px}
+.ink-tile small{font-size:11px;color:var(--ink-3)}
+.ink-tile.has small{color:#1F7A47;font-weight:600}
+.ink-tile.on{outline:2px solid var(--fbs-blue, #0A8FC0);outline-offset:1px}
+.ink-head{display:flex;gap:12px;align-items:center}
+.ink-head i{width:64px;height:64px;border-radius:10px;border:1px solid rgba(0,0,0,.1);flex:none}
+.ink-head h2{margin:0;font-size:24px}
+.ink-none{display:flex;flex-direction:column;gap:4px;background:#FFF7E6;border:1px solid #F2C46D;border-radius:10px;padding:10px 12px;font-size:13.5px}
+.ink-amt{display:flex;gap:8px;align-items:flex-end}
+.ink-amt label{display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:13px}
+.ink-amt input{width:120px;font:inherit;font-size:22px;font-weight:700;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.ink-amt select{font:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.ink-tbl{width:100%;border-collapse:collapse;font-size:14px}
+.ink-tbl th{font-size:12px;color:var(--ink-3);text-align:left;font-weight:600;padding:6px 4px;border-bottom:1px solid var(--line)}
+.ink-tbl td{padding:9px 4px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.ink-tbl td small{display:block;color:var(--ink-3);font-size:12px}
+.ink-tbl .r{text-align:right}
+.ink-tbl .ink-g{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.ink-tbl tfoot td{border-bottom:0;font-weight:700}
