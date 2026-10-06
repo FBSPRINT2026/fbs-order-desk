@@ -496,6 +496,16 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
   const sizeTwins = orders.filter((o) => sameSizes(shipSizes, bySizeOf(o.items.map((it) => ({ size: it.size, qty: it.need })))));
   if (sizeTwins.length === 1 && pcsIn >= 12)
     return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: sizeTwins[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `same count in every size as #${sizeTwins[0].number} (${pcsIn} pcs: ${sizeLine(shipSizes)})` };
+  // nothing open fits: a job of theirs that's already been printed (goods often show on a manifest after the job ran,
+  // e.g. Agape's "VLC Serve Day" 134 pcs for the completed #34328 "Serve Day Order"): same count in every size → that job
+  if (!sizeTwins.length && pcsIn >= 12) {
+    const since = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+    const { data: done } = await admin.from("archived_orders").select("id, visual_id, nickname, data").in("customer_id", custIds).gte("due_date", since).ilike("status_name", "%job completed%").limit(300);
+    const twinsDone = ((done || []) as { id: string; visual_id: string | number; nickname: string; data: { groups?: { lines?: { sizes?: Record<string, number> }[] }[] } }[])
+      .filter((o) => sameSizes(shipSizes, bySizeOf((o.data?.groups || []).flatMap((gr) => (gr.lines || []).flatMap((l) => Object.entries(l.sizes || {}).map(([k, q]) => ({ size: pvSize(k), qty: +q || 0 })))))));
+    if (twinsDone.length === 1)
+      return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: PV + twinsDone[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `same count in every size as #${twinsDone[0].visual_id} ${twinsDone[0].nickname} (already completed; ${pcsIn} pcs: ${sizeLine(shipSizes)})` };
+  }
   // the customer's only open order, and the pieces add up exactly
   if (orders.length === 1 && pcsIn >= 12 && orders[0].items.reduce((x, it) => x + it.need, 0) === pcsIn)
     return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: orders[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `their only open order, and the pieces add up exactly (${pcsIn})` };
