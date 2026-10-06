@@ -27,7 +27,8 @@
     "ssh2": "^1.16.0",
     "imapflow": "^1.0.170",
     "mailparser": "^3.7.2",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^6.9.16",
+    "nodemailer-ntlm-auth": "^1.0.4"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
