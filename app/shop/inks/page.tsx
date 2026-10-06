@@ -9,7 +9,7 @@ import { useSticky } from "@/lib/useSticky";
  * IMS at 1 quart; any amount scales from the percentages (quarts use that formula's own weight per quart).
  */
 type Line = { type: string; code: string; desc: string; pct: number };
-type Ink = { id: string; code: string; name: string; base: string; hex: string; rec_type: string; ing_count: number | null; lines: Line[] | null; grams_per_qt: number | null; captured_at: string | null; captured_note: string };
+type Ink = { copies?: number; id: string; code: string; name: string; base: string; hex: string; rec_type: string; ing_count: number | null; lines: Line[] | null; grams_per_qt: number | null; captured_at: string | null; captured_note: string };
 type Unit = "qt" | "gal" | "g" | "kg" | "lb" | "oz";
 const UNITS: { k: Unit; label: string }[] = [{ k: "qt", label: "Quarts" }, { k: "gal", label: "Gallons" }, { k: "g", label: "Grams" }, { k: "kg", label: "Kilograms" }, { k: "lb", label: "Pounds" }, { k: "oz", label: "Ounces" }];
 const PER_G: Record<Exclude<Unit, "qt" | "gal">, number> = { g: 1, kg: 1000, lb: 453.592, oz: 28.3495 };
@@ -36,7 +36,14 @@ export default function InkRoom() {
       // natural order: 100 C, 101 C … 1795 C … Cool Gray 1 C
       const key = (c: string) => { const m = c.match(/^(\d+)/); return m ? [0, +m[1], c] as const : [1, 0, c] as const; };
       all.sort((a, b) => { const x = key(a.code), y = key(b.code); return x[0] - y[0] || x[1] - y[1] || x[2].localeCompare(y[2]); });
-      setInks(all);
+      // IMS keeps some codes more than once (two "186 C", six "7586 C RM"): one tile per code, the one with a formula
+      const one = new Map<string, Ink & { copies: number }>();
+      for (const i of all) {
+        const k = `${i.rec_type}|${norm(i.code)}`, cur = one.get(k);
+        if (!cur) one.set(k, { ...i, copies: 1 });
+        else one.set(k, { ...(!cur.lines?.length && i.lines?.length ? i : cur), copies: cur.copies + 1 });
+      }
+      setInks([...one.values()]);
     })();
   }, []);
 
@@ -78,7 +85,7 @@ export default function InkRoom() {
                 <button key={i.id} type="button" className={"ink-tile" + (sel?.id === i.id ? " on" : "") + (i.lines?.length ? " has" : "")} onClick={() => setSel(i)} title={i.name}>
                   <i style={{ background: i.hex || "#ddd" }} />
                   <b data-notranslate>{i.code}</b>
-                  <small>{i.rec_type === "U" ? "Shop mix" : i.lines?.length ? "Formula ✓" : "Not read yet"}</small>
+                  <small>{i.rec_type === "U" ? (i.lines?.length ? "Shop mix ✓" : "Shop mix · not read") : i.lines?.length ? "Formula ✓" : "Not read yet"}</small>
                 </button>
               ))}</div>
             )}
@@ -91,7 +98,7 @@ export default function InkRoom() {
             <div className="panel-b stack" style={{ gap: 14 }}>
               <div className="ink-head">
                 <i style={{ background: sel.hex || "#ddd" }} />
-                <div><h2 data-notranslate>{sel.code}</h2><div className="faint" data-notranslate>{sel.name}{sel.rec_type === "U" ? " · our own mix (IMS user formula)" : " · Epic Rio"}</div></div>
+                <div><h2 data-notranslate>{sel.code}</h2><div className="faint" data-notranslate>{sel.name}{sel.rec_type === "U" ? " · our own mix (IMS user formula)" : " · Epic Rio"}{(sel.copies || 1) > 1 ? ` · IMS has ${sel.copies} formulas with this code` : ""}</div></div>
               </div>
               {!sel.lines?.length ? (
                 <div className="ink-none">
