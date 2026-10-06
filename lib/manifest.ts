@@ -713,12 +713,14 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
     if (isUs(g.customer_name)) {
       const m = await matchBlanks(admin, g).catch(() => null);
       if (m?.sure) { await applyGroup(admin, g.supplier, g, m.orderId, m.kind, m.how); out.linked++; }
-      else if (m && !g.lines.some((l) => l.suggest_order_id || l.suggest_archived_id)) { await suggestBlanks(admin, g, m.orderId, m.how); out.suggested++; }
+      else if (m && !g.lines.some((l) => l.suggest_order_id || l.suggest_archived_id || (l.suggest_how || "").startsWith(AI_TAG))) { await suggestBlanks(admin, g, m.orderId, m.how); out.suggested++; }
       continue;
     }
     const had = g.lines.some((l) => l.suggest_order_id || l.suggest_archived_id);
     const p = await planShipment(admin, g).catch(() => null);
     if (!p) continue;
+    // the AI has a say on this one: only a sure rule link replaces it
+    if (isAiGuess(g) && !(p.auto && !p.unplaced.length)) continue;
     // nothing fits any more (e.g. the PO's job number isn't entered yet): drop an old guess so nobody OKs a wrong job
     if (!p.alloc.length && had) { await admin.from("supplier_manifest_lines").update({ suggest_order_id: null, suggest_archived_id: null, suggest_how: p.how || "" }).in("id", g.lines.map((l) => l.id)); continue; }
     if (p.customerId && g.lines.some((l) => !l.customer_id)) await admin.from("supplier_manifest_lines").update({ customer_id: p.customerId }).in("id", g.lines.map((l) => l.id));
@@ -823,10 +825,9 @@ export async function unmatchedGroups(admin: SupabaseClient, onlyCustomers?: str
         pvIds.length ? admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, customer_id, customers(company, name)").in("id", pvIds) : Promise.resolve({ data: [] }),
       ]);
       type R = { id: string; number?: number; visual_id?: string | number; nickname: string; po_number: string; due_date: string | null; customer_id?: string | null; customers: { company: string; name: string } | null };
-      if (!isUs(g.customer_name)) {
-        const first = [...((lo || []) as unknown as R[]), ...((po || []) as unknown as R[])].find((o) => o.customer_id);
-        if (first) suggestCustomer = { id: first.customer_id!, name: first.customers?.company || first.customers?.name || "" };
-      }
+      // the customer of the job we guessed (an unknown account: "is X them?"; our blanks: whose job it is)
+      { const first = [...((lo || []) as unknown as R[]), ...((po || []) as unknown as R[])].find((o) => o.customer_id);
+        if (first) suggestCustomer = { id: first.customer_id!, name: first.customers?.company || first.customers?.name || "" }; }
       orders = [
         ...((lo || []) as unknown as R[]).map((o) => ({ id: o.id, number: o.number || 0, nickname: [o.customers?.company || o.customers?.name, o.nickname].filter(Boolean).join(" · "), po: o.po_number || "", due_date: o.due_date, printavo: false })),
         ...((po || []) as unknown as R[]).map((o) => ({ id: PV + o.id, number: +(o.visual_id || 0), nickname: [o.customers?.company || o.customers?.name, o.nickname].filter(Boolean).join(" · "), po: o.po_number || "", due_date: o.due_date, printavo: true })),
@@ -838,7 +839,7 @@ export async function unmatchedGroups(admin: SupabaseClient, onlyCustomers?: str
 }
 
 /** Link a waiting shipment's lines to orders by hand (staff or the customer). `pick`: line id → order id. */
-export async function linkByHand(admin: SupabaseClient, pick: { lineId: string; orderId: string }[], by: string, allowedCustomers?: string[]) {
+export async function linkByHand(admin: SupabaseClient, pick: { lineId: string; orderId: string }[], by: string, allowedCustomers?: string[], note = "") {
   const ids = pick.map((p) => p.lineId);
   const { data } = await admin.from("supplier_manifest_lines").select("*").in("id", ids).eq("kind", "");
   const lines = (data || []) as Waiting[];
@@ -857,6 +858,8 @@ export async function linkByHand(admin: SupabaseClient, pick: { lineId: string; 
   for (const g of groupLines(lines)) {
     const rows = g.lines.map((line) => ({ line, orderId: pick.find((p) => p.lineId === line.id)!.orderId }));
     const accepted = rows.every((r) => (r.line.suggest_order_id || (r.line.suggest_archived_id ? PV + r.line.suggest_archived_id : null)) === r.orderId);
+    // staff links teach the AI matcher (customers linking their own goods don't)
+    if (!allowedCustomers) await saveGoodsLesson(admin, g, rows[0].orderId, by, note).catch(() => null);
     n += await linkLines(admin, g, rows, accepted ? `suggestion OK'd (${by})` : `linked by ${by}`, by);
   }
   return n;
@@ -905,6 +908,41 @@ async function applyBlanks(admin: SupabaseClient, supplier: string, g: Group, or
   }
 }
 export const __test = { allocate, styleEq, colorEq, matchBlanks, guessCustomerByGoods };
+/** helpers the AI matcher (lib/goodsAi.ts) shares with the rules */
+export const __ai = { isUs, groupLines, styleEq, colorEq, words, norm, numRuns, sumByStyleColor, bySizeOf, sameSizes, sizeLine, PV_CLOSED, pvSize, GENERIC, STOP };
+export type { Waiting, Line as ManifestRow };
+/** a guess the AI made (the rules leave these alone; the AI pass revisits them) */
+export const AI_TAG = "🤖 AI";
+const isAiGuess = (g: Group<Waiting>) => g.lines.some((l) => (l.suggest_how || "").startsWith(AI_TAG));
+
+/**
+ * Remember how staff linked a shipment (picked by hand, or OK'd a guess), with their note on why: the AI matcher reads
+ * the latest of these as worked examples, so it links the next one like it on its own.
+ */
+export async function saveGoodsLesson(admin: SupabaseClient, g: Group<Waiting>, orderId: string, by: string, note = "") {
+  const guess = g.lines.map((l) => l.suggest_order_id || (l.suggest_archived_id ? PV + l.suggest_archived_id : "")).find(Boolean) || "";
+  const isPv = orderId.startsWith(PV);
+  const { data: o } = isPv
+    ? await admin.from("archived_orders").select("visual_id, nickname, po_number, status_name, due_date, customers(company, name)").eq("id", orderId.slice(PV.length)).maybeSingle()
+    : await admin.from("orders").select("number, nickname, po_number, status, due_date, customers(company, name)").eq("id", orderId).maybeSingle();
+  if (!o) return;
+  const r = o as unknown as { visual_id?: string | number; number?: number; nickname: string; po_number: string; status_name?: string; status?: string; due_date: string | null; customers: { company: string; name: string } | null };
+  let guessNo = 0;
+  if (guess && guess !== orderId) {
+    const { data: gx } = guess.startsWith(PV) ? await admin.from("archived_orders").select("visual_id").eq("id", guess.slice(PV.length)).maybeSingle() : await admin.from("orders").select("number").eq("id", guess).maybeSingle();
+    guessNo = +((gx as { visual_id?: number; number?: number } | null)?.visual_id || (gx as { number?: number } | null)?.number || 0);
+  }
+  const by_sc = sumByStyleColor((g.lines as Line[]).map((l) => ({ style: l.style, color: l.color, qty: l.qty_shipped })));
+  const pcs = by_sc.reduce((a, x) => a + x.qty, 0);
+  const payload = {
+    supplier: g.supplier, account: g.customer_name, po: g.customer_po, pcs, ship_date: g.lines[0]?.ship_date || null,
+    items: by_sc.map((x) => `${x.qty} ${x.style} ${x.color}`).join(", "), sizes: sizeLine(bySizeOf((g.lines as Line[]).map((l) => ({ size: l.size, qty: l.qty_shipped })))),
+    job: +(r.visual_id || r.number || 0), jobName: r.nickname || "", jobPo: r.po_number || "", jobCustomer: r.customers?.company || r.customers?.name || "", jobStatus: r.status_name || r.status || "", jobDue: r.due_date,
+    how: !guess ? "picked by hand (no guess)" : guess === orderId ? ((g.lines.find((l) => l.suggest_how)?.suggest_how || "").startsWith(AI_TAG) ? "OK'd the AI's guess" : "OK'd the rules' guess") : `picked by hand; the guess #${guessNo || "?"} was wrong`,
+    note: note.slice(0, 500), by,
+  };
+  await admin.from("ai_suggestions").upsert({ dedupe_key: `goods-lesson:${g.supplier}|${g.supplier_order}|${g.customer_po}`, kind: "goods_lesson", source: "staff", status: "done", title: `${g.customer_name} PO ${g.customer_po} → #${payload.job}`.slice(0, 300), body: note.slice(0, 2000), payload, decided_at: new Date().toISOString(), decided_by: by }, { onConflict: "dedupe_key" });
+}
 
 export type PrintavoGoods = { kind: "goods" | "blanks"; lineIds: string[]; ship_date: string | null; po: string; archivedId: string; number: number; nickname: string; customer: string; due_date: string | null; supplier: string; supplier_order: string; pcs: number; boxes: number; tracking: PendingShipment["tracking"]; delivered: boolean; eta: string | null };
 /** a Printavo job that's been printed (or closed): its goods drop off Goods & Receiving */
@@ -1047,9 +1085,9 @@ export type OpenOrderPick = { id: string; number: number; nickname: string; po: 
  * them. `po` (the shipment's PO) floats matching orders to the top.
  */
 export async function openOrdersFor(admin: SupabaseClient, customerId: string, po = ""): Promise<OpenOrderPick[]> {
-  const since = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
+  const since = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10), since60 = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
   const [{ data: os }, { data: ar }] = await Promise.all([
-    admin.from("orders").select("id, number, nickname, po_number, due_date, status, submitted_at, groups, lines").eq("customer_id", customerId).not("status", "in", "(completed)").order("number", { ascending: false }).limit(80),
+    admin.from("orders").select("id, number, nickname, po_number, due_date, status, submitted_at, groups, lines").eq("customer_id", customerId).not("status", "in", "(quote)").order("number", { ascending: false }).limit(80),
     admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, status_name, qty, data").eq("customer_id", customerId).or(`due_date.gte.${since},due_date.is.null`).order("visual_id", { ascending: false }).limit(80),
   ]);
   const g = { customer_po: po, supplier_order: "" };
@@ -1066,10 +1104,15 @@ export async function openOrdersFor(admin: SupabaseClient, customerId: string, p
     out.push({ id: o.id, number: o.number, nickname: o.nickname || "", po: o.po_number || "", due_date: o.due_date, status: o.status, printavo: false, items: itemsOf(ls), pcs: ls.reduce((a, l) => a + l.n, 0), match: !!po && poHit(o, g) });
   }
   for (const o of (ar || []) as { id: string; visual_id: string | number; nickname: string; po_number: string; due_date: string | null; status_name: string; qty: number | null; data: { groups?: { lines?: { itemNumber?: string; color?: string; sizes?: Record<string, number> }[] }[] } }[]) {
-    if (PV_CLOSED.test(o.status_name || "")) continue;
+    // completed jobs too (goods often arrive after the job printed), but not quotes or cancelled ones
+    const done = /job\s*completed/i.test(o.status_name || "");
+    if (PV_CLOSED.test(o.status_name || "") && !done) continue;
+    if (done && o.due_date && o.due_date < since60) continue;
     const ls = (o.data?.groups || []).flatMap((gr) => (gr.lines || []).map((l) => ({ style: l.itemNumber || "", color: l.color || "", n: Object.values(l.sizes || {}).reduce((a, q) => a + (+q || 0), 0) })));
     const c: Candidate = { id: PV + o.id, number: +o.visual_id || 0, nickname: o.nickname || "", po_number: o.po_number || "", customer_id: customerId, price_type: "", status: o.status_name };
     out.push({ id: PV + o.id, number: c.number, nickname: c.nickname, po: c.po_number, due_date: o.due_date, status: o.status_name, printavo: true, items: itemsOf(ls), pcs: o.qty || ls.reduce((a, l) => a + l.n, 0), match: !!po && poHit(c, g) });
   }
-  return out.sort((a, b) => Number(b.match) - Number(a.match) || (a.due_date || "9999").localeCompare(b.due_date || "9999"));
+  // open jobs first (soonest due), completed ones after
+  const isDone = (o: OpenOrderPick) => /completed/i.test(o.status);
+  return out.sort((a, b) => Number(b.match) - Number(a.match) || Number(isDone(a)) - Number(isDone(b)) || (isDone(a) ? (b.due_date || "").localeCompare(a.due_date || "") : (a.due_date || "9999").localeCompare(b.due_date || "9999")));
 }

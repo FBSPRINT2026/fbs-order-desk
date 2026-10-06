@@ -5049,3 +5049,20 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 /* a row combining several vendors: which one each tracking number is from */
 .rv-trk1{display:inline-flex;align-items:center;gap:4px}
 .rv-src{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-3);background:var(--surface-2);border:1px solid var(--line-2);border-radius:4px;padding:0 4px}
+/* Goods & Receiving: a row opens what's in it; AI guesses; items pop-up */
+.rv-grid tr.rv-click{cursor:pointer}
+.rv-grid tr.rv-click:hover td{background:var(--accent-soft)}
+.lk-ai{flex-basis:100%;padding:10px 12px;border-radius:10px;background:#eef4ff;border:1px solid #c9dafc;margin-bottom:8px}
+.lk-ai p{margin:4px 0 0;font-size:13px}
+.lk-done{background:#eef0f3;color:#555}
+.lk-why{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.lk-why i{font-style:normal;font-size:12px}
+.it-sheet{max-width:min(860px,96vw)}
+.it-wrap{overflow-x:auto}
+.it-grid{width:100%;border-collapse:collapse;font-size:13.5px}
+.it-grid th,.it-grid td{padding:7px 10px;border-bottom:1px solid var(--line-2);text-align:left;white-space:nowrap}
+.it-grid th{font-size:12px;color:var(--muted);font-weight:600}
+.it-grid .r{text-align:right;font-variant-numeric:tabular-nums}
+.it-grid tfoot td{font-weight:700;border-bottom:0}
+.it-grid sup{font-size:10px;color:var(--muted)}
+.it-short{color:#b42318;font-weight:700}

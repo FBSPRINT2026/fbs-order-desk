@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readXlsx } from "@/lib/xlsx";
-import { applyGroup, importManifest, linkByHand, markReceived, openOrdersFor, receiveFreight, receiveTruck, searchManifests, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, unmatchedGroups, type ManifestLine } from "@/lib/manifest";
+import { applyGroup, importManifest, linkByHand, markReceived, openOrdersFor, receiveFreight, receiveTruck, searchManifests, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, saveGoodsLesson, unmatchedGroups, type ManifestLine, type Waiting } from "@/lib/manifest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       if (Array.isArray(b.link)) {
         // resolution center: line → order (a suggestion OK'd, or picked by hand)
         const v = await staff();
-        const n = await linkByHand(admin, (b.link as { lineId: string; orderId: string }[]).filter((x) => x.lineId && x.orderId), v?.email || "staff");
+        const n = await linkByHand(admin, (b.link as { lineId: string; orderId: string }[]).filter((x) => x.lineId && x.orderId), v?.email || "staff", undefined, String(b.note || ""));
         return NextResponse.json({ ok: true, orders: n });
       }
       if (b.received?.lineIds?.length) {
@@ -79,6 +79,18 @@ export async function POST(req: Request) {
         const f = b.freight as { lineIds: string[]; at: string; signedBy: string; undo?: boolean };
         return NextResponse.json({ ok: true, ...(await receiveFreight(admin, f.lineIds || [], f.at, f.signedBy || "", !f.undo)) });
       }
+      if (b.items) {
+        // what's actually in a shipment: style / color / size from the manifest (by its lines, or by tracking number)
+        const it = b.items as { lineIds?: string[]; tracking?: string[] };
+        const ids = (it.lineIds || []).filter(Boolean).slice(0, 1000), trk = (it.tracking || []).filter(Boolean).slice(0, 100);
+        if (!ids.length && !trk.length) return NextResponse.json({ lines: [] });
+        const cols = "id, supplier, customer_name, customer_po, supplier_order, tracking, box, mill, style, color, size, qty_ordered, qty_shipped, kind, match_how, suggest_how, linked_by, ship_date, delivered_at";
+        const { data, error } = ids.length
+          ? await admin.from("supplier_manifest_lines").select(cols).in("id", ids)
+          : await admin.from("supplier_manifest_lines").select(cols).in("tracking", trk);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ lines: data || [] });
+      }
       if (b.retry) return NextResponse.json({ ok: true, ...(await resolvePending(admin, Date.now() + 45000)) });
       if (Array.isArray(b.ignore)) { await admin.from("supplier_manifest_lines").update({ kind: "ignored", match_how: "ignored by staff" }).in("id", b.ignore); return NextResponse.json({ ok: true }); }
       const a = b.assign as { lineIds: string[]; orderId: string; kind: "goods" | "blanks" };
@@ -87,7 +99,12 @@ export async function POST(req: Request) {
       const lines = (ls || []) as (ManifestLine & { id: string; supplier: string })[];
       if (!lines.length) return NextResponse.json({ error: "Those lines are gone." }, { status: 404 });
       const f = lines[0];
-      await applyGroup(admin, f.supplier, { key: "", supplier: f.supplier, customer_name: f.customer_name, customer_account: f.customer_account, customer_po: f.customer_po, supplier_order: f.supplier_order, lines }, a.orderId, a.kind === "blanks" ? "blanks" : "goods", "matched by staff");
+      // our blanks linked by hand: a worked example for the AI matcher (with the note on why, if any)
+      if (lines.some((l) => !(l as { kind?: string }).kind)) {
+        const v = await staff();
+        await saveGoodsLesson(admin, { key: "", supplier: f.supplier, customer_name: f.customer_name, customer_account: f.customer_account, customer_po: f.customer_po, supplier_order: f.supplier_order, lines: lines as unknown as Waiting[] }, a.orderId, v?.email || "staff", String(b.note || "")).catch(() => null);
+      }
+      await applyGroup(admin, f.supplier, { key: "", supplier: f.supplier, customer_name: f.customer_name, customer_account: f.customer_account, customer_po: f.customer_po, supplier_order: f.supplier_order, lines }, a.orderId, a.kind === "blanks" ? "blanks" : "goods", `linked by ${(await staff())?.user?.email || "staff"}`);
       return NextResponse.json({ ok: true });
     }
     const form = await req.formData();

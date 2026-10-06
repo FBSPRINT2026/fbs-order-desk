@@ -31,7 +31,9 @@ type Row = { key: string; side: "fbs" | "customer"; number: number; href: string
   link?: LinkInfo; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
 type LinkInfo = { lineIds: string[]; customerId: string | null; customerName: string; us: boolean; supplier: string; name: string; account: string; suggest: string | null; styles: string;
   /** an unknown account whose goods fit one customer's job: who we think it is, and why */
-  sugCust?: { id: string; name: string } | null; sugHow?: string };
+  sugCust?: { id: string; name: string } | null; sugHow?: string;
+  /** the job number we (or the AI) guessed */
+  sugNo?: number | null };
 type Via = "ss" | "ups" | "fedex" | "freight" | "other";
 const VIAS: { k: string; label: string }[] = [{ k: "ss", label: "S&S truck" }, { k: "ups", label: "UPS" }, { k: "fedex", label: "FedEx" }, { k: "freight", label: "Freight (LTL pallets)" }, { k: "other", label: "DHL / other" }];
 const SUPPLIERS_G: { k: string; label: string }[] = [{ k: "ss", label: "S&S Activewear" }, { k: "sanmar", label: "SanMar" }, { k: "other", label: "Other vendors" }];
@@ -112,6 +114,17 @@ export default function GoodsReceiving() {
   }, [q]);
   const [freight, setFreight] = useState<Row | null>(null);
   const [linking, setLinking] = useState<Row | null>(null);
+  const [items, setItems] = useState<Row | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  async function askAi(force = false) {
+    setAiBusy(true); setNote("The AI is reading the shipments that aren't linked yet… (up to a few minutes)");
+    const r = await fetch("/api/goods/ai-match", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ force }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {};
+    setAiBusy(false);
+    if (!r?.ok || j.error || j.off) { setNote(j.off ? `AI is off: ${j.off}` : `The AI couldn't finish: ${j.error || "no answer"}`); return; }
+    setNote(j.asked ? `AI looked at ${j.asked} shipment${j.asked === 1 ? "" : "s"}: linked ${j.linked}, ${j.suggested} guess${j.suggested === 1 ? "" : "es"} to OK, ${j.none} still waiting${j.skipped ? ` (${j.skipped} unchanged since it last looked)` : ""}.${j.errors?.length ? ` Problems: ${j.errors[0]}` : ""}` : `Nothing new for the AI: ${j.skipped || 0} shipment${j.skipped === 1 ? "" : "s"} unchanged since it last looked. Hold Shift and click to make it look again anyway.`);
+    loadPending();
+  }
   const [order, setOrder] = useState<O | null>(null);
   const [note, setNote] = useState("");
   const [view, setViewState] = useState<View>("today");
@@ -254,7 +267,8 @@ export default function GoodsReceiving() {
     ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
     // on a manifest, not on any order yet: still coming in (or already here)
     ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date,
-      link: { lineIds: g.lineIds, customerId: g.customer?.id || null, customerName: g.customer?.name || "", us: g.us, supplier: g.supplier, name: g.customer_name, account: g.customer_account, suggest: g.lines.find((l) => l.suggest)?.suggest || null, styles: g.styles, sugCust: g.suggestCustomer || null, sugHow: g.how } })),
+      link: { lineIds: g.lineIds, customerId: g.customer?.id || null, customerName: g.customer?.name || "", us: g.us, supplier: g.supplier, name: g.customer_name, account: g.customer_account, suggest: g.lines.find((l) => l.suggest)?.suggest || null, styles: g.styles, sugCust: g.suggestCustomer || null, sugHow: g.how,
+        sugNo: (() => { const id = g.lines.find((l) => l.suggest)?.suggest; return id ? g.orders.find((o) => o.id === id)?.number || null : null; })() } })),
   ];
   // ignored by hand: out of every list (the Ignored tab shows them)
   // one job's goods from several vendors / supplier orders (Gear Go Live PO 10212: part SanMar, part S&S) are one row;
@@ -316,7 +330,8 @@ export default function GoodsReceiving() {
   // a label made but never scanned by the next business day after it shipped
   const unscanned = (r: Row, k: Row["trks"][number]) => !!k.tracking && !k.delivered && ["", "unknown", "pre_transit"].includes(k.status || "") && !!r.shipped && t0 >= nextBiz(r.shipped);
   const rowLine = (r: Row) => (
-    <tr key={r.key} className={r.state === "problem" || r.late ? "prob" : ""}>
+    <tr key={r.key} className={(r.state === "problem" || r.late ? "prob " : "") + "rv-click"} title="Click to see what's in it: styles, colors and sizes"
+      onClick={(e) => { if ((e.target as HTMLElement).closest("a,button,input,label")) return; setItems(r); }}>
       <td className="co"><b>{r.who}</b>{r.what === "Our blanks" && <span className="rv-tag">our blanks</span>}</td>
       <td>{r.sub || "—"}</td>
       <td className="po" title={r.po}>{r.po || "—"}</td>
@@ -334,7 +349,9 @@ export default function GoodsReceiving() {
       <td className="so">{r.so || "—"}</td>
       <td className="act">{r.unlinked
         ? <><button type="button" className="btn sm" onClick={() => (r.link ? setLinking(r) : setView("resolve"))}>Link order</button>
-          {r.link?.sugCust && !r.link.customerId && <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{r.link.sugCust.name}?</button>}</>
+          {r.link?.sugNo
+            ? <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{(r.link.sugHow || "").startsWith("🤖") ? "🤖 " : ""}#{r.link.sugNo}?</button>
+            : r.link?.sugCust && !r.link.customerId && !r.link.us && <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{r.link.sugCust.name}?</button>}</>
         : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}
         {!r.key.startsWith("h") && ((r.parts || [r.key]).every((k) => ignored[k])
           ? <button type="button" className="rv-ign on" onClick={() => ignore(r, false)} title="Put it back in the lists">Restore</button>
@@ -377,6 +394,7 @@ export default function GoodsReceiving() {
 
         <div className="rv-head-r"><div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
           <Link className="btn primary rv-ck" href="/shop/receiving/checkin" title="Count jobs' goods in, size by size">✓ Check-In{ck && (ck.ready + ck.issue) > 0 && <span className="rv-ck-n">{ck.ready ? <i className="rd" title="Jobs on today's schedule (or earlier) with everything here">{ck.ready} ready today</i> : null}{ck.issue ? <i className="pb">{ck.issue} problem{ck.issue === 1 ? "" : "s"}</i> : null}</span>}</Link>
+          <button type="button" className="btn" disabled={aiBusy} onClick={(e) => askAi(e.shiftKey)} title="Have the AI match the shipments that aren't linked yet (it also runs on its own every 20 minutes). Shift-click: look at every one again.">{aiBusy ? "AI is matching…" : "🤖 AI Match"}</button>
           <button type="button" className="btn" onClick={() => setTruck(true)}>Receive S&amp;S Truck</button>
           <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import Supplier Manifests"}<input type="file" hidden accept=".xlsx,.csv" multiple onChange={(e) => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ""; upload(fs); }} /></label>
         </div>
@@ -492,6 +510,7 @@ export default function GoodsReceiving() {
 
       </div>
       </>}
+      {items && <ItemsModal r={items} onClose={() => setItems(null)} onLink={items.unlinked && items.link ? () => { const r = items; setItems(null); setLinking(r); } : undefined} />}
       {linking && <LinkModal r={linking} onClose={() => setLinking(null)} onDone={(m) => { setLinking(null); setNote(m); load(); loadPending(); setRefreshKey((k) => k + 1); if (q.trim().length >= 2) setQ(q + " "); }} />}
       {freight && <FreightModal r={freight} onClose={() => setFreight(null)} onDone={(m) => { setFreight(null); setNote(m); loadPending(); }} />}
       {truck && <TruckModal onClose={() => setTruck(false)} onDone={(m) => { setTruck(false); setNote(m); load(); loadPending(); setRefreshKey((k) => k + 1); }} />}
@@ -733,7 +752,9 @@ function FreightModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onD
  */
 function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone: (msg: string) => void }) {
   const li = r.link!;
-  const [cust, setCust] = useState<{ id: string; name: string } | null>(li.customerId ? { id: li.customerId, name: li.customerName || r.who } : null);
+  const [cust, setCust] = useState<{ id: string; name: string } | null>(li.customerId ? { id: li.customerId, name: li.customerName || r.who } : li.us && li.sugCust ? li.sugCust : null);
+  // why this order: saved with the link, the AI learns from it
+  const [why, setWhy] = useState("");
   const [custs, setCusts] = useState<{ id: string; label: string }[]>([]);
   const [who, setWho] = useState("");
   const [orders, setOrders] = useState<{ id: string; number: number; nickname: string; po: string; due_date: string | null; status: string; printavo: boolean; items: string; pcs: number; match: boolean }[] | null>(null);
@@ -762,8 +783,8 @@ function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone
     setBusy(true); setErr("");
     const post = (body: unknown) => fetch("/api/goods/manifest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(async (x) => { const j = await x.json().catch(() => ({})); if (!x.ok || j.error) throw new Error(j.error || "Couldn't link."); return j; });
     try {
-      if (li.us) await post({ assign: { lineIds: li.lineIds, orderId: pick, kind: "blanks" } });
-      else await post({ link: li.lineIds.map((id) => ({ lineId: id, orderId: pick })) });
+      if (li.us) await post({ assign: { lineIds: li.lineIds, orderId: pick, kind: "blanks" }, note: why.trim() });
+      else await post({ link: li.lineIds.map((id) => ({ lineId: id, orderId: pick })), note: why.trim() });
       const o = orders?.find((x) => x.id === pick);
       const msg = `Linked ${r.who === "FBS" ? "our blanks" : cust?.name || r.who} (${r.sub} ${r.so}) to ${o?.printavo ? "Printavo " : ""}#${o?.number}.`;
       // the manifest calls them something else (BEETLEJUICE GLOBAL LLC → Purple Stitch): ask to make it a rule
@@ -798,7 +819,8 @@ function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone
         <div className="lk-body">
           {li.styles && <div className="faint" style={{ fontSize: 13 }}>What shipped: {li.styles}</div>}
           <div className="lk-cust">
-            {!cust && li.sugCust && !li.customerId && (
+            {li.sugHow && li.sugNo ? <div className="lk-ai"><b>{li.sugHow.startsWith("🤖") ? "AI guess" : "Our guess"}: #{li.sugNo}</b><p>{li.sugHow.replace(/^🤖 AI( thinks #\d+)?:\s*/, "")}</p></div> : null}
+            {!cust && li.sugCust && !li.customerId && !li.us && (
               <div className="lk-guess">
                 <b>I think “{li.name}” is {li.sugCust.name}.</b>
                 <p>{li.sugHow}</p>
@@ -816,25 +838,86 @@ function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone
             )}
           </div>
           {cust && (
-            !orders ? <div className="faint">Loading {cust.name}&apos;s open orders…</div> : !orders.length ? <div className="gb-empty">{cust.name} has no open orders or open Printavo jobs.</div> : (
+            !orders ? <div className="faint">Loading {cust.name}&apos;s open orders…</div> : !orders.length ? <div className="gb-empty">{cust.name} has no open orders or recent jobs.</div> : (
               <div className="lk-list" role="radiogroup" aria-label="Open orders">
-                <div className="faint" style={{ fontSize: 12.5, marginBottom: 2 }}>Select the order these goods are for:</div>
+                <div className="faint" style={{ fontSize: 12.5, marginBottom: 2 }}>Select the order these goods are for (completed jobs are at the bottom):</div>
                 {orders.map((o) => (
                   <label key={o.id} className={"lk-o" + (pick === o.id ? " on" : "")}>
                     <input type="radio" name="lk" checked={pick === o.id} onChange={() => setPick(o.id)} />
                     <span className="lk-n">#{o.number}</span>
                     <span className="lk-m"><b>{o.nickname || o.po || "Order"}</b>{o.po && o.po !== o.nickname ? <span className="faint"> · PO {o.po}</span> : null}<br /><span className="faint">{o.items || "—"}{o.pcs ? ` · ${o.pcs} pcs` : ""}</span></span>
-                    <span className="lk-r">{o.match && <span className="rv-tag lk-match">PO match</span>}{li.suggest === o.id && !o.match && <span className="rv-tag lk-match">our guess</span>}{o.printavo && <span className="rv-tag">Printavo</span>}<span className="faint">{o.due_date ? `due ${new Date(o.due_date + "T12:00").toLocaleDateString([], { month: "numeric", day: "numeric" })}` : ""}</span></span>
+                    <span className="lk-r">{o.match && <span className="rv-tag lk-match">PO match</span>}{li.suggest === o.id && !o.match && <span className="rv-tag lk-match">{(li.sugHow || "").startsWith("🤖") ? "AI guess" : "our guess"}</span>}{/completed/i.test(o.status) && <span className="rv-tag lk-done">Completed</span>}{o.printavo && <span className="rv-tag">Printavo</span>}<span className="faint">{o.due_date ? `due ${new Date(o.due_date + "T12:00").toLocaleDateString([], { month: "numeric", day: "numeric" })}` : ""}</span></span>
                   </label>
                 ))}
               </div>
             )
+          )}
+          {cust && orders && orders.length > 0 && (
+            <label className="lk-why"><span className="faint">Why this order? <i>(optional: the AI learns from it)</i></span>
+              <input type="text" value={why} onChange={(e) => setWhy(e.target.value)} maxLength={300} placeholder="e.g. LEHS = Little Elm High School; same Sport Grey 5000 sizes" /></label>
           )}
           {false && <label className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" style={{ width: "auto" }} />Remember: {li.name}{li.account ? ` (account ${li.account})` : ""} is {cust!.name}</label>}
           {err && <div className="pv-err">{err}</div>}
           <div className="row" style={{ gap: 8 }}><span className="spacer" /><button type="button" className="btn ghost" disabled={busy} onClick={onClose}>Cancel</button><button type="button" className="btn primary" disabled={busy || !pick} onClick={link}>{busy ? "Linking…" : "Link order"}</button></div>
         </div>
       )}
+      </div>
+    </div>
+  );
+}
+
+type ItemLine = { id: string; supplier: string; customer_name: string; customer_po: string; supplier_order: string; tracking: string; box: string; mill: string; style: string; color: string; size: string; qty_ordered: number; qty_shipped: number; kind: string; match_how: string; suggest_how: string; linked_by: string | null };
+const SIZE_SEQ = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "OS"];
+const SIZE_FIX: Record<string, string> = { SM: "S", SMALL: "S", MD: "M", MED: "M", MEDIUM: "M", LG: "L", LARGE: "L", XXL: "2XL", XXXL: "3XL", "2X": "2XL", "3X": "3XL", OSFA: "OS" };
+const sz = (z: string) => { const k = z.toUpperCase().replace(/\s+/g, ""); return SIZE_FIX[k] || k; };
+const sizeRank = (z: string) => { const i = SIZE_SEQ.indexOf(z); return i < 0 ? 100 : i; };
+
+/** What's actually in a shipment: every style and color with its sizes, straight from the supplier's manifest. */
+function ItemsModal({ r, onClose, onLink }: { r: Row; onClose: () => void; onLink?: () => void }) {
+  const [lines, setLines] = useState<ItemLine[] | null>(null), [err, setErr] = useState("");
+  useEffect(() => {
+    const body = r.lineIds?.length ? { lineIds: r.lineIds } : { tracking: r.trks.map((k) => k.tracking).filter(Boolean) };
+    fetch("/api/goods/manifest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items: body }) })
+      .then((x) => x.json()).then((j) => { if (j.error) setErr(j.error); setLines(j.lines || []); }).catch(() => setErr("Couldn't load the items."));
+  }, [r]);
+  const ls = lines || [];
+  const sizes = [...new Set(ls.map((l) => sz(l.size)))].sort((a, b) => sizeRank(a) - sizeRank(b) || a.localeCompare(b));
+  const byItem = new Map<string, { mill: string; style: string; color: string; got: Record<string, number>; ord: Record<string, number> }>();
+  for (const l of ls) {
+    const k = `${l.mill}|${l.style}|${l.color}`;
+    const x = byItem.get(k) || { mill: l.mill, style: l.style, color: l.color, got: {}, ord: {} };
+    const z = sz(l.size);
+    x.got[z] = (x.got[z] || 0) + (l.qty_shipped || 0); x.ord[z] = (x.ord[z] || 0) + (l.qty_ordered || 0);
+    byItem.set(k, x);
+  }
+  const items = [...byItem.values()].sort((a, b) => `${a.style} ${a.color}`.localeCompare(`${b.style} ${b.color}`));
+  const tot = (m: Record<string, number>) => Object.values(m).reduce((a, n) => a + n, 0);
+  const short = items.some((it) => sizes.some((z) => (it.ord[z] || 0) > (it.got[z] || 0)));
+  const how = ls.find((l) => l.match_how)?.match_how || ls.find((l) => l.suggest_how)?.suggest_how || "";
+  const pos = [...new Set(ls.map((l) => l.customer_po).filter(Boolean))].join(" / ") || r.po;
+  return (
+    <div className="pp-modal" role="dialog" aria-modal="true" aria-label="What's in this shipment" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="pp-sheet it-sheet">
+        <div className="pp-sheet-h"><div><b>{r.who}</b>{r.number ? <> · <Link href={r.href}>#{r.number}</Link></> : null} <span className="faint" style={{ fontSize: 14 }}>· {r.sub} {r.so}{pos ? ` · PO ${pos}` : ""} · {r.boxes} box{r.boxes === 1 ? "" : "es"}</span></div><button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>✕</button></div>
+        <div className="lk-body">
+          {!lines ? <div className="faint">Loading the manifest…</div> : !items.length ? <div className="gb-empty">{err || "This shipment isn't on a supplier manifest, so there's no style / size breakdown for it."}</div> : (
+            <div className="it-wrap"><table className="it-grid">
+              <thead><tr><th>Style</th><th>Color</th>{sizes.map((z) => <th key={z} className="r">{z}</th>)}<th className="r">Total</th></tr></thead>
+              <tbody>{items.map((it) => (
+                <tr key={`${it.mill}|${it.style}|${it.color}`}>
+                  <td><b>{it.style}</b>{it.mill ? <div className="faint" style={{ fontSize: 11.5 }}>{it.mill}</div> : null}</td>
+                  <td>{it.color}</td>
+                  {sizes.map((z) => { const g = it.got[z] || 0, o = it.ord[z] || 0; return <td key={z} className={"r" + (o > g ? " it-short" : "")} title={o > g ? `ordered ${o}, shipped ${g}` : ""}>{g || (o ? 0 : "")}{o > g ? <sup>/{o}</sup> : null}</td>; })}
+                  <td className="r"><b>{tot(it.got)}</b></td>
+                </tr>
+              ))}</tbody>
+              <tfoot><tr><td colSpan={2}>Total</td>{sizes.map((z) => <td key={z} className="r">{items.reduce((a, it) => a + (it.got[z] || 0), 0) || ""}</td>)}<td className="r"><b>{items.reduce((a, it) => a + tot(it.got), 0)}</b></td></tr></tfoot>
+            </table></div>
+          )}
+          {short && <div className="faint" style={{ fontSize: 12.5 }}><span className="it-short">Red</span> sizes shipped short: shipped / <sup>ordered</sup>.</div>}
+          {how && <div className="faint" style={{ fontSize: 12.5 }}>{ls.some((l) => l.match_how) ? "Linked: " : "Guess: "}{how}</div>}
+          <div className="row" style={{ gap: 8 }}><span className="spacer" />{onLink && <button type="button" className="btn primary" onClick={onLink}>Link order</button>}<button type="button" className="btn ghost" onClick={onClose}>Close</button></div>
+        </div>
       </div>
     </div>
   );
