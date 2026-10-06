@@ -95,6 +95,17 @@ type Candidate = { id: string; number: number; nickname: string; po_number: stri
  */
 async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: string; kind: "blanks"; how: string; sure: boolean } | null> {
   const po = norm(g.customer_po), core = poCore(g.customer_po);
+  // the job number in the PO ("34380 STEADHAM"): that job, whatever its status (blanks for a job that's already
+  // printed still belong to it, and then drop off Goods & Receiving)
+  const nums = [...new Set(words(g.customer_po).filter((w) => /^\d{4,6}$/.test(w)))];
+  if (nums.length) {
+    const [{ data: an }, { data: on }] = await Promise.all([
+      admin.from("archived_orders").select("id, visual_id").in("visual_id", nums).limit(5),
+      admin.from("orders").select("id, number").in("number", nums.map(Number)).limit(5),
+    ]);
+    const hits = [...((an || []) as { id: string; visual_id: string | number }[]).map((x) => ({ id: PV + x.id, n: +x.visual_id })), ...((on || []) as { id: string; number: number }[]).map((x) => ({ id: x.id, n: x.number }))];
+    if (hits.length === 1) return { orderId: hits[0].id, kind: "blanks", how: `job number in the PO (#${hits[0].n})`, sure: true };
+  }
   const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
   const [{ data }, { data: ar }] = await Promise.all([
     admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, due_date, groups, lines, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).limit(400),
