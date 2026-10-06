@@ -25,7 +25,9 @@ const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
 type Focus = "arrived" | "today" | "way" | "past" | "problems";
 type GroupBy = "carrier" | "supplier";
 type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; po: string; so: string; boxes: number; pcs: number;
-  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean }[]; lineIds?: string[];
+  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean; /** the vendor, on a row that combines several */ src?: string }[]; lineIds?: string[];
+  /** a combined row: the shipments it's made of (one job, several vendors / supplier orders) */
+  parts?: string[];
   link?: LinkInfo; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
 type LinkInfo = { lineIds: string[]; customerId: string | null; customerName: string; us: boolean; supplier: string; name: string; account: string; suggest: string | null; styles: string;
   /** an unknown account whose goods fit one customer's job: who we think it is, and why */
@@ -119,13 +121,18 @@ export default function GoodsReceiving() {
   // shipments ignored by hand: out of every list, under the Ignored tab
   const [ignored, setIgnored] = useState<Record<string, { at: string; by: string; label: string }>>({});
   useEffect(() => { fetch("/api/goods/ignore", { cache: "no-store" }).then((r) => r.json()).then((j) => setIgnored(j.ignored || {})).catch(() => {}); }, []);
-  async function ignore(r: { key: string; who: string; number: number; so: string }, yes: boolean) {
-    const before = ignored;
-    setIgnored((m) => { const n = { ...m }; if (yes) n[r.key] = { at: new Date().toISOString(), by: "", label: `${r.who}${r.number ? ` #${r.number}` : ""}${r.so ? ` · ${r.so}` : ""}` }; else delete n[r.key]; return n; });
-    const res = await fetch("/api/goods/ignore", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: r.key, ignore: yes, label: `${r.who}${r.number ? ` #${r.number}` : ""}${r.so ? ` · ${r.so}` : ""}` }) }).catch(() => null);
-    const j = res ? await res.json().catch(() => ({})) : {};
-    if (!res?.ok || j.error) { setIgnored(before); setNote(`Couldn't ${yes ? "ignore" : "restore"} it: ${j.error || "no answer"}`); return; }
-    setIgnored(j.ignored || {});
+  async function ignore(r: { key: string; who: string; number: number; so: string; parts?: string[] }, yes: boolean) {
+    const before = ignored, keys = r.parts?.length ? r.parts : [r.key];
+    const label = `${r.who}${r.number ? ` #${r.number}` : ""}${r.so ? ` · ${r.so}` : ""}`;
+    setIgnored((m) => { const n = { ...m }; for (const k of keys) { if (yes) n[k] = { at: new Date().toISOString(), by: "", label }; else delete n[k]; } return n; });
+    let last: Record<string, { at: string; by: string; label: string }> | null = null;
+    for (const k of keys) {
+      const res = await fetch("/api/goods/ignore", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: k, ignore: yes, label }) }).catch(() => null);
+      const j = res ? await res.json().catch(() => ({})) : {};
+      if (!res?.ok || j.error) { setIgnored(before); setNote(`Couldn't ${yes ? "ignore" : "restore"} it: ${j.error || "no answer"}`); return; }
+      last = j.ignored || {};
+    }
+    if (last) setIgnored(last);
   }
   // Check-In: this week's jobs ready to count, and open check-in problems (badges on the Check-In button)
   const [ck, setCk] = useState<{ ready: number; issue: number } | null>(null);
@@ -250,8 +257,26 @@ export default function GoodsReceiving() {
       link: { lineIds: g.lineIds, customerId: g.customer?.id || null, customerName: g.customer?.name || "", us: g.us, supplier: g.supplier, name: g.customer_name, account: g.customer_account, suggest: g.lines.find((l) => l.suggest)?.suggest || null, styles: g.styles, sugCust: g.suggestCustomer || null, sugHow: g.how } })),
   ];
   // ignored by hand: out of every list (the Ignored tab shows them)
-  const ignoredRows = rows.filter((r) => ignored[r.key]);
-  const liveRows = rows.filter((r) => !ignored[r.key]);
+  // one job's goods from several vendors / supplier orders (Gear Go Live PO 10212: part SanMar, part S&S) are one row;
+  // each tracking number says which vendor it came from
+  const combine = (list: Row[]): Row[] => {
+    const out: Row[] = [], byJob = new Map<string, Row[]>();
+    for (const r of list) { if (r.unlinked || !r.href) { out.push(r); continue; } const k = `${r.href}|${r.side}`; byJob.set(k, [...(byJob.get(k) || []), r]); }
+    for (const rs of byJob.values()) {
+      if (rs.length === 1) { out.push(rs[0]); continue; }
+      const f = rs[0], subs = [...new Set(rs.map((x) => x.sub))];
+      const state: Row["state"] = rs.every((x) => x.state === "arrived") ? "arrived" : rs.some((x) => x.state === "problem") ? "problem" : "way";
+      const latest = (xs: (string | null)[]) => (xs.filter(Boolean) as string[]).sort().pop() || null;
+      out.push({ ...f, key: rs.map((x) => x.key).join("+"), parts: rs.map((x) => x.key), sub: subs.join(" + "), po: [...new Set(rs.map((x) => x.po).filter(Boolean))].join(" / "), so: rs.map((x) => x.so).filter(Boolean).join(" · "),
+        boxes: rs.reduce((a, x) => a + (x.boxes || 0), 0), pcs: rs.reduce((a, x) => a + (x.pcs || 0), 0),
+        trks: rs.flatMap((x) => x.trks.map((k) => ({ ...k, src: subs.length > 1 ? x.sub : undefined }))), lineIds: rs.flatMap((x) => x.lineIds || []),
+        state, late: rs.some((x) => x.late), noScan: rs.some((x) => x.noScan), at: latest(rs.map((x) => x.at)), deliveredAt: state === "arrived" ? latest(rs.map((x) => x.deliveredAt)) : null,
+        shipped: (rs.map((x) => x.shipped).filter(Boolean) as string[]).sort()[0] || null });
+    }
+    return out;
+  };
+  const ignoredRows = combine(rows.filter((r) => ignored[r.key]));
+  const liveRows = combine(rows.filter((r) => !ignored[r.key]));
   // search results (every manifest, any age) as rows in the same grid
   const hitRows: Row[] = (hits || []).map((h) => rowOf({ key: "h" + h.key, side: h.kind === "blanks" || h.who === "FBS" ? "fbs" : "customer", number: h.order?.number || 0, href: h.order?.href || "", who: h.who, what: h.kind === "blanks" ? "Our blanks" : "Customer goods", sub: h.supplier === "sanmar" ? "SanMar" : "S&S", so: h.supplier_order, po: h.po, boxes: h.boxes, pcs: h.pcs,
     trks: h.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), statuses: h.tracking.map((k) => k.status),
@@ -301,17 +326,17 @@ export default function GoodsReceiving() {
         ? null
         : <div style={{ marginTop: 4 }}><button type="button" className="btn sm primary" onClick={() => setFreight(r)}>Freight received</button></div>) : null}</td>
       <td className={r.late ? "bad" : ""}>{r.state === "arrived" ? "" : r.at ? new Date(r.at.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "numeric", day: "numeric" }) : "—"}{r.need && r.state !== "arrived" ? <div className="faint" style={{ fontSize: 11.5 }}>need by {day(r.need)}</div> : null}</td>
-      <td className="trk"><div>{(open[r.key] ? r.trks : r.trks.slice(0, 1)).map((k, i) => k.tracking
+      <td className="trk"><div>{(open[r.key] ? r.trks : r.parts ? r.trks.filter((k, i) => r.trks.findIndex((x) => x.src === k.src) === i) : r.trks.slice(0, 1)).map((k, i) => k.tracking
         ? k.freight ? <span key={k.tracking}><b style={{ fontFamily: "inherit" }}>{k.carrier}</b><br /><a href={trackingUrl(/r&l/i.test(k.carrier) ? "r&l" : "", k.tracking)} target="_blank" rel="noreferrer">PRO {k.tracking}</a></span>
-        : <a key={k.tracking} href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" className={unscanned(r, k) ? "noscan" : k.delivered ? "done" : ""} title={unscanned(r, k) ? "Label created, never scanned by the carrier" : ""}>{k.tracking}</a>
+        : <span key={k.tracking} className="rv-trk1">{k.src && <span className="rv-src">{k.src}</span>}<a href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" className={unscanned(r, k) ? "noscan" : k.delivered ? "done" : ""} title={unscanned(r, k) ? "Label created, never scanned by the carrier" : ""}>{k.tracking}</a></span>
         : <span key={"l" + i} className="faint">{k.carrier === "S&S Activewear" ? "S&S truck" : k.carrier} · no tracking</span>)}
-        {r.trks.length > 1 && <button type="button" className="rv-more" onClick={() => setOpen({ ...open, [r.key]: !open[r.key] })} title={r.trks.map((k) => k.tracking).join("\n")}>{open[r.key] ? "show less" : `+${r.trks.length - 1} more`}</button>}</div></td>
+        {r.trks.length > (r.parts ? new Set(r.trks.map((k) => k.src)).size : 1) && <button type="button" className="rv-more" onClick={() => setOpen({ ...open, [r.key]: !open[r.key] })} title={r.trks.map((k) => k.tracking).join("\n")}>{open[r.key] ? "show less" : `+${r.trks.length - (r.parts ? new Set(r.trks.map((k) => k.src)).size : 1)} more`}</button>}</div></td>
       <td className="so">{r.so || "—"}</td>
       <td className="act">{r.unlinked
         ? <><button type="button" className="btn sm" onClick={() => (r.link ? setLinking(r) : setView("resolve"))}>Link order</button>
           {r.link?.sugCust && !r.link.customerId && <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{r.link.sugCust.name}?</button>}</>
         : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}
-        {!r.key.startsWith("h") && (ignored[r.key]
+        {!r.key.startsWith("h") && ((r.parts || [r.key]).every((k) => ignored[k])
           ? <button type="button" className="rv-ign on" onClick={() => ignore(r, false)} title="Put it back in the lists">Restore</button>
           : <button type="button" className="rv-ign" onClick={() => ignore(r, true)} title="Ignore this shipment: it leaves every list (find it under Ignored)">Ignore</button>)}</td>
     </tr>

@@ -5046,3 +5046,6 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .rv-sugc:hover{filter:brightness(.97)}
 .lk-guess{flex-basis:100%;padding:10px 12px;border-radius:10px;background:#fff8e6;border:1px solid #f0d58a;margin-bottom:8px}
 .lk-guess p{margin:4px 0 8px;font-size:13px}
+/* a row combining several vendors: which one each tracking number is from */
+.rv-trk1{display:inline-flex;align-items:center;gap:4px}
+.rv-src{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-3);background:var(--surface-2);border:1px solid var(--line-2);border-radius:4px;padding:0 4px}
