@@ -683,8 +683,8 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
       for (const a of p.alloc) rows.push(...(await splitLine(admin, a.line, a.parts)));
       await linkLines(admin, g, rows, p.how, "auto"); out.linked++; continue;
     }
-    // keep an existing suggestion as it is (someone may be looking at it); make one when there's none yet
-    if (!had && p.alloc.length) { await resolveShipment(admin, g); out.suggested++; }
+    // a new suggestion, or a better one than the old guess (the matching has learned something since)
+    if (p.alloc.length && (!had || g.lines.some((l) => (l.suggest_how || "") !== p.how))) { await resolveShipment(admin, g); out.suggested++; }
   }
   // tracking for shipments still waiting for an order
   const trk = new Map<string, Waiting>();
