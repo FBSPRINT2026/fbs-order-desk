@@ -305,7 +305,7 @@ async function openOrders(admin: SupabaseClient, custIds: string[]): Promise<Ope
   const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
   const [{ data: os }, { data: ar }] = await Promise.all([
     admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, submitted_at, due_date, groups, lines").in("customer_id", custIds).not("status", "in", "(completed,quote)"),
-    admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data").in("customer_id", custIds).or(`due_date.gte.${since},due_date.is.null`).limit(200),
+    admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data").in("customer_id", custIds).or(`due_date.gte.${since},due_date.is.null`).not("status_name", "ilike", "%job completed%").order("due_date", { ascending: false, nullsFirst: true }).limit(600),
   ]);
   const live = ((os || []) as (Candidate & { submitted_at: string | null; due_date: string | null; groups: unknown; lines: unknown })[]).filter((o) => !(o.status === "request" && !o.submitted_at));
   const pv = ((ar || []) as { id: string; visual_id: string | number; nickname: string; po_number: string; customer_id: string | null; status_name: string; due_date: string | null; data: { groups?: { lines?: { itemNumber?: string; brand?: string; color?: string; sizes?: Record<string, number> }[] }[] } }[])
@@ -407,6 +407,19 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
     if (byNum.length === 1) {
       const r = pr.find((x) => numRuns(`${byNum[0].nickname} ${byNum[0].po_number}`).includes(x));
       return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: byNum[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `PO number ${r} is on #${byNum[0].number}` };
+    }
+    // the number is on several jobs (a screen print job and its embroidery job, "42998 ARMSTRONG ATLANTA" and
+    // "42998 ARMSTRONG ATLANTA - EMBROIDERY"): split the goods between them by style, color and size
+    if (byNum.length > 1) {
+      const a = allocate(lines, byNum);
+      if (!a.unplaced.length) return { customerId, ...a, auto: a.sure, how: `PO number on ${byNum.length} jobs (#${byNum.map((o) => o.number).join(", #")}), split by style, color and size` };
+    }
+    // not on an open job: maybe on one that's already printed (goods for it still belong to it, then drop off)
+    if (!byNum.length) {
+      const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
+      const { data: done } = await admin.from("archived_orders").select("id, visual_id, nickname, po_number").in("customer_id", custIds).gte("due_date", since).ilike("status_name", "%job completed%").limit(600);
+      const hit = ((done || []) as { id: string; visual_id: string | number; nickname: string; po_number: string }[]).filter((o) => numRuns(`${o.nickname} ${o.po_number}`).some((r) => pr.includes(r)));
+      if (hit.length === 1) return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: PV + hit[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `PO number is on #${hit[0].visual_id} (already completed)` };
     }
     // the customer numbers their jobs this way, but no open job has this number yet (the job isn't entered yet):
     // wait for it instead of guessing another job
