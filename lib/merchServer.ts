@@ -105,7 +105,7 @@ export async function loadOrders(admin: SupabaseClient, storeId: string): Promis
 /* ------------------------------------------------------------------ the public store */
 
 export type PublicStore = Omit<Store, "password" | "notes" | "created_by" | "order_id" | "contact"> & { locked: boolean; open: boolean; contactName: string; /** give-back raised so far (paid orders) */ raised: number };
-export type PublicProduct = Omit<Product, "cost" | "base_price" | "giveback"> & { prices: Record<string, number> };
+export type PublicProduct = Omit<Product, "cost" | "base_price" | "giveback" | "garment_id"> & { garment_id?: string | null; prices: Record<string, number> };
 
 /** The store as a shopper sees it (no costs, FBS prices or notes). With a password, products come only after it's given. */
 export async function publicStore(slug: string, pass = ""): Promise<{ store: PublicStore; products: PublicProduct[] } | null> {
@@ -121,8 +121,10 @@ export async function publicStore(slug: string, pass = ""): Promise<{ store: Pub
   const locked = !!st.password && pass.trim().toLowerCase() !== st.password.trim().toLowerCase();
   const { data: ps } = locked ? { data: [] } : await admin.from("merch_products").select("*").eq("store_id", st.id).eq("active", true).order("position");
   const products = ((ps || []) as Product[]).map((p) => {
-    const { cost: _c, base_price: _b, giveback: _g, ...rest } = p;
-    return { ...rest, prices: Object.fromEntries((p.sizes || []).map((z) => [z, unitPrice(p, z)])) } as PublicProduct;
+    const { cost: _c, base_price: _b, giveback: _g, garment_id: _gi, ...rest } = p;
+    // nothing about our costs or blanks goes to the browser: just what the shopper sees
+    const { youth, ...imprint } = p.imprint || {};
+    return { ...rest, imprint: { ...imprint, youth: youth ? { supplier: "", style: youth.style, brand: youth.brand, garment_id: null, sizes: youth.sizes, cost: {} } : null }, prices: Object.fromEntries((p.sizes || []).map((z) => [z, unitPrice(p, z)])) } as PublicProduct;
   });
   // the fundraiser meter (only when the store has a goal)
   let raised = 0;
@@ -300,7 +302,9 @@ export async function orderByToken(token: string) {
   if (!s) return null;
   const [st] = await autoClose(admin, [s as Store]);
   const { data: items } = await admin.from("merch_order_items").select("*").eq("order_id", o.id).order("created_at");
-  const { data: ps } = await admin.from("merch_products").select("id, name, colors, sizes, base_price, giveback, upcharges, imprint, active").eq("store_id", st.id);
+  const { data: ps0 } = await admin.from("merch_products").select("id, name, colors, sizes, base_price, giveback, upcharges, imprint, active, style").eq("store_id", st.id);
+  // the browser gets prices and pictures, not our blank costs
+  const ps = ((ps0 || []) as (Product & { style: string })[]).map(({ imprint, style: _s, ...p }) => ({ ...p, imprint: { youth: imprint?.youth ? { ...imprint.youth, cost: {}, garment_id: null } : null } }));
   // brothers and sisters from the same checkout (their own bags)
   const { data: sib } = o.checkout_id ? await admin.from("merch_orders").select("number, token, answers").eq("checkout_id", o.checkout_id).neq("id", o.id).order("number") : { data: [] };
   const siblings = ((sib || []) as Pick<MerchOrder, "number" | "token" | "answers">[]).map((x) => ({ code: orderCode(st, x.number), token: x.token, student: x.answers?.student || "" }));

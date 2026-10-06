@@ -176,7 +176,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 {(() => { const t = ctx.customers.find((x) => x.id === o.customer_id)?.payment_terms || "receipt"; const d = o.type === "invoice" ? payDueDate(o, t) : null; return <div className="aa-terms"><span>Payment terms</span><b>{PAY_TERMS[t]}{d && c.balance > 0.004 ? ` · due ${fmtDateLong(d)}` : ""}</b></div>; })()}
                 {canPay ? (
                   <PayPanel items={[{ id: o.id, number: o.number, nickname: o.nickname || "", balance: c.balance, deposit: c.paid < 0.005 ? deposit : undefined }]}
-                    pay={ctx.settings.pay} staxToken={process.env.STAX_WEB_PAYMENTS_TOKEN || ""} canAct={!preview} />
+                    pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} />
                 ) : o.type === "quote" ? (
                   <div className="muted" style={{ fontSize: 13 }}>You can pay online after you approve the quote.</div>
                 ) : <div className="okmsg"><b>Paid in full.</b> Thank you!</div>}

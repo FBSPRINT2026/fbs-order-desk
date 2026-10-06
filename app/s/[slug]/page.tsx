@@ -28,5 +28,5 @@ export default async function StorePage({ params, searchParams }: P) {
   // a shared link can open on an item, the bag or checkout
   const item = q.item && got.products.some((p) => p.id === q.item) ? q.item : undefined;
   const initial = { view: q.checkout ? "checkout" : item ? "item" : "home", item, bag: q.bag === "1" } as const;
-  return <Storefront store={got.store} products={got.products} preview={isStaff} staxToken={process.env.STAX_WEB_PAYMENTS_TOKEN || ""} initial={initial} />;
+  return <Storefront store={got.store} products={got.products} preview={isStaff} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} initial={initial} />;
 }
