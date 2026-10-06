@@ -30,6 +30,7 @@ import { PAY_TERMS, SIZES } from "@/lib/pricing";
 const EVENT_LABEL: Record<string, string> = {
   created: "Created", sent: "Sent to customer", approved: "Customer approved quote", changes: "Customer asked for changes",
   proof_approved: "Proof approved", proof_changes: "Proof changes requested", proofs_requested: "Proof approval requested",
+  art_approved: "Art marked approved by staff", seps_requested: "Separations requested",
   payment: "Payment received", viewed: "Customer viewed", request_submitted: "Customer sent in the request", reorder: "Reordered by the customer",
 };
 

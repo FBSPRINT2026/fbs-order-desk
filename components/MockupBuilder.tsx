@@ -891,13 +891,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!g) throw new Error("Order group not found.");
       const { data: ex } = await sb.from("separations").select("id, imprint_id, location").eq("order_id", o.id).neq("status", "cancelled");
       const have = (ex || []) as { id: string; imprint_id: string | null; location: string }[];
-      const { data: { user } } = await sb.auth.getUser(), me = (user?.email || "").toLowerCase();
       const missing = g.imprints.filter((im) => im.method === "screen" && im.design_id && !have.some((x) => x.imprint_id === im.id));
       if (missing.length) {
-        const rows = missing.map((im) => ({ order_id: o.id, group_id: g.id, imprint_id: im.id, location: im.location || "Imprint", design_id: im.design_id || null, customer_id: o.customer_id, garment_color: g.lines.find((l) => l.color)?.color || "", due_date: o.due_date, requested_by: me, settings: { garments: [...new Set(g.lines.map((l) => l.color).filter(Boolean))], widthIn: parseFloat(String(im.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || undefined } }));
-        const r = await sb.from("separations").insert(rows).select("id, imprint_id, location");
-        if (r.error) throw new Error(r.error.message);
-        have.push(...((r.data || []) as typeof have));
+        // behind the art check: the order approved, its proofs approved, the art saved (lib/artGate.ts)
+        const r = await fetch("/api/separations/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: o.id, only: missing.map((im) => im.id) }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          const why = (j.gate?.reasons as string[] | undefined)?.join(" ") || j.error || "Couldn't make them.";
+          if (!have.some((x) => g.imprints.some((im) => im.id === x.imprint_id))) { setMsg("Not ready for separations: " + why); setSaving(false); return; }
+        }
+        const { data: ex2 } = await sb.from("separations").select("id, imprint_id, location").eq("order_id", o.id).neq("status", "cancelled");
+        have.splice(0, have.length, ...((ex2 || []) as typeof have));
       }
       const mine = have.filter((x) => g.imprints.some((im) => im.id === x.imprint_id));
       const rank = (loc: string) => { const l = (loc || "").toLowerCase(); return /sleeve/.test(l) ? 3 : /back|yoke|shoulder/.test(l) ? 2 : 1; };

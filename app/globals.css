@@ -5163,3 +5163,24 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .jf-big{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:min(1100px,96vw)}
 .jf-big img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:10px;background:#000}
 @media (max-width:760px){.jf-notes li{grid-template-columns:1fr}}
+
+/* Request Separations (calendar job panel, order page) behind the art check */
+.srq{display:flex;flex-direction:column;gap:10px;font-size:13.5px}
+.srq-ok{color:#1F7A47;font-weight:700}
+.srq-block{background:#FFF7E6;border:1px solid #F2C46D;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.srq-block>b{color:#8A5A00}
+.srq-block ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:2px}
+.srq-ask{display:flex;flex-direction:column;gap:6px;width:100%}
+.srq-ask label{display:flex;flex-direction:column;gap:4px;font-weight:600}
+.srq-ask textarea{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;resize:vertical;background:#fff}
+.srq-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.srq-l li{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line-2)}
+.srq-l li:first-child{border-top:0}
+.srq-what{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.srq-what small{color:var(--ink-3);font-size:12px}
+.srq-what .srq-prob{color:#B4401B}
+.srq-msg.ok{color:#1F7A47;font-weight:600}
+.srq-go{align-self:flex-start}
+.ms-seps{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:var(--panel, #fff)}
+.ms-seps-h{display:flex;flex-direction:column;gap:1px}
+.srq .btn:disabled{opacity:.45;cursor:not-allowed}
