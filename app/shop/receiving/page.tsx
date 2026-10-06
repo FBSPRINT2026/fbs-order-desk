@@ -17,7 +17,7 @@ import { useSticky } from "@/lib/useSticky";
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
 type BS = { id: string; order_id: string; blank_order_id: string | null; carrier: string; tracking: string; boxes: number | null; pcs: number | null; note: string; eta: string | null; track_status: string; track_detail: string; est_delivery: string | null; delivered_at: string | null };
-type View = "today" | "fbs" | "customer" | "resolve";
+type View = "today" | "fbs" | "customer" | "resolve" | "ignored";
 type Arrive = "past" | "today" | "tomorrow" | "later" | "nodate";
 const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
   { k: "past", label: "Should be here: not marked received" }, { k: "today", label: "Arriving today" }, { k: "tomorrow", label: "Tomorrow" }, { k: "later", label: "Later" }, { k: "nodate", label: "On the way, no date yet" },
@@ -114,10 +114,21 @@ export default function GoodsReceiving() {
   const [pending, setPending] = useState<PendingShipment[] | null>(null);
   const [pvGoods, setPvGoods] = useState<PrintavoGoods[]>([]);
   const [upBusy, setUpBusy] = useState(false), [refreshKey, setRefreshKey] = useState(0);
+  // shipments ignored by hand: out of every list, under the Ignored tab
+  const [ignored, setIgnored] = useState<Record<string, { at: string; by: string; label: string }>>({});
+  useEffect(() => { fetch("/api/goods/ignore", { cache: "no-store" }).then((r) => r.json()).then((j) => setIgnored(j.ignored || {})).catch(() => {}); }, []);
+  async function ignore(r: { key: string; who: string; number: number; so: string }, yes: boolean) {
+    const before = ignored;
+    setIgnored((m) => { const n = { ...m }; if (yes) n[r.key] = { at: new Date().toISOString(), by: "", label: `${r.who}${r.number ? ` #${r.number}` : ""}${r.so ? ` · ${r.so}` : ""}` }; else delete n[r.key]; return n; });
+    const res = await fetch("/api/goods/ignore", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: r.key, ignore: yes, label: `${r.who}${r.number ? ` #${r.number}` : ""}${r.so ? ` · ${r.so}` : ""}` }) }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    if (!res?.ok || j.error) { setIgnored(before); setNote(`Couldn't ${yes ? "ignore" : "restore"} it: ${j.error || "no answer"}`); return; }
+    setIgnored(j.ignored || {});
+  }
   // Check-In: this week's jobs ready to count, and open check-in problems (badges on the Check-In button)
   const [ck, setCk] = useState<{ ready: number; issue: number } | null>(null);
   useEffect(() => { fetch("/api/goods/checkin", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.jobs) setCk({ ready: (j.jobs as { state: string; day: string }[]).filter((x) => x.state === "ready" && x.day <= j.today).length, issue: (j.problems || []).length }); }).catch(() => {}); }, [refreshKey]);
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "fbs" || v === "customer" || v === "resolve") setViewState(v); }, []);
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "fbs" || v === "customer" || v === "resolve" || v === "ignored") setViewState(v); }, []);
   const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "today") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
   const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); if (j.error) setNote(`Couldn't load everything: ${j.error}`); }, []);
   useEffect(() => { loadPending(); }, [loadPending]);
@@ -142,7 +153,7 @@ export default function GoodsReceiving() {
   }
   const load = useCallback(async () => {
     const [{ data: os }, { data: bo }, { data: st }] = await Promise.all([
-      sb.from("orders").select("id, number, nickname, status, type, due_date, production_date, qty, customer_id, price_type, submitted_at").not("status", "in", "(completed,quote,quote_sent,request)").order("due_date", { ascending: true, nullsFirst: false }).limit(800),
+      sb.from("orders").select("id, number, nickname, status, type, due_date, production_date, qty, customer_id, price_type, submitted_at").not("status", "in", "(completed,ready,quote,quote_sent,request)").order("due_date", { ascending: true, nullsFirst: false }).limit(800),
       sb.from("blank_orders").select("*").neq("status", "cancelled").order("created_at", { ascending: false }).limit(500),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
@@ -236,6 +247,9 @@ export default function GoodsReceiving() {
     ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date,
       link: { lineIds: g.lineIds, customerId: g.customer?.id || null, customerName: g.customer?.name || "", us: g.us, supplier: g.supplier, name: g.customer_name, account: g.customer_account, suggest: g.lines.find((l) => l.suggest)?.suggest || null, styles: g.styles } })),
   ];
+  // ignored by hand: out of every list (the Ignored tab shows them)
+  const ignoredRows = rows.filter((r) => ignored[r.key]);
+  const liveRows = rows.filter((r) => !ignored[r.key]);
   // search results (every manifest, any age) as rows in the same grid
   const hitRows: Row[] = (hits || []).map((h) => rowOf({ key: "h" + h.key, side: h.kind === "blanks" || h.who === "FBS" ? "fbs" : "customer", number: h.order?.number || 0, href: h.order?.href || "", who: h.who, what: h.kind === "blanks" ? "Our blanks" : "Customer goods", sub: h.supplier === "sanmar" ? "SanMar" : "S&S", so: h.supplier_order, po: h.po, boxes: h.boxes, pcs: h.pcs,
     trks: h.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), statuses: h.tracking.map((k) => k.status),
@@ -245,8 +259,8 @@ export default function GoodsReceiving() {
   const term = q.trim().toLowerCase();
   const hay = (r: Row) => [r.who, r.po, r.so, r.sub, r.number ? `#${r.number} ${r.number}` : "", ...r.trks.map((k) => `${k.tracking} ${k.carrier}`)].join(" ");
   const searched: Row[] = term.length >= 2
-    ? [...rows.filter((r) => fuzzyHas(hay(r), term)), ...hitRows.filter((h) => !rows.some((r) => r.so && r.so === h.so && r.sub === h.sub && r.who === h.who) && !rows.some((r) => r.key === h.key))]
-    : rows;
+    ? [...liveRows.filter((r) => fuzzyHas(hay(r), term)), ...hitRows.filter((h) => !rows.some((r) => r.so && r.so === h.so && r.sub === h.sub && r.who === h.who) && !rows.some((r) => r.key === h.key))]
+    : liveRows;
   // the FBS orders / Customer supplied goods tabs just narrow the update to our blanks or the customers' goods
   const view_rows: Row[] = view === "fbs" ? searched.filter((r) => r.side === "fbs") : view === "customer" ? searched.filter((r) => r.side === "customer") : searched;
   const byAt = (a: Row, b: Row) => (a.at || "9999").localeCompare(b.at || "9999");
@@ -254,8 +268,8 @@ export default function GoodsReceiving() {
     arrived: view_rows.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
     // due today, plus S&S truck / freight still not signed for (they never report delivery on their own)
     today: view_rows.filter((r) => r.state !== "arrived" && (localDay(r.at) === t0 || (!!r.at && localDay(r.at) < t0 && r.trks.some((k) => !k.tracking || k.freight)))),
-    // the last week before today
-    past: view_rows.filter((r) => r.state === "arrived" && !!r.deliveredAt && localDay(r.deliveredAt) < t0 && localDay(r.deliveredAt) >= addDays(t0, -7)).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
+    // here before today and the job hasn't printed yet (printed jobs drop off; anything else can be ignored)
+    past: view_rows.filter((r) => r.state === "arrived" && !!r.deliveredAt && localDay(r.deliveredAt) < t0).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
     way: view_rows.filter((r) => r.state !== "arrived").sort(byAt),
     // delivery problems, labels never scanned by the next business day, and anything arriving after it's needed
     problems: view_rows.filter((r) => r.state === "problem" || r.late).sort(byAt),
@@ -293,7 +307,10 @@ export default function GoodsReceiving() {
       <td className="so">{r.so || "—"}</td>
       <td className="act">{r.unlinked
         ? <button type="button" className="btn sm" onClick={() => (r.link ? setLinking(r) : setView("resolve"))}>Link order</button>
-        : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}</td>
+        : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}
+        {!r.key.startsWith("h") && (ignored[r.key]
+          ? <button type="button" className="rv-ign on" onClick={() => ignore(r, false)} title="Put it back in the lists">Restore</button>
+          : <button type="button" className="rv-ign" onClick={() => ignore(r, true)} title="Ignore this shipment: it leaves every list (find it under Ignored)">Ignore</button>)}</td>
     </tr>
   );
   // every list: one block per carrier (S&S truck, UPS, FedEx, other) or per supplier (S&S, SanMar, other vendors)
@@ -315,7 +332,7 @@ export default function GoodsReceiving() {
   const LISTS: Record<Focus, { title: string; tone?: string; n: number; empty: string; rows: Row[] }> = {
     today: { title: "Arriving Today", n: L.today.length, rows: L.today, empty: "Nothing else due today." },
     arrived: { title: "Arrived Today", n: L.arrived.length, rows: L.arrived, empty: "Nothing has arrived yet today." },
-    past: { title: "Already Arrived · Last 7 Days", n: L.past.length, rows: L.past, empty: "Nothing arrived in the last week." },
+    past: { title: "Already Arrived · Not Printed Yet", n: L.past.length, rows: L.past, empty: "Nothing here waiting to print." },
     way: { title: "In Transit", n: L.way.length, rows: L.way, empty: "Nothing on the way." },
     problems: { title: "Delayed / Problems", tone: "bad", n: L.problems.length, rows: L.problems, empty: "No problems." },
   };
@@ -343,6 +360,7 @@ export default function GoodsReceiving() {
         <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; Overview</button>
         <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS Orders<span className="aa-n">{searched.filter((r) => r.side === "fbs" && r.state !== "arrived").length}</span></button>
         <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer Supplied Goods<span className="aa-n">{searched.filter((r) => r.side === "customer" && r.state !== "arrived").length}</span></button>
+        <button type="button" className={"rv-ign-tab" + (view === "ignored" ? " on" : "")} onClick={() => setView(view === "ignored" ? "today" : "ignored")} title="Shipments ignored by hand">Show Ignored<span className="aa-n">{ignoredRows.length}</span></button>
         {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
       </div>
         <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search every manifest: PO, customer, S&S / SanMar order, tracking, style" aria-label="Search the supplier manifests" /></label>
@@ -362,6 +380,12 @@ export default function GoodsReceiving() {
           <p className="muted" style={{ marginTop: 0, fontSize: 13.5 }}>Supplier shipments that aren&apos;t on an order yet. An exact PO match links on its own. Everything else waits here with our best guess (one PO can be several orders: we read the styles, colors and sizes). OK it or change it. Customers see their incoming shipments on their portal and can link them too.</p>
           {!pending ? <div className="empty">Loading…</div> : <ResolveList list={pending} onDone={() => { loadPending(); load(); setRefreshKey((k) => k + 1); }} />}
         </>
+      )}
+      {view === "ignored" && (
+        <section className="rv-day">
+          <div className="rv-day-h"><b>Ignored</b><span className="faint">shipments taken out of the lists by hand. Restore puts one back.</span></div>
+          {grouped(ignoredRows, "Nothing ignored.")}
+        </section>
       )}
       {(view === "today" || view === "fbs" || view === "customer") && <>
 
