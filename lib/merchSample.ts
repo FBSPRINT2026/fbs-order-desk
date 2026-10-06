@@ -55,7 +55,8 @@ type Kind = "tee" | "hoodie";
  */
 function place(kind: Kind, view: "front" | "back", wIn: number, art: { w: number; h: number }) {
   const w = wIn * 34, h = (w * art.h) / art.w;
-  const top = view === "back" ? 100 + 3 * 34 : kind === "hoodie" ? 372 : 128 + 4 * 34;
+  // hoodie backs: below the hood (it hangs over the upper back on the photo)
+  const top = view === "back" ? (kind === "hoodie" ? 440 : 100 + 3 * 34) : kind === "hoodie" ? 372 : 128 + 4 * 34;
   return { x: 499 - w / 2, y: top, w, h };
 }
 
@@ -160,11 +161,14 @@ async function makeProducts(admin: SupabaseClient, settings: Settings, st: Store
     if (!colors.length) continue;
     const base = r2(suggestBasePrice(settings, { cost: +(g.size_costs?.M || g.cost || 3), color: colors[0].name, method: "screen", colors: 2, expected: 96, locations: p.back ? 2 : 1 }) + (p.extra || 0));
     const ups = defaultUpcharges(settings, sizes);
-    const { data: prod, error } = await admin.from("merch_products").insert({
+    const row = {
       store_id: st.id, position: i, name: p.name, description: p.description, design_id: art[p.art],
       imprint: { location: "Full Front", width: p.width, colors: 2, method: "screen", inks: ART_INFO[p.art].inks, ...(p.back ? { back_design_id: art[p.back], back_location: "Upper Back" } : {}), youth: y ? { supplier: "ss", style: y.style, brand: y.brand, garment_id: y.id, sizes: ys, cost: y.size_costs || {} } : null },
       supplier: "ss", style: g.style, brand: g.brand, garment_id: g.id, colors, sizes, cost: g.size_costs || {}, base_price: base, giveback: p.give, upcharges: ups, personalize: p.personalize || [], active: true,
-    }).select("id").single();
+    };
+    // run again: the same product is updated (its orders keep pointing at it)
+    const { data: had } = await admin.from("merch_products").select("id").eq("store_id", st.id).eq("name", p.name).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const { data: prod, error } = had ? await admin.from("merch_products").update(row).eq("id", had.id).select("id").single() : await admin.from("merch_products").insert(row).select("id").single();
     if (error) throw new Error(error.message);
     made.push({ id: prod.id, name: p.name, adult: g, youth: y, colors: colors.map((c) => c.name), sizes, base, give: p.give, ups, personalize: !!p.personalize?.length });
   }
@@ -251,8 +255,7 @@ async function openStore(admin: SupabaseClient, settings: Settings, customerId: 
   }
   const lg = await logo(admin, st.id);
   await admin.from("merch_stores").update({ brand: BRAND(lg), contact: CONTACT, fields: FIELDS, updated_at: new Date().toISOString() }).eq("id", st.id);
-  // products: rebuilt each run (the old ones are hidden, never deleted, so past orders keep their items)
-  await admin.from("merch_products").update({ active: false }).eq("store_id", st.id);
+  // products: made the first time, refreshed (same rows) after that
   const made = await makeProducts(admin, settings, st, OPEN_PLAN, art);
   if (fresh) await makeOrders(admin, st, made, 64, 6, 11);
   return { slug: st.slug, products: made.map((m) => m.name) };
