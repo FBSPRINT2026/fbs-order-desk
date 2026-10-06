@@ -135,7 +135,7 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
   // the "Huffine Shirts" job (a word of the job name, give or take an s)
   const shortHit = (o: C) => abbrevHit(g.customer_po, o.who.split("|"), o.nickname);
   const near = exact.length ? [] : list.filter((o) => nearPoHit(o, g.customer_po));
-  if (near.length === 1 && (!near[0].items.length || fit(near[0]) >= 0.9)) return { orderId: near[0].id, kind: "blanks", how: `PO is one digit off #${near[0].number}'s (${g.customer_po})`, sure: true };
+  if (near.length === 1 && (!near[0].items.length || fit(near[0]) >= 0.9)) return { orderId: near[0].id, kind: "blanks", how: `PO ${g.customer_po} is one digit off #${near[0].number}'s`, sure: true };
   const byName = exact.length ? [] : list.filter((o) => nameHit(o) || shortHit(o));
   let pool = exact.length ? exact : byName, via = exact.length ? "PO / job name" : byName.some(nameHit) ? "customer name in PO" : "short name in the PO (customer's initials or a word of the job name)";
   const pcsShipped = g.lines.reduce((x, l) => x + l.qty_shipped, 0);
@@ -261,6 +261,10 @@ function poHit(o: Candidate, g: { customer_po: string; supplier_order: string })
   if (norm(o.po_number) === po || norm(o.nickname) === po || (core && (poCore(o.po_number) === core || poCore(o.nickname) === core))) return true;
   if (core.length >= 3 && [...words(o.po_number), ...words(o.nickname)].includes(core)) return true;
   if (digits.length >= 3 && String(o.number) === digits && core === digits) return true;
+  // every word of the PO inside the order's PO or name: "HUD 092226" in "Hudson Lady Basketball - HUD 092226" (needs a
+  // number of 4+ digits, so a word or two can't do it alone)
+  { const pw = words(g.customer_po).filter((w) => !/^(po|p|o|so)$/.test(w)), theirs = new Set([...words(o.po_number), ...words(o.nickname)]);
+    if (pw.length && pw.some((w) => /^\d{4,}$/.test(w)) && pw.every((w) => theirs.has(w))) return true; }
   // our own POs often start with the job number: "34380 STEADHAM", "34339 WHITT CLR RUN"
   if (o.number >= 1000 && words(g.customer_po).includes(String(o.number))) return true;
   return !!o.supplier_po && (norm(o.supplier_po) === po || norm(o.supplier_po) === norm(g.supplier_order));
@@ -396,7 +400,7 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
   const near = orders.filter((o) => nearPoHit(o, g.customer_po));
   if (near.length === 1) {
     const a1 = allocate(lines, near);
-    if (!a1.unplaced.length) return { customerId, ...a1, auto: true, how: `PO is one digit off #${near[0].number}'s (${g.customer_po})` };
+    if (!a1.unplaced.length) return { customerId, ...a1, auto: true, how: `PO ${g.customer_po} is one digit off #${near[0].number}'s` };
   }
   const a = allocate(lines, orders);
   const used = new Set(a.alloc.flatMap((x) => x.parts.map((p) => p.orderId)));
