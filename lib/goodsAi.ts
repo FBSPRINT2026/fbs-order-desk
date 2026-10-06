@@ -108,6 +108,7 @@ const SYSTEM = [
   "- Some customers number every job with their own 5-digit PO (Nine18: \"43044 …\"). If the shipment's PO number is on no candidate, the job usually isn't entered yet: answer none unless the garments are an unmistakable twin of one job.",
   "- The same style, color and piece count as a job due within about two weeks is strong evidence. The same count in every size is very strong (\"757 to 757\").",
   "- Goods often arrive after a job already printed or is marked Job Completed. Completed jobs are still valid answers.",
+  "- Search the candidates for the PO's number: every open job carrying it is in play (a mixed shipment: one box, goods for two jobs).",
   "- One PO can cover two jobs: a screen print job and its embroidery job (\"42998 ARMSTRONG ATLANTA\" and \"42998 ARMSTRONG ATLANTA - EMBROIDERY\"). Hats, caps, beanies and polos for embroidery usually go to the embroidery job. Pick the job most of the pieces are for; the code puts each style on the job that lists it.",
   "- A job's goods can come in several shipments or from several vendors. \"Already linked\" shows pieces already tied to a job; a job already fully covered by other shipments is less likely, unless this shipment is a replacement or extras.",
   "- A job line's description often names INK colors (\"1/1 IMPRINT - NAVY\"); don't mistake the ink for the garment color. Job lines without a style still count by color and size.",
@@ -229,7 +230,7 @@ export async function aiMatchPending(admin: SupabaseClient, deadline: number, op
     const ids = w.g.lines.map((l) => l.id);
     if (!c || a.confidence === "none") {
       // say why it's waiting (unless the rules already have a guess up)
-      if (!w.g.lines.some((l) => l.suggest_order_id || l.suggest_archived_id)) await admin.from("supplier_manifest_lines").update({ suggest_how: `${AI_TAG}: ${a.reason}`.slice(0, 500) }).in("id", ids);
+      if (!w.g.lines.some((l) => (l.suggest_order_id || l.suggest_archived_id) && !(l.suggest_how || "").startsWith(AI_TAG))) await admin.from("supplier_manifest_lines").update({ suggest_order_id: null, suggest_archived_id: null, suggest_how: `${AI_TAG}: ${a.reason}`.slice(0, 500) }).in("id", ids);
       out.none++; return;
     }
     const how = `${AI_TAG}: ${a.reason}`.slice(0, 500);
@@ -276,7 +277,8 @@ export async function aiMatchPending(admin: SupabaseClient, deadline: number, op
     // the PO names a number / place no job has yet (Nine18 "AMS 43030 FT WORTH" while only the Dallas job is entered):
     // not close, the job isn't entered yet. Wait, and say which job came nearest.
     if (numberMismatch) {
-      if (!w.g.lines.some((l) => l.suggest_order_id || l.suggest_archived_id)) await admin.from("supplier_manifest_lines").update({ suggest_how: `${AI_TAG}: PO ${w.g.customer_po} isn't on any job yet (nearest: #${c.number} ${c.nickname}). Waiting for the job to be entered.`.slice(0, 500) }).in("id", ids);
+      // an earlier AI guess goes (a rules guess stays for someone to look at)
+      if (!w.g.lines.some((l) => (l.suggest_order_id || l.suggest_archived_id) && !(l.suggest_how || "").startsWith(AI_TAG))) await admin.from("supplier_manifest_lines").update({ suggest_order_id: null, suggest_archived_id: null, suggest_how: `${AI_TAG}: PO ${w.g.customer_po} isn't on any job yet (nearest: #${c.number} ${c.nickname}). Waiting for the job to be entered.`.slice(0, 500) }).in("id", ids);
       out.none++; return;
     }
     for (const j of jobsUsed) {
