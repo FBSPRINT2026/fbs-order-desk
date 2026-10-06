@@ -134,6 +134,8 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
   // shortened POs: "COR Softball" = City of Richardson's softball job (the customer's initials), "COR Huffines" =
   // the "Huffine Shirts" job (a word of the job name, give or take an s)
   const shortHit = (o: C) => abbrevHit(g.customer_po, o.who.split("|"), o.nickname);
+  const near = exact.length ? [] : list.filter((o) => nearPoHit(o, g.customer_po));
+  if (near.length === 1 && (!near[0].items.length || fit(near[0]) >= 0.9)) return { orderId: near[0].id, kind: "blanks", how: `PO is one digit off #${near[0].number}'s (${g.customer_po})`, sure: true };
   const byName = exact.length ? [] : list.filter((o) => nameHit(o) || shortHit(o));
   let pool = exact.length ? exact : byName, via = exact.length ? "PO / job name" : byName.some(nameHit) ? "customer name in PO" : "short name in the PO (customer's initials or a word of the job name)";
   const pcsShipped = g.lines.reduce((x, l) => x + l.qty_shipped, 0);
@@ -145,7 +147,7 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
   if (!pool.length) {
     const soon = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), late = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     const ship = sumByStyleColor(g.lines.map((l) => ({ style: l.style, color: l.color, qty: l.qty_shipped })));
-    const exactJobs = list.filter((o) => o.items.length && (!o.due_date || (o.due_date >= late && o.due_date <= soon)) && sameStyleColor(ship, sumByStyleColor(o.items.map((it) => ({ style: it.style, color: it.color, qty: it.need })))));
+    const exactJobs = list.filter((o) => o.items.length && (!o.due_date || (o.due_date >= late && o.due_date <= soon)) && coversJob(ship, o.items));
     if (exactJobs.length === 1) {
       const o = exactJobs[0];
       return { orderId: o.id, kind: "blanks", how: `same pieces of each style and color as #${o.number} (${pcsShipped} pcs${o.due_date ? `, due ${o.due_date}` : ""})`, sure: true };
@@ -196,6 +198,38 @@ export function abbrevHit(po: string, names: string[], nickname: string): boolea
   const near = (a: string, b: string) => a === b || a + "s" === b || b + "s" === a || (Math.min(a.length, b.length) >= 6 && (a.startsWith(b) || b.startsWith(a)));
   const theirs = [...words(nickname), ...names.flatMap((n) => words(n))].filter((w) => w.length >= 5 && !STOP.has(w) && !GENERIC.test(w));
   return pw.some((w) => w.length >= 5 && !GENERIC.test(w) && theirs.some((t) => near(w, t)));
+}
+
+/**
+ * A PO one typo away from the order's: the same letter codes and a number off by one digit ("LYL 092425" for the job
+ * "Lyles MS Theatre Arts - LYL 092426"). Numbers of 4+ digits only, so short numbers can't collide.
+ */
+export function nearPoHit(o: { po_number: string; nickname: string }, po: string) {
+  const pw = words(po).filter((w) => !/^(po|p|o|so)$/.test(w));
+  const nums = pw.filter((w) => /^\d{4,}$/.test(w)), lets = pw.filter((w) => !/^\d+$/.test(w) && w.length >= 2);
+  // a letter code too ("LYL"): a bare number one digit off is too loose
+  if (!nums.length || !lets.length) return false;
+  const theirs = [...words(o.po_number), ...words(o.nickname)];
+  if (!lets.every((w) => theirs.includes(w))) return false;
+  const off1 = (a: string, b: string) => a.length === b.length && [...a].filter((ch, i) => ch !== b[i]).length <= 1;
+  return nums.every((n) => theirs.some((t) => /^\d+$/.test(t) && off1(n, t)));
+}
+/**
+ * The shipment is this job's goods: every style + color the job lists, in exactly the job's count, plus up to the
+ * job's extras (lines with no style, like "EXTRAS 1 S 1 M"), and nothing the job doesn't list.
+ */
+function coversJob(ship: { style: string; color: string; qty: number }[], items: { style: string; color: string; need: number }[]) {
+  const styled = sumByStyleColor(items.filter((it) => it.style || it.color).map((it) => ({ style: it.style, color: it.color, qty: it.need })));
+  const extras = items.filter((it) => !it.style && !it.color).reduce((a, it) => a + it.need, 0);
+  const sh = sumByStyleColor(ship);
+  if (!styled.length || sh.length !== styled.length) return false;
+  let over = 0;
+  for (const x of sh) {
+    const y = styled.find((j) => styleEq(j.style, x.style) && colorEq(j.color, x.color));
+    if (!y || x.qty < y.qty) return false;
+    over += x.qty - y.qty;
+  }
+  return over <= extras;
 }
 
 /** pieces per style + color (style and color compared loosely: "TundraBlu" = "Tundra Blue", "pc54" = "PC54") */
@@ -358,9 +392,23 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
     const rest = allocate(a.unplaced, orders.filter((o) => !exact.includes(o)));
     return { customerId, alloc: [...a.alloc, ...rest.alloc], unplaced: rest.unplaced, auto: false, how: `PO on ${exact.length} orders; some items matched other orders` };
   }
+  // a PO one typo off one order's ("LYL 092425" for "LYL 092426"), and the goods fit it: that order
+  const near = orders.filter((o) => nearPoHit(o, g.customer_po));
+  if (near.length === 1) {
+    const a1 = allocate(lines, near);
+    if (!a1.unplaced.length) return { customerId, ...a1, auto: true, how: `PO is one digit off #${near[0].number}'s (${g.customer_po})` };
+  }
   const a = allocate(lines, orders);
   const used = new Set(a.alloc.flatMap((x) => x.parts.map((p) => p.orderId)));
   const how = !a.alloc.length ? "" : `No order has PO ${g.customer_po || "(none)"}; items match ${[...used].map((id) => "#" + orders.find((o) => o.id === id)?.number).join(", ")}`;
+  // Nicholas: the same quantity, style and color as an order due in the next two weeks is a link
+  if (used.size === 1 && !a.unplaced.length) {
+    const o = orders.find((x) => used.has(x.id))!;
+    const soon = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), late = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const others = orders.filter((x) => x.id !== o.id && coversJob(lines.map((l) => ({ style: l.style, color: l.color, qty: l.qty_shipped })), x.items));
+    if ((!o.due_date || (o.due_date >= late && o.due_date <= soon)) && !others.length && coversJob(lines.map((l) => ({ style: l.style, color: l.color, qty: l.qty_shipped })), o.items))
+      return { customerId, ...a, auto: true, how: `same pieces of each style and color as #${o.number}${o.due_date ? ` (due ${o.due_date})` : ""}` };
+  }
   return { customerId, ...a, auto: false, how };
 }
 
