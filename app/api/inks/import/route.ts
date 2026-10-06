@@ -11,7 +11,7 @@ export const maxDuration = 60;
  * data/ims/<system>.json) into ink_formulas. Ingredient lines already captured are kept. Sync token only.
  */
 const SETS: Record<string, { system: string; cols: string[]; rows: unknown[][] }> = { RX: rx as never };
-type Read = { rec_type: string; code: string; ims_id?: number; grams_per_qt: number; lines: unknown[]; note?: string };
+type Read = { rec_type: string; code: string; ims_id?: number; grams_per_qt: number; lines: { type: string; code: string; desc: string; pct: number; g?: number }[]; note?: string };
 const READS: Record<string, { formulas: Read[] }> = { RX: rxLines as never };
 
 export async function GET(req: Request) {
@@ -31,7 +31,8 @@ export async function GET(req: Request) {
   // database from a later read aren't replaced
   let lines = 0;
   for (const f of READS[set.system]?.formulas || []) {
-    let q = admin.from("ink_formulas").update({ lines: f.lines, grams_per_qt: f.grams_per_qt, captured_at: new Date().toISOString(), captured_note: f.note || "Read from IMS 3.0 screen (1 qt)" }).eq("system", set.system).is("lines", null);
+    // fills formulas not read yet, and upgrades the first reads (percent only) to the gram figures
+    let q = admin.from("ink_formulas").update({ lines: f.lines, grams_per_qt: f.grams_per_qt, captured_at: new Date().toISOString(), captured_note: f.note || "Read from IMS 3.0 screen (grams for 1 qt)" }).eq("system", set.system).or("lines.is.null,captured_note.eq.Read from IMS 3.0 screen (1 qt)");
     q = f.ims_id ? q.eq("ims_id", f.ims_id) : q.eq("rec_type", f.rec_type).eq("code", f.code);
     if (f.rec_type === "S" && !f.ims_id) q = q.eq("base", set.system);
     const { error, data } = await q.select("id");

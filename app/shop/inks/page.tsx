@@ -8,14 +8,18 @@ import { useSticky } from "@/lib/useSticky";
  * (quarts, gallons, grams, kilos, pounds), get the grams of each Rio mixing ink to weigh out. Formulas are read from
  * IMS at 1 quart; any amount scales from the percentages (quarts use that formula's own weight per quart).
  */
-type Line = { type: string; code: string; desc: string; pct: number };
+/** pct: as IMS shows it (2 decimals); g: grams for 1 quart (IMS shows them to 0.01 g, so scaling from them is exact) */
+type Line = { type: string; code: string; desc: string; pct: number; g?: number };
 type Ink = { copies?: number; id: string; code: string; name: string; base: string; hex: string; rec_type: string; ing_count: number | null; lines: Line[] | null; grams_per_qt: number | null; captured_at: string | null; captured_note: string };
 type Unit = "qt" | "gal" | "g" | "kg" | "lb" | "oz";
 const UNITS: { k: Unit; label: string }[] = [{ k: "qt", label: "Quarts" }, { k: "gal", label: "Gallons" }, { k: "g", label: "Grams" }, { k: "kg", label: "Kilograms" }, { k: "lb", label: "Pounds" }, { k: "oz", label: "Ounces" }];
 const PER_G: Record<Exclude<Unit, "qt" | "gal">, number> = { g: 1, kg: 1000, lb: 453.592, oz: 28.3495 };
 const QUICK: { label: string; amt: number; unit: Unit }[] = [{ label: "½ qt", amt: 0.5, unit: "qt" }, { label: "1 qt", amt: 1, unit: "qt" }, { label: "2 qt", amt: 2, unit: "qt" }, { label: "1 gal", amt: 1, unit: "gal" }, { label: "500 g", amt: 500, unit: "g" }, { label: "1 kg", amt: 1, unit: "kg" }];
 const nice = (s: string) => s.replace(/\b([A-Z])([A-Z]+)\b/g, (_, a, b) => a + b.toLowerCase());
-const fmtG = (g: number) => (g >= 100 ? g.toFixed(1) : g >= 10 ? g.toFixed(2) : g.toFixed(2));
+const fmtG = (g: number) => g.toFixed(2);
+/** grams of one ingredient for the whole batch: from its grams per quart when we have them (exact, like IMS), else
+ *  from the percent (IMS rounds those to 2 decimals, so small ingredients can be a little off) */
+const gramsOf = (l: Line, perQt: number, totalG: number) => (l.g != null && perQt ? (l.g / perQt) * totalG : (l.pct / 100) * totalG);
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
 export default function InkRoom() {
@@ -117,7 +121,7 @@ export default function InkRoom() {
                     <tbody>{sel.lines.map((l, k) => (
                       <tr key={k}>
                         <td><b data-notranslate>{l.type === "RM" ? l.desc : nice(l.desc)}</b><small data-notranslate>{l.code}{l.type === "RM" ? " · recycled ink" : l.type === "ADD" ? " · additive" : ""}</small></td>
-                        <td className="r ink-g">{fmtG((l.pct / 100) * totalG)}</td>
+                        <td className="r ink-g">{fmtG(gramsOf(l, sel.grams_per_qt!, totalG))}</td>
                         <td className="r faint">{l.pct.toFixed(2)}%</td>
                       </tr>
                     ))}</tbody>
