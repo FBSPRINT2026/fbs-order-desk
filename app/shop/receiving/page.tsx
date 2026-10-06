@@ -131,12 +131,13 @@ export default function GoodsReceiving() {
   }
   const [aiBusy, setAiBusy] = useState(false);
   async function askAi(force = false) {
-    setAiBusy(true); setNote("The AI is reading the shipments that aren't linked yet… (up to a few minutes)");
+    setAiBusy(true); setNote("Relinking: checking tracking, linking exact matches, and getting AI recommendations for the rest… (up to a few minutes)");
     const r = await fetch("/api/goods/ai-match", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ force }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : {};
     setAiBusy(false);
     if (!r?.ok || j.error || j.off) { setNote(j.off ? `AI is off: ${j.off}` : `The AI couldn't finish: ${j.error || "no answer"}`); return; }
-    setNote(j.asked ? `AI looked at ${j.asked} shipment${j.asked === 1 ? "" : "s"}: linked ${j.linked}, ${j.suggested} guess${j.suggested === 1 ? "" : "es"} to OK, ${j.none} still waiting${j.skipped ? ` (${j.skipped} unchanged since it last looked)` : ""}.${j.errors?.length ? ` Problems: ${j.errors[0]}` : ""}` : `Nothing new for the AI: ${j.skipped || 0} shipment${j.skipped === 1 ? "" : "s"} unchanged since it last looked. Hold Shift and click to make it look again anyway.`);
+    const ruleLinks = (j.rules?.linked || 0), linked = ruleLinks + (j.linked || 0);
+    setNote(`Relink done: ${linked} shipment${linked === 1 ? "" : "s"} linked (exact matches), ${j.suggested || 0} new AI recommendation${j.suggested === 1 ? "" : "s"} to OK, ${j.none || 0} with nothing close${j.skipped ? `; ${j.skipped} unchanged since the AI last looked` : ""}.${j.errors?.length ? ` Problems: ${j.errors[0]}` : ""}`);
     loadPending();
   }
   const [order, setOrder] = useState<O | null>(null);
@@ -443,7 +444,7 @@ export default function GoodsReceiving() {
 
         <div className="rv-head-r"><div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
           <Link className="btn primary rv-ck" href="/shop/receiving/checkin" title="Count jobs' goods in, size by size">✓ Check-In{ck && (ck.ready + ck.issue) > 0 && <span className="rv-ck-n">{ck.ready ? <i className="rd" title="Jobs on today's schedule (or earlier) with everything here">{ck.ready} ready today</i> : null}{ck.issue ? <i className="pb">{ck.issue} problem{ck.issue === 1 ? "" : "s"}</i> : null}</span>}</Link>
-          <button type="button" className="btn" disabled={aiBusy} onClick={(e) => askAi(e.shiftKey)} title="Have the AI match the shipments that aren't linked yet (it also runs on its own every 20 minutes). Shift-click: look at every one again.">{aiBusy ? "AI is matching…" : "🤖 AI Match"}</button>
+          <button type="button" className="btn" disabled={aiBusy} onClick={(e) => askAi(e.shiftKey)} title="Runs the hourly pass now: refreshes tracking, links exact matches, and has the AI recommend a job for the rest. (Runs on its own every hour, Mon–Fri 6 a.m.–6 p.m.) Shift-click: the AI looks at every shipment again.">{aiBusy ? "Relinking…" : "↻ Attempt to Relink Orders"}</button>
           <button type="button" className="btn" onClick={() => setTruck(true)}>Receive S&amp;S Truck</button>
           <label className="btn" style={{ cursor: "pointer" }}>{upBusy ? "Reading…" : "Import Supplier Manifests"}<input type="file" hidden accept=".xlsx,.csv" multiple onChange={(e) => { const fs = Array.from(e.target.files || []) as File[]; e.target.value = ""; upload(fs); }} /></label>
         </div>
@@ -487,7 +488,7 @@ export default function GoodsReceiving() {
       {/* today's update: arriving today, then what already arrived; the boxes open the other lists */}
       <section className="rv-day">
         <div className="rv-day-h">
-          <b>Today&apos;s Update</b>{term.length >= 2 && <span className="rv-filter">Showing “{q.trim()}”{searching ? " …" : ""} <button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></span>}<span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} · tracking checks every 20 minutes</span>
+          <b>Today&apos;s Update</b>{term.length >= 2 && <span className="rv-filter">Showing “{q.trim()}”{searching ? " …" : ""} <button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></span>}<span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} · tracking and matching run hourly, Mon–Fri 6 a.m.–6 p.m.</span>
           <span className="spacer" />
           <div className="rv-seg" role="group" aria-label="Group by">
             <button type="button" className={groupBy === "carrier" ? "on" : ""} onClick={() => setGroupBy("carrier")}>By carrier</button>

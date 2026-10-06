@@ -135,7 +135,8 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
   // the "Huffine Shirts" job (a word of the job name, give or take an s)
   const shortHit = (o: C) => abbrevHit(g.customer_po, o.who.split("|"), o.nickname);
   const near = exact.length ? [] : list.filter((o) => nearPoHit(o, g.customer_po));
-  if (near.length === 1 && (!near[0].items.length || fit(near[0]) >= 0.9)) return { orderId: near[0].id, kind: "blanks", how: `PO ${g.customer_po} is one digit off #${near[0].number}'s`, sure: true };
+  const isExact = (o: C) => !PV_PRINTED.test(o.status || "") && exactMatch(shipOf(g.lines as Line[]), o.items);
+  if (near.length === 1 && (!near[0].items.length || fit(near[0]) >= 0.9)) return { orderId: near[0].id, kind: "blanks", how: `PO ${g.customer_po} is one digit off #${near[0].number}'s`, sure: isExact(near[0]) };
   const byName = exact.length ? [] : list.filter((o) => nameHit(o) || shortHit(o));
   let pool = exact.length ? exact : byName, via = exact.length ? "PO / job name" : byName.some(nameHit) ? "customer name in PO" : "short name in the PO (customer's initials or a word of the job name)";
   const pcsShipped = g.lines.reduce((x, l) => x + l.qty_shipped, 0);
@@ -148,14 +149,17 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
     const soon = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), late = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     const ship = sumByStyleColor(g.lines.map((l) => ({ style: l.style, color: l.color, qty: l.qty_shipped })));
     const exactJobs = list.filter((o) => o.items.length && (!o.due_date || (o.due_date >= late && o.due_date <= soon)) && coversJob(ship, o.items));
+    // exact (style, color and count in every size) on exactly one current job: link; same style/color totals: suggest
+    const exactAll = list.filter((o) => (!o.due_date || (o.due_date >= late && o.due_date <= soon)) && isExact(o));
+    if (exactAll.length === 1) return { orderId: exactAll[0].id, kind: "blanks", how: `exact match: the same styles, colors and count in every size as #${exactAll[0].number} (${pcsShipped} pcs)`, sure: true };
     if (exactJobs.length === 1) {
       const o = exactJobs[0];
-      return { orderId: o.id, kind: "blanks", how: `same pieces of each style and color as #${o.number} (${pcsShipped} pcs${o.due_date ? `, due ${o.due_date}` : ""})`, sure: true };
+      return { orderId: o.id, kind: "blanks", how: `same pieces of each style and color as #${o.number} (${pcsShipped} pcs${o.due_date ? `, due ${o.due_date}` : ""})`, sure: false };
     }
     if (!exactJobs.length && pcsShipped >= 24) {
       const ss = bySizeOf(g.lines.map((l) => ({ size: l.size, qty: l.qty_shipped })));
       const twins = list.filter((o) => (!o.due_date || (o.due_date >= late && o.due_date <= soon)) && sameSizes(ss, bySizeOf(o.items.map((it) => ({ size: it.size, qty: it.need })))));
-      if (twins.length === 1) return { orderId: twins[0].id, kind: "blanks", how: `same count in every size as #${twins[0].number} (${pcsShipped} pcs: ${sizeLine(ss)})`, sure: true };
+      if (twins.length === 1) return { orderId: twins[0].id, kind: "blanks", how: `same count in every size as #${twins[0].number} (${pcsShipped} pcs: ${sizeLine(ss)})`, sure: false };
     }
     if (exactJobs.length > 1) {
       const o = [...exactJobs].sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"))[0];
@@ -175,7 +179,10 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
   // matched on the garments alone: a suggestion to OK, never linked on its own
   if (!exact.length && !byName.length) return { orderId: best.o.id, kind: "blanks", how, sure: false };
   // sure: one clear order whose garments cover (almost) everything that shipped
-  return { orderId: best.o.id, kind: "blanks", how, sure: clear && (best.f >= 0.9 || (!best.o.items.length && pool.length === 1 && exact.length === 1)) };
+  // sure: the PO / job name points at one order whose garments cover what shipped; a customer name or a short name in the
+  // PO only links when the garments match exactly (otherwise it's a suggestion)
+  const viaPo = exact.length > 0;
+  return { orderId: best.o.id, kind: "blanks", how, sure: clear && (viaPo ? (best.f >= 0.9 || (!best.o.items.length && pool.length === 1 && exact.length === 1)) : isExact(best.o)) };
 }
 
 /**
@@ -237,6 +244,27 @@ function coversJob(ship: { style: string; color: string; qty: number }[], items:
   }
   return over <= extras;
 }
+
+/**
+ * Nicholas: "when the quantities are exact and the colors are exact and they match exactly … and it's a current order,
+ * that should automatically link." Every style + color + size the job lists arrives in exactly that count, and nothing
+ * else ships. A job line with no style matches on color + size; job lines with neither style nor color (extras, or a
+ * Printavo line that only says "4/4 IMPRINT") take what's left, size by size, again exactly.
+ */
+export function exactMatch(ship: { style: string; color: string; size: string; qty: number }[], items: { style: string; color: string; size: string; need: number }[]) {
+  const want = items.filter((it) => it.need > 0);
+  if (!want.length || !ship.some((x) => x.qty > 0)) return false;
+  const named = want.filter((it) => it.style || it.color).map((it) => ({ ...it, size: sizeKey(it.size), left: it.need }));
+  const loose = new Map<string, number>();
+  for (const it of want.filter((x) => !x.style && !x.color)) loose.set(sizeKey(it.size), (loose.get(sizeKey(it.size)) || 0) + it.need);
+  for (const x of ship) {
+    let q = x.qty; const z = sizeKey(x.size);
+    for (const it of named) if (q > 0 && it.left > 0 && it.size === z && (it.style ? styleEq(it.style, x.style) : true) && colorEq(it.color, x.color)) { const t = Math.min(q, it.left); it.left -= t; q -= t; }
+    if (q > 0) { const l = loose.get(z) || 0; if (l < q) return false; loose.set(z, l - q); }
+  }
+  return named.every((it) => it.left === 0) && [...loose.values()].every((n) => n === 0);
+}
+const shipOf = (lines: { style: string; color: string; size: string; qty_shipped: number }[]) => lines.map((l) => ({ style: l.style, color: l.color, size: l.size, qty: l.qty_shipped }));
 
 /**
  * An unknown supplier account: which customer is it? The upcoming job (due in the next three weeks, or up to a week
@@ -461,8 +489,9 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
   const orders = await openOrders(admin, custIds);
   if (!orders.length) {
     // no open jobs at all (Agape: the job already printed): a recently completed one with the same count in every size
+    // (not a current order: a suggestion, never linked on its own)
     const d = await doneTwin(admin, custIds, lines);
-    return d ? { customerId, ...d } : empty;
+    return d ? { customerId, ...d, auto: false } : empty;
   }
   const exact = orders.filter((o) => poHit(o, g));
   if (exact.length === 1) {
@@ -508,20 +537,26 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
   const near = orders.filter((o) => nearPoHit(o, g.customer_po, true));
   if (near.length === 1) {
     const a1 = allocate(lines, near);
-    if (!a1.unplaced.length) return { customerId, ...a1, auto: true, how: `PO ${g.customer_po} is one digit off #${near[0].number}'s` };
+    // links only when the garments match it exactly; otherwise it's a suggestion
+    if (!a1.unplaced.length) return { customerId, ...a1, auto: exactMatch(shipOf(lines), near[0].items), how: `PO ${g.customer_po} is one digit off #${near[0].number}'s` };
   }
   // the sizes say it: one open order with exactly the same count in every size (Nicholas: "the quantity exactly lines
   // up, 757 to 757"; the job line may not even name a style or color: "4/4 IMPRINT + 1-COLOR LEFT SLEEVE…")
   const shipSizes = bySizeOf(lines.map((l) => ({ size: l.size, qty: l.qty_shipped })));
   const pcsIn = lines.reduce((x, l) => x + l.qty_shipped, 0);
+  // EXACT: one current job of theirs wants exactly these pieces (style, color and count in every size): link
+  const twinsExact = orders.filter((o) => !PV_PRINTED.test(o.status || "") && exactMatch(shipOf(lines), o.items));
+  if (twinsExact.length === 1)
+    return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: twinsExact[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `exact match: the same styles, colors and count in every size as #${twinsExact[0].number} (${pcsIn} pcs)` };
+  // anything less than exact is a suggestion from here on (the AI looks at it too)
   const sizeTwins = orders.filter((o) => sameSizes(shipSizes, bySizeOf(o.items.map((it) => ({ size: it.size, qty: it.need })))));
   if (sizeTwins.length === 1 && pcsIn >= 12)
-    return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: sizeTwins[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `same count in every size as #${sizeTwins[0].number} (${pcsIn} pcs: ${sizeLine(shipSizes)})` };
+    return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: sizeTwins[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: false, how: `same count in every size as #${sizeTwins[0].number} (${pcsIn} pcs: ${sizeLine(shipSizes)})` };
   // nothing open fits: a job of theirs that's already been printed (goods often show on a manifest after the job ran)
-  if (!sizeTwins.length) { const d = await doneTwin(admin, custIds, lines); if (d) return { customerId, ...d }; }
+  if (!sizeTwins.length) { const d = await doneTwin(admin, custIds, lines); if (d) return { customerId, ...d, auto: false }; }
   // the customer's only open order, and the pieces add up exactly
   if (orders.length === 1 && pcsIn >= 12 && orders[0].items.reduce((x, it) => x + it.need, 0) === pcsIn)
-    return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: orders[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `their only open order, and the pieces add up exactly (${pcsIn})` };
+    return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: orders[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: false, how: `their only open order, and the pieces add up exactly (${pcsIn})` };
   const a = allocate(lines, orders);
   const used = new Set(a.alloc.flatMap((x) => x.parts.map((p) => p.orderId)));
   const how = !a.alloc.length ? "" : `No order has PO ${g.customer_po || "(none)"}; items match ${[...used].map((id) => "#" + orders.find((o) => o.id === id)?.number).join(", ")}`;
@@ -531,7 +566,7 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
     const soon = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), late = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     const others = orders.filter((x) => x.id !== o.id && coversJob(lines.map((l) => ({ style: l.style, color: l.color, qty: l.qty_shipped })), x.items));
     if ((!o.due_date || (o.due_date >= late && o.due_date <= soon)) && !others.length && coversJob(lines.map((l) => ({ style: l.style, color: l.color, qty: l.qty_shipped })), o.items))
-      return { customerId, ...a, auto: true, how: `same pieces of each style and color as #${o.number}${o.due_date ? ` (due ${o.due_date})` : ""}` };
+      return { customerId, ...a, auto: false, how: `same pieces of each style and color as #${o.number}${o.due_date ? ` (due ${o.due_date})` : ""}` };
   }
   return { customerId, ...a, auto: false, how };
 }
@@ -912,7 +947,7 @@ async function applyBlanks(admin: SupabaseClient, supplier: string, g: Group, or
 }
 export const __test = { allocate, styleEq, colorEq, matchBlanks, guessCustomerByGoods };
 /** helpers the AI matcher (lib/goodsAi.ts) shares with the rules */
-export const __ai = { isUs, groupLines, styleEq, colorEq, words, norm, numRuns, sumByStyleColor, bySizeOf, sameSizes, sizeLine, PV_CLOSED, pvSize, GENERIC, STOP };
+export const __ai = { exactMatch, shipOf, isUs, groupLines, styleEq, colorEq, words, norm, numRuns, sumByStyleColor, bySizeOf, sameSizes, sizeLine, PV_CLOSED, pvSize, GENERIC, STOP };
 export type { Waiting, Line as ManifestRow };
 /** a guess the AI made (the rules leave these alone; the AI pass revisits them) */
 export const AI_TAG = "🤖 AI";

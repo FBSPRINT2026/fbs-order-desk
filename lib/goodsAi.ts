@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState, askClaude } from "@/lib/ai/claude";
 import { orderGroups, type Order } from "@/lib/pricing";
-import { AI_TAG, PV, __ai, abbrevHit, applyGroup, customerForAccount, linkLines, sizeKey, unlinkedFrom, type Group, type ManifestRow, type Waiting } from "@/lib/manifest";
+import { AI_TAG, PV, PV_PRINTED, __ai, abbrevHit, applyGroup, customerForAccount, linkLines, sizeKey, unlinkedFrom, type Group, type ManifestRow, type Waiting } from "@/lib/manifest";
 
 /**
  * The AI matcher. The rules in lib/manifest.ts link what they're sure of; whatever is still waiting comes here.
@@ -17,7 +17,7 @@ import { AI_TAG, PV, __ai, abbrevHit, applyGroup, customerForAccount, linkLines,
  * shipment is only asked about again when something changed (a new job, a new lesson).
  */
 
-const { isUs, groupLines, styleEq, colorEq, words, numRuns, bySizeOf, sameSizes, pvSize, GENERIC, STOP } = __ai;
+const { exactMatch, shipOf, isUs, groupLines, styleEq, colorEq, words, numRuns, bySizeOf, sameSizes, pvSize, GENERIC, STOP } = __ai;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (d: string, n: number) => iso(new Date(Date.parse(d + "T12:00:00Z") + n * 86400000));
 
@@ -117,6 +117,7 @@ const SYSTEM = [
   "Confidence:",
   "- certain: you would bet on it. The PO / name / number points at this job and the garments agree, or the garments are an exact twin of this job and no other candidate comes close.",
   "- likely: your best guess, but a person should OK it.",
+  "- When it's close but not exact (a piece or two off, a size different, a job already completed), still name the job and say exactly what's different (\"2 fewer M than #34431 needs\").",
   "- none: nothing fits well enough. Say what's missing (e.g. \"no job has PO 43044 yet\").",
   "Write the reason as one short plain sentence a shop worker understands, naming the evidence (\"PO LEHS = Little Elm High School; 56 Sport Grey 5000 in the same sizes as #34110\").",
 ].join("\n");
@@ -254,7 +255,12 @@ export async function aiMatchPending(admin: SupabaseClient, deadline: number, op
     }
     const jobsUsed = [...new Set([...target.values()])];
     const howFor = (j: Scored) => (j === c ? how : `${AI_TAG}: ${a.reason} (the ${[...new Set(w.g.lines.filter((l) => target.get(l.id) === j).map((l) => l.style))].join(", ")} are on #${j.number}, the other job with this PO)`).slice(0, 500);
-    if (a.confidence === "certain" && backed && known) {
+    // Nicholas: it links on its own only when everything matches exactly (style, color, count in every size) on a current
+    // job; anything less is the AI's recommendation for someone to OK
+    const current = (j: Scored) => !PV_PRINTED.test(j.status || "") && !/completed/i.test(j.status || "");
+    const exactAll = jobsUsed.every((j) => current(j) && exactMatch(shipOf(w.g.lines.filter((l) => target.get(l.id) === j)), j.items.map((it) => ({ ...it, need: it.qty }))));
+    void backed;
+    if (exactAll && known) {
       for (const j of jobsUsed) {
         const ls = w.g.lines.filter((l) => target.get(l.id) === j), lids = ls.map((l) => l.id);
         if (isUs(w.g.customer_name)) {
