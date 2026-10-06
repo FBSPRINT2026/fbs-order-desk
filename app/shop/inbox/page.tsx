@@ -296,14 +296,14 @@ function Connect({ st, onDone }: { st: Status; onDone: (msg: string) => void }) 
   const host = st.mine?.imap_host || st.defaultHost;
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   return (
-    <section className="panel ibx-connect"><form className="panel-b stack" style={{ gap: 10 }} onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(""); const r = await connectMailbox({ email, password: pw, name, host }); setBusy(false); setPw(""); if (!r.ok) setErr(r.error); else onDone("Your email is connected. Customer email will show up within a couple of minutes."); }}>
+    <section className="panel ibx-connect"><form className="panel-b stack" style={{ gap: 10 }} onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(""); const r = await connectMailbox({ email, password: pw, name, host }); setBusy(false); setPw(""); if (!r.ok) setErr(r.error); else if (r.sendProblem) setErr(`Connected for reading, but sending isn't on yet. ${r.sendProblem}`); else onDone("Your email is connected. Customer email will show up within a couple of minutes."); }}>
       <div><b>{st.mine?.enabled ? "Your email" : "Connect your email"}</b><div className="faint" style={{ fontSize: 13 }}>The portal reads your Inbox and Sent Items every 2 minutes and keeps only customer email. Replies you send from here go out from your address and land in your Sent Items. Your password is checked with the mail server, then stored encrypted; nobody can see it.</div></div>
       <div className="ibx-form">
         <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required /></label>
         <label>Your name (signs replies)<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nicholas" /></label>
         <label>Email password<input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" required /></label>
       </div>
-      <div className="faint" style={{ fontSize: 12.5 }}>IMAP has to be ticked for your mailbox in HostPilot first (Services → Exchange → your name → Advanced Settings); the owner can do that for everyone.</div>
+      <div className="faint" style={{ fontSize: 12.5 }}>IMAP and SMTP have to be ticked for your mailbox in HostPilot first (Services → Exchange → your name → Advanced Settings): IMAP to read, SMTP to send. The owner can do that for everyone.</div>
       {err && <div className="pv-err">{err}</div>}
       <div className="row" style={{ gap: 8 }}>
         <button type="submit" className="btn primary" disabled={busy}>{busy ? "Checking the sign-in…" : st.mine?.enabled ? "Save" : "Connect"}</button>

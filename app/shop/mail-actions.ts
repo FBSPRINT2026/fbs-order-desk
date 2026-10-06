@@ -2,7 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accountById, accountForUser, cfgOf, DEFAULT_MAIL_HOST, encryptSecret, publicAccount, type MailAccount } from "@/lib/mail/config";
-import { sendFromMailbox } from "@/lib/mail/send";
+import { checkSending, sendFromMailbox } from "@/lib/mail/send";
 import { imapClient } from "@/lib/mail/imap";
 import { addContact, closeAnswered, saveBody } from "@/lib/mail/process";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
@@ -45,7 +45,9 @@ export async function connectMailbox(input: { email: string; password: string; n
       ? await admin.from("mail_accounts").update({ ...row, ...(existing.email !== email ? { inbox_validity: null, inbox_uid: null, sent_folder: null, sent_validity: null, sent_uid: null } : {}) }).eq("id", existing.id)
       : await admin.from("mail_accounts").insert(row);
     if (error) return { ok: false as const, error: /duplicate|unique/i.test(error.message) ? "Someone else already connected that mailbox." : error.message };
-    return { ok: true as const };
+    // reading works; check sending too (Intermedia keeps SMTP off per mailbox until it's ticked)
+    const sendProblem = await checkSending({ user: email, pass: input.password, imapHost: host, smtpHost: host, imapPort: 993, smtpPort: 587, fromName: "" }).catch(() => null);
+    return { ok: true as const, sendProblem };
   } catch (e) { return fail(e); }
 }
 
