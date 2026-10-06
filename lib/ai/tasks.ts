@@ -63,6 +63,23 @@ export function orderFromText(s: Settings, text: string, ctx: AiCtx & { admin?: 
   });
 }
 
+/**
+ * The different ways the shop could answer a customer's email (yes / no / yes-if / a question back), each written
+ * out as a complete reply, so the person answering just picks one.
+ */
+export function replyOptions(s: Settings, input: { email: string; facts: string; history?: string; today: string }, ctx: AiCtx & { admin?: SupabaseClient }) {
+  return askClaude<{ options: { label: string; subject: string; body: string }[] }>({
+    task: "reply_options", model: s.assistant.ai.model, maxTokens: 3000, ctx, admin: ctx.admin,
+    tool: { name: "reply_options", description: "Different answers the shop could give, each a complete reply.", input_schema: { type: "object", properties: { options: { type: "array", minItems: 2, maxItems: 4, items: { type: "object", properties: {
+      label: { type: "string", description: "The decision in 3-8 plain words, from the shop's side, e.g. \"Yes, we can make the date\", \"Can't make it, offer the 24th\", \"Yes if we get the order by Saturday\"" },
+      subject: { type: "string" },
+      body: { type: "string", description: "The whole reply. Plain text, no markdown, under 130 words." },
+    }, required: ["label", "subject", "body"] } } }, required: ["options"] } },
+    system: `${SHOP_CONTEXT(s)}\n\nYour job: a customer emailed the shop. Give the person answering 3 or 4 genuinely different answers to choose from, each written out as a complete reply they could send as is. Cover the real decisions this email calls for (for a date: yes / no with an alternative / yes on a condition such as getting the order, art approval or payment by a day; for a price or change: accept / counter / ask a question). Put the most likely answer first. Don't make up facts: when an answer needs something you don't know (a new date, a price), make it a condition or a question, or name a sensible weekday relative to today. Voice: ${s.assistant.ai.voice}\nStart with a greeting using the customer's first name if known. End with a short sign-off line (e.g. "Thanks,") but no name, title, phone or company block: the sender's signature is added when it's sent. Today is ${input.today}.`,
+    prompt: `The customer's email:\n"""\n${input.email.slice(0, 6000)}\n"""\n\nWhat we know:\n${input.facts}\n${input.history ? `\nEarlier in this conversation (oldest first):\n${input.history}\n` : ""}`,
+  });
+}
+
 /** Rewrite a follow-up message in the shop's voice, using the facts given. */
 export function draftMessage(s: Settings, input: { purpose: string; facts: string; starting?: { subject?: string; body?: string }; history?: string }, ctx: AiCtx & { admin?: SupabaseClient }) {
   return askClaude<{ subject: string; body: string }>({

@@ -3,8 +3,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
+import { mailRows } from "@/lib/inbox";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "../mail-actions";
-import { aiRewriteDraft, quoteFromSuggestion } from "../ai-actions";
+import { aiReplyOptions, aiWriteReply, markNoReply, quoteFromSuggestion } from "../ai-actions";
 
 /**
  * Inbox: the customer email from the shop mailbox (Nicholas's), sorted by what needs an answer. Vendors, newsletters
@@ -12,7 +13,7 @@ import { aiRewriteDraft, quoteFromSuggestion } from "../ai-actions";
  * the AI's one-line summary, a drafted reply to edit and send (from nicholas@fbsprint.com, in the same thread), and
  * buttons to make a quote, file it under an order, or sort the sender.
  */
-type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; needs_reply?: boolean } } };
+type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; no_reply?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; needs_reply?: boolean } } };
 type Sug = { id: string; kind: string; status: string; activity_id: string | null; title: string; body: string; draft: { subject?: string; body?: string } | null; payload: { groups?: unknown[] } | null; order_id: string | null };
 type Cust = { id: string; company: string | null; name: string | null };
 type Ord = { id: string; number: number; nickname: string | null; customer_id: string | null; status: string };
@@ -28,7 +29,7 @@ export default function Inbox() {
   const [tab, setTab] = useSticky<"reply" | "leads" | "all">("inbox.tab", "reply");
   const [whose, setWhose] = useSticky<"mine" | "everyone">("inbox.whose", "mine");
   const [connecting, setConnecting] = useState(false);
-  const [open, setOpen] = useState<string | null>(null), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
+  const [open, setOpen] = useState<string | null>(null), [focus, setFocus] = useState<string | null>(null), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
 
   const load = useCallback(async () => {
     const sb = createClient();
@@ -50,19 +51,21 @@ export default function Inbox() {
   }, []);
   useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
 
-  // answered = we sent something later in the same thread
-  const rows = useMemo(() => {
-    const out = (acts || []).filter((x) => x.direction === "out");
-    return (acts || []).filter((x) => x.direction === "in").map((x) => {
-      const answered = out.some((o) => o.occurred_at > x.occurred_at && ((x.external_id && (o.meta?.references || []).includes(x.external_id)) || (o.thread_id && (o.thread_id === x.thread_id || o.thread_id === x.external_id))));
-      const mine = sugs.filter((s) => s.activity_id === x.id);
-      const reply = mine.find((s) => s.kind === "email_reply" && (s.status === "open" || s.status === "snoozed"));
-      const quote = mine.find((s) => s.kind === "draft_order" && s.status === "open");
-      const needs = !answered && (!!reply || !!quote || x.meta?.triage?.needs_reply === true);
-      return { x, answered, reply, quote, needs };
-    });
-  }, [acts, sugs]);
+  const rows = useMemo(() => mailRows(acts || [], sugs), [acts, sugs]);
   const mineId = st?.mine?.enabled ? st.mine.id : null;
+  // opened from a link (the dashboard's Reply): /shop/inbox?open=<email id> opens it ready to answer
+  useEffect(() => {
+    if (!acts || !st) return;
+    const id = new URLSearchParams(window.location.search).get("open");
+    if (!id) return;
+    const r = rows.find((y) => y.x.id === id);
+    if (r) {
+      if (!(r.needs && tab === "reply")) setTab(r.needs ? "reply" : "all");
+      if (whose === "mine" && r.x.meta?.account_id !== mineId) setWhose("everyone");
+      setOpen(id); setFocus(id);
+    }
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [acts, st]); // eslint-disable-line react-hooks/exhaustive-deps
   const scoped = whose === "mine" && mineId ? rows.filter((r) => r.x.meta?.account_id === mineId) : rows;
   const shown = scoped.filter((r) => (tab === "reply" ? r.needs : tab === "leads" ? r.x.meta?.lead && !r.x.customer_id : true));
   const counts = { reply: scoped.filter((r) => r.needs).length, leads: scoped.filter((r) => r.x.meta?.lead && !r.x.customer_id).length, all: scoped.length };
@@ -99,13 +102,13 @@ export default function Inbox() {
             const ord = orders.find((o) => o.id === x.order_id);
             return (
               <div key={x.id} className={"ibx-row" + (open === x.id ? " on" : "")}>
-                <button type="button" className="ibx-head" onClick={() => setOpen(open === x.id ? null : x.id)} aria-expanded={open === x.id}>
+                <button type="button" className="ibx-head" onClick={() => setOpen(open === x.id ? null : x.id)} onDoubleClick={() => { setOpen(x.id); setFocus(x.id); }} title="Double-click to answer it" aria-expanded={open === x.id}>
                   <span className={"ibx-dot" + (needs ? (waitH > 24 ? " late" : " due") : answered ? " ok" : "")} aria-hidden />
                   <span className="ibx-who"><b>{who(x)}</b>{x.meta?.lead && !x.customer_id && <span className="tag">Lead</span>}{x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="tag soft">{INTENT[x.meta.triage.intent]}</span>}</span>
                   <span className="ibx-sub"><b>{x.subject || "(no subject)"}</b>{x.meta?.triage?.summary && <small>{x.meta.triage.summary}</small>}</span>
                   <span className="ibx-when">{ord ? <span className="tag soft">#{ord.number}</span> : null}{(x.meta?.attachments || []).length > 0 && <span title="Attachments">📎{x.meta!.attachments!.length}</span>}<span className={needs && waitH > 24 ? "inv-warn" : "faint"}>{ago(x.occurred_at)}</span>{answered && <span className="faint">· answered</span>}</span>
                 </button>
-                {open === x.id && <Detail x={x} reply={reply} quote={quote} orders={orders.filter((o) => o.customer_id && o.customer_id === x.customer_id)} thread={(acts || []).filter((o) => o.id !== x.id && ((o.thread_id && (o.thread_id === x.thread_id || o.thread_id === x.external_id)) || (x.external_id && (o.meta?.references || []).includes(x.external_id))))}
+                {open === x.id && <Detail key={x.id + (focus === x.id ? ":f" : "")} focus={focus === x.id} x={x} reply={reply} quote={quote} needs={needs} orders={orders.filter((o) => o.customer_id && o.customer_id === x.customer_id)} thread={(acts || []).filter((o) => o.id !== x.id && ((o.thread_id && (o.thread_id === x.thread_id || o.thread_id === x.external_id)) || (x.external_id && (o.meta?.references || []).includes(x.external_id))))}
                   busy={busy} setBusy={setBusy} done={(t) => { flash(t); load(); }} />}
               </div>
             );
@@ -116,10 +119,29 @@ export default function Inbox() {
   );
 }
 
-function Detail({ x, reply, quote, orders, thread, busy, setBusy, done }: { x: Act; reply?: Sug; quote?: Sug; orders: Ord[]; thread: Act[]; busy: string; setBusy: (s: string) => void; done: (msg: string) => void }) {
+type Opt = { label: string; subject: string; body: string };
+const OPTS = new Map<string, Opt[]>(); // reply options already written, per email (this visit)
+
+function Detail({ x, reply, quote, needs, focus, orders, thread, busy, setBusy, done }: { x: Act; reply?: Sug; quote?: Sug; needs: boolean; focus: boolean; orders: Ord[]; thread: Act[]; busy: string; setBusy: (s: string) => void; done: (msg: string) => void }) {
   const [subject, setSubject] = useState(reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`));
   const [body, setBody] = useState(reply?.draft?.body || "");
   const [err, setErr] = useState(""), [company, setCompany] = useState(""), [custQ, setCustQ] = useState(""), [hits, setHits] = useState<Cust[]>([]);
+  const [opts, setOpts] = useState<Opt[] | null>(OPTS.get(x.id) || null), [picked, setPicked] = useState(-1), [ask, setAsk] = useState("");
+  const replyRef = useRef<HTMLDivElement | null>(null), boxRef = useRef<HTMLTextAreaElement | null>(null);
+  async function loadOpts() {
+    setBusy("opts"); setErr("");
+    const r = await aiReplyOptions(x.id);
+    setBusy("");
+    if (!r.ok) return setErr(r.error || "The AI couldn't come up with answers.");
+    OPTS.set(x.id, r.options); setOpts(r.options); setPicked(-1);
+  }
+  function pick(i: number) { const o = opts?.[i]; if (!o) return; setPicked(i); setSubject(o.subject); setBody(o.body); boxRef.current?.focus(); }
+  // double-clicked (or opened from the dashboard): straight to the reply, with answers to pick from
+  useEffect(() => {
+    if (!focus) return;
+    setTimeout(() => { replyRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); boxRef.current?.focus(); }, 80);
+    if (!OPTS.has(x.id) && !busy) loadOpts();
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
   async function urlFor(path: string) { const { data } = await createClient().storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
   async function find(q: string) { setCustQ(q); if (q.trim().length < 2) return setHits([]); const { data } = await createClient().from("customers").select("id, company, name").or(`company.ilike.%${q.replace(/[,()]/g, "")}%,name.ilike.%${q.replace(/[,()]/g, "")}%,email.ilike.%${q.replace(/[,()]/g, "")}%`).limit(8); setHits((data || []) as Cust[]); }
   const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else done(ok); };
@@ -129,13 +151,24 @@ function Detail({ x, reply, quote, orders, thread, busy, setBusy, done }: { x: A
       <EmailBody x={x} />
       {(x.meta?.attachments || []).length > 0 && <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>{x.meta!.attachments!.map((f) => <button key={f.path} type="button" className="btn sm" onClick={() => urlFor(f.path)}>📎 {f.name}</button>)}</div>}
       {thread.length > 0 && <div className="ibx-thread">{thread.sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).map((t) => <div key={t.id} className={"ibx-t " + t.direction}><b>{t.direction === "out" ? "You" : t.meta?.from_name || t.from_email}</b> · {new Date(t.occurred_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}<div>{t.body.slice(0, 600)}</div></div>)}</div>}
-      <div className="ibx-reply">
+      <div className="ibx-reply" ref={replyRef}>
+        <div className="ibx-opts">
+          <button type="button" className="btn sm" disabled={!!busy} onClick={loadOpts}>{busy === "opts" ? "Thinking of answers…" : opts ? "✦ Other answers" : "✦ Reply options"}</button>
+          {opts?.map((o, i) => <button key={i} type="button" className={"chip" + (picked === i ? " on" : "")} onClick={() => pick(i)} title={o.body.slice(0, 300)}>{o.label}</button>)}
+          {!opts && busy !== "opts" && <span className="faint" style={{ fontSize: 12.5 }}>3–4 ways to answer (yes, no, yes if…), each written out. Pick one and edit it.</span>}
+        </div>
         <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject" />
-        <textarea rows={7} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write a reply, or ask the AI to draft one" aria-label="Reply" />
-        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+        <textarea ref={boxRef} rows={8} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write a reply, pick an answer above, or tell the AI what to say below" aria-label="Reply" />
+        <form className="ibx-tell" onSubmit={async (e) => { e.preventDefault(); if (!ask.trim()) return; setBusy("ai"); setErr(""); const r = await aiWriteReply({ activityId: x.id, instruction: ask, subject }); setBusy(""); if (!r.ok) setErr(r.error || "The AI couldn't write that."); else { setSubject(r.subject || subject); setBody(r.body); setPicked(-1); setAsk(""); boxRef.current?.focus(); } }}>
+          <input value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Tell the AI what to say, e.g. “yes, if we get the order by Saturday”" aria-label="Tell the AI what to say" />
+          <button type="submit" className="btn sm" disabled={!!busy || !ask.trim()}>{busy === "ai" ? "Writing…" : "✦ Write it"}</button>
+        </form>
+        <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <button type="button" className="btn primary sm" disabled={!!busy || !body.trim()} onClick={() => run("send", () => sendEmailReply({ activityId: x.id, subject, body, suggestionId: reply?.id }), `Sent to ${x.from_email}.`)}>{busy === "send" ? "Sending…" : "Send reply"}</button>
-          <button type="button" className="btn sm ghost" disabled={!!busy} onClick={async () => { setBusy("ai"); setErr(""); const r = await aiRewriteDraft({ purpose: `Reply to this email from ${x.meta?.from_name || x.from_email}: "${x.subject}". ${x.body.slice(0, 2500)}`, orderId: x.order_id, customerId: x.customer_id, subject, body }); setBusy(""); if (!r.ok) setErr(r.error || "The AI couldn't write that."); else { setSubject(r.subject || subject); setBody(r.body); } }}>{busy === "ai" ? "Writing…" : body ? "✦ Rewrite with AI" : "✦ Draft with AI"}</button>
-          <span className="faint" style={{ fontSize: 12 }}>Sends from your mailbox in the same thread, with their message quoted, and saves to Sent Items.</span>
+          {body.trim() && <button type="button" className="btn sm ghost" disabled={!!busy} onClick={async () => { setBusy("polish"); setErr(""); const r = await aiWriteReply({ activityId: x.id, subject, body }); setBusy(""); if (!r.ok) setErr(r.error || "The AI couldn't rewrite that."); else setBody(r.body); }}>{busy === "polish" ? "Polishing…" : "✦ Polish"}</button>}
+          {needs ? <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id), "Off your Needs a reply list.")}>No reply needed</button>
+            : x.meta?.no_reply ? <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id, false), "Back on Needs a reply.")}>Needs a reply after all</button> : null}
+          <span className="faint" style={{ fontSize: 12 }}>Sends from your mailbox in the same thread, with your signature and their email quoted, and saves to Sent Items.</span>
         </div>
       </div>
       <div className="row ibx-acts" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>

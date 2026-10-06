@@ -5302,6 +5302,8 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ibx-reply{display:flex;flex-direction:column;gap:6px}
 .ibx-reply input,.ibx-reply textarea,.ibx-in,.ibx-acts select{font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 .ibx-reply textarea{resize:vertical}
+.ibx-opts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.ibx-opts .chip{max-width:100%;white-space:normal;text-align:left}
+.ibx-tell{display:flex;gap:6px}.ibx-tell input{flex:1;min-width:0}
 .ibx-in{width:170px}
 .ibx-find{position:relative}
 .ibx-hits{position:absolute;top:100%;left:0;z-index:5;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.12);display:flex;flex-direction:column;min-width:220px}
@@ -5315,3 +5317,4 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ibx-boxes{font-size:12.5px;margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap}
 .ibx-boxes span.ok{color:#1F7A47}.ibx-boxes span.bad{color:var(--danger,#c0392b)}.ibx-boxes span.off{opacity:.6}
 .ibx-whose{display:inline-flex;gap:4px;margin-left:8px}
+.db-click{cursor:pointer}.db-click:hover{background:var(--accent-soft)}

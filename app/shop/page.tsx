@@ -11,6 +11,9 @@ import { Pill } from "@/components/bits";
 import { money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import { useRole } from "@/components/RoleContext";
+import { useRouter } from "next/navigation";
+import { mailRows, type MailSug } from "@/lib/inbox";
+import { getMailStatus } from "./mail-actions";
 
 /**
  * The daily dashboard: the first thing every admin sees. Everything that needs someone today, in one place:
@@ -23,7 +26,7 @@ type Cust = { id: string; company: string; name: string };
 
 type Job = { id: string; href: string; number: number; nickname: string; customer_id: string | null; due: string | null; status: string; statusLabel: string; printavo: boolean; total: number; owner: string; ship: boolean };
 type Msg = { id: string; order_id: string | null; customer_id: string | null; author_name: string; author_email: string; body: string; created_at: string; topic: string | null };
-type Mail = { id: string; customer_id: string | null; order_id: string | null; subject: string; body: string; from_email: string; occurred_at: string; meta: Record<string, unknown> };
+type Mail = { id: string; customer_id: string | null; order_id: string | null; subject: string; body: string; from_email: string; occurred_at: string; direction: string; external_id: string | null; thread_id: string | null; meta: { from_name?: string; account_id?: string; ignored?: boolean; no_reply?: boolean; references?: string[]; triage?: { needs_reply?: boolean; summary?: string; intent?: string } } | null };
 type SepLite = { id: string; number: number; order_id: string | null; location: string; garment_color: string; status: string; due_date: string | null; customer_id: string | null; channels: unknown[]; updated_at: string };
 // separations on the dashboard are the ones being worked on (Printed and Archived aren't listed)
 const SEP_ST: Record<string, [string, string]> = { working: ["Working", "#A152C9"] };
@@ -39,6 +42,7 @@ const pvKind = (s: string) => /ship|delivery/i.test(s) ? "ship" : /^quote/i.test
 export default function Dashboard() {
   const [me, setMe] = useState("");
   const { perms } = useRole();
+  const router = useRouter();
   const boss = perms.money; // owners / admins see the sales numbers; crew (production, receiving, shipping) get the production dashboard
   const crew = !boss;
   const [seps, setSeps] = useState<SepLite[]>([]);
@@ -49,7 +53,7 @@ export default function Dashboard() {
   const [custs, setCusts] = useState<Record<string, Cust>>({});
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [mails, setMails] = useState<Mail[]>([]);
+  const [mails, setMails] = useState<Mail[]>([]), [mailNeeds, setMailNeeds] = useState<Mail[]>([]), [myBox, setMyBox] = useState<string | null>(null);
   const [reorders, setReorders] = useState<Reorder[]>([]);
   const [goods, setGoods] = useState({ today: 0, arrived: 0 });
   const [owners, setOwners] = useState<Record<string, string>>({}); // customer → account owner (first name)
@@ -65,7 +69,7 @@ export default function Dashboard() {
         sb.from("orders").select("id, number, nickname, customer_id, due_date, status, type, total, delivery_method, submitted_at").not("status", "in", "(completed)").limit(800),
         sb.from("archived_orders").select("id, visual_id, nickname, customer_id, due_date, status_name, kind, total, owner:data->>owner").not("status_name", "in", '("Job Completed","Quote - Closed")').limit(800),
         sb.from("messages").select("id, order_id, customer_id, author_name, author_email, body, created_at, topic").eq("author_type", "customer").is("read_at", null).order("created_at", { ascending: false }).limit(30),
-        sb.from("activities").select("id, customer_id, order_id, subject, body, from_email, occurred_at, meta").eq("kind", "email").eq("direction", "in").gte("occurred_at", new Date(Date.now() - 4 * 86400000).toISOString()).order("occurred_at", { ascending: false }).limit(30),
+        sb.from("activities").select("id, customer_id, order_id, subject, body, from_email, occurred_at, direction, external_id, thread_id, meta").eq("kind", "email").gte("occurred_at", new Date(Date.now() - 21 * 86400000).toISOString()).order("occurred_at", { ascending: false }).limit(500),
         sb.from("archived_orders").select("id, visual_id, nickname, customer_id, order_date, total, kind, owner:data->>owner").eq("kind", "invoice").gte("order_date", lastYearFrom).lte("order_date", lastYearTo).order("order_date").limit(400),
         sb.from("archived_orders").select("customer_id, order_date, owner:data->>owner").gte("order_date", addDays(-240)).order("order_date", { ascending: false }).limit(3000),
         sb.from("supplier_manifest_lines").select("tracking, track_status, est_delivery, delivered_at, ship_date, method").neq("kind", "ignored").gte("created_at", new Date(Date.now() - 20 * 86400000).toISOString()).limit(3000),
@@ -91,7 +95,13 @@ export default function Dashboard() {
       ];
       setJobs(js);
       setMsgs((m.data || []) as Msg[]);
-      setMails((e.data || []) as Mail[]);
+      // customer email: the ones still waiting on an answer (same rule as the Inbox), and whose mailbox is mine
+      const allMail = (e.data || []) as Mail[];
+      const inIds = allMail.filter((x) => x.direction === "in").map((x) => x.id);
+      const { data: sg } = inIds.length ? await sb.from("ai_suggestions").select("id, kind, status, activity_id").in("activity_id", inIds) : { data: [] };
+      setMailNeeds(mailRows(allMail, (sg || []) as MailSug[]).filter((r) => r.needs).map((r) => r.x));
+      setMails(allMail.filter((x) => x.direction === "in" && !x.meta?.ignored && x.occurred_at >= new Date(Date.now() - 7 * 86400000).toISOString()).slice(0, 40));
+      getMailStatus().then((r) => { if (r.ok && r.mine?.enabled) setMyBox(r.mine.id); }).catch(() => null);
       // reorder reminders: ordered around this time last year, nothing since (in the last 60 days)
       const recentBuyers = new Set(((recent.data || []) as { customer_id: string | null; order_date: string | null }[]).filter((r) => r.order_date && r.order_date >= addDays(-60)).map((r) => r.customer_id));
       for (const x of js) if (!x.printavo && x.customer_id) recentBuyers.add(x.customer_id);
@@ -143,7 +153,12 @@ export default function Dashboard() {
     };
   }, [jobs, mine, me, owners]); // eslint-disable-line react-hooks/exhaustive-deps
   const myMsgs = msgs.filter((x) => isMine(x.customer_id));
-  const myMails = mails.filter((x) => isMine(x.customer_id));
+  // an email is mine when it came to my mailbox (or it's one of my customers')
+  const mailMine = (x: Mail) => !mine || (!!myBox && x.meta?.account_id === myBox) || (!!x.customer_id && isMine(x.customer_id));
+  const myMails = mails.filter(mailMine);
+  const myNeeds = mailNeeds.filter(mailMine);
+  const replyItems = [...myMsgs.map((x) => ({ at: x.created_at, msg: x, mail: null as Mail | null })), ...myNeeds.map((x) => ({ at: x.occurred_at, msg: null as Msg | null, mail: x }))].sort((a, b) => b.at.localeCompare(a.at));
+  const openMail = (id: string) => router.push(`/shop/inbox?open=${id}`);
   const myReorders = reorders.filter((x) => isMine(x.customer_id, x.owner));
 
   const jobRow = (j: Job) => (
@@ -298,21 +313,26 @@ export default function Dashboard() {
               <div className="db-card-h">
                 <h2>Messages</h2>
                 <div className="aa-sub db-tabs" role="tablist">
-                  <button type="button" className={msgTab === "reply" ? "on" : ""} onClick={() => setMsgTab("reply")}>Needs a reply<span className="aa-n">{myMsgs.length}</span></button>
+                  <button type="button" className={msgTab === "reply" ? "on" : ""} onClick={() => setMsgTab("reply")}>Needs a reply<span className="aa-n">{replyItems.length}</span></button>
                   <button type="button" className={msgTab === "email" ? "on" : ""} onClick={() => setMsgTab("email")}>Customer emails<span className="aa-n">{myMails.length}</span></button>
                 </div>
               </div>
               <div className="db-scroll">
-                {msgTab === "reply" ? list(myMsgs.length, (
-                  <ul className="db-list">{myMsgs.map((x) => (
+                {msgTab === "reply" ? list(replyItems.length, (
+                  <ul className="db-list">{replyItems.map(({ msg: x, mail: e }) => x ? (
                     <li key={x.id} className="db-row db-msg">
                       <span className="db-main"><b>{who(x.customer_id) || x.author_name || x.author_email}</b><span className="db-body">{x.body.slice(0, 200)}{x.body.length > 200 ? "…" : ""}</span></span>
-                      <span className="db-side"><span className="faint">{ago(x.created_at)}</span>{x.order_id ? <Link href={`/shop/orders/${x.order_id}`} className="btn sm primary">Reply</Link> : x.customer_id ? <Link href={`/shop/customers/${x.customer_id}?area=messages`} className="btn sm primary">Reply</Link> : null}</span>
+                      <span className="db-side"><span className="faint">portal · {ago(x.created_at)}</span>{x.order_id ? <Link href={`/shop/orders/${x.order_id}`} className="btn sm primary">Reply</Link> : x.customer_id ? <Link href={`/shop/customers/${x.customer_id}?area=messages`} className="btn sm primary">Reply</Link> : null}</span>
                     </li>
-                  ))}</ul>
-                ), <MsgEmpty title="You're all caught up" text="No customer messages waiting on a reply. New portal messages land here the moment a customer sends one." />) : list(myMails.length, (
+                  ) : e ? (
+                    <li key={e.id} className="db-row db-msg db-click" onDoubleClick={() => openMail(e.id)} title="Double-click to answer it">
+                      <span className="db-main"><b>{who(e.customer_id) || e.meta?.from_name || e.from_email}</b><span className="db-sub">{e.subject || "(no subject)"}</span><span className="db-body">{e.meta?.triage?.summary || `${e.body.slice(0, 160)}${e.body.length > 160 ? "…" : ""}`}</span></span>
+                      <span className="db-side"><span className="faint">email · {ago(e.occurred_at)}</span><Link href={`/shop/inbox?open=${e.id}`} className="btn sm primary">Reply</Link></span>
+                    </li>
+                  ) : null)}</ul>
+                ), <MsgEmpty title="You're all caught up" text="No customer emails or portal messages waiting on a reply. They land here the moment a customer writes." />) : list(myMails.length, (
                   <ul className="db-list">{myMails.map((x) => (
-                    <li key={x.id} className="db-row db-msg">
+                    <li key={x.id} className="db-row db-msg db-click" onDoubleClick={() => openMail(x.id)} title="Double-click to open it in the Inbox">
                       <span className="db-main"><b>{who(x.customer_id) || x.from_email}</b><span className="db-sub">{x.subject || "(no subject)"}</span><span className="db-body">{x.body.slice(0, 160)}{x.body.length > 160 ? "…" : ""}</span></span>
                       <span className="db-side"><span className="faint">{ago(x.occurred_at)}</span>
                         {x.order_id ? <Link href={`/shop/orders/${x.order_id}`} className="btn sm">On its job</Link>

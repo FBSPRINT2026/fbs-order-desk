@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, hasAiKey } from "@/lib/ai/claude";
-import { draftMessage, orderFromText, reviewOrder } from "@/lib/ai/tasks";
+import { draftMessage, orderFromText, replyOptions, reviewOrder } from "@/lib/ai/tasks";
 import { describeGroups, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
 import { processEmailActivity } from "@/lib/ai/email";
 import { storeInboundEmail } from "@/lib/crm/inbound";
@@ -68,6 +68,72 @@ export async function aiRewriteDraft(input: { purpose: string; orderId?: string 
     const { facts, history } = await orderFacts(admin, input.orderId, input.customerId);
     const r = await draftMessage(st.settings, { purpose: input.purpose.slice(0, 500), facts, history, starting: { subject: input.subject, body: input.body?.slice(0, 4000) } }, { admin, order_id: input.orderId, customer_id: input.customerId, by: email });
     return r.ok ? { ok: true as const, subject: r.data.subject, body: r.data.body } : { ok: false as const, error: r.error };
+  } catch (e) { return fail(e); }
+}
+
+/** what the AI needs to answer an email: the email, the thread so far, the order and customer (or their open orders) */
+async function emailContext(admin: ReturnType<typeof createAdminClient>, activityId: string) {
+  const { data: a } = await admin.from("activities").select("id, customer_id, order_id, subject, body, from_email, occurred_at, thread_id, external_id, meta").eq("id", activityId).maybeSingle();
+  if (!a) return null;
+  const meta = (a.meta || {}) as { from_name?: string };
+  const { facts, history: msgHistory } = await orderFacts(admin, a.order_id as string | null, a.customer_id as string | null);
+  const lines = [facts];
+  if (!a.order_id && a.customer_id) {
+    const { data: os } = await admin.from("orders").select("number, nickname, status, due_date").eq("customer_id", a.customer_id).not("status", "in", "(completed,cancelled)").order("number", { ascending: false }).limit(6);
+    if (os?.length) lines.push(`Their open orders: ${os.map((o) => `#${o.number}${o.nickname ? ` "${o.nickname}"` : ""} (${ST[o.status as keyof typeof ST]?.portal || o.status}${o.due_date ? `, in-hands ${fmtDateLong(o.due_date as string)}` : ""})`).join("; ")}.`);
+  }
+  // the email thread so far (both directions), oldest first: the emails this one references that we have on file
+  const refs = (((a.meta || {}) as { references?: string[] }).references || []).slice(-10);
+  let thread = "";
+  if (refs.length) {
+    const { data: t } = await admin.from("activities").select("direction, body, occurred_at").eq("kind", "email").in("external_id", refs).order("occurred_at", { ascending: false }).limit(5);
+    thread = (t || []).reverse().map((m) => `${m.direction === "out" ? "Shop" : "Customer"}: ${String(m.body || "").slice(0, 700)}`).join("\n");
+  }
+  const email = `From: ${meta.from_name ? `${meta.from_name} <${a.from_email}>` : a.from_email}\nSubject: ${a.subject || ""}\n\n${String(a.body || "").slice(0, 6000)}`;
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
+  return { a, email, facts: lines.join("\n"), history: [msgHistory, thread].filter(Boolean).join("\n"), today };
+}
+
+/** 3 or 4 different answers to a customer's email, each written out ("Yes, we can make it", "Can't, offer Monday", …) */
+export async function aiReplyOptions(activityId: string) {
+  try {
+    const { admin, email } = await staff();
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false as const, off: true, error: st.reason };
+    const c = await emailContext(admin, activityId);
+    if (!c) return { ok: false as const, error: "That email isn't on file." };
+    const r = await replyOptions(st.settings, { email: c.email, facts: c.facts, history: c.history, today: c.today }, { admin, order_id: c.a.order_id as string | null, customer_id: c.a.customer_id as string | null, by: email });
+    if (!r.ok) return { ok: false as const, error: r.error };
+    const subj = String(c.a.subject || "");
+    const re = subj.toLowerCase().startsWith("re:") ? subj : `Re: ${subj}`;
+    return { ok: true as const, options: (r.data.options || []).slice(0, 4).map((o) => ({ label: o.label, subject: re, body: o.body })) };
+  } catch (e) { return fail(e); }
+}
+
+/** write (or rewrite) the reply to an email the way you say: "tell her yes if the art is approved by Friday" */
+export async function aiWriteReply(input: { activityId: string; instruction?: string; subject?: string; body?: string }) {
+  try {
+    const { admin, email } = await staff();
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false as const, off: true, error: st.reason };
+    const c = await emailContext(admin, input.activityId);
+    if (!c) return { ok: false as const, error: "That email isn't on file." };
+    const what = input.instruction?.trim();
+    const purpose = what ? `Reply to the customer's email. What the shop wants to say: ${what.slice(0, 600)}` : input.body?.trim() ? "Polish this reply to the customer's email: keep what it says, make it clear and friendly." : "Reply to the customer's email.";
+    const r = await draftMessage(st.settings, { purpose, facts: `${c.facts}\nToday is ${c.today}.\n\nThe customer's email:\n"""\n${c.email}\n"""`, history: c.history, starting: what ? undefined : { subject: input.subject, body: input.body?.slice(0, 4000) } }, { admin, order_id: c.a.order_id as string | null, customer_id: c.a.customer_id as string | null, by: email });
+    return r.ok ? { ok: true as const, subject: input.subject || r.data.subject, body: r.data.body } : { ok: false as const, error: r.error };
+  } catch (e) { return fail(e); }
+}
+
+/** "No reply needed": off the Needs a reply list (the email stays on file) */
+export async function markNoReply(activityId: string, noReply = true) {
+  try {
+    const { admin, email } = await staff();
+    const { data: a } = await admin.from("activities").select("id, meta").eq("id", activityId).maybeSingle();
+    if (!a) return { ok: false as const, error: "That email isn't on file." };
+    await admin.from("activities").update({ meta: { ...((a.meta || {}) as object), no_reply: noReply } }).eq("id", activityId);
+    if (noReply) await admin.from("ai_suggestions").update({ status: "dismissed", decided_at: new Date().toISOString(), decided_by: email || "staff" }).eq("activity_id", activityId).eq("kind", "email_reply").in("status", ["open", "snoozed"]);
+    return { ok: true as const };
   } catch (e) { return fail(e); }
 }
 
