@@ -152,6 +152,11 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
       const o = exactJobs[0];
       return { orderId: o.id, kind: "blanks", how: `same pieces of each style and color as #${o.number} (${pcsShipped} pcs${o.due_date ? `, due ${o.due_date}` : ""})`, sure: true };
     }
+    if (!exactJobs.length && pcsShipped >= 24) {
+      const ss = bySizeOf(g.lines.map((l) => ({ size: l.size, qty: l.qty_shipped })));
+      const twins = list.filter((o) => (!o.due_date || (o.due_date >= late && o.due_date <= soon)) && sameSizes(ss, bySizeOf(o.items.map((it) => ({ size: it.size, qty: it.need })))));
+      if (twins.length === 1) return { orderId: twins[0].id, kind: "blanks", how: `same count in every size as #${twins[0].number} (${pcsShipped} pcs: ${sizeLine(ss)})`, sure: true };
+    }
     if (exactJobs.length > 1) {
       const o = [...exactJobs].sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"))[0];
       return { orderId: o.id, kind: "blanks", how: `same pieces of each style and color as ${exactJobs.length} jobs: #${exactJobs.map((x) => x.number).join(", #")} (the soonest due picked; check it)`, sure: false };
@@ -195,9 +200,9 @@ export function abbrevHit(po: string, names: string[], nickname: string): boolea
     for (let k = 3; k < ws.length; k++) inits.add(ws.slice(0, k).map((w) => w[0]).join(""));
   }
   if (pw.some((w) => w.length >= 3 && inits.has(w))) return true;
-  const near = (a: string, b: string) => a === b || a + "s" === b || b + "s" === a || (Math.min(a.length, b.length) >= 6 && (a.startsWith(b) || b.startsWith(a)));
+  const near = (a: string, b: string) => a === b || a + "s" === b || b + "s" === a || (Math.min(a.length, b.length) >= 6 && (a.startsWith(b) || b.startsWith(a))) || (a.length >= 4 && b.length >= a.length + 3 && b.startsWith(a));
   const theirs = [...words(nickname), ...names.flatMap((n) => words(n))].filter((w) => w.length >= 5 && !STOP.has(w) && !GENERIC.test(w));
-  return pw.some((w) => w.length >= 5 && !GENERIC.test(w) && theirs.some((t) => near(w, t)));
+  return pw.some((w) => w.length >= 4 && !GENERIC.test(w) && theirs.some((t) => near(w, t)));
 }
 
 /**
@@ -269,6 +274,12 @@ async function guessCustomerByGoods(admin: SupabaseClient, g: Group) {
   return { orderId: pick.id, customerId: pick.customerId, customer: pick.customer, number: pick.number,
     how: `"${g.customer_name}" isn't a customer we know, but these ${pcs} pcs (${what}) are exactly what #${pick.number} ${pick.nickname} for ${pick.customer} needs${why}. Is ${g.customer_name} ${pick.customer}?` };
 }
+
+/** pieces per size ("L" → 310) */
+const bySizeOf = (xs: { size: string; qty: number }[]) => { const m = new Map<string, number>(); for (const x of xs) if (x.qty) m.set(sizeKey(x.size), (m.get(sizeKey(x.size)) || 0) + x.qty); return m; };
+/** the same count in every size (S 95, M 280, L 310, XL 60, 2XL 12 = S 95, M 280 …) */
+const sameSizes = (a: Map<string, number>, b: Map<string, number>) => a.size > 0 && a.size === b.size && [...a].every(([z, q]) => b.get(z) === q);
+const sizeLine = (m: Map<string, number>) => [...m].map(([z, q]) => `${z} ${q}`).join(", ");
 
 /** numbers of 5+ digits in a text, even glued to letters ("PeterMEI93298390" → 93298390; "12341-90246" → 12341, 90246) */
 const numRuns = (t: string) => [...new Set((t.match(/\d{5,}/g) || []))];
@@ -478,6 +489,16 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
     const a1 = allocate(lines, near);
     if (!a1.unplaced.length) return { customerId, ...a1, auto: true, how: `PO ${g.customer_po} is one digit off #${near[0].number}'s` };
   }
+  // the sizes say it: one open order with exactly the same count in every size (Nicholas: "the quantity exactly lines
+  // up, 757 to 757"; the job line may not even name a style or color: "4/4 IMPRINT + 1-COLOR LEFT SLEEVE…")
+  const shipSizes = bySizeOf(lines.map((l) => ({ size: l.size, qty: l.qty_shipped })));
+  const pcsIn = lines.reduce((x, l) => x + l.qty_shipped, 0);
+  const sizeTwins = orders.filter((o) => sameSizes(shipSizes, bySizeOf(o.items.map((it) => ({ size: it.size, qty: it.need })))));
+  if (sizeTwins.length === 1 && pcsIn >= 12)
+    return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: sizeTwins[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `same count in every size as #${sizeTwins[0].number} (${pcsIn} pcs: ${sizeLine(shipSizes)})` };
+  // the customer's only open order, and the pieces add up exactly
+  if (orders.length === 1 && pcsIn >= 12 && orders[0].items.reduce((x, it) => x + it.need, 0) === pcsIn)
+    return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: orders[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `their only open order, and the pieces add up exactly (${pcsIn})` };
   const a = allocate(lines, orders);
   const used = new Set(a.alloc.flatMap((x) => x.parts.map((p) => p.orderId)));
   const how = !a.alloc.length ? "" : `No order has PO ${g.customer_po || "(none)"}; items match ${[...used].map((id) => "#" + orders.find((o) => o.id === id)?.number).join(", ")}`;
