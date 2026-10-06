@@ -81,12 +81,27 @@ function ownPart(html: string) {
     if (keyOf(top.slice(box.openEnd, k.start) + top.slice(k.end, box.closeStart))) break;
     box = k;
   }
-  const blocks: { start: number; end: number; key: string }[] = [];
-  let pos = box.openEnd;
-  const push = (s: number, e: number) => { if (e > s) blocks.push({ start: s, end: e, key: keyOf(top.slice(s, e)) }); };
-  for (const k of box.kids) { if (k.start > pos && textOf(top.slice(pos, k.start))) push(pos, k.start); push(k.start, k.end); pos = k.end; }
-  if (box.closeStart > pos && textOf(top.slice(pos, box.closeStart))) push(pos, box.closeStart);
-  return { top, blocks: blocks.filter((x) => x.key), marked: marked && keyOf(top.slice(marked.start, marked.end)) ? top.slice(marked.start, marked.end) : "" };
+  // the lines of the email: paragraphs and tables, looking through the plain <div>s Outlook sometimes wraps them in
+  // (so a signature reads the same whether or not it's wrapped). Each line remembers the wrappers it sits in.
+  type Wrap = { start: number; end: number; first: number };
+  const blocks: { start: number; end: number; key: string; wraps: Wrap[] }[] = [];
+  const holdsBlocks = (n: Node) => n.name === "div" && n.kids.some((k) => BLOCK.has(k.name));
+  const lines = (n: Node, wraps: Wrap[]) => {
+    let pos = n.openEnd;
+    const push = (st: number, e: number) => { if (e > st) blocks.push({ start: st, end: e, key: keyOf(top.slice(st, e)), wraps }); };
+    for (const k of n.kids) {
+      if (k.start > pos && textOf(top.slice(pos, k.start))) push(pos, k.start);
+      if (holdsBlocks(k)) lines(k, [...wraps, { start: k.start, end: k.end, first: blocks.length }]); else push(k.start, k.end);
+      pos = k.end;
+    }
+    if (n.closeStart > pos && textOf(top.slice(pos, n.closeStart))) push(pos, n.closeStart);
+  };
+  lines(box, []);
+  // blank lines don't count, but a wrapper's first line may be blank: point it at its first real line
+  const kept = blocks.map((b, i) => ({ ...b, i })).filter((x) => x.key);
+  const done = new Set<Wrap>();
+  for (const b of kept) for (const w of b.wraps) { if (done.has(w)) continue; done.add(w); const f = kept.findIndex((x) => x.i >= w.first); w.first = f < 0 ? kept.length : f; }
+  return { top, blocks: kept, marked: marked && keyOf(top.slice(marked.start, marked.end)) ? top.slice(marked.start, marked.end) : "" };
 }
 
 /** how each email splits up (for checking the reader against real mail) */
@@ -110,8 +125,11 @@ export function findSignature(htmls: string[]): { html: string; css: string; how
   const need = Math.max(1, Math.ceil(others.length / 2));
   const len = common[need - 1] || 0;
   if (!len) return null;
-  const blocks = a.blocks.slice(a.blocks.length - len);
-  const html = a.top.slice(blocks[0].start, blocks[blocks.length - 1].end).trim();
+  const s0 = a.blocks.length - len, first = a.blocks[s0], last = a.blocks[a.blocks.length - 1];
+  // start at the outermost wrapper that begins with the signature's first line; end after any wrapper opened inside it
+  const start = first.wraps.find((w) => w.first === s0)?.start ?? first.start;
+  const end = Math.max(last.end, ...last.wraps.filter((w) => w.start >= start).map((w) => w.end));
+  const html = a.top.slice(start, end).trim();
   if (html.length > 2_500_000) return null;
   return { html, css: cssOf(a.h), how: `ends ${len} block${len > 1 ? "s" : ""}, ${common.filter((c) => c >= len).length + 1} of ${parts.length} emails agree` };
 }
