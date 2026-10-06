@@ -102,9 +102,10 @@ async function orderFor(admin: SupabaseClient, customerId: string | null, subjec
 
 export type Outcome = "customer" | "lead" | "sent" | "skipped" | "duplicate";
 
-export async function handleIncoming(admin: SupabaseClient, m: MailMsg, mailbox: string): Promise<Outcome> {
+export type Acct = { id: string; email: string };
+export async function handleIncoming(admin: SupabaseClient, m: MailMsg, acct: Acct): Promise<Outcome> {
   const from = lc(m.from.address);
-  if (!from || from === lc(mailbox) || OWN_DOMAINS.has(domainOf(from))) return "skipped";
+  if (!from || from === lc(acct.email) || OWN_DOMAINS.has(domainOf(from))) return "skipped";
   if (m.messageId) { const { data: dup } = await admin.from("activities").select("id").eq("external_id", m.messageId).maybeSingle(); if (dup) return "duplicate"; }
   const parent = await threadParent(admin, m);
   let match = await matchAddress(admin, from);
@@ -129,14 +130,14 @@ export async function handleIncoming(admin: SupabaseClient, m: MailMsg, mailbox:
     to_email: [...m.to, ...m.cc].map((x) => x.address).join(", ").slice(0, 500),
     external_id: m.messageId ? m.messageId.slice(0, 500) : null, thread_id: (m.inReplyTo || m.references[0] || m.messageId || "").slice(0, 500) || null,
     occurred_at: m.date.toISOString(), created_by: "mailbox",
-    meta: { from_name: m.from.name.slice(0, 200), match: match.how, lead, references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, mailbox: "inbox" },
+    meta: { from_name: m.from.name.slice(0, 200), match: match.how, lead, references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, mailbox: "inbox", account_id: acct.id, account: acct.email },
   }).select("id").single();
   if (error) throw new Error(error.message);
   await processEmailActivity(admin, ins.id as string).catch(() => null);
   return lead ? "lead" : "customer";
 }
 
-export async function handleSent(admin: SupabaseClient, m: MailMsg): Promise<Outcome> {
+export async function handleSent(admin: SupabaseClient, m: MailMsg, acct: Acct): Promise<Outcome> {
   if (m.messageId) { const { data: dup } = await admin.from("activities").select("id").eq("external_id", m.messageId).maybeSingle(); if (dup) return "duplicate"; }
   const parent = await threadParent(admin, m);
   let customerId: string | null = parent?.customer_id || null;
@@ -150,7 +151,7 @@ export async function handleSent(admin: SupabaseClient, m: MailMsg): Promise<Out
     to_email: [...m.to, ...m.cc].map((x) => x.address).join(", ").slice(0, 500),
     external_id: m.messageId ? m.messageId.slice(0, 500) : null, thread_id: (m.inReplyTo || m.references[0] || m.messageId || "").slice(0, 500) || null,
     occurred_at: m.date.toISOString(), created_by: "mailbox", ai_processed_at: new Date().toISOString(),
-    meta: { references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, mailbox: "sent" },
+    meta: { references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, mailbox: "sent", account_id: acct.id, account: acct.email },
   });
   await closeAnswered(admin, m, "Answered in Outlook");
   return "sent";

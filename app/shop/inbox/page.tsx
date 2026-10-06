@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
-import { checkMailNow, customerFromEmail, getMailStatus, markNotCustomer, sendEmailReply, setEmailCustomer, setEmailOrder } from "../mail-actions";
+import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, markNotCustomer, sendEmailReply, setEmailCustomer, setEmailOrder } from "../mail-actions";
 import { aiRewriteDraft, quoteFromSuggestion } from "../ai-actions";
 
 /**
@@ -12,11 +12,12 @@ import { aiRewriteDraft, quoteFromSuggestion } from "../ai-actions";
  * the AI's one-line summary, a drafted reply to edit and send (from nicholas@fbsprint.com, in the same thread), and
  * buttons to make a quote, file it under an order, or sort the sender.
  */
-type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { from_name?: string; lead?: boolean; ignored?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number }[]; triage?: { intent?: string; summary?: string; urgency?: string; needs_reply?: boolean } } };
+type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number }[]; triage?: { intent?: string; summary?: string; urgency?: string; needs_reply?: boolean } } };
 type Sug = { id: string; kind: string; status: string; activity_id: string | null; title: string; body: string; draft: { subject?: string; body?: string } | null; payload: { groups?: unknown[] } | null; order_id: string | null };
 type Cust = { id: string; company: string | null; name: string | null };
 type Ord = { id: string; number: number; nickname: string | null; customer_id: string | null; status: string };
-type Status = { ready: boolean; mailbox: string; last_ok_at?: string | null; last_error?: string | null; last_run_at?: string | null; stats?: Record<string, Record<string, number>> };
+type Box = { id: string; email: string; name: string; imap_host: string; enabled: boolean; last_ok_at: string | null; last_error: string | null; last_run_at: string | null; stats: Record<string, Record<string, number>> };
+type Status = { mine: Box | null; all: Box[]; defaultHost: string; myEmail: string };
 
 const ago = (t: string) => { const m = (Date.now() - new Date(t).getTime()) / 60000; return m < 60 ? `${Math.max(1, Math.round(m))} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 const INTENT: Record<string, string> = { new_order: "New order", reorder: "Reorder", change_to_order: "Order change", artwork: "Artwork", payment: "Payment", question: "Question", other: "Other" };
@@ -25,6 +26,8 @@ export default function Inbox() {
   const [st, setSt] = useState<Status | null>(null);
   const [acts, setActs] = useState<Act[] | null>(null), [sugs, setSugs] = useState<Sug[]>([]), [custs, setCusts] = useState<Map<string, Cust>>(new Map()), [orders, setOrders] = useState<Ord[]>([]);
   const [tab, setTab] = useSticky<"reply" | "leads" | "all">("inbox.tab", "reply");
+  const [whose, setWhose] = useSticky<"mine" | "everyone">("inbox.whose", "mine");
+  const [connecting, setConnecting] = useState(false);
   const [open, setOpen] = useState<string | null>(null), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
 
   const load = useCallback(async () => {
@@ -59,9 +62,11 @@ export default function Inbox() {
       return { x, answered, reply, quote, needs };
     });
   }, [acts, sugs]);
-  const shown = rows.filter((r) => (tab === "reply" ? r.needs : tab === "leads" ? r.x.meta?.lead && !r.x.customer_id : true));
-  const counts = { reply: rows.filter((r) => r.needs).length, leads: rows.filter((r) => r.x.meta?.lead && !r.x.customer_id).length, all: rows.length };
-  const today = st?.stats ? Object.values(st.stats)[0] || {} : {};
+  const mineId = st?.mine?.enabled ? st.mine.id : null;
+  const scoped = whose === "mine" && mineId ? rows.filter((r) => r.x.meta?.account_id === mineId) : rows;
+  const shown = scoped.filter((r) => (tab === "reply" ? r.needs : tab === "leads" ? r.x.meta?.lead && !r.x.customer_id : true));
+  const counts = { reply: scoped.filter((r) => r.needs).length, leads: scoped.filter((r) => r.x.meta?.lead && !r.x.customer_id).length, all: scoped.length };
+  const today = st?.mine?.stats ? st.mine.stats[new Date().toISOString().slice(0, 10)] || {} : {};
 
   const who = (x: Act) => { const c = x.customer_id ? custs.get(x.customer_id) : null; return c ? c.company || c.name || x.from_email : `${x.meta?.from_name || x.from_email}`; };
   const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(""), 5000); };
@@ -70,20 +75,23 @@ export default function Inbox() {
     <>
       <div className="page-head">
         <div><div className="eyebrow">Sales</div><h1>Inbox</h1></div>
-        <div className="row" style={{ gap: 8, alignItems: "center" }}>
-          <span className="faint" style={{ fontSize: 13 }}>{!st ? "" : !st.ready ? "Mailbox not connected" : st.last_error ? "" : `${st.mailbox} · checked ${st.last_ok_at ? ago(st.last_ok_at) : "not yet"}`}</span>
-          <button type="button" className="btn" disabled={!!busy || !st?.ready} onClick={async () => { setBusy("check"); const r = await checkMailNow(); setBusy(""); if (!r.ok) flash(r.error); else { flash("Checked."); load(); } }}>{busy === "check" ? "Checking…" : "Check now"}</button>
+        <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {st?.mine?.enabled && <span className="faint" style={{ fontSize: 13 }}>{st.mine.email} · checked {st.mine.last_ok_at ? ago(st.mine.last_ok_at) : "not yet"}</span>}
+          {st?.mine?.enabled && <button type="button" className="btn" disabled={!!busy} onClick={async () => { setBusy("check"); const r = await checkMailNow(); setBusy(""); if (!r.ok) flash(r.error); else { flash("Checked."); load(); } }}>{busy === "check" ? "Checking…" : "Check now"}</button>}
+          {st && <button type="button" className="btn" onClick={() => setConnecting(!connecting)}>{st.mine?.enabled ? "My email settings" : "Connect my email"}</button>}
         </div>
       </div>
-      {st && !st.ready && <div className="ink-none" style={{ marginBottom: 12 }}><b>Connect the mailbox</b><span>In Vercel → Settings → Environment Variables, add <b>MAIL_PASSWORD</b> (the password for {st.mailbox}). If HostPilot shows different server names than east.exch021.serverdata.net, add <b>MAIL_IMAP_HOST</b> and <b>MAIL_SMTP_HOST</b> too, and make sure IMAP is ticked for the mailbox (HostPilot → Services → Mailboxes → your name → Advanced Settings). Redeploy and the Inbox fills in within a couple of minutes.</span></div>}
-      {st?.ready && st.last_error && <div className="pv-err" style={{ marginBottom: 12 }}>{st.last_error}</div>}
+      {st && (connecting || !st.mine?.enabled) && <Connect st={st} onDone={(t) => { setConnecting(false); flash(t); load(); }} />}
+      {st?.mine?.enabled && st.mine.last_error && <div className="pv-err" style={{ marginBottom: 12 }}>{st.mine.last_error}</div>}
+      {st && st.all.length > 0 && <div className="faint ibx-boxes">Connected: {st.all.map((b) => <span key={b.id} className={b.enabled ? (b.last_error ? "bad" : "ok") : "off"} title={b.last_error || (b.last_ok_at ? `checked ${ago(b.last_ok_at)}` : "")}>{b.email}{!b.enabled ? " (off)" : b.last_error ? " (problem)" : ""}</span>)}</div>}
       {msg && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)", marginBottom: 10 }}>{msg}</div>}
       <section className="panel"><div className="panel-b stack" style={{ gap: 10 }}>
         <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }} role="tablist">
           <button type="button" role="tab" aria-selected={tab === "reply"} className={"chip" + (tab === "reply" ? " on" : "")} onClick={() => setTab("reply")}>Needs a reply ({counts.reply})</button>
           <button type="button" role="tab" aria-selected={tab === "leads"} className={"chip" + (tab === "leads" ? " on" : "")} onClick={() => setTab("leads")}>New leads ({counts.leads})</button>
           <button type="button" role="tab" aria-selected={tab === "all"} className={"chip" + (tab === "all" ? " on" : "")} onClick={() => setTab("all")}>All customer email ({counts.all})</button>
-          {st?.ready && <span className="faint" style={{ fontSize: 12.5, marginLeft: "auto" }}>Today: {(today.inbox_customer || 0)} customer · {(today.inbox_lead || 0)} leads · {(today.inbox_skipped || 0)} skipped (not customers)</span>}
+          <span className="ibx-whose">{mineId && <><button type="button" className={"chip sm" + (whose === "mine" ? " on" : "")} onClick={() => setWhose("mine")}>Mine</button><button type="button" className={"chip sm" + (whose === "everyone" ? " on" : "")} onClick={() => setWhose("everyone")}>Everyone</button></>}</span>
+          {st?.mine?.enabled && <span className="faint" style={{ fontSize: 12.5, marginLeft: "auto" }}>Today: {(today.inbox_customer || 0)} customer · {(today.inbox_lead || 0)} leads · {(today.inbox_skipped || 0)} skipped (not customers)</span>}
         </div>
         {!acts ? <div className="faint">Loading…</div> : !shown.length ? <div className="faint">{tab === "reply" ? "Nothing waiting on you." : tab === "leads" ? "No new leads." : "No customer email in the last 30 days yet."}</div> : (
           <div className="ibx-list">{shown.map(({ x, answered, reply, quote, needs }) => {
@@ -148,5 +156,30 @@ function Detail({ x, reply, quote, orders, thread, busy, setBusy, done }: { x: A
       </div>
       {err && <div className="pv-err">{err}</div>}
     </div>
+  );
+}
+
+function Connect({ st, onDone }: { st: Status; onDone: (msg: string) => void }) {
+  const [email, setEmail] = useState(st.mine?.email || st.myEmail), [name, setName] = useState(st.mine?.name || ""), [pw, setPw] = useState("");
+  const [host, setHost] = useState(st.mine?.imap_host || st.defaultHost), [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const known = ["east.exch021.serverdata.net", "west.exch021.serverdata.net"];
+  return (
+    <section className="panel ibx-connect"><form className="panel-b stack" style={{ gap: 10 }} onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(""); const r = await connectMailbox({ email, password: pw, name, host }); setBusy(false); setPw(""); if (!r.ok) setErr(r.error); else onDone("Your email is connected. Customer email will show up within a couple of minutes."); }}>
+      <div><b>{st.mine?.enabled ? "Your email" : "Connect your email"}</b><div className="faint" style={{ fontSize: 13 }}>The portal reads your Inbox and Sent Items every 2 minutes and keeps only customer email. Replies you send from here go out from your address and land in your Sent Items. Your password is checked with the mail server, then stored encrypted; nobody can see it.</div></div>
+      <div className="ibx-form">
+        <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required /></label>
+        <label>Your name (signs replies)<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nicholas" /></label>
+        <label>Email password<input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" required /></label>
+        <label>Mail server<select value={known.includes(host) ? host : "other"} onChange={(e) => setHost(e.target.value === "other" ? "" : e.target.value)}>
+          <option value="east.exch021.serverdata.net">East (east.exch021.serverdata.net)</option><option value="west.exch021.serverdata.net">West (west.exch021.serverdata.net)</option><option value="other">Other…</option>
+        </select>{!known.includes(host) && <input value={host} onChange={(e) => setHost(e.target.value)} placeholder="Incoming mail server from HostPilot" />}</label>
+      </div>
+      <div className="faint" style={{ fontSize: 12.5 }}>First tick IMAP for your mailbox in HostPilot (Services → Exchange → your name → Advanced Settings). The server is under Exchange settings → &quot;Incoming mail&quot; for your site.</div>
+      {err && <div className="pv-err">{err}</div>}
+      <div className="row" style={{ gap: 8 }}>
+        <button type="submit" className="btn primary" disabled={busy}>{busy ? "Checking the sign-in…" : st.mine?.enabled ? "Save" : "Connect"}</button>
+        {st.mine?.enabled && <button type="button" className="btn ghost" disabled={busy} onClick={async () => { setBusy(true); await disconnectMailbox(); setBusy(false); onDone("Your email is disconnected. Email already on file stays."); }}>Disconnect</button>}
+      </div>
+    </form></section>
   );
 }

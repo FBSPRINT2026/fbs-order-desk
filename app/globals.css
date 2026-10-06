@@ -5307,3 +5307,10 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ibx-hits button{font:inherit;text-align:left;background:none;border:0;padding:7px 10px;cursor:pointer}
 .ibx-hits button:hover{background:#F2F6FA}
 @media (max-width:760px){.ibx-head{grid-template-columns:14px 1fr}.ibx-sub,.ibx-when{grid-column:2}.ibx-detail{padding-left:12px}}
+.ibx-connect{margin-bottom:12px}
+.ibx-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.ibx-form label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+.ibx-form input,.ibx-form select{font:inherit;font-weight:400;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.ibx-boxes{font-size:12.5px;margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap}
+.ibx-boxes span.ok{color:#1F7A47}.ibx-boxes span.bad{color:var(--danger,#c0392b)}.ibx-boxes span.off{opacity:.6}
+.ibx-whose{display:inline-flex;gap:4px;margin-left:8px}
