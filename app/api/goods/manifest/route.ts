@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readXlsx } from "@/lib/xlsx";
-import { applyGroup, importManifest, linkByHand, markReceived, openOrdersFor, receiveFreight, receiveTruck, searchManifests, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, saveGoodsLesson, unmatchedGroups, type ManifestLine, type Waiting } from "@/lib/manifest";
+import { applyGroup, importManifest, linkByHand, markReceived, openOrdersFor, receiveFreight, receiveTruck, searchManifests, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, saveGoodsLesson, unlinkLines, unmatchedGroups, type ManifestLine, type Waiting } from "@/lib/manifest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,6 +78,11 @@ export async function POST(req: Request) {
         // an LTL pallet is here: sign for it (no parcel tracking for freight)
         const f = b.freight as { lineIds: string[]; at: string; signedBy: string; undo?: boolean };
         return NextResponse.json({ ok: true, ...(await receiveFreight(admin, f.lineIds || [], f.at, f.signedBy || "", !f.undo)) });
+      }
+      if (Array.isArray(b.unlink)) {
+        // linked to the wrong job: back to "not linked", and that job is remembered as wrong
+        const v = await staff();
+        return NextResponse.json({ ok: true, lines: await unlinkLines(admin, (b.unlink as string[]).filter(Boolean).slice(0, 2000), v?.user?.email || "staff", String(b.note || "")) });
       }
       if (b.items) {
         // what's actually in a shipment: style / color / size from the manifest (by its lines, or by tracking number)

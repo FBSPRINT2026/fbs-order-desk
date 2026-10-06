@@ -104,6 +104,7 @@ export default function GoodsReceiving() {
   useEffect(() => {
     const t = q.trim();
     if (t.length < 2) { setHits(null); return; }
+    setFocus(null);
     setSearching(true);
     const id = setTimeout(async () => {
       const r = await fetch(`/api/goods/manifest?q=${encodeURIComponent(t)}`, { cache: "no-store" }).catch(() => null);
@@ -115,6 +116,17 @@ export default function GoodsReceiving() {
   const [freight, setFreight] = useState<Row | null>(null);
   const [linking, setLinking] = useState<Row | null>(null);
   const [items, setItems] = useState<Row | null>(null);
+  // Unlink: click once to ask, again to do it
+  const [unlinkAsk, setUnlinkAsk] = useState<string | null>(null);
+  async function unlink(r: Row) {
+    if (unlinkAsk !== r.key) { setUnlinkAsk(r.key); setTimeout(() => setUnlinkAsk((k) => (k === r.key ? null : k)), 5000); return; }
+    setUnlinkAsk(null);
+    const res = await fetch("/api/goods/manifest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ unlink: r.lineIds }) }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    if (!res?.ok || j.error) { setNote(`Couldn't unlink it: ${j.error || "no answer"}`); return; }
+    setNote(`Unlinked ${r.who}${r.po ? ` PO ${r.po}` : ""} from #${r.number}. It's back under not linked, and it won't be put on #${r.number} again: link it to the right job (the AI learns from that).`);
+    load(); loadPending(); setRefreshKey((k) => k + 1);
+  }
   const [aiBusy, setAiBusy] = useState(false);
   async function askAi(force = false) {
     setAiBusy(true); setNote("The AI is reading the shipments that aren't linked yet… (up to a few minutes)");
@@ -353,6 +365,7 @@ export default function GoodsReceiving() {
             ? <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{(r.link.sugHow || "").startsWith("🤖") ? "🤖 " : ""}#{r.link.sugNo}?</button>
             : r.link?.sugCust && !r.link.customerId && !r.link.us && <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{r.link.sugCust.name}?</button>}</>
         : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}
+        {!r.unlinked && !!r.lineIds?.length && <button type="button" className={"rv-ign rv-unl" + (unlinkAsk === r.key ? " ask" : "")} onClick={() => unlink(r)} title="Linked to the wrong job? Unlink it: the goods go back to not linked, and that job is remembered as wrong">{unlinkAsk === r.key ? "Sure? Unlink" : "Unlink"}</button>}
         {!r.key.startsWith("h") && ((r.parts || [r.key]).every((k) => ignored[k])
           ? <button type="button" className="rv-ign on" onClick={() => ignore(r, false)} title="Put it back in the lists">Restore</button>
           : <button type="button" className="rv-ign" onClick={() => ignore(r, true)} title="Ignore this shipment: it leaves every list (find it under Ignored)">Ignore</button>)}</td>
@@ -383,6 +396,25 @@ export default function GoodsReceiving() {
   };
   // first look: arriving today, and underneath it what already arrived
   const shown: Focus[] = focus ? [focus] : ["today", "arrived"];
+  // SEARCH is different from the filters: it looks at everything (every state, ignored ones and older manifests too)
+  // and shows the matches in one list, sorted into where each shipment is. The boxes and tabs then narrow that down.
+  const isSearch = term.length >= 2;
+  type Bucket = "today" | "arrived" | "problems" | "way" | "past" | "older" | "ignored";
+  const BUCKETS: { k: Bucket; title: string }[] = [
+    { k: "today", title: "Arriving Today" }, { k: "arrived", title: "Arrived Today" }, { k: "problems", title: "Delayed / Problems" }, { k: "way", title: "In Transit" },
+    { k: "past", title: "Already Arrived" }, { k: "older", title: "Older Shipments (linked, printed or done)" }, { k: "ignored", title: "Ignored" },
+  ];
+  const bucketOf = (r: Row): Bucket => {
+    if (ignored[r.key] || r.parts?.every((k) => ignored[k])) return "ignored";
+    if (r.key.startsWith("h")) return r.state === "arrived" || !r.trks.length ? "older" : r.state === "problem" ? "problems" : "way";
+    if (r.state === "arrived") return localDay(r.deliveredAt) === t0 ? "arrived" : "past";
+    if (r.state === "problem" || r.late) return "problems";
+    if (localDay(r.at) === t0 || (!!r.at && localDay(r.at) < t0 && r.trks.some((k) => !k.tracking || k.freight))) return "today";
+    return "way";
+  };
+  const searchRows: Row[] = isSearch ? [...view_rows, ...ignoredRows.filter((r) => fuzzyHas(hay(r), term) && (view === "fbs" ? r.side === "fbs" : view === "customer" ? r.side === "customer" : true))] : [];
+  const focusBucket: Record<Focus, Bucket[]> = { today: ["today", "arrived"], arrived: ["arrived"], past: ["past", "older"], way: ["way"], problems: ["problems"] };
+  const searchShown = searchRows.filter((r) => !focus || focusBucket[focus].includes(bucketOf(r)));
 
   // FBS pane boxes
   const fbsToday = arriving.filter((a) => a.when === "today" || a.when === "past").length;
@@ -449,19 +481,30 @@ export default function GoodsReceiving() {
           {KPIS.map((k) => (
             <button key={k.k} type="button" className={["rv-kpi-" + k.k, k.tone || "", (focus || "today") === k.k ? "on" : ""].join(" ").trim()} onClick={() => setFocus(k.k === "today" || focus === k.k ? null : k.k)} aria-pressed={(focus || "today") === k.k}>
               {k.k === "today"
-                ? <div className="rv-kpi2"><div><span>Arriving today</span><b>{L.today.length}</b></div><div><span>Arrived today</span><b className="okc">{L.arrived.length}</b></div></div>
-                : <><span>{k.label}</span><b>{k.n}</b></>}
+                ? <div className="rv-kpi2"><div><span>Arriving today</span><b>{isSearch ? searchRows.filter((r) => bucketOf(r) === "today").length : L.today.length}</b></div><div><span>Arrived today</span><b className="okc">{isSearch ? searchRows.filter((r) => bucketOf(r) === "arrived").length : L.arrived.length}</b></div></div>
+                : <><span>{k.label}</span><b>{isSearch ? searchRows.filter((r) => focusBucket[k.k].includes(bucketOf(r))).length : k.n}</b></>}
             </button>
           ))}
         </div>
-        <div className="rv-stack">
+        {isSearch ? (
+          <div className="rv-stack">
+            <div className="rv-results">{searchShown.length ? <><b>{searchShown.length}</b> shipment{searchShown.length === 1 ? "" : "s"} match “{q.trim()}”</> : <>Nothing matches “{q.trim()}”{searching ? " (still looking in older manifests…)" : ""}</>}
+              {focus && <> · only {LISTS[focus].title.toLowerCase()} <button type="button" className="linkbtn" onClick={() => setFocus(null)}>show all</button></>}</div>
+            {BUCKETS.map((b) => { const rs = searchShown.filter((r) => bucketOf(r) === b.k); return rs.length ? (
+              <div key={b.k} className={"rv-list" + (b.k === "ignored" ? " rv-ign-list" : "")}>
+                <h4 className={"rv-sec rv-sec-" + (b.k === "older" ? "past" : b.k === "ignored" ? "way" : b.k)}><span>{b.title}</span><em>{rs.length}</em></h4>
+                {grouped(rs, "")}
+              </div>
+            ) : null; })}
+          </div>
+        ) : <div className="rv-stack">
           {shown.map((k) => (
             <div key={k} className="rv-list">
               <h4 className={"rv-sec rv-sec-" + k}><span>{LISTS[k].title}</span><em>{LISTS[k].n}</em></h4>
               {grouped(LISTS[k].rows, LISTS[k].empty)}
             </div>
           ))}
-        </div>
+        </div>}
       </section>
       </>}
 

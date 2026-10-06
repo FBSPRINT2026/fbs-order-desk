@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState, askClaude } from "@/lib/ai/claude";
 import { orderGroups, type Order } from "@/lib/pricing";
-import { AI_TAG, PV, __ai, abbrevHit, applyGroup, customerForAccount, linkLines, sizeKey, type Group, type ManifestRow, type Waiting } from "@/lib/manifest";
+import { AI_TAG, PV, __ai, abbrevHit, applyGroup, customerForAccount, linkLines, sizeKey, unlinkedFrom, type Group, type ManifestRow, type Waiting } from "@/lib/manifest";
 
 /**
  * The AI matcher. The rules in lib/manifest.ts link what they're sure of; whatever is still waiting comes here.
@@ -155,6 +155,7 @@ export async function aiMatchPending(admin: SupabaseClient, deadline: number, op
   const lessonText = ls.slice(0, 40).map((x) => `- ${x.account} PO "${x.po}" (${x.pcs} pcs: ${x.items}; sizes ${x.sizes}) → #${x.job} "${x.jobName}"${x.jobPo && x.jobPo !== x.jobName ? ` PO "${x.jobPo}"` : ""} for ${x.jobCustomer || "?"} [${x.jobStatus}] (${x.how})${x.note ? ` Note: ${x.note}` : ""}`).join("\n");
   const { data: prev } = await admin.from("ai_suggestions").select("dedupe_key, payload").eq("kind", "goods_ai").in("dedupe_key", groups.map((g) => `goods-ai:${g.key}`));
   const seen = new Map(((prev || []) as { dedupe_key: string; payload: { sig?: string; at?: string } }[]).map((x) => [x.dedupe_key, x.payload]));
+  const notFor = await unlinkedFrom(admin).catch(() => new Map<string, { orderIds: string[]; numbers: number[]; note: string; wasHow: string }>());
   let pool: Job[] | null = null;
   const custCache = new Map<string, Job[]>();
   const max = opts.max ?? 10;
@@ -175,9 +176,10 @@ export async function aiMatchPending(admin: SupabaseClient, deadline: number, op
       if (!pool) pool = await windowJobs(admin, iso(new Date(Date.now() - 75 * 86400000)), iso(new Date(Date.now() + 60 * 86400000)));
       jobs = pool.filter((j) => !j.due || (j.due >= addDays(shipDay, -40) && j.due <= addDays(shipDay, 50)));
     }
-    let cands: Scored[] = jobs.map((j) => ({ ...j, ...score(g, j, shipDay), linkedPcs: 0 }));
+    const no = notFor.get(g.key);
+    let cands: Scored[] = jobs.filter((j) => !no?.orderIds.includes(j.id)).map((j) => ({ ...j, ...score(g, j, shipDay), linkedPcs: 0 }));
     cands = custIds.length ? cands.sort((a, b) => b.score - a.score).slice(0, 40) : cands.filter((c) => c.score > 1).sort((a, b) => b.score - a.score).slice(0, 25);
-    const sig = createHash("sha1").update(JSON.stringify([g.lines.map((l) => `${l.id}:${l.qty_shipped}`).sort(), cands.map((c) => `${c.id}:${c.status}`).sort(), ls.length])).digest("hex");
+    const sig = createHash("sha1").update(JSON.stringify([g.lines.map((l) => `${l.id}:${l.qty_shipped}`).sort(), cands.map((c) => `${c.id}:${c.status}`).sort(), ls.length, no?.orderIds || []])).digest("hex");
     const before = seen.get(`goods-ai:${g.key}`);
     if (!opts.force && before?.sig === sig) { out.skipped++; continue; }
     if (!cands.length) {
@@ -200,6 +202,7 @@ export async function aiMatchPending(admin: SupabaseClient, deadline: number, op
       `PO: ${g.customer_po || "(none)"}`,
       `Shipped: ${shipDay}${g.lines.some((l) => l.delivered_at || l.track_status === "delivered") ? " · already delivered to the shop" : ""}`,
       `Today: ${iso(new Date())}`,
+      ...(no ? [`Staff UNLINKED this shipment from #${no.numbers.join(", #")}: it is NOT for ${no.numbers.length === 1 ? "that job" : "those jobs"}${no.wasHow ? ` (it had been linked because: ${no.wasHow})` : ""}.${no.note ? ` Their note: ${no.note}` : ""}`] : []),
       `Garments (${pcs} pcs): ${itemsText(g.lines.map((l) => ({ style: l.style, color: l.color, size: sizeKey(l.size), qty: l.qty_shipped })))}`,
       ``,
       `PAST DECISIONS BY STAFF (most recent first)`,

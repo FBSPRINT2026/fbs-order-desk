@@ -708,8 +708,11 @@ function groupLines(lines: Waiting[]) {
 export async function resolvePending(admin: SupabaseClient, deadline: number) {
   const { data } = await admin.from("supplier_manifest_lines").select("*").eq("kind", "").order("created_at").limit(3000);
   const out = { linked: 0, suggested: 0, tracked: 0 };
+  const notFor = await unlinkedFrom(admin).catch(() => new Map());
   for (const g of groupLines((data || []) as Waiting[])) {
     if (Date.now() > deadline - 15000) break;
+    // staff unlinked it from a job: the rules leave it alone (the AI, which knows which job was wrong, has a go)
+    if (notFor.has(g.key)) continue;
     if (isUs(g.customer_name)) {
       const m = await matchBlanks(admin, g).catch(() => null);
       if (m?.sure) { await applyGroup(admin, g.supplier, g, m.orderId, m.kind, m.how); out.linked++; }
@@ -1115,4 +1118,39 @@ export async function openOrdersFor(admin: SupabaseClient, customerId: string, p
   // open jobs first (soonest due), completed ones after
   const isDone = (o: OpenOrderPick) => /completed/i.test(o.status);
   return out.sort((a, b) => Number(b.match) - Number(a.match) || Number(isDone(a)) - Number(isDone(b)) || (isDone(a) ? (b.due_date || "").localeCompare(a.due_date || "") : (a.due_date || "9999").localeCompare(b.due_date || "9999")));
+}
+
+/**
+ * Unlink: the goods go back to "not linked", and that job is remembered as wrong for this shipment, so neither the rules
+ * nor the AI put them back on it (and the AI learns from it). Nothing is deleted: tracking rows already on an order here
+ * stay on it as history.
+ */
+export async function unlinkLines(admin: SupabaseClient, lineIds: string[], by: string, note = "") {
+  const { data } = await admin.from("supplier_manifest_lines").select("*").in("id", lineIds).in("kind", ["goods", "blanks"]);
+  const lines = (data || []) as (Waiting & { kind: string; order_id: string | null; archived_order_id: string | null; match_how: string })[];
+  if (!lines.length) throw new Error("Those goods aren't linked to anything.");
+  for (const g of groupLines(lines)) {
+    const wrong = [...new Set(g.lines.map((l) => { const x = l as typeof lines[number]; return x.order_id || (x.archived_order_id ? PV + x.archived_order_id : ""); }).filter(Boolean))];
+    const key = `goods-unlink:${g.key}`;
+    const { data: cur } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", key).maybeSingle();
+    const before = ((cur?.payload as { orderIds?: string[] } | undefined)?.orderIds) || [];
+    // the job numbers, for the AI and for people reading it
+    const nums: number[] = [];
+    for (const id of wrong) {
+      const { data: o } = id.startsWith(PV) ? await admin.from("archived_orders").select("visual_id").eq("id", id.slice(PV.length)).maybeSingle() : await admin.from("orders").select("number").eq("id", id).maybeSingle();
+      const n = +((o as { visual_id?: number; number?: number } | null)?.visual_id || (o as { number?: number } | null)?.number || 0);
+      if (n) nums.push(n);
+    }
+    const how = (g.lines[0] as typeof lines[number]).match_how || "";
+    await admin.from("ai_suggestions").upsert({ dedupe_key: key, kind: "goods_unlink", source: "staff", status: "done", title: `${g.customer_name} PO ${g.customer_po}: not #${nums.join(", #")}`.slice(0, 300), body: note.slice(0, 2000),
+      payload: { orderIds: [...new Set([...before, ...wrong])], numbers: nums, account: g.customer_name, po: g.customer_po, wasHow: how, note: note.slice(0, 500), by }, decided_at: new Date().toISOString(), decided_by: by }, { onConflict: "dedupe_key" });
+    await admin.from("supplier_manifest_lines").update({ kind: "", order_id: null, archived_order_id: null, match_how: "", linked_by: null, suggest_order_id: null, suggest_archived_id: null, suggest_how: `unlinked by ${by}${nums.length ? ` (not #${nums.join(", #")})` : ""}` }).in("id", g.lines.map((l) => l.id));
+  }
+  return lines.length;
+}
+
+/** Jobs staff said a shipment is NOT for (by group key). */
+export async function unlinkedFrom(admin: SupabaseClient): Promise<Map<string, { orderIds: string[]; numbers: number[]; note: string; wasHow: string }>> {
+  const { data } = await admin.from("ai_suggestions").select("dedupe_key, payload").eq("kind", "goods_unlink").limit(2000);
+  return new Map(((data || []) as { dedupe_key: string; payload: { orderIds: string[]; numbers: number[]; note: string; wasHow: string } }[]).map((x) => [x.dedupe_key.slice("goods-unlink:".length), x.payload]));
 }
