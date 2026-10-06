@@ -117,3 +117,11 @@
 .jm-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .jm-pad button{height:62px;border-radius:14px;border:0;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.08);font-size:26px;font-weight:700;color:var(--ink);cursor:pointer;touch-action:manipulation}
 .jm-pad button.fn{background:var(--surface-2);font-size:22px}
+
+/* English / Español switch in the header */
+.jm-lang{display:inline-flex;flex:none;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:2px;gap:2px}
+.jm-top-who+.jm-lang,.jm-top-job+.jm-lang{margin-left:4px}
+.jm-lang button{border:0;background:transparent;color:rgba(255,255,255,.75);font:inherit;font-weight:800;font-size:13px;letter-spacing:.04em;min-width:40px;height:32px;border-radius:999px;cursor:pointer}
+.jm-lang button.on{background:#fff;color:#121925}
+.jm-lang button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.jm-top-who,.jm-top-job{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}

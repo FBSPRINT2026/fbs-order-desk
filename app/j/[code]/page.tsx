@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { jobGate } from "@/lib/jobAccess";
 import { loadJobCard, parseJobCode } from "@/lib/jobCard";
 import { mergeSettings, type Customer } from "@/lib/pricing";
@@ -10,6 +11,7 @@ import { checkinJobFor } from "@/lib/checkin";
 import { printSettings } from "@/lib/printQueue";
 import JobMobile, { type PressSheet } from "@/components/job/JobMobile";
 import JobSignIn from "@/components/job/JobSignIn";
+import { LangProvider, LANG_COOKIE, type Lang } from "@/components/job/lang";
 import type { ShipTarget } from "@/components/ShipWindow";
 
 export const dynamic = "force-dynamic";
@@ -24,18 +26,23 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const gate = await jobGate();
   const who = gate.who;
   const admin = createAdminClient();
+  // English or Español: this phone's choice, else the language on the crew member's profile (the time app's setting)
+  const saved = (await cookies()).get(LANG_COOKIE)?.value;
+  let lang: Lang = saved === "es" || saved === "en" ? saved : "en";
+  if (!saved && who?.employeeId) { const { data: e } = await admin.from("employees").select("lang").eq("id", who.employeeId).maybeSingle(); if (e?.lang === "es") lang = "es"; }
+  const wrap = (el: React.ReactNode) => <LangProvider initial={lang} employee={who?.kind === "employee"}>{el}</LangProvider>;
   if (!who) {
     // the crew on the shop's Wi-Fi sign in here; anyone else (a customer at home) goes to their own order in the
     // customer portal, which only shows it to that customer's login
-    if ((gate.onShopNet || !gate.netConfigured) && !(await searchParams).customer && !gate.customer) return <JobSignIn code={code} />;
-    if (gate.offNetwork && !(await searchParams).customer) return <JobSignIn code={code} offNetwork />;
+    if ((gate.onShopNet || !gate.netConfigured) && !(await searchParams).customer && !gate.customer) return wrap(<JobSignIn code={code} />);
+    if (gate.offNetwork && !(await searchParams).customer) return wrap(<JobSignIn code={code} offNetwork />);
     const job = ref ? await admin.from("orders").select("id").eq("number", +ref.number).maybeSingle() : null;
     if (job?.data) redirect(`/portal/orders/${job.data.id}`);
     const pv = ref ? await admin.from("archived_orders").select("id").eq("visual_id", ref.number).maybeSingle() : null;
     redirect(pv?.data ? `/portal/archive/${pv.data.id}` : "/portal");
   }
   const card = ref ? await loadJobCard(admin, { number: ref.number }) : null;
-  if (!card) return <JobMobile missing={ref?.number || code} who={who} />;
+  if (!card) return wrap(<JobMobile missing={ref?.number || code} who={who} />);
 
   const [{ data: st }, ps] = await Promise.all([admin.from("settings").select("data").eq("id", 1).maybeSingle(), printSettings(admin)]);
   const settings = mergeSettings(st?.data);
@@ -91,7 +98,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   // check-in (staff with Goods & Receiving)
   const checkin = who.can.checkin ? await checkinJobFor(admin, { kind: card.kind, id: card.id }).catch(() => null) : null;
 
-  return (
+  return wrap(
     <JobMobile who={who} card={card} box={ref?.box || null} designs={designs} press={press} ship={ship} shipSettings={settings.ship} checkin={checkin}
       printer={{ ready: ps.mode === "printnode" ? !!ps.printnodeId : !!ps.host, dpi: ps.dpi }} />
   );

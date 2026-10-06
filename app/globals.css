@@ -4981,6 +4981,7 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ck-exp{all:unset;cursor:pointer;text-align:center;font-size:12px;color:var(--ink-3);border-radius:6px;padding:1px 0}
 .ck-exp:hover{background:var(--line-2);color:var(--ink)}
 .ck-exp::before{content:"of ";font-size:10.5px}
+:lang(es) .ck-exp::before{content:"de "}
 .ck-cell input{width:100%;box-sizing:border-box;text-align:center;font-size:18px;font-weight:700;padding:6px 2px;font-variant-numeric:tabular-nums}
 .ck-step{display:flex;gap:3px}
 .ck-step button{all:unset;cursor:pointer;flex:1;text-align:center;border-radius:6px;background:var(--surface);border:1px solid var(--line-2);font-weight:800;line-height:24px;font-size:15px}

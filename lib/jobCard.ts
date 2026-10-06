@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { mergeSettings, orderGroups, sizeLabel, SIZES, METHODS, type Order, type Customer } from "@/lib/pricing";
+import { mergeSettings, orderGroups, sizeLabel, SIZES, METHODS, ST, type Order, type Customer } from "@/lib/pricing";
 import { addressLines, plain, sizeLabel as pvSizeLabel, sizeOrder as pvSizeOrder, type PvOrder } from "@/lib/archive";
 
 /**
@@ -61,7 +61,7 @@ export async function loadJobCard(admin: SupabaseClient, ref: { number: string }
       }));
       return {
         kind: "o", id: o.id, number: String(o.number), name: o.nickname || "", customerId: o.customer_id || null, customer: cu.company || cu.name || "", contact: cu.company ? cu.name || "" : "", phone: cu.phone || "",
-        po: o.po_number || "", due: o.due_date, production: o.production_date || null, rush: !!o.rush, status: o.status, qty: o.qty || groups.reduce((a, g) => a + g.rows.reduce((b, r) => b + r.total, 0), 0),
+        po: o.po_number || "", due: o.due_date, production: o.production_date || null, rush: !!o.rush, status: ST[o.status as keyof typeof ST]?.label || o.status, qty: o.qty || groups.reduce((a, g) => a + g.rows.reduce((b, r) => b + r.total, 0), 0),
         delivery: (o.delivery_method as JobCard["delivery"]) || "pickup", shipMethod: o.ship_method || "", tracking: o.tracking || "",
         shipTo: o.delivery_method !== "pickup" && o.ship_to ? [...(!blind && (cu.company || cu.name) ? [cu.company || cu.name || ""] : []), ...o.ship_to.split(/\n/).map((x) => x.trim()).filter(Boolean)] : [],
         brand: blind ? cu.company || cu.name || "" : shopName, blind,
