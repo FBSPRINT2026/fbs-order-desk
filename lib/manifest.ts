@@ -133,7 +133,9 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
     if (close.length !== 1) return null;
     pool = [close[0].o]; via = `the garments match (${pcsShipped} pcs, same styles and sizes)`;
   }
-  const scored = pool.map((o) => ({ o, f: o.items.length ? fit(o) : 0.5 })).sort((a, b) => b.f - a.f || Math.abs(pcsOf(a.o) - pcsShipped) - Math.abs(pcsOf(b.o) - pcsShipped));
+  let scored = pool.map((o) => ({ o, f: o.items.length ? fit(o) : 0.5 })).sort((a, b) => b.f - a.f || Math.abs(pcsOf(a.o) - pcsShipped) - Math.abs(pcsOf(b.o) - pcsShipped));
+  // a short-name guess (initials, a word) only counts when the garments agree
+  if (!exact.length && !byName.some(nameHit)) { scored = scored.filter((x) => x.f >= 0.5); if (!scored.length) return null; }
   const best = scored[0], next = scored[1];
   if (best.f < 0.5 && pool.length > 1) return null;
   const clear = !next || best.f - next.f >= 0.25;
@@ -184,6 +186,8 @@ function poHit(o: Candidate, g: { customer_po: string; supplier_order: string })
   if (norm(o.po_number) === po || norm(o.nickname) === po || (core && (poCore(o.po_number) === core || poCore(o.nickname) === core))) return true;
   if (core.length >= 3 && [...words(o.po_number), ...words(o.nickname)].includes(core)) return true;
   if (digits.length >= 3 && String(o.number) === digits && core === digits) return true;
+  // our own POs often start with the job number: "34380 STEADHAM", "34339 WHITT CLR RUN"
+  if (o.number >= 1000 && words(g.customer_po).includes(String(o.number))) return true;
   return !!o.supplier_po && (norm(o.supplier_po) === po || norm(o.supplier_po) === norm(g.supplier_order));
 }
 
