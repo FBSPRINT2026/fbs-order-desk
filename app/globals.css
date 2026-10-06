@@ -5212,3 +5212,9 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ink-tbl .r{text-align:right}
 .ink-tbl .ink-g{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
 .ink-tbl tfoot td{border-bottom:0;font-weight:700}
+.ink-tile.stock small{color:var(--ink-2)}
+.ink-tile:disabled{opacity:.5;cursor:default}
+.ink-instock{color:#0A6E8F !important;font-weight:700}
+.ink-stock{display:flex;gap:10px;align-items:center;background:#EAF6FB;border:1px solid #9CCFE3;border-radius:10px;padding:10px 12px;font-size:13.5px}
+.ink-stock i{width:34px;height:34px;border-radius:8px;flex:none;border:1px solid rgba(0,0,0,.1)}
+.ink-stock span{display:flex;flex-direction:column;gap:2px}
