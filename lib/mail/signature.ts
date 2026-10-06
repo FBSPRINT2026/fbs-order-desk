@@ -89,6 +89,14 @@ function ownPart(html: string) {
   return { top, blocks: blocks.filter((x) => x.key), marked: marked && keyOf(top.slice(marked.start, marked.end)) ? top.slice(marked.start, marked.end) : "" };
 }
 
+/** how each email splits up (for checking the reader against real mail) */
+export function explain(html: string) {
+  const p = ownPart(html);
+  const b = html.match(/<body\b[^>]*>/i);
+  const rest = b ? html.slice(b.index! + b[0].length) : html;
+  return { size: html.length, quoteAt: rest.search(QUOTE), topLen: p.top.length, blocks: p.blocks.length, marked: !!p.marked, last: p.blocks.slice(-5).map((x) => x.key.slice(0, 90)), head: rest.slice(0, 300).replace(/data:[^"']+/g, "DATA"), tags: [...new Set((p.top.match(/<[a-z][\w:]*/gi) || []).map((t) => t.toLowerCase()))].slice(0, 30).join(" ") };
+}
+
 const cssOf = (html: string) => [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((x) => x[1].replace(/<!--|-->/g, "")).join("\n").slice(0, 30000);
 
 /** the signature these emails share (newest first), or null when they don't agree on one */
