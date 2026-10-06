@@ -127,8 +127,22 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
   let pool = exact.length ? exact : byName, via = exact.length ? "PO / job name" : byName.some(nameHit) ? "customer name in PO" : "short name in the PO (customer's initials or a word of the job name)";
   const pcsShipped = g.lines.reduce((x, l) => x + l.qty_shipped, 0);
   const pcsOf = (o: C) => o.items.reduce((x, it) => x + it.need, 0);
-  // nothing in the PO points anywhere: the garments decide (same styles, colors and sizes, the same number of pieces)
+  // nothing in the PO points anywhere: the garments decide.
+  // Nicholas: "24 pieces of Gildan 5000 in Azalea and an order in the next two weeks for that quantity, style and color:
+  // that's a link." So: one open job due within two weeks with exactly the same pieces of each style + color links on
+  // its own; otherwise a job with nearly the same styles, sizes and count is suggested.
   if (!pool.length) {
+    const soon = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), late = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const ship = sumByStyleColor(g.lines.map((l) => ({ style: l.style, color: l.color, qty: l.qty_shipped })));
+    const exactJobs = list.filter((o) => o.items.length && (!o.due_date || (o.due_date >= late && o.due_date <= soon)) && sameStyleColor(ship, sumByStyleColor(o.items.map((it) => ({ style: it.style, color: it.color, qty: it.need })))));
+    if (exactJobs.length === 1) {
+      const o = exactJobs[0];
+      return { orderId: o.id, kind: "blanks", how: `same pieces of each style and color as #${o.number} (${pcsShipped} pcs${o.due_date ? `, due ${o.due_date}` : ""})`, sure: true };
+    }
+    if (exactJobs.length > 1) {
+      const o = [...exactJobs].sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"))[0];
+      return { orderId: o.id, kind: "blanks", how: `same pieces of each style and color as ${exactJobs.length} jobs: #${exactJobs.map((x) => x.number).join(", #")} (the soonest due picked; check it)`, sure: false };
+    }
     const close = list.filter((o) => o.items.length && Math.abs(pcsOf(o) - pcsShipped) <= Math.max(2, pcsShipped * 0.05)).map((o) => ({ o, f: fit(o) })).filter((x) => x.f >= 0.95);
     if (close.length !== 1) return null;
     pool = [close[0].o]; via = `the garments match (${pcsShipped} pcs, same styles and sizes)`;
@@ -171,6 +185,22 @@ export function abbrevHit(po: string, names: string[], nickname: string): boolea
   const near = (a: string, b: string) => a === b || a + "s" === b || b + "s" === a || (Math.min(a.length, b.length) >= 6 && (a.startsWith(b) || b.startsWith(a)));
   const theirs = [...words(nickname), ...names.flatMap((n) => words(n))].filter((w) => w.length >= 5 && !STOP.has(w) && !GENERIC.test(w));
   return pw.some((w) => w.length >= 5 && !GENERIC.test(w) && theirs.some((t) => near(w, t)));
+}
+
+/** pieces per style + color (style and color compared loosely: "TundraBlu" = "Tundra Blue", "pc54" = "PC54") */
+function sumByStyleColor(xs: { style: string; color: string; qty: number }[]) {
+  const out: { style: string; color: string; qty: number }[] = [];
+  for (const x of xs) {
+    if (!x.qty) continue;
+    const hit = out.find((o) => styleEq(o.style, x.style) && colorEq(o.color, x.color));
+    if (hit) hit.qty += x.qty; else out.push({ style: x.style, color: x.color, qty: x.qty });
+  }
+  return out;
+}
+/** the same styles and colors, with exactly the same number of pieces of each */
+function sameStyleColor(a: ReturnType<typeof sumByStyleColor>, b: ReturnType<typeof sumByStyleColor>) {
+  if (!a.length || a.length !== b.length) return false;
+  return a.every((x) => b.some((y) => styleEq(x.style, y.style) && colorEq(x.color, y.color) && x.qty === y.qty));
 }
 
 /** The PO without "PO", "#" and spaces: "PO 207" → "207". */
