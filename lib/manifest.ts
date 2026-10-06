@@ -204,11 +204,12 @@ export function abbrevHit(po: string, names: string[], nickname: string): boolea
  * A PO one typo away from the order's: the same letter codes and a number off by one digit ("LYL 092425" for the job
  * "Lyles MS Theatre Arts - LYL 092426"). Numbers of 4+ digits only, so short numbers can't collide.
  */
-export function nearPoHit(o: { po_number: string; nickname: string }, po: string) {
+export function nearPoHit(o: { po_number: string; nickname: string }, po: string, bare = false) {
   const pw = words(po).filter((w) => !/^(po|p|o|so)$/.test(w));
   const nums = pw.filter((w) => /^\d{4,}$/.test(w)), lets = pw.filter((w) => !/^\d+$/.test(w) && w.length >= 2);
-  // a letter code too ("LYL"): a bare number one digit off is too loose
-  if (!nums.length || !lets.length) return false;
+  // a letter code too ("LYL"): a bare number one digit off is too loose across all jobs; within one customer's own
+  // orders (bare = true) a 5+ digit number one off is fine ("PO 27364" for "PO 27366 JOSEY RECORDS")
+  if (!nums.length || (!lets.length && !(bare && nums.every((n) => n.length >= 5)))) return false;
   const theirs = [...words(o.po_number), ...words(o.nickname)];
   if (!lets.every((w) => theirs.includes(w))) return false;
   const off1 = (a: string, b: string) => a.length === b.length && [...a].filter((ch, i) => ch !== b[i]).length <= 1;
@@ -386,7 +387,8 @@ function allocate(lines: Line[], orders: Open[]) {
   orders.forEach((o) => o.items.forEach((it, i) => need.set(k(o, i), it.need)));
   for (const line of [...lines].sort((a, b) => b.qty_shipped - a.qty_shipped)) {
     const z = sizeKey(line.size);
-    const hits = orders.flatMap((o) => o.items.map((it, i) => ({ o, i, it })).filter(({ it }) => it.size === z && styleEq(it.style, line.style) && colorEq(it.color, line.color)));
+    // a job line with no style (Printavo jobs often put it in the description) matches on color and size
+    const hits = orders.flatMap((o) => o.items.map((it, i) => ({ o, i, it })).filter(({ it }) => it.size === z && (it.style ? styleEq(it.style, line.style) : !!it.color) && colorEq(it.color, line.color)));
     const byOrder = [...new Set(hits.map((h) => h.o.id))];
     if (!byOrder.length) { unplaced.push(line); continue; }
     const left = (id: string) => hits.filter((h) => h.o.id === id).reduce((a, h) => a + (need.get(k(h.o, h.i)) || 0), 0);
@@ -467,11 +469,11 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
     // the customer numbers their jobs this way, but no open job has this number yet (the job isn't entered yet):
     // wait for it instead of guessing another job
     const numbered = orders.filter((o) => numRuns(`${o.nickname} ${o.po_number}`).length).length;
-    if (!byNum.length && numbered >= Math.max(2, orders.length * 0.5) && !orders.some((o) => nearPoHit(o, g.customer_po)))
+    if (!byNum.length && numbered >= Math.max(2, orders.length * 0.5) && !orders.some((o) => nearPoHit(o, g.customer_po, true)))
       return { ...empty, how: `PO number ${pr.join(", ")} isn't on any of their open jobs yet` };
   }
   // a PO one typo off one order's ("LYL 092425" for "LYL 092426"), and the goods fit it: that order
-  const near = orders.filter((o) => nearPoHit(o, g.customer_po));
+  const near = orders.filter((o) => nearPoHit(o, g.customer_po, true));
   if (near.length === 1) {
     const a1 = allocate(lines, near);
     if (!a1.unplaced.length) return { customerId, ...a1, auto: true, how: `PO ${g.customer_po} is one digit off #${near[0].number}'s` };
