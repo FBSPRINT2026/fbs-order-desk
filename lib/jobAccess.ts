@@ -10,7 +10,8 @@ import { shopNetwork } from "@/lib/shopNetwork";
 /**
  * Who's using the job's phone menu (after scanning a work order or box label): a staff member signed in to the portal,
  * or an employee signed in to the employee app (/work) with their number and PIN. Employees can read the job, add
- * notes and photos, print box labels and log time; shipping and check-in need a staff login with that permission.
+ * notes and photos, print box labels, count goods in (check-in) and log time; shipping needs a staff login with that
+ * permission.
  */
 export type JobActor = { kind: "staff" | "employee"; name: string; email: string; employeeId: string | null; perms: Perms | null; can: { ship: boolean; checkin: boolean; open: boolean } };
 
@@ -29,7 +30,7 @@ export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boo
   if (staff) return { who: staff, offNetwork: false, onShopNet: net.on, netConfigured: net.configured, customer: false };
   const e = await employeeFor(admin, (await cookies()).get(EMP_COOKIE)?.value).catch(() => null);
   if (e) {
-    const who: JobActor = { kind: "employee", name: `${e.first_name || ""} ${e.last_name || ""}`.trim() || `#${e.code}`, email: "", employeeId: e.id, perms: null, can: { ship: false, checkin: false, open: false } };
+    const who: JobActor = { kind: "employee", name: `${e.first_name || ""} ${e.last_name || ""}`.trim() || `#${e.code}`, email: "", employeeId: e.id, perms: null, can: { ship: false, checkin: true, open: false } };
     if (net.configured && !net.on) return { who: null, offNetwork: true, onShopNet: false, netConfigured: true, customer: false };
     return { who, offNetwork: false, onShopNet: net.on, netConfigured: net.configured, customer: false };
   }

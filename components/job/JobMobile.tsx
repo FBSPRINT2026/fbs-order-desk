@@ -6,9 +6,9 @@ import type { ShipSettings } from "@/lib/pricing";
 import type { Shipment } from "@/lib/shipping";
 import type { CheckJob } from "@/lib/checkinShared";
 import type { ShipTarget } from "@/components/ShipWindow";
-import CheckinModal from "@/components/CheckinModal";
 import { addNote, addPhoto, NOTE_TAGS, useJobFiles, type JobFile } from "./JobFiles";
 import MobileShip from "./MobileShip";
+import PhoneCheckin from "./PhoneCheckin";
 import { LangToggle, useT } from "./lang";
 
 export type PressSheet = {
@@ -55,7 +55,7 @@ export default function JobMobile(p: {
   return (
     <div className="jm">
       <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
-      <section className="jm-job">
+      <section className={"jm-job" + (view === "checkin" ? " slim" : "")}>
         {view !== "home" && <button type="button" className="jm-back" onClick={back}>{t("← Job menu")}</button>}
         <div className="jm-num"><b>#{card.number}</b>{card.rush && <span className="jm-rush">{t("RUSH")}</span>}{p.box ? <span className="jm-box">{t("Box {0}", p.box)}</span> : null}</div>
         <div className="jm-cust">{card.customer || "—"}</div>
@@ -70,7 +70,7 @@ export default function JobMobile(p: {
         {view === "photos" && <Photos job={job} />}
         {view === "labels" && <Labels card={card} box={p.box || null} printer={p.printer} perBox={p.shipSettings?.perBox || 72} staff={who.kind === "staff"} />}
         {view === "ship" && p.ship && p.shipSettings && <MobileShip t={p.ship.t} existing={p.ship.existing} settings={p.shipSettings} box={p.box || null} />}
-        {view === "checkin" && p.checkin && <div className="jm-ci"><CheckinModal job={p.checkin} onClose={back} onSaved={() => { back(); }} /></div>}
+        {view === "checkin" && p.checkin && <Checkin job={p.checkin} />}
       </main>
     </div>
   );
@@ -245,6 +245,26 @@ function Photos({ job }: { job: { kind: "o" | "a"; id: string } }) {
       {big && <div className="jm-lightbox" onClick={() => setBig(null)}><img src={big.url} alt="" /><p>{[big.tag && t(big.tag), big.body].filter(Boolean).join(" · ")}<br /><small>{big.by_name} · {when(big.created_at, locale)}</small></p></div>}
     </>
   );
+}
+
+/** Count the goods in: what was counted before (if anything), else the size-by-size counter. */
+function Checkin({ job }: { job: CheckJob }) {
+  const { t, locale } = useT();
+  const [done, setDone] = useState(job.checkins[0] || null), [again, setAgain] = useState(false), [fresh, setFresh] = useState(false);
+  if (done && !again) {
+    const issues = done.lines.filter((l) => l.issue);
+    return (
+      <div className="jm-card">
+        {fresh && <div className="jm-ok" role="status">{t("Checked in. Thanks!")}</div>}
+        <div className="jm-cardh"><b>{t("Counted in")}</b><span className="jm-faint">{done.by} · {when(done.created_at, locale)}</span></div>
+        <p style={{ margin: 0 }}>{t("{0} of {1} counted", done.received, done.expected)}{done.boxes ? ` · ${t(done.boxes === 1 ? "in 1 box" : "in {0} boxes", done.boxes)}` : ""}</p>
+        {issues.length > 0 && <ul className="jm-ck-plist">{issues.map((l, k) => <li key={k}>{l.item} · {l.size}: {t("got {0} of {1}", l.received, l.expected)}{l.bad ? ` · ${t(l.issue === "mispick" ? "{0} wrong" : "{0} damaged", l.bad)}` : ""}</li>)}</ul>}
+        {done.status === "issue" && !done.resolved_at && <div className="jm-warn">{t("Each one is flagged in Goods & Receiving until it's resolved.")}</div>}
+        <button type="button" className="jm-ghost" onClick={() => { setAgain(true); setFresh(false); }}>{t("Count again")}</button>
+      </div>
+    );
+  }
+  return <PhoneCheckin job={job} onDone={(c) => { setDone(c); setAgain(false); setFresh(true); scrollTo(0, 0); }} />;
 }
 
 /** Print box labels on the Zebra: how many boxes, all of them or just this one. */
