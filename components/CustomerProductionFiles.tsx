@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { SepRow } from "@/components/SeparationStudio";
 import { ARCHIVE_DAYS, SEP_STATUS, sepStage } from "@/lib/sepStatus";
+import { useJobFiles } from "@/components/job/JobFiles";
 
 /**
  * A customer's production files, under their Artwork (staff only, never in the portal): what we print or sew from,
@@ -112,6 +113,8 @@ export default function CustomerProductionFiles({ customerId }: { customerId: st
         </div>
       )}
 
+      <JobNotesForCustomer customerId={customerId} />
+
       <div className="pf-h"><h4>Other files</h4><span className="faint">Digitized embroidery files (DST, EMB, PES…), films, anything kept for repeats.</span></div>
       <label className={"pf-drop" + (over ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); upload(e.dataTransfer.files); }}>
         <input type="file" multiple hidden onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
@@ -126,5 +129,27 @@ export default function CustomerProductionFiles({ customerId }: { customerId: st
         </div>
       )}
     </div>
+  );
+}
+
+/** Photos and notes the crew saved on this customer's jobs (from the phone menu or the job page): how it ran last time. */
+function JobNotesForCustomer({ customerId }: { customerId: string }) {
+  const { items } = useJobFiles(null, customerId);
+  const [big, setBig] = useState("");
+  if (!items?.length) return null;
+  const photos = items.filter((x) => x.kind === "photo" && x.url), notes = items.filter((x) => x.kind === "note");
+  const day = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return (
+    <>
+      <div className="pf-h"><h4>Job photos &amp; notes</h4><span className="faint">Saved by the crew on this customer&apos;s jobs: how it was set up and how it came out.</span></div>
+      {photos.length > 0 && <div className="jf-grid">{photos.slice(0, 24).map((p) => (
+        <figure key={p.id} className="jf-ph"><button type="button" onClick={() => setBig(p.url)}><img src={p.url} alt={p.body || ""} loading="lazy" /></button>
+          <figcaption><b>{p.job}</b>{p.tag && <span>{p.tag}</span>}{p.body && <span>{p.body}</span>}<small>{p.by_name} · {day(p.created_at)}</small></figcaption></figure>
+      ))}</div>}
+      {notes.length > 0 && <ul className="jf-notes" style={{ marginTop: 8 }}>{notes.slice(0, 30).map((n) => (
+        <li key={n.id}>{n.tag ? <span className="jf-tag">{n.tag}</span> : <span />}<span className="jf-body"><b>{n.job}</b> · {n.body}</span><small>{n.by_name} · {day(n.created_at)}</small><span /></li>
+      ))}</ul>}
+      {big && <div className="pp-modal" role="dialog" aria-modal="true" aria-label="Photo" onMouseDown={(e) => { if (e.target === e.currentTarget) setBig(""); }}><div className="jf-big"><img src={big} alt="" /><button type="button" className="btn" onClick={() => setBig("")}>Close</button></div></div>}
+    </>
   );
 }

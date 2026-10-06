@@ -1,5 +1,6 @@
 "use client";
 import JobLabor from "@/components/team/JobLabor";
+import JobFiles from "@/components/job/JobFiles";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -37,8 +38,13 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <Link className="back" href={`/shop/customers/${row.customer_id}?area=orders`}>← {company || "Customer"} · Orders</Link>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", margin: "6px 0 4px" }}>
+        <a className="btn" href={`/print/job/${row.visual_id}`} target="_blank" rel="noreferrer" title="A sheet with the job's QR code, for the press">Job ticket (QR)</a>
+        <a className="btn" href={`/j/${row.visual_id}`} target="_blank" rel="noreferrer" title="The job's phone menu: press setup, notes, photos, Zebra box labels">Phone menu</a>
+      </div>
       <ArchivedGoods id={row.id} groups={(row.data as unknown as { groups?: PvGroup[] }).groups || []} />
       <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
+      <div style={{ marginTop: 10 }}><JobFiles job={{ kind: "a", id: row.id }} /></div>
       <div style={{ marginTop: 10 }}>
         <ArchivedOrderView o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} />
       </div>

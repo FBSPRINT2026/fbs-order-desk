@@ -1,5 +1,6 @@
 "use client";
 import JobLabor from "@/components/team/JobLabor";
+import JobFiles from "@/components/job/JobFiles";
 import { SITE_URL } from "@/lib/config";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -452,6 +453,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <a className="btn" href={`/print/${o.id}`} target="_blank" rel="noreferrer">{o.type === "quote" ? "Quote PDF" : "Invoice PDF"}</a>
           <a className="btn" href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
           <a className="btn" href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer">Box labels</a>
+          <a className="btn" href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)">Phone menu</a>
           <button className="btn" type="button" onClick={duplicate}>Duplicate</button>
           <button className={"btn danger" + (armed === "del" ? " armed" : "")} type="button" onClick={del}>{armed === "del" ? "Confirm delete" : "Delete"}</button>
         </div>
@@ -618,6 +620,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div className="field"><label htmlFor="o-notes">Customer notes (shown on quote/invoice)</label><textarea id="o-notes" rows={4} value={o.notes} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
               </div>
             </section>
+            <JobFiles job={{ kind: "o", id: o.id }} />
           </div>
         </div>
 

@@ -5,6 +5,8 @@ import { ADULT_SIZES, calcOrder, mergeSettings, ONE_SIZE, orderGroups, sizeLabel
 import { fmtDateLong } from "@/lib/format";
 import LabelControls from "./LabelControls";
 import { code128Svg } from "@/lib/barcode";
+import { qrSvg } from "@/lib/qr";
+import { jobLink } from "@/lib/zpl";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +46,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   const barcodeFor = (box: number) => {
     const out = code128Svg(`${o.number}-${box}`, 30, { quietRight: 0 }); // the label margin is the quiet zone on the right, so the bars line up with the edge
     // 4 printer dots per bar module at 203 dpi (Zebra) so bars print crisp; wider on letter printers
-    return { svg: out.svg, widthIn: (out.width * (size === "letter" ? 5 : 4)) / 203 };
+    return { svg: out.svg, widthIn: (out.width * (size === "letter" ? 5 : 3)) / 203 };
   };
   // Wholesale jobs ship blind: the customer's name replaces ours so their end customer never sees FBS Print.
   const blind = o.price_type === "wholesale";
@@ -127,6 +129,10 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
                 .lb tr.inbox td:not(.k) { border-width: 1.5px; }
         .lb td.k { font-size: .72em; font-weight: 700; letter-spacing: .02em; text-transform: uppercase;  line-height: 1.1; }
         .lb-bc { flex: none; margin-left: auto; display: flex; justify-content: flex-end; }
+        .lb-qr { flex: none; }
+        .sz-4x6 .lb-qr { width: 0.62in; height: 0.62in; }
+        .sz-letter .lb-qr { width: 0.85in; height: 0.85in; }
+        .lb-qr svg { width: 100%; height: 100%; display: block; }
         .sz-4x6 .lb-bc .bars { height: 0.3in; }
         .sz-letter .lb-bc .bars { height: 0.45in; }
         .lb-bc .bars svg { width: 100%; height: 100%; display: block; }
@@ -143,7 +149,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           .label.brk { page-break-after: always; break-after: page; }
         }
       `}</style>
-      <LabelControls boxes={boxes} size={size} tight={size === "4x6" && (rows.length > 10 || (bands.length > 1 && rows.length > 8))} />
+      <LabelControls boxes={boxes} size={size} job={{ kind: "o", id: o.id }} tight={size === "4x6" && (rows.length > 10 || (bands.length > 1 && rows.length > 8))} />
       {Array.from({ length: boxes }, (_, bi) => (
         <div className={"label" + (size === "4x6" || bi % 2 === 1 ? " brk" : "")} key={bi}>
           <div className="lb-top">
@@ -159,6 +165,8 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
           <div className="lb-info">
             <div className="lb-infotext"><div className="lb-job">{o.nickname || "Untitled Job"}</div>{o.po_number && <div className="lb-meta">PO {o.po_number}</div>}</div>
             <div className="lb-bc"><div className="bars" style={{ width: `${barcodeFor(bi + 1).widthIn}in` }} dangerouslySetInnerHTML={{ __html: barcodeFor(bi + 1).svg }} /></div>
+            {/* the job's phone menu for this box (a customer scanning it gets their own order in the portal) */}
+            <div className="lb-qr" dangerouslySetInnerHTML={{ __html: qrSvg(jobLink(o.number, bi + 1), 1).svg }} />
           </div>
           <div className="lb-shiprow">
             {shipBlock ? (

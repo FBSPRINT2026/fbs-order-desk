@@ -13,6 +13,7 @@ import QuickShipQuote from "@/components/QuickShipQuote";
 import TransitMap from "@/components/TransitMap";
 import { money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
+import LabelPrinterPanel from "@/components/job/LabelPrinterPanel";
 
 type NewRow = { id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; ship_to: string; ship_method: string; po_number: string };
 type PvRow = { id: string; visual_id: string; nickname: string; qty: number; due_date: string | null; customer_id: string; po_number: string; status_name: string; ship: PvAddress; delivery: string | null; contact: { fullName?: string; email?: string; phone?: string } | null };
@@ -96,7 +97,8 @@ export default function ShippingCenter() {
 
   /** A scanned box label: "34317-2" (order and box) or just the order number. */
   function onScan(v: string) {
-    const m = v.trim().match(/^#?(\d+)(?:-(\d+))?$/);
+    // a box label's barcode ("34317-2"), or its QR code read by a 2D scanner (".../j/34317-2")
+    const m = v.trim().match(/\/j\/#?(\d+)(?:-(\d+))?/) || v.trim().match(/^#?(\d+)(?:-(\d+))?$/);
     setScan("");
     if (!m) return setNote(`“${v}” isn't an order number.`);
     const it = (items || []).find((x) => x.number === m[1]);
@@ -121,6 +123,7 @@ export default function ShippingCenter() {
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
       {showSettings && <ShipSettingsPanel s={settings} onSaved={(s) => { setSettings(s); setShowSettings(false); }} />}
+      {showSettings && <LabelPrinterPanel />}
       {!addressReady(settings.ship.from) && !showSettings && <div className="banner" style={{ marginBottom: 10 }}>Rates and transit times are figured from ZIP {settings.ship.from.zip || "(not set)"}. Add our street address in <button type="button" className="linkbtn" style={{ fontSize: "inherit" }} onClick={() => setShowSettings(true)}>Settings</button> before labels can be printed.</div>}
 
       <div className="sc-tabrow">

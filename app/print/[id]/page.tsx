@@ -5,6 +5,8 @@ import { calcOrder, imprintLabel, mergeSettings, orderGroups, sizeLabel, SIZES, 
 import { fmtDateLong, money, todayISO } from "@/lib/format";
 import PrintButton from "./PrintButton";
 import { code128Svg } from "@/lib/barcode";
+import { qrSvg } from "@/lib/qr";
+import { jobLink } from "@/lib/zpl";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +35,12 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const sh = settings.shop;
 
   if (work && isStaff) {
-    const [{ data: inn }, { data: af }] = await Promise.all([
+    const [{ data: inn }, { data: af }, { data: jn }] = await Promise.all([
       admin.from("order_internal").select("production_notes").eq("order_id", id).maybeSingle(),
       admin.from("art_files").select("*").eq("order_id", id).order("created_at"),
+      admin.from("job_files").select("tag, body, by_name, created_at").eq("order_id", id).eq("kind", "note").eq("archived", false).order("created_at", { ascending: false }).limit(8),
     ]);
+    const shopNotes = (jn || []) as { tag: string; body: string; by_name: string; created_at: string }[];
     const arts = (af || []) as ArtFile[];
     // designs printed on this order, with previews for the press crew
     const dIds = [...new Set(groups.flatMap((g) => g.imprints.map((d) => d.design_id).filter(Boolean) as string[]))];
@@ -57,10 +61,13 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
               <h1 style={{ margin: 0 }}>#{o.number} {o.nickname}</h1>
               <div>{cust.company || cust.name}{o.po_number ? ` · PO ${o.po_number}` : ""}</div>
             </div>
-            {/* job ticket barcode: the employee app scans it to log time on this job */}
-            <div style={{ textAlign: "center" }}>
-              <div style={{ width: `${(code128Svg(String(o.number), 40).width * 1.6) / 96}in`, height: "0.55in" }} dangerouslySetInnerHTML={{ __html: code128Svg(String(o.number), 40).svg }} />
-              <div style={{ fontSize: 11, letterSpacing: ".08em" }}>SCAN TO LOG TIME · #{o.number}</div>
+            {/* the QR opens the job's phone menu (setup, notes, photos, labels, time); the barcode is for scanners */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: "0.95in", height: "0.95in" }} dangerouslySetInnerHTML={{ __html: qrSvg(jobLink(o.number), 2).svg }} />
+              <div style={{ textAlign: "center" }}>
+                <div style={{ width: `${(code128Svg(String(o.number), 40).width * 1.6) / 96}in`, height: "0.5in" }} dangerouslySetInnerHTML={{ __html: code128Svg(String(o.number), 40).svg }} />
+                <div style={{ fontSize: 10.5, letterSpacing: ".06em", maxWidth: "1.9in", lineHeight: 1.25, marginTop: 3 }}>SCAN THE SQUARE WITH A PHONE: SETUP, NOTES, PHOTOS, TIME · #{o.number}</div>
+              </div>
             </div>
             <div style={{ textAlign: "right" }}>
               {o.rush && <div className="wo-rush">RUSH</div>}
@@ -92,6 +99,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
             </div>
           ))}
           {inn?.production_notes && <div className="box"><b>Production notes</b><div style={{ whiteSpace: "pre-wrap" }}>{inn.production_notes}</div></div>}
+          {shopNotes.length > 0 && <div className="box"><b>Shop notes</b>{shopNotes.map((n, i) => <div key={i} style={{ marginTop: 3 }}>{n.tag ? <b style={{ fontSize: 11 }}>{n.tag.toUpperCase()}: </b> : null}{n.body} <span style={{ color: "#5A6478", fontSize: 11 }}>({n.by_name}, {new Date(n.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })})</span></div>)}</div>}
           {arts.length > 0 && (
             <div className="box"><b>Art</b>
               <div className="artgrid">{arts.map((a, i) => (a.file_type.startsWith("image/") && signed[i]?.signedUrl ? <img key={a.id} src={signed[i].signedUrl!} alt={a.name} /> : <span key={a.id}>{a.name}</span>))}</div>

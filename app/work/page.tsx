@@ -63,6 +63,14 @@ export default function WorkApp() {
     return { ok: !!r?.ok, j: r ? await r.json().catch(() => ({})) : { error: "offline" } };
   };
   const errText = (e: string) => (t as Record<string, string>)[e] || e;
+  // opened from a job's phone menu ("Log time"): go straight to that job
+  const fromLink = useRef(false);
+  useEffect(() => {
+    if (!me?.signedIn || fromLink.current) return;
+    const j = new URLSearchParams(location.search).get("job");
+    fromLink.current = true;
+    if (j) { history.replaceState(null, "", location.pathname); lookup(j); }
+  }, [me?.signedIn]); // eslint-disable-line react-hooks/exhaustive-deps
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 3500); };
   function switchLang(l: Lang) { setLang(l); try { localStorage.setItem("fbs_lang", l); } catch { /* ignore */ } if (me?.signedIn) post({ action: "lang", lang: l }); }
 

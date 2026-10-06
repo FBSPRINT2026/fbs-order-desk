@@ -150,7 +150,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
 
   /** A scanned box label ("34317-2") jumps to that box; the order number alone jumps to the next box without a weight. */
   function onScan(v: string) {
-    const m = v.trim().match(/^#?(\d+)(?:-(\d+))?$/);
+    const m = v.trim().match(/\/j\/#?(\d+)(?:-(\d+))?/) || v.trim().match(/^#?(\d+)(?:-(\d+))?$/);
     if (!m) return;
     let n = m[2] ? +m[2] : (boxes.findIndex((b) => !b.weight) + 1 || boxes.length);
     if (n > boxes.length) { addBox(); n = boxes.length + 1; }

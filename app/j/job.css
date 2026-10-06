@@ -1,0 +1,119 @@
+/* The job's phone menu (/j/<number>): made for the shop floor, one hand, big targets. Uses the app's colors (light and
+   dark follow the phone). */
+.jm{min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--ink);font-size:16px;display:flex;flex-direction:column}
+.jm-top{display:flex;align-items:center;gap:10px;padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top));background:#121925;color:#fff;border-bottom:4px solid transparent;border-image:var(--fbs-fade) 1}
+.jm-top img{height:30px}
+.jm-top-who,.jm-top-job{margin-left:auto;font-size:14px;font-weight:700;opacity:.85}
+.jm-job{background:#121925;color:#fff;padding:6px 16px 16px;display:flex;flex-direction:column;gap:2px}
+.jm-back{align-self:flex-start;border:0;background:rgba(255,255,255,.1);color:#fff;font:inherit;font-weight:700;font-size:14px;border-radius:10px;padding:8px 12px;margin:4px 0 8px;cursor:pointer}
+.jm-num{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.jm-num b{font-family:var(--display);font-stretch:75%;font-weight:800;font-size:46px;line-height:1;letter-spacing:.01em}
+.jm-rush{background:#E5484D;color:#fff;font-weight:800;font-size:13px;letter-spacing:.08em;padding:4px 8px;border-radius:6px}
+.jm-box{background:#fff;color:#121925;font-weight:800;font-size:13px;padding:4px 8px;border-radius:6px}
+.jm-cust{font-size:18px;font-weight:700}
+.jm-name{font-size:15px;opacity:.85}
+.jm-facts{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:14px;color:#c9d1dd}
+.jm-facts b{color:#fff}
+.jm-viewh{font-family:var(--display);font-stretch:80%;font-size:26px;margin:12px 0 0;color:#fff}
+.jm-main{flex:1;padding:14px 14px calc(28px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;width:100%;max-width:640px;margin:0 auto}
+.jm-cam{display:flex;align-items:center;justify-content:center;gap:10px;min-height:64px;border:0;border-radius:16px;background:var(--fbs-blue);color:#fff;font:inherit;font-size:18px;font-weight:800;cursor:pointer;touch-action:manipulation}
+.jm-cam svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+.jm-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.jm-tile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:104px;padding:14px;border-radius:16px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;text-align:left;text-decoration:none;cursor:pointer;touch-action:manipulation}
+.jm-tile svg{width:28px;height:28px;fill:none;stroke:var(--fbs-blue);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin-bottom:6px}
+.jm-tile b{font-size:17px}
+.jm-tile small{font-size:13px;color:var(--ink-3)}
+.jm-tile.hot{border:2px solid var(--fbs-orange)}
+.jm-tile:active{transform:scale(.98)}
+.jm-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.jm-card.tight{padding:10px 14px}
+.jm-cardh{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.jm-cardh b{font-size:16px}
+.jm-h{font-family:var(--display);font-stretch:80%;font-size:26px;margin:0}
+.jm-label{font-size:12.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.jm-pre{white-space:pre-wrap;margin:0;font-size:15px;line-height:1.45}
+.jm-faint{color:var(--ink-3);font-size:14px;margin:0}
+.jm-link{border:0;background:none;color:var(--fbs-blue);font:inherit;font-weight:700;font-size:14px;cursor:pointer;padding:4px}
+.jm-note{display:flex;flex-direction:column;gap:3px;padding:6px 0;border-bottom:1px solid var(--line-2)}
+.jm-note:last-child{border-bottom:0}
+.jm-note p{margin:0;white-space:pre-wrap;font-size:15px}
+.jm-note small{color:var(--ink-3);font-size:12.5px}
+.jm-tag{align-self:flex-start;font-size:12px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--accent-soft,#e7efff);color:var(--fbs-blue)}
+.jm-chips{display:flex;flex-wrap:wrap;gap:6px}
+.jm-chip{min-height:40px;padding:6px 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation}
+.jm-chip small{font-weight:400;color:var(--ink-3)}
+.jm-chip.on{border-color:var(--fbs-blue);background:var(--fbs-blue);color:#fff}
+.jm-chip.on small{color:#dfe8ff}
+.jm textarea,.jm input:not([type=radio]):not([type=checkbox]){width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:12px}
+.jm textarea:focus,.jm input:focus{outline:none;border-color:var(--fbs-blue)}
+.jm-go{min-height:56px;border:0;border-radius:14px;background:var(--fbs-blue);color:#fff;font:inherit;font-size:17px;font-weight:800;cursor:pointer;touch-action:manipulation;width:100%}
+.jm-go:disabled{opacity:.45;cursor:default}
+.jm-ghost{min-height:50px;border:1.5px solid var(--line);border-radius:14px;background:transparent;color:var(--ink);font:inherit;font-weight:700;cursor:pointer;width:100%}
+.jm-row{display:flex;gap:8px}
+.jm-alt{display:block;text-align:center;color:var(--fbs-blue);font-weight:700;font-size:14px;padding:10px;text-decoration:none}
+.jm-err{color:#C4302B;font-weight:700;font-size:14.5px}
+.jm-ok{color:#1E7A4C;font-weight:700;font-size:14.5px}
+.jm-warn{background:#FFF4E0;color:#7A4B00;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600}
+/* press setup */
+.jm-heads{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.jm-heads li{display:flex;align-items:center;gap:10px;min-height:42px;padding:6px 10px;border-radius:10px;background:var(--bg)}
+.jm-heads li.h-flash,.jm-heads li.h-roller{background:#FFF1E6}
+.jm-heads li.h-cool,.jm-heads li.h-free,.jm-heads li.h-down{opacity:.6}
+.jm-hn{width:28px;height:28px;border-radius:50%;background:#121925;color:#fff;font-weight:800;font-size:14px;display:grid;place-items:center;flex:none}
+.jm-heads i{width:26px;height:26px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);flex:none}
+.jm-heads b{font-size:15.5px}
+.jm-heads small{margin-left:auto;color:var(--ink-3);font-size:13px}
+.jm-print{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--line-2)}
+.jm-print img{width:96px;height:96px;object-fit:contain;border-radius:10px;background:#fff;border:1px solid var(--line-2);flex:none}
+.jm-print b{font-size:16px}
+.jm-print small{display:block;color:var(--ink-3);font-size:13px}
+.jm-print ul{list-style:none;margin:4px 0 0;padding:0;font-size:14.5px}
+.jm-print li span{color:var(--ink-3);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;margin-right:4px}
+.jm-sizes{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+.jm-sizes td{padding:6px 4px;border-top:1px solid var(--line-2);vertical-align:top}
+.jm-sizes td small{display:block;color:var(--ink-3)}
+.jm-sizes td.r{text-align:right}
+/* photos */
+.jm-shot img{width:100%;max-height:52vh;object-fit:contain;border-radius:10px;background:#000}
+.jm-gallery{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.jm-gallery button{border:0;padding:0;background:var(--surface);border-radius:12px;overflow:hidden;cursor:pointer;text-align:left;color:var(--ink)}
+.jm-gallery img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.jm-gallery span{display:block;padding:6px 8px;font-size:12.5px;font-weight:700}
+.jm-lightbox{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;color:#fff;text-align:center}
+.jm-lightbox img{max-width:100%;max-height:80vh;object-fit:contain}
+/* labels */
+.jm-count{display:flex;align-items:center;gap:8px}
+.jm-count button{width:60px;height:60px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);font-size:28px;font-weight:700;color:var(--ink);cursor:pointer}
+.jm-count input{width:90px!important;text-align:center;font-size:30px!important;font-weight:800;height:60px}
+/* ship */
+.jm-addr{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.jm-addr label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;font-weight:700;color:var(--ink-3)}
+.jm-addr label.wide{grid-column:1/-1}
+.jm-sbox{border:1.5px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.jm-sbox.on{border-color:var(--fbs-blue)}
+.jm-sbox-h{display:flex;justify-content:space-between;align-items:center}
+.jm-dims{display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr;gap:6px}
+.jm-dims label,.jm-trk{display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:700;color:var(--ink-3)}
+.jm-dims input{padding:10px 8px!important;text-align:center;font-weight:700}
+.jm-dims .w input{border-color:var(--fbs-blue)!important}
+.jm-rates{display:flex;flex-direction:column;gap:6px}
+.jm-rate{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;cursor:pointer}
+.jm-rate.on{border-color:var(--fbs-blue);background:var(--accent-soft,#eef3ff)}
+.jm-rate span{flex:1;display:flex;flex-direction:column}
+.jm-rate small{color:var(--ink-3);font-size:13px}
+.jm-rate input{width:20px;height:20px;accent-color:var(--fbs-blue)}
+/* check-in (the shop's check-in window, shown full screen) */
+.jm-ci .pp-modal{position:static;background:none;padding:0;display:block}
+.jm-ci .pp-sheet{max-width:none;width:100%;max-height:none;box-shadow:none;border-radius:16px}
+/* sign in */
+.jm-signin{gap:14px}
+.jm-signin h1{font-family:var(--display);font-stretch:80%;font-size:30px;margin:6px 0 0}
+.jm-signin p{margin:0;color:var(--ink-2)}
+.jm-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.jm-field{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border-radius:14px;border:2px solid var(--line);background:var(--surface);font:inherit;color:var(--ink);cursor:pointer}
+.jm-field span{font-size:13px;color:var(--ink-3);font-weight:700}
+.jm-field b{font-size:26px;letter-spacing:.08em;min-height:32px}
+.jm-field.on{border-color:var(--fbs-blue)}
+.jm-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.jm-pad button{height:62px;border-radius:14px;border:0;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.08);font-size:26px;font-weight:700;color:var(--ink);cursor:pointer;touch-action:manipulation}
+.jm-pad button.fn{background:var(--surface-2);font-size:22px}

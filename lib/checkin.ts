@@ -84,11 +84,13 @@ const CLOSED = /job\s*completed|quote|cancel|closed/i;
  * The jobs scheduled from `from` to `to` (inclusive), with their goods: what's expected, what the manifests say shipped
  * and arrived, and any check-ins. Also every job with an open check-in problem, whatever its date.
  */
-export async function checkinJobs(admin: SupabaseClient, from: string, to: string): Promise<{ jobs: CheckJob[]; problems: CheckJob[] }> {
+export async function checkinJobs(admin: SupabaseClient, from: string, to: string, only?: { kind: "o" | "a"; id: string }): Promise<{ jobs: CheckJob[]; problems: CheckJob[] }> {
   const lo = addDays(from, -21), hi = addDays(to, 30);
+  const pvQ = admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, po_number, qty, data, customers(company, name)");
+  const oQ = admin.from("orders").select("id, number, nickname, status, due_date, production_date, po_number, qty, groups, lines, customers(company, name)");
   const [{ data: pv, error: e1 }, { data: os, error: e2 }, { data: open, error: e3 }] = await Promise.all([
-    admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, po_number, qty, data, customers(company, name)").gte("due_date", lo).lte("due_date", hi).limit(1500),
-    admin.from("orders").select("id, number, nickname, status, due_date, production_date, po_number, qty, groups, lines, customers(company, name)").not("status", "in", "(completed,quote,quote_sent,request)").limit(800),
+    only ? (only.kind === "a" ? pvQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : pvQ.gte("due_date", lo).lte("due_date", hi).limit(1500),
+    only ? (only.kind === "o" ? oQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : oQ.not("status", "in", "(completed,quote,quote_sent,request)").limit(800),
     admin.from("goods_checkins").select("order_id, archived_order_id").eq("status", "issue").is("resolved_at", null).limit(500),
   ]);
   if (e1) throw new Error(`Printavo jobs: ${e1.message}`);
@@ -102,9 +104,9 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
   const inWeek = (d: string | null) => !!d && d >= from && d <= to;
   const pvJobs = ((pv || []) as unknown as PvRow[]).filter((a) => {
     const start = localDay(a.data?.startAt), day = start || ymd(a.due_date);
-    return (openPv.has(a.id)) || (!CLOSED.test(a.status_name || "") && inWeek(day));
+    return !!only || (openPv.has(a.id)) || (!CLOSED.test(a.status_name || "") && inWeek(day));
   });
-  const oJobs = ((os || []) as unknown as ORow[]).filter((o) => openO.has(o.id) || inWeek(ymd(o.production_date) || ymd(o.due_date)));
+  const oJobs = ((os || []) as unknown as ORow[]).filter((o) => !!only || openO.has(o.id) || inWeek(ymd(o.production_date) || ymd(o.due_date)));
 
   const pvIds = pvJobs.map((a) => a.id), oIds = oJobs.map((o) => o.id);
   const [{ data: ml }, { data: ck }] = await Promise.all([
@@ -153,12 +155,18 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     const ms = [...new Set(own.map((l) => l.tracking))].map((t) => mix.get(t)).filter(Boolean) as MixedBox[];
     if (ms.length) j.mixed = ms;
   }
+  if (only) return { jobs, problems: [] };
   const inRange = jobs.filter((j) => j.day >= from && j.day <= to).sort((a, b) => a.day.localeCompare(b.day) || a.number - b.number);
   const problems = jobs.filter((j) => j.state === "issue").sort((a, b) => (a.day || "").localeCompare(b.day || ""));
   return { jobs: inRange, problems };
 }
 
 /** Save a count. Differences become an open problem; manifest lines on the job count as arrived. */
+/** One job's goods, for counting it in on a phone (after scanning its work order or box label). */
+export async function checkinJobFor(admin: SupabaseClient, ref: { kind: "o" | "a"; id: string }): Promise<CheckJob | null> {
+  return (await checkinJobs(admin, "", "", ref)).jobs[0] || null;
+}
+
 export async function saveCheckin(admin: SupabaseClient, by: string, b: { ref: string; lines: CheckLine[]; boxes?: number | null; note?: string; photos?: string[]; source?: string }) {
   const pv = b.ref.startsWith(PV), id = pv ? b.ref.slice(PV.length) : b.ref;
   const lines: CheckLine[] = (b.lines || []).map((l) => {
