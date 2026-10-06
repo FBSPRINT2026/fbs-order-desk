@@ -192,3 +192,25 @@
 .jm-ped-b button:disabled{opacity:.35}
 .jm-check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
 .jm-check input{width:20px;height:20px;flex:none;margin-top:1px}
+
+/* Press timer */
+.jm-tm{align-items:center;text-align:center;gap:8px;border-width:2px}
+.jm-tm.setup{border-color:#F2A65A;background:#FFF8F1}
+.jm-tm.run{border-color:#5FBF86;background:#F2FBF5}
+.jm-tm.paused{border-color:#B8C0CC;background:#F4F6FA}
+.jm-tm-ph{font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;padding:3px 10px;border-radius:999px;background:#121925;color:#fff}
+.jm-tm.setup .jm-tm-ph{background:#C2410C}.jm-tm.run .jm-tm-ph{background:#1F7A47}.jm-tm.paused .jm-tm-ph{background:#5B6678}
+.jm-tm-loc{font-weight:800;font-size:22px}
+.jm-tm-loc small{font-weight:600;font-size:15px;color:#5B6678}
+.jm-tm-clock{font-size:56px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.jm-tm-btns,.jm-tm-pause,.jm-tm-fin{display:flex;flex-direction:column;gap:8px;width:100%;margin-top:4px}
+.jm-tm .jm-go,.jm-tm .jm-ghost{width:100%}
+.jm-chip.done{background:#E3F5EA;border-color:#9BD3B0;color:#1F7A47}
+.jm-ghost.done{border-color:#5FBF86;color:#1F7A47;font-weight:800}
+.jm-tm-log{list-style:none;margin:0;padding:0}
+.jm-tm-log li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid #EEF1F6;font-size:14px}
+.jm-tm-log li:first-child{border-top:0}
+.jm-tm-log li>span:first-child{display:flex;flex-direction:column}
+.jm-tm-log small{color:#7C8799}
+.jm-tm-t{display:flex;flex-direction:column;align-items:flex-end;white-space:nowrap;color:#5B6678}
+.jm-tm-t b{color:#121925}

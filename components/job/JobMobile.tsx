@@ -10,10 +10,11 @@ import { addNote, addPhoto, NOTE_TAGS, useJobFiles, type JobFile } from "./JobFi
 import MobileShip from "./MobileShip";
 import PhoneCheckin from "./PhoneCheckin";
 import PressSheetCard from "./PressSheetCard";
+import PressTimer from "./PressTimer";
 import type { PressOption, PressSheet } from "@/lib/pressActual";
 import { LangToggle, useT } from "./lang";
 
-type View = "home" | "setup" | "notes" | "photos" | "labels" | "ship" | "checkin";
+type View = "home" | "setup" | "notes" | "photos" | "labels" | "ship" | "checkin" | "timer";
 
 const fmtDay = (d: string | null, loc = "en-US") => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString(loc, { weekday: "short", month: "short", day: "numeric" }) : "—");
 const when = (d: string, loc = "en-US") => new Date(d).toLocaleString(loc, { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -47,7 +48,7 @@ export default function JobMobile(p: {
       <main className="jm-main"><div className="jm-card"><h1 className="jm-h">{t("No job #{0}", p.missing || "")}</h1><p>{t("This code doesn't match a job in the portal or in Printavo. Check the number on the label.")}</p></div></main></div>
   );
   const job = { kind: card.kind, id: card.id };
-  const title: Record<View, string> = { home: "", setup: t("Press setup"), notes: t("Notes"), photos: t("Photos"), labels: t("Box labels"), ship: t("Ship"), checkin: t("Check in goods") };
+  const title: Record<View, string> = { home: "", setup: t("Press setup"), notes: t("Notes"), photos: t("Photos"), labels: t("Box labels"), ship: t("Ship"), checkin: t("Check in goods"), timer: t("Press timer") };
 
   return (
     <div className="jm">
@@ -68,6 +69,7 @@ export default function JobMobile(p: {
         {view === "labels" && <Labels card={card} box={p.box || null} printer={p.printer} perBox={p.shipSettings?.perBox || 72} staff={who.kind === "staff"} />}
         {view === "ship" && p.ship && p.shipSettings && <MobileShip t={p.ship.t} existing={p.ship.existing} settings={p.shipSettings} box={p.box || null} />}
         {view === "checkin" && p.checkin && <Checkin job={p.checkin} />}
+        {view === "timer" && <PressTimer card={card} presses={p.presses || []} />}
       </main>
     </div>
   );
@@ -100,7 +102,7 @@ function Home({ p, job, go }: { p: Parameters<typeof JobMobile>[0]; job: { kind:
         {tile("labels", t("Box labels"), I.label, p.printer?.ready ? t("Print to the Zebra") : t("Printer not set up"))}
         {p.ship && tile("ship", t("Ship"), I.ship, t("Boxes, weights, rates"))}
         {p.checkin && tile("checkin", t("Check in goods"), I.checkin, p.checkin.state === "checked" ? t("Counted") : p.checkin.state === "issue" ? t("Problem open") : t("{0} pcs expected", p.checkin.ordered), p.checkin.state === "ready")}
-        {tile("time", t("Log time"), I.time, t("Start / finish"))}
+        {p.who.kind === "employee" ? tile("timer", t("Press timer"), I.time, t("Setup · run · pause")) : tile("time", t("Log time"), I.time, t("Start / finish"))}
         {p.who.can.open && tile("open", t("Full job"), I.open, t("Open in the shop"))}
       </div>
       {recent.length > 0 && (
