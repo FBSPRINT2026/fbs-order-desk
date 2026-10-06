@@ -97,10 +97,17 @@ export async function requestSeparations(admin: SupabaseClient, orderId: string,
   const blocked = want.filter((x) => x.problem);
   const go = want.filter((x) => !x.problem);
   if (!go.length) return { ok: false as const, error: blocked[0] ? `${blocked[0].location}: ${blocked[0].problem}` : "Every location already has a separation.", gate };
-  const rows = go.map((x) => ({
-    order_id: order.id, group_id: x.groupId, imprint_id: x.imprintId, location: x.location, design_id: x.designId, customer_id: order.customer_id,
-    garment_color: x.garments[0] || "", due_date: order.due_date, requested_by: by, status: "requested", settings: { garments: x.garments, ...(x.widthIn ? { widthIn: x.widthIn } : {}) },
-  }));
+  // a reorder (or the same art again): start from the last separation of that art that went to film, as printed
+  // (its inks, meshes and press setup, after any changes the crew saved), so nothing is re-separated from scratch
+  const ids = [...new Set(go.map((x) => x.designId).filter((x): x is string => !!x))];
+  const { data: prev } = ids.length ? await admin.from("separations").select("id, number, order_id, design_id, location, method, channels, files, preview_path, settings").in("design_id", ids).eq("status", "films").order("updated_at", { ascending: false }).limit(50) : { data: [] };
+  const prior = (prev || []) as { id: string; number: number; order_id: string | null; design_id: string; location: string; method: string; channels: unknown; files: unknown; preview_path: string | null; settings: Record<string, unknown> | null }[];
+  const rows = go.map((x) => {
+    const base = { order_id: order.id, group_id: x.groupId, imprint_id: x.imprintId, location: x.location, design_id: x.designId, customer_id: order.customer_id, garment_color: x.garments[0] || "", due_date: order.due_date, requested_by: by, status: "requested" };
+    const p = prior.find((s) => s.design_id === x.designId && s.location.trim().toLowerCase() === x.location.trim().toLowerCase()) || prior.find((s) => s.design_id === x.designId);
+    if (!p) return { ...base, settings: { garments: x.garments, ...(x.widthIn ? { widthIn: x.widthIn } : {}) } };
+    return { ...base, method: p.method, channels: p.channels, files: p.files, preview_path: p.preview_path, notes: `Started from S-${p.number}, as it was printed. Same films: check the size and inks, then Print Films only if anything changed.`, settings: { ...(p.settings || {}), garments: x.garments, ...(x.widthIn ? { widthIn: x.widthIn } : {}), from: p.id } };
+  });
   const { error } = await admin.from("separations").insert(rows);
   if (error) return { ok: false as const, error: error.message, gate };
   await admin.from("order_events").insert({ order_id: order.id, kind: "seps_requested", detail: go.map((x) => x.location).join(", "), actor: by });

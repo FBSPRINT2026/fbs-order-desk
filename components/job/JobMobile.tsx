@@ -9,13 +9,10 @@ import type { ShipTarget } from "@/components/ShipWindow";
 import { addNote, addPhoto, NOTE_TAGS, useJobFiles, type JobFile } from "./JobFiles";
 import MobileShip from "./MobileShip";
 import PhoneCheckin from "./PhoneCheckin";
+import PressSheetCard from "./PressSheetCard";
+import type { PressOption, PressSheet } from "@/lib/pressActual";
 import { LangToggle, useT } from "./lang";
 
-export type PressSheet = {
-  id: string; number: number; location: string; status: string; garment: string; notes: string; press: string;
-  heads: { n: number; what: string; name: string; hex: string; mesh: number | null }[];
-  screens: { name: string; hex: string; mesh: number | null; kind: string }[];
-};
 type View = "home" | "setup" | "notes" | "photos" | "labels" | "ship" | "checkin";
 
 const fmtDay = (d: string | null, loc = "en-US") => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString(loc, { weekday: "short", month: "short", day: "numeric" }) : "—");
@@ -34,7 +31,7 @@ const I = {
 
 /** The phone menu for one job (opened by scanning its QR code). */
 export default function JobMobile(p: {
-  who: JobActor; missing?: string; card?: JobCard; box?: number | null; designs?: Record<string, { number: number; name: string; url: string }>; press?: PressSheet[];
+  who: JobActor; missing?: string; card?: JobCard; box?: number | null; designs?: Record<string, { number: number; name: string; url: string }>; press?: PressSheet[]; presses?: PressOption[];
   ship?: { t: ShipTarget; existing: Shipment | null } | null; shipSettings?: ShipSettings; checkin?: CheckJob | null; printer?: { ready: boolean; dpi: number };
 }) {
   const { who, card } = p;
@@ -65,7 +62,7 @@ export default function JobMobile(p: {
       </section>
       <main className="jm-main">
         {view === "home" && <Home p={p} job={job} go={go} />}
-        {view === "setup" && <Setup card={card} designs={p.designs || {}} press={p.press || []} />}
+        {view === "setup" && <Setup card={card} job={job} designs={p.designs || {}} press={p.press || []} presses={p.presses || []} />}
         {view === "notes" && <Notes card={card} job={job} />}
         {view === "photos" && <Photos job={job} />}
         {view === "labels" && <Labels card={card} box={p.box || null} printer={p.printer} perBox={p.shipSettings?.perBox || 72} staff={who.kind === "staff"} />}
@@ -128,28 +125,12 @@ function NoteRow({ n }: { n: JobFile }) {
 }
 
 /** What's printed where: the imprints, the designs, and how each separation goes on the press. */
-function Setup({ card, designs, press }: { card: JobCard; designs: Record<string, { number: number; name: string; url: string }>; press: PressSheet[] }) {
+function Setup({ card, job, designs, press, presses }: { card: JobCard; job: { kind: "o" | "a"; id: string }; designs: Record<string, { number: number; name: string; url: string }>; press: PressSheet[]; presses: PressOption[] }) {
   const { t } = useT();
+  const [sheets, setSheets] = useState(press);
   return (
     <>
-      {press.map((s) => (
-        <div key={s.id} className="jm-card">
-          <div className="jm-cardh"><b>{t(s.location || "Print")} · S-{s.number}</b><span className="jm-faint">{s.press || t("press not chosen")}</span></div>
-          {s.heads.length ? (
-            <ol className="jm-heads">{s.heads.map((h) => (
-              <li key={h.n} className={"h-" + h.what}><span className="jm-hn">{h.n}</span>
-                {h.what === "screen" ? <><i style={{ background: h.hex || "#ccc" }} /><b>{h.name}</b>{h.mesh ? <small>{t("{0} mesh", h.mesh)}</small> : null}</> : <b className="jm-faint">{t(h.what === "flash" ? "Flash" : h.what === "roller" ? "Roller" : h.what === "cool" ? "Cool down (empty)" : h.what === "down" ? "Head down" : "Empty")}</b>}
-              </li>
-            ))}</ol>
-          ) : (
-            <>
-              <p className="jm-faint" style={{ margin: "4px 0 8px" }}>{t("No press setup saved yet. Screens in print order:")}</p>
-              <ol className="jm-heads">{s.screens.map((c, i) => <li key={i} className="h-screen"><span className="jm-hn">{i + 1}</span><i style={{ background: c.hex || "#ccc" }} /><b>{c.name}</b>{c.mesh ? <small>{t("{0} mesh", c.mesh)}</small> : null}</li>)}</ol>
-            </>
-          )}
-          {s.notes && <p className="jm-pre">{s.notes}</p>}
-        </div>
-      ))}
+      {sheets.map((sh) => <PressSheetCard key={sh.id} sheet={sh} presses={presses} job={job} onSaved={setSheets} />)}
       {card.groups.map((g, gi) => (
         <div key={gi} className="jm-card">
           <div className="jm-cardh"><b>{card.groups.length > 1 ? g.name : t("Prints")}</b><span className="jm-faint">{t("{0} pcs", g.rows.reduce((a, r) => a + r.total, 0))}</span></div>

@@ -4,12 +4,12 @@ import { cookies } from "next/headers";
 import { jobGate } from "@/lib/jobAccess";
 import { loadJobCard, parseJobCode } from "@/lib/jobCard";
 import { mergeSettings, type Customer } from "@/lib/pricing";
-import { mergeProduction } from "@/lib/production";
 import { addressFromText, emptyAddress, type BillTo, type Shipment } from "@/lib/shipping";
 import { addressLines, type PvOrder } from "@/lib/archive";
 import { checkinJobFor } from "@/lib/checkin";
 import { printSettings } from "@/lib/printQueue";
-import JobMobile, { type PressSheet } from "@/components/job/JobMobile";
+import JobMobile from "@/components/job/JobMobile";
+import { pressSheets } from "@/lib/pressActualServer";
 import JobSignIn from "@/components/job/JobSignIn";
 import { LangProvider, LANG_COOKIE, type Lang } from "@/components/job/lang";
 import type { ShipTarget } from "@/components/ShipWindow";
@@ -55,22 +55,8 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const designs: Record<string, { number: number; name: string; url: string }> = {};
   dRows.filter((d) => d.preview_path).forEach((d, i) => { designs[d.id] = { number: d.number, name: d.name, url: signed[i]?.signedUrl || "" }; });
 
-  // press setups from the separations made for this job
-  const presses = mergeProduction((st?.data as Record<string, unknown>)?.production).machines;
-  const press: PressSheet[] = [];
-  if (card.kind === "o") {
-    const { data: seps } = await admin.from("separations").select("id, number, location, status, channels, settings, notes, garment_color").eq("order_id", card.id).neq("status", "cancelled").order("created_at");
-    for (const s of (seps || []) as { id: string; number: number; location: string; status: string; channels: { key: string; name: string; hex: string; kind: string; mesh?: number; order?: number }[] | null; settings: Record<string, unknown> | null; notes: string; garment_color: string }[]) {
-      const ch = (s.channels || []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      const setup = (s.settings?.pressSetup || null) as { press: string; heads: string[]; at?: string } | null;
-      press.push({
-        id: s.id, number: s.number, location: s.location, status: s.status, garment: s.garment_color || "", notes: s.notes || "",
-        press: setup ? presses.find((m) => m.id === setup.press)?.name || "" : "",
-        heads: setup ? setup.heads.map((h, i) => { const k = h.startsWith("p:") ? h.slice(2) : ""; const c = ch.find((x) => x.key === k); return { n: i + 1, what: k ? "screen" : h || "free", name: c?.name || (k ? k : ""), hex: c?.hex || "", mesh: c?.mesh || null }; }) : [],
-        screens: ch.map((c) => ({ name: c.name, hex: c.hex, mesh: c.mesh || null, kind: c.kind })),
-      });
-    }
-  }
+  // press setups: the suggestion (the separations) and what really ran (press_actuals)
+  const { sheets: press, presses } = await pressSheets(admin, card, st?.data);
 
   // shipping (staff with the Shipping Center)
   let ship: { t: ShipTarget; existing: Shipment | null } | null = null;
@@ -99,7 +85,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const checkin = who.can.checkin ? await checkinJobFor(admin, { kind: card.kind, id: card.id }).catch(() => null) : null;
 
   return wrap(
-    <JobMobile who={who} card={card} box={ref?.box || null} designs={designs} press={press} ship={ship} shipSettings={settings.ship} checkin={checkin}
+    <JobMobile who={who} card={card} box={ref?.box || null} designs={designs} press={press} presses={presses} ship={ship} shipSettings={settings.ship} checkin={checkin}
       printer={{ ready: ps.mode === "printnode" ? !!ps.printnodeId : !!ps.host, dpi: ps.dpi }} />
   );
 }
