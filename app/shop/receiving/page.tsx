@@ -290,7 +290,7 @@ export default function GoodsReceiving() {
   const unscanned = (r: Row, k: Row["trks"][number]) => !!k.tracking && !k.delivered && ["", "unknown", "pre_transit"].includes(k.status || "") && !!r.shipped && t0 >= nextBiz(r.shipped);
   const rowLine = (r: Row) => (
     <tr key={r.key} className={r.state === "problem" || r.late ? "prob" : ""}>
-      <td className="co"><b>{r.who}</b>{r.what === "Our blanks" && r.unlinked && <span className="rv-tag">our blanks</span>}</td>
+      <td className="co"><b>{r.who}</b>{r.what === "Our blanks" && <span className="rv-tag">our blanks</span>}</td>
       <td>{r.sub || "—"}</td>
       <td className="po" title={r.po}>{r.po || "—"}</td>
       <td className="r">{r.boxes || "—"}</td>

@@ -41,7 +41,7 @@ export function parseManifest(rows: string[][]): ManifestLine[] {
     const shipped = Math.round(+get(r, "qty_shipped") || 0);
     const pro = get(r, "pro");
     return {
-      ship_date: excelDate(get(r, "ship_date")), customer_name: get(r, "customer_name"), customer_account: get(r, "customer_account"), customer_po: get(r, "customer_po"), invoice: get(r, "invoice"),
+      ship_date: excelDate(get(r, "ship_date")), customer_name: ourName(get(r, "customer_name")), customer_account: get(r, "customer_account"), customer_po: get(r, "customer_po"), invoice: get(r, "invoice"),
       box: get(r, "box"), warehouse: get(r, "warehouse"), method: get(r, "method"),
       // freight (LTL) has a PRO number instead of a tracking number
       // (for freight SanMar puts the carton id in the tracking column; the PRO number is what the freight line tracks)
@@ -59,7 +59,10 @@ const freightCarrier = (method: string) => {
   const m = (method.split(/[-–]/)[0] || method).trim();
   return m.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase()).replace(/\bR&l\b/i, "R&L").replace(/\bLtl\b/, "LTL");
 };
-const isUs = (name: string) => /^fbs(\s|$|print)/i.test(name.trim());
+/** SanMar has our account under the company's legal name: Franklin Business Services = FBS */
+const FRANKLIN = /^franklin\s+business\s+serv/i;
+export const ourName = (name: string) => (FRANKLIN.test(name.trim()) ? "FBS" : name);
+const isUs = (name: string) => /^fbs(\s|$|print)/i.test(name.trim()) || FRANKLIN.test(name.trim());
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
 const day = (d: string) => new Date(d + "T12:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 const nextBusinessDay = (d: string) => { const x = new Date(d + "T12:00"); do { x.setDate(x.getDate() + 1); } while (x.getDay() === 0 || x.getDay() === 6); return x.toISOString().slice(0, 10); };
