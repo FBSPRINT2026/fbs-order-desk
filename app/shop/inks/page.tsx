@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { useCan } from "@/components/RoleContext";
+import InkInventory from "@/components/InkInventory";
 
 /**
  * Ink Room: every Epic Rio coated PMS color from Avient IMS 3.0, and a mixing calculator. Pick a color, say how much
@@ -48,7 +49,7 @@ export default function InkRoom() {
   const [q, setQ] = useState("");
   const [sq, setSq] = useState(""), [choosing, setChoosing] = useState(false);
   const canStock = useCan("inkStock");
-  const [tab, setTab] = useSticky<"pms" | "stock">("inks.tab", "pms");
+  const [tab, setTab] = useSticky<"pms" | "stock" | "inventory">("inks.tab", "pms");
   const [sel, setSel] = useState<Ink | null>(null), [selStock, setSelStock] = useState<Stock | null>(null);
   const [edit, setEdit] = useState<Draft | null>(null), [busy, setBusy] = useState(false), [formErr, setFormErr] = useState("");
   const [amt, setAmt] = useSticky<string>("inks.amt", "1"), [unit, setUnit] = useSticky<Unit>("inks.unit", "qt");
@@ -171,20 +172,38 @@ export default function InkRoom() {
   const qts = sel?.grams_per_qt ? totalG / sel.grams_per_qt : 0;
   const draftPms = edit ? tidyPms(edit.pms) : "", draftF = edit && draftPms ? formulaFor(draftPms) : null;
 
+  const tabs = (
+    <div className="row" style={{ gap: 6 }} role="tablist">
+      <button type="button" role="tab" aria-selected={tab === "pms"} className={"chip" + (tab === "pms" ? " on" : "")} onClick={() => setTab("pms")}>PMS formulas</button>
+      <button type="button" role="tab" aria-selected={tab === "stock"} className={"chip" + (tab === "stock" ? " on" : "")} onClick={() => setTab("stock")}>Stock colors{stock ? ` (${stockedN})` : ""}</button>
+      <button type="button" role="tab" aria-selected={tab === "inventory"} className={"chip" + (tab === "inventory" ? " on" : "")} onClick={() => setTab("inventory")}>Inventory</button>
+    </div>
+  );
+  const head = (
+    <div className="page-head">
+      <div><div className="eyebrow">Production</div><h1>Ink Room</h1></div>
+      <div className="faint" style={{ fontSize: 13 }}>{inks ? `${ready} Epic Rio PMS formulas` : "Loading colors…"}{stock ? ` · ${stockedN} stock colors on the shelf` : ""}</div>
+    </div>
+  );
+  if (tab === "inventory") return (
+    <>
+      {head}
+      {err && <div className="pv-err">{err}</div>}
+      <section className="panel"><div className="panel-b stack" style={{ gap: 12 }}>
+        {tabs}
+        {!inks || !stock ? <div className="faint">Loading…</div> : <InkInventory stock={stock} formulas={inks} canStock={canStock} />}
+      </div></section>
+    </>
+  );
+
   return (
     <>
-      <div className="page-head">
-        <div><div className="eyebrow">Production</div><h1>Ink Room</h1></div>
-        <div className="faint" style={{ fontSize: 13 }}>{inks ? `${ready} Epic Rio PMS formulas` : "Loading colors…"}{stock ? ` · ${stockedN} stock colors on the shelf` : ""}</div>
-      </div>
+      {head}
       {err && <div className="pv-err">{err}</div>}
       <div className="ink-wrap">
         <section className="panel ink-list">
           <div className="panel-b stack" style={{ gap: 10 }}>
-            <div className="row" style={{ gap: 6 }} role="tablist">
-              <button type="button" role="tab" aria-selected={tab === "pms"} className={"chip" + (tab === "pms" ? " on" : "")} onClick={() => setTab("pms")}>PMS formulas</button>
-              <button type="button" role="tab" aria-selected={tab === "stock"} className={"chip" + (tab === "stock" ? " on" : "")} onClick={() => setTab("stock")}>Stock colors{stock ? ` (${stockedN})` : ""}</button>
-            </div>
+            {tabs}
             {tab === "stock" ? (
               <>
                 <div className="row" style={{ gap: 8, alignItems: "center" }}>
