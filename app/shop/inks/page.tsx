@@ -186,10 +186,10 @@ export default function InkRoom() {
                         <small>{x.stocked ? "We stock this" : "Not stocked"}</small>
                       </button>
                     ) : (
-                      <button key={x.id} type="button" className={"ink-tile stock" + (selStock?.id === x.id ? " on" : "")} onClick={() => pickStock(x)} title={`${x.name}${x.product ? ` (${x.product})` : ""}${x.pms ? ` ≈ PMS ${x.pms}` : ""}`}>
+                      <button key={x.id} type="button" className={"ink-tile stock" + (selStock?.id === x.id ? " on" : "")} onClick={() => pickStock(x)} title={`${x.name}${x.pms ? ` · PMS ${x.pms}` : ""}`}>
                         <i style={{ background: x.hex || "#ddd" }} />
                         <b>{x.name}</b>
-                        <small data-notranslate>{x.product ? `${x.product} · ` : ""}{x.pms ? `≈ PMS ${x.pms}` : "No PMS"}</small>
+                        {x.pms && <small data-notranslate>PMS {x.pms}</small>}
                       </button>
                     ))}</div>
                   </div>
