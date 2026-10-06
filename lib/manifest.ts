@@ -1144,7 +1144,7 @@ export async function unlinkLines(admin: SupabaseClient, lineIds: string[], by: 
     const how = (g.lines[0] as typeof lines[number]).match_how || "";
     await admin.from("ai_suggestions").upsert({ dedupe_key: key, kind: "goods_unlink", source: "staff", status: "done", title: `${g.customer_name} PO ${g.customer_po}: not #${nums.join(", #")}`.slice(0, 300), body: note.slice(0, 2000),
       payload: { orderIds: [...new Set([...before, ...wrong])], numbers: nums, account: g.customer_name, po: g.customer_po, wasHow: how, note: note.slice(0, 500), by }, decided_at: new Date().toISOString(), decided_by: by }, { onConflict: "dedupe_key" });
-    await admin.from("supplier_manifest_lines").update({ kind: "", order_id: null, archived_order_id: null, match_how: "", linked_by: null, suggest_order_id: null, suggest_archived_id: null, suggest_how: `unlinked by ${by}${nums.length ? ` (not #${nums.join(", #")})` : ""}` }).in("id", g.lines.map((l) => l.id));
+    await admin.from("supplier_manifest_lines").update({ kind: "", order_id: null, archived_order_id: null, match_how: "", linked_by: "", suggest_order_id: null, suggest_archived_id: null, suggest_how: `unlinked by ${by}${nums.length ? ` (not #${nums.join(", #")})` : ""}` }).in("id", g.lines.map((l) => l.id));
   }
   return lines.length;
 }
