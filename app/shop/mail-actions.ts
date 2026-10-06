@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { accountById, accountForUser, cfgOf, DEFAULT_MAIL_HOST, encryptSecret, publicAccount, type MailAccount } from "@/lib/mail/config";
 import { sendFromMailbox } from "@/lib/mail/send";
 import { imapClient } from "@/lib/mail/imap";
-import { closeAnswered } from "@/lib/mail/process";
+import { addContact, closeAnswered } from "@/lib/mail/process";
 import { runAccount } from "@/lib/mail/run";
 
 // Staff actions for the mailboxes: connect your own, reply from the mailbox an email came to, sort a sender, check now.
@@ -98,7 +98,10 @@ export async function markNotCustomer(activityId: string) {
   } catch (e) { return fail(e); }
 }
 
-/** "This is <customer>": this sender's email goes to that customer from now on (a new contact, a lead who's now a customer) */
+/**
+ * "This is someone at <customer>": the sender becomes a contact on that customer's account (not a new account),
+ * and their email goes to that customer from now on.
+ */
 export async function setEmailCustomer(activityId: string, customerId: string) {
   try {
     const { admin, email } = await staff();
@@ -107,7 +110,8 @@ export async function setEmailCustomer(activityId: string, customerId: string) {
     await admin.from("mail_senders").upsert({ email: (a.from_email as string).toLowerCase(), kind: "customer", customer_id: customerId, decided_by: email || "staff", decided_at: new Date().toISOString() });
     await admin.from("activities").update({ customer_id: customerId, meta: { ...((a.meta || {}) as object), lead: false, match: "override" } }).eq("from_email", a.from_email).is("customer_id", null);
     await admin.from("ai_suggestions").update({ customer_id: customerId }).eq("activity_id", a.id);
-    return { ok: true as const };
+    const added = await addContact(admin, customerId, a.from_email as string, ((a.meta || {}) as { from_name?: string }).from_name || "", true);
+    return { ok: true as const, added };
   } catch (e) { return fail(e); }
 }
 

@@ -5294,6 +5294,7 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ibx-when{display:flex;gap:6px;align-items:center;font-size:12.5px;white-space:nowrap}
 .ibx-detail{padding:4px 12px 14px 32px;display:flex;flex-direction:column;gap:10px}
 .ibx-body{white-space:pre-wrap;font:inherit;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;max-height:340px;overflow:auto;margin:0}
+.ibx-html{display:flex;flex-direction:column;align-items:flex-start;gap:4px}.ibx-html iframe{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;display:block}
 .ibx-thread{display:flex;flex-direction:column;gap:6px}
 .ibx-t{font-size:12.5px;border-left:3px solid var(--line);padding:4px 10px}
 .ibx-t.out{border-left-color:#0A8FC0}

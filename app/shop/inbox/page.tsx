@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, markNotCustomer, sendEmailReply, setEmailCustomer, setEmailOrder } from "../mail-actions";
@@ -12,7 +12,7 @@ import { aiRewriteDraft, quoteFromSuggestion } from "../ai-actions";
  * the AI's one-line summary, a drafted reply to edit and send (from nicholas@fbsprint.com, in the same thread), and
  * buttons to make a quote, file it under an order, or sort the sender.
  */
-type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number }[]; triage?: { intent?: string; summary?: string; urgency?: string; needs_reply?: boolean } } };
+type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; needs_reply?: boolean } } };
 type Sug = { id: string; kind: string; status: string; activity_id: string | null; title: string; body: string; draft: { subject?: string; body?: string } | null; payload: { groups?: unknown[] } | null; order_id: string | null };
 type Cust = { id: string; company: string | null; name: string | null };
 type Ord = { id: string; number: number; nickname: string | null; customer_id: string | null; status: string };
@@ -126,7 +126,7 @@ function Detail({ x, reply, quote, orders, thread, busy, setBusy, done }: { x: A
   return (
     <div className="ibx-detail">
       <div className="faint" style={{ fontSize: 12.5 }}>From {x.meta?.from_name ? `${x.meta.from_name} <${x.from_email}>` : x.from_email} · {new Date(x.occurred_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}{x.meta?.match === "domain" ? " · matched by their company's email domain" : x.meta?.match === "thread" ? " · a reply in a thread we have" : ""}</div>
-      <pre className="ibx-body">{x.body}</pre>
+      <EmailBody x={x} />
       {(x.meta?.attachments || []).length > 0 && <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>{x.meta!.attachments!.map((f) => <button key={f.path} type="button" className="btn sm" onClick={() => urlFor(f.path)}>📎 {f.name}</button>)}</div>}
       {thread.length > 0 && <div className="ibx-thread">{thread.sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).map((t) => <div key={t.id} className={"ibx-t " + t.direction}><b>{t.direction === "out" ? "You" : t.meta?.from_name || t.from_email}</b> · {new Date(t.occurred_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}<div>{t.body.slice(0, 600)}</div></div>)}</div>}
       <div className="ibx-reply">
@@ -148,13 +148,58 @@ function Detail({ x, reply, quote, orders, thread, busy, setBusy, done }: { x: A
         {!x.customer_id && <>
           <input className="ibx-in" placeholder="Company name" value={company} onChange={(e) => setCompany(e.target.value)} aria-label="New customer company" />
           <button type="button" className="btn sm primary" disabled={!!busy} onClick={() => run("new", () => customerFromEmail(x.id, company), "New customer made from the email.")}>Make them a customer</button>
-          <span className="faint">or it&apos;s</span>
-          <span className="ibx-find"><input className="ibx-in" placeholder="Find a customer…" value={custQ} onChange={(e) => find(e.target.value)} aria-label="Find customer" />
-            {hits.length > 0 && <span className="ibx-hits">{hits.map((c) => <button key={c.id} type="button" onClick={() => run("cust", () => setEmailCustomer(x.id, c.id), `Now filed under ${c.company || c.name}. Their future email will be too.`)}>{c.company || c.name}</button>)}</span>}</span>
+          <span className="faint">or add {x.meta?.from_name?.split(" ")[0] || "them"} as a contact at</span>
+          <span className="ibx-find"><input className="ibx-in" placeholder="Find a customer…" value={custQ} onChange={(e) => find(e.target.value)} aria-label="Find the customer they work for" />
+            {hits.length > 0 && <span className="ibx-hits">{hits.map((c) => <button key={c.id} type="button" onClick={() => run("cust", () => setEmailCustomer(x.id, c.id), `${x.meta?.from_name || x.from_email} is now a contact at ${c.company || c.name}. Their email will file there from now on.`)}>{c.company || c.name}</button>)}</span>}</span>
         </>}
         <button type="button" className="btn sm ghost" style={{ marginLeft: "auto" }} disabled={!!busy} onClick={() => run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`)}>Not a customer</button>
       </div>
       {err && <div className="pv-err">{err}</div>}
+    </div>
+  );
+}
+
+/**
+ * The email as Outlook shows it: its own formatting, signature and pictures, in a locked-down frame (no scripts run;
+ * links open in a new tab). Pictures sent inside the email come from our private copy; email stored before we kept
+ * the formatting shows as plain text until the next mailbox check fills it in.
+ */
+function EmailBody({ x }: { x: Act }) {
+  const [doc, setDoc] = useState<string | null>(null), [plain, setPlain] = useState(false), [h, setH] = useState(240);
+  const ref = useRef<HTMLIFrameElement | null>(null);
+  useEffect(() => {
+    let live = true;
+    setDoc(null); setH(240);
+    const path = x.meta?.html;
+    if (!path) return;
+    (async () => {
+      const sb = createClient().storage.from("proofs");
+      const { data: blob } = await sb.download(path);
+      if (!blob || !live) return;
+      let html = await blob.text();
+      const inline = Object.entries(x.meta?.inline || {});
+      if (inline.length) {
+        const { data: urls } = await sb.createSignedUrls(inline.map(([, p]) => p), 3600);
+        inline.forEach(([cid, p]) => { const u = urls?.find((r) => r.path === p)?.signedUrl; if (u) html = html.split(`cid:${cid}`).join(u); });
+      }
+      html = html.replace(/<script[\s\S]*?<\/script>/gi, "");
+      const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}table{max-width:100%}</style>`;
+      html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + head) : head + html;
+      if (live) setDoc(html);
+    })().catch(() => null);
+    return () => { live = false; };
+  }, [x.id, x.meta?.html, x.meta?.inline]);
+  const fit = () => { const d = ref.current?.contentDocument; if (d?.body) setH(Math.min(1600, Math.max(120, d.documentElement.scrollHeight + 4))); };
+  if (!x.meta?.html || plain || doc == null) return (
+    <div>
+      <pre className="ibx-body">{x.body}</pre>
+      {x.meta?.html && plain && <button type="button" className="btn sm ghost" onClick={() => setPlain(false)}>Show as in Outlook</button>}
+    </div>
+  );
+  return (
+    <div className="ibx-html">
+      <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
+      <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>
     </div>
   );
 }

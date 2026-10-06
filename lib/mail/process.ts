@@ -15,11 +15,11 @@ import { processEmailActivity } from "@/lib/ai/email";
  *    for that thread (he already answered in Outlook).
  */
 export type MailAddr = { address: string; name: string };
-export type MailAttachment = { filename: string; contentType: string; size: number; content: Buffer; inline: boolean };
+export type MailAttachment = { filename: string; contentType: string; size: number; content: Buffer; inline: boolean; cid?: string };
 export type MailMsg = {
   messageId: string; inReplyTo: string; references: string[]; date: Date;
   from: MailAddr; to: MailAddr[]; cc: MailAddr[]; subject: string; text: string;
-  headers: Record<string, string>; attachments: MailAttachment[];
+  headers: Record<string, string>; html?: string; attachments: MailAttachment[];
 };
 
 const lc = (s: string) => (s || "").trim().toLowerCase();
@@ -38,7 +38,7 @@ export function isAutomated(m: MailMsg) {
   return false;
 }
 
-export type Match = { customerId: string | null; how: "override" | "email" | "contact" | "printavo" | "domain" | "thread" | null; ignore?: boolean };
+export type Match = { customerId: string | null; how: "override" | "email" | "contact" | "printavo" | "domain" | "company" | "thread" | null; ignore?: boolean };
 const clean = (e: string) => lc(e).replace(/[,()"'\\]/g, "");
 
 /** which customer an address belongs to */
@@ -63,6 +63,12 @@ export async function matchAddress(admin: SupabaseClient, email: string): Promis
     ]);
     const ids = [...new Set([...(cs || []).map((x) => x.id as string), ...(ks || []).map((x) => x.customer_id as string)].filter(Boolean))];
     if (ids.length === 1) return { customerId: ids[0], how: "domain" };
+    // the domain is the company's name: christine@shagcarpet.com → "Shag Carpet" (customers.company_key)
+    const label = d.split(".").slice(0, -1).join("").replace(/^www/, "").replace(/[^a-z0-9]/g, "");
+    if (label.length >= 4) {
+      const { data: ck } = await admin.from("customers").select("id").eq("company_key", label).limit(2);
+      if (ck?.length === 1) return { customerId: ck[0].id as string, how: "company" };
+    }
   }
   return { customerId: null, how: null };
 }
@@ -83,13 +89,44 @@ async function saveAttachments(admin: SupabaseClient, m: MailMsg, folder: string
   for (const a of m.attachments.slice(0, 15)) {
     if (!a.filename || !(ART.test(a.contentType) || ART_EXT.test(a.filename))) continue;
     if (a.size > 40 * 1024 * 1024) continue;
-    if (a.inline && /^image\//.test(a.contentType) && a.size < 60 * 1024) continue; // signature logos, social icons
+    if (a.inline && /^image\//.test(a.contentType) && (a.size < 60 * 1024 || (a.cid && m.html?.includes(a.cid)))) continue; // signature logos, pictures in the body (saved with the body)
     const name = a.filename.replace(/[^\w.\- ]+/g, "_").slice(-120);
     const path = `emails/${folder}/${Date.now().toString(36)}-${name}`;
     const { error } = await admin.storage.from("proofs").upload(path, a.content, { contentType: a.contentType || "application/octet-stream", upsert: false });
     if (!error) out.push({ name: a.filename, path, type: a.contentType, size: a.size });
   }
   return out;
+}
+
+/**
+ * The email as it looks in Outlook: its HTML (formatting, signatures) saved privately, with the pictures that are
+ * part of the message (cid: images: logos, pasted screenshots) saved beside it so the Inbox can show them.
+ */
+export async function saveBody(admin: SupabaseClient, m: MailMsg, folder: string): Promise<{ html?: string; inline?: Record<string, string> }> {
+  if (!m.html || m.html.length > 3_000_000) return {};
+  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  const inline: Record<string, string> = {};
+  for (const a of m.attachments) {
+    if (!a.cid || !/^image\//.test(a.contentType) || a.size > 8 * 1024 * 1024 || !m.html.includes(a.cid)) continue;
+    const path = `emails/${folder}/${stamp}/inline-${a.cid.replace(/[^\w.\-]+/g, "_").slice(0, 80)}`;
+    const { error } = await admin.storage.from("proofs").upload(path, a.content, { contentType: a.contentType, upsert: true });
+    if (!error) inline[a.cid] = path;
+  }
+  const path = `emails/${folder}/${stamp}/body.html`;
+  const { error } = await admin.storage.from("proofs").upload(path, Buffer.from(m.html, "utf8"), { contentType: "text/html; charset=utf-8", upsert: true });
+  return error ? {} : { html: path, inline };
+}
+
+/** someone at a customer we matched by their company: on the customer's contacts (no portal sign-in until staff turn it on) */
+export async function addContact(admin: SupabaseClient, customerId: string, email: string, name: string, chosen = false) {
+  const e = lc(email);
+  if (!e || (!chosen && FREE.has(domainOf(e)))) return false;
+  const { data: have } = await admin.from("customer_contacts").select("id").eq("customer_id", customerId).ilike("email", e).limit(1);
+  if (have?.length) return false;
+  const { data: cust } = await admin.from("customers").select("email").eq("id", customerId).maybeSingle();
+  if (lc(String(cust?.email || "")) === e) return false; // already the customer's main email
+  const { error } = await admin.from("customer_contacts").insert({ customer_id: customerId, email: e, name: (name || "").slice(0, 120), portal_access: false });
+  return !error;
 }
 
 const orderNum = (subject: string) => subject.match(/(?:#|order\s*#?\s*|quote\s*#?\s*|invoice\s*#?\s*|job\s*#?\s*)(\d{3,7})\b/i)?.[1];
@@ -124,13 +161,15 @@ export async function handleIncoming(admin: SupabaseClient, m: MailMsg, acct: Ac
   }
   const orderId = parent?.order_id || (await orderFor(admin, match.customerId, m.subject));
   const attachments = await saveAttachments(admin, m, match.customerId || "leads");
+  const body = await saveBody(admin, m, match.customerId || "leads");
+  if (match.customerId && ["domain", "company"].includes(match.how || "")) await addContact(admin, match.customerId, from, m.from.name);
   const { data: ins, error } = await admin.from("activities").insert({
     customer_id: match.customerId, order_id: orderId, kind: "email", direction: "in",
     subject: m.subject.slice(0, 500), body: m.text.slice(0, 100000), from_email: from,
     to_email: [...m.to, ...m.cc].map((x) => x.address).join(", ").slice(0, 500),
     external_id: m.messageId ? m.messageId.slice(0, 500) : null, thread_id: (m.inReplyTo || m.references[0] || m.messageId || "").slice(0, 500) || null,
     occurred_at: m.date.toISOString(), created_by: "mailbox",
-    meta: { from_name: m.from.name.slice(0, 200), match: match.how, lead, references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, mailbox: "inbox", account_id: acct.id, account: acct.email },
+    meta: { from_name: m.from.name.slice(0, 200), match: match.how, lead, references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, ...body, mailbox: "inbox", account_id: acct.id, account: acct.email },
   }).select("id").single();
   if (error) throw new Error(error.message);
   await processEmailActivity(admin, ins.id as string).catch(() => null);
@@ -145,13 +184,14 @@ export async function handleSent(admin: SupabaseClient, m: MailMsg, acct: Acct):
   if (!customerId) return "skipped";
   const orderId = parent?.order_id || (await orderFor(admin, customerId, m.subject));
   const attachments = await saveAttachments(admin, m, customerId);
+  const body = await saveBody(admin, m, customerId);
   await admin.from("activities").insert({
     customer_id: customerId, order_id: orderId, kind: "email", direction: "out",
     subject: m.subject.slice(0, 500), body: m.text.slice(0, 100000), from_email: lc(m.from.address),
     to_email: [...m.to, ...m.cc].map((x) => x.address).join(", ").slice(0, 500),
     external_id: m.messageId ? m.messageId.slice(0, 500) : null, thread_id: (m.inReplyTo || m.references[0] || m.messageId || "").slice(0, 500) || null,
     occurred_at: m.date.toISOString(), created_by: "mailbox", ai_processed_at: new Date().toISOString(),
-    meta: { references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, mailbox: "sent", account_id: acct.id, account: acct.email },
+    meta: { references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, ...body, mailbox: "sent", account_id: acct.id, account: acct.email },
   });
   await closeAnswered(admin, m, "Answered in Outlook");
   return "sent";
