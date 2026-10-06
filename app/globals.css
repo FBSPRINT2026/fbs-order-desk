@@ -5231,3 +5231,9 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ink-colorpick{width:48px;height:38px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
 .ink-pmsnote{margin-top:-6px}
 .ink-pmsnote.ok{color:#1F7A47}
+.ink-tile.pick{opacity:.55}
+.ink-tile.pick.in{opacity:1;border-color:#1F7A47;box-shadow:inset 0 0 0 1px #1F7A47}
+.ink-tile.pick i{position:relative}
+.ink-check{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:#fff;border:1px solid var(--line);display:grid;place-items:center;font-size:13px;font-weight:800;color:#1F7A47}
+.ink-tile.pick.in small{color:#1F7A47;font-weight:600}
+.ink-form label.ink-check-row{flex-direction:row;align-items:center;gap:8px;font-weight:500}
