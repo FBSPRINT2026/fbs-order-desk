@@ -37,7 +37,7 @@ const stockLabel = (x: Stock) => [x.brand, x.line].filter(Boolean).join(" ");
 export default function InkRoom() {
   const [inks, setInks] = useState<Ink[] | null>(null), [err, setErr] = useState("");
   const [stock, setStock] = useState<Stock[] | null>(null);
-  const [q, setQ] = useState(""), [only, setOnly] = useSticky<"ready" | "all">("inks.only", "all");
+  const [q, setQ] = useState("");
   const [sq, setSq] = useState(""), [choosing, setChoosing] = useState(false);
   const canStock = useCan("inkStock");
   const [tab, setTab] = useSticky<"pms" | "stock">("inks.tab", "pms");
@@ -75,14 +75,16 @@ export default function InkRoom() {
   }
 
   /** Epic Rio standard formula for a PMS code */
-  const formulaFor = (pms: string) => (pms ? (inks || []).find((i) => i.rec_type === "S" && norm(i.code) === norm(pms)) || null : null);
+  const formulaFor = (pms: string) => (pms ? (inks || []).find((i) => i.rec_type === "S" && !!i.lines?.length && norm(i.code) === norm(pms)) || null : null);
   /** stock inks that are about this PMS */
   const stockFor = (code: string) => (stock || []).filter((x) => x.stocked && x.pms && norm(x.pms) === norm(code));
 
-  const ready = useMemo(() => (inks || []).filter((i) => i.lines?.length).length, [inks]);
+  const ready = useMemo(() => (inks || []).filter((i) => i.rec_type === "S" && i.lines?.length).length, [inks]);
   const list = useMemo(() => {
     const t = norm(q).replace(/^(pms|pantone)\s*/, "");
-    let xs = (inks || []).filter((i) => (only === "ready" ? !!i.lines?.length : true));
+    // the chart shows only Epic Rio standard formulas that have been read from IMS (and checked); the rest of the IMS
+    // list and the shop's own IMS mixes stay in the table, out of sight, until a read fills them in
+    let xs = (inks || []).filter((i) => i.rec_type === "S" && !!i.lines?.length);
     if (t) {
       const exact = xs.filter((i) => norm(i.code) === t || norm(i.code) === `${t} c`);
       const starts = xs.filter((i) => !exact.includes(i) && norm(i.code).startsWith(t));
@@ -90,7 +92,7 @@ export default function InkRoom() {
       xs = [...exact, ...starts, ...has];
     }
     return xs.slice(0, 240);
-  }, [inks, q, only]);
+  }, [inks, q]);
 
   // stock colors, grouped by brand and line, filtered by the search
   const groups = useMemo(() => {
@@ -156,7 +158,7 @@ export default function InkRoom() {
     <>
       <div className="page-head">
         <div><div className="eyebrow">Production</div><h1>Ink Room</h1></div>
-        <div className="faint" style={{ fontSize: 13 }}>{inks ? `${inks.length.toLocaleString()} Epic Rio coated colors · ${ready} with formulas` : "Loading colors…"}{stock ? ` · ${stockedN} stock colors on the shelf` : ""}</div>
+        <div className="faint" style={{ fontSize: 13 }}>{inks ? `${ready} Epic Rio PMS formulas` : "Loading colors…"}{stock ? ` · ${stockedN} stock colors on the shelf` : ""}</div>
       </div>
       {err && <div className="pv-err">{err}</div>}
       <div className="ink-wrap">
@@ -196,10 +198,9 @@ export default function InkRoom() {
             ) : (<>
             <input className="ink-q" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a color: 186, 7527, Cool Gray 7, Warm Red…" aria-label="Find a color" autoFocus />
             <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-              <button type="button" className={"chip" + (only === "all" ? " on" : "")} onClick={() => setOnly("all")}>All colors</button>
-              <button type="button" className={"chip" + (only === "ready" ? " on" : "")} onClick={() => setOnly("ready")}>With formulas ({ready})</button>
+              <span className="faint" style={{ fontSize: 13 }}>{ready} colors read from IMS so far. More are added as they're read.</span>
             </div>
-            {!inks ? <div className="faint">Loading…</div> : !list.length ? <div className="faint">No color matches “{q}”.</div> : (
+            {!inks ? <div className="faint">Loading…</div> : !list.length ? <div className="faint">{q ? `No formula for “${q}” yet. It hasn't been read from IMS; look it up there for now.` : "No formulas read yet."}</div> : (
               <div className="ink-grid">{list.map((i) => { const st = i.rec_type === "S" ? stockFor(i.code) : []; return (
                 <button key={i.id} type="button" className={"ink-tile" + (sel?.id === i.id ? " on" : "") + (i.lines?.length ? " has" : "")} onClick={() => pickInk(i)} title={i.name}>
                   <i style={{ background: i.hex || "#ddd" }} />
