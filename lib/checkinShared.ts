@@ -7,6 +7,8 @@ export type CheckItem = { key: string; style: string; color: string; desc: strin
 export type Issue = "" | "short" | "over" | "damaged" | "mispick";
 export type CheckLine = { item: string; style: string; color: string; size: string; expected: number; received: number; issue: Issue; bad?: number; note?: string };
 export type CheckinRow = { id: string; order_id: string | null; archived_order_id: string | null; lines: CheckLine[]; expected: number; received: number; boxes: number | null; source: string; status: "complete" | "issue"; note: string; photos: string[]; by: string; created_at: string; resolved_at: string | null; resolved_by: string; resolution: string };
+export type JobKind = "sp" | "emb" | "hp" | "other";
+export const KIND_LABEL: Record<JobKind, string> = { sp: "Screen printing", emb: "Embroidery", hp: "Heat press", other: "Other" };
 export type JobState = "issue" | "checked" | "ready" | "partial" | "way" | "none";
 export type CheckJob = {
   ref: string;                 // "pv:<archived id>" or an order id
@@ -16,6 +18,8 @@ export type CheckJob = {
   items: CheckItem[]; source: "manifest" | "order";
   shipped: number; arrived: number; lines: number; delivered: number; boxes: number; suppliers: string[];
   state: JobState; checkins: CheckinRow[];
+  /** screen printing (sp), embroidery (emb), heat press (hp) or anything else */
+  kind: JobKind;
   href: string;
 };
 

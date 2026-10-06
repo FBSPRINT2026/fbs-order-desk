@@ -17,7 +17,7 @@ import { sizeKey, PV } from "@/lib/manifest";
  */
 
 export * from "@/lib/checkinShared";
-import type { CheckItem, CheckJob, CheckLine, CheckinRow, Issue, JobState } from "@/lib/checkinShared";
+import type { CheckItem, CheckJob, CheckLine, CheckinRow, Issue, JobKind, JobState } from "@/lib/checkinShared";
 const sizeOf = (k: string) => { const raw = k.replace(/^size_/, ""); if (/^(adj|adjustable|osfa|os|one\s*size)$/i.test(raw.trim())) return "OS"; const z = sizeKey(raw); return /^other$/i.test(z) ? "OTHER" : z; };
 
 const ymd = (d: string | null | undefined) => (d ? d.slice(0, 10) : null);
@@ -62,6 +62,16 @@ function itemsFromOrder(o: Pick<Order, "groups" | "lines">): CheckItem[] {
     out.push({ key: `${out.length}`, style: l.style || "", color: l.color || "", desc: l.garment || "", sizes });
   }
   return out;
+}
+/** what kind of job: the Printavo status says it first ("SP - …", "Emb - …", "HP - …"), else most of its lines */
+function kindOf(status: string, cats: string[]): JobKind {
+  if (/^\s*emb\b/i.test(status)) return "emb";
+  if (/^\s*sp\b/i.test(status)) return "sp";
+  if (/^\s*hp\b/i.test(status)) return "hp";
+  const n = (re: RegExp) => cats.filter((c) => re.test(c)).length;
+  const e = n(/embroid|^emb$/i), sp = n(/screen|^sp$/i), hp = n(/heat|transfer|dtf/i);
+  if (!e && !sp && !hp) return cats.length ? "other" : "sp";
+  return e > sp && e >= hp ? "emb" : hp > sp && hp > e ? "hp" : "sp";
 }
 const total = (items: CheckItem[]) => items.reduce((s, it) => s + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0);
 
@@ -109,7 +119,7 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
   ]);
   const lines = (ml || []) as ML[], cks = (ck || []) as CheckinRow[];
 
-  const build = (ref: string, base: Omit<CheckJob, "ref" | "items" | "source" | "shipped" | "arrived" | "lines" | "delivered" | "boxes" | "suppliers" | "state" | "checkins" | "ordered">, ordered: number, own: CheckItem[], ls: ML[], cs: CheckinRow[]): CheckJob => {
+  const build = (ref: string, base: Omit<CheckJob, "ref" | "kind" | "items" | "source" | "shipped" | "arrived" | "lines" | "delivered" | "boxes" | "suppliers" | "state" | "checkins" | "ordered">, ordered: number, own: CheckItem[], ls: ML[], cs: CheckinRow[]): CheckJob => {
     const items = ls.length ? itemsFromManifest(ls) : own;
     const shipped = ls.reduce((s, l) => s + (l.qty_shipped || 0), 0);
     const isIn = (l: ML) => !!l.delivered_at || l.track_status === "delivered";
@@ -121,18 +131,19 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     // fewer than the job (more coming some other way) is only partly here
     const need = ordered || total(own);
     const state: JobState = openIssue ? "issue" : cs.length ? "checked" : !ls.length ? "none" : delivered === ls.length ? (!need || arrived >= need ? "ready" : "partial") : delivered ? "partial" : "way";
-    return { ...base, ref, ordered: ordered || total(own), items, source: ls.length ? "manifest" : "order", shipped, arrived, lines: ls.length, delivered, boxes, suppliers: [...new Set(ls.map((l) => (l.supplier === "ss" ? "S&S" : l.supplier === "sanmar" ? "SanMar" : l.supplier)))], state, checkins: cs };
+    const { _kind, ...rest } = base as typeof base & { _kind?: JobKind };
+    return { ...rest, ref, kind: _kind || "sp", ordered: ordered || total(own), items, source: ls.length ? "manifest" : "order", shipped, arrived, lines: ls.length, delivered, boxes, suppliers: [...new Set(ls.map((l) => (l.supplier === "ss" ? "S&S" : l.supplier === "sanmar" ? "SanMar" : l.supplier)))], state, checkins: cs };
   };
 
   const jobs: CheckJob[] = [];
   for (const a of pvJobs) {
     const start = localDay(a.data?.startAt), due = ymd(a.due_date);
-    jobs.push(build(PV + a.id, { number: +a.visual_id || 0, nickname: a.nickname || "", customer: a.customers?.company || a.customers?.name || "", po: a.po_number || "", status: a.status_name || "", start, due, day: start || due || "", href: `/shop/archive/${a.id}` },
+    jobs.push(build(PV + a.id, { number: +a.visual_id || 0, nickname: a.nickname || "", customer: a.customers?.company || a.customers?.name || "", po: a.po_number || "", status: a.status_name || "", start, due, day: start || due || "", href: `/shop/archive/${a.id}`, _kind: kindOf(a.status_name || "", (a.data?.groups || []).flatMap((g) => (g.lines || []).map((l) => (l.category || "").trim()))) } as never,
       +(a.data?.totalQuantity || a.qty || 0), itemsFromPrintavo(a.data), lines.filter((l) => l.archived_order_id === a.id), cks.filter((c) => c.archived_order_id === a.id)));
   }
   for (const o of oJobs) {
     const start = ymd(o.production_date), due = ymd(o.due_date);
-    jobs.push(build(o.id, { number: o.number, nickname: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", po: o.po_number || "", status: o.status, start, due, day: start || due || "", href: `/shop/orders/${o.id}` },
+    jobs.push(build(o.id, { number: o.number, nickname: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", po: o.po_number || "", status: o.status, start, due, day: start || due || "", href: `/shop/orders/${o.id}`, _kind: kindOf("", orderGroups(o as unknown as Order).flatMap((g) => [...(g.imprints || []).map((im) => im.method || ""), ...g.lines.flatMap((l) => ((l as { decorations?: { method: string }[] }).decorations || []).map((d) => d.method))])) } as never,
       +(o.qty || 0), itemsFromOrder(o as unknown as Order), lines.filter((l) => l.order_id === o.id), cks.filter((c) => c.order_id === o.id)));
   }
   const inRange = jobs.filter((j) => j.day >= from && j.day <= to).sort((a, b) => a.day.localeCompare(b.day) || a.number - b.number);

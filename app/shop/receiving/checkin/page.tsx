@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CheckinModal, { ISSUE_WORD } from "@/components/CheckinModal";
-import type { CheckJob, CheckinRow, JobState } from "@/lib/checkinShared";
+import { KIND_LABEL, type CheckJob, type CheckinRow, type JobState } from "@/lib/checkinShared";
 import { useSticky } from "@/lib/useSticky";
 
 /**
@@ -66,7 +66,7 @@ export default function CheckInPage() {
       <div key={j.ref} className={"ck-row ck-st-" + j.state}>
         <span className="pill" style={{ ["--sc" as string]: s.c }} title={s.hint}>{s.label}</span>
         <div className="ck-row-b">
-          <b><Link href={j.href}>#{j.number}</Link> <span data-notranslate>{j.customer}</span></b>
+          <b><Link href={j.href}>#{j.number}</Link> <span data-notranslate>{j.customer}</span>{j.kind === "hp" || j.kind === "other" ? <span className={"ck-kind k-" + j.kind}>{KIND_LABEL[j.kind]}</span> : null}</b>
           <span className="ck-row-n" data-notranslate>{j.nickname}{j.po ? ` · PO ${j.po}` : ""}</span>
           <small className="faint">{[
             `${j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0)} pcs`,
@@ -110,13 +110,22 @@ export default function CheckInPage() {
         {(filter === "all" || filter === "issue") && problems.length > 0 && (
           <section className="ck-sec ck-problems">
             <h2>Problems <span className="faint">counted in short, damaged, wrong or extra: resolve each one</span></h2>
-            {problems.map(row)}
+            {problems.map((j) => <div key={j.ref} className="ck-pk"><span className={"ck-kind k-" + j.kind}>{KIND_LABEL[j.kind]}</span>{row(j)}</div>)}
           </section>
         )}
         {filter !== "issue" && (days.length ? days.map((d) => (
           <section key={d} className="ck-sec">
             <h2>{d === data.today ? "Today · " : ""}{dayName(d)} <span className="faint">{shown.filter((j) => j.day === d).length} job{shown.filter((j) => j.day === d).length === 1 ? "" : "s"}{(() => { const n = shown.filter((j) => j.day === d && j.state === "ready").length; return n ? ` · ${n} ready to count` : ""; })()}</span></h2>
-            {shown.filter((j) => j.day === d).map(row)}
+            {/* screen printing (and heat press / other) on the left, embroidery on the right */}
+            <div className="ck-split">{([["sp", "Screen Printing", (j: CheckJob) => j.kind !== "emb"], ["emb", "Embroidery", (j: CheckJob) => j.kind === "emb"]] as const).map(([k, label, f]) => {
+              const js = shown.filter((j) => j.day === d && f(j));
+              return (
+                <div key={k} className={"ck-col ck-col-" + k}>
+                  <h3>{label}<span>{js.length}{js.some((j) => j.state === "ready") ? ` · ${js.filter((j) => j.state === "ready").length} ready` : ""}</span></h3>
+                  {js.length ? js.map(row) : <div className="ck-none">No {label.toLowerCase()} jobs.</div>}
+                </div>
+              );
+            })}</div>
           </section>
         )) : <div className="empty">{q ? `Nothing matches “${q}” this week.` : filter === "all" ? "No jobs on the schedule this week." : `No jobs "${STATE[filter as JobState].label}" this week.`}</div>)}
       </>}
