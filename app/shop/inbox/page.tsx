@@ -13,7 +13,7 @@ import { aiReplyOptions, aiWriteReply, markNoReply, quoteFromSuggestion } from "
  * right with the answer on top: suggested answers to pick from, the reply box, then the email and the conversation
  * before it. Vendors, newsletters and personal mail never get here (they're skipped, not stored).
  */
-type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; no_reply?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; needs_reply?: boolean }; reply_options?: { at: string; options: { label: string; subject: string; body: string }[] } } };
+type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; no_reply?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; urgent_reason?: string; needs_reply?: boolean }; reply_options?: { at: string; options: { label: string; subject: string; body: string }[] } } };
 type Sug = { id: string; kind: string; status: string; activity_id: string | null; title: string; body: string; draft: { subject?: string; body?: string } | null; payload: { groups?: unknown[] } | null; order_id: string | null };
 type Cust = { id: string; company: string | null; name: string | null };
 type Ord = { id: string; number: number; nickname: string | null; customer_id: string | null; status: string };
@@ -67,8 +67,9 @@ export default function Inbox() {
     window.history.replaceState(null, "", window.location.pathname);
   }, [acts, st]); // eslint-disable-line react-hooks/exhaustive-deps
   const scoped = whose === "mine" && mineId ? rows.filter((r) => r.x.meta?.account_id === mineId) : rows;
-  const shown = scoped.filter((r) => (tab === "reply" ? r.needs : tab === "leads" ? r.x.meta?.lead && !r.x.customer_id : true));
-  const counts = { reply: scoped.filter((r) => r.needs).length, leads: scoped.filter((r) => r.x.meta?.lead && !r.x.customer_id).length, all: scoped.length };
+  const shown = scoped.filter((r) => (tab === "reply" ? r.needs : tab === "leads" ? r.x.meta?.lead && !r.x.customer_id : true))
+    .sort((a, b) => (tab === "reply" ? Number(b.urgent) - Number(a.urgent) : 0) || b.x.occurred_at.localeCompare(a.x.occurred_at)); // urgent ones first on Needs reply
+  const counts = { urgent: scoped.filter((r) => r.urgent).length, reply: scoped.filter((r) => r.needs).length, leads: scoped.filter((r) => r.x.meta?.lead && !r.x.customer_id).length, all: scoped.length };
   const today = st?.mine?.stats ? st.mine.stats[new Date().toISOString().slice(0, 10)] || {} : {};
 
   const who = (x: Act) => { const c = x.customer_id ? custs.get(x.customer_id) : null; return c ? c.company || c.name || x.from_email : `${x.meta?.from_name || x.from_email}`; };
@@ -106,7 +107,7 @@ export default function Inbox() {
         <section className="ibx-pane ibx-left" aria-label="Emails">
           <div className="ibx-left-h">
             <div className="ibx-tabs" role="tablist">
-              <button type="button" role="tab" aria-selected={tab === "reply"} className={tab === "reply" ? "on" : ""} onClick={() => setTab("reply")}>Needs reply<span>{counts.reply}</span></button>
+              <button type="button" role="tab" aria-selected={tab === "reply"} className={tab === "reply" ? "on" : ""} onClick={() => setTab("reply")}>Needs reply<span className={counts.urgent ? "hot" : ""} title={counts.urgent ? `${counts.urgent} urgent` : undefined}>{counts.reply}</span></button>
               <button type="button" role="tab" aria-selected={tab === "leads"} className={tab === "leads" ? "on" : ""} onClick={() => setTab("leads")}>Leads<span>{counts.leads}</span></button>
               <button type="button" role="tab" aria-selected={tab === "all"} className={tab === "all" ? "on" : ""} onClick={() => setTab("all")}>All<span>{counts.all}</span></button>
             </div>
@@ -117,11 +118,11 @@ export default function Inbox() {
           </div>
           <div className="ibx-items" ref={listRef} onKeyDown={onKeys}>
             {!acts ? <div className="faint ibx-none">Loading…</div> : !listed.length ? <div className="faint ibx-none">{q ? "Nothing matches." : tab === "reply" ? "Nothing waiting on you." : tab === "leads" ? "No new leads." : "No customer email in the last 30 days yet."}</div>
-              : listed.map(({ x, answered, needs }) => {
+              : listed.map(({ x, answered, needs, urgent }) => {
                 const waitH = (Date.now() - new Date(x.occurred_at).getTime()) / 36e5;
                 const ord = orders.find((o) => o.id === x.order_id);
                 return (
-                  <button key={x.id} data-id={x.id} type="button" className={"ibx-item" + (sel?.x.id === x.id ? " on" : "") + (needs ? " needs" : "")} onClick={() => pickRow(x.id)} onDoubleClick={() => pickRow(x.id, true)} title="Double-click to answer it">
+                  <button key={x.id} data-id={x.id} type="button" className={"ibx-item" + (sel?.x.id === x.id ? " on" : "") + (needs ? " needs" : "") + (urgent ? " urgent" : "")} onClick={() => pickRow(x.id)} onDoubleClick={() => pickRow(x.id, true)} title="Double-click to answer it">
                     <span className="ibx-item-top">
                       <span className={"ibx-dot" + (needs ? (waitH > 24 ? " late" : " due") : answered ? " ok" : "")} aria-hidden />
                       <b className="ibx-item-who">{who(x)}</b>
@@ -130,6 +131,7 @@ export default function Inbox() {
                     <span className="ibx-item-subj">{x.subject || "(no subject)"}</span>
                     {x.meta?.triage?.summary && <span className="ibx-item-sum">{x.meta.triage.summary}</span>}
                     <span className="ibx-item-tags">
+                      {urgent && <span className="tag ibx-urgent" title={x.meta?.triage?.urgent_reason || "The customer needs a fast answer"}>Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
                       {x.meta?.lead && !x.customer_id && <span className="tag">Lead</span>}
                       {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="tag soft">{INTENT[x.meta.triage.intent]}</span>}
                       {ord && <span className="tag soft">#{ord.number}</span>}
@@ -143,7 +145,7 @@ export default function Inbox() {
         </section>
         <section className="ibx-pane ibx-right" aria-label="Email and reply">
           {!sel ? <div className="ibx-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span className="faint">Pick an email on the left. New customer email shows up within a couple of minutes.</span>}</div>
-            : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} focus={focus === sel.x.id} x={sel.x} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} answered={sel.answered}
+            : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} focus={focus === sel.x.id} x={sel.x} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
                 orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
                 thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
                 back={() => setPicked(false)} busy={busy} setBusy={setBusy} done={(t) => { flash(t); load(); }} />}
@@ -159,7 +161,7 @@ type Opt = { label: string; subject: string; body: string };
  * The right-hand pane: who and what at the top, then the answer (suggested answers first, so they're the first thing
  * you see), then the email itself and the conversation before it.
  */
-function Detail({ x, who, reply, quote, needs, answered, focus, orders, thread, back, busy, setBusy, done }: { x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string) => void }) {
+function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done }: { x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string) => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   const [subject, setSubject] = useState(draftSubject);
   const [body, setBody] = useState(reply?.draft?.body || "");
@@ -191,6 +193,7 @@ function Detail({ x, who, reply, quote, needs, answered, focus, orders, thread, 
         <button type="button" className="btn sm ghost ibx-back" onClick={back}>← Emails</button>
         <h2>{x.subject || "(no subject)"}</h2>
         <div className="ibx-read-from"><b>{who}</b>{who !== (x.meta?.from_name || x.from_email) && <span> · {x.meta?.from_name || ""} &lt;{x.from_email}&gt;</span>}{who === (x.meta?.from_name || x.from_email) && who !== x.from_email && <span> &lt;{x.from_email}&gt;</span>}<span className="faint"> · {when}{answered ? " · answered" : ""}</span></div>
+        {urgent && <div className="ibx-read-urgent"><b>Urgent</b>{x.meta?.triage?.urgent_reason ? ` · ${x.meta.triage.urgent_reason}` : " · the customer needs a fast answer"}</div>}
         {x.meta?.triage?.summary && <div className="ibx-read-sum">✦ {x.meta.triage.summary}</div>}
         <div className="ibx-read-tools">
           {quote && x.customer_id && <button type="button" className="btn sm primary" disabled={!!busy} onClick={() => run("quote", async () => { const r = await quoteFromSuggestion(quote.id); if (r.ok) window.open(`/shop/orders/${r.id}`, "_blank"); return r; }, "Quote created from the email.")}>Create quote from email</button>}

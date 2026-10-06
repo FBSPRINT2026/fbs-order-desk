@@ -5385,3 +5385,13 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
   .ibx-back{display:inline-flex}
   .ibx-read-h{position:static}
 }
+/* urgent replies */
+.ibx-tabs button span.hot{background:var(--danger)!important;color:#fff!important}
+.ibx-urgent{background:var(--danger);color:#fff;border-color:var(--danger);text-transform:none;letter-spacing:0;font-family:inherit;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ibx-item.urgent{border-left-color:var(--danger)}
+.ibx-item.urgent.on{border-left-color:var(--danger)}
+.ibx-read-urgent{font-size:13px;color:var(--danger);background:color-mix(in srgb,var(--danger) 9%,transparent);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent);border-radius:8px;padding:6px 9px}
+.db-urgent{background:color-mix(in srgb,var(--danger) 4%,var(--surface))}
+.db-urgent .db-row{border-left:3px solid var(--danger);padding-left:10px}
+.db-late{color:var(--danger);font-weight:700;font-size:12.5px}
+.db-urgent-tag{font-size:11px;font-weight:800;color:#fff;background:var(--danger);border-radius:5px;padding:1px 6px}

@@ -107,6 +107,7 @@ export type EmailTriage = {
   intent: "new_order" | "reorder" | "change_to_order" | "artwork" | "payment" | "question" | "not_customer" | "other";
   summary: string;
   urgency: "high" | "normal" | "low";
+  urgent_reason?: string;
   order_number: number | null;
   needs_reply: boolean;
   suggested_reply: string;
@@ -119,12 +120,13 @@ export function triageEmail(s: Settings, email: { from: string; subject: string;
     tool: { name: "triage", description: "What this email is and what to do.", input_schema: { type: "object", properties: {
       intent: { type: "string", enum: ["new_order", "reorder", "change_to_order", "artwork", "payment", "question", "not_customer", "other"] },
       summary: { type: "string", description: "One sentence" },
-      urgency: { type: "string", enum: ["high", "normal", "low"] },
+      urgency: { type: "string", enum: ["high", "normal", "low"], description: "high when the customer needs a fast answer or fast work: a rush or quick turnaround, a deadline or event within about 7 days, a same-day pickup, a problem with an order in progress, or words like urgent / ASAP / today. low for thank-yous and FYIs." },
+      urgent_reason: { type: "string", description: "When urgency is high: why, in a few words with the date, e.g. \"85 shirts needed by Fri Oct 9\". Empty otherwise." },
       order_number: { type: ["integer", "null"] },
       needs_reply: { type: "boolean" },
       suggested_reply: { type: "string", description: `A short reply in this voice: ${s.assistant.ai.voice}. End with a short sign-off (e.g. "Thanks,") but no name, title or phone block; the sender's email signature is added. Empty if no reply is needed.` },
     }, required: ["intent", "summary", "urgency", "needs_reply", "suggested_reply"] } },
-    system: `${SHOP_CONTEXT(s)}\n\nYour job: sort an email that came into the shop's inbox. Spam, vendors and newsletters are "not_customer".`,
+    system: `${SHOP_CONTEXT(s)}\n\nYour job: sort an email that came into the shop's inbox. Spam, vendors and newsletters are "not_customer". Today is ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" })}.`,
     prompt: `From: ${email.from}\nSubject: ${email.subject}\n${email.customer ? `Known customer: ${email.customer}\n` : "Not a known customer.\n"}${email.openOrders ? `Their open orders: ${email.openOrders}\n` : ""}\n"""\n${email.body.slice(0, 15000)}\n"""`,
   });
 }

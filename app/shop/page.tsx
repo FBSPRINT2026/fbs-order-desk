@@ -26,7 +26,7 @@ type Cust = { id: string; company: string; name: string };
 
 type Job = { id: string; href: string; number: number; nickname: string; customer_id: string | null; due: string | null; status: string; statusLabel: string; printavo: boolean; total: number; owner: string; ship: boolean };
 type Msg = { id: string; order_id: string | null; customer_id: string | null; author_name: string; author_email: string; body: string; created_at: string; topic: string | null };
-type Mail = { id: string; customer_id: string | null; order_id: string | null; subject: string; body: string; from_email: string; occurred_at: string; direction: string; external_id: string | null; thread_id: string | null; meta: { from_name?: string; account_id?: string; ignored?: boolean; no_reply?: boolean; references?: string[]; triage?: { needs_reply?: boolean; summary?: string; intent?: string } } | null };
+type Mail = { id: string; customer_id: string | null; order_id: string | null; subject: string; body: string; from_email: string; occurred_at: string; direction: string; external_id: string | null; thread_id: string | null; meta: { from_name?: string; account_id?: string; ignored?: boolean; no_reply?: boolean; references?: string[]; triage?: { needs_reply?: boolean; summary?: string; intent?: string; urgency?: string; urgent_reason?: string } } | null };
 type SepLite = { id: string; number: number; order_id: string | null; location: string; garment_color: string; status: string; due_date: string | null; customer_id: string | null; channels: unknown[]; updated_at: string };
 // separations on the dashboard are the ones being worked on (Printed and Archived aren't listed)
 const SEP_ST: Record<string, [string, string]> = { working: ["Working", "#A152C9"] };
@@ -53,7 +53,7 @@ export default function Dashboard() {
   const [custs, setCusts] = useState<Record<string, Cust>>({});
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [mails, setMails] = useState<Mail[]>([]), [mailNeeds, setMailNeeds] = useState<Mail[]>([]), [myBox, setMyBox] = useState<string | null>(null);
+  const [mails, setMails] = useState<Mail[]>([]), [mailNeeds, setMailNeeds] = useState<Mail[]>([]), [mailUrgent, setMailUrgent] = useState<Mail[]>([]), [myBox, setMyBox] = useState<string | null>(null);
   const [reorders, setReorders] = useState<Reorder[]>([]);
   const [goods, setGoods] = useState({ today: 0, arrived: 0 });
   const [owners, setOwners] = useState<Record<string, string>>({}); // customer → account owner (first name)
@@ -99,7 +99,9 @@ export default function Dashboard() {
       const allMail = (e.data || []) as Mail[];
       const inIds = allMail.filter((x) => x.direction === "in").map((x) => x.id);
       const { data: sg } = inIds.length ? await sb.from("ai_suggestions").select("id, kind, status, activity_id").in("activity_id", inIds) : { data: [] };
-      setMailNeeds(mailRows(allMail, (sg || []) as MailSug[]).filter((r) => r.needs).map((r) => r.x));
+      const mr = mailRows(allMail, (sg || []) as MailSug[]);
+      setMailNeeds(mr.filter((r) => r.needs).map((r) => r.x));
+      setMailUrgent(mr.filter((r) => r.urgent).map((r) => r.x));
       setMails(allMail.filter((x) => x.direction === "in" && !x.meta?.ignored && x.occurred_at >= new Date(Date.now() - 7 * 86400000).toISOString()).slice(0, 40));
       getMailStatus().then((r) => { if (r.ok && r.mine?.enabled) setMyBox(r.mine.id); }).catch(() => null);
       // reorder reminders: ordered around this time last year, nothing since (in the last 60 days)
@@ -157,6 +159,7 @@ export default function Dashboard() {
   const mailMine = (x: Mail) => !mine || (!!myBox && x.meta?.account_id === myBox) || (!!x.customer_id && isMine(x.customer_id));
   const myMails = mails.filter(mailMine);
   const myNeeds = mailNeeds.filter(mailMine);
+  const myUrgent = mailUrgent.filter(mailMine).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)); // longest waiting first
   const replyItems = [...myMsgs.map((x) => ({ at: x.created_at, msg: x, mail: null as Mail | null })), ...myNeeds.map((x) => ({ at: x.occurred_at, msg: null as Msg | null, mail: x }))].sort((a, b) => b.at.localeCompare(a.at));
   const openMail = (id: string) => router.push(`/shop/inbox?open=${id}`);
   const myReorders = reorders.filter((x) => isMine(x.customer_id, x.owner));
@@ -304,6 +307,17 @@ export default function Dashboard() {
 
       {!v ? <div className="empty">Loading your day…</div> : (
         <div className="dash">
+          {/* 0. urgent replies: customers who need a fast answer (rush, near deadline, same-day pickup…), only when there are any */}
+          {myUrgent.length > 0 && <section className="db-card db-bad db-urgent">
+            <div className="db-card-h"><h2>Urgent replies</h2><span className="db-n">{myUrgent.length}</span><span className="faint db-h-note">customers waiting on a fast answer · oldest first</span><span className="spacer" /><Link href="/shop/inbox" className="linkbtn">Inbox →</Link></div>
+            <ul className="db-list">{myUrgent.map((e) => (
+              <li key={e.id} className="db-row db-msg db-click" onDoubleClick={() => openMail(e.id)} title="Double-click to answer it">
+                <span className="db-main"><b>{who(e.customer_id) || e.meta?.from_name || e.from_email}</b><span className="db-sub">{e.meta?.triage?.urgent_reason || e.subject || "(no subject)"}</span><span className="db-body">{e.meta?.triage?.summary || e.body.slice(0, 160)}</span></span>
+                <span className="db-side"><span className={(Date.now() - Date.parse(e.occurred_at)) / 36e5 > 4 ? "db-late" : "faint"}>waiting {ago(e.occurred_at).replace(" ago", "")}</span><Link href={`/shop/inbox?open=${e.id}`} className="btn sm primary">Reply</Link></span>
+              </li>
+            ))}</ul>
+          </section>}
+
           {/* 1. the assistant: what needs doing */}
           {panel("Assistant", "fade", null, <AssistantStrip />, ["/shop/assistant", "All follow-ups"], <span className="faint db-h-note">follow-ups, approvals and suggestions for today</span>)}
 
@@ -327,7 +341,7 @@ export default function Dashboard() {
                   ) : e ? (
                     <li key={e.id} className="db-row db-msg db-click" onDoubleClick={() => openMail(e.id)} title="Double-click to answer it">
                       <span className="db-main"><b>{who(e.customer_id) || e.meta?.from_name || e.from_email}</b><span className="db-sub">{e.subject || "(no subject)"}</span><span className="db-body">{e.meta?.triage?.summary || `${e.body.slice(0, 160)}${e.body.length > 160 ? "…" : ""}`}</span></span>
-                      <span className="db-side"><span className="faint">email · {ago(e.occurred_at)}</span><Link href={`/shop/inbox?open=${e.id}`} className="btn sm primary">Reply</Link></span>
+                      <span className="db-side">{e.meta?.triage?.urgency === "high" && <span className="db-urgent-tag">Urgent</span>}<span className="faint">email · {ago(e.occurred_at)}</span><Link href={`/shop/inbox?open=${e.id}`} className="btn sm primary">Reply</Link></span>
                     </li>
                   ) : null)}</ul>
                 ), <MsgEmpty title="You're all caught up" text="No customer emails or portal messages waiting on a reply. They land here the moment a customer writes." />) : list(myMails.length, (

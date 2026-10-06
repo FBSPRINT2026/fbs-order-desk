@@ -3,11 +3,12 @@
  * An email needs a reply when the AI drafted one (or a quote) or its triage says so, and nobody has answered it
  * since: answered = something we sent later in the same thread (from Outlook or the portal), or staff marked it
  * "no reply needed".
+ * Urgent = needs a reply and the AI rated it high urgency (rush, deadline within a week, same-day pickup, a problem).
  */
 
 export type MailAct = {
   id: string; direction: string; occurred_at: string; external_id: string | null; thread_id: string | null; customer_id: string | null;
-  meta: { references?: string[]; account_id?: string; ignored?: boolean; lead?: boolean; no_reply?: boolean; triage?: { needs_reply?: boolean; intent?: string; summary?: string } } | null;
+  meta: { references?: string[]; account_id?: string; ignored?: boolean; lead?: boolean; no_reply?: boolean; triage?: { needs_reply?: boolean; intent?: string; summary?: string; urgency?: string; urgent_reason?: string } } | null;
 };
 export type MailSug = { id: string; kind: string; status: string; activity_id: string | null };
 
@@ -19,6 +20,8 @@ export function mailRows<A extends MailAct, S extends MailSug>(acts: A[], sugs: 
     const reply = mine.find((s) => s.kind === "email_reply" && (s.status === "open" || s.status === "snoozed"));
     const quote = mine.find((s) => s.kind === "draft_order" && s.status === "open");
     const needs = !answered && !x.meta?.no_reply && (!!reply || !!quote || x.meta?.triage?.needs_reply === true);
-    return { x, answered, reply, quote, needs };
+    // urgent: still waiting on us and the customer needs it fast (the AI read a rush, a near deadline, a same-day pickup…)
+    const urgent = needs && x.meta?.triage?.urgency === "high";
+    return { x, answered, reply, quote, needs, urgent };
   });
 }
