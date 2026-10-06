@@ -27,7 +27,9 @@ type GroupBy = "carrier" | "supplier";
 type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; po: string; so: string; boxes: number; pcs: number;
   trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean }[]; lineIds?: string[];
   link?: LinkInfo; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
-type LinkInfo = { lineIds: string[]; customerId: string | null; customerName: string; us: boolean; supplier: string; name: string; account: string; suggest: string | null; styles: string };
+type LinkInfo = { lineIds: string[]; customerId: string | null; customerName: string; us: boolean; supplier: string; name: string; account: string; suggest: string | null; styles: string;
+  /** an unknown account whose goods fit one customer's job: who we think it is, and why */
+  sugCust?: { id: string; name: string } | null; sugHow?: string };
 type Via = "ss" | "ups" | "fedex" | "freight" | "other";
 const VIAS: { k: string; label: string }[] = [{ k: "ss", label: "S&S truck" }, { k: "ups", label: "UPS" }, { k: "fedex", label: "FedEx" }, { k: "freight", label: "Freight (LTL pallets)" }, { k: "other", label: "DHL / other" }];
 const SUPPLIERS_G: { k: string; label: string }[] = [{ k: "ss", label: "S&S Activewear" }, { k: "sanmar", label: "SanMar" }, { k: "other", label: "Other vendors" }];
@@ -245,7 +247,7 @@ export default function GoodsReceiving() {
     ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
     // on a manifest, not on any order yet: still coming in (or already here)
     ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date,
-      link: { lineIds: g.lineIds, customerId: g.customer?.id || null, customerName: g.customer?.name || "", us: g.us, supplier: g.supplier, name: g.customer_name, account: g.customer_account, suggest: g.lines.find((l) => l.suggest)?.suggest || null, styles: g.styles } })),
+      link: { lineIds: g.lineIds, customerId: g.customer?.id || null, customerName: g.customer?.name || "", us: g.us, supplier: g.supplier, name: g.customer_name, account: g.customer_account, suggest: g.lines.find((l) => l.suggest)?.suggest || null, styles: g.styles, sugCust: g.suggestCustomer || null, sugHow: g.how } })),
   ];
   // ignored by hand: out of every list (the Ignored tab shows them)
   const ignoredRows = rows.filter((r) => ignored[r.key]);
@@ -306,7 +308,8 @@ export default function GoodsReceiving() {
         {r.trks.length > 1 && <button type="button" className="rv-more" onClick={() => setOpen({ ...open, [r.key]: !open[r.key] })} title={r.trks.map((k) => k.tracking).join("\n")}>{open[r.key] ? "show less" : `+${r.trks.length - 1} more`}</button>}</div></td>
       <td className="so">{r.so || "—"}</td>
       <td className="act">{r.unlinked
-        ? <button type="button" className="btn sm" onClick={() => (r.link ? setLinking(r) : setView("resolve"))}>Link order</button>
+        ? <><button type="button" className="btn sm" onClick={() => (r.link ? setLinking(r) : setView("resolve"))}>Link order</button>
+          {r.link?.sugCust && !r.link.customerId && <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{r.link.sugCust.name}?</button>}</>
         : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}
         {!r.key.startsWith("h") && (ignored[r.key]
           ? <button type="button" className="rv-ign on" onClick={() => ignore(r, false)} title="Put it back in the lists">Restore</button>
@@ -770,6 +773,13 @@ function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone
         <div className="lk-body">
           {li.styles && <div className="faint" style={{ fontSize: 13 }}>What shipped: {li.styles}</div>}
           <div className="lk-cust">
+            {!cust && li.sugCust && !li.customerId && (
+              <div className="lk-guess">
+                <b>I think “{li.name}” is {li.sugCust.name}.</b>
+                <p>{li.sugHow}</p>
+                <div className="row" style={{ gap: 8 }}><button type="button" className="btn primary sm" onClick={() => setCust(li.sugCust!)}>Yes, it&apos;s {li.sugCust.name}</button><span className="faint" style={{ fontSize: 12.5 }}>or find the customer below</span></div>
+              </div>
+            )}
             {cust ? (
               <><span className="faint">Customer</span><b>{cust.name}</b><button type="button" className="linkbtn" onClick={() => { setCust(null); setWho(""); }}>Change</button></>
             ) : (

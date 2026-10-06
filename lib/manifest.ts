@@ -232,6 +232,43 @@ function coversJob(ship: { style: string; color: string; qty: number }[], items:
   return over <= extras;
 }
 
+/**
+ * An unknown supplier account: which customer is it? The upcoming job (due in the next three weeks, or up to a week
+ * late) whose garments include exactly these pieces of each style and color (the job can have more, like hats the
+ * customer sends separately). Several such jobs: the one whose name shares a word with the PO. Returns null unless
+ * exactly one job fits.
+ */
+async function guessCustomerByGoods(admin: SupabaseClient, g: Group) {
+  const ship = sumByStyleColor((g.lines as Line[]).map((l) => ({ style: l.style, color: l.color, qty: l.qty_shipped })));
+  if (!ship.length) return null;
+  const pcs = ship.reduce((a, x) => a + x.qty, 0);
+  if (pcs < 6) return null; // a couple of pieces fit too many jobs
+  const lo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10), hi = new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10);
+  const [{ data: ar }, { data: os }] = await Promise.all([
+    admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data, customers(company, name)").gte("due_date", lo).lte("due_date", hi).not("status_name", "ilike", "%job completed%").limit(1500),
+    admin.from("orders").select("id, number, nickname, po_number, customer_id, due_date, status, groups, lines, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).gte("due_date", lo).lte("due_date", hi).limit(500),
+  ]);
+  type J = { id: string; number: number; nickname: string; po: string; customerId: string | null; customer: string; due: string | null; items: { style: string; color: string; qty: number }[] };
+  const jobs: J[] = [
+    ...((ar || []) as unknown as { id: string; visual_id: string | number; nickname: string; po_number: string; customer_id: string | null; status_name: string; due_date: string | null; data: { groups?: { lines?: { itemNumber?: string; color?: string; sizes?: Record<string, number> }[] }[] }; customers: { company: string; name: string } | null }[])
+      .filter((o) => !PV_CLOSED.test(o.status_name || "") && !PV_PRINTED.test(o.status_name || ""))
+      .map((o) => ({ id: PV + o.id, number: +o.visual_id || 0, nickname: o.nickname || "", po: o.po_number || "", customerId: o.customer_id, customer: o.customers?.company || o.customers?.name || "", due: o.due_date,
+        items: (o.data?.groups || []).flatMap((gr) => (gr.lines || []).map((l) => ({ style: l.itemNumber || "", color: l.color || "", qty: Object.values(l.sizes || {}).reduce((a, q) => a + (+q || 0), 0) }))) })),
+    ...((os || []) as unknown as (Candidate & { due_date: string | null; customers: { company: string; name: string } | null })[]).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", po: o.po_number || "", customerId: o.customer_id, customer: o.customers?.company || o.customers?.name || "", due: o.due_date,
+      items: orderGroups(o as unknown as Order).flatMap((gr) => gr.lines.map((l) => ({ style: l.style || "", color: l.color || "", qty: Object.values(l.sizes || {}).reduce((a: number, q) => a + (+(q || 0)), 0) }))) })),
+  ];
+  // every style + color that shipped is on the job in exactly that count
+  const fits = jobs.filter((j) => { const js = sumByStyleColor(j.items.filter((it) => it.style || it.color)); return ship.every((x) => js.some((y) => styleEq(x.style, y.style) && colorEq(x.color, y.color) && x.qty === y.qty)); });
+  const poWords = words(g.customer_po).filter((w) => w.length >= 4 && !GENERIC.test(w) && !STOP.has(w));
+  const named = fits.filter((j) => poWords.some((w) => words(`${j.nickname} ${j.po}`).includes(w)));
+  const pick = fits.length === 1 ? fits[0] : named.length === 1 ? named[0] : null;
+  if (!pick) return null;
+  const what = ship.map((x) => `${x.qty} ${x.style} ${x.color}`).join(", ");
+  const why = named.includes(pick) ? `, and the PO "${g.customer_po}" matches the job name` : "";
+  return { orderId: pick.id, customerId: pick.customerId, customer: pick.customer, number: pick.number,
+    how: `"${g.customer_name}" isn't a customer we know, but these ${pcs} pcs (${what}) are exactly what #${pick.number} ${pick.nickname} for ${pick.customer} needs${why}. Is ${g.customer_name} ${pick.customer}?` };
+}
+
 /** numbers of 5+ digits in a text, even glued to letters ("PeterMEI93298390" → 93298390; "12341-90246" → 12341, 90246) */
 const numRuns = (t: string) => [...new Set((t.match(/\d{5,}/g) || []))];
 
@@ -384,7 +421,13 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
   const customerId = custIds.length === 1 ? custIds[0] : null;
   const lines = g.lines as Line[];
   const empty: Plan = { customerId, alloc: [], unplaced: lines, auto: false, how: "" };
-  if (!custIds.length) return empty;
+  if (!custIds.length) {
+    // an account we don't know ("UPSHOT HOLDINGS"): if the goods are exactly what one upcoming job needs, ask whether
+    // that's the customer (never linked on its own: the person OKs it, and can make it a rule)
+    const gs = await guessCustomerByGoods(admin, g).catch(() => null);
+    if (!gs) return empty;
+    return { customerId: null, alloc: lines.map((line) => ({ line, parts: [{ orderId: gs.orderId, qty: line.qty_shipped }] })), unplaced: [], auto: false, how: gs.how };
+  }
   const orders = await openOrders(admin, custIds);
   if (!orders.length) return empty;
   const exact = orders.filter((o) => poHit(o, g));
@@ -660,6 +703,8 @@ export type PendingShipment = {
   boxes: number; pcs: number; methods: string; styles: string; lineIds: string[]; customer: { id: string; name: string } | null; us: boolean;
   tracking: { carrier: string; tracking: string; status: string; detail: string; eta: string | null; delivered: boolean; delivered_at?: string | null; boxes?: number; pcs?: number; freight?: boolean }[]; how: string; lines: PendingLine[];
   orders: { id: string; number: number; nickname: string; po: string; due_date: string | null; printavo: boolean }[];
+  /** an unknown account: the customer whose job these goods fit (to ask "is X them?") */
+  suggestCustomer?: { id: string; name: string } | null;
 };
 
 function summarize(g: Group<Waiting>, customer: { id: string; name: string } | null, orders: PendingShipment["orders"]): PendingShipment {
@@ -708,6 +753,7 @@ export async function unmatchedGroups(admin: SupabaseClient, onlyCustomers?: str
       }
     }
     let orders: PendingShipment["orders"] = [];
+    let suggestCustomer: { id: string; name: string } | null = null;
     if (customer) {
       if (!orderCache.has(customer.id)) {
         const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
@@ -727,16 +773,20 @@ export async function unmatchedGroups(admin: SupabaseClient, onlyCustomers?: str
       const liveIds = [...new Set(g.lines.map((l) => l.suggest_order_id).filter(Boolean))] as string[];
       const pvIds = [...new Set(g.lines.map((l) => l.suggest_archived_id).filter(Boolean))] as string[];
       const [{ data: lo }, { data: po }] = await Promise.all([
-        liveIds.length ? admin.from("orders").select("id, number, nickname, po_number, due_date, customers(company, name)").in("id", liveIds) : Promise.resolve({ data: [] }),
-        pvIds.length ? admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, customers(company, name)").in("id", pvIds) : Promise.resolve({ data: [] }),
+        liveIds.length ? admin.from("orders").select("id, number, nickname, po_number, due_date, customer_id, customers(company, name)").in("id", liveIds) : Promise.resolve({ data: [] }),
+        pvIds.length ? admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, customer_id, customers(company, name)").in("id", pvIds) : Promise.resolve({ data: [] }),
       ]);
-      type R = { id: string; number?: number; visual_id?: string | number; nickname: string; po_number: string; due_date: string | null; customers: { company: string; name: string } | null };
+      type R = { id: string; number?: number; visual_id?: string | number; nickname: string; po_number: string; due_date: string | null; customer_id?: string | null; customers: { company: string; name: string } | null };
+      if (!isUs(g.customer_name)) {
+        const first = [...((lo || []) as unknown as R[]), ...((po || []) as unknown as R[])].find((o) => o.customer_id);
+        if (first) suggestCustomer = { id: first.customer_id!, name: first.customers?.company || first.customers?.name || "" };
+      }
       orders = [
         ...((lo || []) as unknown as R[]).map((o) => ({ id: o.id, number: o.number || 0, nickname: [o.customers?.company || o.customers?.name, o.nickname].filter(Boolean).join(" · "), po: o.po_number || "", due_date: o.due_date, printavo: false })),
         ...((po || []) as unknown as R[]).map((o) => ({ id: PV + o.id, number: +(o.visual_id || 0), nickname: [o.customers?.company || o.customers?.name, o.nickname].filter(Boolean).join(" · "), po: o.po_number || "", due_date: o.due_date, printavo: true })),
       ];
     }
-    out.push(summarize(g, customer, orders));
+    out.push({ ...summarize(g, customer, orders), suggestCustomer });
   }
   return out;
 }
@@ -808,7 +858,7 @@ async function applyBlanks(admin: SupabaseClient, supplier: string, g: Group, or
     if (row && trk) { const f = await startTracker(trk, carrier).catch(() => null); if (f) await admin.from("blank_shipments").update(f).eq("id", row.id); }
   }
 }
-export const __test = { allocate, styleEq, colorEq, matchBlanks };
+export const __test = { allocate, styleEq, colorEq, matchBlanks, guessCustomerByGoods };
 
 export type PrintavoGoods = { kind: "goods" | "blanks"; lineIds: string[]; ship_date: string | null; po: string; archivedId: string; number: number; nickname: string; customer: string; due_date: string | null; supplier: string; supplier_order: string; pcs: number; boxes: number; tracking: PendingShipment["tracking"]; delivered: boolean; eta: string | null };
 /** a Printavo job that's been printed (or closed): its goods drop off Goods & Receiving */
