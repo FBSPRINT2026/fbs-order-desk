@@ -22,6 +22,7 @@ export const PERMS = [
   { k: "customers", group: "Sales", label: "Can open Customers" },
   { k: "incoming", group: "Sales", label: "Can open Incoming Orders" },
   { k: "projects", group: "Sales", label: "Can open Projects" },
+  { k: "stores", group: "Sales", label: "Can open Merch Stores (packing included)" },
   { k: "assistant", group: "Sales", label: "Can open the Assistant (follow-ups)" },
   { k: "artwork", group: "Production", label: "Can open Artwork" },
   { k: "separations", group: "Production", label: "Can open Separations" },
@@ -59,7 +60,7 @@ export const seesMoney = (role?: string | null, own?: Partial<Perms> | null) => 
 
 /** pages and the permission that opens them (anything else, like Orders and the dashboard, everyone opens) */
 export const PAGE_PERMS: [string, PermKey][] = [
-  ["/shop/customers", "customers"], ["/shop/incoming", "incoming"], ["/shop/projects", "projects"], ["/shop/assistant", "assistant"],
+  ["/shop/customers", "customers"], ["/shop/incoming", "incoming"], ["/shop/projects", "projects"], ["/shop/stores", "stores"], ["/shop/assistant", "assistant"],
   ["/shop/settings", "settings"], ["/shop/catalog", "settings"], ["/shop/artwork", "artwork"], ["/shop/separations", "separations"],
   ["/shop/board", "schedule"], ["/shop/calendar", "schedule"], ["/shop/employees", "employees"], ["/shop/shipping", "shipping"],
   ["/shop/receiving", "receiving"], ["/shop/time", "timeclock"],

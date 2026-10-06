@@ -19,6 +19,7 @@ const ICONS: Record<string, React.ReactNode> = {
   // a screen printing press seen from above: the center hub and its platens
   board: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2" /><path d="M12 9.8V7M12 14.2V17M9.8 12H7M14.2 12H17" /><rect x="9.5" y="2.5" width="5" height="4.5" rx="1" /><rect x="9.5" y="17" width="5" height="4.5" rx="1" /><rect x="2.5" y="9.5" width="4.5" height="5" rx="1" /><rect x="17" y="9.5" width="4.5" height="5" rx="1" /></svg>,
   calendar: <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>,
+  stores: <svg viewBox="0 0 24 24"><path d="M4 8h16l-1.2 11.2a1 1 0 0 1-1 .8H6.2a1 1 0 0 1-1-.8z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" /></svg>,
   projects: <svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" /><path d="M3 7V5a1 1 0 0 1 1-1h5l2 2" /></svg>,
   customers: <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .8 3.1 2.6 3.5 5.2" /></svg>,
   catalog: <svg viewBox="0 0 24 24"><path d="M8 3l-5 3 2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.7-2 3-4 3S8.5 4.7 8 3z" /></svg>,
@@ -35,7 +36,7 @@ const ICONS: Record<string, React.ReactNode> = {
 const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 
 /** shorter names for the tightest menu (two links a row) */
-const SHORT: Record<string, string> = { "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving" };
+const SHORT: Record<string, string> = { "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving" };
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
 
@@ -125,7 +126,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
 
   // the menu, in groups
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
-    { title: "Sales", items: [["/shop/orders", "orders", "Orders"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/projects", "projects", "Projects"], ["/shop/customers", "customers", "Customers"]] },
+    { title: "Sales", items: [["/shop/orders", "orders", "Orders"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/projects", "projects", "Projects"], ["/shop/customers", "customers", "Customers"]] },
     { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/separations", "seps", "Separations"], ["/shop/board", "board", "Production"], ["/shop/employees", "team", "Employees"]] },
     { title: "Shop Tools", items: [["/shop/shipping", "shipping", "Shipping Center"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/time", "clock", "Time Clock"]] },
   ];
