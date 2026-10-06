@@ -108,6 +108,7 @@ const SYSTEM = [
   "- Some customers number every job with their own 5-digit PO (Nine18: \"43044 …\"). If the shipment's PO number is on no candidate, the job usually isn't entered yet: answer none unless the garments are an unmistakable twin of one job.",
   "- The same style, color and piece count as a job due within about two weeks is strong evidence. The same count in every size is very strong (\"757 to 757\").",
   "- Goods often arrive after a job already printed or is marked Job Completed. Completed jobs are still valid answers.",
+  "- One PO can cover two jobs: a screen print job and its embroidery job (\"42998 ARMSTRONG ATLANTA\" and \"42998 ARMSTRONG ATLANTA - EMBROIDERY\"). Hats, caps, beanies and polos for embroidery usually go to the embroidery job. Pick the job most of the pieces are for; the code puts each style on the job that lists it.",
   "- A job's goods can come in several shipments or from several vendors. \"Already linked\" shows pieces already tied to a job; a job already fully covered by other shipments is less likely, unless this shipment is a replacement or extras.",
   "- A job line's description often names INK colors (\"1/1 IMPRINT - NAVY\"); don't mistake the ink for the garment color. Job lines without a style still count by color and size.",
   "- Style numbers vary by vendor: 5000 = G500 = Gildan 5000; 64000 = G640; colors may be abbreviated (SportGrey = Sport Grey, AthlHthr = Athletic Heather).",
@@ -242,18 +243,35 @@ export async function aiMatchPending(admin: SupabaseClient, deadline: number, op
     const rival = w.cands.some((x) => x.id !== c.id && ((c.twin && x.twin) || (x.fit >= 0.99 && c.fit >= 0.99 && x.items.reduce((s, it) => s + it.qty, 0) === c.items.reduce((s, it) => s + it.qty, 0))) && !c.named);
     const backed = (c.fit >= 0.8 || c.twin || c.named) && !numberMismatch && !rival;
     const known = isUs(w.g.customer_name) || w.custIds.length > 0;
+    // one PO, several jobs (a screen print job and its embroidery job: "42998 ARMSTRONG ATLANTA" and "… - EMBROIDERY"):
+    // a line whose style + color isn't on the picked job but is on exactly one other job the PO points at goes there
+    const onJob = (j: Scored, l: Waiting, strict: boolean) => j.items.some((it) => (it.style ? styleEq(it.style, l.style) : !strict) && colorEq(it.color, l.color));
+    const target = new Map<string, Scored>();
+    for (const l of w.g.lines) {
+      if (onJob(c, l, true)) { target.set(l.id, c); continue; }
+      const alt = w.cands.filter((x) => x.id !== c.id && (x.numbered || x.named) && x.customerId === c.customerId && onJob(x, l, true));
+      target.set(l.id, alt.length === 1 ? alt[0] : c);
+    }
+    const jobsUsed = [...new Set([...target.values()])];
+    const howFor = (j: Scored) => (j === c ? how : `${AI_TAG}: ${a.reason} (the ${[...new Set(w.g.lines.filter((l) => target.get(l.id) === j).map((l) => l.style))].join(", ")} are on #${j.number}, the other job with this PO)`).slice(0, 500);
     if (a.confidence === "certain" && backed && known) {
-      if (isUs(w.g.customer_name)) {
-        await applyGroup(admin, w.g.supplier, w.g, c.id, "blanks", how);
-        await admin.from("supplier_manifest_lines").update({ linked_by: "ai" }).in("id", ids);
-      } else {
-        if (c.customerId) await admin.from("supplier_manifest_lines").update({ customer_id: c.customerId }).in("id", ids).is("customer_id", null);
-        await linkLines(admin, w.g, (w.g.lines as ManifestRow[]).map((line) => ({ line, orderId: c.id })), how, "ai");
+      for (const j of jobsUsed) {
+        const ls = w.g.lines.filter((l) => target.get(l.id) === j), lids = ls.map((l) => l.id);
+        if (isUs(w.g.customer_name)) {
+          await applyGroup(admin, w.g.supplier, { ...w.g, lines: ls }, j.id, "blanks", howFor(j));
+          await admin.from("supplier_manifest_lines").update({ linked_by: "ai" }).in("id", lids);
+        } else {
+          if (j.customerId) await admin.from("supplier_manifest_lines").update({ customer_id: j.customerId }).in("id", lids).is("customer_id", null);
+          await linkLines(admin, { ...w.g, lines: ls }, (ls as ManifestRow[]).map((line) => ({ line, orderId: j.id })), howFor(j), "ai");
+        }
       }
       out.linked++; return;
     }
-    const sugHow = `${AI_TAG} thinks #${c.number}: ${a.reason}`.slice(0, 500);
-    await admin.from("supplier_manifest_lines").update(c.id.startsWith(PV) ? { suggest_order_id: null, suggest_archived_id: c.id.slice(PV.length), suggest_how: sugHow } : { suggest_order_id: c.id, suggest_archived_id: null, suggest_how: sugHow }).in("id", ids);
+    for (const j of jobsUsed) {
+      const lids = w.g.lines.filter((l) => target.get(l.id) === j).map((l) => l.id);
+      const sugHow = (j === c ? `${AI_TAG} thinks #${c.number}: ${a.reason}` : `${AI_TAG} thinks #${j.number} for these (#${c.number} for the rest): ${a.reason}`).slice(0, 500);
+      await admin.from("supplier_manifest_lines").update(j.id.startsWith(PV) ? { suggest_order_id: null, suggest_archived_id: j.id.slice(PV.length), suggest_how: sugHow } : { suggest_order_id: j.id, suggest_archived_id: null, suggest_how: sugHow }).in("id", lids);
+    }
     out.suggested++;
   };
   for (let i = 0; i < work.length; i += 4) await Promise.all(work.slice(i, i + 4).map((w) => run(w).catch((e) => { out.errors.push(e instanceof Error ? e.message : String(e)); })));

@@ -24,10 +24,12 @@ const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
 ];
 type Focus = "arrived" | "today" | "way" | "past" | "problems";
 type GroupBy = "carrier" | "supplier";
-type Row = { key: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; po: string; so: string; boxes: number; pcs: number;
+type Row = { key: string; /** a job's shipments shown separately (Uncombine): the job key, to combine them again */ splitOf?: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; po: string; so: string; boxes: number; pcs: number;
   trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean; /** the vendor, on a row that combines several */ src?: string }[]; lineIds?: string[];
   /** a combined row: the shipments it's made of (one job, several vendors / supplier orders) */
   parts?: string[];
+  /** a combined row's job key (Uncombine) */
+  jobKey?: string;
   link?: LinkInfo; at: string | null; deliveredAt: string | null; need: string | null; unlinked: boolean; state: "arrived" | "problem" | "way"; late: boolean; via: Via; supplier: string; shipped: string | null; noScan: boolean };
 type LinkInfo = { lineIds: string[]; customerId: string | null; customerName: string; us: boolean; supplier: string; name: string; account: string; suggest: string | null; styles: string;
   /** an unknown account whose goods fit one customer's job: who we think it is, and why */
@@ -145,7 +147,18 @@ export default function GoodsReceiving() {
   const [upBusy, setUpBusy] = useState(false), [refreshKey, setRefreshKey] = useState(0);
   // shipments ignored by hand: out of every list, under the Ignored tab
   const [ignored, setIgnored] = useState<Record<string, { at: string; by: string; label: string }>>({});
-  useEffect(() => { fetch("/api/goods/ignore", { cache: "no-store" }).then((r) => r.json()).then((j) => setIgnored(j.ignored || {})).catch(() => {}); }, []);
+  // jobs whose shipments should show separately (Uncombine)
+  const [separate, setSeparate] = useState<Record<string, { at: string; by: string; label: string }>>({});
+  useEffect(() => { fetch("/api/goods/ignore", { cache: "no-store" }).then((r) => r.json()).then((j) => { setIgnored(j.ignored || {}); setSeparate(j.separate || {}); }).catch(() => {}); }, []);
+  async function setSeparated(jobKey: string, yes: boolean, label: string) {
+    const before = separate;
+    setSeparate((m) => { const n = { ...m }; if (yes) n[jobKey] = { at: new Date().toISOString(), by: "", label }; else delete n[jobKey]; return n; });
+    const res = await fetch("/api/goods/ignore", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: jobKey, separate: yes, label }) }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    if (!res?.ok || j.error) { setSeparate(before); setNote(`Couldn't ${yes ? "uncombine" : "combine"} it: ${j.error || "no answer"}`); return; }
+    setSeparate(j.separate || {});
+    if (yes) setNote(`Uncombined ${label}: each supplier order has its own row again. If one is on the wrong job, Unlink that one.`);
+  }
   async function ignore(r: { key: string; who: string; number: number; so: string; parts?: string[] }, yes: boolean) {
     const before = ignored, keys = r.parts?.length ? r.parts : [r.key];
     const label = `${r.who}${r.number ? ` #${r.number}` : ""}${r.so ? ` · ${r.so}` : ""}`;
@@ -288,12 +301,14 @@ export default function GoodsReceiving() {
   const combine = (list: Row[]): Row[] => {
     const out: Row[] = [], byJob = new Map<string, Row[]>();
     for (const r of list) { if (r.unlinked || !r.href) { out.push(r); continue; } const k = `${r.href}|${r.side}`; byJob.set(k, [...(byJob.get(k) || []), r]); }
-    for (const rs of byJob.values()) {
+    for (const [jk, rs] of byJob) {
       if (rs.length === 1) { out.push(rs[0]); continue; }
+      // uncombined by hand: each supplier order its own row
+      if (separate[jk]) { out.push(...rs.map((x) => ({ ...x, splitOf: jk }))); continue; }
       const f = rs[0], subs = [...new Set(rs.map((x) => x.sub))];
       const state: Row["state"] = rs.every((x) => x.state === "arrived") ? "arrived" : rs.some((x) => x.state === "problem") ? "problem" : "way";
       const latest = (xs: (string | null)[]) => (xs.filter(Boolean) as string[]).sort().pop() || null;
-      out.push({ ...f, key: rs.map((x) => x.key).join("+"), parts: rs.map((x) => x.key), sub: subs.join(" + "), po: [...new Set(rs.map((x) => x.po).filter(Boolean))].join(" / "), so: rs.map((x) => x.so).filter(Boolean).join(" · "),
+      out.push({ ...f, splitOf: undefined, key: rs.map((x) => x.key).join("+"), parts: rs.map((x) => x.key), jobKey: jk, sub: subs.join(" + "), po: [...new Set(rs.map((x) => x.po).filter(Boolean))].join(" / "), so: rs.map((x) => x.so).filter(Boolean).join(" · "),
         boxes: rs.reduce((a, x) => a + (x.boxes || 0), 0), pcs: rs.reduce((a, x) => a + (x.pcs || 0), 0),
         trks: rs.flatMap((x) => x.trks.map((k) => ({ ...k, src: subs.length > 1 ? x.sub : undefined }))), lineIds: rs.flatMap((x) => x.lineIds || []),
         state, late: rs.some((x) => x.late), noScan: rs.some((x) => x.noScan), at: latest(rs.map((x) => x.at)), deliveredAt: state === "arrived" ? latest(rs.map((x) => x.deliveredAt)) : null,
@@ -365,6 +380,8 @@ export default function GoodsReceiving() {
             ? <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{(r.link.sugHow || "").startsWith("🤖") ? "🤖 " : ""}#{r.link.sugNo}?</button>
             : r.link?.sugCust && !r.link.customerId && !r.link.us && <button type="button" className="rv-sugc" onClick={() => setLinking(r)} title={r.link.sugHow || ""}>{r.link.sugCust.name}?</button>}</>
         : <Link href={r.href} className="rv-linked" title="Linked to this order">#{r.number}</Link>}
+        {r.parts && r.jobKey && <button type="button" className="rv-ign" onClick={() => setSeparated(r.jobKey!, true, `${r.who} #${r.number}`)} title="These supplier orders were put together because they're linked to the same job. Show each one on its own row (then Unlink the one that's wrong).">Uncombine</button>}
+        {r.splitOf && <button type="button" className="rv-ign" onClick={() => setSeparated(r.splitOf!, false, `${r.who} #${r.number}`)} title="Show this job's supplier orders as one row again">Combine</button>}
         {!r.unlinked && !!r.lineIds?.length && <button type="button" className={"rv-ign rv-unl" + (unlinkAsk === r.key ? " ask" : "")} onClick={() => unlink(r)} title="Linked to the wrong job? Unlink it: the goods go back to not linked, and that job is remembered as wrong">{unlinkAsk === r.key ? "Sure? Unlink" : "Unlink"}</button>}
         {!r.key.startsWith("h") && ((r.parts || [r.key]).every((k) => ignored[k])
           ? <button type="button" className="rv-ign on" onClick={() => ignore(r, false)} title="Put it back in the lists">Restore</button>
