@@ -94,10 +94,16 @@ async function emailContext(admin: ReturnType<typeof createAdminClient>, activit
   return { a, email, facts: lines.join("\n"), history: [msgHistory, thread].filter(Boolean).join("\n"), today };
 }
 
-/** 3 or 4 different answers to a customer's email, each written out ("Yes, we can make it", "Can't, offer Monday", …) */
-export async function aiReplyOptions(activityId: string) {
+/**
+ * 3 or 4 different answers to a customer's email ("Yes, we can make it", "Can't, offer Monday", …), each written out.
+ * Kept with the email so they're only written once; "Other answers" (fresh) writes a new set.
+ */
+export async function aiReplyOptions(activityId: string, fresh = false) {
   try {
     const { admin, email } = await staff();
+    const { data: row } = await admin.from("activities").select("meta").eq("id", activityId).maybeSingle();
+    const kept = ((row?.meta || {}) as { reply_options?: { options: { label: string; subject: string; body: string }[] } }).reply_options;
+    if (!fresh && kept?.options?.length) return { ok: true as const, options: kept.options };
     const st = await aiState(admin);
     if (!st.ready) return { ok: false as const, off: true, error: st.reason };
     const c = await emailContext(admin, activityId);
@@ -106,7 +112,9 @@ export async function aiReplyOptions(activityId: string) {
     if (!r.ok) return { ok: false as const, error: r.error };
     const subj = String(c.a.subject || "");
     const re = subj.toLowerCase().startsWith("re:") ? subj : `Re: ${subj}`;
-    return { ok: true as const, options: (r.data.options || []).slice(0, 4).map((o) => ({ label: o.label, subject: re, body: o.body })) };
+    const options = (r.data.options || []).slice(0, 4).map((o) => ({ label: o.label, subject: re, body: o.body }));
+    await admin.from("activities").update({ meta: { ...((c.a.meta || {}) as object), reply_options: { at: new Date().toISOString(), options } } }).eq("id", activityId);
+    return { ok: true as const, options };
   } catch (e) { return fail(e); }
 }
 
