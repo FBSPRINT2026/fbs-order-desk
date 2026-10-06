@@ -787,7 +787,9 @@ export type PendingLine = { id: string; style: string; mill: string; color: stri
 export type PendingShipment = {
   key: string; supplier: string; customer_name: string; customer_account: string; customer_po: string; supplier_order: string; ship_date: string | null;
   boxes: number; pcs: number; methods: string; styles: string; lineIds: string[]; customer: { id: string; name: string } | null; us: boolean;
-  tracking: { carrier: string; tracking: string; status: string; detail: string; eta: string | null; delivered: boolean; delivered_at?: string | null; boxes?: number; pcs?: number; freight?: boolean }[]; how: string; lines: PendingLine[];
+  tracking: { carrier: string; tracking: string; status: string; detail: string; eta: string | null; delivered: boolean; delivered_at?: string | null; boxes?: number; pcs?: number; freight?: boolean;
+    /** a mixed box: the jobs whose goods share this box */
+    mixed?: MixedBox["jobs"] }[]; how: string; lines: PendingLine[];
   orders: { id: string; number: number; nickname: string; po: string; due_date: string | null; printavo: boolean }[];
   /** an unknown account: the customer whose job these goods fit (to ask "is X them?") */
   suggestCustomer?: { id: string; name: string } | null;
@@ -873,6 +875,8 @@ export async function unmatchedGroups(admin: SupabaseClient, onlyCustomers?: str
     }
     out.push({ ...summarize(g, customer, orders), suggestCustomer });
   }
+  const mix = await mixedBoxes(admin, out.flatMap((g) => g.tracking.map((t) => t.tracking))).catch(() => new Map<string, MixedBox>());
+  for (const g of out) for (const t of g.tracking) { const m = mix.get(t.tracking); if (m) t.mixed = m.jobs; }
   return out;
 }
 
@@ -1009,6 +1013,9 @@ export async function printavoGoods(admin: SupabaseClient): Promise<PrintavoGood
     if (delivered && lastDelivered && Date.now() - Date.parse(lastDelivered) > 120 * 86400000) continue;
     out.push({ kind: (f as Row & { kind: string }).kind === "blanks" ? "blanks" : "goods", lineIds: ls.map((l) => l.id), ship_date: f.ship_date, po: f.customer_po, archivedId: f.archived_order_id, number: +(a?.visual_id || 0), nickname: a?.nickname || "", customer: a?.customers?.company || a?.customers?.name || f.customer_name, due_date: a?.due_date || null, supplier: f.supplier, supplier_order: f.supplier_order, pcs: s.pcs, boxes: s.boxes, tracking: s.tracking, delivered, eta: s.tracking.map((t) => t.eta).filter(Boolean).sort().pop() || null });
   }
+  // mixed boxes: say so on the tracking number
+  const mix = await mixedBoxes(admin, out.flatMap((g) => g.tracking.map((t) => t.tracking))).catch(() => new Map<string, MixedBox>());
+  for (const g of out) for (const t of g.tracking) { const m = mix.get(t.tracking); if (m) t.mixed = m.jobs; }
   return out.sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"));
 }
 
@@ -1188,4 +1195,45 @@ export async function unlinkLines(admin: SupabaseClient, lineIds: string[], by: 
 export async function unlinkedFrom(admin: SupabaseClient): Promise<Map<string, { orderIds: string[]; numbers: number[]; note: string; wasHow: string }>> {
   const { data } = await admin.from("ai_suggestions").select("dedupe_key, payload").eq("kind", "goods_unlink").limit(2000);
   return new Map(((data || []) as { dedupe_key: string; payload: { orderIds: string[]; numbers: number[]; note: string; wasHow: string } }[]).map((x) => [x.dedupe_key.slice("goods-unlink:".length), x.payload]));
+}
+
+/**
+ * Mixed boxes: one box (tracking number) holding goods for more than one job (Nine18 PO 42998: box …4616 has 36 ST350
+ * for #34476 and 50 CP91L beanies for #34477). For each tracking number given, the jobs whose goods are in it, when
+ * that's more than one. Pieces in the box not linked to any job yet count as job 0.
+ */
+export type MixedBox = { tracking: string; box: string; supplier: string; jobs: { number: number; pcs: number; items: string }[] };
+export async function mixedBoxes(admin: SupabaseClient, trackings: string[]): Promise<Map<string, MixedBox>> {
+  const want = [...new Set(trackings.filter(Boolean))];
+  const out = new Map<string, MixedBox>();
+  if (!want.length) return out;
+  type R = { tracking: string; box: string; supplier: string; style: string; color: string; qty_shipped: number; kind: string; order_id: string | null; archived_order_id: string | null };
+  const rows: R[] = [];
+  for (let i = 0; i < want.length; i += 200) {
+    const { data } = await admin.from("supplier_manifest_lines").select("tracking, box, supplier, style, color, qty_shipped, kind, order_id, archived_order_id").in("tracking", want.slice(i, i + 200)).in("kind", ["", "goods", "blanks"]);
+    rows.push(...((data || []) as R[]));
+  }
+  const byTrk = new Map<string, R[]>();
+  for (const r of rows) byTrk.set(r.tracking, [...(byTrk.get(r.tracking) || []), r]);
+  const jobKey = (r: R) => (r.kind ? r.archived_order_id || r.order_id || "" : "");
+  const multi = [...byTrk.entries()].filter(([, rs]) => new Set(rs.map(jobKey)).size > 1);
+  if (!multi.length) return out;
+  const pv = [...new Set(multi.flatMap(([, rs]) => rs.map((r) => (r.kind ? r.archived_order_id : null)).filter(Boolean)))] as string[];
+  const lv = [...new Set(multi.flatMap(([, rs]) => rs.map((r) => (r.kind ? r.order_id : null)).filter(Boolean)))] as string[];
+  const [{ data: a1 }, { data: a2 }] = await Promise.all([
+    pv.length ? admin.from("archived_orders").select("id, visual_id").in("id", pv) : Promise.resolve({ data: [] }),
+    lv.length ? admin.from("orders").select("id, number").in("id", lv) : Promise.resolve({ data: [] }),
+  ]);
+  const num = new Map<string, number>([...((a1 || []) as { id: string; visual_id: number }[]).map((o) => [o.id, +o.visual_id] as const), ...((a2 || []) as { id: string; number: number }[]).map((o) => [o.id, o.number] as const)]);
+  for (const [trk, rs] of multi) {
+    const jobs = new Map<string, { number: number; pcs: number; items: Map<string, number> }>();
+    for (const r of rs) {
+      const k = jobKey(r);
+      const j = jobs.get(k) || { number: k ? num.get(k) || 0 : 0, pcs: 0, items: new Map() };
+      j.pcs += r.qty_shipped; const it = `${r.style} ${r.color}`.trim(); j.items.set(it, (j.items.get(it) || 0) + r.qty_shipped);
+      jobs.set(k, j);
+    }
+    out.set(trk, { tracking: trk, box: rs[0].box || "", supplier: rs[0].supplier, jobs: [...jobs.values()].sort((a, b) => (a.number || 1e9) - (b.number || 1e9)).map((j) => ({ number: j.number, pcs: j.pcs, items: [...j.items].map(([k, q]) => `${q} ${k}`).join(", ") })) });
+  }
+  return out;
 }

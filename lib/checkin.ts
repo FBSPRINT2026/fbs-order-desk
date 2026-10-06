@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { orderGroups, type Order } from "@/lib/pricing";
-import { sizeKey, PV } from "@/lib/manifest";
+import { sizeKey, PV, mixedBoxes, type MixedBox } from "@/lib/manifest";
 
 /**
  * Check-In: receiving counts each job's goods in, size by size.
@@ -145,6 +145,13 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     const start = ymd(o.production_date), due = ymd(o.due_date);
     jobs.push(build(o.id, { number: o.number, nickname: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", po: o.po_number || "", status: o.status, start, due, day: start || due || "", href: `/shop/orders/${o.id}`, _kind: kindOf("", orderGroups(o as unknown as Order).flatMap((g) => [...(g.imprints || []).map((im) => im.method || ""), ...g.lines.flatMap((l) => ((l as { decorations?: { method: string }[] }).decorations || []).map((d) => d.method))])) } as never,
       +(o.qty || 0), itemsFromOrder(o as unknown as Order), lines.filter((l) => l.order_id === o.id), cks.filter((c) => c.order_id === o.id)));
+  }
+  // mixed boxes: a box that also holds goods for another job
+  const mix = await mixedBoxes(admin, lines.map((l) => l.tracking)).catch(() => new Map<string, MixedBox>());
+  if (mix.size) for (const j of jobs) {
+    const own = lines.filter((l) => (j.ref.startsWith(PV) ? l.archived_order_id === j.ref.slice(PV.length) : l.order_id === j.ref));
+    const ms = [...new Set(own.map((l) => l.tracking))].map((t) => mix.get(t)).filter(Boolean) as MixedBox[];
+    if (ms.length) j.mixed = ms;
   }
   const inRange = jobs.filter((j) => j.day >= from && j.day <= to).sort((a, b) => a.day.localeCompare(b.day) || a.number - b.number);
   const problems = jobs.filter((j) => j.state === "issue").sort((a, b) => (a.day || "").localeCompare(b.day || ""));

@@ -73,6 +73,7 @@ export default function CheckInPage() {
             j.lines ? `${j.suppliers.join(" / ")}: ${j.arrived === j.shipped ? `all ${j.shipped} delivered` : `${j.arrived} of ${j.shipped} delivered`}${j.ordered && j.shipped < j.ordered ? ` (only ${j.shipped} of the ${j.ordered} on manifests)` : ""}${j.boxes ? ` · ${j.boxes} box${j.boxes === 1 ? "" : "es"}` : ""}` : "no manifest",
             j.start ? `prints ${short(j.start)}` : "", j.due ? `due ${short(j.due)}` : "",
           ].filter(Boolean).join(" · ")}</small>
+          {j.mixed?.map((m) => <small key={m.tracking} className="ck-mix" title={m.jobs.map((x) => `${x.number ? `#${x.number}` : "Not linked yet"}: ${x.items}`).join("\n")}>📦 Mixed box …{m.tracking.slice(-4)}: also {m.jobs.filter((x) => x.number !== j.number).map((x) => `${x.number ? `#${x.number}` : "unlinked"} (${x.items})`).join(", ")}</small>)}
           {last && <small className={"ck-last" + (last.status === "issue" && !last.resolved_at ? " bad" : "")}>Counted {last.received} of {last.expected} by {last.by}, {when(last.created_at)}{last.status === "issue" ? ` · ${last.lines.filter((l) => l.issue).map((l) => `${ISSUE_WORD[l.issue]} ${l.size}`).slice(0, 4).join(", ")}${last.resolved_at ? ` · resolved: ${last.resolution || "yes"}` : ""}` : ""}</small>}
         </div>
         <div className="ck-row-a">

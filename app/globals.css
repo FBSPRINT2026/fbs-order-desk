@@ -5074,3 +5074,13 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .it-sec{border:1px solid var(--line-2);border-radius:10px;padding:8px 10px}
 .it-sec-h{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:4px;font-size:14px}
 .it-boxes{margin-left:auto;font-size:12px}
+/* mixed box: one box, goods for more than one job */
+.rv-mixbox{display:block;width:max-content;max-width:100%;white-space:normal;margin:3px 0 1px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#5b3fb4;background:#efe7ff;border:1px solid #d6c7ff;border-radius:6px;padding:0 5px;cursor:help}
+.it-mix{flex-basis:100%;padding:10px 12px;border-radius:10px;background:#f4efff;border:1px solid #d6c7ff;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.it-mix-box{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}
+.it-mix-box .mono{font-size:12px;color:var(--ink-2)}
+.it-mix-job b{color:#5b3fb4}
+.ck-mix{display:block;color:#5b3fb4;font-weight:600}
+div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;border:1px solid #d6c7ff;font-size:13px;font-weight:500}
+.rv-trk1:has(.rv-mixbox){flex-wrap:wrap}
+.rv-trk1 .rv-mixbox{flex-basis:100%;width:auto;max-width:180px}

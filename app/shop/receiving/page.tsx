@@ -25,7 +25,8 @@ const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
 type Focus = "arrived" | "today" | "way" | "past" | "problems";
 type GroupBy = "carrier" | "supplier";
 type Row = { key: string; /** a job's shipments shown separately (Uncombine): the job key, to combine them again */ splitOf?: string; side: "fbs" | "customer"; number: number; href: string; who: string; what: string; sub: string; po: string; so: string; boxes: number; pcs: number;
-  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean; /** the vendor, on a row that combines several */ src?: string }[]; lineIds?: string[];
+  trks: { carrier: string; tracking: string; delivered: boolean; status: string; detail?: string; freight?: boolean; /** the vendor, on a row that combines several */ src?: string;
+    /** a mixed box: every job with goods in this box */ mixed?: { number: number; pcs: number; items: string }[] }[]; lineIds?: string[];
   /** a combined row: the shipments it's made of (one job, several vendors / supplier orders) */
   parts?: string[];
   /** a combined row's job keys (Uncombine) */
@@ -284,7 +285,9 @@ export default function GoodsReceiving() {
     const supplier = /^ss$|s&s|s & s/i.test(x.supplierRaw) ? "ss" : /sanmar/i.test(x.supplierRaw) ? "sanmar" : "other";
     const k0 = x.trks[0];
     const via: Via = !k0 ? "other" : k0.freight ? "freight" : !k0.tracking ? (/s&s|s & s|ss activewear/i.test(k0.carrier) ? "ss" : "other") : /^ups$/i.test(k0.carrier) || /^1Z/i.test(k0.tracking) ? "ups" : /fedex/i.test(k0.carrier) ? "fedex" : "other";
-    return { ...x, via, supplier, noScan, state, late: state !== "arrived" && !!x.at && !!x.need && localDay(x.at) > x.need };
+    // a mixed box first, so it shows even when the list is folded
+    const trks = [...x.trks].sort((a, b) => Number(!!b.mixed) - Number(!!a.mixed));
+    return { ...x, trks, via, supplier, noScan, state, late: state !== "arrived" && !!x.at && !!x.need && localDay(x.at) > x.need };
   };
   const rows: Row[] = [
     // our blanks ordered here
@@ -292,9 +295,9 @@ export default function GoodsReceiving() {
     // customers' goods on orders here
     ...data.goods.flatMap((it) => it.shipments.filter((sh) => sh.tracking || sh.eta).map((sh) => { const o = v.byId.get(it.order.id); return rowOf({ key: "g" + sh.id, side: "customer", number: it.order.number, href: `/shop/orders/${it.order.id}`, who: v.who(o), what: "Customer goods", sub: it.goods.supplier === "ss" ? "S&S" : it.goods.supplier === "sanmar" ? "SanMar" : supplierLabel(it.goods.supplier) || "Customer", boxes: sh.boxes || 0, pcs: 0, trks: [{ carrier: sh.carrier, tracking: sh.tracking, delivered: sh.track_status === "delivered", status: sh.track_status || "" }], statuses: [sh.track_status || ""], at: sh.est_delivery || sh.eta, deliveredAt: sh.delivered_at || null, need: v.needBy(o), unlinked: false, supplierRaw: it.goods.supplier || "", shipped: sh.created_at ? sh.created_at.slice(0, 10) : null, po: "", so: it.goods.supplier_po || "" }); })),
     // tied to Printavo jobs (until go-live)
-    ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
+    ...pvGoods.map((g) => rowOf({ key: "pv" + g.kind + g.archivedId + g.supplier_order, side: g.kind === "blanks" ? "fbs" : "customer", number: g.number, href: `/shop/archive/${g.archivedId}`, who: g.customer, what: g.kind === "blanks" ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight, mixed: k.mixed })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at).filter(Boolean).sort().pop() || null, need: g.due_date ? bizBefore(g.due_date, data.lead) : null, unlinked: false, supplierRaw: g.supplier, shipped: g.ship_date })),
     // on a manifest, not on any order yet: still coming in (or already here)
-    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date,
+    ...(pending || []).map((g) => rowOf({ key: "u" + g.key, side: g.us ? "fbs" : "customer", number: 0, href: "", who: g.us ? "FBS" : g.customer?.name || g.customer_name, what: g.us ? "Our blanks" : "Customer goods", sub: g.supplier === "sanmar" ? "SanMar" : "S&S", so: g.supplier_order, po: g.customer_po, boxes: g.boxes, pcs: g.pcs, trks: g.tracking.map((k) => ({ carrier: k.carrier, tracking: k.tracking, delivered: k.delivered, status: k.status, detail: k.detail, freight: k.freight, mixed: k.mixed })), lineIds: g.lineIds, statuses: g.tracking.map((k) => k.status), at: g.tracking.filter((k) => !k.delivered).map((k) => k.eta).filter(Boolean).sort().pop() || null, deliveredAt: g.tracking.map((k) => k.delivered_at || null).filter(Boolean).sort().pop() || null, need: null, unlinked: true, supplierRaw: g.supplier, shipped: g.ship_date,
       link: { lineIds: g.lineIds, customerId: g.customer?.id || null, customerName: g.customer?.name || "", us: g.us, supplier: g.supplier, name: g.customer_name, account: g.customer_account, suggest: g.lines.find((l) => l.suggest)?.suggest || null, styles: g.styles, sugCust: g.suggestCustomer || null, sugHow: g.how,
         sugNo: (() => { const id = g.lines.find((l) => l.suggest)?.suggest; return id ? g.orders.find((o) => o.id === id)?.number || null : null; })() } })),
   ];
@@ -328,7 +331,7 @@ export default function GoodsReceiving() {
       // the same box counted once (a box shared by two jobs shows up under each)
       const perOrder = new Map<string, number>();
       for (const x of rs) { const k = `${x.sub}|${x.so}`; perOrder.set(k, Math.max(perOrder.get(k) || 0, x.boxes || 0)); }
-      const trks = [...new Map(rs.flatMap((x) => x.trks.map((k) => ({ ...k, src: subs.length > 1 ? x.sub : undefined }))).map((k) => [k.tracking || Math.random().toString(), k])).values()];
+      const trks = [...new Map(rs.flatMap((x) => x.trks.map((k) => ({ ...k, src: subs.length > 1 ? x.sub : undefined }))).map((k) => [k.tracking || Math.random().toString(), k])).values()].sort((a, b) => Number(!!b.mixed) - Number(!!a.mixed));
       out.push({ ...f, splitOf: undefined, number: jobs[0].number, href: jobs[0].href, jobs: jobs.length > 1 ? jobs : undefined, key: rs.map((x) => x.key).join("+"), parts: rs.map((x) => x.key), jobKeys, sub: subs.join(" + "), po: [...new Set(rs.map((x) => x.po).filter(Boolean))].join(" / "), so: [...new Set(rs.map((x) => x.so).filter(Boolean))].join(" · "),
         boxes: [...perOrder.values()].reduce((a, n) => a + n, 0), pcs: rs.reduce((a, x) => a + (x.pcs || 0), 0),
         trks, lineIds: rs.flatMap((x) => x.lineIds || []),
@@ -378,6 +381,13 @@ export default function GoodsReceiving() {
     : <span className="rv-dot way">On the way</span>;
   // a label made but never scanned by the next business day after it shipped
   const unscanned = (r: Row, k: Row["trks"][number]) => !!k.tracking && !k.delivered && ["", "unknown", "pre_transit"].includes(k.status || "") && !!r.shipped && t0 >= nextBiz(r.shipped);
+  // a box holding goods for more than one job: say so, and which other job(s) it's for
+  const mixBadge = (r: Row, jobs: { number: number; pcs: number; items: string }[]) => {
+    const mine = new Set(r.jobs ? r.jobs.map((j) => j.number) : [r.number]);
+    const others = jobs.filter((j) => !mine.has(j.number));
+    const title = `Mixed box: one box, goods for ${jobs.length} jobs. Split it when you count it.\n` + jobs.map((j) => `${j.number ? `#${j.number}` : "Not linked yet"}: ${j.items}`).join("\n");
+    return <span className="rv-mixbox" title={title}>📦 MIXED BOX{others.length ? <> · also {others.map((j) => (j.number ? `#${j.number}` : "unlinked")).join(", ")}</> : null}</span>;
+  };
   const rowLine = (r: Row) => (
     <tr key={r.key} className={(r.state === "problem" || r.late ? "prob " : "") + "rv-click"} title="Click to see what's in it: styles, colors and sizes"
       onClick={(e) => { if ((e.target as HTMLElement).closest("a,button,input,label")) return; setItems(r); }}>
@@ -392,7 +402,7 @@ export default function GoodsReceiving() {
       <td className={r.late ? "bad" : ""}>{r.state === "arrived" ? "" : r.at ? new Date(r.at.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "numeric", day: "numeric" }) : "—"}{r.need && r.state !== "arrived" ? <div className="faint" style={{ fontSize: 11.5 }}>need by {day(r.need)}</div> : null}</td>
       <td className="trk"><div>{(open[r.key] ? r.trks : r.parts ? r.trks.filter((k, i) => r.trks.findIndex((x) => x.src === k.src) === i) : r.trks.slice(0, 1)).map((k, i) => k.tracking
         ? k.freight ? <span key={k.tracking}><b style={{ fontFamily: "inherit" }}>{k.carrier}</b><br /><a href={trackingUrl(/r&l/i.test(k.carrier) ? "r&l" : "", k.tracking)} target="_blank" rel="noreferrer">PRO {k.tracking}</a></span>
-        : <span key={k.tracking} className="rv-trk1">{k.src && <span className="rv-src">{k.src}</span>}<a href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" className={unscanned(r, k) ? "noscan" : k.delivered ? "done" : ""} title={unscanned(r, k) ? "Label created, never scanned by the carrier" : ""}>{k.tracking}</a></span>
+        : <span key={k.tracking} className="rv-trk1">{k.src && <span className="rv-src">{k.src}</span>}<a href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" className={unscanned(r, k) ? "noscan" : k.delivered ? "done" : ""} title={unscanned(r, k) ? "Label created, never scanned by the carrier" : ""}>{k.tracking}</a>{k.mixed && mixBadge(r, k.mixed)}</span>
         : <span key={"l" + i} className="faint">{k.carrier === "S&S Activewear" ? "S&S truck" : k.carrier} · no tracking</span>)}
         {r.trks.length > (r.parts ? new Set(r.trks.map((k) => k.src)).size : 1) && <button type="button" className="rv-more" onClick={() => setOpen({ ...open, [r.key]: !open[r.key] })} title={r.trks.map((k) => k.tracking).join("\n")}>{open[r.key] ? "show less" : `+${r.trks.length - (r.parts ? new Set(r.trks.map((k) => k.src)).size : 1)} more`}</button>}</div></td>
       <td className="so">{r.so || "—"}</td>
@@ -958,10 +968,11 @@ const sizeRank = (z: string) => { const i = SIZE_SEQ.indexOf(z); return i < 0 ? 
 /** What's actually in a shipment: every style and color with its sizes, straight from the supplier's manifest. */
 function ItemsModal({ r, onClose, onLink }: { r: Row; onClose: () => void; onLink?: () => void }) {
   const [lines, setLines] = useState<ItemLine[] | null>(null), [err, setErr] = useState("");
+  const [mixed, setMixed] = useState<{ tracking: string; box: string; supplier: string; jobs: { number: number; pcs: number; items: string }[] }[]>([]);
   useEffect(() => {
     const body = r.lineIds?.length ? { lineIds: r.lineIds } : { tracking: r.trks.map((k) => k.tracking).filter(Boolean) };
     fetch("/api/goods/manifest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items: body }) })
-      .then((x) => x.json()).then((j) => { if (j.error) setErr(j.error); setLines(j.lines || []); }).catch(() => setErr("Couldn't load the items."));
+      .then((x) => x.json()).then((j) => { if (j.error) setErr(j.error); setLines(j.lines || []); setMixed(j.mixed || []); }).catch(() => setErr("Couldn't load the items."));
   }, [r]);
   const ls = lines || [];
   const sizes = [...new Set(ls.map((l) => sz(l.size)))].sort((a, b) => sizeRank(a) - sizeRank(b) || a.localeCompare(b));
@@ -982,7 +993,7 @@ function ItemsModal({ r, onClose, onLink }: { r: Row; onClose: () => void; onLin
   const jobNos = [...new Set(ls.map(jobKey))];
   const sections = jobNos.map((k) => ({ k, job: ls.find((l) => jobKey(l) === k)?.job || null, lines: ls.filter((l) => jobKey(l) === k) }))
     .sort((a, b) => (a.job?.number || 1e9) - (b.job?.number || 1e9));
-  const mixed = sections.length > 1;
+  const isMixed = sections.length > 1;
   const items = itemsOf(ls);
   const tot = (m: Record<string, number>) => Object.values(m).reduce((a, n) => a + n, 0);
   const short = items.some((it) => sizes.some((z) => (it.ord[z] || 0) > (it.got[z] || 0)));
@@ -1008,8 +1019,19 @@ function ItemsModal({ r, onClose, onLink }: { r: Row; onClose: () => void; onLin
       <div className="pp-sheet it-sheet">
         <div className="pp-sheet-h"><div><b>{r.who}</b>{r.jobs ? <> · {r.jobs.map((j, i) => <span key={j.href}>{i ? " + " : ""}<Link href={j.href}>#{j.number}</Link></span>)}</> : r.number ? <> · <Link href={r.href}>#{r.number}</Link></> : null} <span className="faint" style={{ fontSize: 14 }}>· {r.sub} {r.so}{pos ? ` · PO ${pos}` : ""} · {r.boxes} box{r.boxes === 1 ? "" : "es"}</span></div><button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>✕</button></div>
         <div className="lk-body">
-          {mixed && <div className="lk-ai"><b>Mixed shipment: {sections.filter((x) => x.job).length} jobs share these boxes.</b><p>Split the box when you count it: each table below is what goes to that job.</p></div>}
-          {!lines ? <div className="faint">Loading the manifest…</div> : !items.length ? <div className="gb-empty">{err || "This shipment isn't on a supplier manifest, so there's no style / size breakdown for it."}</div> : mixed ? (
+          {mixed.length > 0 && (
+            <div className="it-mix">
+              <b>📦 Mixed box{mixed.length === 1 ? "" : "es"}: {mixed.length === 1 ? "this box holds" : "these boxes hold"} goods for more than one job. Split {mixed.length === 1 ? "it" : "them"} when you count.</b>
+              {mixed.map((m) => (
+                <div key={m.tracking} className="it-mix-box">
+                  <span className="mono">{m.supplier === "sanmar" ? "SanMar" : m.supplier === "ss" ? "S&S" : m.supplier} {m.tracking}{m.box && m.box !== m.tracking ? ` · box ${m.box}` : ""}</span>
+                  {m.jobs.map((j) => <span key={j.number} className="it-mix-job"><b>{j.number ? `#${j.number}` : "Not linked yet"}</b> {j.items}</span>)}
+                </div>
+              ))}
+            </div>
+          )}
+          {isMixed && !mixed.length && <div className="lk-ai"><b>{sections.filter((x) => x.job).length} jobs in this shipment.</b><p>Each table below is what goes to that job.</p></div>}
+          {!lines ? <div className="faint">Loading the manifest…</div> : !items.length ? <div className="gb-empty">{err || "This shipment isn't on a supplier manifest, so there's no style / size breakdown for it."}</div> : isMixed ? (
             sections.map((sec) => (
               <div key={sec.k} className="it-sec">
                 <div className="it-sec-h">{sec.job ? <><b>For #{sec.job.number}</b> <span className="faint">{sec.job.nickname}</span></> : <b>Not linked yet</b>}<span className="faint it-boxes">{boxesOf(sec.lines).join(" · ")}</span></div>

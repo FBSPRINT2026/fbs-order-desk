@@ -20,6 +20,8 @@ export type CheckJob = {
   state: JobState; checkins: CheckinRow[];
   /** screen printing (sp), embroidery (emb), heat press (hp) or anything else */
   kind: JobKind;
+  /** boxes this job shares with other jobs (a mixed box): split it when counting */
+  mixed?: { tracking: string; box: string; supplier: string; jobs: { number: number; pcs: number; items: string }[] }[];
   href: string;
 };
 

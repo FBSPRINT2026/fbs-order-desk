@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readXlsx } from "@/lib/xlsx";
-import { applyGroup, importManifest, linkByHand, markReceived, openOrdersFor, receiveFreight, receiveTruck, searchManifests, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, saveGoodsLesson, unlinkLines, unmatchedGroups, type ManifestLine, type Waiting } from "@/lib/manifest";
+import { applyGroup, importManifest, linkByHand, markReceived, openOrdersFor, receiveFreight, receiveTruck, searchManifests, truckPending, parseManifest, printavoGoods, rememberAccount, resolvePending, saveGoodsLesson, unlinkLines, mixedBoxes, unmatchedGroups, type ManifestLine, type Waiting } from "@/lib/manifest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -105,7 +105,9 @@ export async function POST(req: Request) {
           ...((a1 || []) as { id: string; visual_id: number; nickname: string }[]).map((o) => [o.id, { number: +o.visual_id, nickname: o.nickname || "" }] as const),
           ...((a2 || []) as { id: string; number: number; nickname: string }[]).map((o) => [o.id, { number: o.number, nickname: o.nickname || "" }] as const),
         ]);
-        return NextResponse.json({ lines: ls.map((l) => ({ ...l, job: job.get(l.archived_order_id || l.order_id || "") || null })) });
+        // boxes in it that also hold goods for another job
+        const mix = await mixedBoxes(admin, (data || []).map((l) => (l as { tracking: string }).tracking)).catch(() => new Map());
+        return NextResponse.json({ lines: ls.map((l) => ({ ...l, job: job.get(l.archived_order_id || l.order_id || "") || null })), mixed: [...mix.values()] });
       }
       if (b.retry) return NextResponse.json({ ok: true, ...(await resolvePending(admin, Date.now() + 45000)) });
       if (Array.isArray(b.ignore)) { await admin.from("supplier_manifest_lines").update({ kind: "ignored", match_how: "ignored by staff" }).in("id", b.ignore); return NextResponse.json({ ok: true }); }

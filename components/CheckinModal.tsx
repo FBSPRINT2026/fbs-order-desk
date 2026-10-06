@@ -72,6 +72,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
             <div className="ck-src">{job.source === "manifest"
               ? <>From the {job.suppliers.join(" / ")} manifest: <b>{expected} pcs</b>{job.boxes ? ` in ${job.boxes} box${job.boxes === 1 ? "" : "es"}` : ""}{job.ordered && job.ordered !== expected ? ` (the job has ${job.ordered})` : ""}.</>
               : <>From the job&apos;s line items (no manifest): <b>{expected} pcs</b>.</>}</div>
+            {job.mixed?.map((m) => <div key={m.tracking} className="ck-mix">📦 <b>Mixed box …{m.tracking.slice(-4)}</b>{m.box && m.box !== m.tracking ? ` (box ${m.box})` : ""}: count only this job&apos;s part. The rest is for {m.jobs.filter((x) => x.number !== job.number).map((x) => `${x.number ? `#${x.number}` : "a shipment not linked yet"}: ${x.items}`).join("; ")}.</div>)}
           </div>
           <button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>×</button>
         </div>
