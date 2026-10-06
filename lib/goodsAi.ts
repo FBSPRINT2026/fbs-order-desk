@@ -241,7 +241,7 @@ export async function aiMatchPending(admin: SupabaseClient, deadline: number, op
     const poNums = words(w.g.customer_po).filter((x) => /^\d{4,}$/.test(x));
     const theirs = new Set([...words(c.nickname), ...words(c.po)]);
     const otherWord = words(w.g.customer_po).filter((x) => x.length >= 4 && !/^\d+$/.test(x) && !GENERIC.test(x) && !STOP.has(x));
-    const numberMismatch = poNums.length > 0 && !c.numbered && !otherWord.some((x) => theirs.has(x));
+    const numberMismatch = poNums.length > 0 && !c.numbered && !poNums.some((x) => theirs.has(x)) && !otherWord.some((x) => theirs.has(x));
     const rival = w.cands.some((x) => x.id !== c.id && ((c.twin && x.twin) || (x.fit >= 0.99 && c.fit >= 0.99 && x.items.reduce((s, it) => s + it.qty, 0) === c.items.reduce((s, it) => s + it.qty, 0))) && !c.named);
     const backed = (c.fit >= 0.8 || c.twin || c.named) && !numberMismatch && !rival;
     const known = isUs(w.g.customer_name) || w.custIds.length > 0;
