@@ -4926,3 +4926,9 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .pf-kind{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);background:var(--surface-2);padding:2px 6px;border-radius:5px}
 .pf-name{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pf-meta{font-size:12px;white-space:nowrap}
+/* separation name: click to rename */
+.sep-name{all:unset;cursor:text;border-radius:6px;padding:0 4px;margin-left:-4px}
+.sep-name:hover{background:var(--surface-2)}
+.sep-name-ed{font-size:.55em;margin-left:8px;color:var(--ink-3);opacity:0;vertical-align:middle}
+.sep-name:hover .sep-name-ed,.sep-name:focus-visible .sep-name-ed{opacity:1}
+.sep-rename{font:inherit;font-size:inherit;font-weight:inherit;padding:0 6px;border:1px solid var(--accent);border-radius:8px;min-width:280px;max-width:100%;background:var(--surface);color:var(--ink)}

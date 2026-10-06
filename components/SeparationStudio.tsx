@@ -48,6 +48,8 @@ export type SepFile = { path: string; name: string; kind: "plate" | "preview" | 
 export { ARCHIVE_DAYS, SEP_STATUS, sepStage, type SepStage } from "@/lib/sepStatus";
 import { ARCHIVE_DAYS, SEP_STATUS } from "@/lib/sepStatus";
 
+/** where every separation starts (Restart Separation goes back here) */
+const START = { ...DEFAULT_SEP, widthIn: 11, lpi: 55, angle: 22.5, dpi: 720, removeBg: true, lib: "auto" as const };
 type Studio = SepSettings & { widthIn: number; lpi: number; angle: number; dpi: number; removeBg: boolean;
   /** vector art: take out the background layer (a page-size box of cream / white behind the art); unset = not asked yet */
   dropBackdrop?: boolean; lib: "auto" | "wilflex" | "pms"; solidOut?: "pixels" | "vector";
@@ -253,7 +255,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [vraw, setVart] = useState<VArt | null>(null);
   const [me, setMe] = useState({ email: "", boss: false });
   const [err, setErr] = useState(""), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
-  const [st, setSt] = useState<Studio>({ ...DEFAULT_SEP, widthIn: 11, lpi: 55, angle: 22.5, dpi: 720, removeBg: true, lib: "auto" });
+  const [st, setSt] = useState<Studio>(START);
   // vector art's background layer (stock art's cream / white page box): asked once, then kept in the settings
   const backdrop = useMemo(() => findBackdrop(vraw), [vraw]);
   const vart = useMemo(() => (vraw && backdrop && st.dropBackdrop ? withoutBackdrop(vraw, backdrop) : vraw), [vraw, backdrop, st.dropBackdrop]);
@@ -285,7 +287,11 @@ export default function SeparationStudio({ id }: { id: string }) {
   // two tabs: screens with their films, the press with the coach
   const rtab = rtab0 === "films" ? "screens" : rtab0 === "coach" ? "press" : rtab0;
   const [pick, setPick] = useState(false);
-  const [cancelAsk, setCancelAsk] = useState(false);
+  const [cancelAsk, setCancelAsk] = useState(false), [restartAsk, setRestartAsk] = useState(false);
+  // the name (click it to rename); null = not editing
+  const [editName, setEditName] = useState<string | null>(null);
+  // after a restart the inks are found fresh from the art (not from the logo's saved print plan)
+  const freshFind = useRef(false);
   // how many inks the art itself needs (from the last automatic find): fewer is a choice, not "shading"
   const [natural, setNatural] = useState(0);
   // the ink whose Suggested colors box is open (index in the ink bar)
@@ -536,7 +542,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   useEffect(() => {
     if (!pxTick) return;
     if (refind.current !== false && img !== refind.current) { refind.current = false; findInks(st.method, true, false); return; }
-    if (!inks.length) findInks(st.method, true, true);
+    if (!inks.length) { const fresh = freshFind.current; freshFind.current = false; findInks(st.method, true, !fresh); }
   }, [pxTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---------- separate (a moment after anything changes) ---------- */
@@ -817,6 +823,30 @@ export default function SeparationStudio({ id }: { id: string }) {
     if (on) { if (shirtBefore.current === null) shirtBefore.current = st.garment; set({ garment: k.hex }); }
     else if (st.garment === k.hex) { set({ garment: shirtBefore.current ?? "" }); shirtBefore.current = null; }
   }
+  /** rename it (the name shows in the list, the customer's files and on the films) */
+  async function rename(v: string) {
+    setEditName(null);
+    const name = v.trim(); if (!row || !name || name === row.location) return;
+    const r = await sb.from("separations").update({ location: name, updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
+    if (r.error) setErr(r.error.message); else setRow(r.data as SepRow);
+  }
+  /** start over on the same art: inks, settings, screens, press setup and saved files go; the art, name, customer and
+   *  shirt from the order stay (no uploading the same file again) */
+  async function restart() {
+    if (!row) return;
+    setRestartAsk(false); setBusy("Restarting…"); setErr("");
+    const old = row.settings as Record<string, unknown>;
+    const keep: Record<string, unknown> = {};
+    for (const k of ["art", "garments"]) if (old[k] !== undefined) keep[k] = old[k];
+    const r = await sb.from("separations").update({ settings: keep, channels: [], files: (row.files || []).filter((f) => f.kind === "upload"), preview_path: null, status: row.status === "cancelled" ? "cancelled" : "in_progress", method: "spot", updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
+    if (r.error) { setErr(r.error.message); setBusy(""); return; }
+    setRow(r.data as SepRow);
+    setSt(START); setInks([]); setOrderKeys([]); setNames({}); setMesh({}); setHidden(new Set()); setSolo(null); setSetup(null); setMatchAt(null);
+    setVart(null); setImg(null); setRes(null); setArtUrl("");
+    freshFind.current = true;
+    await load();
+    setBusy(""); setMsg("Restarted: same art, everything else from the start.");
+  }
   /** save this separation to a customer (it shows in their Artwork, under Separations) */
   async function setCustomer(cid: string | null) {
     if (!row) return;
@@ -961,7 +991,10 @@ export default function SeparationStudio({ id }: { id: string }) {
             {/* whose art this is: an order's separation belongs to the order's customer; any other can be saved to one */}
             {(!row.order_id || row.customer_id) && <span className="sep-cust">· <CustomerPick compact disabled={!!row.order_id} value={row.customer_id} placeholder="Save to a customer…" onPick={(cid) => setCustomer(cid)} /></span>}
             {row.customer_id && <Link className="sep-cust-l" href={`/shop/customers/${row.customer_id}?area=artwork`} title="This customer's production files (staff only)">Production files ↗</Link>}</div>
-          <h1>{row.location || "Separation"}{order ? <span className="faint"> · #{order.number} {order.nickname || ""}</span> : null}</h1>
+          <h1>{editName !== null
+            ? <input className="sep-rename" value={editName} autoFocus aria-label="Separation name" onChange={(e) => setEditName(e.target.value)} onBlur={(e) => rename(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditName(null); }} />
+            : <button type="button" className="sep-name" title="Click to rename" onClick={() => setEditName(row.location || "")}>{row.location || "Separation"}<span className="sep-name-ed" aria-hidden>✎</span></button>}{order ? <span className="faint"> · #{order.number} {order.nickname || ""}</span> : null}</h1>
         </div>
         <div className="row" style={{ gap: 8, alignItems: "center" }}>
           <span className="pill" style={{ ["--sc" as string]: s0.c }}>{s0.label}</span>
@@ -971,6 +1004,9 @@ export default function SeparationStudio({ id }: { id: string }) {
           </>}
           {order && <Link className="btn" href={`/shop/orders/${order.id}`}>Open Order</Link>}
           {!!(row.settings as { art?: SepArt }).art && row.status !== "films" && row.status !== "cancelled" && <label className="btn" title="Upload a different file (the inks are found again)"><input type="file" accept={ART_ACCEPT} hidden onChange={(e) => { replaceArt(e.target.files?.[0]); e.target.value = ""; }} />Replace Art</label>}
+          {tab === "studio" && hasArt && (restartAsk
+            ? <span className="sep-ask">Start over on this art? Inks, settings, screens and press setup reset. <button type="button" className="btn sm primary" onClick={restart}>Yes, Restart</button> <button type="button" className="btn sm" onClick={() => setRestartAsk(false)}>No</button></span>
+            : <button type="button" className="btn" disabled={!!busy} onClick={() => { setCancelAsk(false); setRestartAsk(true); }} title="Same art, everything else back to the start (no new upload)">Restart Separation</button>)}
           {row.status === "cancelled"
             ? <button type="button" className="btn primary" onClick={() => setStatus("in_progress")} title="Back to Working">Restore</button>
             : cancelAsk
