@@ -76,6 +76,10 @@ function OrderSheet({ b, o, onClose, onChanged }: { b: StoreBundle; o: MerchOrde
             ))}
           </div>
           <div className="faint" style={{ fontSize: 13 }}>{o.shopper.name} · <a href={`mailto:${o.shopper.email}`}>{o.shopper.email}</a>{o.shopper.phone ? ` · ${o.shopper.phone}` : ""} · {o.delivery === "org" ? "deliver to school" : o.delivery === "pickup" ? "pick up at FBS" : `ship to ${[o.ship_to.street1, o.ship_to.city, o.ship_to.state, o.ship_to.zip].filter(Boolean).join(", ")}`}</div>
+          {o.checkout_id && (() => {
+            const sibs = b.orders.filter((x) => x.checkout_id === o.checkout_id && x.id !== o.id);
+            return sibs.length ? <div className="faint" style={{ fontSize: 13 }}>Same checkout (one payment, separate bags): {sibs.map((x) => `${orderCode(b.store, x.number)}${x.answers?.student ? ` (${x.answers.student})` : ""}`).join(", ")}</div> : null;
+          })()}
           <table className="ms-mini"><tbody>{(o.items || []).map((it) => (
             <tr key={it.id}><td><b>{it.name}</b><div className="faint" style={{ fontSize: 12.5 }}>{it.style} · {it.color} · {sizeName(it.size)}{Object.values(it.personalization || {}).length ? ` · ${Object.values(it.personalization).join(", ")}` : ""}</div></td><td className="r">×{it.qty}</td><td className="r">{money(it.qty * it.unit_price)}</td>
               {b.staff && <td><select value={it.pack || ""} onChange={async (e) => { await setItemPack(it.id!, e.target.value as "" | "packed" | "backorder"); onChanged(); }}><option value="">To pack</option><option value="packed">Packed</option><option value="backorder">Back-ordered</option></select></td>}</tr>
