@@ -92,18 +92,26 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
                   <b data-notranslate>{[it.style, it.color].filter(Boolean).join(" · ") || "Item"}</b>{it.desc && <span className="faint" data-notranslate>{it.desc}</span>}
                   <span className="spacer" />
                   <span className={"ck-tot" + (done ? (cnt === exp ? " ok" : " off") : "")}>{done ? `${cnt} / ${exp}` : `${exp} pcs`}</span>
-                  <button type="button" className="btn sm" onClick={() => fill(cs)} title="Take the full amount for every size">✓ All</button>
+                  <button type="button" className="btn sm" tabIndex={-1} onClick={() => fill(cs)} title="Take the full amount for every size">✓ All</button>
                 </div>
                 <div className="ck-grid" style={{ gridTemplateColumns: `repeat(${cs.length}, minmax(64px, 1fr))` }}>
                   {cs.map((c) => (
                     <div key={c.k} className={"ck-cell" + tone(c)}>
                       <span className="ck-size">{c.size === "OTHER" ? "Other" : c.size}</span>
-                      <button type="button" className="ck-exp" title="Tap: all of them are here" onClick={() => fill([c])}>{c.expected}</button>
+                      <button type="button" className="ck-exp" tabIndex={-1} title="Tap: all of them are here" onClick={() => fill([c])}>{c.expected}</button>
                       <input type="number" min={0} inputMode="numeric" aria-label={`${c.size} received`} value={got[c.k] ?? ""} placeholder="—"
-                        onChange={(e) => setGot((g) => ({ ...g, [c.k]: e.target.value }))} onFocus={(e) => e.target.select()} />
+                        data-ck={cells.indexOf(c)} autoFocus={cells.indexOf(c) === 0}
+                        onChange={(e) => setGot((g) => ({ ...g, [c.k]: e.target.value }))} onFocus={(e) => e.target.select()} onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                        onKeyDown={(e) => {
+                          // Enter works like Tab (next size, then the next item's first size); on the last size, to the Check In button
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          const nx = document.querySelector<HTMLElement>(`.ck-modal input[data-ck="${cells.indexOf(c) + (e.shiftKey ? -1 : 1)}"]`) || document.querySelector<HTMLElement>(".ck-foot .ck-go");
+                          nx?.focus();
+                        }} />
                       <span className="ck-step">
-                        <button type="button" aria-label={`One less ${c.size}`} onClick={() => setGot((g) => ({ ...g, [c.k]: String(Math.max(0, (n(c.k) ?? c.expected) - 1)) }))}>−</button>
-                        <button type="button" aria-label={`One more ${c.size}`} onClick={() => setGot((g) => ({ ...g, [c.k]: String((n(c.k) ?? c.expected) + 1) }))}>+</button>
+                        <button type="button" tabIndex={-1} aria-label={`One less ${c.size}`} onClick={() => setGot((g) => ({ ...g, [c.k]: String(Math.max(0, (n(c.k) ?? c.expected) - 1)) }))}>−</button>
+                        <button type="button" tabIndex={-1} aria-label={`One more ${c.size}`} onClick={() => setGot((g) => ({ ...g, [c.k]: String((n(c.k) ?? c.expected) + 1) }))}>+</button>
                       </span>
                     </div>
                   ))}
@@ -147,7 +155,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
           <span className={"ck-sum" + (left ? "" : counted === expected && !problems.length ? " ok" : " off")}>{left ? `${left} size${left === 1 ? "" : "s"} left to count · ${counted} so far` : `${counted} of ${expected} counted${problems.length ? ` · ${problems.length} problem${problems.length === 1 ? "" : "s"}` : " · all here"}`}</span>
           <span className="spacer" />
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
-          <button type="button" className={"btn " + (problems.length ? "warn" : "primary")} disabled={!!busy} onClick={save}>{busy || (problems.length ? `Check In with ${problems.length} Problem${problems.length === 1 ? "" : "s"}` : "Check In")}</button>
+          <button type="button" className={"btn ck-go " + (problems.length ? "warn" : "primary")} disabled={!!busy} onClick={save}>{busy || (problems.length ? `Check In with ${problems.length} Problem${problems.length === 1 ? "" : "s"}` : "Check In")}</button>
         </div>
       </div>
     </div>
