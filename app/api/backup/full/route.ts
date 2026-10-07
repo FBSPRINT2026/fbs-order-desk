@@ -43,11 +43,13 @@ const TABLES: Record<string, string> = {
 /** left out on purpose: sign-in sessions and the sync's short-lived locks (nothing to restore) */
 const SKIPPED = ["employee_sessions", "printavo_sync_locks"];
 const PART_ROWS = 4000;
+/** tables with big rows: smaller pages (each page is one database statement) */
+const BIG: Record<string, number> = { archived_orders: 150, printavo_index: 500, ink_formulas: 500 };
 const BUDGET_MS = 230_000;
 
 type Row = { id: string; folder: string; status: string; manifest: Manifest };
 type FileRec = { path: string; name: string; bytes: number; rows: number; sha256: string; table: string };
-type Manifest = { kind: "full"; made?: string; folder: string; done: string[]; files: FileRec[]; rows: Record<string, number>; skipped: string[] };
+type Manifest = { kind: "full"; made?: string; folder: string; done: string[]; files: FileRec[]; rows: Record<string, number>; skipped: string[]; /** a big table part way through */ cur?: { table: string; last: string | number | null; part: number; total: number } | null };
 
 async function owner() {
   const v = await getViewer();
@@ -101,13 +103,16 @@ export async function POST(req: Request) {
     for (const table of Object.keys(TABLES)) {
       if (m.done.includes(table)) continue;
       if (Date.now() - t0 > BUDGET_MS) break;
-      // read the whole table in key order, 1,000 rows a page; write it in parts of 4,000 rows
-      const keys = TABLES[table].split(",");
-      let from = 0, part = 1, buf: unknown[] = [], total = 0;
+      // read the table in key order and write it in parts of 4,000 rows. One-column keys page by the key (fast at any
+      // depth: the Printavo history's big rows timed out with offsets); big tables in small pages; a table that runs
+      // past this call's time picks up from where it stopped (m.cur) on the next call
+      const keys = TABLES[table].split(","), keyset = keys.length === 1, page = BIG[table] || 1000;
+      const cur = m.cur?.table === table ? m.cur : null;
+      let from = 0, part = cur?.part || 1, buf: unknown[] = [], total = cur?.total || 0, last: string | number | null = cur?.last ?? null;
       const files: FileRec[] = [];
-      const flush = async () => {
-        if (!buf.length && part > 1) return;
-        const name = part === 1 && buf.length < PART_ROWS ? `${table}.ndjson.gz` : `${table}-${part}.ndjson.gz`;
+      const flush = async (final: boolean) => {
+        if (!buf.length && (part > 1 || !final)) return;
+        const name = part === 1 && final && buf.length < PART_ROWS ? `${table}.ndjson.gz` : `${table}-${part}.ndjson.gz`;
         const gz = gzipSync(Buffer.from(buf.map((r) => JSON.stringify(r)).join("\n") + (buf.length ? "\n" : ""), "utf8"));
         const path = `${m.folder}/${name}`;
         const up = await admin.storage.from("backups").upload(path, gz, { contentType: "application/gzip", upsert: true });
@@ -115,21 +120,34 @@ export async function POST(req: Request) {
         files.push({ path, name, bytes: gz.length, rows: buf.length, sha256: createHash("sha256").update(gz).digest("hex"), table });
         part++; buf = [];
       };
+      let finished = false;
       for (;;) {
         let q = admin.from(table).select("*");
         for (const k of keys) q = q.order(k, { ascending: true });
-        const { data, error } = await q.range(from, from + 999);
+        if (keyset && last != null) q = q.gt(keys[0], last);
+        const { data, error } = keyset ? await q.limit(page) : await q.range(from, from + page - 1);
         if (error) throw new Error(`${table}: ${error.message}`);
-        const rows = data || [];
+        const rows = (data || []) as Record<string, unknown>[];
         buf.push(...rows); total += rows.length; from += rows.length;
-        if (buf.length >= PART_ROWS) await flush();
-        if (rows.length < 1000) break;
+        if (rows.length) last = rows[rows.length - 1][keys[0]] as string | number;
+        if (buf.length >= PART_ROWS) await flush(false);
+        if (rows.length < page) { finished = true; break; }
+        // out of time part way through a big table: save what's read and carry on next call
+        if (keyset && Date.now() - t0 > BUDGET_MS) break;
       }
-      await flush();
-      m.files = [...m.files.filter((f) => f.table !== table), ...files];
+      if (!finished) {
+        await flush(false);
+        m.files = [...m.files, ...files];
+        m.cur = { table, last, part, total };
+        await admin.from("data_backups").update({ manifest: m, error: null }).eq("id", id);
+        break;
+      }
+      await flush(true);
+      m.files = [...m.files.filter((f) => f.table !== table || (cur && f.name !== `${table}.ndjson.gz` && files.every((x) => x.path !== f.path))), ...files];
       m.rows = { ...m.rows, [table]: total };
       m.done = [...m.done, table];
-      await admin.from("data_backups").update({ manifest: m }).eq("id", id);
+      m.cur = null;
+      await admin.from("data_backups").update({ manifest: m, error: null }).eq("id", id);
     }
     const left = Object.keys(TABLES).filter((t) => !m.done.includes(t));
     if (left.length) return NextResponse.json({ id, status: "building", done: m.done.length, total: Object.keys(TABLES).length, next: left[0] });
