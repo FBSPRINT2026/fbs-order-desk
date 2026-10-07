@@ -482,5 +482,6 @@ const ES: Record<string, string> = {
   "We made it: log {0}": "Ya la hicimos: registrar {0}",
   "Logged {0} of {1}.": "Se registraron {0} de {1}.",
   "History": "Historial",
+  "Coverage comes from this art's separation on another order.": "La cobertura viene de la separación de este arte en otro pedido.",
   "No batch logged yet.": "Aún no hay lotes registrados.",
 };

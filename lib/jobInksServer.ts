@@ -12,7 +12,7 @@ import { batchesFor, type Batch } from "@/lib/inkBatches";
  */
 export type FormulaLine = { type: string; code: string; desc: string; pct: number; g?: number };
 export type PhoneInk = JobInk & { hex: string; lines: FormulaLine[] | null; gramsPerQt: number | null; batches: Batch[] };
-export type PhoneInks = { inks: PhoneInk[]; unnamed: boolean; noSeps: boolean };
+export type PhoneInks = { inks: PhoneInk[]; unnamed: boolean; noSeps: boolean; borrowed?: boolean };
 
 const norm = (s: string) => s.toLowerCase().replace(/^(pms|pantone)\s*/, "").replace(/\s+/g, " ").trim();
 /** what a screen's ink name could be called in IMS: "PMS 123C" → "123 C" */
@@ -31,9 +31,16 @@ export async function phoneInks(admin: SupabaseClient, card: JobCard, settingsDa
   if (card.kind === "o") {
     const { data: o } = await admin.from("orders").select("id, number, nickname, groups").eq("id", card.id).maybeSingle();
     if (!o) return null;
-    const { data: seps } = await admin.from("separations").select("order_id, imprint_id, garment_color, location, design_id, status, settings, channels").eq("order_id", card.id);
     const orders = [o] as Parameters<typeof jobsFromOrders>[1];
-    const dIds = [...new Set([...((seps || []) as { design_id: string | null }[]).map((x) => x.design_id), ...orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.imprints || []).map((i) => i.design_id)))].filter(Boolean))] as string[];
+    const imDesigns = [...new Set(orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.imprints || []).map((i) => i.design_id))).filter(Boolean))] as string[];
+    // this order's separations, plus the latest separations of the same art on other orders (used until this one's are made)
+    const cols = "order_id, imprint_id, garment_color, location, design_id, status, settings, channels";
+    const [{ data: own }, { data: same }] = await Promise.all([
+      admin.from("separations").select(cols).eq("order_id", card.id),
+      imDesigns.length ? admin.from("separations").select(cols).in("design_id", imDesigns).neq("order_id", card.id).neq("status", "cancelled").order("updated_at", { ascending: false }).limit(40) : Promise.resolve({ data: [] }),
+    ]);
+    const seps = [...(own || []), ...(same || [])];
+    const dIds = [...new Set([...(seps as { design_id: string | null }[]).map((x) => x.design_id), ...imDesigns].filter(Boolean))] as string[];
     const styles = [...new Set(orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.lines || []).map((l) => l.style || ""))).filter(Boolean))];
     const [{ data: designs }, { data: gar }] = await Promise.all([
       dIds.length ? admin.from("designs").select("id, width_px, height_px").in("id", dIds) : Promise.resolve({ data: [] }),
@@ -41,7 +48,7 @@ export async function phoneInks(admin: SupabaseClient, card: JobCard, settingsDa
     ]);
     // the whole job as one booking (every location)
     const slot = { order_id: card.id, archived_order_id: null, day, status: "", finished_at: null, locations: null, label: null };
-    jobs = jobsFromOrders([slot], orders, (seps || []) as Parameters<typeof jobsFromOrders>[2], (designs || []) as Parameters<typeof jobsFromOrders>[3], s, (gar || []) as GarmentFabric[]);
+    jobs = jobsFromOrders([slot], orders, seps as Parameters<typeof jobsFromOrders>[2], (designs || []) as Parameters<typeof jobsFromOrders>[3], s, (gar || []) as GarmentFabric[]);
   } else {
     const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, data").eq("id", card.id).maybeSingle();
     if (!r) return null;
@@ -73,5 +80,5 @@ export async function phoneInks(admin: SupabaseClient, card: JobCard, settingsDa
       batches: x.kind === "pms" ? batches.filter((b) => b.code.toUpperCase() === x.code.toUpperCase()) : [],
     };
   });
-  return { inks, unnamed: card.kind === "a", noSeps: job.prints.some((p) => p.note === "no separation yet") };
+  return { inks, unnamed: card.kind === "a", noSeps: job.prints.some((p) => p.note === "no separation yet"), borrowed: job.prints.some((p) => p.note.startsWith("coverage from")) };
 }

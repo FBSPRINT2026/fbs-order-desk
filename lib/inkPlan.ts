@@ -5,13 +5,15 @@
  * Ink per print = print area × coverage × the mesh's theoretical ink volume × a real-world factor:
  *  - Theoretical ink volume (cm³ of ink per m² printed) is the mesh maker's figure for how much ink the open mesh holds
  *    (SEFAR PET 1500 data). It falls as the mesh count rises: 110 ≈ 53, 156 ≈ 30, 230 ≈ 19, 305 ≈ 14.
- *  - On a shirt the deposit runs heavier than that (the stencil's thickness, off-contact, the ink driven into the
- *    fabric). FACTOR 1.6 is set so a 10×12 full underbase on 156 mesh comes to about 1,000 prints a gallon, the usual
- *    shop figure.
+ *  - On a shirt the deposit runs much heavier than that (the stencil's thickness, off-contact, the ink driven into the
+ *    fabric). FACTOR 4 matches a weighed print (a 6×6 at about half fill, print-flash-print: 4 g of ink a shirt), and
+ *    puts a typical full front (10×12, about half covered, 156 mesh) near 800 prints a gallon. Until Oct 7 it was 1.6,
+ *    an unchecked "1,000 full underbases a gallon" guess that ran about 2.5× light. Managers can tune it.
  *  - Each screen also leaves ink behind (in the screen, on the squeegee and flood bar): SETUP grams per screen per job.
  *  - The underbase goes under every color, so it covers the area of all of them together, and it prints on the
  *    underbase mesh in our white for the fabric: Amazing Bright Tiger on cotton, Super Poly White on poly blends.
- * Coverage and mesh come from the job's separations when they're made; before that, defaults by location.
+ * Coverage and mesh come from the job's separations when they're made; else the latest separation of the same design
+ * on another order (a reorder, or the same art for a new customer); before that, defaults by location.
  * A PMS color comes out of its Epic Rio formula: the grams split across the Rio Mix inks by the formula's weights.
  */
 import { fabricOf, needsPolyWhite, type Fabric } from "./fabric";
@@ -25,7 +27,7 @@ export type InkPlanSettings = {
   /** days ahead to plan an order for */ horizonDays: number;
   /** extra on top of the need when ordering (%) */ bufferPct: number;
 };
-export const DEFAULT_INK_PLAN: InkPlanSettings = { factor: 1.6, setupG: 120, coverage: 25, colorMesh: 230, baseMesh: 156, polyPct: 50, horizonDays: 14, bufferPct: 10 };
+export const DEFAULT_INK_PLAN: InkPlanSettings = { factor: 4, setupG: 120, coverage: 25, colorMesh: 156, baseMesh: 156, polyPct: 50, horizonDays: 14, bufferPct: 10 };
 export const mergeInkPlan = (d: unknown): InkPlanSettings => ({ ...DEFAULT_INK_PLAN, ...((d && typeof d === "object" ? d : {}) as Partial<InkPlanSettings>) });
 
 /** SEFAR PET 1500 theoretical ink volume, cm³/m², by threads per inch */
@@ -237,13 +239,21 @@ export function jobsFromOrders(slots: SlotLite[], orders: OrderLite[], seps: Sep
       for (const [color, { pieces, line }] of byColor) {
         if (!pieces) continue;
         const sep = oSeps.find((x) => x.imprint_id === im.id && (x.garment_color || "").toLowerCase() === color.toLowerCase()) || oSeps.find((x) => x.imprint_id === im.id) || oSeps.find((x) => x.location && sameLoc(x.location, im.location));
+        // no separation on this order yet: the same art's separation from another order gives the real coverage
+        const other = !sep && im.design_id ? seps.find((x) => x.order_id !== oid && x.design_id === im.design_id && x.status !== "cancelled" && x.channels?.some((c) => c.kind === "color")) : undefined;
         const d = dById.get(sep?.design_id || im.design_id || "");
         const aspect = d?.width_px && d.height_px ? d.height_px / d.width_px : undefined;
-        const wGiven = sep?.settings?.widthIn || parseFloat(String(im.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || undefined;
+        const typed = parseFloat(String(im.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || undefined;
+        const wGiven = sep?.settings?.widthIn || typed || other?.settings?.widthIn || undefined;
         const { w, h } = sizeFor(im.location, wGiven, aspect);
         const dark = !LIGHT.test(color);
         let screens: Screen[];
-        if (sep?.channels?.length) {
+        if (other) {
+          // its colors as separated; the underbase depends on this order's shirt color
+          screens = other.channels!.filter((c) => c.kind === "color").map((c) => ({ name: c.name, kind: "color" as const, mesh: c.mesh || s.colorMesh, coverage: c.coverage > 1 ? c.coverage : c.coverage * 100, known: true }));
+          const ub = other.channels!.find((c) => c.kind === "underbase");
+          if (dark && !screens.every((x) => isWhite(x.name))) screens.unshift({ name: "Underbase", kind: "underbase", mesh: ub?.mesh || s.baseMesh, coverage: unionCov(screens.map((x) => x.coverage)), known: false });
+        } else if (sep?.channels?.length) {
           screens = sep.channels.map((c) => ({ name: c.name, kind: c.kind === "underbase" ? "underbase" : c.kind === "highlight" ? "highlight" : "color", mesh: c.mesh || (c.kind === "underbase" ? s.baseMesh : s.colorMesh), coverage: c.coverage > 1 ? c.coverage : c.coverage * 100, known: true }));
         } else {
           const names = String(im.inks || "").split(/[,;+\/]|\band\b/i).map((x) => x.trim()).filter(Boolean);
@@ -253,7 +263,7 @@ export function jobsFromOrders(slots: SlotLite[], orders: OrderLite[], seps: Sep
         }
         const cat = gByKey.get(gKey(line.brand, line.style)) || gByStyle.get((line.style || "").toLowerCase());
         const fabric = fabricOf({ style: line.style, brand: line.brand, garment: line.garment, color, fabric: cat?.fabric, supplier: cat?.supplier || undefined });
-        const pr: Print = { location: im.location, pieces, garmentColor: color, fabric, wIn: w, hIn: h, screens, note: sep ? "" : "no separation yet" };
+        const pr: Print = { location: im.location, pieces, garmentColor: color, fabric, wIn: w, hIn: h, screens, note: sep ? "" : other ? "coverage from this design's separation on another order" : "no separation yet" };
         perSlot.set(sl, [...(perSlot.get(sl) || []), pr]);
       }
     }

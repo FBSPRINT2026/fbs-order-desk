@@ -65,6 +65,7 @@ export default function PhoneInks({ card, data }: { card: JobCard; data: PhoneIn
       )}
       <p className="jm-faint">
         {t("Estimates: ink on the shirts plus what stays in the screens.")}
+        {data.borrowed ? " " + t("Coverage comes from this art's separation on another order.") : ""}
         {data.noSeps ? " " + t("Some prints have no separation yet, so those use the default coverage.") : ""}
         {data.unnamed ? " " + t("Colors come from the Printavo job.") : ""}
       </p>

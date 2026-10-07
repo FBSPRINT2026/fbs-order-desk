@@ -61,7 +61,10 @@ export default function InkInventory({ stock, formulas, canStock }: { stock: Sto
         aIds.length ? sb.from("archived_orders").select("id, visual_id, nickname, qty, status_name, data").in("id", aIds) : Promise.resolve({ data: [] }),
       ]);
       const orders = (o.data || []) as Parameters<typeof jobsFromOrders>[1];
-      const seps = (sp.data || []) as Parameters<typeof jobsFromOrders>[2];
+      const imDesigns = [...new Set(orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.imprints || []).map((i) => i.design_id))).filter(Boolean))] as string[];
+      // the same art's separations on other orders give the coverage until a job's own are made
+      const { data: same } = imDesigns.length ? await sb.from("separations").select("order_id, imprint_id, garment_color, location, design_id, status, settings, channels").in("design_id", imDesigns).neq("status", "cancelled").order("updated_at", { ascending: false }).limit(300) : { data: [] };
+      const seps = [...(sp.data || []), ...(same || [])] as Parameters<typeof jobsFromOrders>[2];
       const dIds = [...new Set([...seps.map((x) => x.design_id), ...orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.imprints || []).map((i) => i.design_id)))].filter(Boolean))] as string[];
       const { data: designs } = dIds.length ? await sb.from("designs").select("id, width_px, height_px").in("id", dIds) : { data: [] };
       const styles = [...new Set(orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.lines || []).map((l) => (l as { style?: string }).style || ""))).filter(Boolean))];
@@ -121,7 +124,7 @@ export default function InkInventory({ stock, formulas, canStock }: { stock: Sto
 
   if (mode === "settings") {
     const F: [keyof InkPlanSettings, string, string, number][] = [
-      ["factor", "Real-world factor", "How much heavier a print lays down than the mesh's theoretical ink volume. 1.6 ≈ 1,000 prints a gallon for a 10×12 underbase on 156.", 0.1],
+      ["factor", "Real-world factor", "How much heavier a print lays down than the mesh's theoretical ink volume. 4 ≈ a weighed print (6×6, half filled, 4 g a shirt over two hits); a typical full front on 156 comes to about 800 prints a gallon. Weigh a few shirts before and after printing to tune it.", 0.1],
       ["setupG", "Left in each screen (g)", "Ink left in a screen, on the squeegee and flood bar per screen per job.", 10],
       ["coverage", "Color coverage before separations (%)", "How much of the print area one color covers, until the job's separations give the real number.", 1],
       ["colorMesh", "Color mesh before separations", "", 1], ["baseMesh", "Underbase mesh before separations", "", 1],
