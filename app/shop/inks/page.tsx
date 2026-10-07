@@ -58,7 +58,7 @@ export default function InkRoom() {
     (async () => {
       const sb = createClient(), all: Ink[] = [];
       for (let from = 0; ; from += 1000) {
-        const { data, error } = await sb.from("ink_formulas").select("id, code, name, base, hex, rec_type, ing_count, lines, grams_per_qt, captured_at, captured_note").eq("system", "RX").order("code").range(from, from + 999);
+        const { data, error } = await sb.from("ink_formulas").select("id, code, name, base, hex, rec_type, ing_count, lines, grams_per_qt, captured_at, captured_note").eq("system", "RX").is("archived_at", null).order("code").range(from, from + 999);
         if (error) { setErr(error.message); return; }
         all.push(...((data || []) as Ink[]));
         if (!data || data.length < 1000) break;
