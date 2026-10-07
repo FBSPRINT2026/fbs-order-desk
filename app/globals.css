@@ -5412,3 +5412,9 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ibx-opt{justify-content:flex-start}
 .ibx-opt b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;min-height:2.6em}
 .ibx-opt span{line-height:1.35;min-height:2.7em}
+/* Ink Room: when a PMS color was last mixed */
+.ink-hist{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line);margin-top:6px;padding-top:8px;font-size:13px}
+.ink-hist-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ink-hist ul{list-style:none;margin:2px 0 0;padding:0}
+.ink-hist li{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid var(--line-2,#eef0f3)}
+.ink-hist-old{color:#B54708;font-weight:700}

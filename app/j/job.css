@@ -214,3 +214,26 @@
 .jm-tm-log small{color:#7C8799}
 .jm-tm-t{display:flex;flex-direction:column;align-items:flex-end;white-space:nowrap;color:#5B6678}
 .jm-tm-t b{color:#121925}
+/* inks the job needs (PhoneInks) */
+.jm-ink{display:flex;align-items:center;gap:12px;width:100%;padding:10px 0;border:0;border-bottom:1px solid var(--line-2);background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer;touch-action:manipulation}
+.jm-ink:last-child{border-bottom:0}
+.jm-ink-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.jm-ink-main b{font-size:16.5px}
+.jm-ink-main small{color:var(--ink-3);font-size:13px}
+.jm-ink-amt{font-weight:800;font-size:17px;white-space:nowrap}
+.jm-sw{flex:none;width:44px;height:44px;border-radius:12px;border:1px solid rgba(0,0,0,.18)}
+.jm-sw.big{width:64px;height:64px;border-radius:16px}
+.jm-sw.none{background:repeating-linear-gradient(45deg,#e6e8ec 0 6px,#fff 6px 12px)}
+.jm-ist{font-size:13px;font-weight:700;color:var(--ink-3)}
+.jm-ist.ok{color:#1F7A47}
+.jm-ist.make{color:#B54708}
+.jm-inkh{display:flex;align-items:center;gap:14px}
+.jm-ink-need{font-size:18px}
+.jm-inkw{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;border-bottom:1px solid var(--line-2);font-size:15px}
+.jm-inkw small{display:block;color:var(--ink-3);font-size:12.5px}
+.jm-qt{min-width:120px;text-align:center;font-size:28px;font-weight:800}
+.jm-mix{width:100%;border-collapse:collapse;font-size:15px}
+.jm-mix td{padding:7px 0;border-bottom:1px solid var(--line-2);vertical-align:top}
+.jm-mix td small{display:block;color:var(--ink-3);font-size:12.5px}
+.jm-mix td.r{text-align:right;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:17px}
+.jm-mix tr.tot td{border-bottom:0;font-weight:800}

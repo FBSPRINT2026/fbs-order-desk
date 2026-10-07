@@ -380,6 +380,7 @@ export default function InkRoom() {
                     <tfoot><tr><td>Total</td><td className="r ink-g">{fmtG(totalG)} g</td><td className="r faint">{qts ? `${qts.toFixed(2)} qt` : ""}</td></tr></tfoot>
                   </table>
                   <div className="faint" style={{ fontSize: 12.5 }}>{sel.grams_per_qt} g per quart for this color. {sel.captured_note}{sel.captured_at ? ` (${new Date(sel.captured_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})` : ""}.</div>
+                  {sel.rec_type === "S" && <InkHistory key={sel.code} code={sel.code} qts={qts} grams={totalG} />}
                 </>
               )}
               </>)}
@@ -388,5 +389,45 @@ export default function InkRoom() {
         </section>
       </div>
     </>
+  );
+}
+
+type Batch = { id: string; code: string; qt: number; grams: number | null; job: string; note: string; made_by: string; made_at: string };
+const qtText = (qt: number) => {
+  if (qt < 4) return `${+qt.toFixed(2)} qt`;
+  const g = Math.floor(qt / 4), r = +(qt - g * 4).toFixed(2);
+  return r === 2 ? `${g}½ gal` : r ? `${g} gal ${r} qt` : `${g} gal`;
+};
+
+/** When this PMS color was last mixed (ink_batches, logged from the job's phone menu or here), so nobody hunts the
+ *  shelf for a color last made years ago. "Log this batch" records the amount in the calculator above. */
+function InkHistory({ code, qts, grams }: { code: string; qts: number; grams: number }) {
+  const [list, setList] = useState<Batch[] | null>(null), [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/inks/batches?codes=${encodeURIComponent(code)}`).then((r) => r.json()).then((j) => live && setList(j.batches || [])).catch(() => live && setList([]));
+    return () => { live = false; };
+  }, [code]);
+  async function log() {
+    setBusy(true); setErr("");
+    const r = await fetch("/api/inks/batches", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, qt: Math.round(qts * 100) / 100, grams: Math.round(grams * 10) / 10 }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+    setBusy(false);
+    if (!r?.ok || !j.batch) return setErr(j.error || "Couldn't save.");
+    setList((l) => [j.batch, ...(l || [])]);
+  }
+  const last = list?.[0], old = last && Date.now() - new Date(last.made_at).getTime() > 2 * 365.25 * 864e5;
+  const day = (d: string) => new Date(d).toLocaleDateString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric" });
+  return (
+    <div className="ink-hist">
+      <div className="ink-hist-h"><b>History</b>{qts > 0 && <button type="button" className="btn sm" disabled={busy} onClick={log}>{busy ? "Saving…" : `Log a ${qtText(qts)} batch`}</button>}</div>
+      {!list ? <span className="faint">Loading…</span> : !list.length ? <span className="faint">No batch logged yet.</span> : (
+        <>
+          <span className={old ? "ink-hist-old" : "faint"}>{old ? `Last made ${day(last!.made_at)}, over two years ago. Just make it.` : `Last made ${day(last!.made_at)}. There's probably some on the shelf.`}</span>
+          <ul>{list.slice(0, 8).map((b) => <li key={b.id}><span>{day(b.made_at)}{b.made_by ? ` · ${b.made_by}` : ""}{b.job ? ` · ${b.job}` : ""}</span><b>{qtText(+b.qt)}</b></li>)}</ul>
+        </>
+      )}
+      {err && <span className="err">{err}</span>}
+    </div>
   );
 }

@@ -11,10 +11,12 @@ import MobileShip from "./MobileShip";
 import PhoneCheckin from "./PhoneCheckin";
 import PressSheetCard from "./PressSheetCard";
 import PressTimer from "./PressTimer";
+import PhoneInks from "./PhoneInks";
+import type { PhoneInks as PhoneInksData } from "@/lib/jobInksServer";
 import type { PressOption, PressSheet } from "@/lib/pressActual";
 import { LangToggle, useT } from "./lang";
 
-type View = "home" | "setup" | "notes" | "photos" | "labels" | "ship" | "checkin" | "timer";
+type View = "home" | "setup" | "notes" | "photos" | "labels" | "ship" | "checkin" | "timer" | "inks";
 
 const fmtDay = (d: string | null, loc = "en-US") => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString(loc, { weekday: "short", month: "short", day: "numeric" }) : "—");
 const when = (d: string, loc = "en-US") => new Date(d).toLocaleString(loc, { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -27,12 +29,13 @@ const I = {
   ship: "M3 6h11v10H3zM14 9h4l3 4v3h-7M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
   checkin: "M4 8l8-4 8 4v9l-8 4-8-4zM4 8l8 4 8-4M12 12v9M9 15l2 2 4-4",
   time: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 3",
+  ink: "M12 3c-3 4.5-6 7.6-6 11a6 6 0 0 0 12 0c0-3.4-3-6.5-6-11zM9.5 15a2.5 2.5 0 0 0 2.5 2.5",
   open: "M14 4h6v6M20 4l-9 9M18 14v6H4V6h6",
 };
 
 /** The phone menu for one job (opened by scanning its QR code). */
 export default function JobMobile(p: {
-  who: JobActor; missing?: string; card?: JobCard; box?: number | null; designs?: Record<string, { number: number; name: string; url: string }>; press?: PressSheet[]; presses?: PressOption[];
+  who: JobActor; missing?: string; card?: JobCard; box?: number | null; designs?: Record<string, { number: number; name: string; url: string }>; press?: PressSheet[]; presses?: PressOption[]; inks?: PhoneInksData | null;
   ship?: { t: ShipTarget; existing: Shipment | null } | null; shipSettings?: ShipSettings; checkin?: CheckJob | null; printer?: { ready: boolean; dpi: number };
 }) {
   const { who, card } = p;
@@ -48,7 +51,7 @@ export default function JobMobile(p: {
       <main className="jm-main"><div className="jm-card"><h1 className="jm-h">{t("No job #{0}", p.missing || "")}</h1><p>{t("This code doesn't match a job in the portal or in Printavo. Check the number on the label.")}</p></div></main></div>
   );
   const job = { kind: card.kind, id: card.id };
-  const title: Record<View, string> = { home: "", setup: t("Press setup"), notes: t("Notes"), photos: t("Photos"), labels: t("Box labels"), ship: t("Ship"), checkin: t("Check in goods"), timer: t("Press timer") };
+  const title: Record<View, string> = { home: "", setup: t("Press setup"), notes: t("Notes"), photos: t("Photos"), labels: t("Box labels"), ship: t("Ship"), checkin: t("Check in goods"), timer: t("Press timer"), inks: t("Inks") };
 
   return (
     <div className="jm">
@@ -69,6 +72,7 @@ export default function JobMobile(p: {
         {view === "labels" && <Labels card={card} box={p.box || null} printer={p.printer} perBox={p.shipSettings?.perBox || 72} staff={who.kind === "staff"} />}
         {view === "ship" && p.ship && p.shipSettings && <MobileShip t={p.ship.t} existing={p.ship.existing} settings={p.shipSettings} box={p.box || null} />}
         {view === "checkin" && p.checkin && <Checkin job={p.checkin} />}
+        {view === "inks" && p.inks && <PhoneInks card={card} data={p.inks} />}
         {view === "timer" && <PressTimer card={card} presses={p.presses || []} />}
       </main>
     </div>
@@ -97,6 +101,7 @@ function Home({ p, job, go }: { p: Parameters<typeof JobMobile>[0]; job: { kind:
       {shot && <PhotoSave job={job} file={shot} onDone={() => { setShot(null); load(); }} />}
       <div className="jm-tiles">
         {tile("setup", t("Press setup"), I.setup, prints ? (prints === 1 ? t("1 print") : t("{0} prints", prints)) + (p.press?.length ? ` · ${t("screens")}` : "") : "")}
+        {p.inks && p.inks.inks.length > 0 && tile("inks", t("Inks"), I.ink, p.inks.inks.length === 1 ? t("1 ink · how much") : t("{0} inks · how much", p.inks.inks.length))}
         {tile("notes", t("Notes"), I.notes, items ? (nNotes === 1 ? t("1 shop note") : t("{0} shop notes", nNotes)) : "")}
         {tile("photos", t("Photos"), I.photo, items ? ((n) => (n === 1 ? t("1 saved") : t("{0} saved", n)))((items || []).filter((x) => x.kind !== "note").length) : "")}
         {tile("labels", t("Box labels"), I.label, p.printer?.ready ? t("Print to the Zebra") : t("Printer not set up"))}

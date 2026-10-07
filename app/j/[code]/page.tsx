@@ -10,6 +10,7 @@ import { checkinJobFor } from "@/lib/checkin";
 import { printSettings } from "@/lib/printQueue";
 import JobMobile from "@/components/job/JobMobile";
 import { pressSheets } from "@/lib/pressActualServer";
+import { phoneInks } from "@/lib/jobInksServer";
 import JobSignIn from "@/components/job/JobSignIn";
 import { LangProvider, LANG_COOKIE, type Lang } from "@/components/job/lang";
 import type { ShipTarget } from "@/components/ShipWindow";
@@ -55,8 +56,8 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const designs: Record<string, { number: number; name: string; url: string }> = {};
   dRows.filter((d) => d.preview_path).forEach((d, i) => { designs[d.id] = { number: d.number, name: d.name, url: signed[i]?.signedUrl || "" }; });
 
-  // press setups: the suggestion (the separations) and what really ran (press_actuals)
-  const { sheets: press, presses } = await pressSheets(admin, card, st?.data);
+  // press setups: the suggestion (the separations) and what really ran (press_actuals); the inks to pull or mix
+  const [{ sheets: press, presses }, inks] = await Promise.all([pressSheets(admin, card, st?.data), phoneInks(admin, card, st?.data).catch(() => null)]);
 
   // shipping (staff with the Shipping Center)
   let ship: { t: ShipTarget; existing: Shipment | null } | null = null;
@@ -85,7 +86,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const checkin = who.can.checkin ? await checkinJobFor(admin, { kind: card.kind, id: card.id }).catch(() => null) : null;
 
   return wrap(
-    <JobMobile who={who} card={card} box={ref?.box || null} designs={designs} press={press} presses={presses} ship={ship} shipSettings={settings.ship} checkin={checkin}
+    <JobMobile who={who} card={card} box={ref?.box || null} designs={designs} press={press} presses={presses} inks={inks} ship={ship} shipSettings={settings.ship} checkin={checkin}
       printer={{ ready: ps.mode === "printnode" ? !!ps.printnodeId : !!ps.host, dpi: ps.dpi }} />
   );
 }

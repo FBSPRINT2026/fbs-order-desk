@@ -76,8 +76,8 @@ const norm = (s: string) => s.toLowerCase().replace(/^(pms|pantone)\s*/, "").rep
 const pmsKey = (s: string) => { const t = norm(s); const m = t.match(/^(\d{3,4})\s*c?$/); return m ? `${m[1]} c` : t; };
 const isWhite = (name: string) => /\bwhite\b/i.test(name) && !/off[- ]?white|cream|ivory/i.test(name);
 
-/** which shelf ink(s) a job's ink comes out of */
-export function planUsage(jobs: Job[], stock: StockLite[], formulas: FormulaLite[], s: InkPlanSettings) {
+/** how a job's ink names find their ink: the white for the fabric, a stocked ink, or an Epic Rio formula */
+export function inkMatcher(stock: StockLite[], formulas: FormulaLite[]) {
   const live = stock.filter((x) => x.stocked);
   const tiger = live.find((x) => /tiger/i.test(x.name)) || live.find((x) => x.section === "base" && /white/i.test(x.name) && !/poly/i.test(x.name));
   const polyW = live.find((x) => /super\s*poly/i.test(x.name)) || live.find((x) => x.section === "base" && /poly/i.test(x.name) && /white/i.test(x.name)) || tiger;
@@ -85,6 +85,14 @@ export function planUsage(jobs: Job[], stock: StockLite[], formulas: FormulaLite
   const byName = new Map<string, StockLite>(); for (const x of [...live].sort((a, b) => (a.section === "rfu" ? -1 : 0) - (b.section === "rfu" ? -1 : 0))) if (!byName.has(norm(x.name))) byName.set(norm(x.name), x);
   const byPms = new Map<string, StockLite>(); for (const x of live) if (x.pms && x.section !== "mixing" && !byPms.has(pmsKey(x.pms))) byPms.set(pmsKey(x.pms), x);
   const fByCode = new Map<string, FormulaLite>(); for (const f of formulas) if (f.rec_type === "S" && f.lines?.length && !fByCode.has(pmsKey(f.code))) fByCode.set(pmsKey(f.code), f);
+  const stockFor = (name: string) => byName.get(norm(name)) || byName.get(norm(name.replace(/^(rio\s*(rfu)?|wilflex|monarch|inktek)\s+/i, ""))) || byPms.get(pmsKey(name)) || null;
+  const formulaFor = (name: string) => fByCode.get(pmsKey(name)) || null;
+  return { tiger, polyW, byProduct, byName, stockFor, formulaFor };
+}
+
+/** which shelf ink(s) a job's ink comes out of */
+export function planUsage(jobs: Job[], stock: StockLite[], formulas: FormulaLite[], s: InkPlanSettings) {
+  const { tiger, polyW, byProduct, byName, stockFor, formulaFor } = inkMatcher(stock, formulas);
   const needs = new Map<string, InkNeed>();
   const add = (key: string, st: StockLite | null, name: string, density: number, u: Use) => {
     const n = needs.get(key) || { key, stock: st, name, density, uses: [] };
@@ -106,9 +114,9 @@ export function planUsage(jobs: Job[], stock: StockLite[], formulas: FormulaLite
         continue;
       }
       const nm = norm(sc.name), pk = pmsKey(sc.name);
-      const st = byName.get(nm) || byName.get(norm(sc.name.replace(/^(rio\s*(rfu)?|wilflex|monarch|inktek)\s+/i, ""))) || byPms.get(pk);
+      const st = stockFor(sc.name);
       if (st) { const d = densityOf(st.name); add(st.id, st, st.name, d, { ...base, ink: sc.name, grams: grams(d), via: `${size}${st.pms && norm(st.name) !== nm ? ` · stock ink for PMS ${st.pms}` : ""}` }); continue; }
-      const f = fByCode.get(pk);
+      const f = formulaFor(sc.name);
       if (f?.lines?.length) {
         const d = densityOf(sc.name, f.grams_per_qt), total = grams(d), sum = f.lines.reduce((a, l) => a + (l.g ?? l.pct), 0) || 1;
         for (const l of f.lines) {
@@ -125,6 +133,52 @@ export function planUsage(jobs: Job[], stock: StockLite[], formulas: FormulaLite
   }
   return needs;
 }
+
+/** one ink a job needs, all its screens together (the job's phone menu: "what to pull or mix") */
+export type JobInk = {
+  key: string; name: string; kind: "white" | "stock" | "pms" | "other"; screen: string;
+  /** the Epic Rio formula's code when it's mixed ("123 C") */ code: string;
+  grams: number; density: number; est: boolean; where: { location: string; pieces: number; grams: number }[]; why: string;
+  /** how many screens use it */ n: number;
+};
+export function jobInks(job: Job, stock: StockLite[], formulas: FormulaLite[], s: InkPlanSettings): JobInk[] {
+  const { tiger, polyW, stockFor, formulaFor } = inkMatcher(stock, formulas);
+  const out = new Map<string, JobInk>();
+  for (const p of job.prints) for (const sc of p.screens) {
+    const white = sc.kind !== "color" || isWhite(sc.name);
+    let key: string, name: string, kind: JobInk["kind"], d: number, code = "", why = "";
+    if (white) {
+      const pw = needsPolyWhite(p.fabric, p.garmentColor, s.polyPct), w = pw.poly ? polyW : tiger;
+      key = w ? w.id : "white"; name = w ? w.name : "White"; kind = "white"; d = densityOf("white"); why = `${pw.poly ? "Poly white" : "Cotton white"}: ${pw.why}`;
+    } else {
+      const st = stockFor(sc.name), f = st ? null : formulaFor(sc.name);
+      if (st) { key = st.id; name = st.name; kind = "stock"; d = densityOf(st.name); }
+      else if (f) { key = `f:${f.code.toUpperCase()}`; name = `PMS ${f.code}`; kind = "pms"; code = f.code; d = densityOf(sc.name, f.grams_per_qt); }
+      else { key = sc.name ? `x:${norm(sc.name)}` : "x:unnamed"; name = sc.name || "Colors not named"; kind = "other"; d = densityOf(sc.name); }
+    }
+    const g = p.pieces * gramsPerPrint(p.wIn, p.hIn, sc.coverage, sc.mesh, d, s.factor) + s.setupG;
+    const cur = out.get(key) || { key, name, kind, screen: sc.kind === "underbase" ? "Underbase" : sc.name, code, grams: 0, density: d, est: false, where: [], why, n: 0 };
+    cur.grams += g; cur.n++; cur.est = cur.est || !sc.known;
+    const at = cur.where.find((x) => x.location === p.location);
+    if (at) { at.grams += g; at.pieces = Math.max(at.pieces, p.pieces); } else cur.where.push({ location: p.location, pieces: p.pieces, grams: g });
+    out.set(key, cur);
+  }
+  const rank = { white: 0, stock: 1, pms: 1, other: 2 };
+  return [...out.values()].sort((a, b) => rank[a.kind] - rank[b.kind] || b.grams - a.grams);
+}
+
+/** a batch to mix for a need: whole quarts up to 3, then half gallons ("2 qt", "1½ gal") */
+export function batchQt(grams: number, density: number) {
+  const q = grams / density / CM3_PER_QT;
+  return q <= 3 ? Math.max(1, Math.ceil(q)) : Math.ceil(q / 2) * 2;
+}
+/** quarts → "3 qt", "1 gal", "1½ gal", "2 gal 1 qt" */
+export function qtLabel(qt: number) {
+  if (qt < 4) return `${+qt.toFixed(2)} qt`;
+  const g = Math.floor(qt / 4), r = +(qt - g * 4).toFixed(2);
+  return r === 2 ? `${g}½ gal` : r ? `${g} gal ${r} qt` : `${g} gal`;
+}
+export const qtStep = (qt: number) => (qt < 4 ? 1 : 2);
 
 export type CountLite = { stock_ink_id: string; grams: number; counted_at: string; counted_by: string; kind: string };
 export type InkStatus = {
