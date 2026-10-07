@@ -102,17 +102,45 @@ export default function InkRoom() {
     }
     return xs;
   }, [inks, q]);
-  // the chart in three parts: the regular PMS formulas, then IMS's High Opacity ("… C HO") formulas, then the ones
-  // adjusted for printing over an underbase ("… C UB"); the regular part shows at most 240 at a time
+  // the chart by Pantone guide. What the code's shape means (from Pantone's own color pages and guide docs):
+  //  · "P 7-6 C" / "100-4 C": the CMYK (four-color process) Guide; the first number is the page (1–180), the second
+  //    the chip on that page (1–16)
+  //  · "16-6340 C": Fashion, Home + Interiors; 2 digits of lightness (11–19), 2 of hue, 2 of chroma
+  //  · 3 digits starting 8 (801–814) or 9 (901–942): Neons;  4 digits starting 9 (9020–9603): Pastels
+  //  · 871–877, 4 digits starting 8, 5 digits starting 10: Metallics
+  //  · "… C HO": High Opacity;  "… C UB": adjusted for printing over an underbase (both the shop's/IMS's versions)
   const parts = useMemo(() => {
-    const kind = (c: string) => (/(^|[^a-z])ho([^a-z]|$)/i.test(c) ? "ho" : /(^|[^a-z])ub([^a-z]|$)/i.test(c) ? "ub" : "std");
-    const std = list.filter((i) => kind(i.code) === "std");
+    const kind = (code: string) => {
+      const u = code.toUpperCase().trim();
+      if (/(^|[^A-Z])HO([^A-Z]|$)/.test(u)) return "ho";
+      if (/(^|[^A-Z])UB([^A-Z]|$)/.test(u)) return "ub";
+      if (/^\d{2}-\d{4}\s*C$/.test(u)) return "fhi";
+      if (/^P?\s*-?\s*\d{1,3}\s*-\s*\d{1,2}\s*C$/.test(u)) return "cmyk";
+      if (u.startsWith("HEXACHROME")) return "hexa";
+      if (/SHIMMER/.test(u) || /^(87[1-7]|8\d{3}|10\d{3})\s*C$/.test(u)) return "metal";
+      if (/^(80[1-9]|81[0-4]|9\d\d)\s*C$/.test(u)) return "neon";
+      if (/^9\d{3}\s*C$/.test(u)) return "pastel";
+      if (/ALT|OLD|UNIMIX|PADE/.test(u)) return "alt";
+      return "std";
+    };
+    // CMYK guide codes in book order: page, then chip
+    const pg = (c: string) => { const m = c.match(/(\d{1,3})\s*-\s*(\d{1,2})/); return m ? +m[1] * 100 + +m[2] : 0; };
+    const by = (k: string) => list.filter((i) => kind(i.code) === k);
+    const std = by("std");
+    const searching = !!norm(q);
     return [
-      { k: "std", title: "", xs: std.slice(0, 240), more: std.length > 240 },
-      { k: "ho", title: "High Opacity", xs: list.filter((i) => kind(i.code) === "ho"), more: false },
-      { k: "ub", title: "Adjusted for Underbase", xs: list.filter((i) => kind(i.code) === "ub"), more: false },
-    ].filter((x) => x.xs.length);
-  }, [list]);
+      { k: "std", title: "", note: "", xs: std.slice(0, 240), more: std.length > 240 },
+      { k: "ho", title: "High Opacity", note: "“… C HO”: the PMS color mixed for more coverage.", xs: by("ho") },
+      { k: "ub", title: "Adjusted for Underbase", note: "“… C UB”: the PMS color adjusted to print over a white underbase.", xs: by("ub") },
+      { k: "neon", title: "Neons", note: "Pantone Pastels & Neons guide: 801–814 C and 901–942 C.", xs: by("neon") },
+      { k: "pastel", title: "Pastels", note: "Pantone Pastels & Neons guide: four digits starting with 9 (9020–9603 C).", xs: by("pastel") },
+      { k: "metal", title: "Metallics & Shimmer", note: "Pantone Metallics guide (871–877, 8000s, 10000s). These use the silver shimmer base or additive.", xs: by("metal") },
+      { k: "cmyk", title: "CMYK Process Guide", note: "“P 7-6 C”: Pantone's four-color process guide. The first number is the page, the second the chip on that page.", xs: searching ? by("cmyk") : [...by("cmyk")].sort((a, b) => pg(a.code) - pg(b.code)) },
+      { k: "fhi", title: "Fashion, Home + Interiors", note: "“16-6340 C”: Pantone's textile system. First two digits are lightness (11–19), then hue, then chroma.", xs: by("fhi") },
+      { k: "hexa", title: "Hexachrome", note: "Pantone's older six-color process inks.", xs: by("hexa") },
+      { k: "alt", title: "Alternates & old formulas", note: "Shop alternates, older versions and one-off mixes.", xs: by("alt") },
+    ].map((x) => ({ more: false, ...x })).filter((x) => x.xs.length);
+  }, [list, q]);
 
   // stock colors, grouped by brand and line, filtered by the search
   const groups = useMemo(() => {
@@ -252,6 +280,7 @@ export default function InkRoom() {
               <>{parts.map((p) => (
               <div key={p.k} className="ink-group">
                 {p.title && <h3>{p.title} <span className="faint">{p.xs.length}</span></h3>}
+                {p.note && <div className="faint" style={{ fontSize: 12.5, marginTop: -2 }}>{p.note}</div>}
               <div className="ink-grid">{p.xs.map((i) => { const st = i.rec_type === "S" ? stockFor(i.code) : []; return (
                 <button key={i.id} type="button" className={"ink-tile" + (sel?.id === i.id ? " on" : "") + (i.lines?.length ? " has" : "")} onClick={() => pickInk(i)} title={i.name}>
                   <i style={{ background: i.hex || "#ddd" }} />
