@@ -1497,19 +1497,30 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
   const [why, setWhy] = useState("");
   const [learned, setLearned] = useState<{ summary: string; lessons: { id: string; lesson: string }[] } | null>(null), [learning, setLearning] = useState(false);
   const [readInks, setReadInks] = useState(0);
+  /** choosing Separo's files is the whole step: they're saved and learned from right away (Nicholas, Oct 7 2026).
+   *  Only when no ink names can be read from them does it wait for the inks to be typed. */
   async function pickFiles(fs: File[]) {
+    if (!fs.length) return;
     setFiles(fs);
     const names = await inkNamesFromFiles(fs);
-    if (names.length && !inkText.trim()) { setInkText(names.join("\n")); setReadInks(names.length); }
+    if (names.length) { setInkText(names.join("\n")); setReadInks(names.length); await save(fs, names); }
+    else if (inkText.trim()) await save(fs, inkText.split(/\n|,/).map((x) => x.trim()).filter(Boolean));
   }
   /** Separo's result next to ours → lessons for our separations (and notes for the engine) */
-  async function learn(chs: Channel[]) {
+  async function learn(chs: Channel[], fs: File[]) {
     setLearning(true);
     try {
       const imgs: { label: string; data: string }[] = [];
       const art = artImage(); if (art) imgs.push({ label: "The original art:", data: art });
-      const comp = files.find((f) => /^image\/(png|jpe?g)$/i.test(f.type) && f.size < 15e6);
+      // a look at what came back: a PNG / JPG as is, else the PDF / .ai / EPS drawn (its first page)
+      const comp = fs.find((f) => /^image\/(png|jpe?g)$/i.test(f.type) && f.size < 15e6);
       if (comp) { const d = await jpegOf(comp); if (d) imgs.push({ label: `What came back from ${src} (${comp.name}):`, data: d }); }
+      else {
+        const doc = fs.find((f) => /\.(pdf|ai|eps)$/i.test(f.name) && f.size < 60e6);
+        const png = doc ? await makePreview(doc).catch(() => null) : null;
+        const d = png ? await jpegOf(png) : null;
+        if (d && doc) imgs.push({ label: `What came back from ${src} (${doc.name}, first page):`, data: d });
+      }
       const r = await fetch("/api/separations/learn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ separation_id: row.id, design_id: row.design_id, source: src, why, theirs: { inks: chs.map((c) => ({ name: c.name, hex: c.hex })), files: files.map((f) => f.name) }, ...ours(), images: imgs }) });
       const j = await r.json().catch(() => ({}));
       if (j.summary) setLearned({ summary: j.summary, lessons: j.lessons || [] });
@@ -1519,24 +1530,24 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
   const [inkText, setInkText] = useState(row.channels.map((c) => c.name).join("\n"));
   const [src, setSrc] = useState(row.source && row.source !== "studio" ? row.source : "Separo");
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
-  async function save() {
+  async function save(fs: File[] = files, given?: string[]) {
     setBusy(true); setErr("");
     try {
       const added: SepFile[] = [];
-      for (const f of files) {
+      for (const f of fs) {
         const path = `separations/${row.id}/upload-${Date.now()}-${f.name.replace(/[^\w.-]+/g, "_")}`;
         const r = await sb.storage.from("proofs").upload(path, f, { upsert: true, contentType: f.type || "application/octet-stream" });
         if (r.error) throw new Error(r.error.message);
         added.push({ path, name: f.name, kind: "upload", size: f.size });
       }
-      const names = inkText.split(/\n|,/).map((x) => x.trim()).filter(Boolean);
+      const names = given || inkText.split(/\n|,/).map((x) => x.trim()).filter(Boolean);
       // Separo names inks "7405 C", "Base", "White": a PMS number gets its color, a white after the base is the highlight
       const hasBase = names.some((n) => /base/i.test(n));
       const channels: Channel[] = names.map((n, i) => ({ key: "u" + i, name: n, hex: colorHex(n) || colorHex("PMS " + n) || (/^white$/i.test(n) || /base/i.test(n) ? "#FFFFFF" : "#999999"), kind: /base|underbase/i.test(n) ? "underbase" : /highlight/i.test(n) || (hasBase && /^white$/i.test(n.trim())) ? "highlight" : "color", order: i + 1, mesh: /base/i.test(n) ? 156 : 230, coverage: 0 }));
       const r = await sb.from("separations").update({ status: "review", method: "outside", source: src, channels, files: [...(row.files || []), ...added], updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
       if (r.error) throw new Error(r.error.message);
       onSaved(r.data as SepRow);
-      await learn(channels);
+      await learn(channels, fs);
       setFiles([]);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     setBusy(false);
@@ -1545,7 +1556,7 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
     <div className="sep-outside">
       <section className="sep-card">
         <h3>Learn from Separo · 1. Get the art</h3>
-        <p className="sep-help">When a job has to be separated in Separo, upload what comes back here: it&apos;s compared with ours and the differences teach our separations.</p>
+        <p className="sep-help">When a job has to be separated in Separo, just upload what comes back below: it&apos;s saved, compared with ours and learned from right away.</p>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           {origUrl ? <a className="btn" href={origUrl} target="_blank" rel="noreferrer">Download the Art</a> : <span className="faint">No art on this imprint.</span>}
           <a className="btn" href="https://separo.io" target="_blank" rel="noreferrer">Open Separo ↗</a>
@@ -1553,13 +1564,18 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
       </section>
       <section className="sep-card">
         <h3>2. Upload what came back</h3>
-        <label className="sep-f">From<input value={src} onChange={(e) => setSrc(e.target.value)} /></label>
-        <label className="tmx-drop"><input type="file" multiple accept=".eps,.pdf,.ai,.psd,.tif,.tiff,.png,.jpg,.zip" onChange={(e) => pickFiles([...(e.target.files || [])])} /><b>{files.length ? files.map((f) => f.name).join(", ") : "Choose files (EPS, PDF, AI, PSD, TIFF, PNG, ZIP)"}</b></label>
-        {readInks > 0 && <div className="sep-ok">Read {readInks} ink{readInks === 1 ? "" : "s"} from the file. Check the print order.</div>}
-        <label className="sep-f">Inks, in print order (one per line)<textarea rows={6} value={inkText} onChange={(e) => setInkText(e.target.value)} placeholder={"Underbase\n7405 C\n2347 C\n288 C\nHighlight White\nBlack"} /></label>
-        <label className="sep-f">Why Separo this time? What was wrong with ours? (it learns from this)<textarea rows={3} value={why} onChange={(e) => setWhy(e.target.value)} placeholder="e.g. ours used 5 colors for the gradient, Separo did it in 3; our underbase was too heavy" /></label>
+        <label className="tmx-drop"><input type="file" multiple accept=".eps,.pdf,.ai,.psd,.tif,.tiff,.png,.jpg,.zip" onChange={(e) => pickFiles([...(e.target.files || [])])} /><b>{busy ? "Uploading…" : learning ? "Learning from it…" : files.length ? files.map((f) => f.name).join(", ") : "Choose Separo's files (EPS, PDF, AI, PSD, TIFF, PNG, ZIP): it learns from them right away"}</b></label>
+        {readInks > 0 && <div className="sep-ok">Read {readInks} ink{readInks === 1 ? "" : "s"} from the file: saved and sent for review.</div>}
+        {/* only when the inks couldn't be read from the files: type them, then save */}
+        {files.length > 0 && !readInks && !busy && !learning && <>
+          <label className="sep-f">Couldn&apos;t read the inks from these files. Type them in print order (one per line)<textarea rows={6} value={inkText} onChange={(e) => setInkText(e.target.value)} placeholder={"Underbase\n7405 C\n2347 C\n288 C\nHighlight White\nBlack"} /></label>
+          <button type="button" className="btn primary" disabled={!inkText.trim()} onClick={() => save()}>Save &amp; Learn</button>
+        </>}
+        <details className="sep-more"><summary className="faint">Add a note (optional): why Separo this time, from another program</summary>
+          <label className="sep-f">What was wrong with ours? (it learns from this too; type it before choosing the files)<textarea rows={3} value={why} onChange={(e) => setWhy(e.target.value)} placeholder="e.g. ours used 5 colors for the gradient, Separo did it in 3; our underbase was too heavy" /></label>
+          <label className="sep-f">From<input value={src} onChange={(e) => setSrc(e.target.value)} /></label>
+        </details>
         {err && <div className="pv-err">{err}</div>}
-        <button type="button" className="btn primary" disabled={busy || learning || (!files.length && !inkText.trim())} onClick={save}>{busy ? "Uploading…" : learning ? "Learning from it…" : "Save & Send for Review"}</button>
       </section>
       {learned && (
         <section className="sep-card sep-coach">
