@@ -3,7 +3,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { KIND_LABEL, addDays, dayLabel, daysBetween, dec, fullName, hm, localDay, localMinutes, localToIso, periodOf, timeLabel, timecard, type Punch, type TimeOff } from "@/lib/timeclock";
 import { useSticky } from "@/lib/useSticky";
-import { isBoss, type TimeData } from "./types";
+import { isBoss, seesPay, type TimeData } from "./types";
 
 /**
  * Timecards for a pay period: regular, overtime (over the weekly limit), breaks and time off per person, each day's
@@ -21,7 +21,7 @@ export default function TimeCards({ d }: { d: TimeData }) {
   // Summary (hours per person) or Punches (every in and out, day by day, for everyone)
   const [view, setView] = useSticky<"summary" | "punches">("time.cardsView", "summary");
   const [q, setQ] = useState("");
-  const boss = isBoss(d);
+  const boss = isBoss(d), seePay = seesPay(d);
 
   const load = useCallback(async () => {
     const sb = createClient();
@@ -31,11 +31,11 @@ export default function TimeCards({ d }: { d: TimeData }) {
       sb.from("time_punches").select("*").gte("at", from).lt("at", to).order("at"),
       sb.from("time_off").select("*").lte("starts_on", period.end).gte("ends_on", period.start),
       sb.from("time_periods").select("approved_at, approved_by").eq("starts_on", period.start).maybeSingle(),
-      boss ? sb.from("employee_pay").select("employee_id, rate, salary") : Promise.resolve({ data: [] }),
+      seePay ? sb.from("employee_pay").select("employee_id, rate, salary") : Promise.resolve({ data: [] }),
     ]);
     setPunches((p || []) as Punch[]); setOffs((o || []) as TimeOff[]); setApproved(ap || null);
     setPay(Object.fromEntries(((pr.data || []) as { employee_id: string; rate: number | null; salary: number | null }[]).map((x) => [x.employee_id, { rate: x.rate, salary: x.salary }])));
-  }, [period.start, period.end, boss]);
+  }, [period.start, period.end, seePay]);
   useEffect(() => { load(); }, [load]);
 
   const cards = useMemo(() => {
@@ -47,12 +47,12 @@ export default function TimeCards({ d }: { d: TimeData }) {
   const days = Array.from({ length: daysBetween(period.start, period.end) + 1 }, (_, i) => addDays(period.start, i));
 
   function exportCsv() {
-    const head = ["Employee", "Employee ID", "Department", "Period Start", "Period End", "Regular Hours", "Overtime Hours", "PTO Hours", "Sick Hours", "Holiday Hours", "Unpaid Hours", "Total Paid Hours", ...(boss ? ["Pay Rate", "Gross Pay"] : [])];
+    const head = ["Employee", "Employee ID", "Department", "Period Start", "Period End", "Regular Hours", "Overtime Hours", "PTO Hours", "Sick Hours", "Holiday Hours", "Unpaid Hours", "Total Paid Hours", ...(seePay ? ["Pay Rate", "Gross Pay"] : [])];
     const rows = cards.map(({ e, c }) => {
       const r = pay[e.id]?.rate ?? null;
       const paid = c.regular + c.overtime + c.pto + c.sick + c.holiday;
       const gross = r != null ? (c.regular / 60) * r + (c.overtime / 60) * r * 1.5 + ((c.pto + c.sick + c.holiday) / 60) * r : null;
-      return [fullName(e), e.uattend_id || e.id.slice(0, 8), e.department, period.start, period.end, dec(c.regular), dec(c.overtime), dec(c.pto), dec(c.sick), dec(c.holiday), dec(c.unpaid), dec(paid), ...(boss ? [r != null ? r.toFixed(2) : "", gross != null ? gross.toFixed(2) : ""] : [])];
+      return [fullName(e), e.uattend_id || e.id.slice(0, 8), e.department, period.start, period.end, dec(c.regular), dec(c.overtime), dec(c.pto), dec(c.sick), dec(c.holiday), dec(c.unpaid), dec(paid), ...(seePay ? [r != null ? r.toFixed(2) : "", gross != null ? gross.toFixed(2) : ""] : [])];
     });
     const csv = [head, ...rows].map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `payroll-${period.start}-to-${period.end}.csv`; a.click();

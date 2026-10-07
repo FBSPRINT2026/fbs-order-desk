@@ -277,6 +277,8 @@ export type WhenDates = { soonest: string | null; aggressive: string | null; reg
 
 export default function MachineSchedule({ when }: { /** hidden mode: no calendar, just the When answer for these groups */ when?: { groups: Group[]; onDates: (d: WhenDates | null) => void } } = {}) {
   const canEquip = useCan("pressDefaults");
+  // crew pay rates (job labor cost, overtime cost): owners / admins, and anyone with the "pay" permission
+  const canPay = useCan("pay");
   const [now, setNow] = useState(() => shopTime(new Date())!);
   useEffect(() => { const t = setInterval(() => setNow(shopTime(new Date())!), 60000); return () => clearInterval(t); }, []);
   const today = now.day;
@@ -473,7 +475,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     if (user?.email) {
       const { data: sf } = await sb.from("staff").select("name, role").eq("email", user.email.toLowerCase()).maybeSingle(); setMe({ email: user.email.toLowerCase(), name: (sf?.name as string) || "" });
       setIsAdmin(["owner", "admin"].includes((sf?.role as string) || ""));
-      if (["owner", "admin"].includes((sf?.role as string) || "")) {
+      if (["owner", "admin"].includes((sf?.role as string) || "") || canPay) {
         const [{ data: pr }, { data: em }] = await Promise.all([sb.from("employee_pay").select("employee_id, rate"), sb.from("employees").select("id, first_name, last_name")]);
         setPay({ rates: Object.fromEntries(((pr || []) as { employee_id: string; rate: number | null }[]).filter((x) => x.rate != null).map((x) => [x.employee_id, +x.rate!])), names: Object.fromEntries(((em || []) as { id: string; first_name: string; last_name: string }[]).map((x) => [x.id, `${x.first_name} ${x.last_name}`.trim()])) });
       }

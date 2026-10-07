@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fullName, hm, jobMinutes, timeLabel, dayLabel, localDay, type Employee, type JobTime } from "@/lib/timeclock";
-import { money } from "@/lib/format";
+import { payMoney } from "@/lib/format";
 
 /** Labor on one order: time logged per step (setup, front, back…), who did it, pieces per labor hour and (owners/admins) cost. */
 export default function JobLabor({ orderId, archivedId, qty, total }: { orderId?: string; archivedId?: string; qty?: number; total?: number }) {
@@ -34,7 +34,7 @@ export default function JobLabor({ orderId, archivedId, qty, total }: { orderId?
         <div className="tj-steps">{[...byTask.entries()].map(([t, m]) => <span key={t} className="tmx-p">{t} <b>{hm(m)}</b></span>)}</div>
         <div className="jl-k">
           {qty ? <span>{(qty / (mins / 60)).toFixed(1)} <small>pcs / labor hr</small></span> : null}
-          {cost != null && <span>{money(cost)} <small>labor cost</small></span>}
+          {cost != null && <span>{payMoney(cost)} <small>labor cost</small></span>}
           {cost != null && total ? <span>{((cost / total) * 100).toFixed(0)}% <small>of the price</small></span> : null}
         </div>
         <button type="button" className="linkbtn" onClick={() => setOpen(!open)} style={{ alignSelf: "flex-start" }}>{open ? "Hide entries" : `Show ${rows.length} entries`}</button>

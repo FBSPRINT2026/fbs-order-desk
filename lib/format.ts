@@ -7,6 +7,8 @@ let hideMoney = false;
 export const setHideMoney = (b: boolean) => { hideMoney = b; };
 export const moneyHidden = () => hideMoney && typeof window !== "undefined";
 export const money = (n: number | string | null | undefined) => (moneyHidden() ? "—" : fmt$.format(+(n ?? 0) || 0));
+/** pay rates and labor cost: shown to whoever may see pay (the "pay" permission), whether or not they see prices */
+export const payMoney = (n: number | string | null | undefined) => fmt$.format(+(n ?? 0) || 0);
 
 export function todayISO() {
   const d = new Date();

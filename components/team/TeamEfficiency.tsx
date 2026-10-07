@@ -2,7 +2,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { addDays, dec, fullName, hm, jobKey, jobMinutes, localDay, localToIso, timecard, type JobTime, type Punch } from "@/lib/timeclock";
-import { money } from "@/lib/format";
+import { money, payMoney } from "@/lib/format";
 import type { TeamData } from "./types";
 
 type Ord = { key: string; label: string; customer: string; qty: number; total: number; href: string };
@@ -13,6 +13,8 @@ type Ord = { key: string; label: string; customer: string; qty: number; total: n
  * Cost uses each person's hourly rate (owners and admins only).
  */
 export default function TeamEfficiency({ d }: { d: TeamData }) {
+  /** labor cost: owners / admins and the "pay" permission; order totals and labor % stay owner / admin */
+  const pay = d.boss || !!d.seesPay;
   const [to, setTo] = useState(localDay(new Date())); const [from, setFrom] = useState(addDays(localDay(new Date()), -29));
   const [rows, setRows] = useState<JobTime[] | null>(null);
   const [orders, setOrders] = useState<Record<string, Ord>>({});
@@ -24,7 +26,7 @@ export default function TeamEfficiency({ d }: { d: TeamData }) {
     const lo = localToIso(from, 0), hi = localToIso(addDays(to, 1), 0);
     const [{ data: j }, pr, { data: p }] = await Promise.all([
       sb.from("job_time").select("*").eq("voided", false).gte("started_at", lo).lt("started_at", hi).limit(10000),
-      d.boss ? sb.from("employee_pay").select("employee_id, rate, salary") : Promise.resolve({ data: [] }),
+      pay ? sb.from("employee_pay").select("employee_id, rate, salary") : Promise.resolve({ data: [] }),
       sb.from("time_punches").select("*").eq("voided", false).gte("at", lo).lt("at", hi).limit(20000),
     ]);
     const js = (j || []) as JobTime[];
@@ -42,7 +44,7 @@ export default function TeamEfficiency({ d }: { d: TeamData }) {
     for (const o of (os || []) as { id: string; number: number; nickname: string; qty: number; total: number; customer_id: string | null }[]) m["o:" + o.id] = { key: "o:" + o.id, label: `#${o.number} ${o.nickname || ""}`.trim(), customer: cn.get(o.customer_id || "") || "", qty: +o.qty || 0, total: +o.total || 0, href: `/shop/orders/${o.id}` };
     for (const o of (as || []) as { id: string; visual_id: string; nickname: string; qty: number; total: number; customer_id: string | null }[]) m["a:" + o.id] = { key: "a:" + o.id, label: `#${o.visual_id} ${o.nickname || ""}`.trim(), customer: cn.get(o.customer_id || "") || "", qty: +o.qty || 0, total: +o.total || 0, href: `/shop/archive/${o.id}` };
     setOrders(m);
-  }, [from, to, d.boss]);
+  }, [from, to, pay]);
   useEffect(() => { load(); }, [load]);
 
   const cost = (r: JobTime) => (jobMinutes(r) / 60) * (rates[r.employee_id] || 0);
@@ -87,23 +89,23 @@ export default function TeamEfficiency({ d }: { d: TeamData }) {
       </div>
       <div className="sc-kpis tmx-kpis">
         <div className="sc-kpi blue"><span>Job Hours</span><b>{dec(v.total)}</b><small>logged on jobs</small></div>
-        {d.boss && <div className="sc-kpi orange"><span>Labor Cost</span><b>{money(v.totalCost)}</b><small>at each person&apos;s rate</small></div>}
+        {pay && <div className="sc-kpi orange"><span>Labor Cost</span><b>{payMoney(v.totalCost)}</b><small>at each person&apos;s rate</small></div>}
         <div className="sc-kpi teal"><span>Pieces / Labor Hour</span><b>{v.pph != null ? v.pph.toFixed(1) : "—"}</b><small>order pieces ÷ hours</small></div>
         <div className="sc-kpi"><span>Jobs Worked</span><b>{v.jobs.length}</b><small>{v.people.length} people</small></div>
       </div>
       {rows === null ? <div className="empty">Loading…</div> : !rows.length ? <div className="empty">No job time logged in these dates yet. Once people start logging jobs in the employee app, this fills in.</div> : (<>
         <section className="db-card db-blue">
           <div className="db-card-h"><h2>By Job</h2><span className="faint db-h-note">tap a job for its steps</span></div>
-          <table className="rv-tbl tj-tbl"><thead><tr><th>Job</th><th className="r">Labor</th><th className="r">People</th><th className="r">Pieces</th><th className="r">Pcs / Hr</th>{d.boss && <><th className="r">Labor Cost</th><th className="r">Order</th><th className="r">Labor %</th></>}</tr></thead>
+          <table className="rv-tbl tj-tbl"><thead><tr><th>Job</th><th className="r">Labor</th><th className="r">People</th><th className="r">Pieces</th><th className="r">Pcs / Hr</th>{pay && <th className="r">Labor Cost</th>}{d.boss && <><th className="r">Order</th><th className="r">Labor %</th></>}</tr></thead>
             <tbody>{v.jobs.map((j) => (
               <Fragment key={j.k}>
                 <tr onClick={() => setOpen(open === j.k ? null : j.k)} style={{ cursor: "pointer" }} className={open === j.k ? "tmx-emp on" : ""}>
                   <td><b>{j.label}</b>{j.o?.customer ? <div className="faint">{j.o.customer}</div> : null}</td>
                   <td className="r num">{hm(j.m)}</td><td className="r num">{j.people}</td><td className="r num">{j.o?.qty || "—"}</td>
                   <td className="r num">{j.pph != null ? j.pph.toFixed(1) : "—"}</td>
-                  {d.boss && <><td className="r num">{money(j.c)}</td><td className="r num">{j.o?.total ? money(j.o.total) : "—"}</td><td className={"r num" + (j.pct != null && j.pct > 35 ? " tmx-ot" : "")}>{j.pct != null ? `${j.pct.toFixed(0)}%` : "—"}</td></>}
+                  {pay && <td className="r num">{payMoney(j.c)}</td>}{d.boss && <><td className="r num">{j.o?.total ? money(j.o.total) : "—"}</td><td className={"r num" + (j.pct != null && j.pct > 35 ? " tmx-ot" : "")}>{j.pct != null ? `${j.pct.toFixed(0)}%` : "—"}</td></>}
                 </tr>
-                {open === j.k && <tr className="tmx-detail"><td colSpan={d.boss ? 8 : 5}><div className="tj-steps">{j.tasks.map(([t, m]) => <span key={t} className="tmx-p">{t} <b>{hm(m)}</b></span>)}{j.o && <a className="linkbtn" href={j.o.href}>Open order →</a>}</div></td></tr>}
+                {open === j.k && <tr className="tmx-detail"><td colSpan={5 + (pay ? 1 : 0) + (d.boss ? 2 : 0)}><div className="tj-steps">{j.tasks.map(([t, m]) => <span key={t} className="tmx-p">{t} <b>{hm(m)}</b></span>)}{j.o && <a className="linkbtn" href={j.o.href}>Open order →</a>}</div></td></tr>}
               </Fragment>
             ))}</tbody></table>
         </section>

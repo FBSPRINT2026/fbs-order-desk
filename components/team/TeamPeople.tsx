@@ -15,8 +15,11 @@ import type { TeamData } from "./types";
  */
 const COLORS = ["#0E9BD8", "#F26660", "#FCB122", "#0F8C78", "#7C5CD6", "#D0487A", "#3F7F2E", "#B8621B"];
 const money = (n: number) => `$${n.toFixed(2).replace(/\.00$/, "")}`;
+const payMoney = money;
 
 export default function TeamPeople({ d }: { d: TeamData }) {
+  /** pay rates: owners / admins, and anyone given the "pay" permission (Jose, production lead); read only for them */
+  const canPay = d.boss || !!d.seesPay;
   const [edit, setEdit] = useState<Partial<Employee> | null>(null);
   const [showOld, setShowOld] = useSticky("team.showOld", false);
   const [prod, setProd] = useState<ProductionSettings | null>(null);
@@ -27,7 +30,7 @@ export default function TeamPeople({ d }: { d: TeamData }) {
     const sb = createClient();
     const [{ data: st }, pay] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
-      d.boss ? sb.from("employee_pay").select("employee_id, rate") : Promise.resolve({ data: [] as { employee_id: string; rate: number | null }[] }),
+      canPay ? sb.from("employee_pay").select("employee_id, rate") : Promise.resolve({ data: [] as { employee_id: string; rate: number | null }[] }),
     ]);
     setProd(mergeProduction((st?.data as { production?: unknown } | null)?.production));
     setRates(Object.fromEntries(((pay.data || []) as { employee_id: string; rate: number | null }[]).filter((x) => x.rate != null).map((x) => [x.employee_id, +x.rate!])));
@@ -38,7 +41,7 @@ export default function TeamPeople({ d }: { d: TeamData }) {
   const list = d.employees.filter((e) => showOld || e.active);
   const depts = d.settings.departments;
   const byId = useMemo(() => new Map(d.employees.map((e) => [e.id, e])), [d.employees]);
-  const timeData = { me: d.me, role: d.boss ? "owner" : "staff", employees: d.employees, settings: d.settings, reload: d.reload };
+  const timeData = { me: d.me, role: d.boss ? "owner" : "staff", seesPay: canPay, employees: d.employees, settings: d.settings, reload: d.reload };
 
   async function setDept(e: Employee, dept: string) {
     setBusy(e.id);
@@ -98,7 +101,7 @@ export default function TeamPeople({ d }: { d: TeamData }) {
     return (
       <select value={cur} disabled={busy === c.id + role} onChange={(e) => setMember(c, role, e.target.value)} aria-label={role}>
         <option value="">— nobody —</option>
-        {sorted.map((e) => <option key={e.id} value={e.id}>{fullName(e)}{d.boss && rates[e.id] ? ` · ${money(rates[e.id])}/hr` : ""}{e.department && e.department !== "Screen Printing" ? ` · ${e.department}` : ""}</option>)}
+        {sorted.map((e) => <option key={e.id} value={e.id}>{fullName(e)}{canPay && rates[e.id] ? ` · ${payMoney(rates[e.id])}/hr` : ""}{e.department && e.department !== "Screen Printing" ? ` · ${e.department}` : ""}</option>)}
       </select>
     );
   };
@@ -114,11 +117,11 @@ export default function TeamPeople({ d }: { d: TeamData }) {
 
       <section className="db-card db-blue">
         <div className="db-card-h"><h2>Press Crews</h2><a className="linkbtn" href="/shop/settings/production">Crew hours &amp; presses</a></div>
-        <p className="faint" style={{ fontSize: 12.5, margin: "0 0 10px" }}>Who runs each press. The press operator&apos;s name shows on the production calendar{d.boss ? ", and the crew's rates add up to the labor cost of every job on that press" : ""}.</p>
+        <p className="faint" style={{ fontSize: 12.5, margin: "0 0 10px" }}>Who runs each press. The press operator&apos;s name shows on the production calendar{canPay ? ", and the crew's rates add up to the labor cost of every job on that press" : ""}.</p>
         {!prod ? <div className="db-empty">Loading…</div> : (
           <div className="tp-crews">{prod.crews.map((c) => { const r = crewRate(c), ps = presses(c); return (
             <div key={c.id} className="tp-crew">
-              <div className="tp-crew-h"><b>{ps.length ? ps.join(", ") : "No press yet"}</b><span className="faint">{c.leader ? `${c.leader}'s crew` : "Crew"}</span>{d.boss && <span className={"tmx-tag" + (r ? " ok" : "")}>{r ? `${money(r)}/hr` : "no rates"}</span>}</div>
+              <div className="tp-crew-h"><b>{ps.length ? ps.join(", ") : "No press yet"}</b><span className="faint">{c.leader ? `${c.leader}'s crew` : "Crew"}</span>{canPay && <span className={"tmx-tag" + (r ? " ok" : "")}>{r ? `${payMoney(r)}/hr` : "no rates"}</span>}</div>
               {CREW_ROLES.map(([k, l]) => <label key={k} className="tp-role"><span>{l}</span>{pick(c, k)}</label>)}
               <details className="tp-skill">
                 <summary><b>Crew speed</b>{(() => { const t = typical(c); if (!t) return null; const pc = Math.round((t.base / Math.max(1, t.mine) - 1) * 100); return <span className={pc > 0 ? "ok" : pc < 0 ? "bad" : ""}>{pc === 0 ? "standard" : `${pc > 0 ? pc + "% faster" : -pc + "% slower"} on a typical job`}</span>; })()}</summary>
@@ -147,7 +150,7 @@ export default function TeamPeople({ d }: { d: TeamData }) {
                   <li key={e.id} className={e.active ? "" : "old"}>
                     <button type="button" className="tp-p" onClick={() => setEdit(e)} title="Edit">
                       <span className="tmx-av sm" style={{ background: e.color || COLORS[i % COLORS.length] }}>{(e.first_name[0] || "") + (e.last_name[0] || "")}</span>
-                      <span className="tp-p-n"><b>{fullName(e)}{!e.active ? " · former" : ""}</b><small className="faint">{[crews.length ? `${crews.join(", ")}'s crew` : "", d.boss && rates[e.id] ? `${money(rates[e.id])}/hr` : ""].filter(Boolean).join(" · ") || "#" + (e.code ?? "")}</small></span>
+                      <span className="tp-p-n"><b>{fullName(e)}{!e.active ? " · former" : ""}</b><small className="faint">{[crews.length ? `${crews.join(", ")}'s crew` : "", canPay && rates[e.id] ? `${payMoney(rates[e.id])}/hr` : ""].filter(Boolean).join(" · ") || "#" + (e.code ?? "")}</small></span>
                     </button>
                     <select value={depts.includes(e.department) ? e.department : ""} disabled={busy === e.id} onChange={(ev) => setDept(e, ev.target.value)} aria-label="Team"><option value="">No team</option>{depts.map((x) => <option key={x}>{x}</option>)}</select>
                   </li>

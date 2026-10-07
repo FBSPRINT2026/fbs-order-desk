@@ -27,5 +27,11 @@ export async function saveAccess(email: string, role: Role, perms: Perms): Promi
   const access = { ...((data.access as Record<string, unknown>) || {}) };
   if (Object.keys(own).length && role !== "owner") access[who] = own; else delete access[who];
   const r = await admin.from("settings").upsert({ id: 1, data: { ...data, access }, updated_at: new Date().toISOString() });
-  return r.error ? { ok: false, error: r.error.message } : { ok: true };
+  if (r.error) return { ok: false, error: r.error.message };
+  // the database lets someone read pay rates only from their staff record (the settings row is writable by any staff
+  // member, so it can't be what the database trusts): keep staff.sees_pay in step with the "pay" permission
+  const sp = await admin.from("staff").update({ sees_pay: role !== "owner" && role !== "admin" && !!(own.pay ?? base.pay) }).eq("email", who);
+  if (sp.error && !/sees_pay/.test(sp.error.message)) return { ok: false, error: sp.error.message };
+  if (sp.error) return { ok: true, error: "Saved. Pay rates will show for them once the database update (staff.sees_pay) is run." };
+  return { ok: true };
 }

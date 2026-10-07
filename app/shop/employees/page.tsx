@@ -10,6 +10,7 @@ import TeamEfficiency from "@/components/team/TeamEfficiency";
 import TeamApp from "@/components/team/TeamApp";
 import TeamPeople from "@/components/team/TeamPeople";
 import type { TeamData } from "@/components/team/types";
+import { useCan } from "@/components/RoleContext";
 
 /**
  * Production → Employees: people and teams (press crews), and job efficiency. Plan who works which jobs each day, see who's on what right now,
@@ -23,6 +24,7 @@ export default function EmployeesPage() {
   const sp = useSearchParams(), router = useRouter();
   const tab = (sp.get("tab") as Tab) || "people";
   const [d, setD] = useState<TeamData | null>(null);
+  const canPay = useCan("pay");
   const reload = useCallback(async () => {
     const sb = createClient();
     const { data: { user } } = await sb.auth.getUser();
@@ -32,8 +34,9 @@ export default function EmployeesPage() {
       sb.from("employees").select("*").order("first_name"),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
-    setD({ me: email, boss: ["owner", "admin"].includes((st?.role as string) || ""), employees: (emps || []) as Employee[], settings: mergeTime((s?.data as { time?: unknown } | null)?.time), reload });
-  }, []);
+    const boss = ["owner", "admin"].includes((st?.role as string) || "");
+    setD({ me: email, boss, seesPay: boss || canPay, employees: (emps || []) as Employee[], settings: mergeTime((s?.data as { time?: unknown } | null)?.time), reload });
+  }, [canPay]);
   useEffect(() => { reload(); }, [reload]);
   const go = (t: Tab) => { const p = new URLSearchParams(sp.toString()); if (t === "people") p.delete("tab"); else p.set("tab", t); router.replace(`/shop/employees${p.size ? "?" + p : ""}`, { scroll: false }); };
   return (

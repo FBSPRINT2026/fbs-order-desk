@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fullName, type Employee } from "@/lib/timeclock";
-import { isBoss, type TimeData } from "./types";
+import { isBoss, seesPay, type TimeData } from "./types";
 import { useSticky } from "@/lib/useSticky";
 
 const COLORS = ["#0E9BD8", "#F26660", "#FCB122", "#0F8C78", "#7C5CD6", "#D0487A", "#3F7F2E", "#B8621B"];
@@ -41,12 +41,12 @@ export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Par
   const [staff, setStaff] = useState<{ email: string; name: string }[]>([]);
   const [pin, setPin] = useState(""), [rate, setRate] = useState(""), [salary, setSalary] = useState("");
   const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [note, setNote] = useState("");
-  const boss = isBoss(d);
+  const boss = isBoss(d), pay = seesPay(d);
   useEffect(() => {
     const sb = createClient();
     sb.from("staff").select("email, name").order("name").then(({ data }) => setStaff((data || []) as { email: string; name: string }[]));
-    if (boss && e.id) sb.from("employee_pay").select("rate, salary").eq("employee_id", e.id).maybeSingle().then(({ data }) => { setRate(data?.rate != null ? String(data.rate) : ""); setSalary(data?.salary != null ? String(data.salary) : ""); });
-  }, [boss, e.id]);
+    if (pay && e.id) sb.from("employee_pay").select("rate, salary").eq("employee_id", e.id).maybeSingle().then(({ data }) => { setRate(data?.rate != null ? String(data.rate) : ""); setSalary(data?.salary != null ? String(data.salary) : ""); });
+  }, [pay, e.id]);
   const set = <K extends keyof Employee>(k: K, x: Employee[K]) => setV({ ...v, [k]: x });
   const f = (k: "first_name" | "last_name" | "email" | "phone" | "title", label: string, type = "text") => <label>{label}<input type={type} value={(v[k] as string) || ""} onChange={(ev) => set(k, ev.target.value)} /></label>;
 
@@ -95,6 +95,7 @@ export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Par
             <label>Pay<select value={v.pay_type || "hourly"} onChange={(ev) => set("pay_type", ev.target.value as Employee["pay_type"])}><option value="hourly">Hourly</option><option value="salary">Salary</option></select></label>
             <label>Hire date<input type="date" value={v.hire_date || ""} onChange={(ev) => set("hire_date", ev.target.value || null)} /></label>
           </div>
+          {!boss && pay && (rate || salary) && <div className="faint" style={{ fontSize: 13 }}>Pay: {rate ? `$${(+rate).toFixed(2)}/hr` : ""}{rate && salary ? " · " : ""}{salary ? `$${(+salary).toLocaleString()}/yr` : ""} <span>(only an owner or admin changes pay)</span></div>}
           {boss && <div className="tmx-2">
             <label>Hourly rate ($)<input type="number" min={0} step="0.01" value={rate} onChange={(ev) => setRate(ev.target.value)} placeholder="18.00" /></label>
             <label>Salary per year ($)<input type="number" min={0} step="1" value={salary} onChange={(ev) => setSalary(ev.target.value)} placeholder="—" /></label>
