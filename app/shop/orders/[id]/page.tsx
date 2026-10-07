@@ -246,6 +246,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     timer.current = setTimeout(save, 700);
   }
   const setGroup = (i: number, fn: (g: Group) => void) => patch((d) => fn(d.groups[i]));
+  // finishing: picked once for the whole order (the usual case) or per group. Embroidery extras stay on their group.
+  const [finSplit, setFinSplit] = useState<boolean | null>(null);
+  const isFin = (id: string) => !id.startsWith("emb_");
+  const finKey = (g: Group) => (g.finishing || []).filter(isFin).sort().join(",");
+  const finPerGroup = finSplit ?? (!!o && new Set(o.groups.map(finKey)).size > 1);
+  const orderFinList = o?.price_type === "wholesale" && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;
+  const setOrderFin = (id: string, on: boolean) => patch((d) => { for (const g of d.groups) { const set = new Set(g.finishing || []); if (on) set.add(id); else set.delete(id); g.finishing = [...set]; } });
+  const finishingSame = () => { setFinSplit(false); patch((d) => { const base = (d.groups[0]?.finishing || []).filter(isFin); for (const g of d.groups) g.finishing = [...(g.finishing || []).filter((x) => !isFin(x)), ...base]; }); };
   const cloneGroup = (g: Group): Group => ({ id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid() })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })), finishing: [...(g.finishing || [])] });
 
   /** Groups the AI read from an email: fill blank costs and details from the catalog, then add or replace. */
@@ -584,17 +592,40 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <OrderSeparations o={o} />
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
-            <GroupEditor hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
+            <GroupEditor finishingAt={finPerGroup ? "group" : "order"} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
           ))}
           <div className="row">
-            <button className="btn" type="button" onClick={() => patch((d) => { d.groups.push(newGroup()); })}>+ Add line item group</button>
+            <button className="btn" type="button" onClick={() => patch((d) => { const ng = newGroup(); if (!finPerGroup) ng.finishing = (d.groups[0]?.finishing || []).filter(isFin); d.groups.push(ng); })}>+ Add line item group</button>
             <span className="faint" style={{ fontSize: 12 }}>Garments in the same group share imprints, and their quantities add up for the price break.</span>
             <FillFromText orderId={o.id} hasContent={o.groups.some((g) => g.lines.some((l) => l.style || Object.keys(l.sizes || {}).length))} onApply={applyProposal} />
           </div>
+
+          {orderFinList.length > 0 && (
+            <section className="panel fin-panel">
+              <div className="panel-h"><h2>Finishing</h2>
+                <div className="chips" role="group" aria-label="Apply finishing to">
+                  <button type="button" className={"chip" + (!finPerGroup ? " on" : "")} onClick={finishingSame}>Apply to all groups</button>
+                  <button type="button" className={"chip" + (finPerGroup ? " on" : "")} onClick={() => setFinSplit(true)}>Apply to individual groups</button>
+                </div>
+              </div>
+              <div className="panel-b">
+                {finPerGroup ? <div className="faint" style={{ fontSize: 13 }}>Pick finishing in each group above.</div> : (
+                  <div className="row" style={{ gap: 16 }}>
+                    {orderFinList.map((f) => (
+                      <label key={f.id} className="check" style={{ fontSize: 13 }}>
+                        <input type="checkbox" checked={o.groups.length > 0 && o.groups.every((g) => (g.finishing || []).includes(f.id))} onChange={(e) => setOrderFin(f.id, e.target.checked)} />
+                        {f.name}{seesMoney && <span className="faint"> ({money(f.price)}/pc)</span>}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
 
           <div className="grid g2 fees-notes">
             <section className="panel money-only">

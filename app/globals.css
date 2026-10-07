@@ -5476,3 +5476,17 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ws-fees{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px}
 .ws-fees .field small,.ws .field small{font-size:11.5px}
 .ws-notes{font-size:12.5px;white-space:pre-wrap}
+/* group editor: screens (contract jobs) and the order's finishing panel */
+.scr-sec{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line-2)}
+.scr-sec .lbl{margin-bottom:6px}
+.scr-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.scr-tbl th{font-weight:600;font-size:11.5px;color:var(--muted);text-align:left;padding:4px 8px;border-bottom:1px solid var(--line-2)}
+.scr-tbl td{padding:6px 8px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.scr-tbl .c{text-align:center}.scr-tbl .r{text-align:right}
+.scr-tbl label.check{display:inline-flex;gap:6px;align-items:center}
+.scr-n{display:inline-flex;gap:8px;align-items:center;justify-content:center}
+.scr-n input{width:58px;padding:3px 6px}
+.scr-auto{font-size:12px;margin-left:6px}
+.fin-panel{margin-bottom:14px}
+.fin-panel .panel-h{flex-wrap:wrap}
+.fin-panel label.check{display:inline-flex;gap:6px;align-items:center}

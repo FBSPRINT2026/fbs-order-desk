@@ -1,11 +1,13 @@
 "use client";
-import { ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { isLightColor, lineQty, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { smallerSpot } from "@/lib/mockup";
 import DesignSearch from "@/components/DesignSearch";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
+  /** where finishing is picked: in this group (default), or once for the whole order below the groups */
+  finishingAt?: "group" | "order";
   gi: number;
   g: Group;
   gc: GroupCalc;
@@ -49,7 +51,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock }: Props) {
+export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock }: Props) {
   const [askSkip, setAskSkip] = useState(false);
   const [blockMsg, setBlockMsg] = useState("");
   const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
@@ -104,11 +106,15 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
   // wholesale (contract) jobs use the contract's own finishing list and prices
-  const finList = [
-    ...(gc.wholesale && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing),
-    // embroidery extras (specialty thread, 3D puff…) only on a group with embroidery
-    ...(gc.wholesale && g.imprints.some((d) => d.method === "embroidery") ? settings.wholesale.embExtras || [] : []),
-  ];
+  const finList = gc.wholesale && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;
+  // embroidery extras (specialty thread, 3D puff…): only on a group with embroidery
+  const embList = gc.wholesale && g.imprints.some((d) => d.method === "embroidery") ? settings.wholesale.embExtras || [] : [];
+  // screens (contract jobs): per screen print, its colors + the underbase when it gets one, or set by hand
+  const wpl = settings.wholesale;
+  const scrImps = gc.wholesale ? g.imprints.filter((d) => d.method === "screen" && d.colors < FULL_COLOR) : [];
+  const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, wpl));
+  const scrFee = g.remake && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
+  const tick = (id: string, on: boolean) => update((x) => { const set = new Set(x.finishing || []); if (on) set.add(id); else set.delete(id); x.finishing = [...set]; });
   return (
     <section className={"line" + (hidePrices ? " np" : "")}>
       <div className="line-h">
@@ -279,6 +285,43 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
             </table>
           </div>
           <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>
+          {scrImps.length > 0 && (
+            <div className="scr-sec">
+              <div className="lbl">SCREENS</div>
+              <table className="scr-tbl">
+                <thead><tr><th>Print</th><th className="c">Colors</th><th>Underbase</th><th className="c">Screens</th>{!hidePrices && <th className="r">Setup</th>}</tr></thead>
+                <tbody>{scrImps.map((d) => {
+                  const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight);
+                  return (
+                    <tr key={d.id}>
+                      <td>{d.location || "Print"}{d.inks ? <span className="faint"> · {d.inks}</span> : null}</td>
+                      <td className="c">{d.colors}</td>
+                      <td>{allLight ? <span className="faint">None (light garment)</span> : <>
+                        <label className="check"><input type="checkbox" checked={sc.under} onChange={(e) => update((x) => { x.imprints[di].underbase = e.target.checked; x.imprints[di].screens = undefined; })} /> {sc.under ? "Underbase" : "No underbase"}</label>
+                        {d.underbase == null ? <span className="faint scr-auto"> auto{!sc.under ? " (dark ink)" : ""}</span> : <button type="button" className="linkbtn scr-auto" onClick={() => update((x) => { x.imprints[di].underbase = undefined; })}>auto</button>}
+                      </>}</td>
+                      <td className="c">{d.screens != null
+                        ? <span className="scr-n"><input type="number" min={1} max={15} aria-label="Screens" value={d.screens} onChange={(e) => update((x) => { x.imprints[di].screens = Math.max(1, Math.min(15, Math.round(+e.target.value) || 1)); })} /><button type="button" className="linkbtn" onClick={() => update((x) => { x.imprints[di].screens = undefined; })}>auto ({sc.auto})</button></span>
+                        : <span className="scr-n"><b>{sc.n}</b><button type="button" className="linkbtn" onClick={() => update((x) => { x.imprints[di].screens = sc.auto; })}>change</button></span>}</td>
+                      {!hidePrices && <td className="r num">{money(sc.n * (+scrFee || 0))}</td>}
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+              <div className="row ct-extra">
+                {wpl.remakeFee != null && <label className="check"><input type="checkbox" checked={!!g.remake} onChange={(e) => update((x) => { x.remake = e.target.checked || undefined; })} /> Screens on file (remake {money(wpl.remakeFee)}/screen instead of {money(wpl.screenFee)})</label>}
+                {wpl.specialtyInk?.length ? <label className="check"><input type="checkbox" checked={!!g.specialtyInk} onChange={(e) => update((x) => { x.specialtyInk = e.target.checked || undefined; })} /> Polyester, nylon or dyed garments (specialty ink, per location)</label> : null}
+              </div>
+            </div>
+          )}
+          {embList.length > 0 && (
+            <div className="scr-sec">
+              <div className="lbl">EMBROIDERY EXTRAS</div>
+              <div className="row" style={{ gap: 14 }}>
+                {embList.map((f) => <label key={f.id} className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />{f.name}{!hidePrices && <span className="faint"> ({money(f.price)}/pc)</span>}</label>)}
+              </div>
+            </div>
+          )}
           </div>
           </div>
         </div>
@@ -287,19 +330,13 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           <div className={"grp-foot-l mk-lock" + (locked ? " on" : "")}>
             {locked && <button type="button" className="mk-cover" tabIndex={-1} aria-label="Finishing is locked until a mockup is created" onClick={() => setAskSkip(true)} />}
             <div inert={locked || undefined} className="mk-body">
-            {gc.wholesale && (settings.wholesale.specialtyInk?.length || settings.wholesale.remakeFee != null) ? (
-              <div className="row ct-extra" style={{ marginBottom: 8 }}>
-                {settings.wholesale.specialtyInk?.length ? <label className="check"><input type="checkbox" checked={!!g.specialtyInk} onChange={(e) => update((x) => { x.specialtyInk = e.target.checked || undefined; })} /> Polyester, nylon or dyed garments (specialty ink, per location)</label> : null}
-                {settings.wholesale.remakeFee != null ? <label className="check"><input type="checkbox" checked={!!g.remake} onChange={(e) => update((x) => { x.remake = e.target.checked || undefined; })} /> Screens on file (remake {money(settings.wholesale.remakeFee)}/color)</label> : null}
-              </div>
-            ) : null}
-            {finList.length > 0 && (
+            {finishingAt === "group" && finList.length > 0 && (
         <div className="imprints">
                 <div className="lbl" style={{ marginBottom: 6 }}>FINISHING</div>
                 <div className="row" style={{ gap: 14 }}>
                   {finList.map((f) => (
                     <label key={f.id} className="check" style={{ fontSize: 13 }}>
-                      <input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => update((x) => { const set = new Set(x.finishing || []); if (e.target.checked) set.add(f.id); else set.delete(f.id); x.finishing = [...set]; })} />
+                      <input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />
                       {f.name}{!hidePrices && <span className="faint"> ({money(f.price)}/pc)</span>}
                     </label>
                   ))}

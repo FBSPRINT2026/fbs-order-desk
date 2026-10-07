@@ -1,3 +1,5 @@
+import { colorHex } from "./inkColors";
+
 // Shared pricing engine and order vocabulary.
 // Used by the shop editor (live totals), the customer portal (display)
 // and the server (Stripe amounts), so every total comes from one place.
@@ -53,7 +55,9 @@ export type Method = "screen" | "embroidery" | "dtf";
 /** One decoration on a group of garments (Printavo calls these imprints). */
 export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number;
   /** embroidery: stitch count (contract pricing includes 6,000; each extra 1,000 is charged) */ stitches?: number;
-  /** inks matched to a PMS (non-standard ink): a matching fee each */ pms?: number; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string; /** staff confirmed a small print really goes on this big location */ keepLocation?: boolean; };
+  /** inks matched to a PMS (non-standard ink): a matching fee each */ pms?: number;
+  /** underbase on a dark garment: set by hand (true / false); not set = decided from the inks (black, navy, dark reds don't need one) */ underbase?: boolean;
+  /** screens set by hand (else colors + underbase) */ screens?: number; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string; /** staff confirmed a small print really goes on this big location */ keepLocation?: boolean; };
 /** A piece of customer art, saved under their account and reused across orders. */
 export type Design = { id: string; number: number; customer_id: string | null; name: string; file_path: string; file_name: string; file_type: string; preview_path: string; width_px: number | null; height_px: number | null; starred?: boolean; archived_at?: string | null; /** made in the shirt designer: where its editable layers are saved */ designer?: { file: string } | null; /** how it prints (lib/printPlan.ts PrintPlan), shared by the Mockup Creator and separations */ print_plan?: unknown;
   /** where the art really sits in the file once its background is removed / empty margins cut (original pixels) */ art_box?: { x: number; y: number; w: number; h: number; of: { w: number; h: number } } | null; method: string; colors: number; inks: string; notes: string; created_by: string; created_at: string };
@@ -309,6 +313,16 @@ export const DEFAULT_SETTINGS: Settings = {
   },
 };
 
+/**
+ * The contract list as first loaded (Oct 7) had the embroidery extras and vinyl in its finishing. Finishing is fold,
+ * poly bag, barcode and tag removal; the embroidery extras have their own list (Nicholas, Oct 7). Fixed on read until
+ * the settings are saved again.
+ */
+function contractFinishing(w: PriceList): PriceList {
+  if (!w.finishing?.some((f) => /^(emb_|vinyl_)/.test(f.id))) return w;
+  const moved = w.finishing.filter((f) => f.id.startsWith("emb_") && !(w.embExtras || []).some((x) => x.id === f.id));
+  return { ...w, embExtras: [...(w.embExtras || []), ...moved], finishing: w.finishing.filter((f) => !/^(emb_|vinyl_)/.test(f.id)) };
+}
 /** Fill any missing keys in stored settings with defaults. */
 export function mergeSettings(data: unknown): Settings {
   const d = (data && typeof data === "object" ? data : {}) as Partial<Settings>;
@@ -319,7 +333,7 @@ export function mergeSettings(data: unknown): Settings {
     brand: { ...DEFAULT_SETTINGS.brand, ...(d.brand || {}) },
     pay: { ...DEFAULT_SETTINGS.pay, ...(d.pay || {}) },
     upcharges: { ...DEFAULT_SETTINGS.upcharges, ...(d.upcharges || {}) },
-    wholesale: { ...DEFAULT_SETTINGS.wholesale, ...(d.wholesale || {}), upcharges: { ...DEFAULT_SETTINGS.wholesale.upcharges, ...(d.wholesale?.upcharges || {}) } },
+    wholesale: contractFinishing({ ...DEFAULT_SETTINGS.wholesale, ...(d.wholesale || {}), upcharges: { ...DEFAULT_SETTINGS.wholesale.upcharges, ...(d.wholesale?.upcharges || {}) } }),
     finishing: Array.isArray(d.finishing) ? d.finishing : DEFAULT_SETTINGS.finishing,
     assistant: { ...DEFAULT_SETTINGS.assistant, ...(d.assistant || {}), ai: { ...DEFAULT_SETTINGS.assistant.ai, ...(d.assistant?.ai || {}) } },
     ship: { ...DEFAULT_SETTINGS.ship, ...(d.ship || {}), from: { ...DEFAULT_SETTINGS.ship.from, ...(d.ship?.from || {}) }, boxes: Array.isArray(d.ship?.boxes) && d.ship.boxes.length ? d.ship.boxes : DEFAULT_SETTINGS.ship.boxes },
@@ -360,6 +374,33 @@ export function orderGroups(o: Pick<Order, "groups" | "lines">): Group[] {
  * file are remakes, PMS-matched inks have a fee each, embroidery has its own quantity breaks (x.eti) and charges
  * stitches past the included count.
  */
+/** how light an ink prints (L*, 0 black to 100 white), from its name ("Black", "Navy", "PMS 186 C"); null = unknown */
+function inkL(name: string): number | null {
+  const hex = colorHex(name.trim());
+  if (!hex) return /\b(black|navy|maroon|burgundy|oxblood|charcoal|forest|brown|dark)\b/i.test(name) ? 20 : null;
+  const v = [1, 3, 5].map((i) => { const c = parseInt(hex.slice(i, i + 2), 16) / 255; return c > 0.04045 ? ((c + 0.055) / 1.055) ** 2.4 : c / 12.92; });
+  const Y = 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  return 116 * (Y > 0.008856 ? Math.cbrt(Y) : 7.787 * Y + 16 / 116) - 16;
+}
+/**
+ * Does this print need an underbase on a dark garment? Set by hand on the imprint, otherwise from its inks: dark
+ * inks (black, navy, maroon, dark reds: L* 40 and under) print on their own, the same as the separations never put
+ * an underbase under black. Any lighter ink, or inks not filled in yet, means yes.
+ */
+export function needsUnderbase(d: Pick<Imprint, "inks" | "underbase" | "method" | "colors">): boolean {
+  if (d.underbase != null) return d.underbase;
+  const names = (d.inks || "").split(/[,;\/+]|\band\b/i).map((x) => x.trim()).filter(Boolean);
+  if (!names.length) return true;
+  return names.some((n) => { const L = inkL(n); return L == null || L > 40; });
+}
+/** screens for a screen print: set by hand, else its colors plus the underbase when it gets one */
+export function screensFor(d: Imprint, s: Pick<PriceList, "darkAddsColor">, light: boolean): { n: number; under: boolean; auto: number } {
+  const k0 = Math.max(1, num(d.colors) || 1);
+  const under = !!s.darkAddsColor && !light && k0 < FULL_COLOR && needsUnderbase(d);
+  const auto = k0 + (under ? 1 : 0);
+  return { n: d.screens != null && d.screens > 0 ? d.screens : auto, under, auto };
+}
+
 function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light, x: { eti?: number; remake?: boolean } = {}) {
   const inkFee = num(d.inkChanges) * num(s.inkChangeFee) + num(d.pms) * num(s.pmsFee);
   if (d.method === "screen") {
@@ -369,14 +410,15 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
       const each = num((dtgLight && s.dtgLight ? s.dtgLight : s.dtg)[ti]);
       return { each, setup: 0, inkFee, dtg: each, full: true };
     }
-    // the underbase on a dark garment is one more color
-    const under = s.darkAddsColor && !light && !full ? 1 : 0;
+    // the underbase on a dark garment is one more color (not under black, navy, dark reds; or as set by hand)
+    const sc = screensFor(d, s, light);
+    const under = sc.under ? 1 : 0;
     const k = k0 + under;
     const row = (light && s.screenLight ? s.screenLight : s.screen)[ti] || [];
     const n = Math.min(row.length || 6, k);
     const dtg = s.dtg ? num((dtgLight && s.dtgLight ? s.dtgLight : s.dtg)[ti]) : 0;
     const fee = x.remake && s.remakeFee != null ? s.remakeFee : s.screenFee;
-    return { each: num(row[n - 1]), setup: Math.min(k, 12) * num(fee), inkFee, dtg, full: false, under, custom: k > (row.length || 99) };
+    return { each: num(row[n - 1]), setup: Math.min(sc.n, 15) * num(fee), inkFee, dtg, full: false, under, screens: sc.n, custom: k > (row.length || 99) };
   }
   if (d.method === "embroidery") {
     const eti = x.eti ?? ti;
