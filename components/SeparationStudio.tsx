@@ -438,9 +438,14 @@ export default function SeparationStudio({ id }: { id: string }) {
       const raster = /^image\/(png|jpe?g|webp)/i.test(des.file_type || "") || /\.(png|jpe?g|webp)$/i.test(des.file_name || "");
       const svg = /svg/i.test(des.file_type || "") || /\.svg$/i.test(des.file_name || des.file_path || "");
       const paths = [raster || svg ? des.file_path : des.preview_path || des.file_path, des.file_path].filter(Boolean) as string[];
-      if (svg) { const { data: sv } = await sb.storage.from("proofs").download(des.file_path); if (sv) setVart(parseSvg(await sv.text())); }
+      // SVG that's all filled shapes: the picture is drawn from its shapes (fitted to the art, see `vart`), never the file
+      // itself. Setting the file's picture here after the shapes were drawn put a page-size picture under shapes measured
+      // by the art, which cut off the outer edge (the sun's ray tips) whenever this download finished last.
+      let shapesOnly = false;
+      if (svg) { const { data: sv } = await sb.storage.from("proofs").download(des.file_path); if (sv) { const v = parseSvg(await sv.text()); if (v.ok) { fromShapes.current = true; shapesOnly = true; } setVart(v); } }
       const { data: urls } = await sb.storage.from("proofs").createSignedUrls(paths, 3600);
       setOrigUrl(urls?.[1]?.signedUrl || urls?.[0]?.signedUrl || "");
+      if (shapesOnly) return;
       // the art as a local blob, so the canvas can read its pixels (no cross-site image)
       const { data: blob } = await sb.storage.from("proofs").download(paths[0]);
       setArtUrl(blob ? URL.createObjectURL(blob) : urls?.[0]?.signedUrl || "");
