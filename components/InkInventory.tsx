@@ -66,7 +66,7 @@ export default function InkInventory({ stock, formulas, canStock }: { stock: Sto
       const { data: same } = imDesigns.length ? await sb.from("separations").select("order_id, imprint_id, garment_color, location, design_id, status, settings, channels").in("design_id", imDesigns).neq("status", "cancelled").order("updated_at", { ascending: false }).limit(300) : { data: [] };
       const seps = [...(sp.data || []), ...(same || [])] as Parameters<typeof jobsFromOrders>[2];
       const dIds = [...new Set([...seps.map((x) => x.design_id), ...orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.imprints || []).map((i) => i.design_id)))].filter(Boolean))] as string[];
-      const { data: designs } = dIds.length ? await sb.from("designs").select("id, width_px, height_px").in("id", dIds) : { data: [] };
+      const { data: designs } = dIds.length ? await sb.from("designs").select("id, width_px, height_px, art_box").in("id", dIds) : { data: [] };
       const styles = [...new Set(orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.lines || []).map((l) => (l as { style?: string }).style || ""))).filter(Boolean))];
       const { data: gar } = styles.length ? await sb.from("garments").select("style, brand, fabric, supplier").in("style", styles) : { data: [] };
       const ps = mergeProduction(d.production);

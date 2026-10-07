@@ -209,7 +209,7 @@ type SlotLite = { order_id: string | null; archived_order_id: string | null; day
 type SepLite = { order_id: string; imprint_id: string | null; garment_color: string | null; location: string | null; design_id: string | null; status: string; settings: { widthIn?: number } | null; channels: { name: string; kind: string; mesh: number; coverage: number }[] | null };
 type LineLite = { style?: string; brand?: string; garment?: string; color?: string; sizes?: Record<string, number> };
 type OrderLite = { id: string; number: number; nickname: string | null; groups: { lines: LineLite[]; imprints: { id: string; method: string; location: string; colors: number; inks: string; size: string; design_id?: string }[] }[] | null };
-type DesignLite = { id: string; width_px: number | null; height_px: number | null };
+type DesignLite = { id: string; width_px: number | null; height_px: number | null; art_box?: { w: number; h: number } | null };
 const LIGHT = /\b(white|natural|ash|cream|ivory|light|silver|heather\s*gr[ae]y|sport\s*gr[ae]y|pink|yellow|lime|sand|oatmeal|bone|vanilla|butter|mint|sky|baby)\b/i;
 const sum = (o?: Record<string, number>) => Object.values(o || {}).reduce((a, n) => a + (+n || 0), 0);
 const sameLoc = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -242,7 +242,8 @@ export function jobsFromOrders(slots: SlotLite[], orders: OrderLite[], seps: Sep
         // no separation on this order yet: the same art's separation from another order gives the real coverage
         const other = !sep && im.design_id ? seps.find((x) => x.order_id !== oid && x.design_id === im.design_id && x.status !== "cancelled" && x.channels?.some((c) => c.kind === "color")) : undefined;
         const d = dById.get(sep?.design_id || im.design_id || "");
-        const aspect = d?.width_px && d.height_px ? d.height_px / d.width_px : undefined;
+        // the art's own shape (cropped to what's left after its background was removed), else the file's
+        const aspect = d?.art_box?.w && d.art_box.h ? d.art_box.h / d.art_box.w : d?.width_px && d.height_px ? d.height_px / d.width_px : undefined;
         const typed = parseFloat(String(im.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || undefined;
         const wGiven = sep?.settings?.widthIn || typed || other?.settings?.widthIn || undefined;
         const { w, h } = sizeFor(im.location, wGiven, aspect);

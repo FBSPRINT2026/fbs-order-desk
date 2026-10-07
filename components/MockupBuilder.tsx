@@ -9,7 +9,7 @@ import { custLabel } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, uploadDesign } from "@/lib/designs";
 import { mockupUploadUrls, myLogos, portalCatalog, saveMyMockup } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
-import { isVector, knockOut } from "@/lib/artPrep";
+import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
 import { starMyDesign } from "@/app/portal/actions";
 import { PREVIEWABLE_TYPES } from "@/lib/pricing";
 import DesignSearch from "@/components/DesignSearch";
@@ -133,16 +133,28 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [clean, setClean] = useState<Record<string, string>>({});
   const [keepBg, setKeepBg] = useState<Record<string, boolean>>({});
   const [keepInside, setKeepInside] = useState<Record<string, boolean>>({});
+  // where the art really is once the background is gone (or a see-through logo's empty margins are cut off): the
+  // logo is sized on the shirt by that, not by the old box around it
+  const [trims, setTrims] = useState<Record<string, { w: number; h: number }>>({});
   /** The logo image to draw and read colors from: the cleaned-up version when its background was removed. */
   async function logoImg(d: Design): Promise<HTMLImageElement> {
     const hit = imgCache.current.get(d.id);
     if (hit) return hit;
     let img = await loadImg(urls[d.id]);
-    if (!keepBg[d.id] && !isVector(d.file_type, d.file_name)) {
-      const k = knockOut(img, { keepInside: !!keepInside[d.id] });
+    if (!isVector(d.file_type, d.file_name)) {
+      // a logo on a solid background: background out, then cropped to the art. Already see-through (or the background
+      // kept on purpose): just the empty margins cut off, so the art itself is what's sized on the shirt
+      const k: CleanArt | null = (keepBg[d.id] ? null : knockOut(img, { keepInside: !!keepInside[d.id] })) || trimClear(img);
       if (k) {
         img = await loadImg(k.url);
         setClean((c) => ({ ...c, [d.id]: k.url }));
+        setTrims((t) => ({ ...t, [d.id]: { w: k.box.w, h: k.box.h } }));
+        // remember it on the design, so separations and ink estimates size the art, not the box (staff only)
+        const art_box = { ...k.box, of: k.of };
+        const same = d.art_box && d.art_box.w === art_box.w && d.art_box.h === art_box.h && d.art_box.x === art_box.x && d.art_box.y === art_box.y;
+        if (!portal && !keepInside[d.id] && !same && !d.id.startsWith("qt-")) {
+          sb.from("designs").update({ art_box }).eq("id", d.id).then(({ error }) => { if (!error) setDesigns((xs) => xs.map((x) => (x.id === d.id ? { ...x, art_box } : x))); });
+        }
       }
     }
     imgCache.current.set(d.id, img);
@@ -150,6 +162,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
   function resetLogo(d: Design) {
     imgCache.current.delete(d.id);
+    setTrims((t) => { const n = { ...t }; delete n[d.id]; return n; });
     setClean((c) => { const n = { ...c }; delete n[d.id]; return n; });
     setPaints((p) => Object.fromEntries(Object.entries(p).filter(([, v]) => v.design !== d.id)));
   }
@@ -479,7 +492,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     return im.inks.split(",").map((z) => z.trim()).filter(Boolean).map((n) => ({ name: n, hex: colorHex(n) || "" }));
   };
-  const ratioOf = (d?: Design) => (d?.width_px && d?.height_px ? d.height_px / d.width_px : 0);
+  // the art's own proportions: cropped to what's left after the background came out (this session, or saved on the design)
+  const ratioOf = (d?: Design) => {
+    const t = d ? trims[d.id] || d.art_box || null : null;
+    if (t?.w && t.h) return t.h / t.w;
+    return d?.width_px && d?.height_px ? d.height_px / d.width_px : 0;
+  };
   const place = (im: Imprint, view?: View, fit?: Fit | null) => {
     const d = designOf(im);
     const r = ratioOf(d) || 0.6;

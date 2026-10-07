@@ -591,7 +591,8 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
       let alt: string | undefined;
       if (knock) {
         const k = knockOut(await loadImg(s.url));
-        if (k) { alt = s.url; s = { ...s, url: k.url }; }
+        // cropped to the art: the layer takes the art's own size, not the old white box
+        if (k) { alt = s.url; s = { ...s, url: k.url, w: k.w, h: k.h }; }
       }
       const fit = Math.min(360 / s.w, 300 / s.h, 1);
       add({ kind: "img", src: s.url, w: s.w * fit, h: s.h * fit, x: W / 2, y: nextY() + 80, rot: 0, s: 1, name: nm, ...(alt ? { alt, knocked: true } : {}) } as LayerInit);

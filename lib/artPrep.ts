@@ -1,7 +1,9 @@
 "use client";
 /**
  * Helpers for customer art that isn't clean vector: JPG / PNG / photos / PDFs.
- * - knockOut: a logo on a solid background (JPGs are always on one) gets that background made see-through.
+ * - knockOut: a logo on a solid background (JPGs are always on one) gets that background made see-through, and is
+ *   cropped to what's left, so the art (not the old white box) is what gets sized on the shirt.
+ * - trimClear: a logo that's already see-through but has empty margins is cropped to the art the same way.
  * - makePreview: files a browser can't show (HEIC from iPhones, PDF, AI, TIFF, BMP) become a PNG preview.
  * - effectiveDpi: how sharp a raster logo will print at a given width.
  */
@@ -16,6 +18,47 @@ function canvasOf(img: CanvasImageSource, w: number, h: number) {
   return { c, x };
 }
 
+/** The result of cleaning up a logo: the picture, and where the art sits in the ORIGINAL file (pixels). */
+export type CleanArt = { url: string; bg: string; w: number; h: number; box: { x: number; y: number; w: number; h: number }; of: { w: number; h: number } };
+
+/** the smallest box around pixels that aren't (nearly) see-through, or null when there's nothing */
+function artBox(d: Uint8ClampedArray, w: number, h: number, minAlpha = 12) {
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    const row = y * w * 4;
+    for (let x = 0; x < w; x++) if (d[row + x * 4 + 3] >= minAlpha) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; y1 = y; }
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+/** crop a worked canvas to the art (plus a 2px edge), scaled back to the original file's pixels for `box` */
+function cropToArt(c: HTMLCanvasElement, data: ImageData, k: number, W: number, H: number, bg: string): CleanArt | null {
+  const b = artBox(data.data, c.width, c.height);
+  if (!b) return null;
+  const pad = 2, x = Math.max(0, b.x - pad), y = Math.max(0, b.y - pad);
+  const w = Math.min(c.width - x, b.w + pad * 2), h = Math.min(c.height - y, b.h + pad * 2);
+  const out = document.createElement("canvas");
+  out.width = w; out.height = h;
+  out.getContext("2d")!.drawImage(c, x, y, w, h, 0, 0, w, h);
+  return { url: out.toDataURL("image/png"), bg, w, h, box: { x: Math.round(x / k), y: Math.round(y / k), w: Math.min(W, Math.round(w / k)), h: Math.min(H, Math.round(h / k)) }, of: { w: W, h: H } };
+}
+
+/**
+ * A see-through logo with empty margins around the art: cropped to the art. Null when it has no see-through
+ * pixels, or the art already fills the file (less than 3% to gain on every side).
+ */
+export function trimClear(img: HTMLImageElement): CleanArt | null {
+  const W = img.naturalWidth, H = img.naturalHeight;
+  if (!W || !H) return null;
+  const k = Math.min(1, 2000 / Math.max(W, H));
+  const w = Math.max(1, Math.round(W * k)), h = Math.max(1, Math.round(H * k));
+  const { c, x } = canvasOf(img, w, h);
+  let data: ImageData;
+  try { data = x.getImageData(0, 0, w, h); } catch { return null; }
+  const b = artBox(data.data, w, h);
+  if (!b || (b.w >= w * 0.97 && b.h >= h * 0.97)) return null;
+  return cropToArt(c, data, k, W, H, "");
+}
+
 /**
  * If the image has no transparency and its edges are one solid color (the white box around a JPG logo),
  * make that background see-through everywhere — including inside letters (the holes in e, d, p, ®).
@@ -23,7 +66,7 @@ function canvasOf(img: CanvasImageSource, w: number, h: number) {
  * from the background, so there's no white halo on dark shirts.
  * Returns null when there's nothing to remove (already transparent, or a busy photo edge).
  */
-export function knockOut(img: HTMLImageElement, opts: { keepInside?: boolean } = {}): { url: string; bg: string } | null {
+export function knockOut(img: HTMLImageElement, opts: { keepInside?: boolean } = {}): CleanArt | null {
   const W = img.naturalWidth, H = img.naturalHeight;
   if (!W || !H) return null;
   // work at up to 2000px; the result is used for mockups, not production files
@@ -85,7 +128,8 @@ export function knockOut(img: HTMLImageElement, opts: { keepInside?: boolean } =
   if (removed < w * h * 0.05) return null;
   x.putImageData(data, 0, 0);
   const hex = (n: number) => Math.round(n).toString(16).padStart(2, "0");
-  return { url: c.toDataURL("image/png"), bg: `#${hex(bg[0])}${hex(bg[1])}${hex(bg[2])}` };
+  // cropped to what's left: the removed background no longer counts as part of the logo's size
+  return cropToArt(c, data, k, W, H, `#${hex(bg[0])}${hex(bg[1])}${hex(bg[2])}`);
 }
 
 /** Dots per inch a raster logo will print at, for a print width in inches. */

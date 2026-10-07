@@ -43,7 +43,7 @@ export async function phoneInks(admin: SupabaseClient, card: JobCard, settingsDa
     const dIds = [...new Set([...(seps as { design_id: string | null }[]).map((x) => x.design_id), ...imDesigns].filter(Boolean))] as string[];
     const styles = [...new Set(orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.lines || []).map((l) => l.style || ""))).filter(Boolean))];
     const [{ data: designs }, { data: gar }] = await Promise.all([
-      dIds.length ? admin.from("designs").select("id, width_px, height_px").in("id", dIds) : Promise.resolve({ data: [] }),
+      dIds.length ? admin.from("designs").select("id, width_px, height_px, art_box").in("id", dIds) : Promise.resolve({ data: [] }),
       styles.length ? admin.from("garments").select("style, brand, fabric, supplier").in("style", styles) : Promise.resolve({ data: [] }),
     ]);
     // the whole job as one booking (every location)
