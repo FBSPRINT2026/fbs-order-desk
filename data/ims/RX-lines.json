@@ -81001,6 +81001,5242 @@
      "g": 2.08
     }
    ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9185 C",
+   "grams_per_qt": 1260.4,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 87.32,
+     "g": 1100.69
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 8.77,
+     "g": 110.59
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 3.49,
+     "g": 43.99
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.4,
+     "g": 5.13
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9186 C",
+   "grams_per_qt": 1279.82,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 96.43,
+     "g": 1234.25
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 2.67,
+     "g": 34.18
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 0.59,
+     "g": 7.59
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.29,
+     "g": 3.8
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "919 C",
+   "grams_per_qt": 1236.1,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 79.57,
+     "g": 983.65
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 17.88,
+     "g": 221.02
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 1.52,
+     "g": 18.85
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 1.01,
+     "g": 12.58
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "920 C",
+   "grams_per_qt": 1202.12,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 71.0,
+     "g": 853.57
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 25.47,
+     "g": 306.19
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 3.52,
+     "g": 42.36
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9200 C",
+   "grams_per_qt": 1275.77,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 94.24,
+     "g": 1202.31
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 5.23,
+     "g": 66.79
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 0.52,
+     "g": 6.67
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9201 C",
+   "grams_per_qt": 1277.54,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 95.15,
+     "g": 1215.66
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 4.32,
+     "g": 55.25
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 0.51,
+     "g": 6.63
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9202 C",
+   "grams_per_qt": 1271.34,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 92.71,
+     "g": 1178.77
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 4.62,
+     "g": 58.8
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 2.38,
+     "g": 30.27
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.27,
+     "g": 3.5
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9203 C",
+   "grams_per_qt": 1269.63,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 92.06,
+     "g": 1168.85
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 4.5,
+     "g": 57.15
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 3.06,
+     "g": 38.96
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.36,
+     "g": 4.67
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "921 C",
+   "grams_per_qt": 1195.94,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 66.38,
+     "g": 793.92
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 20.64,
+     "g": 246.94
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 12.96,
+     "g": 155.08
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "922 C",
+   "grams_per_qt": 1239.18,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 76.08,
+     "g": 942.85
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 21.73,
+     "g": 269.39
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 2.17,
+     "g": 26.94
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9220 C",
+   "grams_per_qt": 1276.59,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 94.67,
+     "g": 1208.63
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 4.73,
+     "g": 60.42
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 0.59,
+     "g": 7.54
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9221 C",
+   "grams_per_qt": 1282.2,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 97.63,
+     "g": 1251.82
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 1.72,
+     "g": 22.12
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 0.47,
+     "g": 6.05
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.17,
+     "g": 2.21
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9222 C",
+   "grams_per_qt": 1261.24,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 88.03,
+     "g": 1110.32
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 7.2,
+     "g": 90.92
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 4.21,
+     "g": 53.15
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.54,
+     "g": 6.85
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9223 C",
+   "grams_per_qt": 1259.61,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 87.26,
+     "g": 1099.15
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 7.5,
+     "g": 94.52
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 4.45,
+     "g": 56.05
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.78,
+     "g": 9.89
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9224 C",
+   "grams_per_qt": 1272.69,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 93.24,
+     "g": 1186.65
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 4.66,
+     "g": 59.33
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 1.86,
+     "g": 23.74
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.23,
+     "g": 2.97
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9225 C",
+   "grams_per_qt": 1267.69,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 91.94,
+     "g": 1165.6
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 2.78,
+     "g": 35.25
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 2.65,
+     "g": 33.59
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 2.62,
+     "g": 33.25
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9226 C",
+   "grams_per_qt": 1265.26,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 90.93,
+     "g": 1150.58
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 3.29,
+     "g": 41.7
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 3.01,
+     "g": 38.11
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 2.75,
+     "g": 34.87
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "923 C",
+   "grams_per_qt": 1165.71,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 65.03,
+     "g": 758.1
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 32.51,
+     "g": 379.05
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 2.16,
+     "g": 25.27
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 0.28,
+     "g": 3.29
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "924 C",
+   "grams_per_qt": 1150.5,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 72.37,
+     "g": 832.64
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 23.55,
+     "g": 271.06
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 4.06,
+     "g": 46.8
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9240 C",
+   "grams_per_qt": 1285.65,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 99.54,
+     "g": 1279.77
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 0.4,
+     "g": 5.16
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.05,
+     "g": 0.72
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9241 C",
+   "grams_per_qt": 1283.49,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.8,
+     "g": 1268.12
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 0.99,
+     "g": 12.81
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.09,
+     "g": 1.28
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 0.09,
+     "g": 1.28
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9242 C",
+   "grams_per_qt": 1272.78,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 93.93,
+     "g": 1195.55
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 3.75,
+     "g": 47.82
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 1.97,
+     "g": 25.11
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.33,
+     "g": 4.3
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9243 C",
+   "grams_per_qt": 1261.51,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 88.73,
+     "g": 1119.4
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 5.82,
+     "g": 73.51
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 4.63,
+     "g": 58.47
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.8,
+     "g": 10.13
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9244 C",
+   "grams_per_qt": 1278.52,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 95.65,
+     "g": 1223.0
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 3.82,
+     "g": 48.92
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 0.45,
+     "g": 5.87
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.05,
+     "g": 0.73
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "925 C",
+   "grams_per_qt": 1157.71,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 42.27,
+     "g": 489.46
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 34.52,
+     "g": 399.67
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 23.19,
+     "g": 268.58
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9260 C",
+   "grams_per_qt": 1268.77,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 92.65,
+     "g": 1175.58
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 3.76,
+     "g": 47.78
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 2.07,
+     "g": 26.29
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 1.5,
+     "g": 19.12
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9262 C",
+   "grams_per_qt": 1277.63,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 96.07,
+     "g": 1227.42
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 2.63,
+     "g": 33.72
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 1.07,
+     "g": 13.73
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.21,
+     "g": 2.76
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9263 C",
+   "grams_per_qt": 1275.29,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 95.08,
+     "g": 1212.64
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 3.28,
+     "g": 41.89
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 1.21,
+     "g": 15.43
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.41,
+     "g": 5.33
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "927 C",
+   "grams_per_qt": 1117.57,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 45.26,
+     "g": 505.9
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 34.25,
+     "g": 382.87
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 20.47,
+     "g": 228.8
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "928 C",
+   "grams_per_qt": 1184.32,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 52.76,
+     "g": 624.89
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 40.82,
+     "g": 483.55
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 6.4,
+     "g": 75.88
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9280 C",
+   "grams_per_qt": 1284.26,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 99.05,
+     "g": 1272.09
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 0.63,
+     "g": 8.14
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 0.21,
+     "g": 2.76
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.09,
+     "g": 1.27
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9284 C",
+   "grams_per_qt": 1279.79,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 96.37,
+     "g": 1233.36
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 2.32,
+     "g": 29.74
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 1.3,
+     "g": 16.69
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9285 C",
+   "grams_per_qt": 1283.08,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.43,
+     "g": 1262.98
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.72,
+     "g": 9.33
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 0.7,
+     "g": 9.08
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.13,
+     "g": 1.69
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9286 C",
+   "grams_per_qt": 1285.31,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 99.15,
+     "g": 1274.39
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.56,
+     "g": 7.29
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 0.21,
+     "g": 2.72
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 0.07,
+     "g": 0.91
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "929 C",
+   "grams_per_qt": 1239.7,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 75.94,
+     "g": 941.54
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 15.19,
+     "g": 188.31
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 8.86,
+     "g": 109.85
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "930 C",
+   "grams_per_qt": 1232.84,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 71.71,
+     "g": 884.08
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 26.28,
+     "g": 324.08
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 2.0,
+     "g": 24.68
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "931 C",
+   "grams_per_qt": 1179.06,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 55.12,
+     "g": 649.9
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 41.19,
+     "g": 485.73
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 3.68,
+     "g": 43.43
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "932 C",
+   "grams_per_qt": 1195.02,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 57.07,
+     "g": 682.06
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 22.59,
+     "g": 269.98
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 20.33,
+     "g": 242.98
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9320 C",
+   "grams_per_qt": 1284.7,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.84,
+     "g": 1269.84
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.59,
+     "g": 7.62
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 0.49,
+     "g": 6.35
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 0.06,
+     "g": 0.89
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9324 C",
+   "grams_per_qt": 1281.72,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 97.72,
+     "g": 1252.54
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 1.5,
+     "g": 19.32
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 0.76,
+     "g": 9.86
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "933 C",
+   "grams_per_qt": 1181.58,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 63.89,
+     "g": 755.02
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 35.58,
+     "g": 420.43
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 0.51,
+     "g": 6.13
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "934 C",
+   "grams_per_qt": 1178.8,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 59.58,
+     "g": 702.44
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 25.28,
+     "g": 298.08
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 15.12,
+     "g": 178.28
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9342 C",
+   "grams_per_qt": 1284.37,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.85,
+     "g": 1269.64
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 0.75,
+     "g": 9.65
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.19,
+     "g": 2.54
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 0.19,
+     "g": 2.54
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9344 C",
+   "grams_per_qt": 1269.41,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 92.67,
+     "g": 1176.38
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 4.83,
+     "g": 61.36
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 2.49,
+     "g": 31.67
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9345 C",
+   "grams_per_qt": 1286.36,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 99.7,
+     "g": 1282.51
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 0.19,
+     "g": 2.56
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.1,
+     "g": 1.29
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "935 C",
+   "grams_per_qt": 1210.71,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 64.94,
+     "g": 786.33
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 25.2,
+     "g": 305.2
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 7.09,
+     "g": 85.95
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 2.74,
+     "g": 33.23
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "936 C",
+   "grams_per_qt": 1268.48,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 90.9,
+     "g": 1153.16
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 6.55,
+     "g": 83.14
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 2.53,
+     "g": 32.18
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "937 C",
+   "grams_per_qt": 1243.62,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 77.32,
+     "g": 961.58
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 22.0,
+     "g": 273.71
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 0.6,
+     "g": 7.57
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.06,
+     "g": 0.76
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "938 C",
+   "grams_per_qt": 1234.05,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 72.82,
+     "g": 898.68
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 24.32,
+     "g": 300.24
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 2.58,
+     "g": 31.86
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 0.26,
+     "g": 3.27
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9382 C",
+   "grams_per_qt": 1282.92,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 97.71,
+     "g": 1253.67
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 1.62,
+     "g": 20.9
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 0.65,
+     "g": 8.35
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9385 C",
+   "grams_per_qt": 1283.78,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.18,
+     "g": 1260.46
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 1.22,
+     "g": 15.75
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 0.34,
+     "g": 4.42
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.24,
+     "g": 3.15
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "940 C",
+   "grams_per_qt": 1246.93,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 86.57,
+     "g": 1079.52
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 12.17,
+     "g": 151.81
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 0.99,
+     "g": 12.37
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.25,
+     "g": 3.23
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9402 C",
+   "grams_per_qt": 1281.51,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 96.61,
+     "g": 1238.06
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 2.97,
+     "g": 38.1
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.37,
+     "g": 4.77
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.04,
+     "g": 0.58
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9403 C",
+   "grams_per_qt": 1283.75,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.03,
+     "g": 1258.58
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 1.71,
+     "g": 22.03
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 0.19,
+     "g": 2.45
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.05,
+     "g": 0.69
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "942 C",
+   "grams_per_qt": 1252.32,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 85.54,
+     "g": 1071.25
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 12.74,
+     "g": 159.56
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 1.71,
+     "g": 21.51
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9424 C",
+   "grams_per_qt": 1278.81,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 95.08,
+     "g": 1215.97
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 3.69,
+     "g": 47.29
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 1.21,
+     "g": 15.55
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9440 C",
+   "grams_per_qt": 1284.16,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.48,
+     "g": 1264.66
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 0.89,
+     "g": 11.48
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 0.53,
+     "g": 6.88
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.08,
+     "g": 1.14
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9441 C",
+   "grams_per_qt": 1284.2,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.48,
+     "g": 1264.74
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 0.89,
+     "g": 11.51
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 0.48,
+     "g": 6.22
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.13,
+     "g": 1.73
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9460 C",
+   "grams_per_qt": 1278.47,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 96.79,
+     "g": 1237.55
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 2.88,
+     "g": 36.83
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.18,
+     "g": 2.3
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 0.14,
+     "g": 1.79
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9461 C",
+   "grams_per_qt": 1284.38,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.96,
+     "g": 1271.06
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 0.55,
+     "g": 7.06
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 0.44,
+     "g": 5.75
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.04,
+     "g": 0.51
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9464 C",
+   "grams_per_qt": 1283.1,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.28,
+     "g": 1261.15
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 1.54,
+     "g": 19.82
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.16,
+     "g": 2.13
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9481 C",
+   "grams_per_qt": 1284.19,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.66,
+     "g": 1267.08
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.65,
+     "g": 8.4
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 0.59,
+     "g": 7.67
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.08,
+     "g": 1.04
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9501 C",
+   "grams_per_qt": 1284.99,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 99.07,
+     "g": 1273.12
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 0.59,
+     "g": 7.63
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.24,
+     "g": 3.11
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.08,
+     "g": 1.13
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9502 C",
+   "grams_per_qt": 1284.89,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.95,
+     "g": 1271.44
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 0.63,
+     "g": 8.15
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.26,
+     "g": 3.46
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.14,
+     "g": 1.84
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9504 C",
+   "grams_per_qt": 1283.21,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.13,
+     "g": 1259.21
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 0.76,
+     "g": 9.77
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.56,
+     "g": 7.24
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.54,
+     "g": 6.99
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9520 C",
+   "grams_per_qt": 1285.86,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 99.42,
+     "g": 1278.52
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 0.33,
+     "g": 4.26
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 0.12,
+     "g": 1.59
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.11,
+     "g": 1.49
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9525 C",
+   "grams_per_qt": 1274.04,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 94.07,
+     "g": 1198.53
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 3.13,
+     "g": 39.95
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 2.16,
+     "g": 27.57
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 0.62,
+     "g": 7.99
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9544 C",
+   "grams_per_qt": 1285.81,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 99.47,
+     "g": 1279.07
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 0.34,
+     "g": 4.42
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 0.09,
+     "g": 1.16
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.09,
+     "g": 1.16
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9560 C",
+   "grams_per_qt": 1281.76,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 97.58,
+     "g": 1250.85
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 1.23,
+     "g": 15.82
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 0.8,
+     "g": 10.31
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 0.37,
+     "g": 4.78
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9561 C",
+   "grams_per_qt": 1277.66,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 95.21,
+     "g": 1216.53
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 4.41,
+     "g": 56.43
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.22,
+     "g": 2.82
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 0.14,
+     "g": 1.88
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9563 C",
+   "grams_per_qt": 1270.77,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 91.78,
+     "g": 1166.38
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 7.03,
+     "g": 89.45
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.78,
+     "g": 10.01
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 0.38,
+     "g": 4.93
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9581 C",
+   "grams_per_qt": 1274.83,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 93.73,
+     "g": 1194.97
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 5.94,
+     "g": 75.78
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.32,
+     "g": 4.08
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9583 C",
+   "grams_per_qt": 1265.07,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 89.07,
+     "g": 1126.91
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 8.9,
+     "g": 112.69
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 1.24,
+     "g": 15.78
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.76,
+     "g": 9.69
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9601 C",
+   "grams_per_qt": 1284.58,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 99.02,
+     "g": 1272.07
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 0.51,
+     "g": 6.59
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 0.34,
+     "g": 4.44
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.11,
+     "g": 1.48
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "9603 C",
+   "grams_per_qt": 1283.19,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.35,
+     "g": 1262.03
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 1.04,
+     "g": 13.4
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.6,
+     "g": 7.76
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "0131 C YELLOW",
+   "grams_per_qt": 1264.69,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 88.98,
+     "g": 1125.33
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 8.89,
+     "g": 112.53
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 1.36,
+     "g": 17.31
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 0.75,
+     "g": 9.52
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "021 C ORANGE",
+   "grams_per_qt": 1088.31,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "890RX",
+     "desc": "RIO MIX GOLDEN YELLOW",
+     "pct": 81.25,
+     "g": 884.25
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 18.75,
+     "g": 204.06
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "032 C RED",
+   "grams_per_qt": 1061.62,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 55.35,
+     "g": 587.61
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 27.12,
+     "g": 287.93
+    },
+    {
+     "type": "MIX INK",
+     "code": "470RX",
+     "desc": "RIO MIX RED",
+     "pct": 11.99,
+     "g": 127.32
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 5.53,
+     "g": 58.76
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "0521 C MAGENTA",
+   "grams_per_qt": 1279.53,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 96.38,
+     "g": 1233.3
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 3.61,
+     "g": 46.23
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "0631 C VIOLET",
+   "grams_per_qt": 1259.78,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 89.83,
+     "g": 1131.75
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 5.43,
+     "g": 68.48
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 4.72,
+     "g": 59.55
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "072 C BLUE",
+   "grams_per_qt": 1143.82,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 89.28,
+     "g": 1021.21
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 6.63,
+     "g": 75.93
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 2.75,
+     "g": 31.5
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 1.32,
+     "g": 15.18
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "0961 C BLACK",
+   "grams_per_qt": 1270.51,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 92.4,
+     "g": 1173.99
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 4.82,
+     "g": 61.3
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 1.68,
+     "g": 21.4
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 1.08,
+     "g": 13.82
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "100-4 C",
+   "grams_per_qt": 1238.47,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 70.78,
+     "g": 876.61
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 21.39,
+     "g": 265.02
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 6.42,
+     "g": 79.51
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 1.39,
+     "g": 17.33
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10077 C",
+   "grams_per_qt": 1117.05,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 98.35,
+     "g": 1098.62
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 1.36,
+     "g": 15.26
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.28,
+     "g": 3.17
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10106 C",
+   "grams_per_qt": 1113.11,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 90.82,
+     "g": 1011.0
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 9.08,
+     "g": 101.1
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 0.09,
+     "g": 1.01
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10117 C",
+   "grams_per_qt": 1105.51,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 71.0,
+     "g": 784.98
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 28.4,
+     "g": 313.99
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 0.59,
+     "g": 6.54
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10118 C",
+   "grams_per_qt": 1124.01,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 95.54,
+     "g": 1073.95
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 4.01,
+     "g": 45.07
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 0.44,
+     "g": 4.99
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10121 C",
+   "grams_per_qt": 1107.75,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 66.47,
+     "g": 736.32
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 29.54,
+     "g": 327.25
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 3.98,
+     "g": 44.18
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10122 C",
+   "grams_per_qt": 1102.45,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 57.98,
+     "g": 639.27
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 34.9,
+     "g": 384.8
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 6.24,
+     "g": 68.88
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 0.86,
+     "g": 9.5
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10127 C",
+   "grams_per_qt": 1111.05,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 68.59,
+     "g": 762.09
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 29.1,
+     "g": 323.34
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 2.19,
+     "g": 24.38
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 0.11,
+     "g": 1.24
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10128 C",
+   "grams_per_qt": 1109.75,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 65.72,
+     "g": 729.37
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 31.61,
+     "g": 350.84
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 2.66,
+     "g": 29.54
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10132 C",
+   "grams_per_qt": 1108.6,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 77.08,
+     "g": 854.57
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 15.02,
+     "g": 166.51
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 7.81,
+     "g": 86.64
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.07,
+     "g": 0.88
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10153 C",
+   "grams_per_qt": 1098.73,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 49.49,
+     "g": 543.77
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 32.03,
+     "g": 351.99
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 16.61,
+     "g": 182.59
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 1.85,
+     "g": 20.38
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10161 C",
+   "grams_per_qt": 1092.55,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 63.02,
+     "g": 688.62
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 27.33,
+     "g": 298.63
+    },
+    {
+     "type": "MIX INK",
+     "code": "480RX",
+     "desc": "RIO MIX BARBERRY MAROON",
+     "pct": 6.27,
+     "g": 68.52
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 3.36,
+     "g": 36.78
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "102 C HO",
+   "grams_per_qt": 1120.54,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 47.17,
+     "g": 528.56
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 37.73,
+     "g": 422.85
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 15.09,
+     "g": 169.13
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10207 C",
+   "grams_per_qt": 1111.33,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 58.58,
+     "g": 651.06
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 36.53,
+     "g": 406.07
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 4.87,
+     "g": 54.2
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10264 C",
+   "grams_per_qt": 1117.48,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 88.02,
+     "g": 983.71
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 7.04,
+     "g": 78.69
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 3.52,
+     "g": 39.35
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 1.4,
+     "g": 15.73
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10270 C",
+   "grams_per_qt": 1138.43,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 69.06,
+     "g": 786.23
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 14.48,
+     "g": 164.88
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 8.77,
+     "g": 99.9
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 7.19,
+     "g": 81.86
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.48,
+     "g": 5.56
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10273 C",
+   "grams_per_qt": 1078.44,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 66.22,
+     "g": 714.2
+    },
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 33.77,
+     "g": 364.24
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "103 C UB",
+   "grams_per_qt": 1090.01,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 92.08,
+     "g": 1003.76
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 6.17,
+     "g": 67.26
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 1.09,
+     "g": 11.94
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.64,
+     "g": 7.05
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10324 C",
+   "grams_per_qt": 1127.45,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 85.79,
+     "g": 967.27
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 9.43,
+     "g": 106.4
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 4.29,
+     "g": 48.37
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 0.48,
+     "g": 5.41
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10348 C",
+   "grams_per_qt": 1108.01,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 74.24,
+     "g": 822.69
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 17.94,
+     "g": 198.83
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 5.01,
+     "g": 55.51
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 2.79,
+     "g": 30.98
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10357 C",
+   "grams_per_qt": 1108.45,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 54.05,
+     "g": 599.16
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 30.63,
+     "g": 339.53
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 9.91,
+     "g": 109.85
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 5.4,
+     "g": 59.91
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10366 C",
+   "grams_per_qt": 1119.65,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 81.37,
+     "g": 911.1
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 9.04,
+     "g": 101.24
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 8.49,
+     "g": 95.16
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 0.9,
+     "g": 10.12
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.18,
+     "g": 2.03
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10392 C",
+   "grams_per_qt": 1107.99,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 53.26,
+     "g": 590.18
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 24.69,
+     "g": 273.57
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 11.7,
+     "g": 129.67
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 10.34,
+     "g": 114.57
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10393 C",
+   "grams_per_qt": 1111.99,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 49.18,
+     "g": 546.88
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 27.86,
+     "g": 309.9
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 14.75,
+     "g": 164.06
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 8.19,
+     "g": 91.15
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10394 C",
+   "grams_per_qt": 1125.03,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 96.15,
+     "g": 1081.75
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 2.88,
+     "g": 32.46
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 0.96,
+     "g": 10.82
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10398 C",
+   "grams_per_qt": 1117.06,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 54.83,
+     "g": 612.52
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 42.74,
+     "g": 477.54
+    },
+    {
+     "type": "MIX INK",
+     "code": "890RX",
+     "desc": "RIO MIX GOLDEN YELLOW",
+     "pct": 2.41,
+     "g": 27.0
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10402 C",
+   "grams_per_qt": 1103.41,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 68.37,
+     "g": 754.47
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 17.94,
+     "g": 198.05
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 11.96,
+     "g": 132.03
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 1.7,
+     "g": 18.86
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10407 C",
+   "grams_per_qt": 1145.0,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 78.24,
+     "g": 895.94
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 15.64,
+     "g": 179.18
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 4.53,
+     "g": 51.96
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 1.56,
+     "g": 17.92
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10412 C",
+   "grams_per_qt": 1125.29,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 97.56,
+     "g": 1097.85
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 1.95,
+     "g": 21.95
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 0.48,
+     "g": 5.49
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10413 C",
+   "grams_per_qt": 1082.11,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 43.95,
+     "g": 475.66
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 32.96,
+     "g": 356.74
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 10.98,
+     "g": 118.91
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 10.98,
+     "g": 118.91
+    },
+    {
+     "type": "MIX INK",
+     "code": "480RX",
+     "desc": "RIO MIX BARBERRY MAROON",
+     "pct": 1.09,
+     "g": 11.89
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10449 C",
+   "grams_per_qt": 1134.65,
+   "lines": [
+    {
+     "type": "BASE",
+     "code": "47984",
+     "desc": "ASI SILVER SHIMMER LC",
+     "pct": 85.36,
+     "g": 968.6
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 12.19,
+     "g": 138.37
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 1.7,
+     "g": 19.37
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 0.73,
+     "g": 8.31
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "10452 C",
+   "grams_per_qt": 1118.67,
+   "lines": [
+    {
+     "type": "ADD",
+     "code": "15370PFX",
+     "desc": "EPIC SILVER SHIMMER [D]",
+     "pct": 72.58,
+     "g": 811.95
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 16.12,
+     "g": 180.43
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 9.67,
+     "g": 108.25
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 1.61,
+     "g": 18.04
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "104-9 C",
+   "grams_per_qt": 1283.95,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 98.44,
+     "g": 1263.95
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 0.65,
+     "g": 8.42
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 0.65,
+     "g": 8.42
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.24,
+     "g": 3.16
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "109 C HO",
+   "grams_per_qt": 1130.91,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 71.09,
+     "g": 803.96
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 28.43,
+     "g": 321.59
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 0.47,
+     "g": 5.36
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "109-8 C",
+   "grams_per_qt": 1171.84,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 46.15,
+     "g": 540.85
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 42.53,
+     "g": 498.43
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 11.31,
+     "g": 132.56
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "111-13 C",
+   "grams_per_qt": 1201.97,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 50.47,
+     "g": 606.64
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 44.75,
+     "g": 537.93
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 2.46,
+     "g": 29.57
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 2.31,
+     "g": 27.83
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "116 C UB",
+   "grams_per_qt": 1116.49,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 76.29,
+     "g": 851.8
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 20.98,
+     "g": 234.24
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 2.67,
+     "g": 29.81
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.05,
+     "g": 0.64
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "119-4 C",
+   "grams_per_qt": 1269.45,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 92.11,
+     "g": 1169.36
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 5.16,
+     "g": 65.59
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 1.88,
+     "g": 23.89
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.83,
+     "g": 10.61
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "123 C UB",
+   "grams_per_qt": 1166.42,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 51.92,
+     "g": 605.69
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 46.15,
+     "g": 538.38
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 1.4,
+     "g": 16.42
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 0.5,
+     "g": 5.93
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "1235 C HO",
+   "grams_per_qt": 1154.36,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 56.99,
+     "g": 657.93
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 40.28,
+     "g": 465.02
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 2.62,
+     "g": 30.24
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 0.1,
+     "g": 1.17
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "130 C HO",
+   "grams_per_qt": 1098.05,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 87.56,
+     "g": 961.52
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 10.5,
+     "g": 115.38
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 1.92,
+     "g": 21.15
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "13-16 C",
+   "grams_per_qt": 1111.37,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 51.54,
+     "g": 572.87
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 22.68,
+     "g": 252.06
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 13.4,
+     "g": 148.95
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 12.37,
+     "g": 137.49
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "137 C HO",
+   "grams_per_qt": 1114.95,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 62.6,
+     "g": 698.01
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 20.86,
+     "g": 232.67
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 16.27,
+     "g": 181.48
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 0.25,
+     "g": 2.79
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "1375 C UB",
+   "grams_per_qt": 1093.82,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 87.53,
+     "g": 957.45
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 8.18,
+     "g": 89.53
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 4.11,
+     "g": 45.02
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 0.16,
+     "g": 1.82
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "139-15 C",
+   "grams_per_qt": 1146.26,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 44.66,
+     "g": 511.92
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 29.12,
+     "g": 333.86
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 25.24,
+     "g": 289.35
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.97,
+     "g": 11.13
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "139-2 C",
+   "grams_per_qt": 1263.82,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 90.33,
+     "g": 1141.67
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 5.42,
+     "g": 68.5
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 3.61,
+     "g": 45.66
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 0.63,
+     "g": 7.99
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "151 C HO",
+   "grams_per_qt": 1089.13,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 85.71,
+     "g": 933.54
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 8.92,
+     "g": 97.25
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 5.35,
+     "g": 58.34
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "151-8 C",
+   "grams_per_qt": 1133.51,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 58.08,
+     "g": 658.38
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 27.53,
+     "g": 312.1
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 13.74,
+     "g": 155.79
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.63,
+     "g": 7.24
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "15-4319 C",
+   "grams_per_qt": 1181.92,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 58.04,
+     "g": 686.01
+    },
+    {
+     "type": "MIX INK",
+     "code": "960RX",
+     "desc": "RIO MIX ELECTRIC BLUE",
+     "pct": 38.14,
+     "g": 450.82
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 3.31,
+     "g": 39.2
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.49,
+     "g": 5.89
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "16 C",
+   "grams_per_qt": 1107.26,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 48.36,
+     "g": 535.48
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 19.32,
+     "g": 213.99
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 16.26,
+     "g": 180.1
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 16.04,
+     "g": 177.69
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "165 C UB",
+   "grams_per_qt": 1080.68,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 78.43,
+     "g": 847.6
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 20.58,
+     "g": 222.49
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 0.98,
+     "g": 10.59
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "16-6340 C",
+   "grams_per_qt": 1162.27,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 40.75,
+     "g": 473.71
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 36.39,
+     "g": 422.95
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 22.56,
+     "g": 262.23
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.29,
+     "g": 3.38
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "1665 C HO",
+   "grams_per_qt": 1103.75,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 56.26,
+     "g": 620.99
+    },
+    {
+     "type": "MIX INK",
+     "code": "880RX",
+     "desc": "RIO MIX SUNSHINE YELLOW",
+     "pct": 32.66,
+     "g": 360.57
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 10.88,
+     "g": 120.19
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.18,
+     "g": 2.0
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "169-1 C",
+   "grams_per_qt": 1285.96,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 99.54,
+     "g": 1280.04
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.22,
+     "g": 2.96
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 0.22,
+     "g": 2.96
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "178 C HO",
+   "grams_per_qt": 1145.66,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 37.69,
+     "g": 431.83
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 33.96,
+     "g": 389.09
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 20.35,
+     "g": 233.19
+    },
+    {
+     "type": "MIX INK",
+     "code": "470RX",
+     "desc": "RIO MIX RED",
+     "pct": 7.99,
+     "g": 91.55
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "1807 C HO",
+   "grams_per_qt": 1101.87,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 52.31,
+     "g": 576.39
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 43.57,
+     "g": 480.09
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 3.02,
+     "g": 33.38
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 1.09,
+     "g": 12.01
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "18-4936 C",
+   "grams_per_qt": 1131.52,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 58.82,
+     "g": 665.61
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 22.49,
+     "g": 254.49
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 18.16,
+     "g": 205.55
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.51,
+     "g": 5.87
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "185 C HO",
+   "grams_per_qt": 1060.53,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 57.89,
+     "g": 613.99
+    },
+    {
+     "type": "MIX INK",
+     "code": "470RX",
+     "desc": "RIO MIX RED",
+     "pct": 19.29,
+     "g": 204.66
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 15.78,
+     "g": 167.45
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 7.01,
+     "g": 74.43
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "186 C HO",
+   "grams_per_qt": 1046.38,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 51.31,
+     "g": 536.92
+    },
+    {
+     "type": "MIX INK",
+     "code": "470RX",
+     "desc": "RIO MIX RED",
+     "pct": 44.15,
+     "g": 462.01
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 4.53,
+     "g": 47.45
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "188 C HO",
+   "grams_per_qt": 1065.63,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "480RX",
+     "desc": "RIO MIX BARBERRY MAROON",
+     "pct": 84.87,
+     "g": 904.45
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 7.16,
+     "g": 76.37
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 5.79,
+     "g": 61.7
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 2.16,
+     "g": 23.11
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "191 C - ALT",
+   "grams_per_qt": 1131.25,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 43.39,
+     "g": 490.92
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 33.96,
+     "g": 384.2
+    },
+    {
+     "type": "MIX INK",
+     "code": "480RX",
+     "desc": "RIO MIX BARBERRY MAROON",
+     "pct": 18.86,
+     "g": 213.44
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 3.77,
+     "g": 42.69
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "192 C HO",
+   "grams_per_qt": 1093.63,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 51.69,
+     "g": 565.32
+    },
+    {
+     "type": "MIX INK",
+     "code": "470RX",
+     "desc": "RIO MIX RED",
+     "pct": 33.43,
+     "g": 365.63
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 14.87,
+     "g": 162.68
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "194 C HO",
+   "grams_per_qt": 1112.84,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 83.18,
+     "g": 925.66
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 11.38,
+     "g": 126.65
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 5.02,
+     "g": 55.88
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.41,
+     "g": 4.65
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "195 C HO",
+   "grams_per_qt": 1112.93,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 61.53,
+     "g": 684.89
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 27.69,
+     "g": 308.19
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 7.69,
+     "g": 85.61
+    },
+    {
+     "type": "MIX INK",
+     "code": "670RX",
+     "desc": "RIO MIX MIDNIGHT BLUE",
+     "pct": 3.07,
+     "g": 34.24
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "199 C HO",
+   "grams_per_qt": 1075.02,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 64.51,
+     "g": 693.56
+    },
+    {
+     "type": "MIX INK",
+     "code": "480RX",
+     "desc": "RIO MIX BARBERRY MAROON",
+     "pct": 27.95,
+     "g": 300.54
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 5.91,
+     "g": 63.58
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 1.61,
+     "g": 17.34
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "200 C HO",
+   "grams_per_qt": 1065.65,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "480RX",
+     "desc": "RIO MIX BARBERRY MAROON",
+     "pct": 67.52,
+     "g": 719.56
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 24.84,
+     "g": 264.74
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 5.06,
+     "g": 53.95
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 2.57,
+     "g": 27.4
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "2040 C UB",
+   "grams_per_qt": 1118.57,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "480RX",
+     "desc": "RIO MIX BARBERRY MAROON",
+     "pct": 38.9,
+     "g": 435.22
+    },
+    {
+     "type": "MIX INK",
+     "code": "940RX",
+     "desc": "RIO MIX ELECTRIC RED",
+     "pct": 30.94,
+     "g": 346.13
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 30.14,
+     "g": 337.22
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "209 C HO",
+   "grams_per_qt": 1090.76,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 87.19,
+     "g": 951.1
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 12.39,
+     "g": 135.16
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.36,
+     "g": 4.0
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 0.04,
+     "g": 0.5
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "2231 c",
+   "grams_per_qt": 1157.03,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 37.93,
+     "g": 438.87
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 34.48,
+     "g": 398.98
+    },
+    {
+     "type": "MIX INK",
+     "code": "980RX",
+     "desc": "RIO MIX ELECTRIC YELLOW",
+     "pct": 17.24,
+     "g": 199.5
+    },
+    {
+     "type": "MIX INK",
+     "code": "780RX",
+     "desc": "RIO MIX FOREST GREEN",
+     "pct": 10.34,
+     "g": 119.68
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "235 C HO",
+   "grams_per_qt": 1084.16,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 41.07,
+     "g": 445.3
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 25.78,
+     "g": 279.58
+    },
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 24.65,
+     "g": 267.29
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 6.2,
+     "g": 67.23
+    },
+    {
+     "type": "MIX INK",
+     "code": "380RX",
+     "desc": "RIO MIX BLAZE ORANGE",
+     "pct": 1.21,
+     "g": 13.19
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 1.06,
+     "g": 11.57
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "265 C UB",
+   "grams_per_qt": 1130.36,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 55.85,
+     "g": 631.35
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 24.72,
+     "g": 279.48
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 13.96,
+     "g": 157.9
+    },
+    {
+     "type": "MIX INK",
+     "code": "900RX",
+     "desc": "RIO MIX ELECTRIC PINK",
+     "pct": 5.45,
+     "g": 61.63
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "268 C UB",
+   "grams_per_qt": 1126.44,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "490RX",
+     "desc": "RIO MIX MAJESTIC MAGENTA",
+     "pct": 36.04,
+     "g": 406.05
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 33.09,
+     "g": 372.83
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 18.62,
+     "g": 209.84
+    },
+    {
+     "type": "MIX INK",
+     "code": "950RX",
+     "desc": "RIO MIX ELECTRIC PURPLE",
+     "pct": 12.22,
+     "g": 137.72
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "281 C HO",
+   "grams_per_qt": 1088.46,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "670RX",
+     "desc": "RIO MIX MIDNIGHT BLUE",
+     "pct": 86.03,
+     "g": 936.5
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 8.11,
+     "g": 88.35
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 4.87,
+     "g": 53.01
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.97,
+     "g": 10.6
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "286 C - UB",
+   "grams_per_qt": 1127.25,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 60.3,
+     "g": 679.74
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 36.68,
+     "g": 413.57
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 3.01,
+     "g": 33.94
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "287 C - UB",
+   "grams_per_qt": 1105.28,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 74.08,
+     "g": 818.85
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 23.52,
+     "g": 259.97
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 2.39,
+     "g": 26.46
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "288 C HO",
+   "grams_per_qt": 1113.91,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 51.71,
+     "g": 576.05
+    },
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 36.47,
+     "g": 406.31
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 8.36,
+     "g": 93.13
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 3.13,
+     "g": 34.92
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 0.31,
+     "g": 3.5
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "289 C UB",
+   "grams_per_qt": 1095.66,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 74.42,
+     "g": 815.48
+    },
+    {
+     "type": "MIX INK",
+     "code": "580RX",
+     "desc": "RIO MIX DEEP VIOLET",
+     "pct": 15.0,
+     "g": 164.39
+    },
+    {
+     "type": "MIX INK",
+     "code": "190RX",
+     "desc": "RIO MIX DEEP BLACK",
+     "pct": 6.99,
+     "g": 76.65
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 3.57,
+     "g": 39.14
+    }
+   ]
+  },
+  {
+   "rec_type": "S",
+   "code": "293 C UB",
+   "grams_per_qt": 1135.85,
+   "lines": [
+    {
+     "type": "MIX INK",
+     "code": "680RX",
+     "desc": "RIO MIX AQUAMARINE",
+     "pct": 55.14,
+     "g": 626.42
+    },
+    {
+     "type": "MIX INK",
+     "code": "690RX",
+     "desc": "RIO MIX INDIGO BLUE",
+     "pct": 35.45,
+     "g": 402.72
+    },
+    {
+     "type": "MIX INK",
+     "code": "110RX",
+     "desc": "RIO MIX WHITE",
+     "pct": 9.39,
+     "g": 106.71
+    }
+   ]
   }
  ]
 }
