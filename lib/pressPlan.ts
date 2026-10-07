@@ -9,6 +9,10 @@ import type { Slot } from "@/lib/pressSetup";
  *   - the colors lightest to darkest, smaller areas before bigger ones (a later screen touches every wet color before
  *     it, so the big wet areas should be the last ones it has to cross), detail and black late, highlight white last;
  *   - a flash before a light color that prints on top of a darker wet color (light over dark wet goes muddy);
+ *   - on a spot-color job with an underbase, a flash between the colors whenever the press has a flash unit free (the
+ *     shop's rule: colors that touch, like the d and E in FedEx, bleed into each other wet). The first color sits on the
+ *     head right before that flash, and the last color on the head next to the unload station, where the person
+ *     pulling shirts sees it. Simulated process separations are built for wet-on-wet, so they don't get these;
  *   - the roller (a dead screen that flattens the flashed base) comes after the flash, before the colors;
  *   - the press's own flashes, roller and cool-down stations stay where they are unless a flash has to move;
  *   - screens on the heads nearest the load and unload stations, where the operator can watch the inks; the empty
@@ -68,9 +72,13 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
   // the items to place in order: screens and the flashes they need
   // pri: which flashes stay when the press runs out of units (higher stays): underbase 4 (always), before the
   // highlight white 3, before a specialty ink 2, light over dark wet 1, a big wet area the next screen would pick up 0
-  type Item = { t: "screen"; p: PlanPlate } | { t: "flash"; why: string; must: boolean; pri: number };
+  type Item = { t: "screen"; p: PlanPlate } | { t: "flash"; why: string; must: boolean; pri: number; gen?: boolean };
   const items: Item[] = [];
   const special = (p: PlanPlate) => SPECIAL.test(p.name);
+  // spot colors on an underbase: flash between the colors when there's a unit for it (sim process runs wet-on-wet)
+  const spotOnBase = hasBase && !seq.some((p) => p.kind === "highlight" || p.tonal);
+  // the earliest one stays when units run short: the first color goes right before the second flash
+  const betweenFlash = (a: PlanPlate, b: PlanPlate, k: number): Item => ({ t: "flash", why: `Flash before ${b.name}: on an underbase job the colors get flashed between each other when the press has the room, so colors that touch (${a.name} and ${b.name}) don't bleed into each other wet.`, must: false, pri: 0.5 - k * 0.01, gen: true });
   seq.forEach((p, k) => {
     if (k > 0) {
       const prev = seq[k - 1];
@@ -87,52 +95,68 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
         const big = !hit && !hasBase ? sinceFlash.find((q) => q.kind !== "underbase" && q.coverage > 0.12 && (o.ov![idx(q)]?.[idx(p)] || 0) > 0.5) : undefined;
         if (hit) items.push({ t: "flash", why: `Flash before ${p.name}: it prints on top of ${hit.name} while that's still wet (light over dark goes muddy).`, must: false, pri: 1 });
         else if (big) items.push({ t: "flash", why: `Flash before ${p.name}: most of it lands on ${big.name}'s big wet area, and the screen would pick that ink up (if the press is short a flash, wet-on-wet works with light pressure).`, must: false, pri: 0 });
-      }
+        else if (spotOnBase) items.push(betweenFlash(prev, p, k));
+      } else if (spotOnBase) items.push(betweenFlash(prev, p, k));
     }
     items.push({ t: "screen", p });
   });
   // more flashes than the press has: keep the underbase flash, then the most important ones (and say so)
-  let fl = items.filter((x) => x.t === "flash").length;
+  // (the flashes between colors are "when there's room": the placement below decides which of them fit)
+  let fl = items.filter((x) => x.t === "flash" && !x.gen).length;
   while (fl > Math.max(units, 1)) {
     let drop = -1;
-    items.forEach((x, i) => { if (x.t === "flash" && !x.must && (drop < 0 || x.pri <= (items[drop] as { pri: number }).pri)) drop = i; });
+    items.forEach((x, i) => { if (x.t === "flash" && !x.must && !x.gen && (drop < 0 || x.pri <= (items[drop] as { pri: number }).pri)) drop = i; });
     if (drop < 0) break;
     const x = items[drop] as { why: string };
     why.push(`Would flash before ${x.why.split(":")[0].replace(/^Flash (before|after) /, "")} too, but the press has ${units} flash unit${units === 1 ? "" : "s"}: print it wet-on-wet with light pressure, or in two passes.`);
     items.splice(drop, 1); fl--;
   }
+  // more flashes between colors than units left: keep the earliest ones in the list (the placement may still pick others)
+  const genIdx = items.map((x, i) => (x.t === "flash" && x.gen ? i : -1)).filter((i) => i >= 0);
   if (!units && fl) why.push(`This press has no flash unit set in its defaults; the job needs ${fl === 1 ? "one" : fl}.`);
 
   // place them on the heads: the press's flashes, roller and cool-down stations stay; screens near load / unload
   const roller = lay.indexOf("roller");
+  type St = { cost: number; moved: number; skipped: number; prev: St | null; h: number; put: Slot | null; gone?: number[] };
+  // costs, in order of what matters: a screen on a flash / cool-down / roller head or a moved flash (CRAMP) only when
+  // nothing else fits; then a flash between colors left out (SKIP, the earliest kept first); then the head layout
+  const CRAMP = 1000, SKIP = (k: number) => 100 + (genIdx.length - genIdx.indexOf(k));
+  const place = (items: Item[]) => {
   const vis = (h: number) => Math.min(h, N - 1 - h);
-  type St = { cost: number; moved: number; skipped: number; prev: St | null; h: number; put: Slot | null };
-  const INF = 1e9;
   const key = (k: number, mv: number, sk: number, pf: number) => `${k}|${mv}|${sk}|${pf}`;
   let layer = new Map<string, St & { k: number; mv: number; sk: number; pf: number }>();
   layer.set(key(0, 0, 0, 0), { cost: 0, moved: 0, skipped: 0, prev: null, h: -1, put: null, k: 0, mv: 0, sk: 0, pf: 0 });
   const add = (m: typeof layer, s: St & { k: number; mv: number; sk: number; pf: number }) => { const kk = key(s.k, s.mv, s.sk, s.pf), cur = m.get(kk); if (!cur || s.cost < cur.cost) m.set(kk, s); };
   for (let h = 0; h < N; h++) {
+    // a flash between colors can be left out (no head used)
+    for (let again = true; again;) {
+      again = false;
+      for (const s of [...layer.values()]) {
+        const it = items[s.k];
+        if (it?.t === "flash" && it.gen) { const n = { ...s, cost: s.cost + SKIP(s.k), k: s.k + 1, gone: [...(s.gone || []), s.k] }; const kk = key(n.k, n.mv, n.sk, n.pf), cur = layer.get(kk); if (!cur || n.cost < cur.cost) { layer.set(kk, n); again = true; } }
+      }
+    }
     const next = new Map<string, St & { k: number; mv: number; sk: number; pf: number }>();
     const st = lay[h];
     for (const s of layer.values()) {
-      const base = { prev: s, h, moved: s.mv, skipped: s.sk };
+      const base = { prev: s, h, moved: s.mv, skipped: s.sk, gone: s.gone };
       const it = items[s.k];
-      // the underbase's flash waits for nothing: passing a head with the base still wet costs a lot
-      const wait = it?.t === "flash" && it.must ? 20 : 0;
+      // the underbase's flash waits for nothing: passing a head with the base still wet costs a lot. A color due for a
+      // flash goes on the head right before it (an empty head between them costs a little)
+      const wait = it?.t === "flash" ? (it.must ? 20 : 3) : 0;
       if (st === "down") { add(next, { ...base, cost: s.cost, put: "down", k: s.k, mv: s.mv, sk: s.sk, pf: 0 }); continue; }
       if (st === "roller" || st === "cool") {
         // a dead head right after a flash is the cool-down the base needs
         add(next, { ...base, cost: s.cost - (s.pf ? 3 : 0) + wait, put: st, k: s.k, mv: s.mv, sk: s.sk, pf: 0 });
         // a big job can use it for a screen (the roller comes off / no cool-down there), when there's no other room
-        if (it?.t === "screen") add(next, { ...base, cost: s.cost + vis(h) + (st === "roller" ? 12 : 8) + (s.pf ? 3 : 0), put: "p:" + it.p.key, k: s.k + 1, mv: s.mv, sk: s.sk, pf: 0 });
+        if (it?.t === "screen") add(next, { ...base, cost: s.cost + vis(h) + (st === "roller" ? 12 : 8) + CRAMP + (s.pf ? 3 : 0), put: "p:" + it.p.key, k: s.k + 1, mv: s.mv, sk: s.sk, pf: 0 });
         continue;
       }
       if (st === "flash" || st === "flashdown") {
         if (it?.t === "flash") add(next, { ...base, cost: s.cost, put: "flash", k: s.k + 1, mv: s.mv, sk: s.sk, pf: 1 });
         // not needed here: the flash stays on the press (turned off), or takes a screen
         add(next, { ...base, cost: s.cost + 1 - (s.pf ? 3 : 0) + wait, put: "flash-idle", k: s.k, mv: s.mv, sk: s.sk + 1, pf: 0 });
-        if (it?.t === "screen") add(next, { ...base, cost: s.cost + vis(h) + 5 + (s.pf ? 3 : 0), put: "p:" + it.p.key, k: s.k + 1, mv: s.mv, sk: s.sk + 1, pf: 0 });
+        if (it?.t === "screen") add(next, { ...base, cost: s.cost + vis(h) + 5 + CRAMP + (s.pf ? 3 : 0), put: "p:" + it.p.key, k: s.k + 1, mv: s.mv, sk: s.sk + 1, pf: 0 });
         continue;
       }
       // a free head: leave it empty, or put the next item on it
@@ -142,13 +166,22 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
         // (a hair more for later heads: on a tie, the screens stay together)
         add(next, { ...base, cost: s.cost + vis(h) + h * 0.01 + (s.pf ? 3 : 0) + beforeRoller, put: "p:" + it.p.key, k: s.k + 1, mv: s.mv, sk: s.sk, pf: 0 });
       } else if (it?.t === "flash") {
-        add(next, { ...base, cost: s.cost + 6, put: "flash", k: s.k + 1, mv: s.mv + 1, sk: s.sk, pf: 1 });
+        add(next, { ...base, cost: s.cost + 6 + CRAMP, put: "flash", k: s.k + 1, mv: s.mv + 1, sk: s.sk, pf: 1 });
       }
     }
     layer = next;
   }
   let best: (St & { k: number; mv: number; sk: number }) | null = null;
   for (const s of layer.values()) if (s.k === items.length && s.mv <= s.sk && (!best || s.cost < best.cost)) best = s;
+  return best;
+  };
+  const best = place(items);
+  // the flashes between colors that didn't fit: those colors print wet-on-wet
+  const gone = new Set(best?.gone || []);
+  const noRoom = [...gone].map((i) => (items[i + 1] as { p: PlanPlate }).p.name);
+  if (noRoom.length) why.push(`No flash free before ${noRoom.join(", ")}: ${noRoom.length === 1 ? "it prints" : "they print"} wet-on-wet.`);
+  for (let i = items.length - 1; i >= 0; i--) if (gone.has(i)) items.splice(i, 1);
+  fl = items.filter((x) => x.t === "flash").length;
   if (!best) return { heads: [], order: seq.map((p) => p.key), why: [`${seq.length} screens and ${fl} flash${fl === 1 ? "" : "es"} don't fit on ${N} heads: two rounds, or another press.`], ok: false };
   const heads: Slot[] = new Array(N).fill("");
   for (let s: St | null = best; s && s.h >= 0; s = s.prev) heads[s.h] = s.put ?? "";
@@ -172,6 +205,8 @@ export function recommendSetup(lay: Station[], plates: PlanPlate[], o: { dark: b
     if ((o.ov[idx(a)]?.[idx(b)] || 0) > 0.5 && b.coverage < a.coverage && lum(b.hex) > lum(a.hex) + 15) why.push(`${b.name} prints after ${a.name} because it sits on top of it.`);
   }
   for (const x of items) if (x.t === "flash" && !x.must) why.push(x.why);
+  const lastCol = cols[cols.length - 1], lh = lastCol ? heads.indexOf("p:" + lastCol.key) : -1;
+  if (cols.length > 1 && lh === N - 1) why.push(`${lastCol.name}, the last color, is on head ${N}, next to the unload station, so whoever pulls the shirts sees it.`);
   const mv = heads.map((x, i) => (x === "flash" && lay[i] !== "flash" && lay[i] !== "flashdown" ? i + 1 : 0)).filter(Boolean);
   if (mv.length) why.push(`Moves a flash to head ${mv.join(" and ")} for this job.`);
   if (idleKept.length) why.push(`This job doesn't need the flash on ${idleKept.length === 1 ? `head ${idleKept[0] + 1}` : `heads ${idleKept.map((i) => i + 1).join(" and ")}`}: leave ${idleKept.length === 1 ? "it" : "them"} there, turned off.`);
