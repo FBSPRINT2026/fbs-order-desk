@@ -5618,3 +5618,24 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .sup-notes{width:100%;font-size:13px;resize:vertical}
 .sup-big{max-width:96vw;max-height:92vh;border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
 @media (max-width:700px){.sup-card{grid-template-columns:1fr}}
+/* moving customers off Printavo: the move checklist and the warnings */
+.mv{background:var(--surface);border-radius:14px;max-width:620px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.mv-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.mv-h h2{margin:2px 0 0;font-size:20px}
+.mv-pv{font-size:13px;background:var(--surface-2);border-radius:8px;padding:8px 10px}
+.mv-steps{display:flex;gap:4px;flex-wrap:wrap;list-style:none;margin:0;padding:0}
+.mv-steps button{border:1px solid var(--line);background:none;border-radius:999px;padding:4px 10px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink-2)}
+.mv-steps li.on button{border-color:var(--accent);color:var(--ink);font-weight:600}
+.mv-steps li.done button{color:var(--ok,#2e9d5b)}
+.mv-b{min-height:120px}
+.mv-f{display:flex;gap:8px;align-items:center}
+.mv-choice{display:grid;gap:8px}
+.mv-opt{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer}
+.mv-opt.on{border-color:var(--accent)}
+.mv-opt input{display:none}
+.mv-opt span{font-size:13px;color:var(--muted)}
+.mv-warn{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0;padding:12px 14px;border-radius:10px;background:var(--warn-bg,#fff4d6);color:var(--warn-ink,#8a5a00);font-size:14px}
+.mv-warn > div{flex:1 1 300px}
+.mv-strip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 12px;padding:9px 12px;border-radius:9px;background:var(--warn-bg,#fff4d6);color:var(--warn-ink,#8a5a00);font-size:13.5px}
+.mv-strip > span{flex:1 1 300px}
+.mv-strip.on{background:var(--surface-2);color:var(--ink-2)}

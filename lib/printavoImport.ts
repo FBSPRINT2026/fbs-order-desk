@@ -50,11 +50,14 @@ export async function importCustomer(sb: SupabaseClient, printavoId: string): Pr
       if (viaContact?.[0]) { customerId = viaContact[0].customer_id; how = "matched by email"; }
     }
   }
+  let moved = false;
   if (customerId) {
     const { data: cur } = await sb.from("customers").select("*").eq("id", customerId).single();
+    // moved to the new system: their name, contacts and details are kept here now; Printavo only links to them
+    moved = !!(cur as { moved_at?: string | null } | null)?.moved_at;
     const fill: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(fields)) if (typeof v === "string" && v && !(cur as Record<string, unknown>)?.[k]) fill[k] = v;
-    if (Object.keys(fill).length) await sb.from("customers").update(fill).eq("id", customerId);
+    if (Object.keys(fill).length && !moved) await sb.from("customers").update(fill).eq("id", customerId);
   } else {
     const { data: made, error } = await sb.from("customers").insert({ ...fields, price_type: "retail" }).select("id").single();
     if (error || !made) throw new Error("Couldn't create the customer: " + (error?.message || "unknown"));
@@ -74,7 +77,7 @@ export async function importCustomer(sb: SupabaseClient, printavoId: string): Pr
     customer_id: customerId, printavo_id: c.id, name: (c.fullName || "").trim(), email: (c.email || "").trim().toLowerCase(), phone: (c.phone || "").trim(), is_primary: c.id === p?.id,
   }));
   if (p && !contacts.some((c) => c.printavo_id === p.id) && (p.fullName || p.email)) contacts.push({ customer_id: customerId, printavo_id: p.id, name: (p.fullName || "").trim(), email, phone: (p.phone || "").trim(), is_primary: true });
-  if (contacts.length) {
+  if (contacts.length && !moved) {
     const { error: ce } = await sb.from("customer_contacts").upsert(contacts, { onConflict: "printavo_id" });
     if (ce) console.warn("[printavo] contacts:", ce.message);
   }

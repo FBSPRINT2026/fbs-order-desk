@@ -2,6 +2,7 @@
 import JobLabor from "@/components/team/JobLabor";
 import JobFiles from "@/components/job/JobFiles";
 import { stampOrderMockups } from "@/lib/mockupStamp";
+import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import { SITE_URL } from "@/lib/config";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -521,7 +522,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      <div className="ed-grid">
+      {/* moving off Printavo: a 40,000-series order waits until its customer has been moved (checklist done) */}
+      {cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) && <NotMovedBanner customerId={cust.id} name={custLabel(cust)} what="this order"
+        onMoved={async () => { const { data } = await sb.from("customers").select("*").eq("id", cust.id).maybeSingle(); if (data) setCustomers((cs) => cs.map((x) => (x.id === cust.id ? (data as Customer) : x))); }} />}
+      <div className="ed-grid" inert={(cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>)) || undefined} style={cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) ? { opacity: 0.45 } : undefined}>
         <div className="stack">
           <div className="top2">
             <section className="panel">

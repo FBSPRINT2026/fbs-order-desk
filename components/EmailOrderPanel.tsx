@@ -5,6 +5,7 @@ import { SUPPLIERS } from "@/lib/goods";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
+import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import dynamic from "next/dynamic";
 import type { WhenDates } from "@/components/MachineSchedule";
 
@@ -17,7 +18,7 @@ const WhenCalc = dynamic(() => import("@/components/MachineSchedule"), { ssr: fa
  * customer's mockup, their goods); reorders copy a past job with the new quantities, and the job can be swapped.
  */
 type Fin = { id: string; name: string; price: number };
-type Loaded = { draft: EODraft | null; files: EOFile[]; past: PastJob[]; created: string | null; finishing: Fin[]; ai: boolean; aiReason: string; customer: { id: string; company: string | null; name: string | null; price_type: string } | null };
+type Loaded = { draft: EODraft | null; files: EOFile[]; past: PastJob[]; created: string | null; finishing: Fin[]; ai: boolean; aiReason: string; customer: { id: string; company: string | null; name: string | null; price_type: string; moved_at?: string | null; is_test?: boolean } | null };
 
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
 const qtyOf = (l: GLine) => Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0) || 0), 0);
@@ -111,6 +112,8 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
     </section>
   );
   const job = d?.reorderOf ? data.past.find((p) => p.ref === d.reorderOf) : null;
+  // moving off Printavo: a customer's first order here waits for their move checklist
+  const mustMove = needsMove(data.customer as unknown as Record<string, unknown>);
 
   return (
     <section className="eo" aria-label="Suggested order">
@@ -125,6 +128,8 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
       {busy === "read" && <p className="eo-reading">Reading the email{files.length ? ` and ${files.length} attachment${files.length === 1 ? "" : "s"}` : ""}: garments, sizes, art, mockups, and whether it's a reorder. This takes 15 to 40 seconds.</p>}
       {err && <div className="err">{err}</div>}
       {d && total > 0 && <div hidden><WhenCalc key={whenKey} when={{ groups: d.groups, onDates: setWhen }} /></div>}
+      {d && mustMove && data.customer && <NotMovedBanner customerId={data.customer.id} name={data.customer.company || data.customer.name || ""} what="an order for them"
+        onMoved={() => setData((x) => (x && x.customer ? { ...x, customer: { ...x.customer, moved_at: new Date().toISOString() } } : x))} />}
       {d && !editing && <WhenLine when={when} due={d.due_date} onUse={(day) => patch((x) => { x.due_date = day; })} />}
       {d && !editing && <Review d={d} files={files} urlOf={urlOf} custName={data.customer ? data.customer.company || data.customer.name || "" : ""} job={d.reorderOf ? data.past.find((p) => p.ref === d.reorderOf)?.label || "" : ""} finishing={data.finishing} />}
       {d && !editing && <>
@@ -133,8 +138,8 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
           <span className="spacer" />
           {step && <span className="faint">{step}</span>}
           <label>Save as<select value={status} onChange={(e) => setStatus(e.target.value as "quote" | "approved")}><option value="quote">Quote (price it, send for approval)</option><option value="approved">Approved order</option></select></label>
-          <button type="button" className="btn" disabled={!!busy || !total || !data.customer} title="Make the order and open it in the full order screen to change anything; Save & back to email brings you back here" onClick={() => create("edit")}>Edit details</button>
-          <button type="button" className="btn primary" disabled={!!busy || !total || !data.customer} onClick={() => create()}>{busy === "create" ? "Creating…" : "Create order"}</button>
+          <button type="button" className="btn" disabled={!!busy || !total || !data.customer || mustMove} title="Make the order and open it in the full order screen to change anything; Save & back to email brings you back here" onClick={() => create("edit")}>Edit details</button>
+          <button type="button" className="btn primary" disabled={!!busy || !total || !data.customer || mustMove} onClick={() => create()}>{busy === "create" ? "Creating…" : "Create order"}</button>
         </div>
         <div className="eo-quick"><button type="button" className="eo-link" disabled={!!busy} onClick={() => setEditing(true)}>Fix what the AI read before creating (files, sizes, prints)</button></div>
         {!data.customer && <div className="warn">Make the sender a customer first (the yellow box above), then create the order.</div>}
@@ -265,7 +270,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
           <label>Save as<select value={status} onChange={(e) => setStatus(e.target.value as "quote" | "approved")}><option value="quote">Quote (price it, send for approval)</option><option value="approved">Approved order</option></select></label>
           {step && <span className="faint">{step}</span>}
           <button type="button" className="btn" disabled={!!busy} onClick={() => setEditing(false)}>Back to summary</button>
-          <button type="button" className="btn primary" disabled={!!busy || !total || !data.customer} onClick={() => create()}>{busy === "create" ? "Creating…" : "Create order"}</button>
+          <button type="button" className="btn primary" disabled={!!busy || !total || !data.customer || mustMove} onClick={() => create()}>{busy === "create" ? "Creating…" : "Create order"}</button>
         </div>
         {!data.customer && <div className="warn">Make the sender a customer first (the yellow box above), then create the order.</div>}
       </>}

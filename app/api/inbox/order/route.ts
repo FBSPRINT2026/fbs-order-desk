@@ -36,7 +36,7 @@ export async function GET(req: Request) {
     admin.from("ai_suggestions").select("id, status, order_id, payload").eq("dedupe_key", `email:${id}:order`).maybeSingle(),
     pastJobs(admin, a.customer_id as string | null),
     aiState(admin),
-    a.customer_id ? admin.from("customers").select("id, company, name, price_type").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
+    a.customer_id ? admin.from("customers").select("*").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   const draft = (sg?.payload as { v?: number; draft?: EODraft } | null)?.v === 2 ? (sg!.payload as { draft: EODraft }).draft : null;
   const atts = ((a.meta as { attachments?: { name: string; path: string; type: string; size: number }[] })?.attachments || []).map((f) => ({ ...f, role: "other" as const }));

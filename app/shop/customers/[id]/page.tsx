@@ -28,6 +28,7 @@ import ProgramAdmin from "@/components/ProgramAdmin";
 import { emailStatement, recordLumpPayment } from "@/app/shop/pay-actions";
 import { needsGoods } from "@/lib/goods";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
+import CustomerMove, { needsMove } from "@/components/CustomerMove";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -98,7 +99,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     if (!latest.current) return;
     // staff-only fields (notes, tags, follow-up, owner) are saved to customer_private; last contact is kept by the database
     const { id: _id, created_at, ...all } = latest.current;
-    const { pub: rest, priv } = splitCustomer(all);
+    const { pub: rest0, priv } = splitCustomer(all);
+    // the move fields belong to the move checklist: never written from here (a stale copy would undo a move)
+    const { moved_at: _ma, moved_by: _mb, move_checklist: _mc, ...rest } = rest0 as typeof rest0 & { moved_at?: unknown; moved_by?: unknown; move_checklist?: unknown };
+    void _ma; void _mb; void _mc;
     setState("Saving…");
     const sb = createClient();
     const [a, b] = await Promise.all([
@@ -120,7 +124,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   }
   useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); save(); } }, []); // flush on leave
 
+  // moving off Printavo: their first order here waits for the move checklist (name, contacts, pricing…)
+  const [moveOpen, setMoveOpen] = useState<"" | "quote" | "edit">("");
   async function newQuote() {
+    if (needsMove(c as unknown as Record<string, unknown>)) { setMoveOpen("quote"); return; }
     const { data, error } = await createClient().from("orders").insert({ customer_id: id, tax_exempt: !!c?.tax_exempt, price_type: c?.price_type || "retail" }).select("id").single();
     if (data) router.push(`/shop/orders/${data.id}?new=1`);
     else if (error) alert(error.message);
@@ -155,6 +162,14 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           <button className={"btn danger" + (armed ? " armed" : "")} type="button" onClick={del} disabled={os.length > 0 || archive.length > 0} title={os.length ? "Delete this customer's orders first" : archive.length ? "This customer has archived Printavo orders" : ""}>{armed ? "Confirm delete" : "Delete"}</button>
         </div>
       </div>
+      {c && "moved_at" in (c as object) && !c.is_test && (() => {
+        const mv = c as unknown as { moved_at?: string | null; moved_by?: string; move_checklist?: Record<string, unknown> };
+        const steps = Object.entries(mv.move_checklist || {}).filter(([k, v]) => k !== "pricing_note" && v).length;
+        return mv.moved_at
+          ? <div className="mv-strip on"><span>In the new system since {new Date(mv.moved_at).toLocaleDateString()}{mv.moved_by ? ` (${mv.moved_by})` : ""}. New orders are 40,000-series.</span><button type="button" className="linkbtn" onClick={() => setMoveOpen("edit")}>Checklist</button></div>
+          : <div className="mv-strip"><span><b>Not in the new system yet.</b> Their next order here waits for a short checklist (name, contacts, retail / wholesale, pricing, addresses).{steps ? ` ${steps} of 5 done.` : ""}</span><button type="button" className="btn primary sm" onClick={() => setMoveOpen("edit")}>Move to the new system</button></div>;
+      })()}
+      {moveOpen && <CustomerMove customerId={id} onClose={() => setMoveOpen("")} onMoved={async () => { const go = moveOpen === "quote"; await reloadShop(); const { data: fresh } = await createClient().from("customers").select("*").eq("id", id).maybeSingle(); if (fresh) setC((x) => (x ? { ...x, ...(fresh as object) } : x)); setMoveOpen(""); if (go) setTimeout(() => newQuote(), 300); }} />}
       <TestAccount key={id} customerId={id} isTest={!!c.is_test} jobs={os.length} onChange={(v) => { reloadShop(); if (v !== undefined) setC((x) => (x ? { ...x, is_test: v } : x)); }} />
       <AccountAreas mode="shop" goodsCount={goodsOpen}
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} onCount={setProjOpen} />} projectsCount={projOpen}
