@@ -8,7 +8,7 @@ import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors,
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
-import { filmPdf, filmRollPdf, filmSinglePdf, filmBox, deflate } from "@/lib/filmPdf";
+import { filmPdf, filmRollPdf, filmSinglePdf, filmNestPdf, filmBox, nestLayout, deflate } from "@/lib/filmPdf";
 import { ripPdf } from "@/lib/ripPdf";
 import { folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder } from "@/lib/filmFolder";
 import { illustratorPdf } from "@/lib/illustratorPdf";
@@ -794,9 +794,14 @@ export default function SeparationStudio({ id }: { id: string }) {
   /** Print films: one file per screen in print order, each upright (turned only if too wide for the roll) and just the
    *  size of its film, so FilmMaker (Auto Page, white space removed) trims the film after every screen */
   /** `only`: just that film (0-based, print order), for reprinting one that came out wrong */
-  async function filmsEach(rollIn: number, only?: number) {
+  async function filmsEach(rollIn: number, only?: number, nest = false) {
     const { pages, names } = await filmPages(), n = pages.length, pad = String(n).length;
     const out: { name: string; bytes: Uint8Array }[] = [];
+    // override: every film nested on one sheet (small prints), cut apart by hand instead of trimmed one by one
+    if (nest && only == null && n > 1) {
+      const bytes = await filmNestPdf(pages.map((p, i) => ({ ...p, ink: names[i] || `screen ${i + 1}` })), rollIn, title, deflate, { targets: st.regMarks !== false });
+      return [{ name: `${slug(title)}-nested-${n}-films.pdf`, bytes }];
+    }
     for (let i = 0; i < n; i++) {
       if (only != null && i !== only) continue;
       const ink = names[i] || `screen ${i + 1}`;
@@ -1419,7 +1424,7 @@ export default function SeparationStudio({ id }: { id: string }) {
           )}
           {defOpen && <PressDefaults presses={presses} start={press?.id} me={me.email} onClose={() => setDefOpen(false)} onSaved={(m, lay) => { const lc = layoutCounts(lay); setPresses((ps) => ps.map((p) => (p.id === m.id ? { ...p, layout: lay, flashes: lc.units, rollers: lc.rollers || undefined } : p))); setDefOpen(false); setMsg(`${m.name.split(" · ")[0]} defaults saved. Every job's setup on it starts from these.`); }} />}
           {rtab === "screens" && res && <PrintFilms n={plates.length} inks={plates.map((p) => p.name)} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
-            make={async (rollIn, only) => { try { return await filmsEach(rollIn, only); } finally { setBusy(""); } }}
+            make={async (rollIn, only, nest) => { try { return await filmsEach(rollIn, only, nest); } finally { setBusy(""); } }}
             onSent={() => { if (row.status !== "cancelled") markPrinted(); }} />}
           {rtab === "screens" && <section className="sep-card">
             <h3>Files</h3>
@@ -1604,7 +1609,7 @@ const ROLL_IN = 17;
 function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }: {
   n: number; inks: string[]; aspect: number; widthIn: number; dpi: number; title: string; busy: boolean;
   /** `only`: one film (0-based, print order) */
-  make: (rollIn: number, only?: number) => Promise<{ name: string; bytes: Uint8Array }[]>; onSent: () => void;
+  make: (rollIn: number, only?: number, nest?: boolean) => Promise<{ name: string; bytes: Uint8Array }[]>; onSent: () => void;
 }) {
   const rollIn = ROLL_IN;
   const [folder, setFolder] = useState<string | null>(null), [canFolder, setCanFolder] = useState(false);
@@ -1613,7 +1618,11 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
   const [again, setAgain] = useState<number | null>(null);
   useEffect(() => { setCanFolder(folderPrintable()); savedFolder().then((h) => setFolder(h?.name || null)); }, []);
   const W = widthIn * 72, H = W * aspect;
-  const B = filmBox(W, H, rollIn), total = n * B.lengthIn;
+  // override: nest every film on one sheet instead of trimming after each (small prints: sleeves, napes)
+  const [nest, setNest] = useSticky("sep.films.nest", false);
+  const nesting = nest && n > 1;
+  const B = filmBox(W, H, rollIn), NL = nestLayout(n, W, H, rollIn), total = nesting ? NL.lengthIn : n * B.lengthIn;
+  const fits = nesting ? NL.fits : B.fits;
   async function choose() {
     setErr("");
     try { const h = await pickFolder(); setFolder(h.name); return true; }
@@ -1625,7 +1634,7 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
     setErr(""); setMsg(""); setWorking(true); setAgain(only ?? null);
     try {
       if (canFolder && !folder && !(await choose())) return;
-      const files = await make(rollIn, only);
+      const files = await make(rollIn, only, only == null && nesting);
       const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
       const many = only != null ? `film ${only + 1} of ${n} (${inks[only] || "screen"}) again` : `${files.length} film${files.length === 1 ? "" : "s"}`;
       const done = () => { if (only == null) onSent(); };
@@ -1639,7 +1648,7 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
           if (r === "denied") { setErr("The browser wasn't allowed to save into the hot folder. Click Print films again and choose Allow (or Allow on every visit)."); return; }
           if (r === "no-folder") break;
         }
-        if (sent === files.length) { setMsg(only != null ? `Sent ${many} to FilmMaker at ${at}.` : `Sent ${many} to FilmMaker at ${at}, one file per screen (FilmMaker trims after each).`); done(); return; }
+        if (sent === files.length) { setMsg(only != null ? `Sent ${many} to FilmMaker at ${at}.` : nesting ? `Sent ${n} films nested on one sheet to FilmMaker at ${at}: cut them apart by hand.` : `Sent ${many} to FilmMaker at ${at}, one file per screen (FilmMaker trims after each).`); done(); return; }
       }
       for (const f of files) download(f.bytes, f.name);
       setMsg(`Downloaded ${many} at ${at}.${canFolder ? "" : " On the film PC (Chrome or Edge) these go straight to FilmMaker."}`);
@@ -1654,6 +1663,12 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
   // the roll, drawn: one film after another down the roll, a dashed cut after each
   const pic = (() => {
     const RW = rollIn * 72, RL = Math.max(total * 72, 72), k = Math.min(150 / RW, 210 / RL), fh = B.h;
+    if (nesting) return (
+      <svg className="pf-roll" width={RW * k + 2} height={RL * k + 2} viewBox={`-1 -1 ${RW + 2 / k} ${RL + 2 / k}`} aria-hidden>
+        <rect x={0} y={0} width={RW} height={RL} className="pf-film" />
+        {NL.place.map((p, i) => { const x = 0.2 * 72 + p.x, y = NL.h - p.y - NL.fh; return <g key={i}><rect x={x} y={y} width={NL.fw} height={NL.fh} className={"pf-box" + (NL.fits ? "" : " bad")} /><text x={x + NL.fw / 2} y={y + NL.fh / 2} className="pf-n" fontSize={Math.min(NL.fw, NL.fh) * 0.32}>{i + 1}</text></g>; })}
+      </svg>
+    );
     return (
       <svg className="pf-roll" width={RW * k + 2} height={RL * k + 2} viewBox={`-1 -1 ${RW + 2 / k} ${RL + 2 / k}`} aria-hidden>
         <rect x={0} y={0} width={RW} height={RL} className="pf-film" />
@@ -1667,17 +1682,27 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }
   })();
   return (
     <section className="sep-card">
-      <div className="pf-head"><h3>Print films</h3><button type="button" className="btn primary" disabled={busy || working || !B.fits} onClick={() => print()}>{working && again == null ? "Making films…" : "Print Films"}</button></div>
+      <div className="pf-head"><h3>Print films</h3><button type="button" className="btn primary" disabled={busy || working || !fits} onClick={() => print()}>{working && again == null ? "Making films…" : "Print Films"}</button></div>
       <div className="pf-lay">
         {pic}
         <div className="pf-txt">
-          {B.fits ? <>
+          {nesting ? (NL.fits ? <>
+            <b>{n} films nested on one sheet · {total.toFixed(1)}&quot; of film</b>
+            <span>{NL.cols === 1 ? "One across" : `${NL.cols} across`}{NL.rows > 1 ? `, ${NL.rows} rows` : ""}{NL.rot ? ", turned sideways" : ""} · not trimmed: cut them apart by hand</span>
+            <span className="faint">{NL.widthIn.toFixed(1)}&quot; of the {rollIn}&quot; roll used · saves {Math.max(0, n * B.lengthIn - total).toFixed(1)}&quot; over trimming each</span>
+          </> : <span className="pv-err">These films are too wide to nest on the {rollIn}&quot; roll. Turn off nesting.</span>) : B.fits ? <>
             <b>{n} film{n === 1 ? "" : "s"}, one per screen · {total.toFixed(1)}&quot; of film</b>
             <span>{B.rot ? "Turned sideways (too wide for the roll upright)" : "Upright"}, {B.lengthIn.toFixed(1)}&quot; each, trimmed after each one</span>
             <span className="faint">{B.widthIn.toFixed(1)}&quot; of the {rollIn}&quot; roll used · targets top and bottom, ¾&quot; from the art</span>
           </> : <span className="pv-err">The film is {B.widthIn.toFixed(1)}&quot; across even turned sideways: too big for the {rollIn}&quot; roll. Make the print smaller.</span>}
         </div>
       </div>
+      {n > 1 && (
+        <label className="pf-nest" title="For small prints (sleeves, napes, pockets): every film on one sheet, side by side, cut apart by hand, instead of FilmMaker trimming after each film">
+          <input type="checkbox" checked={nest} onChange={(e) => setNest(e.target.checked)} />
+          <span><b>Override: nest instead of trim</b> <span className="faint">(small prints: all films on one sheet)</span></span>
+        </label>
+      )}
       {B.fits && n > 0 && (
         <div className="pf-again">
           <span className="faint">A film came out wrong or the roll ran out? Print just that one again:</span>
