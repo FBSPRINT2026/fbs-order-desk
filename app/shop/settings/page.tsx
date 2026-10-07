@@ -117,7 +117,7 @@ export default function SettingsPage() {
               return (
                 <div className="matrix-wrap">
                   <table className="matrix">
-                    <thead><tr><th>Min qty</th>{pl.blankAdd && <th>Blank +</th>}{Array.from({ length: cols }, (_, c) => <th key={c}>{c + 1}c</th>)}{dtg && <th>Full color</th>}<th>Embroidery</th><th>DTF</th></tr></thead>
+                    <thead><tr><th>Min qty</th>{pl.blankAdd && <th>Blank +</th>}{Array.from({ length: cols }, (_, c) => <th key={c}>{c + 1}c</th>)}{dtg && <th>Full color</th>}{pl.specialtyInk && <th title="Polyester, nylon or dyed garments: per location">Specialty ink</th>}{!pl.embTiers && <th>Embroidery</th>}<th>DTF</th></tr></thead>
                     <tbody>
                       {pl.tiers.map((t, i) => (
                         <tr key={tab + shade + i}>
@@ -125,7 +125,8 @@ export default function SettingsPage() {
                           {pl.blankAdd && <td><input type="number" step="0.01" aria-label={`${t}+ blank add`} value={pl.blankAdd[i] ?? 0} onChange={(e) => updPl((d) => { if (d.blankAdd) d.blankAdd[i] = n(e.target.value); })} /></td>}
                           {Array.from({ length: cols }, (_, j) => <td key={j}><input type="number" step="0.01" aria-label={`${t}+ pieces, ${j + 1} colors`} value={scr[i]?.[j] ?? 0} onChange={(e) => setScr(i, j, n(e.target.value))} /></td>)}
                           {dtg && <td><input type="number" step="0.01" aria-label={`${t}+ full color`} value={dtg[i] ?? 0} onChange={(e) => setDtg(i, n(e.target.value))} /></td>}
-                          <td><input type="number" step="0.05" aria-label={`${t}+ embroidery`} value={pl.embroidery[i] ?? 0} onChange={(e) => updPl((d) => { d.embroidery[i] = n(e.target.value); })} /></td>
+                          {pl.specialtyInk && <td><input type="number" step="0.05" aria-label={`${t}+ specialty ink per location`} value={pl.specialtyInk[i] ?? 0} onChange={(e) => updPl((d) => { if (d.specialtyInk) d.specialtyInk[i] = n(e.target.value); })} /></td>}
+                          {!pl.embTiers && <td><input type="number" step="0.05" aria-label={`${t}+ embroidery`} value={pl.embroidery[i] ?? 0} onChange={(e) => updPl((d) => { d.embroidery[i] = n(e.target.value); })} /></td>}
                           <td><input type="number" step="0.05" aria-label={`${t}+ DTF`} value={pl.dtf[i] ?? 0} onChange={(e) => updPl((d) => { d.dtf[i] = n(e.target.value); })} /></td>
                         </tr>
                       ))}
@@ -134,6 +135,47 @@ export default function SettingsPage() {
                 </div>
               );
             })()}
+            {tab === "wholesale" && pl.embTiers && (
+              <>
+                <div className="lbl">EMBROIDERY (CONTRACT)</div>
+                <div className="grid g4">
+                  <div className="field"><label htmlFor="s-embst">Stitches included</label><input id="s-embst" type="number" step="500" value={pl.embStitches ?? 6000} onChange={(e) => updPl((d) => { d.embStitches = n(e.target.value); })} /></div>
+                  <div className="field"><label htmlFor="s-emb1k">Each extra 1,000 stitches</label><input id="s-emb1k" type="number" step="0.05" value={pl.embPer1k ?? 0} onChange={(e) => updPl((d) => { d.embPer1k = n(e.target.value); })} /></div>
+                </div>
+                <div className="matrix-wrap"><table className="matrix">
+                  <thead><tr><th>Min qty</th><th>{(pl.embStitches ?? 6000) / 1000}K stitches</th><th title="Fleece, hats, beanies, bags, backpacks: any non-standard flat garment">Specialty items +</th></tr></thead>
+                  <tbody>{pl.embTiers.map((t, i) => (
+                    <tr key={"emb" + i}>
+                      <td className="tier"><input type="number" min="1" aria-label={`Embroidery tier ${i + 1} minimum`} value={t} onChange={(e) => updPl((d) => { if (d.embTiers) d.embTiers[i] = n(e.target.value); })} /></td>
+                      <td><input type="number" step="0.05" aria-label={`${t}+ embroidery`} value={pl.embroidery[i] ?? 0} onChange={(e) => updPl((d) => { d.embroidery[i] = n(e.target.value); })} /></td>
+                      <td><input type="number" step="0.05" aria-label={`${t}+ specialty item add-on`} value={pl.embSpecialty?.[i] ?? 0} onChange={(e) => updPl((d) => { if (d.embSpecialty) d.embSpecialty[i] = n(e.target.value); })} /></td>
+                    </tr>
+                  ))}</tbody>
+                </table></div>
+              </>
+            )}
+            {tab === "wholesale" && (
+              <>
+                <div className="lbl">CONTRACT RULES</div>
+                <label className="check"><input type="checkbox" checked={!!pl.darkAddsColor} onChange={(e) => updPl((d) => { d.darkAddsColor = e.target.checked; })} /> Dark garments add one color for the underbase (any color not on the light list below)</label>
+                <div className="grid g4">
+                  <div className="field"><label htmlFor="s-min">Jobs under this many pieces are charged as this many</label><input id="s-min" type="number" step="1" value={pl.minQty ?? 0} onChange={(e) => updPl((d) => { d.minQty = n(e.target.value) || undefined; })} /></div>
+                  <div className="field"><label htmlFor="s-remake">Screen remake, per color</label><input id="s-remake" type="number" step="0.5" value={pl.remakeFee ?? 0} onChange={(e) => updPl((d) => { d.remakeFee = n(e.target.value); })} /></div>
+                  <div className="field"><label htmlFor="s-pms">PMS matching, per color</label><input id="s-pms" type="number" step="0.5" value={pl.pmsFee ?? 0} onChange={(e) => updPl((d) => { d.pmsFee = n(e.target.value); })} /></div>
+                  <div className="field"><label htmlFor="s-sploc">Special imprint (sleeve, pocket, side), per location</label><input id="s-sploc" type="number" step="0.05" value={pl.specialLocPrice ?? 0} onChange={(e) => updPl((d) => { d.specialLocPrice = n(e.target.value); })} /></div>
+                </div>
+                <div className="field"><label htmlFor="s-splocs">Special imprint locations (comma separated)</label><input id="s-splocs" type="text" value={(pl.specialLocations || []).join(", ")} onChange={(e) => updPl((d) => { d.specialLocations = e.target.value.split(",").map((x) => x.trim()).filter(Boolean); })} /></div>
+                <div className="lbl">CONTRACT FINISHING <button className="btn sm" type="button" onClick={() => updPl((d) => { d.finishing = [...(d.finishing || []), { id: uid(), name: "", price: 0 }]; })}>+ Add</button></div>
+                {(pl.finishing || []).map((f, i) => (
+                  <div key={f.id} className="fee-row">
+                    <input type="text" aria-label="Add-on name" value={f.name} onChange={(e) => updPl((d) => { if (d.finishing) d.finishing[i].name = e.target.value; })} />
+                    <input type="number" step="0.05" aria-label="Price per piece" value={f.price} onChange={(e) => updPl((d) => { if (d.finishing) d.finishing[i].price = n(e.target.value); })} />
+                    <button className="btn icon ghost" type="button" aria-label="Remove add-on" onClick={() => updPl((d) => { d.finishing?.splice(i, 1); })}>✕</button>
+                  </div>
+                ))}
+                {pl.contractNotes && <div className="muted" style={{ fontSize: 12.5, whiteSpace: "pre-wrap" }}>{pl.contractNotes}</div>}
+              </>
+            )}
             {pl.lightColors && <div className="field"><label htmlFor="s-light">Light garment colors (comma separated)</label><input id="s-light" type="text" value={pl.lightColors.join(", ")} onChange={(e) => updPl((d) => { d.lightColors = e.target.value.split(",").map((x) => x.trim()).filter(Boolean); })} /></div>}
             <div className="preview">Check: <b>100 black tees</b>{tab === "retail" ? <> on a <b>$2.00</b> blank</> : <> supplied by the customer</>}, 1-color front + 1-color back → <b>{money(chk.lines[0]?.calcEach)} each</b>, {money(chk.sub + chk.setup)} total{chk.setup ? ` (incl. ${money(chk.setup)} setup)` : ""}.</div>
           </div>
@@ -142,7 +184,7 @@ export default function SettingsPage() {
         <section className="panel">
           <div className="panel-h"><h2>Finishing add-ons</h2><button className="btn sm" type="button" onClick={() => upd((d) => { d.finishing.push({ id: uid(), name: "", price: 0 }); })}>+ Add</button></div>
           <div className="panel-b stack">
-            <div className="muted" style={{ fontSize: 13 }}>Per-piece extras you can tick on any group, for retail or wholesale jobs.</div>
+            <div className="muted" style={{ fontSize: 13 }}>Per-piece extras you can tick on any group. Wholesale jobs use the contract finishing list on the Wholesale tab when it has one.</div>
             {s.finishing.map((f, i) => (
               <div key={f.id} className="fee-row">
                 <input type="text" aria-label="Add-on name" placeholder="Fold & bag" value={f.name} onChange={(e) => upd((d) => { d.finishing[i].name = e.target.value; })} />

@@ -51,7 +51,9 @@ export const PAY_METHODS = ["Credit card", "ACH", "Zelle", "Venmo", "Cash", "Che
 
 export type Method = "screen" | "embroidery" | "dtf";
 /** One decoration on a group of garments (Printavo calls these imprints). */
-export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string; /** staff confirmed a small print really goes on this big location */ keepLocation?: boolean; };
+export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number;
+  /** embroidery: stitch count (contract pricing includes 6,000; each extra 1,000 is charged) */ stitches?: number;
+  /** inks matched to a PMS (non-standard ink): a matching fee each */ pms?: number; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string; /** staff confirmed a small print really goes on this big location */ keepLocation?: boolean; };
 /** A piece of customer art, saved under their account and reused across orders. */
 export type Design = { id: string; number: number; customer_id: string | null; name: string; file_path: string; file_name: string; file_type: string; preview_path: string; width_px: number | null; height_px: number | null; starred?: boolean; archived_at?: string | null; /** made in the shirt designer: where its editable layers are saved */ designer?: { file: string } | null; /** how it prints (lib/printPlan.ts PrintPlan), shared by the Mockup Creator and separations */ print_plan?: unknown;
   /** where the art really sits in the file once its background is removed / empty margins cut (original pixels) */ art_box?: { x: number; y: number; w: number; h: number; of: { w: number; h: number } } | null; method: string; colors: number; inks: string; notes: string; created_by: string; created_at: string };
@@ -79,7 +81,9 @@ export type Group = { id: string; name?: string; lines: GLine[]; imprints: Impri
   /** staff chose to fill in imprints without making a mockup */ mockupSkipped?: boolean;
   /** photos-only pictures of the latest saved mockups (storage paths), shown as thumbnails on the order */ mockupThumbs?: string[];
   /** mockups the customer supplied themselves (their own software, or saved from the portal builder): storage paths */
-  customerMockups?: { path: string; name: string }[] };
+  customerMockups?: { path: string; name: string }[];
+  /** the garments are polyester, nylon or dyed: specialty (low-bleed) ink, charged per location (contract pricing) */ specialtyInk?: boolean;
+  /** the screens are on file from an earlier order: remake price instead of new setup */ remake?: boolean };
 export type PriceType = "retail" | "wholesale";
 
 /** Older orders stored one garment per line with its own decorations. */
@@ -125,7 +129,30 @@ export type PriceList = {
   lightColors?: string[];     // garment colors that get light-garment screen prices
   dtgLightColors?: string[];  // garment colors that get light-garment full-color prices (no white underbase)
   colorAdjust?: Record<string, number>; // per-piece price change by garment color (e.g. White -0.065)
+  /* Contract (wholesale) rules, from the FBS Contract Pricing List */
+  /** dark garments (not on lightColors): one more color for the underbase, priced and set up like any color */
+  darkAddsColor?: boolean;
+  /** jobs under this many pieces are charged as this many */
+  minQty?: number;
+  /** screen remake per color, when the screens are on file (group.remake) */
+  remakeFee?: number;
+  /** PMS matching (non-standard ink), per matched color (imprint.pms) */
+  pmsFee?: number;
+  /** special imprint locations (sleeve, pocket, side): per location per piece */
+  specialLocPrice?: number;
+  specialLocations?: string[];
+  /** specialty ink for polyester, nylon or dyed garments (group.specialtyInk): per location per piece, per screen tier */
+  specialtyInk?: number[];
+  /** this list's own finishing add-ons (contract prices); retail's list when not set */
+  finishing?: Finishing[];
+  /** embroidery's own quantity breaks (embroidery[] is per these), stitches included, each extra 1,000, and the
+   *  specialty-item add-on (fleece, hats, beanies, bags, backpacks: any non-standard flat garment) per break */
+  embTiers?: number[]; embStitches?: number; embPer1k?: number; embSpecialty?: number[];
+  /** the price sheet's own notes (spoilage, rush, digitizing ranges…), shown with the list */
+  contractNotes?: string;
 };
+/** non-standard flat garments (embroidery specialty items), from the garment's name */
+export const SPECIALTY_ITEM = /\b(hat|cap|snapback|trucker|beanie|knit|bag|backpack|tote|duffel|fleece|hood(ie|ed)?|sweatshirt|crewneck sweat|jacket|vest|blanket|towel|apron)s?\b/i;
 export const FULL_COLOR = 11;
 /** True when a garment color is on the light-garment list. */
 const normColor = (c: string) => (c || "").trim().toLowerCase().replace(/^sports /, "sport ");
@@ -325,21 +352,35 @@ export function orderGroups(o: Pick<Order, "groups" | "lines">): Group[] {
   }));
 }
 
-function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light) {
-  const inkFee = num(d.inkChanges) * num(s.inkChangeFee);
+/**
+ * One imprint's price per piece and its one-time charges. `light` = on a light garment (no underbase).
+ * Contract rules when the list has them: dark garments add a color for the underbase (price and screens), screens on
+ * file are remakes, PMS-matched inks have a fee each, embroidery has its own quantity breaks (x.eti) and charges
+ * stitches past the included count.
+ */
+function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light, x: { eti?: number; remake?: boolean } = {}) {
+  const inkFee = num(d.inkChanges) * num(s.inkChangeFee) + num(d.pms) * num(s.pmsFee);
   if (d.method === "screen") {
-    const k = Math.max(1, num(d.colors) || 1);
-    const full = k >= FULL_COLOR;
+    const k0 = Math.max(1, num(d.colors) || 1);
+    const full = k0 >= FULL_COLOR;
     if (s.dtg && full) {
       const each = num((dtgLight && s.dtgLight ? s.dtgLight : s.dtg)[ti]);
       return { each, setup: 0, inkFee, dtg: each, full: true };
     }
+    // the underbase on a dark garment is one more color
+    const under = s.darkAddsColor && !light && !full ? 1 : 0;
+    const k = k0 + under;
     const row = (light && s.screenLight ? s.screenLight : s.screen)[ti] || [];
     const n = Math.min(row.length || 6, k);
     const dtg = s.dtg ? num((dtgLight && s.dtgLight ? s.dtgLight : s.dtg)[ti]) : 0;
-    return { each: num(row[n - 1]), setup: Math.min(n, 10) * num(s.screenFee), inkFee, dtg, full: false };
+    const fee = x.remake && s.remakeFee != null ? s.remakeFee : s.screenFee;
+    return { each: num(row[n - 1]), setup: Math.min(k, 12) * num(fee), inkFee, dtg, full: false, under, custom: k > (row.length || 99) };
   }
-  if (d.method === "embroidery") return { each: num(s.embroidery[ti]), setup: num(s.digitizing), inkFee };
+  if (d.method === "embroidery") {
+    const eti = x.eti ?? ti;
+    const extra = s.embPer1k && num(d.stitches) > num(s.embStitches) ? Math.ceil((num(d.stitches) - num(s.embStitches)) / 1000) * num(s.embPer1k) : 0;
+    return { each: r2(num(s.embroidery[eti]) + extra), setup: num(s.digitizing), inkFee };
+  }
   if (d.method === "dtf") return { each: num(s.dtf[ti]), setup: 0, inkFee };
   return { each: 0, setup: 0, inkFee };
 }
@@ -350,11 +391,14 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const pl = priceList(s, o.price_type || "retail");
   const qty = (g.lines || []).reduce((a, l) => a + lineQty(l), 0);
   const ti = tierIndex(qty, pl);
-  const imprints = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl) }));
+  // embroidery has its own quantity breaks on contract pricing
+  const eti = pl.embTiers?.length ? tierIndex(qty, { tiers: pl.embTiers }) : ti;
+  const ix = { eti, remake: !!g.remake };
+  const imprints = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl, false, false, ix) }));
   // Print price per piece. With a digital (full color) price list, screen prints switch to digital
   // for the whole garment when that is cheaper, or when any location is full color.
   const printFor = (light: boolean, dtgLight: boolean) => {
-    const imps = light || dtgLight ? (g.imprints || []).map((d) => imprintPrice(d, ti, pl, light, dtgLight)) : imprints;
+    const imps = light || dtgLight ? (g.imprints || []).map((d) => imprintPrice(d, ti, pl, light, dtgLight, ix)) : imprints;
     const other = imps.filter((_, i) => (g.imprints || [])[i]?.method !== "screen").reduce((a, d) => a + d.each, 0);
     const scr = imps.filter((_, i) => (g.imprints || [])[i]?.method === "screen");
     let screenPart = scr.reduce((a, d) => a + d.each, 0);
@@ -372,14 +416,22 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (!printCache.has(key)) printCache.set(key, light || dl ? printFor(light, dl) : printEach);
     return { light, print: printCache.get(key) as number };
   };
-  const finishing = (g.finishing || []).map((fid) => s.finishing.find((f) => f.id === fid)).filter(Boolean) as Finishing[];
+  const finList = pl.finishing?.length ? pl.finishing : s.finishing;
+  const finishing = (g.finishing || []).map((fid) => finList.find((f) => f.id === fid)).filter(Boolean) as Finishing[];
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
+  // contract extras per piece: special locations (sleeve, pocket, side), specialty ink on poly / nylon / dyed garments
+  const imps = g.imprints || [];
+  const locExtra = pl.specialLocPrice ? imps.filter((d) => (pl.specialLocations || []).some((z) => z.toLowerCase() === (d.location || "").toLowerCase())).length * num(pl.specialLocPrice) : 0;
+  const inkExtra = g.specialtyInk && pl.specialtyInk?.length ? imps.filter((d) => d.method === "screen").length * num(pl.specialtyInk[Math.min(ti, pl.specialtyInk.length - 1)]) : 0;
+  // embroidery on a specialty item (fleece, hats, bags…): an add-on per embroidered location
+  const embSpecial = (l: GLine) => (pl.embSpecialty?.length && SPECIALTY_ITEM.test(`${l.garment} ${l.style}`) ? imps.filter((d) => d.method === "embroidery").length * num(pl.embSpecialty[Math.min(eti, pl.embSpecialty.length - 1)]) : 0);
   const lines: LineCalc[] = (g.lines || []).map((l) => {
     const lq = lineQty(l);
     const adj = Object.entries(pl.colorAdjust || {}).find(([c]) => normColor(c) === normColor(l.color))?.[1] || 0;
     const garmentRaw = pl.useGarment ? num(l.cost) * (1 + num(pl.markup) / 100) + num(pl.blankAdd?.[ti]) + num(adj) : 0;
     const garmentEach = r2(garmentRaw);
-    const { light, print: linePrint } = printLine(l.color);
+    const { light, print: basePrint } = printLine(l.color);
+    const linePrint = r2(basePrint + locExtra + inkExtra + embSpecial(l));
     const calcEach = r2(garmentRaw + linePrint + finishEach);
     const hasOv = l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride);
     const each = hasOv ? r2(+(l.priceOverride as number)) : calcEach;
@@ -392,10 +444,17 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     });
     return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
   });
-  const screens = o.waive_setup ? 0 : imprints.reduce((a, d) => a + d.setup, 0);
+  // screens: no underbase screen when every garment is light
+  const anyDark = !pl.darkAddsColor || (g.lines || []).some((l) => lineQty(l) > 0 && !isLightColor(l.color, pl));
+  const setups = anyDark ? imprints : (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl, true, true, ix) }));
+  const screens = o.waive_setup ? 0 : setups.reduce((a, d) => a + d.setup, 0);
   const inkFees = imprints.reduce((a, d) => a + d.inkFee, 0);
-  const setup = r2(screens + inkFees);
-  return { id: g.id, qty, ti, tierMin: pl.tiers[ti], materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub: r2(lines.reduce((a, l) => a + l.sub, 0)), setup, inkFees: r2(inkFees), belowMin: qty > 0 && qty < pl.tiers[0], wholesale: !pl.useGarment };
+  const sub = r2(lines.reduce((a, l) => a + l.sub, 0));
+  // contract minimum: a job under minQty pieces is charged as minQty pieces (the missing pieces at the average price)
+  // (screen printing: embroidery has its own 6-11 break)
+  const minCharge = pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
+  const setup = r2(screens + inkFees + minCharge);
+  return { id: g.id, qty, ti, tierMin: pl.tiers[ti], materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;

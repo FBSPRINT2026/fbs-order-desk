@@ -103,6 +103,8 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
   };
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
+  // wholesale (contract) jobs use the contract's own finishing list and prices
+  const finList = gc.wholesale && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;
   return (
     <section className={"line" + (hidePrices ? " np" : "")}>
       <div className="line-h">
@@ -242,6 +244,12 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                           if (des && (im.method === "screen" || im.method === "embroidery") && des.colors && !im.inks.trim()) im.colors = des.colors;
                         })}
                         onUpload={async (f, name) => { if (!onUploadDesign) return; const des = await onUploadDesign(f, name); if (des) update((x) => { x.imprints[di].design_id = des.id; }); }} />
+                      {gc.wholesale && ((d.method === "embroidery" && settings.wholesale.embPer1k) || (d.method === "screen" && settings.wholesale.pmsFee)) ? (
+                        <div className="row ct-extra">
+                          {d.method === "embroidery" && <label>Stitches <input type="number" min={0} step={500} aria-label="Stitch count" placeholder={String(settings.wholesale.embStitches || 6000)} value={d.stitches ?? ""} onChange={(e) => update((x) => { x.imprints[di].stitches = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /><span className="faint">{(settings.wholesale.embStitches || 6000).toLocaleString()} included, {money(settings.wholesale.embPer1k)} each 1,000 over</span></label>}
+                          {d.method === "screen" && <label>PMS-matched inks <input type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /><span className="faint">{money(settings.wholesale.pmsFee)} each (non-standard ink)</span></label>}
+                        </div>
+                      ) : null}
                       {(() => {
                         // a small print on a big location (3.5" on the Full Front) is usually a left chest
                         const m = (d.size || "").match(/^([\d.]+)/); if (!m) return null;
@@ -275,11 +283,17 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
           <div className={"grp-foot-l mk-lock" + (locked ? " on" : "")}>
             {locked && <button type="button" className="mk-cover" tabIndex={-1} aria-label="Finishing is locked until a mockup is created" onClick={() => setAskSkip(true)} />}
             <div inert={locked || undefined} className="mk-body">
-            {settings.finishing.length > 0 && (
+            {gc.wholesale && (settings.wholesale.specialtyInk?.length || settings.wholesale.remakeFee != null) ? (
+              <div className="row ct-extra" style={{ marginBottom: 8 }}>
+                {settings.wholesale.specialtyInk?.length ? <label className="check"><input type="checkbox" checked={!!g.specialtyInk} onChange={(e) => update((x) => { x.specialtyInk = e.target.checked || undefined; })} /> Polyester, nylon or dyed garments (specialty ink, per location)</label> : null}
+                {settings.wholesale.remakeFee != null ? <label className="check"><input type="checkbox" checked={!!g.remake} onChange={(e) => update((x) => { x.remake = e.target.checked || undefined; })} /> Screens on file (remake {money(settings.wholesale.remakeFee)}/color)</label> : null}
+              </div>
+            ) : null}
+            {finList.length > 0 && (
         <div className="imprints">
                 <div className="lbl" style={{ marginBottom: 6 }}>FINISHING</div>
                 <div className="row" style={{ gap: 14 }}>
-                  {settings.finishing.map((f) => (
+                  {finList.map((f) => (
                     <label key={f.id} className="check" style={{ fontSize: 13 }}>
                       <input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => update((x) => { const set = new Set(x.finishing || []); if (e.target.checked) set.add(f.id); else set.delete(f.id); x.finishing = [...set]; })} />
                       {f.name}{!hidePrices && <span className="faint"> ({money(f.price)}/pc)</span>}
@@ -301,7 +315,8 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
                   <div className="pb-r"><span>Garments</span><b>{money(gar)}</b></div>
                   <div className="pb-r"><span>Imprints</span><b>{money(imp)}</b></div>
                   {fin ? <div className="pb-r"><span>Finishing</span><b>{money(fin)}</b></div> : null}
-                  {gc.setup ? <div className="pb-r"><span>Setup{gc.inkFees ? " (incl. ink changes)" : ""}</span><b>{money(gc.setup)}</b></div> : null}
+                  {gc.setup ? <div className="pb-r"><span>Setup{gc.minCharge ? ` (incl. ${money(gc.minCharge)}: under ${settings.wholesale.minQty || 12} pcs is charged as ${settings.wholesale.minQty || 12})` : gc.inkFees ? " (incl. ink and PMS fees)" : ""}</span><b>{money(gc.setup)}</b></div> : null}
+                  {gc.custom ? <div className="pb-r"><span className="ink-warn">9+ colors: custom quote (priced at 8 here)</span></div> : null}
                   {gc.materials ? <div className="pb-r"><span>2XL+ Materials Charge</span><b>{money(gc.materials)}</b></div> : null}
                 </>
               );
