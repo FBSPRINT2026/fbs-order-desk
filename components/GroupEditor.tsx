@@ -1,5 +1,5 @@
 "use client";
-import { isLightColor, lineQty, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { smallerSpot } from "@/lib/mockup";
 import DesignSearch from "@/components/DesignSearch";
@@ -114,6 +114,9 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
   const scrImps = gc.wholesale ? g.imprints.filter((d) => d.method === "screen" && d.colors < FULL_COLOR) : [];
   const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, wpl));
   const scrFee = g.remake && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
+  const embImps = gc.wholesale ? g.imprints.filter((d) => d.method === "embroidery") : [];
+  const inkRate = wpl.specialtyInk?.length ? wpl.specialtyInk[Math.min(gc.ti, wpl.specialtyInk.length - 1)] : 0;
+  const setPms = (di: number, name: string, v: boolean | undefined) => update((x) => { const m = { ...(x.imprints[di].pmsCharge || {}) }; if (v == null) delete m[name.toLowerCase()]; else m[name.toLowerCase()] = v; x.imprints[di].pmsCharge = Object.keys(m).length ? m : undefined; });
   const tick = (id: string, on: boolean) => update((x) => { const set = new Set(x.finishing || []); if (on) set.add(id); else set.delete(id); x.finishing = [...set]; });
   return (
     <section className={"line" + (hidePrices ? " np" : "")}>
@@ -254,10 +257,9 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                           if (des && (im.method === "screen" || im.method === "embroidery") && des.colors && !im.inks.trim()) im.colors = des.colors;
                         })}
                         onUpload={async (f, name) => { if (!onUploadDesign) return; const des = await onUploadDesign(f, name); if (des) update((x) => { x.imprints[di].design_id = des.id; }); }} />
-                      {gc.wholesale && ((d.method === "embroidery" && settings.wholesale.embPer1k) || (d.method === "screen" && settings.wholesale.pmsFee)) ? (
+                      {gc.wholesale && d.method === "embroidery" && settings.wholesale.embPer1k ? (
                         <div className="row ct-extra">
                           {d.method === "embroidery" && <label>Stitches <input type="number" min={0} step={500} aria-label="Stitch count" placeholder={String(settings.wholesale.embStitches || 6000)} value={d.stitches ?? ""} onChange={(e) => update((x) => { x.imprints[di].stitches = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /><span className="faint">{(settings.wholesale.embStitches || 6000).toLocaleString()} included, {money(settings.wholesale.embPer1k)} each 1,000 over</span></label>}
-                          {d.method === "screen" && <label>PMS-matched inks <input type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /><span className="faint">{money(settings.wholesale.pmsFee)} each (non-standard ink)</span></label>}
                         </div>
                       ) : null}
                       {(() => {
@@ -285,43 +287,6 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
             </table>
           </div>
           <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>
-          {scrImps.length > 0 && (
-            <div className="scr-sec">
-              <div className="lbl">SCREENS</div>
-              <table className="scr-tbl">
-                <thead><tr><th>Print</th><th className="c">Colors</th><th>Underbase</th><th className="c">Screens</th>{!hidePrices && <th className="r">Setup</th>}</tr></thead>
-                <tbody>{scrImps.map((d) => {
-                  const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight);
-                  return (
-                    <tr key={d.id}>
-                      <td>{d.location || "Print"}{d.inks ? <span className="faint"> · {d.inks}</span> : null}</td>
-                      <td className="c">{d.colors}</td>
-                      <td>{allLight ? <span className="faint">None (light garment)</span> : <>
-                        <label className="check"><input type="checkbox" checked={sc.under} onChange={(e) => update((x) => { x.imprints[di].underbase = e.target.checked; x.imprints[di].screens = undefined; })} /> {sc.under ? "Underbase" : "No underbase"}</label>
-                        {d.underbase == null ? <span className="faint scr-auto"> auto{!sc.under ? " (dark ink)" : ""}</span> : <button type="button" className="linkbtn scr-auto" onClick={() => update((x) => { x.imprints[di].underbase = undefined; })}>auto</button>}
-                      </>}</td>
-                      <td className="c">{d.screens != null
-                        ? <span className="scr-n"><input type="number" min={1} max={15} aria-label="Screens" value={d.screens} onChange={(e) => update((x) => { x.imprints[di].screens = Math.max(1, Math.min(15, Math.round(+e.target.value) || 1)); })} /><button type="button" className="linkbtn" onClick={() => update((x) => { x.imprints[di].screens = undefined; })}>auto ({sc.auto})</button></span>
-                        : <span className="scr-n"><b>{sc.n}</b><button type="button" className="linkbtn" onClick={() => update((x) => { x.imprints[di].screens = sc.auto; })}>change</button></span>}</td>
-                      {!hidePrices && <td className="r num">{money(sc.n * (+scrFee || 0))}</td>}
-                    </tr>
-                  );
-                })}</tbody>
-              </table>
-              <div className="row ct-extra">
-                {wpl.remakeFee != null && <label className="check"><input type="checkbox" checked={!!g.remake} onChange={(e) => update((x) => { x.remake = e.target.checked || undefined; })} /> Screens on file (remake {money(wpl.remakeFee)}/screen instead of {money(wpl.screenFee)})</label>}
-                {wpl.specialtyInk?.length ? <label className="check"><input type="checkbox" checked={!!g.specialtyInk} onChange={(e) => update((x) => { x.specialtyInk = e.target.checked || undefined; })} /> Polyester, nylon or dyed garments (specialty ink, per location)</label> : null}
-              </div>
-            </div>
-          )}
-          {embList.length > 0 && (
-            <div className="scr-sec">
-              <div className="lbl">EMBROIDERY EXTRAS</div>
-              <div className="row" style={{ gap: 14 }}>
-                {embList.map((f) => <label key={f.id} className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />{f.name}{!hidePrices && <span className="faint"> ({money(f.price)}/pc)</span>}</label>)}
-              </div>
-            </div>
-          )}
           </div>
           </div>
         </div>
@@ -330,6 +295,64 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
           <div className={"grp-foot-l mk-lock" + (locked ? " on" : "")}>
             {locked && <button type="button" className="mk-cover" tabIndex={-1} aria-label="Finishing is locked until a mockup is created" onClick={() => setAskSkip(true)} />}
             <div inert={locked || undefined} className="mk-body">
+            {(scrImps.length > 0 || embImps.length > 0) && (
+              <div className="sbx">
+                {scrImps.length > 0 && <div className="sbx-sec">
+                  <div className="sbx-h"><span>Screens</span>{wpl.remakeFee != null && <label className="check" title="The screens are on file from an earlier order"><input type="checkbox" checked={!!g.remake} onChange={(e) => update((x) => { x.remake = e.target.checked || undefined; })} />Remake {money(wpl.remakeFee)}</label>}</div>
+                  {scrImps.map((d) => {
+                    const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight);
+                    return (
+                      <div key={d.id} className="sbx-r">
+                        <span className="sbx-loc">{d.location || "Print"}</span>
+                        {allLight ? <span className="faint">no underbase</span> : <span>
+                          <label className="check" title={d.underbase == null ? (sc.under ? "Automatic: a light ink needs one" : "Automatic: dark inks print without one") : "Set by hand"}><input type="checkbox" checked={sc.under} onChange={(e) => update((x) => { x.imprints[di].underbase = e.target.checked; x.imprints[di].screens = undefined; })} />Underbase</label>
+                          {d.underbase != null && <button type="button" className="linkbtn" onClick={() => update((x) => { x.imprints[di].underbase = undefined; })}>auto</button>}
+                        </span>}
+                        <span className="sbx-n">{d.screens != null
+                          ? <><input type="number" min={1} max={15} aria-label="Screens" value={d.screens} onChange={(e) => update((x) => { x.imprints[di].screens = Math.max(1, Math.min(15, Math.round(+e.target.value) || 1)); })} /><button type="button" className="linkbtn" onClick={() => update((x) => { x.imprints[di].screens = undefined; })}>auto</button></>
+                          : <button type="button" className="linkbtn sbx-cnt" title="Change the number of screens" onClick={() => update((x) => { x.imprints[di].screens = sc.auto; })}>{sc.n} screen{sc.n === 1 ? "" : "s"}</button>}</span>
+                        {!hidePrices && <b className="num">{money(sc.n * (+scrFee || 0))}</b>}
+                      </div>
+                    );
+                  })}
+                </div>}
+                {scrImps.length > 0 && <div className="sbx-sec">
+                  <div className="sbx-h"><span>Inks</span></div>
+                  {scrImps.map((d) => {
+                    const di = g.imprints.indexOf(d), list = pmsInks(d);
+                    if (!list.length) return wpl.pmsFee ? (
+                      <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Print"}</span><span className="faint">inks not named</span>
+                        <label className="sbx-n">PMS matches <input type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /></label>
+                      </div>) : null;
+                    return (
+                      <div key={d.id} className="sbx-r">
+                        <span className="sbx-loc">{d.location || "Print"}</span>
+                        <span className="sbx-inks">{list.map((x) => (
+                          <span key={x.name} className={"sbx-ink" + (x.charge ? " pms" : "")}>
+                            <button type="button" className="sbx-ink-b" title={x.charge ? "PMS match: click for standard, no charge" : "Click to charge a PMS match"} onClick={() => setPms(di, x.name, x.auto === !x.charge ? undefined : !x.charge)}>
+                              {x.name}{x.charge ? !hidePrices && wpl.pmsFee ? ` · PMS match ${money(wpl.pmsFee)}` : " · PMS match" : x.auto || x.set ? " · standard, no charge" : ""}
+                            </button>
+                          </span>
+                        ))}</span>
+                      </div>
+                    );
+                  })}
+                  {(g.specialtyInk || g.specialtyInkSet) && inkRate ? (
+                    <div className="sbx-r">
+                      <label className="check"><input type="checkbox" checked={!!g.specialtyInk} onChange={(e) => update((x) => { x.specialtyInk = e.target.checked || undefined; x.specialtyInkSet = true; })} />Polyester / dyed garment{!hidePrices && <span className="faint"> · specialty ink {money(inkRate)}/pc per location</span>}</label>
+                      {g.specialtyInkSet ? <button type="button" className="linkbtn" onClick={() => update((x) => { x.specialtyInkSet = undefined; })}>auto</button> : g.fabricNote ? <span className="faint">({g.fabricNote})</span> : null}
+                    </div>
+                  ) : null}
+                </div>}
+                {embImps.length > 0 && <div className="sbx-sec">
+                  <div className="sbx-h"><span>Digitizing</span></div>
+                  {embImps.map((d) => (
+                    <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Embroidery"}</span>{d.stitches ? <span className="faint">{d.stitches.toLocaleString()} stitches</span> : null}{!hidePrices && <b className="num">{money(wpl.digitizing)}</b>}</div>
+                  ))}
+                  {embList.length > 0 && <div className="sbx-r">{embList.map((f) => <label key={f.id} className="check"><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />{f.name}{!hidePrices && <span className="faint"> {money(f.price)}/pc</span>}</label>)}</div>}
+                </div>}
+              </div>
+            )}
             {finishingAt === "group" && finList.length > 0 && (
         <div className="imprints">
                 <div className="lbl" style={{ marginBottom: 6 }}>FINISHING</div>

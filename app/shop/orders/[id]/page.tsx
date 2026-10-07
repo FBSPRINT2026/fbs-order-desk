@@ -20,6 +20,7 @@ import ProjectPicker from "@/components/ProjectPicker";
 import { Pill } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import { checkOrder } from "@/lib/orderChecks";
+import { specialtyGarment } from "@/lib/fabric";
 import { withPrivate } from "@/lib/crm/private";
 import { ChecksPanel, FillFromText } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
@@ -230,6 +231,23 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       for (const z of ["2XL", "3XL", "4XL", "5XL"] as const) if (sc[z] && gm.cost) up[z] = Math.max(0, Math.round((sc[z] - +gm.cost) * 100) / 100);
       l.sizeUp = Object.keys(up).length ? up : undefined;
     } })); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [o, catalog]);
+
+  // contract jobs: specialty ink (poly / nylon / dyed garments) follows the garments on each group, unless staff set it
+  // by hand. Only while the order is still being quoted or worked up, so a printed job's price doesn't move.
+  useEffect(() => {
+    if (!o || o.price_type !== "wholesale" || !catalog.length || ["production", "ready", "completed"].includes(o.status)) return;
+    const want = o.groups.map((g) => {
+      const hits = g.lines.filter((l) => (l.style || l.garment || "").trim()).map((l) => {
+        const cat = catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase());
+        return specialtyGarment({ style: l.style, brand: l.brand, garment: `${l.garment || ""} ${cat?.description || ""}`, color: l.color, fabric: cat?.fabric, supplier: cat?.supplier || undefined });
+      });
+      const yes = hits.filter((h) => h.yes);
+      return { on: yes.length > 0, why: yes.map((h) => h.why).join("; ").slice(0, 200) };
+    });
+    if (o.groups.some((g, i) => !g.specialtyInkSet && (!!g.specialtyInk !== want[i].on || (g.fabricNote || "") !== want[i].why)))
+      patch((d) => d.groups.forEach((g, i) => { if (g.specialtyInkSet || !want[i]) return; g.specialtyInk = want[i].on || undefined; g.fabricNote = want[i].why || undefined; }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o, catalog]);
 

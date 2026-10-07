@@ -125,3 +125,18 @@ export function needsPolyWhite(f: Fabric, color: string, polyPct = 50): { poly: 
   if (f.polyPct > 0 && BLEEDERS.test(color)) return { poly: true, why: `${f.polyPct}% polyester and ${color} dyes bleed the most` };
   return { poly: false, why: f.polyPct ? `${f.polyPct}% polyester, under ${polyPct}%` : "cotton" };
 }
+
+/**
+ * Does a garment need specialty (low-bleed) ink on the contract price list: mostly polyester (over half: Sport-Tek
+ * ST350, performance tees), nylon, or a dyed garment (tie-dye, dip-dye). 100% cotton and cotton-rich blends don't
+ * (a Bella+Canvas Heather CVC at 48% poly doesn't; a 50/50 doesn't either: staff can tick it).
+ */
+export function specialtyGarment(g: { style?: string; brand?: string; garment?: string; color?: string; fabric?: string; supplier?: string }): { yes: boolean; why: string } {
+  const label = [g.brand, g.style].filter(Boolean).join(" ").trim() || g.garment || "Garment";
+  const words = `${g.garment || ""} ${g.color || ""}`;
+  if (/\b(tie|dip|ice)[- ]?dye/i.test(words)) return { yes: true, why: `${label}: dyed garment` };
+  if (/\bnylon\b/i.test(`${g.fabric || ""} ${g.garment || ""}`)) return { yes: true, why: `${label}: nylon` };
+  const f = fabricOf(g);
+  if (f.polyPct > 50) return { yes: true, why: `${label}: ${f.polyPct}% polyester` };
+  return { yes: false, why: `${label}: ${f.polyPct ? `${f.polyPct}% polyester` : "cotton"}` };
+}

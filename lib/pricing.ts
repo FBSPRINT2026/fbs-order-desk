@@ -55,7 +55,10 @@ export type Method = "screen" | "embroidery" | "dtf";
 /** One decoration on a group of garments (Printavo calls these imprints). */
 export type Imprint = { id: string; method: Method; location: string; colors: number; inks: string; size: string; notes: string; inkChanges?: number;
   /** embroidery: stitch count (contract pricing includes 6,000; each extra 1,000 is charged) */ stitches?: number;
-  /** inks matched to a PMS (non-standard ink): a matching fee each */ pms?: number;
+  /** inks matched to a PMS (non-standard ink): a matching fee each. Only used when the inks aren't named; named inks
+   *  are charged by pmsInks() */ pms?: number;
+  /** PMS charge per ink set by hand (lowercase ink name → charge or not): "standard, no charge" for a customer's
+   *  regular PMS 186, or a match on an ink that isn't named as a PMS */ pmsCharge?: Record<string, boolean>;
   /** underbase on a dark garment: set by hand (true / false); not set = decided from the inks (black, navy, dark reds don't need one) */ underbase?: boolean;
   /** screens set by hand (else colors + underbase) */ screens?: number; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string; /** staff confirmed a small print really goes on this big location */ keepLocation?: boolean; };
 /** A piece of customer art, saved under their account and reused across orders. */
@@ -86,7 +89,10 @@ export type Group = { id: string; name?: string; lines: GLine[]; imprints: Impri
   /** photos-only pictures of the latest saved mockups (storage paths), shown as thumbnails on the order */ mockupThumbs?: string[];
   /** mockups the customer supplied themselves (their own software, or saved from the portal builder): storage paths */
   customerMockups?: { path: string; name: string }[];
-  /** the garments are polyester, nylon or dyed: specialty (low-bleed) ink, charged per location (contract pricing) */ specialtyInk?: boolean;
+  /** the garments are polyester, nylon or dyed: specialty (low-bleed) ink, charged per location (contract pricing).
+   *  Set from the garments' fabric by the order editor unless staff set it by hand (specialtyInkSet) */ specialtyInk?: boolean;
+  /** staff ticked / unticked specialty ink themselves: the garments no longer decide */ specialtyInkSet?: boolean;
+  /** why specialty ink was picked automatically ("ST350: 100% polyester") */ fabricNote?: string;
   /** the screens are on file from an earlier order: remake price instead of new setup */ remake?: boolean };
 export type PriceType = "retail" | "wholesale";
 
@@ -106,7 +112,7 @@ export type Order = {
   approved_name: string | null; created_at: string; updated_at: string;
   price_type: PriceType; submitted_at?: string | null; completed_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; /** firm in-hands (can't slip), and the time it's needed that day (minutes; null = end of day) */ firm?: boolean; due_time?: number | null; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string;
 };
-export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; /** the supplier's size chart: flat body width / length per size (inches) */ specs?: import("@/lib/garmentBody").GarmentSpecs | null; size_costs?: Record<string, number>; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string }>; /** "ss" or "sanmar" */ supplier?: string | null; supplier_style?: string | null };
+export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; /** the supplier's size chart: flat body width / length per size (inches) */ specs?: import("@/lib/garmentBody").GarmentSpecs | null; size_costs?: Record<string, number>; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string }>; /** fiber content lines from the supplier ("100% polyester") */ fabric?: string; /** "ss" or "sanmar" */ supplier?: string | null; supplier_style?: string | null };
 export type ArtFile = { id: string; order_id: string; name: string; file_path: string; file_type: string; created_at: string };
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string; fee?: number; processor_id?: string | null; note?: string | null };
 export type Customer = { id: string; is_test?: boolean; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType; payment_terms?: PayTerms;
@@ -387,9 +393,24 @@ function inkL(name: string): number | null {
  * inks (black, navy, maroon, dark reds: L* 40 and under) print on their own, the same as the separations never put
  * an underbase under black. Any lighter ink, or inks not filled in yet, means yes.
  */
+/** the inks named on a print ("Black, PMS 186 C + White") */
+export const inkNames = (inks: string) => (inks || "").split(/[,;\/+]|\band\b/i).map((x) => x.trim()).filter(Boolean);
+/** an ink named as a PMS / Pantone color ("PMS 186 C", "Pantone 7625", "186C") rather than a house ink */
+export const isPmsInk = (n: string) => /\b(pms|pantone)\b/i.test(n) || /^\d{3,4}\s*-?\s*[cu]?$/i.test(n.trim());
+/** each named ink on a print and whether it's charged as a PMS match: PMS inks are, unless marked standard (no charge) */
+export function pmsInks(d: Pick<Imprint, "inks" | "pmsCharge">): { name: string; auto: boolean; charge: boolean; set: boolean }[] {
+  return inkNames(d.inks).map((name) => {
+    const auto = isPmsInk(name), v = d.pmsCharge?.[name.toLowerCase()];
+    return { name, auto, charge: v ?? auto, set: v != null };
+  });
+}
+/** PMS matching fees on a print: the named inks charged as matches, or the count typed when no inks are named */
+export function pmsCount(d: Pick<Imprint, "inks" | "pmsCharge" | "pms">): number {
+  return inkNames(d.inks).length ? pmsInks(d).filter((x) => x.charge).length : num(d.pms);
+}
 export function needsUnderbase(d: Pick<Imprint, "inks" | "underbase" | "method" | "colors">): boolean {
   if (d.underbase != null) return d.underbase;
-  const names = (d.inks || "").split(/[,;\/+]|\band\b/i).map((x) => x.trim()).filter(Boolean);
+  const names = inkNames(d.inks);
   if (!names.length) return true;
   return names.some((n) => { const L = inkL(n); return L == null || L > 40; });
 }
@@ -402,7 +423,7 @@ export function screensFor(d: Imprint, s: Pick<PriceList, "darkAddsColor">, ligh
 }
 
 function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light, x: { eti?: number; remake?: boolean } = {}) {
-  const inkFee = num(d.inkChanges) * num(s.inkChangeFee) + num(d.pms) * num(s.pmsFee);
+  const inkFee = num(d.inkChanges) * num(s.inkChangeFee) + (d.method === "screen" ? pmsCount(d) : num(d.pms)) * num(s.pmsFee);
   if (d.method === "screen") {
     const k0 = Math.max(1, num(d.colors) || 1);
     const full = k0 >= FULL_COLOR;
