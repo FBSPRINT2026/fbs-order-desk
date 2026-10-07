@@ -1485,14 +1485,26 @@ async function jpegOf(f: File): Promise<string | null> {
 /** "Films" view: each screen's film in print order, black where the ink goes (a halftone screen in its tone); a film
  *  opens on its own (with the close-up of the real dots) when clicked */
 function FilmsView({ plates, w, h, onOpen }: { plates: Plate[]; w: number; h: number; onOpen: (key: string) => void }) {
+  // zoom: how wide each film shows (px), from thumbnails up to one film filling the width (then scroll)
+  const [size, setSize] = useSticky("sep.films.size", 200);
+  const z = (k: number) => setSize((v) => Math.max(120, Math.min(2400, Math.round(v * k))));
   return (
-    <div className="sep-films">
+    <div className="sep-films-wrap">
+      <div className="sep-films-zoom">
+        <button type="button" className="btn sm icon" onClick={() => z(1 / 1.5)} aria-label="Smaller films" title="Smaller">−</button>
+        <input type="range" min={120} max={2400} step={20} value={size} onChange={(e) => setSize(+e.target.value)} aria-label="Film size (zoom)" />
+        <button type="button" className="btn sm icon" onClick={() => z(1.5)} aria-label="Bigger films" title="Bigger">+</button>
+        <button type="button" className="linkbtn" onClick={() => setSize(200)}>All</button>
+        <button type="button" className="linkbtn" onClick={() => setSize(2400)}>One at a time</button>
+      </div>
+      <div className="sep-films" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(min(${size}px, 100%), 1fr))` }}>
       {plates.map((p, i) => (
         <button key={p.key} type="button" className="sep-film" onClick={() => onOpen(p.key)} title={`See the ${p.name} film bigger, and its real dots`}>
           <FilmCanvas p={p} w={w} h={h} />
           <span className="sep-film-l"><b>{i + 1}</b> <span data-notranslate>{p.name}</span>{p.tonal ? <small> · halftone</small> : null}</span>
         </button>
       ))}
+      </div>
     </div>
   );
 }
