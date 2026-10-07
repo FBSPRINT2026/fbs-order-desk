@@ -368,12 +368,15 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
           {!hidePrices && <div className="price-box">
             {(() => {
               // Split the group's line items into garments / imprints / finishing (overrides land in garments)
-              const imp = gc.lines.reduce((a, lc) => a + lc.qty * lc.printEach, 0);
-              const fin = gc.qty * gc.finishEach;
-              const gar = gc.sub - imp - fin;
+              // a typed price ("Each" override) is shared out in the same proportions as the calculated price, so a
+              // lower typed price never shows as a negative garment charge (customer supplied goods: no garment part)
+              const part = (lc: GroupCalc["lines"][number], v: number) => (lc.hasOv ? (lc.calcEach ? (lc.each * v) / lc.calcEach : 0) : v);
+              const imp = gc.lines.reduce((a, lc) => a + lc.qty * part(lc, lc.printEach), 0);
+              const fin = gc.lines.reduce((a, lc) => a + lc.qty * part(lc, gc.finishEach), 0);
+              const gar = Math.round((gc.sub - imp - fin) * 100) / 100;
               return (
                 <>
-                  <div className="pb-r"><span>Garments</span><b>{money(gar)}</b></div>
+                  {gc.wholesale && Math.abs(gar) < 0.01 ? null : <div className="pb-r"><span>Garments</span><b>{money(gar)}</b></div>}
                   <div className="pb-r"><span>Imprints</span><b>{money(imp)}</b></div>
                   {fin ? <div className="pb-r"><span>Finishing</span><b>{money(fin)}</b></div> : null}
                   {gc.setup ? <div className="pb-r"><span>Setup{gc.minCharge ? ` (incl. ${money(gc.minCharge)}: under ${settings.wholesale.minQty || 12} pcs is charged as ${settings.wholesale.minQty || 12})` : gc.inkFees ? " (incl. ink and PMS fees)" : ""}</span><b>{money(gc.setup)}</b></div> : null}
