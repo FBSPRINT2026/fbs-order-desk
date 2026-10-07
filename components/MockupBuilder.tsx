@@ -169,6 +169,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
   function toggleBg(d: Design) { resetLogo(d); setKeepBg((k) => ({ ...k, [d.id]: !k[d.id] })); }
   const [msg, setMsg] = useState("");
+  /** the customer's own mockups for this group: shown beside ours as the picture to match */
+  const [custMocks, setCustMocks] = useState<{ name: string; url: string; pdf: boolean }[]>([]);
+  const [custBig, setCustBig] = useState(false);
   // the shirt designer, opened for one imprint (new design, or editing its logo)
   const [designerFor, setDesignerFor] = useState<{ imId: string; side: Side; shirt: LabShirt | null; start: { doc?: DesignDoc | null; imageUrl?: string; name?: string; at?: { x: number; y: number; w: number } } } | null>(null);
   // quick text typed right into an imprint (shown as a stand-in logo "qt-<imprint>" until the mockup is saved)
@@ -225,6 +228,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setGroupName(g.name || `Group ${groups.indexOf(g) + 1}`);
           setLines(g.lines.filter((l) => l.style || l.color).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })));
           setImprints(g.imprints.map((d) => ({ ...d })));
+          const cm = (g.customerMockups || []).slice(0, 4);
+          if (cm.length) {
+            const { data: su } = await sb.storage.from("proofs").createSignedUrls(cm.map((m) => m.path), 3600);
+            setCustMocks(cm.map((m, i) => ({ name: m.name || "Customer mockup", url: su?.[i]?.signedUrl || "", pdf: /\.pdf$/i.test(m.path) })).filter((m) => m.url));
+          }
         }
       }
     })();
@@ -1250,6 +1258,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {!imprints.some((im) => sideOf(im.location) === curTab) && <div className="faint" style={{ fontSize: 12 }}>Add a {curTab === "sleeve" ? "sleeve" : curTab} location to see it up close here.</div>}
         </div>}
         <div className="mk-side stack">
+          {custMocks.length > 0 && (
+            <section className="panel mk-cust">
+              <div className="panel-h"><h2>Customer&apos;s mockup</h2><span className="faint" style={{ fontSize: 12 }}>Match this</span></div>
+              <div className="panel-b">
+                <div className="mk-cust-row">{custMocks.map((m, i) => m.pdf
+                  ? <a key={i} className="mk-cust-pdf" href={m.url} target="_blank" rel="noreferrer">{m.name} (PDF) ↗</a>
+                  : <button key={i} type="button" className={"mk-cust-th" + (custBig ? " big" : "")} title="Click to make it bigger" onClick={() => setCustBig((b) => !b)}><img src={m.url} alt={m.name} /></button>)}</div>
+                <div className="faint" style={{ fontSize: 12 }}>Location and size were filled in from it where we could read them. Check them against this, then save our mockup.</div>
+              </div>
+            </section>
+          )}
           {/* Idea Lab: design on this side of the shirt (sits above the Imprints panel) */}
           <button type="button" className={"mk-lab" + (ready ? "" : " mk-off")} disabled={!ready} onClick={() => openLab(curTab)}>
             <span className="mk-lab-ic" aria-hidden="true">✦</span>

@@ -5496,3 +5496,10 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .fin-panel{margin-bottom:14px}
 .fin-panel .panel-h{flex-wrap:wrap}
 .fin-panel label.check{display:inline-flex;gap:6px;align-items:center}
+/* Mockup Creator: the customer's own mockup, to match */
+.mk-cust .panel-b{display:flex;flex-direction:column;gap:8px}
+.mk-cust-row{display:flex;gap:8px;flex-wrap:wrap}
+.mk-cust-th{border:1px solid var(--line);border-radius:6px;padding:0;background:#fff;cursor:zoom-in;width:120px;height:120px;overflow:hidden}
+.mk-cust-th img{width:100%;height:100%;object-fit:contain;display:block}
+.mk-cust-th.big{width:100%;height:auto;cursor:zoom-out}
+.mk-cust-th.big img{height:auto}

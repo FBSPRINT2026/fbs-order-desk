@@ -6,7 +6,7 @@ import { normSize, proposalToGroups, type ProposedOrder } from "@/lib/ai/normali
 import { refetchAttachments } from "@/lib/mail/imap";
 import { officeText } from "@/lib/officeText";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
-import { newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
+import { LOCATIONS, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
 import { isPicture, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
 
 /**
@@ -21,7 +21,7 @@ type AiFile = { file: number; role: "art" | "mockup" | "size_breakdown" | "other
 type PGroup = NonNullable<ProposedOrder["groups"]>[number];
 type AiGroup = Omit<PGroup, "garments" | "prints"> & {
   garments?: (NonNullable<PGroup["garments"]>[number] & { reorder_line?: number | null })[];
-  prints?: (NonNullable<PGroup["prints"]>[number] & { art_file?: number | null })[];
+  prints?: (NonNullable<PGroup["prints"]>[number] & { art_file?: number | null; width_in?: number | null; drop_in?: number | null })[];
   mockup_files?: number[]; finishing?: string[];
 };
 type AiOrder = Omit<ProposedOrder, "groups"> & {
@@ -192,6 +192,8 @@ function tool(finishingIds: string[]) {
             size: { type: "string", description: "Print size only if given or clear, e.g. '10\" wide'" },
             notes: { type: "string" },
             art_file: { type: ["integer", "null"], description: "The File number of the art printed here" },
+            width_in: { type: ["number", "null"], description: "Width of the print in inches, judged from the customer's mockup against the garment (see the sizing note). Null when there is no mockup showing it." },
+            drop_in: { type: ["number", "null"], description: "Front / back prints: inches from the collar seam down to the top of the print, judged from the mockup. Null when not shown." },
           } } },
           mockup_files: { type: "array", items: { type: "integer" }, description: "File numbers of mockups for these garments" },
           finishing: { type: "array", items: { type: "string", enum: finishingIds.length ? finishingIds : ["none"] } },
@@ -228,7 +230,8 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 1. Decide what it is. NEW = something built from scratch: a new design, new garments. REORDER = the same job as one we printed before, again ("reorder", "same as last time", "more of the ___ shirts", a past design or job named). For a reorder set reorder_of to the past job's J number and list its garment lines with reorder_line = the L number and the NEW quantities. If they want it exactly as before without numbers, copy the old quantities and ask to confirm.
 2. Say what every attached file is: art (the print file), mockup (the design shown on a garment), size_breakdown (styles, colors, sizes and quantities), other (signature logos, unrelated pictures).
 3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color.
-4. Prints: one per location. Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it. Give a print size only if it's stated or plainly shown.
+4. Prints: one per location. Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it, using our names: ${LOCATIONS.join(", ")}. Give size only if it's stated in words.
+4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front (big) or Center Chest (under about 5" tall and wide on adult). Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Give width_in to the nearest quarter inch, and drop_in (collar seam to the top of the print, scaled the same way: a toddler full front usually sits 1.5" to 2.5" down, an adult one about 3"). Never invent these without a mockup.
 5. Garments that share the same prints are one group, with the mockup files for them.
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
 7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
@@ -289,7 +292,15 @@ ${String(a.body || "").slice(0, 12000)}
     for (const pg of p.groups || []) {
       const [g] = proposalToGroups({ groups: [pg] });
       if (!g) continue;
-      (pg.prints || []).slice(0, 10).forEach((pr, k) => { const f = fileAt(pr.art_file); if (f && g.imprints[k]) art[g.imprints[k].id] = f; });
+      (pg.prints || []).slice(0, 10).forEach((pr, k) => {
+        const im = g.imprints[k]; if (!im) return;
+        const f = fileAt(pr.art_file); if (f) art[im.id] = f;
+        // where and how big the customer's mockup shows it, so our Mockup Creator rebuilds the same picture
+        const w = +(pr.width_in || 0), dr = +(pr.drop_in ?? -1);
+        if (!im.size && w >= 1 && w <= 16) im.size = `${Math.round(w * 4) / 4}" wide`;
+        if (!im.drop && dr >= 0 && dr <= 10 && /front|back|chest/i.test(im.location)) im.drop = String(Math.round(dr * 4) / 4);
+        if (w || dr >= 0) im.notes = [im.notes, "Size and placement read from the customer's mockup"].filter(Boolean).join(". ").slice(0, 300);
+      });
       const ms = (pg.mockup_files || []).map(fileAt).filter(Boolean);
       if (ms.length) mockups[g.id] = [...new Set(ms)];
       g.finishing = (pg.finishing || []).filter((x) => finIds.has(x));
