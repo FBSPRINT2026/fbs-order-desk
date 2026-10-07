@@ -8,7 +8,7 @@ import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors,
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
-import { filmPdf, filmRollPdf, filmSinglePdf, filmBox, FILM_HEAD, deflate } from "@/lib/filmPdf";
+import { filmPdf, filmRollPdf, filmSinglePdf, filmBox, deflate } from "@/lib/filmPdf";
 import { ripPdf } from "@/lib/ripPdf";
 import { folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder } from "@/lib/filmFolder";
 import { illustratorPdf } from "@/lib/illustratorPdf";
@@ -798,8 +798,8 @@ export default function SeparationStudio({ id }: { id: string }) {
     const out: { name: string; bytes: Uint8Array }[] = [];
     for (let i = 0; i < n; i++) {
       const ink = names[i] || `screen ${i + 1}`;
-      const bytes = await filmSinglePdf(pages[i], rollIn, `${title} - film ${i + 1} of ${n}: ${ink} - print at 100%, no fit to page - art ${st.widthIn}" wide`,
-        title.split(" ")[0], deflate, { targets: st.regMarks !== false });
+      // on the film, right of the top target: just the ink, the job # and the location
+      const bytes = await filmSinglePdf({ ...pages[i], ink }, rollIn, title, deflate, { targets: st.regMarks !== false });
       out.push({ name: `${slug(title)}-${String(i + 1).padStart(pad, "0")}-of-${n}-${slug(ink)}.pdf`, bytes });
     }
     return out;
@@ -1635,7 +1635,7 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
         <rect x={0} y={0} width={RW} height={RL} className="pf-film" />
         {Array.from({ length: n }, (_, i) => {
           const y = i * fh, x = 0.2 * 72;
-          return <g key={i}><rect x={x} y={y + FILM_HEAD} width={B.w} height={fh - FILM_HEAD} className={"pf-box" + (B.fits ? "" : " bad")} /><text x={x + B.w / 2} y={y + fh / 2 + FILM_HEAD / 2} className="pf-n" fontSize={Math.min(B.w, fh) * 0.32}>{i + 1}</text>
+          return <g key={i}><rect x={x} y={y} width={B.w} height={fh} className={"pf-box" + (B.fits ? "" : " bad")} /><text x={x + B.w / 2} y={y + fh / 2} className="pf-n" fontSize={Math.min(B.w, fh) * 0.32}>{i + 1}</text>
             {i < n - 1 && <line x1={0} x2={RW} y1={y + fh} y2={y + fh} stroke="currentColor" strokeDasharray={`${12 / k} ${8 / k}`} strokeWidth={1 / k} />}</g>;
         })}
       </svg>

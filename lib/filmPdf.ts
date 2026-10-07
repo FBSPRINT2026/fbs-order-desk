@@ -110,34 +110,34 @@ export async function filmRollPdf(pages: FilmPage[], rollIn: number, title: stri
 /**
  * One film per file, the way the shop's FilmMaker queue trims (Layout Manager: Auto Page, white space removed, so the
  * Epson cuts after every job). The page is just the film: the art at real size, upright unless it's too wide for the
- * roll, with a registration target centered above and below it (¾" clear of the art, 1.5× the old size) and the ink +
- * job # right of the top target. No corner crop marks, nothing at the sides (Nicholas, Oct 7 2026).
+ * roll, with a registration target centered above and below it (¾" clear of the art, 1.5× the old size) and one line
+ * right of the top target: the ink, the job # and the location ("PMS 2745 C  #1467 Full Front"). Nothing else on the
+ * film: no job line, no corner crop marks, nothing at the sides (Nicholas, Oct 7 2026).
  */
 export const FILM_GAP = 54;           // pt: ¾" from the art's edge to where a target starts
 export const FILM_TARGET = 21;        // pt: target arm (crosshair half-length); the circle is half of it
 export const FILM_SIDE = 18;          // pt: ¼" at the sides (no marks there)
-export const FILM_HEAD = 22;          // pt: the job line at the very top
 const ROLL_EDGE_IN = 0.4;             // in: the printer's own margins
 /** the page one film needs: upright if it fits across the roll, else a quarter turn */
 export function filmBox(artW: number, artH: number, rollIn: number) {
   const mt = FILM_GAP + 2 * FILM_TARGET + 6, bw = artW + 2 * FILM_SIDE, bh = artH + 2 * mt, P = (rollIn - ROLL_EDGE_IN) * 72;
-  const rot = bw > P, w = rot ? bh : bw, h = (rot ? bw : bh) + FILM_HEAD;
+  const rot = bw > P, w = rot ? bh : bw, h = rot ? bw : bh;
   return { rot, mt, w, h, fits: w <= P, widthIn: w / 72, lengthIn: h / 72 };
 }
-export async function filmSinglePdf(p: FilmPage, rollIn: number, head: string, job: string, z: (u8: Uint8Array) => Promise<Uint8Array> = deflate, marks: FilmMarks = {}): Promise<Uint8Array> {
+export async function filmSinglePdf(p: FilmPage, rollIn: number, tag: string, z: (u8: Uint8Array) => Promise<Uint8Array> = deflate, marks: FilmMarks = {}): Promise<Uint8Array> {
   const aw = p.widthIn * 72, ah = p.heightIn * 72, B = filmBox(aw, ah, rollIn), ms = FILM_SIDE, mt = B.mt, bw = aw + 2 * ms;
   const r = FILM_TARGET / 2, k = r * 0.5523, a = FILM_TARGET;
   const target = (x: number, y: number) => `${x - a} ${y} m ${x + a} ${y} l S ${x} ${y - a} m ${x} ${y + a} l S ${x + r} ${y} m ${x + r} ${y + k} ${x + k} ${y + r} ${x} ${y + r} c ${x - k} ${y + r} ${x - r} ${y + k} ${x - r} ${y} c ${x - r} ${y - k} ${x - k} ${y - r} ${x} ${y - r} c ${x + k} ${y - r} ${x + r} ${y - k} ${x + r} ${y} c S\n`;
   // in the film's own frame (art at ms, mt): targets centered, their near edge ¾" from the art
   const tx = ms + aw / 2, tTop = mt + ah + FILM_GAP + a, tBot = mt - FILM_GAP - a;
-  const ink = `${p.ink || p.label}  ${job}`, fs = 11, tw = ink.length * fs * 0.6;
+  const ink = `${p.ink || p.label}  ${tag}`, fs = 11, tw = ink.length * fs * 0.6;
   let lx = tx + a + 8; if (lx + tw > bw - 4) lx = Math.max(4, tx - a - 8 - tw);
   const film = `q ${aw.toFixed(2)} 0 0 ${ah.toFixed(2)} ${ms} ${mt} cm /Im0 Do Q\n0 G 0 g 0.75 w\n` +
     (marks.targets === false ? "" : target(tx, tTop) + target(tx, tBot)) +
     `BT /F1 ${fs} Tf ${lx.toFixed(2)} ${(tTop - fs / 3).toFixed(2)} Td (${esc(ink)}) Tj ET\n`;
-  // place the film under the job line; turned a quarter turn when it's too wide for the roll
+  // the film fills the page; turned a quarter turn when it's too wide for the roll
   const place = B.rot ? `q 0 1 -1 0 ${(B.w).toFixed(2)} 0 cm\n` : `q 1 0 0 1 0 0 cm\n`;
-  const content = `q 0 g BT /F1 8 Tf 2 ${(B.h - 12).toFixed(2)} Td (${esc(head)}) Tj ET Q\n` + place + film + "Q\n";
+  const content = place + film + "Q\n";
   const parts: Uint8Array[] = [], offsets: number[] = []; let pos = 0;
   const push = (x: Uint8Array | string) => { const b = typeof x === "string" ? enc.encode(x) : x; parts.push(b); pos += b.length; };
   const obj = (n: number, body: (Uint8Array | string)[]) => { offsets[n] = pos; push(`${n} 0 obj\n`); for (const b of body) push(b); push("\nendobj\n"); };
@@ -153,7 +153,7 @@ export async function filmSinglePdf(p: FilmPage, rollIn: number, head: string, j
   const xref = pos, count = 7;
   let x = `xref\n0 ${count}\n0000000000 65535 f \n`;
   for (let i = 1; i < count; i++) x += `${String(offsets[i] || 0).padStart(10, "0")} 00000 n \n`;
-  push(x + `trailer\n<< /Size ${count} /Root 1 0 R /Info << /Title (${esc(head)}) /Creator (FBS Print Separations) >> >>\nstartxref\n${xref}\n%%EOF\n`);
+  push(x + `trailer\n<< /Size ${count} /Root 1 0 R /Info << /Title (${esc(`${p.ink || p.label} ${tag}`)}) /Creator (FBS Print Separations) >> >>\nstartxref\n${xref}\n%%EOF\n`);
   const out = new Uint8Array(pos); let o = 0; for (const b of parts) { out.set(b, o); o += b.length; }
   return out;
 }
