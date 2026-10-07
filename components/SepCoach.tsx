@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { changeText, type CoachChange, type Lesson } from "@/lib/sepCoach";
+import { MicButton } from "@/components/SearchInput";
 
 type Turn = { id: string | null; message: string; reply: string; changes: CoachChange[]; applied: boolean; lesson?: { id: string; lesson: string } | null; at: string };
 
@@ -24,6 +25,7 @@ export default function SepCoach({ sepId, designId, context, images, onApply }: 
   const [text, setText] = useState(""), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const [showLessons, setShowLessons] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const inRef = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(async () => {
     const [{ data: f }, { data: l }] = await Promise.all([
@@ -96,8 +98,10 @@ export default function SepCoach({ sepId, designId, context, images, onApply }: 
         </div>
       )}
       <div className="sc-in">
-        <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="How did it come out? What should be better?" rows={2} aria-label="Tell the coach how the separation came out"
+        <textarea ref={inRef} value={text} onChange={(e) => setText(e.target.value)} placeholder="How did it come out? What should be better?" rows={2} aria-label="Tell the coach how the separation came out"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
+        {/* talk instead of typing: what's said is added to the box; read it over, then Send */}
+        <MicButton target={() => inRef.current} append keepListening label="Talk to the coach (microphone)" className="sc-mic" />
         <button type="button" className="btn sm primary" disabled={busy || !text.trim()} onClick={send}>{busy ? "Thinking…" : "Send"}</button>
       </div>
       {err && <div className="pv-err">{err}</div>}

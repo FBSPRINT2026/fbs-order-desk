@@ -16,14 +16,23 @@ function speechApi(): Rec | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-/** Put text in a React-controlled input as if it were typed, so its onChange runs. */
-function typeInto(el: HTMLInputElement, text: string) {
-  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+/** Put text in a React-controlled input or textarea as if it were typed, so its onChange runs. */
+function typeInto(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const set = Object.getOwnPropertyDescriptor(proto, "value")?.set;
   if (set) set.call(el, text); else el.value = text;
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-export function MicButton({ target, onDone }: { target: () => HTMLInputElement | null; onDone?: (text: string) => void }) {
+/**
+ * `append`: add what's said after what's already in the box (a message being written) instead of replacing it (a
+ * search). `keepListening`: stay on through pauses until clicked again (talking through a longer note). `label`: what
+ * the button says to screen readers and on hover.
+ */
+export function MicButton({ target, onDone, append = false, keepListening = false, label = "Search by voice", className = "" }: {
+  target: () => HTMLInputElement | HTMLTextAreaElement | null; onDone?: (text: string) => void;
+  append?: boolean; keepListening?: boolean; label?: string; className?: string;
+}) {
   const [ok, setOk] = useState(false);
   const [on, setOn] = useState(false);
   const rec = useRef<Rec>(null);
@@ -34,8 +43,10 @@ export function MicButton({ target, onDone }: { target: () => HTMLInputElement |
     if (on) { rec.current?.stop(); return; }
     const S = speechApi(); if (!S) return;
     const r = new S(); rec.current = r;
-    r.lang = "en-US"; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    r.lang = "en-US"; r.interimResults = true; r.continuous = keepListening; r.maxAlternatives = 1;
     let said = "";
+    const before = append ? (target()?.value || "").replace(/\s+$/, "") : "";
+    const join = (t: string) => (before && t ? `${before} ${t}` : before || t);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     r.onresult = (e: any) => {
       let interim = "";
@@ -43,7 +54,7 @@ export function MicButton({ target, onDone }: { target: () => HTMLInputElement |
         const t = e.results[i][0].transcript;
         if (e.results[i].isFinal) said += t; else interim += t;
       }
-      const el = target(); if (el) typeInto(el, (said + interim).trim());
+      const el = target(); if (el) typeInto(el, join((said + interim).trim()));
     };
     r.onend = () => { setOn(false); const el = target(); if (said.trim() && el) { el.focus(); onDone?.(el.value); } };
     r.onerror = () => setOn(false);
@@ -52,8 +63,8 @@ export function MicButton({ target, onDone }: { target: () => HTMLInputElement |
   };
 
   return (
-    <button type="button" className={"mic" + (on ? " on" : "")} onClick={toggle} aria-pressed={on}
-      aria-label={on ? "Stop listening" : "Search by voice"} title={on ? "Listening… click to stop" : "Search by voice"}>
+    <button type="button" className={"mic" + (on ? " on" : "") + (className ? " " + className : "")} onClick={toggle} aria-pressed={on}
+      aria-label={on ? "Stop listening" : label} title={on ? "Listening… click to stop" : label}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>
     </button>
   );
