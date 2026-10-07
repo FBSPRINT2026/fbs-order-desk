@@ -33,12 +33,14 @@ export async function GET(req: Request) {
   // Formulas whose saved lines already match the read are skipped, so a rerun only writes what changed.
   let lines = 0, same = 0;
   const all = READS[set.system]?.formulas || [];
+  // jsonb stores object keys in its own order, so compare with keys sorted (and numbers as numbers)
+  const canon = (g: unknown, l: unknown) => JSON.stringify([Number(g), ((l as Record<string, unknown>[] | null) || []).map((x) => Object.keys(x).sort().map((k) => [k, typeof x[k] === "string" ? x[k] : Number(x[k])]))]);
   const have = new Map<string, string>();
   for (let from = 0; ; from += 1000) {
     const { data, error } = await admin.from("ink_formulas").select("ims_id,rec_type,code,base,grams_per_qt,lines").eq("system", set.system).range(from, from + 999);
     if (error) return NextResponse.json({ error: error.message, rows: n }, { status: 500 });
     for (const r of data || []) {
-      const v = JSON.stringify([Number(r.grams_per_qt), r.lines]);
+      const v = canon(r.grams_per_qt, r.lines);
       if (r.ims_id) have.set(`id:${r.ims_id}`, v);
       if (r.rec_type !== "S" || r.base === set.system) have.set(`${r.rec_type}|${r.code}`, v);
     }
@@ -46,7 +48,7 @@ export async function GET(req: Request) {
   }
   const reads = all.filter((f) => {
     const v = have.get(f.ims_id ? `id:${f.ims_id}` : `${f.rec_type}|${f.code}`);
-    const hit = v === JSON.stringify([Number(f.grams_per_qt), f.lines]);
+    const hit = v === canon(f.grams_per_qt, f.lines);
     if (hit) same++;
     return !hit;
   });
