@@ -148,6 +148,8 @@ export type PriceList = {
   /** embroidery's own quantity breaks (embroidery[] is per these), stitches included, each extra 1,000, and the
    *  specialty-item add-on (fleece, hats, beanies, bags, backpacks: any non-standard flat garment) per break */
   embTiers?: number[]; embStitches?: number; embPer1k?: number; embSpecialty?: number[];
+  /** embroidery extras per piece (specialty thread, 3D puff, personalization…), ticked on a group with embroidery */
+  embExtras?: Finishing[];
   /** the price sheet's own notes (spoilage, rush, digitizing ranges…), shown with the list */
   contractNotes?: string;
 };
@@ -416,7 +418,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (!printCache.has(key)) printCache.set(key, light || dl ? printFor(light, dl) : printEach);
     return { light, print: printCache.get(key) as number };
   };
-  const finList = pl.finishing?.length ? pl.finishing : s.finishing;
+  const finList = [...(pl.finishing?.length ? pl.finishing : s.finishing), ...(pl.embExtras || [])];
   const finishing = (g.finishing || []).map((fid) => finList.find((f) => f.id === fid)).filter(Boolean) as Finishing[];
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
   // contract extras per piece: special locations (sleeve, pocket, side), specialty ink on poly / nylon / dyed garments

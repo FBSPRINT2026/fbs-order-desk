@@ -229,7 +229,10 @@ export const FBS_CONTRACT_2024: PriceList = {
       "id": "vinyl_digit",
       "name": "Vinyl number (per digit)",
       "price": 2.5
-    },
+    }
+  ],
+  "contractNotes": "FBS Contract Pricing List 2024v1r1. 9+ color and full color jobs are custom quoted. Spoilage / reject on customer supplied goods: 5% on small orders, up to 2% on large orders. Embroidery digitizing: basic $40-$60, complex / puff $80+ (set on the job). Sew-outs $15. Drop ship fee $5 per order + cost (add as an order fee). Tag removal & custom imprint also needs a 1-color screen. Standard service on all decoration methods: 7-14 business days after approvals and receipt of goods; rush available.",
+  "embExtras": [
     {
       "id": "emb_thread",
       "name": "Specialty thread (embroidery)",
@@ -245,6 +248,5 @@ export const FBS_CONTRACT_2024: PriceList = {
       "name": "Embroidery personalization (name)",
       "price": 6
     }
-  ],
-  "contractNotes": "FBS Contract Pricing List 2024v1r1. 9+ color and full color jobs are custom quoted. Spoilage / reject on customer supplied goods: 5% on small orders, up to 2% on large orders. Embroidery digitizing: basic $40-$60, complex / puff $80+ (set on the job). Sew-outs $15. Drop ship fee $5 per order + cost (add as an order fee). Tag removal & custom imprint also needs a 1-color screen. Standard service on all decoration methods: 7-14 business days after approvals and receipt of goods; rush available."
+  ]
 };

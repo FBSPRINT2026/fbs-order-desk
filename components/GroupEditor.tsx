@@ -104,7 +104,11 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;
   // wholesale (contract) jobs use the contract's own finishing list and prices
-  const finList = gc.wholesale && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing;
+  const finList = [
+    ...(gc.wholesale && settings.wholesale.finishing?.length ? settings.wholesale.finishing : settings.finishing),
+    // embroidery extras (specialty thread, 3D puff…) only on a group with embroidery
+    ...(gc.wholesale && g.imprints.some((d) => d.method === "embroidery") ? settings.wholesale.embExtras || [] : []),
+  ];
   return (
     <section className={"line" + (hidePrices ? " np" : "")}>
       <div className="line-h">
