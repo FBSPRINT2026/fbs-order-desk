@@ -1450,10 +1450,14 @@ function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, on
   const tipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const endTip = () => { if (tipTimer.current) clearTimeout(tipTimer.current); tipTimer.current = null; setTip((t) => { if (t) markTipSeen(); return ""; }); };
   const lastDown = useRef<{ t: number; x: number; y: number; id: string } | null>(null);
+  // phones: the fingers on the photo, and a two-finger pinch that resizes the design being dragged (or selected)
+  const pts = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ id: string; d0: number; w0: number; w: number } | null>(null);
+  const [touch, setTouch] = useState(false);
   // the outline and resize handle only show while a design is selected; clicking anywhere else clears it
   useEffect(() => {
     if (!sel) return;
-    const off = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest?.(".mk-art")) setSel(""); };
+    const off = (e: PointerEvent) => { if (pts.current.size > 0 || pinch.current) return; if (!(e.target as HTMLElement).closest?.(".mk-art")) setSel(""); };
     document.addEventListener("pointerdown", off);
     return () => document.removeEventListener("pointerdown", off);
   }, [sel]);
@@ -1462,7 +1466,25 @@ function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, on
   return (
     <div className="mk-stage">
       <div ref={box} className="mk-photo" style={{ aspectRatio: `${PHOTO_W} / ${PHOTO_H}` }}
+        onPointerDownCapture={(e) => {
+          if (e.pointerType === "touch" && !touch) setTouch(true);
+          pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          // a second finger: pinch to resize the design under the first one (or the selected one)
+          if (pts.current.size === 2) {
+            const id = drag.current?.id || sel, it = items.find((x) => x.id === id);
+            const [a, b] = [...pts.current.values()];
+            if (it) { pinch.current = { id: it.id, d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), w0: it.p.w, w: it.p.w }; setSel(it.id); drag.current = null; }
+          }
+        }}
         onPointerMove={(e) => {
+          if (pts.current.has(e.pointerId)) pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          const pz = pinch.current;
+          if (pz && pts.current.size >= 2) {
+            const [a, b] = [...pts.current.values()];
+            const w = Math.max(12, pz.w0 * (Math.hypot(a.x - b.x, a.y - b.y) / pz.d0));
+            if (Math.abs(w - pz.w) > 0.5) { onResize(pz.id, w); pz.w = w; }
+            return;
+          }
           const d = drag.current; if (!d) return;
           const f = k();
           if (d.mode === "move") onMove(d.id, (e.clientX - d.x) / f, (e.clientY - d.y) / f);
@@ -1470,12 +1492,16 @@ function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, on
           drag.current = { ...d, x: e.clientX, y: e.clientY };
         }}
         onPointerUp={(e) => {
+          pts.current.delete(e.pointerId);
+          const pz = pinch.current;
+          if (pz) { if (pts.current.size < 2) { pinch.current = null; drag.current = null; onEnd?.(pz.id); } return; }
           const d = drag.current; drag.current = null;
           // only after a real drag: a plain click never changes the location
           if (d && onEnd && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id);
         }}
-        onPointerLeave={(e) => { const d = drag.current; drag.current = null; if (d && onEnd && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id); }}
-        onPointerDown={(e) => { if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg")) setSel(""); }}>
+        onPointerCancel={(e) => { pts.current.delete(e.pointerId); if (pinch.current && pts.current.size < 2) { const id = pinch.current.id; pinch.current = null; onEnd?.(id); } drag.current = null; }}
+        onPointerLeave={(e) => { if (e.pointerType === "touch") return; const d = drag.current; drag.current = null; if (d && onEnd && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id); }}
+        onPointerDown={(e) => { if (pts.current.size > 1) return; if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg")) setSel(""); }}>
         <img src={src} alt="" draggable={false} className="mk-bg" />
         {grid && items.map((it) => <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }} />)}
         {/* the art itself, cut to the shirt outline */}
@@ -1516,8 +1542,10 @@ function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, on
               const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect();
               const a = (-(it.p.rot || 0) * Math.PI) / 180, vx = e.clientX - (r.left + r.width / 2), vy = e.clientY - (r.top + r.height / 2);
               const lx = vx * Math.cos(a) - vy * Math.sin(a) + el.offsetWidth / 2, ly = vx * Math.sin(a) + vy * Math.cos(a) + el.offsetHeight / 2;
-              const corner = Math.max(10, Math.min(el.offsetWidth, el.offsetHeight) * 0.18);
+              // a finger needs a bigger corner than a mouse
+              const corner = Math.max(e.pointerType === "touch" ? 30 : 10, Math.min(el.offsetWidth, el.offsetHeight) * (e.pointerType === "touch" ? 0.3 : 0.18));
               const mode = lx > el.offsetWidth - corner && ly > el.offsetHeight - corner ? "size" : "move";
+              if (pts.current.size > 1) return; // second finger of a pinch
               drag.current = { id: it.id, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode, w: it.p.w, el };
             }}>
             {it.url ? null : "?"}
@@ -1532,7 +1560,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, on
           </div>
         ))}
         {tip && (() => { const it = items.find((x) => x.id === tip); return it ? (
-          <div className="mk-hint" style={{ left: `${(it.p.x + it.p.w / 2) * s}%`, top: `${it.p.y * sy}%` }}>Double-click to change a color<span>Drag to move · drag the corner to resize</span></div>
+          <div className="mk-hint" style={{ left: `${(it.p.x + it.p.w / 2) * s}%`, top: `${it.p.y * sy}%` }}>{touch ? "Double-tap to change a color" : "Double-click to change a color"}<span>{touch ? "Drag to move · pinch or drag the corner to resize" : "Drag to move · drag the corner to resize"}</span></div>
         ) : null; })()}
         {corner}
       </div>
@@ -1624,7 +1652,7 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
             }
             setSel(true);
             const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect();
-            const corner = Math.max(10, Math.min(r.width, r.height) * 0.18);
+            const corner = Math.max(e.pointerType === "touch" ? 30 : 10, Math.min(r.width, r.height) * (e.pointerType === "touch" ? 0.3 : 0.18));
             const mode = e.clientX > r.right - corner && e.clientY > r.bottom - corner ? "size" : "move";
             el.setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode, w: wIn };
           }}>

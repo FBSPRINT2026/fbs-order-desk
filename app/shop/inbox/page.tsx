@@ -146,7 +146,7 @@ export default function Inbox() {
         </section>
         <section className="ibx-pane ibx-right" aria-label="Email and reply">
           {!sel ? <div className="ibx-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span className="faint">Pick an email on the left. New customer email shows up within a couple of minutes.</span>}</div>
-            : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} focus={focus === sel.x.id} x={sel.x} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
+            : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "") + ((sel.x.meta as { reply_options?: { at?: string } } | null)?.reply_options?.at || "")} focus={focus === sel.x.id} x={sel.x} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
                 orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
                 thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
                 back={() => setPicked(false)} busy={busy} setBusy={setBusy} done={(t) => { flash(t); load(); }} />}
@@ -164,10 +164,13 @@ type Opt = { label: string; subject: string; body: string };
  */
 function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done }: { x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string) => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
-  const [subject, setSubject] = useState(draftSubject);
-  const [body, setBody] = useState(reply?.draft?.body || "");
+  // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
+  const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
+  const confirm = confirm0?.label === "Order confirmation" ? confirm0 : undefined;
+  const [subject, setSubject] = useState(confirm?.subject || draftSubject);
+  const [body, setBody] = useState(confirm?.body || reply?.draft?.body || "");
   const [err, setErr] = useState(""), [company, setCompany] = useState(""), [custQ, setCustQ] = useState(""), [hits, setHits] = useState<Cust[]>([]);
-  const [opts, setOpts] = useState<Opt[] | null>(x.meta?.reply_options?.options || null), [picked, setPicked] = useState(reply?.draft?.body ? -2 : -1), [ask, setAsk] = useState("");
+  const [opts, setOpts] = useState<Opt[] | null>(x.meta?.reply_options?.options || null), [picked, setPicked] = useState(confirm ? 0 : reply?.draft?.body ? -2 : -1), [ask, setAsk] = useState("");
   const boxRef = useRef<HTMLTextAreaElement | null>(null);
   // Create order: the AI's suggested order from this email and its attachments, to check and create
   const [ordering, setOrdering] = useState(false);

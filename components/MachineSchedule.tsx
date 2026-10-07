@@ -272,7 +272,10 @@ function layoutAll(cards: Card[], nowAbs: number) {
   return { by, ofCard, lunch };
 }
 
-export default function MachineSchedule() {
+/** "When can we print it?" answered for an order that isn't booked yet (Inbox → Create order): in-hands dates per option */
+export type WhenDates = { soonest: string | null; aggressive: string | null; regular: string | null; slow: string | null; press: string; minutes: number; noMachine: boolean };
+
+export default function MachineSchedule({ when }: { /** hidden mode: no calendar, just the When answer for these groups */ when?: { groups: Group[]; onDates: (d: WhenDates | null) => void } } = {}) {
   const canEquip = useCan("pressDefaults");
   const [now, setNow] = useState(() => shopTime(new Date())!);
   useEffect(() => { const t = setInterval(() => setNow(shopTime(new Date())!), 60000); return () => clearInterval(t); }, []);
@@ -403,7 +406,9 @@ export default function MachineSchedule() {
     let sl = (sl0 || []) as Slot[];
     // not marked done by the end of its day → it moves forward to today (first in line), remembering where it started
     const stale = sl.filter((x) => (x.order_id || x.hold_id) && x.day < today && x.status !== "done");
-    if (stale.length) {
+    // (the hidden "when can we print it?" mode only looks: it lays stale jobs on today without saving anything)
+    if (stale.length && when) sl = sl.map((x) => (stale.includes(x) ? { ...x, day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day } : x));
+    else if (stale.length) {
       await Promise.all(stale.map((x) => sb.from("production_slots").update({ day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day, updated_at: new Date().toISOString() }).eq("id", x.id)));
       sl = sl.map((x) => (stale.includes(x) ? { ...x, day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day } : x));
       // once a day: offer to re-plan around what didn't get done
@@ -411,7 +416,7 @@ export default function MachineSchedule() {
     }
     // jobs the floor started in the employee app (punched onto the order) count as started here
     const oids = [...new Set(sl.filter((x) => x.day === today && x.order_id && x.status !== "done").map((x) => x.order_id!))];
-    if (oids.length) {
+    if (oids.length && !when) {
       const { data: jt } = await sb.from("job_time").select("order_id, started_at, ended_at, pieces").in("order_id", oids).eq("voided", false).gte("started_at", new Date(Date.now() - 18 * 3600000).toISOString());
       const by = new Map<string, { first: string; open: boolean; pieces: number }>();
       for (const r of (jt || []) as { order_id: string; started_at: string; ended_at: string | null; pieces: number | null }[]) {
@@ -658,7 +663,28 @@ export default function MachineSchedule() {
     const said = [n ? `${n} job update${n === 1 ? "" : "s"}` : "", hn ? `new hours for ${x.hours.map((h) => shortName(h.m)).join(", ")}` : ""].filter(Boolean).join(" and ");
     setReplan({ why: said ? `Saved ${said}. Anything not started runs from ${clockLong(now.min)} on. Re-plan the rest of the week around it?` : `Anything not started runs from ${clockLong(now.min)} on. Re-plan the rest of the week around it?` });
   }
-  if (!s || !jobs) return <div className="empty">Loading the schedule…</div>;
+  // hidden mode: once the schedule has loaded, answer "when can we print it?" for the order being made and stop
+  const whenRef = useRef<((n: Need) => WhenResult | null) | null>(null);
+  const whenDone = useRef(false);
+  useEffect(() => {
+    if (!when || whenDone.current || !s || !jobs || !whenRef.current) return;
+    whenDone.current = true;
+    const needs = needsForOrder(s, { groups: when.groups, lines: [], number: 0, nickname: "" } as never).filter((n) => n.steps.length);
+    if (!needs.length) { when.onDates(null); return; }
+    const hands = (end: number, soonest: boolean) => { const day0 = Math.floor((end - 1) / 1440), d = fromOrd(day0), m = end - day0 * 1440; return soonest && m <= 15 * 60 ? d : plusWorkdays(d, Math.max(1, s.bufferDays)); };
+    const latest = (xs: (string | null)[]) => (xs.some((x) => !x) ? null : (xs as string[]).sort().pop() || null);
+    const rs = needs.map((n) => whenRef.current!(n));
+    if (rs.some((r) => !r || r.noMachine)) { when.onDates({ soonest: null, aggressive: null, regular: null, slow: null, press: "", minutes: 0, noMachine: true }); return; }
+    const ok = rs as WhenResult[];
+    when.onDates({
+      soonest: latest(ok.map((r) => (r.soonest ? hands(r.soonest.end, true) : null))),
+      aggressive: latest(ok.map((r) => (r.aggressive ? hands(r.aggressive.end, true) : null))),
+      regular: latest(ok.map((r) => (r.open ? hands(r.open.end, false) : null))),
+      slow: latest(ok.map((r) => (r.slow ? [hands(r.slow.end, false), plusWorkdays(today, s.turnDays)].sort().pop()! : null))),
+      press: ok.map((r) => r.open?.m.name).filter(Boolean).join(" + "), minutes: ok.reduce((a, r) => a + r.minutes, 0), noMachine: false,
+    });
+  }, [when, s, jobs, segs]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!s || !jobs) return when ? null : <div className="empty">Loading the schedule…</div>;
 
   /**
    * Re-plan: take every booked job that hasn't started (plus, if asked, the ones waiting in Ready To Schedule) and lay
@@ -1427,6 +1453,7 @@ export default function MachineSchedule() {
    * Where a Planner hold goes: just in time, not first thing. The latest start that still finishes the working day
    * before its in-hands date (packing / shipping), on the press that fits it best; if nothing fits by then, the soonest.
    */
+  whenRef.current = whenCan;
   const holdSpot = (need: Need, due: string | null): WhenOpt | null => {
     const cand = s.machines.filter((m) => m.active && fits(need, m));
     if (!cand.length) return null;
@@ -1475,6 +1502,7 @@ export default function MachineSchedule() {
 
   const shift = (dir: 1 | -1) => (view === "timeline" ? setWeek(addDay(week, 7 * dir)) : setDay(nextVis(addDay(view === "split" ? d0 : day, dir), dir)));
   // test hook (off unless window.__MS_DEBUG is set): the scheduler's state and actions, for the automated stress test
+  if (when) return null;
   if (typeof window !== "undefined" && (window as unknown as { __MS_DEBUG?: boolean }).__MS_DEBUG) Object.assign(window, { __ms: { s, cards, segs, machines, today, now, tight, tray, slots, holds, planIt, applyPlan, whatIfs, whenCan, holdSpot, otReport, otOn, acceptAll, book, unbook, saveProgress, logAction, splitByLocation, saveHold, removeHold, cutOvertime, load } });
 
   return (

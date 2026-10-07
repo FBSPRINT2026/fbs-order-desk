@@ -1,9 +1,10 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { proposalToGroups } from "@/lib/ai/normalize";
-import { STATUSES, type Group } from "@/lib/pricing";
+import { METHODS, SIZES, STATUSES, sizeLabel, type Group } from "@/lib/pricing";
 import { isPicture, type EODraft } from "@/lib/emailOrderShared";
 import { trimPng } from "@/lib/pngTrim";
+import { SITE_URL } from "@/lib/config";
 
 /**
  * Make the order staff checked in the Inbox's "Create order" panel (lib/ai/emailOrder.ts suggested it):
@@ -134,7 +135,42 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     if (cp.error) continue;
     await admin.from("art_files").insert({ order_id: oid, name: f.name, file_path: to, file_type: f.type || "" });
   }
-  await admin.from("activities").update({ order_id: oid }).eq("id", a.id);
+  // the email's suggested answer becomes the order confirmation (Nick, Oct 7): thanks, the link, what we have, approve?
+  const reply = confirmationReply({ number: o.number as number, id: oid, nickname: d.nickname, due: d.due_date, groups, subject: String(a.subject || ""), first: String(((a.meta as { from_name?: string } | null)?.from_name || "")).trim().split(/\s+/)[0] || "" });
+  const meta0 = (a.meta || {}) as { reply_options?: { options?: { label: string; subject: string; body: string }[] } };
+  const others = (meta0.reply_options?.options || []).filter((x) => x.label !== reply.label).slice(0, 3);
+  await admin.from("activities").update({ order_id: oid, meta: { ...meta0, reply_options: { at: new Date().toISOString(), options: [reply, ...others] } } }).eq("id", a.id);
   await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: by, order_id: oid }).eq("dedupe_key", `email:${a.id}:order`);
   return { ok: true, id: oid, number: o.number as number };
+}
+
+/** "Thanks for your order": the reply staff send once the order is made, with its link and a short summary */
+export function confirmationReply(o: { number: number; id: string; nickname: string; due: string | null; groups: Group[]; subject: string; first: string }) {
+  const lines: string[] = [];
+  for (const g of o.groups) {
+    for (const l of g.lines) {
+      const sizes = SIZES.filter((z) => +(l.sizes?.[z] || 0) > 0).map((z) => `${sizeLabel(z)} ${l.sizes[z]}`).join(", ");
+      const qty = SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0) || 0), 0);
+      if (qty) lines.push(`- ${[l.brand, l.style].filter(Boolean).join(" ")}${l.color ? `, ${l.color}` : ""}${l.garment ? ` (${l.garment})` : ""}: ${sizes} (${qty} pcs)`);
+    }
+    for (const im of g.imprints) lines.push(`- ${im.location}: ${METHODS[im.method] || im.method}${im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}${im.inks ? ` (${im.inks})` : ""}${im.size ? `, ${im.size}` : ""}`);
+  }
+  const due = o.due && /^\d{4}-\d{2}-\d{2}$/.test(o.due) ? new Date(o.due + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : "";
+  const body = [
+    `Hi${o.first ? ` ${o.first}` : ""},`,
+    "",
+    "Thanks for your order! Please see below.",
+    "",
+    `Here's a link to your order confirmation: ${SITE_URL}/portal/orders/${o.id}`,
+    "",
+    `Order #${o.number}${o.nickname ? `: ${o.nickname}` : ""}`,
+    ...lines,
+    ...(due ? ["", `In hands: ${due}`] : []),
+    "",
+    "Please let us know if this is approved.",
+    "",
+    "Thanks,",
+    "FBS Print",
+  ].join("\n");
+  return { label: "Order confirmation", subject: o.subject.toLowerCase().startsWith("re:") ? o.subject : `Re: ${o.subject}`, body };
 }

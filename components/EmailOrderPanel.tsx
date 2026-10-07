@@ -5,6 +5,11 @@ import { SUPPLIERS } from "@/lib/goods";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
+import dynamic from "next/dynamic";
+import type { WhenDates } from "@/components/MachineSchedule";
+
+// the Production calendar, hidden: answers "when can we print it?" from the live schedule for the order being made
+const WhenCalc = dynamic(() => import("@/components/MachineSchedule"), { ssr: false });
 
 /**
  * Inbox → Create order: the AI's suggested order from the email and its attachments, for staff to check and fix
@@ -22,6 +27,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
   /** the AI's order is shown as a summary to approve; Edit details opens the full form */
   const [editing, setEditing] = useState(false);
   const [step, setStep] = useState("");
+  const [when, setWhen] = useState<WhenDates | null | undefined>(undefined);
   const [data, setData] = useState<Loaded | null>(null);
   const [d, setD] = useState<EODraft | null>(null);
   const [busy, setBusy] = useState<"" | "read" | "create">(""), [err, setErr] = useState("");
@@ -53,6 +59,8 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
   const files = d?.files || data?.files || [];
   const pics = files.filter((f) => isPicture(f) && f.role !== "signature");
   const urlOf = (p: string) => files.find((f) => f.path === p)?.url || "";
+  const whenKey = useMemo(() => JSON.stringify((d?.groups || []).map((g) => [g.lines.map((l) => [l.style, l.color, l.sizes]), g.imprints.map((im) => [im.method, im.location, im.colors, im.inks])])), [d]);
+  useEffect(() => { setWhen(undefined); }, [whenKey]);
   const total = useMemo(() => (d?.groups || []).reduce((a, g) => a + g.lines.reduce((b, l) => b + qtyOf(l), 0), 0), [d]);
   const patch = (fn: (x: EODraft) => void) => setD((x) => { if (!x) return x; const y = clone(x); fn(y); return y; });
   const patchG = (gi: number, fn: (g: Group) => void) => patch((x) => fn(x.groups[gi]));
@@ -116,6 +124,8 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
       {!data.ai && !d && <div className="warn">{data.aiReason || "AI is off."} You can still enter the order by hand from the order page.</div>}
       {busy === "read" && <p className="eo-reading">Reading the email{files.length ? ` and ${files.length} attachment${files.length === 1 ? "" : "s"}` : ""}: garments, sizes, art, mockups, and whether it's a reorder. This takes 15 to 40 seconds.</p>}
       {err && <div className="err">{err}</div>}
+      {d && total > 0 && <div hidden><WhenCalc key={whenKey} when={{ groups: d.groups, onDates: setWhen }} /></div>}
+      {d && !editing && <WhenLine when={when} due={d.due_date} onUse={(day) => patch((x) => { x.due_date = day; })} />}
       {d && !editing && <Review d={d} files={files} urlOf={urlOf} custName={data.customer ? data.customer.company || data.customer.name || "" : ""} job={d.reorderOf ? data.past.find((p) => p.ref === d.reorderOf)?.label || "" : ""} finishing={data.finishing} />}
       {d && !editing && <>
         <div className="eo-foot">
@@ -294,6 +304,28 @@ function Review({ d, files, urlOf, custName, job, finishing }: { d: EODraft; fil
         {d.questions.length > 0 && <><dt>To ask</dt><dd><ul>{d.questions.map((q, i) => <li key={i}>{q}</li>)}</ul></dd></>}
         {sig.length > 0 && <><dt>Ignored</dt><dd className="faint">{sig.map((f) => f.name).join(", ")} (email signature)</dd></>}
       </dl>
+    </div>
+  );
+}
+
+const dLbl = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+/** "When can we print it?" for this order, from the live Production schedule, with the in-hands date checked against it */
+function WhenLine({ when, due, onUse }: { when: WhenDates | null | undefined; due: string | null; onUse: (day: string) => void }) {
+  if (when === undefined) return <div className="eo-when faint">Checking the production schedule for when we can print it…</div>;
+  if (!when) return null;
+  if (when.noMachine) return <div className="eo-when warn">No press or machine can run these prints as they are. Check the prints.</div>;
+  const opts: [string, string | null, string][] = [["Regular turn", when.regular, "fits the schedule as it is"], ["Aggressive", when.aggressive, "jump the line, nobody late"], ["Soonest", when.soonest, "with overtime"]];
+  const makes = (d: string | null) => (d && due ? d <= due : null);
+  return (
+    <div className="eo-when">
+      <div className="eo-when-h"><b>When we can print it</b><span className="faint">{when.press ? `${when.press} · ` : ""}from the Production schedule</span></div>
+      <div className="eo-when-opts">{opts.map(([name, d, why]) => (
+        <span key={name} className={"eo-when-o" + (makes(d) === false ? " miss" : makes(d) ? " ok" : "")} title={why}>
+          <small>{name}</small><b>{d ? dLbl(d) : "?"}</b>{due && d ? <em>{makes(d) ? "✓ makes it" : "✗ misses it"}</em> : null}
+        </span>
+      ))}</div>
+      {due ? <div className="faint" style={{ fontSize: 12.5 }}>They asked for {dLbl(due)}.</div>
+        : when.regular ? <button type="button" className="eo-link" onClick={() => onUse(when.regular!)}>No date asked: use {dLbl(when.regular)} (regular turn) as the in-hands date</button> : null}
     </div>
   );
 }
