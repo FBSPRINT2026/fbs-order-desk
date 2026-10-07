@@ -57,3 +57,17 @@ export function colorWord(hex: string): string {
   const hue = h < 15 || h >= 345 ? "red" : h < 40 ? "orange" : h < 70 ? "yellow" : h < 165 ? "green" : h < 200 ? "teal" : h < 255 ? "blue" : h < 290 ? "purple" : "pink";
   return l > 0.8 ? `light ${hue}` : l < 0.25 ? `dark ${hue}` : hue;
 }
+
+/**
+ * Vector art sized by its shapes, not its page: a logo placed on a letter-size artboard with empty space around it
+ * would otherwise be measured (and printed) by the page, so "12 inches wide" made the art much smaller than 12".
+ */
+export function fitToShapes(v: VArt): VArt {
+  if (!v.ok || !v.shapes.length) return v;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const sh of v.shapes) { const b = box(sh.ops); if (b.x0 < x0) x0 = b.x0; if (b.y0 < y0) y0 = b.y0; if (b.x1 > x1) x1 = b.x1; if (b.y1 > y1) y1 = b.y1; }
+  if (!isFinite(x0) || x1 <= x0 || y1 <= y0) return v;
+  // nothing to gain: the art already fills the page
+  if (x1 - x0 >= v.w * 0.97 && y1 - y0 >= v.h * 0.97) return v;
+  return { ...v, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}

@@ -14,7 +14,7 @@ import { folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder } 
 import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
-import { findBackdrop, withoutBackdrop } from "@/lib/vectorBg";
+import { findBackdrop, fitToShapes, withoutBackdrop } from "@/lib/vectorBg";
 import CustomerPick from "@/components/CustomerPick";
 import { adjustInks, colorWord, dropInk, fadesOf, inkName, planFor, planPrint, shown, withMiddle, type PrintPlan } from "@/lib/printPlan";
 import { browserInflate, parsePdf } from "@/lib/pdfVector";
@@ -152,6 +152,29 @@ function vectorCover(v: VArt, px: Px, inks: SepInk[], s: SepSettings, blackOver:
   return { cover, knock, white: draw(m, false) };
 }
 
+/** the picture cropped to its art: see-through margins always, near-white margins when the white isn't printed */
+async function cropImgToArt(img: HTMLImageElement, white: boolean): Promise<HTMLImageElement> {
+  const W = img.naturalWidth, H = img.naturalHeight;
+  if (!W || !H || W * H > 40_000_000) return img;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d", { willReadFrequently: true })!; x.drawImage(img, 0, 0);
+  let d: Uint8ClampedArray;
+  try { d = x.getImageData(0, 0, W, H).data; } catch { return img; }
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) for (let X = 0; X < W; X++) {
+    const o = (y * W + X) * 4;
+    if (d[o + 3] < 12 || (white && d[o] > 242 && d[o + 1] > 242 && d[o + 2] > 242)) continue;
+    if (X < x0) x0 = X; if (X > x1) x1 = X; if (y < y0) y0 = y; y1 = y;
+  }
+  if (x1 < 0) return img;
+  const pad = 2, bx = Math.max(0, x0 - pad), by = Math.max(0, y0 - pad), bw = Math.min(W - bx, x1 - x0 + 1 + pad * 2), bh = Math.min(H - by, y1 - y0 + 1 + pad * 2);
+  if (bw >= W * 0.97 && bh >= H * 0.97) return img;
+  const o = document.createElement("canvas"); o.width = bw; o.height = bh;
+  o.getContext("2d")!.drawImage(c, bx, by, bw, bh, 0, 0, bw, bh);
+  const blob = await new Promise<Blob | null>((res) => o.toBlob(res, "image/png"));
+  return blob ? loadImg(URL.createObjectURL(blob)) : img;
+}
+
 function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false, side = MAX_SIDE): Px {
   const nat = Math.max(img.naturalWidth || 1, img.naturalHeight || 1);
   const k = vector ? side / nat : Math.min(1, side / nat);
@@ -258,7 +281,8 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [st, setSt] = useState<Studio>(START);
   // vector art's background layer (stock art's cream / white page box): asked once, then kept in the settings
   const backdrop = useMemo(() => findBackdrop(vraw), [vraw]);
-  const vart = useMemo(() => (vraw && backdrop && st.dropBackdrop ? withoutBackdrop(vraw, backdrop) : vraw), [vraw, backdrop, st.dropBackdrop]);
+  // measured by the art's own shapes, not the page it sits on: the print width is the art's width
+  const vart = useMemo(() => { const v = vraw && backdrop && st.dropBackdrop ? withoutBackdrop(vraw, backdrop) : vraw; return v?.ok ? fitToShapes(v) : v; }, [vraw, backdrop, st.dropBackdrop]);
   // after the background comes out (or goes back), the inks are found again once the new art is drawn
   const refind = useRef<HTMLImageElement | null | false>(false);
   // EPS / PDF art: the Studio's picture of it is drawn from its shapes
@@ -400,8 +424,10 @@ export default function SeparationStudio({ id }: { id: string }) {
   }, [sb, id]);
   useEffect(() => { load(); }, [load]);
   // vector art: the picture the Studio works from is drawn from its shapes (without the background, when removed)
-  useEffect(() => { if (vart?.ok && (fromShapes.current || vart !== vraw)) setArtUrl(URL.createObjectURL(new Blob([vartSvg(vart)], { type: "image/svg+xml" }))); }, [vart]);
-  useEffect(() => { if (!artUrl) return; loadImg(artUrl).then(setImg).catch((e) => setErr(e.message)); }, [artUrl]);
+  useEffect(() => { if (vart?.ok && (fromShapes.current || vart !== vraw || vart.w !== vraw?.w)) setArtUrl(URL.createObjectURL(new Blob([vartSvg(vart)], { type: "image/svg+xml" }))); }, [vart]);
+  // a picture is cropped to its art (empty see-through space, or the white background when that isn't printed), so the
+  // print width, the ppi and the films measure the graphic, not the box around it
+  useEffect(() => { if (!artUrl) return; loadImg(artUrl).then((im) => (vart?.ok ? im : cropImgToArt(im, st.removeBg))).then(setImg).catch((e) => setErr(e.message)); }, [artUrl, st.removeBg]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!img) return; pxRef.current = pixelsOf(img, st.removeBg, !!vart); setPxTick((t) => t + 1); }, [img, st.removeBg, vart]);
 
   /* ---------- fades (gradients) between inks ---------- */
