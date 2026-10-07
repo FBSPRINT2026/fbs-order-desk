@@ -2,12 +2,16 @@
 // Used by the shop editor (live totals), the customer portal (display)
 // and the server (Stripe amounts), so every total comes from one place.
 
+/** Infant (months) and toddler sizes: onesies, baby and toddler tees (Little Groupies). Supplier ranges like 3-6M
+ *  are stored by their top month (6M), the way Printavo kept them. */
+export const BABY_SIZES = ["NB", "6M", "12M", "18M", "24M"] as const;
+export const TODDLER_SIZES = ["2T", "3T", "4T", "5T"] as const;
 export const YOUTH_SIZES = ["YXS", "YS", "YM", "YL", "YXL"] as const;
 export const ADULT_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"] as const;
 /** Quantity for one-size items (hats, koozies, bags). */
 export const ONE_SIZE = "OS" as const;
-/** Every size, youth first, then one-size. Orders store quantities keyed by these names. */
-export const SIZES = [...YOUTH_SIZES, ...ADULT_SIZES, ONE_SIZE] as const;
+/** Every size, smallest first (baby, toddler, youth, adult), then one-size. Orders store quantities keyed by these names. */
+export const SIZES = [...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES, ONE_SIZE] as const;
 /** How a size is shown to people. */
 export const sizeLabel = (z: string) => (z === ONE_SIZE ? "Qty" : z);
 export type Size = (typeof SIZES)[number];

@@ -26,9 +26,13 @@ const SIZE_ALIASES: Record<string, Size> = {
   SMALL: "S", MEDIUM: "M", LARGE: "L", "X-LARGE": "XL", XLARGE: "XL", "EXTRA LARGE": "XL", "X-SMALL": "XS",
   YOUTH_S: "YS", YOUTH_M: "YM", YOUTH_L: "YL", YOUTH_XL: "YXL", YOUTH_XS: "YXS", "Y-S": "YS", "Y-M": "YM", "Y-L": "YL", "Y-XL": "YXL",
   OSFA: "OS", "ONE SIZE": "OS", QTY: "OS",
+  // baby and toddler (ranges are stored by their top month, as Printavo did)
+  NEWBORN: "NB", "0-3M": "NB", "0-3 M": "NB", "3M": "6M", "3-6M": "6M", "6-12M": "12M", "12-18M": "18M", "18-24M": "24M",
+  "06M": "6M", "6 MONTHS": "6M", "12 MONTHS": "12M", "18 MONTHS": "18M", "24 MONTHS": "24M", "6MO": "6M", "12MO": "12M", "18MO": "18M", "24MO": "24M",
+  "2": "2T", "3": "3T", "4": "4T", "5": "5T", "5/6": "5T", "5-6T": "5T", "5/6T": "5T", "2-3T": "3T",
 };
 export function normSize(raw: string): Size | null {
-  const k = raw.trim().toUpperCase().replace(/\s+/g, " ");
+  const k = raw.trim().toUpperCase().replace(/\s+/g, " ").replace(/^SIZE_/, "");
   if ((SIZES as readonly string[]).includes(k)) return k as Size;
   return SIZE_ALIASES[k] || SIZE_ALIASES[k.replace(/\s/g, "_")] || null;
 }

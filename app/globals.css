@@ -5418,3 +5418,49 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ink-hist ul{list-style:none;margin:2px 0 0;padding:0}
 .ink-hist li{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid var(--line-2,#eef0f3)}
 .ink-hist-old{color:#B54708;font-weight:700}
+/* Inbox → Create order (components/EmailOrderPanel.tsx) */
+.eo{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:10px;margin:8px 0}
+.eo-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.eo-h b{font-size:16px}
+.eo-conf{font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
+.eo-conf.high{background:#E3F4EA;color:#1F7A47}.eo-conf.low{background:#FDEBD8;color:#B54708}
+.eo-reading{margin:0;font-size:13.5px;color:var(--ink-2)}
+.eo-sum{margin:0;font-size:14px}
+.eo-files{display:flex;flex-wrap:wrap;gap:10px}
+.eo-file{display:flex;flex-direction:column;gap:3px;width:132px;font-size:12px}
+.eo-file img,.eo-doc{width:132px;height:96px;object-fit:contain;border:1px solid var(--line-2);border-radius:8px;background:#fff}
+.eo-doc{display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--ink-3);text-decoration:none;font-size:14px}
+.eo-fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eo-file select,.eo-file small{font-size:12px}.eo-file small{color:var(--ink-3)}
+.eo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.eo label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-3);font-weight:600}
+.eo input,.eo select,.eo textarea{font:inherit;font-size:13.5px;color:var(--ink);padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);min-width:0}
+.eo .eo-check{flex-direction:row;align-items:center;gap:6px;color:var(--ink);font-weight:500;font-size:13.5px}
+.eo-goods{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end;padding:8px 10px;border-radius:9px;background:var(--surface-2)}
+.eo-goods .grow{flex:1;min-width:200px}
+.eo-note{margin:0;font-size:12.5px}
+.eo-group{border-top:1px solid var(--line-2);padding-top:10px;display:flex;flex-direction:column;gap:6px}
+.eo-gh{display:flex;gap:8px;align-items:center}.eo-gname{font-weight:700;flex:1;max-width:320px}
+.eo-lines{display:flex;flex-direction:column;gap:8px}
+.eo-line{display:flex;flex-direction:column;gap:5px;padding:8px;border:1px solid var(--line-2);border-radius:9px}
+.eo-lf{display:flex;gap:6px;flex-wrap:wrap}.eo-lf input{width:110px}.eo-lf .grow{flex:1;min-width:160px}
+.eo-sizes{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end}
+.eo .eo-sz{width:56px;text-align:center;gap:2px}.eo-sz input{text-align:center;width:100%;font-weight:700}
+.eo-qty{margin-left:auto;font-size:13px}
+.eo-sub{font-size:12px;font-weight:700;color:var(--ink-3);display:flex;gap:8px;align-items:center}
+.eo-print{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.eo-print > input{width:150px}.eo-print .eo-short{width:80px}
+.eo .eo-n{flex-direction:row;align-items:center;gap:4px}.eo-n input{width:44px;text-align:center}
+.eo-art{width:46px;height:46px;object-fit:contain;border:1px solid var(--line-2);border-radius:7px;background:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink-3);text-align:center}
+.eo-art.on{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.eo-mocks{display:flex;flex-wrap:wrap;gap:8px}
+.eo .eo-mock{flex-direction:row;align-items:center;gap:6px;padding:4px 8px 4px 4px;border:1.5px solid var(--line);border-radius:9px;font-weight:500;color:var(--ink);font-size:12.5px}
+.eo-mock img{width:54px;height:54px;object-fit:contain;background:#fff;border-radius:6px}
+.eo .eo-mock.on{border-color:var(--accent);background:var(--accent-soft)}
+.eo-fin{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.eo-link{border:0;background:none;color:var(--accent);font:inherit;font-weight:600;font-size:13px;cursor:pointer;padding:2px 0;align-self:flex-start}
+.eo-x{border:0;background:none;color:var(--ink-3);font-size:18px;line-height:1;cursor:pointer;padding:2px 6px}
+.eo-x:hover{color:var(--danger,#c0392b)}
+.eo-notes textarea{resize:vertical}
+.eo-q ul{margin:4px 0;padding-left:18px;font-size:13.5px}.eo-q li{margin:2px 0}
+.eo-foot{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;border-top:1px solid var(--line-2);padding-top:10px}
+.eo-foot b{font-size:15px}

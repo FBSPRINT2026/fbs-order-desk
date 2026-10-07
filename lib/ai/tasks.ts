@@ -7,7 +7,7 @@ import type { ProposedOrder } from "@/lib/ai/normalize";
 // The AI jobs the order desk can hand to Claude. Each one has a clear job description, the shop's
 // facts it needs, and a strict answer format. Add new jobs here the same way.
 
-const SHOP_CONTEXT = (s: Settings) => `You work at ${s.shop.name}, a screen printing, embroidery and DTF shop.
+export const SHOP_CONTEXT = (s: Settings) => `You work at ${s.shop.name}, a screen printing, embroidery and DTF shop.
 Order vocabulary:
 - Garments are listed by style number and brand (e.g. Gildan 5000, Bella+Canvas 3001, Next Level 6210) with a color and a size run.
 - Sizes: ${SIZES.join(", ")} (Y* = youth, OS = one size, for hats and bags).

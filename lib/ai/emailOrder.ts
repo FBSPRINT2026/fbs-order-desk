@@ -1,0 +1,325 @@
+import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { aiState, askClaude } from "@/lib/ai/claude";
+import { SHOP_CONTEXT } from "@/lib/ai/tasks";
+import { normSize, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
+import { refetchAttachments } from "@/lib/mail/imap";
+import { officeText } from "@/lib/officeText";
+import { mergeProduction, needsForPrintavo } from "@/lib/production";
+import { newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
+import { isPicture, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
+
+/**
+ * "Create order" from a customer email. The AI reads the email AND its attachments (pictures and PDFs it looks at,
+ * spreadsheets and Word files as text) with what we know about the customer (wholesale or not, their past jobs),
+ * decides whether it's a new order or a reorder of a past job, and fills in the order for staff to check in the
+ * Inbox. Nothing is created until staff press Create order (lib/emailOrderCreate.ts). Never sets prices.
+ */
+
+type Att = { name: string; path: string; type: string; size: number };
+type AiFile = { file: number; role: "art" | "mockup" | "size_breakdown" | "other"; what?: string };
+type PGroup = NonNullable<ProposedOrder["groups"]>[number];
+type AiGroup = Omit<PGroup, "garments" | "prints"> & {
+  garments?: (NonNullable<PGroup["garments"]>[number] & { reorder_line?: number | null })[];
+  prints?: (NonNullable<PGroup["prints"]>[number] & { art_file?: number | null })[];
+  mockup_files?: number[]; finishing?: string[];
+};
+type AiOrder = Omit<ProposedOrder, "groups"> & {
+  kind: "new" | "reorder"; reorder_of?: number | null; summary?: string;
+  garments_supplied_by?: "customer" | "shop" | "unknown";
+  goods?: { supplier?: string; expected?: string; note?: string };
+  files?: AiFile[];
+  groups?: AiGroup[];
+};
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const lineSizes = (l: GLine) => SIZES.filter((z) => +(l.sizes?.[z] || 0) > 0).map((z) => `${z} ${l.sizes[z]}`).join(", ");
+const qtyOf = (gs: Group[]) => gs.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
+
+// ---------- the customer's past jobs (what a reorder copies) ----------
+
+type PvRow = { id: string; visual_id: string | number | null; nickname: string | null; qty: number | null; status_name: string; order_date: string | null; files: Record<string, string> | null;
+  data: { groups?: { lines?: { itemNumber?: string; brand?: string; color?: string; description?: string; items?: number | null; category?: string | null; sizes?: Record<string, number>; mockups?: { full?: string; mime?: string }[] }[] | null; imprints?: { column?: string; details?: string; typeOfWork?: string }[] | null }[] } | null };
+
+/** a Printavo invoice's groups in the portal's order format: garments, sizes, print locations and colors, mockups */
+export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
+  const ps = mergeProduction(prodData);
+  const out: Group[] = [];
+  for (const g of row.data?.groups || []) {
+    const lines: GLine[] = [];
+    const mockups: { path: string; name: string }[] = [];
+    for (const pl of g.lines || []) {
+      const l = newGLine();
+      l.style = (pl.itemNumber || "").trim().slice(0, 40);
+      l.brand = (pl.brand || "").trim().slice(0, 40);
+      l.color = (pl.color || "").trim().slice(0, 60);
+      l.garment = (pl.description || "").split(/\r?\n/)[0].replace(new RegExp(`^${(pl.brand || "").replace(/[^\w ]/g, ".")}\\s*-?\\s*`, "i"), "").trim().slice(0, 120);
+      for (const [k, q] of Object.entries(pl.sizes || {})) { const z = normSize(k); const n = Math.floor(+q || 0); if (z && n > 0) l.sizes[z] = (l.sizes[z] || 0) + n; }
+      if (!Object.keys(l.sizes).length && !(pl.items || 0)) continue;
+      if (!Object.keys(l.sizes).length && pl.items) { l.sizes.OS = Math.floor(+pl.items); l.oneSize = true; }
+      lines.push(l);
+      for (const m of pl.mockups || []) { const p = m.full ? row.files?.[m.full] : ""; if (p && /\.(png|jpe?g|gif|webp)$/i.test(p)) mockups.push({ path: p, name: `Printavo #${row.visual_id} mockup` }); }
+    }
+    if (!lines.length) continue;
+    const steps = needsForPrintavo(ps, { qty: row.qty, status_name: row.status_name || "", nickname: row.nickname || "", data: { groups: [g as never] } }).flatMap((n) => n.steps);
+    const imprints: Imprint[] = steps.map((st) => {
+      const im = newImprint(st.location || "Full Front");
+      im.method = st.method === "embroidery" ? "embroidery" : st.method === "heat" ? "dtf" : "screen";
+      im.colors = Math.max(1, st.colors || 1);
+      im.notes = `From Printavo #${row.visual_id}${st.note ? ` (${st.note})` : ""}`;
+      return im;
+    });
+    out.push({ id: uid(), lines, imprints, customerMockups: mockups.slice(0, 6) });
+  }
+  return out;
+}
+
+/** a portal order copied: new ids, same garments, prints (and their designs), finishing and mockups */
+function groupsFromOrder(o: Order): Group[] {
+  return orderGroups(o).map((g) => ({
+    id: uid(), name: g.name, youth: g.youth, finishing: g.finishing || [],
+    lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })),
+    imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
+    customerMockups: g.customerMockups || [], mockupThumbs: g.mockupThumbs, mockupAt: g.mockupAt,
+  }));
+}
+
+export async function pastJobs(admin: SupabaseClient, customerId: string | null): Promise<PastJob[]> {
+  if (!customerId) return [];
+  const [{ data: os }, { data: as }, { data: st }] = await Promise.all([
+    admin.from("orders").select("id, number, nickname, status, created_at, groups, lines").eq("customer_id", customerId).not("status", "in", "(request)").order("created_at", { ascending: false }).limit(12),
+    admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data").eq("customer_id", customerId).eq("kind", "invoice").order("order_date", { ascending: false, nullsFirst: false }).limit(15),
+    admin.from("settings").select("data").eq("id", 1).maybeSingle(),
+  ]);
+  const prod = (st?.data as { production?: unknown } | null)?.production;
+  const jobs: PastJob[] = [];
+  for (const o of (os || []) as (Order & { created_at: string })[]) {
+    const groups = groupsFromOrder(o);
+    if (!groups.some((g) => g.lines.some((l) => l.style || l.color))) continue;
+    jobs.push({ ref: `o:${o.id}`, label: `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}`, date: (o.created_at || "").slice(0, 10), qty: qtyOf(groups), groups });
+  }
+  for (const r of (as || []) as PvRow[]) {
+    const groups = groupsFromPrintavo(r, prod);
+    if (!groups.length) continue;
+    jobs.push({ ref: `a:${r.id}`, label: `#${r.visual_id}${r.nickname ? ` ${r.nickname}` : ""} (Printavo)`, date: r.order_date || "", qty: r.qty || qtyOf(groups), groups, note: "Printavo job: its art is in the job's files on the archive page." });
+  }
+  return jobs.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 25);
+}
+
+/** the past jobs as the AI reads them: J numbers, and L numbers for every garment line */
+function jobsText(jobs: PastJob[]) {
+  return jobs.map((j, ji) => {
+    let n = 0;
+    const lines = j.groups.flatMap((g) => [
+      ...g.lines.map((l) => `   L${++n}: ${[l.brand, l.style, l.garment].filter(Boolean).join(" ") || "(no style)"}, ${l.color || "no color"}: ${lineSizes(l) || "no sizes"}`),
+      `   prints: ${g.imprints.map((d) => `${d.location} ${d.method === "screen" ? `${d.colors} color${d.colors === 1 ? "" : "s"}` : d.method}${d.inks ? ` (${d.inks})` : ""}`).join("; ") || "none listed"}${g.finishing?.length ? `; finishing ${g.finishing.join(", ")}` : ""}`,
+    ]);
+    return `J${ji + 1}: ${j.label}, ${j.date}, ${j.qty} pcs\n${lines.join("\n")}`;
+  }).join("\n");
+}
+
+// ---------- the attachments ----------
+
+async function readFiles(admin: SupabaseClient, atts: Att[]) {
+  const images: { media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string; label: string }[] = [];
+  const documents: { data: string; label: string }[] = [];
+  const listing: string[] = [];
+  let budget = 18 * 1024 * 1024;
+  for (const [i, a] of atts.slice(0, 12).entries()) {
+    const n = i + 1, tag = `File ${n}: "${a.name}"`;
+    const pic = isPicture(a), pdf = /pdf/i.test(a.type) || /\.pdf$/i.test(a.name);
+    const text = /\.(xlsx|xlsm|docx|csv|tsv|txt)$/i.test(a.name) || /spreadsheetml|wordprocessingml|^text\//i.test(a.type);
+    if (!pic && !pdf && !text) { listing.push(`${tag} (${a.type || "file"}, can't be opened here; judge it by its name)`); continue; }
+    if ((pic && (a.size > 3.7 * 1024 * 1024 || images.length >= 8)) || (pdf && a.size > 15 * 1024 * 1024) || a.size > budget) { listing.push(`${tag} (too big to look at here)`); continue; }
+    const { data } = await admin.storage.from("proofs").download(a.path);
+    if (!data) { listing.push(`${tag} (couldn't be opened)`); continue; }
+    const buf = Buffer.from(await data.arrayBuffer());
+    budget -= buf.length;
+    if (pic) {
+      const t = /png/i.test(a.type) || /\.png$/i.test(a.name) ? "image/png" : /gif/i.test(a.type) ? "image/gif" : /webp/i.test(a.type) ? "image/webp" : "image/jpeg";
+      images.push({ media_type: t, data: buf.toString("base64"), label: `${tag} (picture):` });
+      listing.push(`${tag} (picture, shown above)`);
+    } else if (pdf) {
+      documents.push({ data: buf.toString("base64"), label: `${tag} (PDF):` });
+      listing.push(`${tag} (PDF, shown above)`);
+    } else {
+      const t = officeText(a.name, a.type, buf);
+      listing.push(t ? `${tag} contents:\n"""\n${t}\n"""` : `${tag} (couldn't be read${/\.(xls|doc)$/i.test(a.name) ? "; old Excel/Word format" : ""})`);
+    }
+  }
+  return { images, documents, listing };
+}
+
+// ---------- the AI ----------
+
+const FILE_ROLE = { type: "string", enum: ["art", "mockup", "size_breakdown", "other"] };
+function tool(finishingIds: string[]) {
+  return {
+    name: "propose_order",
+    description: "The order found in the customer's email and attachments, in the shop's order format.",
+    input_schema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["new", "reorder"], description: "new = something we build from scratch (a new design or new garments); reorder = the same job as one we printed before, again" },
+        reorder_of: { type: ["integer", "null"], description: "For a reorder: the J number of the past job it repeats" },
+        summary: { type: "string", description: "One sentence for staff: what they want" },
+        nickname: { type: "string", description: "Short job name, e.g. 'Terrible Toddler'" },
+        due_date: { type: ["string", "null"], description: "In-hands date YYYY-MM-DD only if the customer gave one" },
+        po_number: { type: "string" },
+        delivery: { type: ["string", "null"], enum: ["pickup", "ship", "deliver", null] },
+        ship_to: { type: "string" },
+        notes: { type: "string", description: "Anything else the shop should know (one or two sentences)" },
+        garments_supplied_by: { type: "string", enum: ["customer", "shop", "unknown"], description: "customer = they buy the blanks and send them to us" },
+        goods: { type: "object", properties: {
+          supplier: { type: "string", description: "Where their garments come from, e.g. SanMar, S&S Activewear" },
+          expected: { type: "string", description: "When they should arrive, in plain words with a date if you can work it out, e.g. 'End of this week (Fri Oct 9)'" },
+          note: { type: "string" },
+        } },
+        files: { type: "array", description: "Every attached file and what it is", items: { type: "object", properties: {
+          file: { type: "integer" }, role: FILE_ROLE, what: { type: "string", description: "A few words, e.g. 'print art, 2 colors', 'sizes per style'" },
+        }, required: ["file", "role"] } },
+        groups: { type: "array", items: { type: "object", properties: {
+          name: { type: "string" },
+          garments: { type: "array", items: { type: "object", properties: {
+            style: { type: "string" }, brand: { type: "string" }, description: { type: "string" }, color: { type: "string" },
+            sizes: { type: "object", description: "Size code to quantity, e.g. {\"6M\":5,\"12M\":5,\"2T\":4}", additionalProperties: { type: "integer" } },
+            reorder_line: { type: ["integer", "null"], description: "For a reorder: the L number of the past job's line this is" },
+          } } },
+          prints: { type: "array", items: { type: "object", properties: {
+            method: { type: "string", enum: ["screen", "embroidery", "dtf"] }, location: { type: "string" },
+            colors: { description: "Ink colors in the art (not the shirt color, not the underbase), or 'full'", anyOf: [{ type: "integer" }, { type: "string", enum: ["full"] }] },
+            inks: { type: "string", description: "The ink colors by name, e.g. 'Gold, Black'" },
+            size: { type: "string", description: "Print size only if given or clear, e.g. '10\" wide'" },
+            notes: { type: "string" },
+            art_file: { type: ["integer", "null"], description: "The File number of the art printed here" },
+          } } },
+          mockup_files: { type: "array", items: { type: "integer" }, description: "File numbers of mockups for these garments" },
+          finishing: { type: "array", items: { type: "string", enum: finishingIds.length ? finishingIds : ["none"] } },
+        } } },
+        questions: { type: "array", items: { type: "string" }, description: "What we still need to ask the customer, in plain words" },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+      },
+      required: ["kind", "summary", "files", "groups", "questions", "confidence"],
+    },
+  };
+}
+
+const supplierKey = (s: string) => (/san\s*mar/i.test(s) ? "sanmar" : /s\s*&\s*s|ss\s*active/i.test(s) ? "ss" : s.trim().slice(0, 60));
+
+/** run the AI for one email and save the suggestion; returns the draft and the past jobs */
+export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
+  const { settings, ready, reason } = await aiState(admin);
+  if (!ready) return { ok: false, error: reason };
+  const { data: a } = await admin.from("activities").select("id, customer_id, subject, body, from_email, occurred_at, meta").eq("id", activityId).maybeSingle();
+  if (!a) return { ok: false, error: "Email not found." };
+  const atts = (await refetchAttachments(admin, activityId).catch(() => null)) || ((a.meta as { attachments?: Att[] })?.attachments || []);
+  const [{ data: cust }, past] = await Promise.all([
+    a.customer_id ? admin.from("customers").select("id, company, name, email, price_type, notes").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
+    pastJobs(admin, a.customer_id as string | null),
+  ]);
+  const { images, documents, listing } = await readFiles(admin, atts);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const weekday = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago", weekday: "long" });
+  const fin = (settings.finishing || []).map((f) => `${f.id} = ${f.name}`).join("; ");
+  const system = `${SHOP_CONTEXT(settings as Settings)}
+More sizes: infant NB, 6M, 12M, 18M, 24M and toddler 2T, 3T, 4T, 5T. Ranges like 3-6M or 6-12M are written as the top month (6M, 12M).
+
+Your job: a customer emailed the shop. Read the email and every attached file (pictures, PDFs, spreadsheet contents) and fill in the order for staff to check. Today is ${weekday} ${today}.
+1. Decide what it is. NEW = something built from scratch: a new design, new garments. REORDER = the same job as one we printed before, again ("reorder", "same as last time", "more of the ___ shirts", a past design or job named). For a reorder set reorder_of to the past job's J number and list its garment lines with reorder_line = the L number and the NEW quantities. If they want it exactly as before without numbers, copy the old quantities and ask to confirm.
+2. Say what every attached file is: art (the print file), mockup (the design shown on a garment), size_breakdown (styles, colors, sizes and quantities), other (signature logos, unrelated pictures).
+3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color.
+4. Prints: one per location. Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it. Give a print size only if it's stated or plainly shown.
+5. Garments that share the same prints are one group, with the mockup files for them.
+6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
+7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
+Never invent prices or dates. Anything unclear or missing goes in questions, written to the customer in plain words.`;
+  const custText = cust ? `Customer: ${cust.company || cust.name} <${cust.email || a.from_email}>. ${cust.price_type === "wholesale" ? "WHOLESALE customer: they supply their own garments (we only print)." : "Retail customer: we normally supply the garments."}${cust.notes ? ` Notes on file: ${String(cust.notes).slice(0, 400)}` : ""}` : `Sender ${a.from_email} isn't a customer on file yet.`;
+  const prompt = `${custText}
+
+${past.length ? `This customer's past jobs (newest first):\n${jobsText(past)}` : "No past jobs on file for this customer."}
+
+Attached files:
+${listing.join("\n") || "(none)"}
+
+The email (${String(a.occurred_at).slice(0, 10)}):
+Subject: ${a.subject || ""}
+"""
+${String(a.body || "").slice(0, 12000)}
+"""`;
+  const r = await askClaude<AiOrder>({
+    task: "order_from_email", model: settings.assistant.ai.model, maxTokens: 4000, timeoutMs: 55_000,
+    ctx: { activity_id: a.id as string, customer_id: (a.customer_id as string) || null, by }, admin,
+    tool: tool((settings.finishing || []).map((f) => f.id)), system, prompt, images, documents,
+  });
+  if (!r.ok) return { ok: false, error: r.error };
+  const p = r.data;
+  const files: EOFile[] = atts.slice(0, 12).map((f, i) => {
+    const t = (p.files || []).find((x) => x.file === i + 1);
+    const role = t?.role === "size_breakdown" ? "sheet" : t?.role === "art" || t?.role === "mockup" ? t.role : "other";
+    return { path: f.path, name: f.name, type: f.type, size: f.size, role, what: t?.what || "" };
+  });
+  const fileAt = (n?: number | null) => (n && files[n - 1] ? files[n - 1].path : "");
+
+  const art: Record<string, string> = {}, mockups: Record<string, string[]> = {};
+  const finIds = new Set((settings.finishing || []).map((f) => f.id));
+  let groups: Group[] = [];
+  const job = p.kind === "reorder" && p.reorder_of ? past[p.reorder_of - 1] : undefined;
+  if (job) {
+    // the past job, copied, with the new quantities on the lines they named
+    groups = JSON.parse(JSON.stringify(job.groups)) as Group[];
+    const flat = groups.flatMap((g) => g.lines.map((l) => ({ g, l })));
+    const named = (p.groups || []).flatMap((g) => g.garments || []).filter((x) => x.reorder_line && flat[x.reorder_line - 1]);
+    if (named.length) {
+      const keep = new Set<GLine>();
+      for (const x of named) {
+        const t = flat[x.reorder_line! - 1].l;
+        const sizes: GLine["sizes"] = {};
+        for (const [raw, q] of Object.entries(x.sizes || {})) { const z = normSize(raw); const n = Math.max(0, Math.min(100000, Math.floor(+q || 0))); if (z && n) sizes[z] = (sizes[z] || 0) + n; }
+        if (Object.keys(sizes).length) t.sizes = sizes;
+        if (x.color && x.color.trim().toLowerCase() !== t.color.trim().toLowerCase()) t.color = x.color.trim().slice(0, 60);
+        keep.add(t);
+      }
+      for (const g of groups) g.lines = g.lines.filter((l) => keep.has(l));
+      groups = groups.filter((g) => g.lines.length);
+    }
+    // a new style or color they added that wasn't on the old job goes in the first group
+    const extra = proposalToGroups({ groups: (p.groups || []).map((g) => ({ ...g, prints: [], garments: (g.garments || []).filter((x) => !x.reorder_line) })) }).flatMap((g) => g.lines).filter((l) => Object.keys(l.sizes).length);
+    if (extra.length && groups[0]) groups[0].lines.push(...extra);
+  } else {
+    for (const pg of p.groups || []) {
+      const [g] = proposalToGroups({ groups: [pg] });
+      if (!g) continue;
+      (pg.prints || []).slice(0, 10).forEach((pr, k) => { const f = fileAt(pr.art_file); if (f && g.imprints[k]) art[g.imprints[k].id] = f; });
+      const ms = (pg.mockup_files || []).map(fileAt).filter(Boolean);
+      if (ms.length) mockups[g.id] = [...new Set(ms)];
+      g.finishing = (pg.finishing || []).filter((x) => finIds.has(x));
+      groups.push(g);
+    }
+    // a mockup the AI didn't tie to a group goes with the first one
+    const loose = files.filter((f) => f.role === "mockup" && !Object.values(mockups).flat().includes(f.path)).map((f) => f.path);
+    if (loose.length && groups[0]) mockups[groups[0].id] = [...(mockups[groups[0].id] || []), ...loose];
+  }
+
+  const wholesale = cust?.price_type === "wholesale";
+  const supplied = p.garments_supplied_by === "customer" || (wholesale && p.garments_supplied_by !== "shop");
+  const draft: EODraft = {
+    v: 2, kind: job ? "reorder" : "new", summary: (p.summary || "").slice(0, 400), confidence: p.confidence || "medium",
+    nickname: (p.nickname || job?.label.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "") || "").slice(0, 120),
+    due_date: /^\d{4}-\d{2}-\d{2}$/.test(p.due_date || "") ? p.due_date! : null,
+    delivery: p.delivery && ["pickup", "ship", "deliver"].includes(p.delivery) ? p.delivery : "pickup",
+    ship_to: (p.ship_to || "").slice(0, 500), po_number: (p.po_number || "").slice(0, 60), notes: (p.notes || "").slice(0, 2000),
+    goods: { supplied, supplier: supplierKey(p.goods?.supplier || ""), expected: (p.goods?.expected || "").slice(0, 120), note: (p.goods?.note || "").slice(0, 300) },
+    groups, art, mockups, reorderOf: job?.ref || null,
+    questions: (p.questions || []).map((q) => String(q).slice(0, 300)).slice(0, 10), files,
+  };
+  const row = {
+    kind: "draft_order", dedupe_key: `email:${a.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
+    customer_id: a.customer_id, order_id: null, activity_id: a.id,
+    title: `${draft.kind === "reorder" ? "Reorder" : "New order"} in ${cust?.company || cust?.name || a.from_email}'s email`,
+    body: `${draft.summary}${draft.questions.length ? `\nStill need: ${draft.questions.join("; ")}` : ""}`,
+    payload: { v: 2, draft, groups: draft.groups, proposal: p, qty: r2(qtyOf(groups)) },
+  };
+  const { error } = await admin.from("ai_suggestions").upsert(row, { onConflict: "dedupe_key" });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, draft, past };
+}

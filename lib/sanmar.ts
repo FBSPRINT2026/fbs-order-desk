@@ -47,12 +47,14 @@ const auth = () => { const c = cred(); return `<arg1><sanMarCustomerNumber>${esc
 
 // SanMar size names -> our size codes
 const SIZE_MAP: Record<string, string> = { XS: "XS", S: "S", M: "M", L: "L", XL: "XL", "2XL": "2XL", XXL: "2XL", "3XL": "3XL", XXXL: "3XL", "4XL": "4XL", "5XL": "5XL", "6XL": "5XL",
-  YXS: "YXS", YS: "YS", YM: "YM", YL: "YL", YXL: "YXL", OSFA: "OS", OS: "OS", "ONE SIZE": "OS", ADJ: "OS", "S/M": "M", "M/L": "L", "L/XL": "XL" };
+  YXS: "YXS", YS: "YS", YM: "YM", YL: "YL", YXL: "YXL", OSFA: "OS", OS: "OS", "ONE SIZE": "OS", ADJ: "OS",
+  NB: "NB", "0-3M": "NB", "3-6M": "6M", "6M": "6M", "06M": "6M", "6-12M": "12M", "12M": "12M", "12-18M": "18M", "18M": "18M", "18-24M": "24M", "24M": "24M",
+  "2T": "2T", "3T": "3T", "4T": "4T", "5T": "5T", "5/6": "5T", "5/6T": "5T", "S/M": "M", "M/L": "L", "L/XL": "XL" };
 // youth styles label sizes XS-XL; ours are YXS-YXL (same rule as S&S)
 const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
 const isYouth = (basic: string) => /youth|toddler|kids|infant/i.test(`${tag(basic, "productTitle")} ${tag(basic, "category")}`);
 const sizeFor = (raw: string, youth: boolean) => { const z = SIZE_MAP[raw.toUpperCase()] || raw.toUpperCase(); return youth && YOUTH[z] ? YOUTH[z] : z; };
-const ORDER = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
+const ORDER = ["NB", "6M", "12M", "18M", "24M", "2T", "3T", "4T", "5T", "YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
 const num = (s: string) => { const n = parseFloat(s); return isFinite(n) ? n : 0; };
 
 export type SanMarSku = { color: string; catalogColor: string; size: string; rawSize: string; piecePrice: number; casePrice: number; myPrice: number; image: string; front: string; back: string; swatch: string; brand: string; title: string; description: string; status: string };

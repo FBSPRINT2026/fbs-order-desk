@@ -1,0 +1,224 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import { LOCATIONS, METHODS, SIZES, newGLine, newImprint, sizeLabel, type GLine, type Group, type Method } from "@/lib/pricing";
+import { SUPPLIERS } from "@/lib/goods";
+import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
+
+/**
+ * Inbox → Create order: the AI's suggested order from the email and its attachments, for staff to check and fix
+ * before it becomes an order. New orders are built from the email (garments and sizes, prints with the art, the
+ * customer's mockup, their goods); reorders copy a past job with the new quantities, and the job can be swapped.
+ */
+type Fin = { id: string; name: string; price: number };
+type Loaded = { draft: EODraft | null; files: EOFile[]; past: PastJob[]; created: string | null; finishing: Fin[]; ai: boolean; aiReason: string; customer: { id: string; company: string | null; name: string | null; price_type: string } | null };
+
+const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+const qtyOf = (l: GLine) => Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0) || 0), 0);
+const uidish = () => Math.random().toString(36).slice(2, 10);
+
+export default function EmailOrderPanel({ activityId, onClose, onCreated }: { activityId: string; onClose: () => void; onCreated: (id: string, number: number) => void }) {
+  const [data, setData] = useState<Loaded | null>(null);
+  const [d, setD] = useState<EODraft | null>(null);
+  const [busy, setBusy] = useState<"" | "read" | "create">(""), [err, setErr] = useState("");
+  const [status, setStatus] = useState<"quote" | "approved">("quote");
+
+  async function read() {
+    setBusy("read"); setErr("");
+    const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+    setBusy("");
+    if (!r?.ok || !j.draft) return setErr(j.error || "The AI couldn't read this email. Try again.");
+    setData((x) => (x ? { ...x, draft: j.draft, files: j.files, past: j.past } : x));
+    setD(j.draft);
+  }
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const r = await fetch(`/api/inbox/order?activity=${encodeURIComponent(activityId)}`).catch(() => null);
+      const j = r ? await r.json().catch(() => null) : null;
+      if (!live) return;
+      if (!r?.ok || !j) return setErr(j?.error || "Couldn't load the email.");
+      setData(j);
+      if (j.draft) setD(j.draft);
+      else if (j.ai) read();
+    })();
+    return () => { live = false; };
+  }, [activityId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const files = d?.files || data?.files || [];
+  const pics = files.filter(isPicture);
+  const urlOf = (p: string) => files.find((f) => f.path === p)?.url || "";
+  const total = useMemo(() => (d?.groups || []).reduce((a, g) => a + g.lines.reduce((b, l) => b + qtyOf(l), 0), 0), [d]);
+  const patch = (fn: (x: EODraft) => void) => setD((x) => { if (!x) return x; const y = clone(x); fn(y); return y; });
+  const patchG = (gi: number, fn: (g: Group) => void) => patch((x) => fn(x.groups[gi]));
+
+  function pickJob(ref: string) {
+    const j = data?.past.find((p) => p.ref === ref);
+    patch((x) => {
+      if (!j) { x.kind = "new"; x.reorderOf = null; return; }
+      x.kind = "reorder"; x.reorderOf = j.ref; x.groups = clone(j.groups).map((g) => ({ ...g, id: uidish() }));
+      if (!x.nickname) x.nickname = j.label.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "");
+    });
+  }
+
+  async function create() {
+    if (!d) return;
+    setBusy("create"); setErr("");
+    const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+    setBusy("");
+    if (!r?.ok || !j.id) return setErr(j.error || "Couldn't create the order.");
+    onCreated(j.id, j.number);
+  }
+
+  if (!data) return <section className="eo"><div className="eo-h"><b>Create order</b><span className="spacer" /><button type="button" className="btn sm ghost" onClick={onClose}>Close</button></div>{err ? <div className="err">{err}</div> : <p className="faint">Loading…</p>}</section>;
+  if (data.created) return (
+    <section className="eo"><div className="eo-h"><b>Create order</b><span className="spacer" /><button type="button" className="btn sm ghost" onClick={onClose}>Close</button></div>
+      <p>An order was already made from this email. <a href={`/shop/orders/${data.created}`} target="_blank" rel="noreferrer">Open it</a>, or <button type="button" className="eo-link" onClick={() => setData({ ...data, created: null })}>make another</button>.</p>
+    </section>
+  );
+  const job = d?.reorderOf ? data.past.find((p) => p.ref === d.reorderOf) : null;
+
+  return (
+    <section className="eo" aria-label="Suggested order">
+      <div className="eo-h">
+        <b>{d ? (d.kind === "reorder" ? "Reorder" : "New order") : "Create order"}</b>
+        {d && <span className={"eo-conf " + d.confidence}>{d.confidence === "high" ? "AI is confident" : d.confidence === "medium" ? "Check the details" : "AI wasn't sure: check everything"}</span>}
+        <span className="spacer" />
+        {data.ai && <button type="button" className="btn sm ghost" disabled={!!busy} onClick={read}>{busy === "read" ? "Reading…" : d ? "Read it again" : "Read the email"}</button>}
+        <button type="button" className="btn sm ghost" onClick={onClose}>Close</button>
+      </div>
+      {!data.ai && !d && <div className="warn">{data.aiReason || "AI is off."} You can still enter the order by hand from the order page.</div>}
+      {busy === "read" && <p className="eo-reading">Reading the email{files.length ? ` and ${files.length} attachment${files.length === 1 ? "" : "s"}` : ""}: garments, sizes, art, mockups, and whether it's a reorder. This takes 15 to 40 seconds.</p>}
+      {err && <div className="err">{err}</div>}
+      {d && <>
+        {d.summary && <p className="eo-sum">✦ {d.summary}</p>}
+
+        {files.length > 0 && <div className="eo-files">
+          {files.map((f, i) => (
+            <div key={f.path} className="eo-file">
+              {isPicture(f) && f.url ? <a href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt="" /></a> : <a className="eo-doc" href={f.url || undefined} target="_blank" rel="noreferrer">{(f.name.split(".").pop() || "file").toUpperCase()}</a>}
+              <span className="eo-fname" title={f.name}>{f.name}</span>
+              <select aria-label={`What ${f.name} is`} value={f.role} onChange={(e) => patch((x) => { x.files[i].role = e.target.value as EOFile["role"]; })}>
+                {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+              {f.what && <small>{f.what}</small>}
+            </div>
+          ))}
+        </div>}
+
+        <div className="eo-grid">
+          <label>Order type
+            <select value={d.reorderOf || ""} onChange={(e) => pickJob(e.target.value)}>
+              <option value="">New order (from scratch)</option>
+              {data.past.map((p) => <option key={p.ref} value={p.ref}>Reorder of {p.label} · {p.date} · {p.qty} pcs</option>)}
+            </select>
+          </label>
+          <label>Job name<input value={d.nickname} onChange={(e) => patch((x) => { x.nickname = e.target.value; })} /></label>
+          <label>In-hands date<input type="date" value={d.due_date || ""} onChange={(e) => patch((x) => { x.due_date = e.target.value || null; })} /></label>
+          <label>Delivery<select value={d.delivery} onChange={(e) => patch((x) => { x.delivery = e.target.value as EODraft["delivery"]; })}><option value="pickup">Pickup</option><option value="ship">Ship</option><option value="deliver">We deliver</option></select></label>
+          <label>PO #<input value={d.po_number} onChange={(e) => patch((x) => { x.po_number = e.target.value; })} /></label>
+        </div>
+        {job?.note && <p className="faint eo-note">{job.note}</p>}
+
+        <div className="eo-goods">
+          <label className="eo-check"><input type="checkbox" checked={d.goods.supplied} onChange={(e) => patch((x) => { x.goods.supplied = e.target.checked; })} /> The customer sends the garments</label>
+          {d.goods.supplied && <>
+            <label>From<select value={SUPPLIERS[d.goods.supplier] ? d.goods.supplier : d.goods.supplier ? "other" : ""} onChange={(e) => patch((x) => { x.goods.supplier = e.target.value === "other" ? x.goods.supplier && !SUPPLIERS[x.goods.supplier] ? x.goods.supplier : "Other" : e.target.value; })}>
+              <option value="">Not known yet</option>{Object.entries(SUPPLIERS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}<option value="other">Somewhere else</option>
+            </select></label>
+            {d.goods.supplier && !SUPPLIERS[d.goods.supplier] && <label>Supplier<input value={d.goods.supplier} onChange={(e) => patch((x) => { x.goods.supplier = e.target.value; })} /></label>}
+            <label className="grow">Expected<input value={d.goods.expected} placeholder="e.g. End of this week (Fri Oct 9)" onChange={(e) => patch((x) => { x.goods.expected = e.target.value; })} /></label>
+          </>}
+        </div>
+
+        {d.groups.map((g, gi) => (
+          <div key={g.id} className="eo-group">
+            <div className="eo-gh"><input className="eo-gname" aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => patchG(gi, (x) => { x.name = e.target.value; })} />
+              {d.groups.length > 1 && <button type="button" className="btn sm ghost" onClick={() => patch((x) => { x.groups.splice(gi, 1); })}>Remove group</button>}</div>
+            <div className="eo-lines">
+              {g.lines.map((l, li) => {
+                const used = SIZES.filter((z) => l.sizes?.[z] !== undefined);
+                return (
+                  <div key={l.id} className="eo-line">
+                    <div className="eo-lf">
+                      <input aria-label="Style" placeholder="Style #" value={l.style} onChange={(e) => patchG(gi, (x) => { x.lines[li].style = e.target.value; })} />
+                      <input aria-label="Brand" placeholder="Brand" value={l.brand} onChange={(e) => patchG(gi, (x) => { x.lines[li].brand = e.target.value; })} />
+                      <input aria-label="Color" placeholder="Color" value={l.color} onChange={(e) => patchG(gi, (x) => { x.lines[li].color = e.target.value; })} />
+                      <input aria-label="Description" className="grow" placeholder="Description" value={l.garment} onChange={(e) => patchG(gi, (x) => { x.lines[li].garment = e.target.value; })} />
+                      <button type="button" className="eo-x" aria-label="Remove garment" onClick={() => patchG(gi, (x) => { x.lines.splice(li, 1); if (!x.lines.length) x.lines.push(newGLine()); })}>×</button>
+                    </div>
+                    <div className="eo-sizes">
+                      {used.map((z) => (
+                        <label key={z} className="eo-sz"><span>{sizeLabel(z)}</span><input inputMode="numeric" value={l.sizes[z] ?? ""} onChange={(e) => patchG(gi, (x) => { const n = Math.max(0, Math.floor(+e.target.value.replace(/\D/g, "") || 0)); x.lines[li].sizes[z] = n; })} onBlur={() => patchG(gi, (x) => { if (!x.lines[li].sizes[z]) delete x.lines[li].sizes[z]; })} /></label>
+                      ))}
+                      <select aria-label="Add a size" value="" onChange={(e) => { const z = e.target.value as keyof GLine["sizes"]; if (z) patchG(gi, (x) => { x.lines[li].sizes[z] = x.lines[li].sizes[z] || 0; }); }}>
+                        <option value="">+ size</option>{SIZES.filter((z) => l.sizes?.[z] === undefined).map((z) => <option key={z} value={z}>{sizeLabel(z)}</option>)}
+                      </select>
+                      <b className="eo-qty">{qtyOf(l)} pcs</b>
+                    </div>
+                  </div>
+                );
+              })}
+              <button type="button" className="eo-link" onClick={() => patchG(gi, (x) => { x.lines.push(newGLine()); })}>+ Add garment</button>
+            </div>
+
+            <div className="eo-sub">Prints</div>
+            {g.imprints.map((im, ii) => {
+              const art = d.art[im.id] || "";
+              return (
+                <div key={im.id} className="eo-print">
+                  {im.design_id ? <span className="eo-art on" title="Uses the design from the past job">Design</span>
+                    : art && urlOf(art) ? <img className="eo-art" src={urlOf(art)} alt="" /> : <span className="eo-art">No art</span>}
+                  <input list="eo-locs" aria-label="Location" value={im.location} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].location = e.target.value; })} />
+                  <select aria-label="Method" value={im.method} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                  {im.method !== "dtf" && <label className="eo-n">Colors<input inputMode="numeric" value={im.colors} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].colors = Math.max(1, Math.min(15, +e.target.value.replace(/\D/g, "") || 1)); })} /></label>}
+                  <input aria-label="Inks" placeholder="Inks" value={im.inks} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].inks = e.target.value; })} />
+                  <input aria-label="Print size" className="eo-short" placeholder="Size" value={im.size} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].size = e.target.value; })} />
+                  {!im.design_id && <select aria-label="Art file" value={art} onChange={(e) => patch((x) => { if (e.target.value) x.art[im.id] = e.target.value; else delete x.art[im.id]; })}>
+                    <option value="">No art file</option>{files.map((f) => <option key={f.path} value={f.path}>{f.name}</option>)}
+                  </select>}
+                  <button type="button" className="eo-x" aria-label="Remove print" onClick={() => patchG(gi, (x) => { x.imprints.splice(ii, 1); })}>×</button>
+                </div>
+              );
+            })}
+            <button type="button" className="eo-link" onClick={() => patchG(gi, (x) => { x.imprints.push(newImprint(x.imprints.length ? "Full Back" : "Full Front")); })}>+ Add print</button>
+
+            {(pics.length > 0 || (g.customerMockups || []).length > 0) && <>
+              <div className="eo-sub">Customer&apos;s mockup</div>
+              <div className="eo-mocks">
+                {(g.customerMockups || []).map((m) => <span key={m.path} className="eo-mock on" title={m.name}>{m.name}</span>)}
+                {pics.map((f) => {
+                  const on = (d.mockups[g.id] || []).includes(f.path);
+                  return <label key={f.path} className={"eo-mock" + (on ? " on" : "")}><input type="checkbox" checked={on} onChange={() => patch((x) => { const cur = x.mockups[g.id] || []; x.mockups[g.id] = on ? cur.filter((p) => p !== f.path) : [...cur, f.path]; })} />{f.url && <img src={f.url} alt="" />}<span>{f.name}</span></label>;
+                })}
+              </div>
+            </>}
+
+            {data.finishing.length > 0 && <div className="eo-fin">
+              <span className="eo-sub">Finishing</span>
+              {data.finishing.map((f) => <label key={f.id} className="eo-check"><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => patchG(gi, (x) => { x.finishing = e.target.checked ? [...(x.finishing || []), f.id] : (x.finishing || []).filter((y) => y !== f.id); })} />{f.name}</label>)}
+            </div>}
+          </div>
+        ))}
+        <datalist id="eo-locs">{LOCATIONS.map((l) => <option key={l} value={l} />)}</datalist>
+        <button type="button" className="eo-link" onClick={() => patch((x) => { x.groups.push({ id: uidish(), lines: [newGLine()], imprints: [newImprint()] }); })}>+ Add a group (garments with different prints)</button>
+
+        <label className="eo-notes">Notes on the order<textarea rows={2} value={d.notes} onChange={(e) => patch((x) => { x.notes = e.target.value; })} /></label>
+        {d.questions.length > 0 && <div className="eo-q">
+          <div className="eo-sub">Still to ask the customer <button type="button" className="eo-link" onClick={() => navigator.clipboard?.writeText(d.questions.map((q) => `- ${q}`).join("\n"))}>Copy</button></div>
+          <ul>{d.questions.map((q, i) => <li key={i}>{q}<button type="button" className="eo-x" aria-label="Drop this question" onClick={() => patch((x) => { x.questions.splice(i, 1); })}>×</button></li>)}</ul>
+          <small className="faint">These go in the order&apos;s production notes.</small>
+        </div>}
+
+        <div className="eo-foot">
+          <b>{total} pcs</b>
+          <span className="spacer" />
+          <label>Save as<select value={status} onChange={(e) => setStatus(e.target.value as "quote" | "approved")}><option value="quote">Quote (price it, send for approval)</option><option value="approved">Approved order</option></select></label>
+          <button type="button" className="btn primary" disabled={!!busy || !total} onClick={create}>{busy === "create" ? "Creating…" : "Create order"}</button>
+        </div>
+        {!data.customer && <div className="warn">Make the sender a customer first (the yellow box above), then create the order.</div>}
+      </>}
+    </section>
+  );
+}

@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ImapFlow } from "imapflow";
 import { simpleParser, type ParsedMail, type AddressObject } from "mailparser";
 import { cfgOf, type MailAccount, type MailCfg } from "./config";
-import { handleIncoming, handleSent, saveBody, type MailMsg, type Outcome } from "./process";
+import { handleIncoming, handleSent, saveAttachments, saveBody, type MailMsg, type Outcome } from "./process";
+import { accountById } from "./config";
 
 export function imapClient(c: MailCfg) {
   return new ImapFlow({ host: c.imapHost, port: c.imapPort, secure: true, auth: { user: c.user, pass: c.pass }, logger: false, socketTimeout: 40000 });
@@ -100,4 +101,41 @@ async function backfillHtml(admin: SupabaseClient, client: ImapFlow, accountId: 
     if (body.html) n++;
   }
   return n;
+}
+
+/**
+ * Go back to the mailbox for one stored email and save the attachments the portal skipped when it came in
+ * (before Oct 7 spreadsheets and documents weren't kept). Files already on file are not saved twice. Done once
+ * per email (meta.att_checked); returns the email's attachment list.
+ */
+export async function refetchAttachments(admin: SupabaseClient, activityId: string) {
+  const { data: a } = await admin.from("activities").select("id, customer_id, external_id, meta").eq("id", activityId).maybeSingle();
+  const meta = ((a?.meta || {}) as { account_id?: string; mailbox?: string; attachments?: { name: string; path: string; type: string; size: number }[]; att_checked?: boolean });
+  const have = meta.attachments || [];
+  if (!a || meta.att_checked || !a.external_id || !meta.account_id) return have;
+  const acct = await accountById(admin, meta.account_id);
+  if (!acct || !acct.enabled) return have;
+  const client = imapClient(cfgOf(acct));
+  let got = have;
+  try {
+    await client.connect();
+    const folder = meta.mailbox === "sent" ? acct.sent_folder || (await sentFolder(client)) : "INBOX";
+    const lock = await client.getMailboxLock(folder);
+    try {
+      const found = await client.search({ header: { "message-id": String(a.external_id) } }, { uid: true });
+      const uid = Array.isArray(found) ? found[0] : undefined;
+      if (uid) {
+        const msg = await client.fetchOne(String(uid), { source: true, size: true }, { uid: true });
+        if (msg && msg.source && (msg.size || 0) <= MAX_BYTES) {
+          const m = toMsg(await simpleParser(msg.source));
+          const names = new Set(have.map((x) => x.name));
+          const fresh = await saveAttachments(admin, { ...m, attachments: m.attachments.filter((x) => !names.has(x.filename)) }, (a.customer_id as string) || "leads");
+          got = [...have, ...fresh];
+        }
+      }
+    } finally { lock.release(); }
+  } catch { /* mailbox unreachable: keep what's on file, try again next time */ return have; }
+  finally { await client.logout().catch(() => null); }
+  await admin.from("activities").update({ meta: { ...meta, attachments: got, att_checked: true } }).eq("id", a.id);
+  return got;
 }

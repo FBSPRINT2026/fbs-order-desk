@@ -25,6 +25,8 @@ type SSProduct = { colorName: string; sizeName: string; sizeOrder: string; custo
 const SIZE_MAP: Record<string, string> = {
   XS: "XS", S: "S", M: "M", L: "L", XL: "XL", "2XL": "2XL", XXL: "2XL", "3XL": "3XL", XXXL: "3XL", "4XL": "4XL", "5XL": "5XL",
   YXS: "YXS", YS: "YS", YM: "YM", YL: "YL", YXL: "YXL", "OSFA": "OS", "OS": "OS", "ONE SIZE": "OS", "ADJ": "OS",
+  NB: "NB", "0-3M": "NB", "3-6M": "6M", "6M": "6M", "06M": "6M", "6-12M": "12M", "12M": "12M", "12-18M": "18M", "18M": "18M", "18-24M": "24M", "24M": "24M",
+  "2T": "2T", "3T": "3T", "4T": "4T", "5T": "5T", "5/6": "5T", "5/6T": "5T",
 };
 
 function mode(nums: number[]) {

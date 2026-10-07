@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ADULT_SIZES, calcOrder, mergeSettings, ONE_SIZE, orderGroups, sizeLabel, SIZES, YOUTH_SIZES, type Customer, type GLine, type Order } from "@/lib/pricing";
+import { ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, calcOrder, mergeSettings, ONE_SIZE, orderGroups, sizeLabel, SIZES, YOUTH_SIZES, type Customer, type GLine, type Order } from "@/lib/pricing";
 import { fmtDateLong } from "@/lib/format";
 import LabelControls from "./LabelControls";
 import { code128Svg } from "@/lib/barcode";
@@ -40,7 +40,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
     const bandRows = rows.filter((l) => list.some((z) => l.sizes?.[z as keyof GLine["sizes"]]));
     return { name, rows: bandRows, sizes: list.filter((z) => bandRows.some((l) => l.sizes?.[z as keyof GLine["sizes"]])) };
   };
-  const bands = [bandOf("YOUTH", YOUTH_SIZES), bandOf("ADULT", ADULT_SIZES), bandOf("ONE SIZE", [ONE_SIZE])].filter((b) => b.rows.length);
+  const bands = [bandOf("BABY", BABY_SIZES), bandOf("TODDLER", TODDLER_SIZES), bandOf("YOUTH", YOUTH_SIZES), bandOf("ADULT", ADULT_SIZES), bandOf("ONE SIZE", [ONE_SIZE])].filter((b) => b.rows.length);
   const totalPcs = c.qty;
   // Shipping barcode: order number and box number ("1004-2"). The Shipping center scans it to open the order at that box.
   const barcodeFor = (box: number) => {

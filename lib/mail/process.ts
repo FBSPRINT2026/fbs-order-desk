@@ -82,12 +82,14 @@ async function threadParent(admin: SupabaseClient, m: MailMsg) {
 }
 
 const ART = /^(image\/|application\/(pdf|postscript|illustrator|eps|x-eps|vnd\.adobe|zip|x-zip|octet-stream))/i;
-const ART_EXT = /\.(png|jpe?g|gif|webp|tiff?|bmp|svg|pdf|ai|eps|ps|psd|cdr|zip|heic)$/i;
+const ART_EXT = /\.(png|jpe?g|gif|webp|tiff?|bmp|svg|pdf|ai|eps|ps|psd|cdr|zip|heic|xlsx|xlsm|xls|csv|tsv|numbers|docx|doc|txt|rtf)$/i;
+/** spreadsheets and documents (size breakdowns, order sheets, rosters) are kept too, since Oct 7 */
+const DOCS = /^(application\/(vnd\.openxmlformats-officedocument|vnd\.ms-excel|msword|rtf|vnd\.apple\.numbers)|text\/(csv|tab-separated-values|plain))/i;
 /** artwork and documents customers send (not signature logos): saved privately with the email */
-async function saveAttachments(admin: SupabaseClient, m: MailMsg, folder: string) {
+export async function saveAttachments(admin: SupabaseClient, m: MailMsg, folder: string) {
   const out: { name: string; path: string; type: string; size: number }[] = [];
   for (const a of m.attachments.slice(0, 15)) {
-    if (!a.filename || !(ART.test(a.contentType) || ART_EXT.test(a.filename))) continue;
+    if (!a.filename || !(ART.test(a.contentType) || DOCS.test(a.contentType) || ART_EXT.test(a.filename))) continue;
     if (a.size > 40 * 1024 * 1024) continue;
     if (a.inline && /^image\//.test(a.contentType) && (a.size < 60 * 1024 || (a.cid && m.html?.includes(a.cid)))) continue; // signature logos, pictures in the body (saved with the body)
     const name = a.filename.replace(/[^\w.\- ]+/g, "_").slice(-120);

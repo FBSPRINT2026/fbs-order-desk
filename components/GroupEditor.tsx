@@ -1,5 +1,5 @@
 "use client";
-import { ADULT_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { smallerSpot } from "@/lib/mockup";
 import DesignSearch from "@/components/DesignSearch";
@@ -90,13 +90,16 @@ export default function GroupEditor({ gi, g, gc, settings, prices, catalog, canR
     });
   }
 
-  // Sizes shown for a row: the catalog's size run for that style, otherwise the adult run
-  // (plus youth if the row already has youth quantities from an older order).
+  // Sizes shown for a row: the catalog's size run for that style, otherwise the adult run (plus baby, toddler or
+  // youth when the row already has quantities in those, e.g. from the AI reading an email or an older order).
   const colsFor = (l: GLine): string[] => {
     const run = (l.sizeRun || []).filter((z) => z !== ONE_SIZE);
-    if (run.length) return run;
-    const youth = !!g.youth || YOUTH_SIZES.some((z) => l.sizes?.[z]);
-    return [...(youth ? YOUTH_SIZES : []), ...ADULT_SIZES];
+    const has = (list: readonly string[]) => list.some((z) => l.sizes?.[z as keyof GLine["sizes"]]);
+    if (run.length) return [...run, ...[...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES].filter((z) => !run.includes(z) && l.sizes?.[z as keyof GLine["sizes"]])];
+    const baby = has(BABY_SIZES), tod = has(TODDLER_SIZES), youth = !!g.youth || has(YOUTH_SIZES);
+    // little ones only: no adult columns to scroll past
+    if ((baby || tod) && !has(ADULT_SIZES)) return [...(baby ? BABY_SIZES : []), ...(tod ? TODDLER_SIZES : []), ...(youth ? YOUTH_SIZES : [])];
+    return [...(baby ? BABY_SIZES : []), ...(tod ? TODDLER_SIZES : []), ...(youth ? YOUTH_SIZES : []), ...ADULT_SIZES];
   };
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   const locked = !!onMockup && !noLock && !g.mockupAt && !g.mockupSkipped && !(g.customerMockups || []).length;

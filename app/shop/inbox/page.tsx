@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "../mail-actions";
-import { aiReplyOptions, aiWriteReply, markNoReply, quoteFromSuggestion } from "../ai-actions";
+import { aiReplyOptions, aiWriteReply, markNoReply } from "../ai-actions";
+import EmailOrderPanel from "@/components/EmailOrderPanel";
 
 /**
  * Inbox, laid out like Outlook: the customer email on the left (what needs an answer first), the picked email on the
@@ -168,6 +169,10 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const [err, setErr] = useState(""), [company, setCompany] = useState(""), [custQ, setCustQ] = useState(""), [hits, setHits] = useState<Cust[]>([]);
   const [opts, setOpts] = useState<Opt[] | null>(x.meta?.reply_options?.options || null), [picked, setPicked] = useState(reply?.draft?.body ? -2 : -1), [ask, setAsk] = useState("");
   const boxRef = useRef<HTMLTextAreaElement | null>(null);
+  // Create order: the AI's suggested order from this email and its attachments, to check and create
+  const [ordering, setOrdering] = useState(false);
+  useEffect(() => { setOrdering(false); }, [x.id]);
+  const orderish = ["new_order", "reorder"].includes(x.meta?.triage?.intent || "") || !!quote;
   async function loadOpts(fresh = false) {
     setBusy("opts"); setErr("");
     const r = await aiReplyOptions(x.id, fresh);
@@ -196,7 +201,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
         {urgent && <div className="ibx-read-urgent"><b>Urgent</b>{x.meta?.triage?.urgent_reason ? ` · ${x.meta.triage.urgent_reason}` : " · the customer needs a fast answer"}</div>}
         {x.meta?.triage?.summary && <div className="ibx-read-sum">✦ {x.meta.triage.summary}</div>}
         <div className="ibx-read-tools">
-          {quote && x.customer_id && <button type="button" className="btn sm primary" disabled={!!busy} onClick={() => run("quote", async () => { const r = await quoteFromSuggestion(quote.id); if (r.ok) window.open(`/shop/orders/${r.id}`, "_blank"); return r; }, "Quote created from the email.")}>Create quote from email</button>}
+          {x.direction === "in" && <button type="button" className={"btn sm" + (orderish && !x.order_id ? " primary" : "")} disabled={!!busy} onClick={() => setOrdering((v) => !v)} title="The AI reads the email and its attachments and suggests the order (new, or a reorder of a past job) for you to check">{ordering ? "Hide order" : x.meta?.triage?.intent === "reorder" ? "Create reorder" : "Create order"}</button>}
           {x.customer_id && <select aria-label="File under an order" value={x.order_id || ""} disabled={!!busy} onChange={(e) => run("ord", () => setEmailOrder(x.id, e.target.value || null), "Filed under the order.")}>
             <option value="">Not about an order</option>{orders.slice(0, 40).map((o) => <option key={o.id} value={o.id}>#{o.number} {o.nickname || ""} ({o.status})</option>)}
           </select>}
@@ -216,6 +221,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {hits.length > 0 && <span className="ibx-hits">{hits.map((c) => <button key={c.id} type="button" onClick={() => run("cust", () => setEmailCustomer(x.id, c.id), `${x.meta?.from_name || x.from_email} is now a contact at ${c.company || c.name}. Their email will file there from now on.`)}>{c.company || c.name}</button>)}</span>}</span>
         </div>}
       </header>
+
+      {ordering && <EmailOrderPanel key={x.id} activityId={x.id} onClose={() => setOrdering(false)} onCreated={(id, n) => { setOrdering(false); window.open(`/shop/orders/${id}`, "_blank"); done(`Order #${n} created from the email. It's open in a new tab to price and send.`); }} />}
 
       <div className="ibx-answer">
         <div className="ibx-answer-h"><b>Your answer</b>
