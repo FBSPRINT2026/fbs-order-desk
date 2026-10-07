@@ -212,7 +212,7 @@ function tool(finishingIds: string[]) {
             notes: { type: "string" },
             art_file: { type: ["integer", "null"], description: "The File number of the art printed here" },
             width_in: { type: ["number", "null"], description: "Width of the print in inches, judged from the customer's mockup against the garment (see the sizing note). Null when there is no mockup showing it." },
-            drop_in: { type: ["number", "null"], description: "Front / back prints: inches from the collar seam down to the top of the print, judged from the mockup. Null when not shown." },
+            drop_in: { type: ["number", "null"], description: "Only when the customer states how far below the collar the print goes; otherwise null (we use our standard placement)." },
           } } },
           mockup_files: { type: "array", items: { type: "integer" }, description: "File numbers of mockups for these garments" },
           finishing: { type: "array", items: { type: "string", enum: finishingIds.length ? finishingIds : ["none"] } },
@@ -251,7 +251,7 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 2. Say what every attached file is: art (the print file), mockup (the design shown on a garment), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files).
 3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color.
 4. Prints: one per location. Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it, using our names: ${LOCATIONS.join(", ")}. Give size only if it's stated in words.
-4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front (big) or Center Chest (under about 5" tall and wide on adult). Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Measure the inked art only (from its leftmost to rightmost ink), not empty space around it, and judge the chest width at the armpits, not the sleeves. Give width_in to the nearest quarter inch, and drop_in (collar seam to the top of the print, scaled the same way: a toddler full front usually sits 1.5" to 2.5" down, an adult one about 3"). Never invent these without a mockup.
+4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front (big) or Center Chest (under about 5" tall and wide on adult). Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Measure the inked art only (from its leftmost to rightmost ink), not empty space around it, and judge the chest width at the armpits, not the sleeves. Give width_in to the nearest quarter inch, Leave drop_in null unless the customer states how far down it goes. Never invent these without a mockup.
 5. Garments that share the same prints are one group, with the mockup files for them.
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
 7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
@@ -329,10 +329,11 @@ ${String(a.body || "").slice(0, 12000)}
         // one screen prints every size on the order: never bigger than fits the smallest size ordered (a 2T)
         const small = smallestOrdered(null, Object.keys(Object.assign({}, ...g.lines.map((l) => l.sizes || {}))), body);
         let capped = "";
-        if (small && w > 0) { const cap = maxWidthFor(im.location, 0, small); if (w > cap) { w = cap; capped = ` (capped to fit the ${small.size})`; } }
+        if (small && w > 0) { const cap = maxWidthFor(im.location, 0, small); if (w > cap) { capped = `. ${Math.round(cap * 4) / 4}" wide: the largest that fits the ${small.size}, the smallest size on this order (one screen prints every size); their mockup looked like ${Math.round(w * 4) / 4}"`; w = cap; } }
         if (w >= 1 && w <= 16) im.size = `${Math.round(w * 4) / 4}" wide`;
-        if (!im.drop && dr >= 0 && dr <= 10 && /front|back|chest/i.test(im.location)) im.drop = String(Math.round(dr * 4) / 4);
-        im.aiPlace = { size: im.size, drop: im.drop || "", garment: body.size, kind: body.kind };
+        // the drop isn't taken from their picture (it came out too close to the collar): our standard placement is used
+        void dr;
+        im.aiPlace = { size: im.size, drop: "", garment: body.size, kind: body.kind };
         im.notes = [im.notes, `Size and placement read from the customer's mockup${fix ? ` (adjusted from ${fix.n} earlier correction${fix.n === 1 ? "" : "s"})` : ""}${capped}`].filter(Boolean).join(". ").slice(0, 300);
       });
       const ms = (pg.mockup_files || []).map(fileAt).filter(Boolean);

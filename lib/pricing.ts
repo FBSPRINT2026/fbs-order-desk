@@ -90,6 +90,7 @@ export type Group = { id: string; name?: string; lines: GLine[]; imprints: Impri
   /** when mockups were last saved for this group (unlocks the imprints section) */ mockupAt?: string;
   /** staff chose to fill in imprints without making a mockup */ mockupSkipped?: boolean;
   /** photos-only pictures of the latest saved mockups (storage paths), shown as thumbnails on the order */ mockupThumbs?: string[];
+  /** the size the mockup is shown on (2T, 3T…), picked in the Mockup Creator; else the middle size of the run */ mockupSize?: string;
   /** mockups the customer supplied themselves (their own software, or saved from the portal builder): storage paths */
   customerMockups?: { path: string; name: string }[];
   /** the garments are polyester, nylon or dyed: specialty (low-bleed) ink, charged per location (contract pricing).

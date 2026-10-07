@@ -150,7 +150,10 @@ function fitSpot(s: Loc, b?: Body | null): Loc {
   const k = kOf(b);
   if (!k) return s;
   const maxW = half(s.maxW * k.gw), maxH = half(s.maxH * k.gl);
-  return { ...s, dx: s.dx ? s.dx * k.kw : s.dx, drop: s.drop != null ? s.drop * k.kl : s.drop, defW: Math.min(maxW, half(s.defW * k.gw)), maxW, maxH };
+  // the drop below the collar shrinks less than the shirt does: the neckline doesn't scale down with a toddler tee, so
+  // a straight scale (4" × 0.55 = 2.2" on a 3T) crowds the collar. Smaller garments use the square root (~3" on a 3T).
+  const dropK = k.kl < 1 ? Math.sqrt(k.kl) : k.kl;
+  return { ...s, dx: s.dx ? s.dx * k.kw : s.dx, drop: s.drop != null ? s.drop * dropK : s.drop, defW: Math.min(maxW, half(s.defW * k.gw)), maxW, maxH };
 }
 export const spotFor = (location: string, b?: Body | null): Loc => fitSpot(LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 12, maxH: 14 }, b);
 /** a print's size on this garment as the adult Large it would be (the location rules are in adult inches) */

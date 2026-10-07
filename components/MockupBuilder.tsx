@@ -22,7 +22,7 @@ import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
-import { bodyOf, smallestOrdered, REF_BODY, type Body } from "@/lib/garmentBody";
+import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
 import { planPrint, pxOfImage, type PrintPlan } from "@/lib/printPlan";
@@ -178,6 +178,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const autoWant = useRef<Record<string, { colors: number; inks: string }>>({});
   /** the sizes on the order (2T, 3T, 4T…): one screen prints them all, so prints are capped to the smallest */
   const [ordered, setOrdered] = useState<string[]>([]);
+  /** the size the mockup is shown on, picked from the sizes ordered (null = the middle size); saved with the mockup */
+  const [shownSize, setShownSize] = useState<string | null>(null);
   /** prints whose size the customer specified: changing it asks first ("Are you sure you want to override?") */
   const [sizeOk, setSizeOk] = useState<Record<string, boolean>>({});
   const [sizeAsk, setSizeAsk] = useState<{ id: string; was: string; go?: () => void } | null>(null);
@@ -253,6 +255,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setImprints(g.imprints.map((d) => ({ ...d })));
           autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
           setOrdered([...new Set(g.lines.flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)))]);
+          if (g.mockupSize) setShownSize(g.mockupSize);
           const cm = (g.customerMockups || []).slice(0, 4);
           if (cm.length) {
             const { data: su } = await sb.storage.from("proofs").createSignedUrls(cm.map((m) => m.path), 3600);
@@ -529,7 +532,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // The garment the mockup is shown on: its middle size (2T-5T → 3T, adult → Large) and that size's measurements
   // (supplier size chart, else typical). The photo scale and every print area follow it, so a toddler tee isn't sized
   // like an adult Gildan 5000.
-  const bodyFor = (l?: Line): Body => bodyOf(l ? garmentFor(l) : null);
+  const runSizes = sortSizes(ordered);
+  const bodyFor = (l?: Line): Body => { const g = l ? garmentFor(l) : null; return shownSize && runSizes.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g); };
   const body = bodyFor(lines[active] || lines[0]);
   const scaleOf = (b: Body) => REF_BODY.widthIn / b.widthIn;
   // a style without its size chart yet: ask S&S once (staff), so the body is measured, not typical
@@ -545,7 +549,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // picture stays on the middle size (a 3T)
   const capBody = smallestOrdered(shownG, ordered, body);
   const fitBody = (b: Body) => (capBody && capBody.widthIn < b.widthIn ? capBody : b);
-  const spotFor = (loc: string, b: Body = body) => spotFor0(loc, b);
+  // where a print sits follows the shown size; how big it can be follows the smallest size ordered
+  const spotFor = (loc: string, b: Body = body) => {
+    const s0 = spotFor0(loc, b), cb = fitBody(b);
+    if (cb === b) return s0;
+    const c = spotFor0(loc, cb);
+    return { ...s0, maxW: Math.min(s0.maxW, c.maxW), maxH: Math.min(s0.maxH, c.maxH), defW: Math.min(s0.defW, c.defW) };
+  };
   const maxWidthFor = (loc: string, r: number, b: Body = body) => maxWidthFor0(loc, r, fitBody(b));
   const printWidth = (size: string, loc: string, r: number, b: Body = body) => printWidth0(size, loc, r, fitBody(b));
   const sideMaxWidth = (loc: string, r: number, b: Body = body) => sideMaxWidth0(loc, r, fitBody(b));
@@ -957,6 +967,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       sb.from("ai_suggestions").upsert({ dedupe_key: `mockup-lesson:${order.id}:${im.id}`, kind: LESSON_KIND, source: "staff", status: "done", customer_id: order.customer_id || null, order_id: order.id, title: `${im.location} on ${ai.garment}: AI ${ai.size}${ai.drop ? `, ${ai.drop}" down` : ""} → ${im.size}${im.drop ? `, ${im.drop}" down` : ""}`.slice(0, 300), body: same ? "Kept as the AI read it" : "Changed by staff in the Mockup Creator", payload: lesson, decided_at: new Date().toISOString() }, { onConflict: "dedupe_key" }).then(() => {});
     }
     if (mockupSaved) g.mockupAt = new Date().toISOString();
+    g.mockupSize = shownSize && runSizes.includes(shownSize) ? shownSize : undefined;
     if (thumbs.length) g.mockupThumbs = thumbs;
     const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
     if (error) { setMsg("Couldn't update the order: " + error.message); return false; }
@@ -1092,6 +1103,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   // a mockup needs a customer (art and mockups save to their account) and at least one garment
   const ready = !!customerId && lines.some((l) => l.style.trim() && garmentFor(l));
+  // a size bigger than the smallest size ordered can take (a 9.5" front on a 2T-4T run) is brought down to the
+  // largest that fits, and the print says why (the note goes to the order with the mockup)
+  useEffect(() => {
+    if (!capBody || !ready) return;
+    const fixes: Record<string, { size: string; note: string }> = {};
+    for (const im of imprints) {
+      const d = designOf(im); if (!d || im.sizeFrom === "customer") continue; // the customer's own size: warned, not changed
+      const r = ratioOf(d) || 0, m = (im.size || "").match(/^([\d.]+)/); if (!m) continue;
+      const want = /tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1];
+      const cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4;
+      if (want > cap + 0.01) fixes[im.id] = { size: `${cap}" wide`, note: `${cap}" wide: the largest that fits the ${capBody.size}, the smallest size on this order (one screen prints every size). Was ${im.size}.` };
+    }
+    if (!Object.keys(fixes).length) return;
+    setImprints((xs) => xs.map((x) => (fixes[x.id] ? { ...x, size: fixes[x.id].size, notes: [(x.notes || "").replace(/\s*\d+(\.\d+)?" wide: the largest that fits[^.]*\.[^.]*\.( Was [^.]*\.?)?/g, ""), fixes[x.id].note].filter((z) => z.trim()).join(" ").slice(0, 300) } : x)));
+  }, [capBody?.size, ready, imprints.map((x) => `${x.id}:${x.size}:${x.design_id}`).join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
   // on a phone, opening a mockup asks about each print's size first: "Full Front: 9" wide · Keep / Change size"
   useEffect(() => {
     if (sizerShown.current || auto || portal || !ready || typeof window === "undefined") return;
@@ -1209,6 +1235,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       <div className={"mk mk-" + mode} ref={mkRef}>
         <div className="mk-stage-wrap">
           <div className={"mk-canvas" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
+          {runSizes.length > 1 && (
+            <div className="mk-sizes" role="group" aria-label="Show the mockup on">
+              <span className="faint">Show on</span>
+              {runSizes.map((z) => {
+                const on = (shownSize && runSizes.includes(shownSize) ? shownSize : body.size) === z;
+                return <button key={z} type="button" className={"chip" + (on ? " on" : "")} aria-pressed={on} title={on ? "The mockup and proof show this size" : `See the same print on a ${z}`} onClick={() => setShownSize(z)}>{z}</button>;
+              })}
+              <span className="faint mk-sizes-n">{capBody ? `Print sized for the ${capBody.size}` : "Same print size on every size"} · the size picked here is the mockup</span>
+            </div>
+          )}
           <div className="mk-views">
             {single && (
               <div className="chips mk-viewsw">
@@ -1499,6 +1535,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           );
                         })()}
                       </div>
+                      {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioOf(designOf(im)) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
+                      {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioOf(designOf(im)) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
                       <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
                     </div>
                   </div>

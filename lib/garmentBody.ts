@@ -20,6 +20,8 @@ const TYPICAL: Record<string, [number, number]> = {
 };
 const kindOf = (z: string): Body["kind"] => (/^(NB|\d+M)$/.test(z) ? "infant" : /^\dT$/.test(z) ? "toddler" : /^Y/.test(z) ? "youth" : "adult");
 const ORDER = Object.keys(TYPICAL);
+/** sizes in size order (NB … 5T, YXS … YXL, XS … 5XL); unknown ones dropped */
+export const sortSizes = (zs: string[]) => ORDER.filter((z) => zs.includes(z));
 
 /**
  * The size a garment is shown in: Large for adult runs, youth Large for youth runs, otherwise the middle of the run
