@@ -1,6 +1,7 @@
 "use client";
 import JobLabor from "@/components/team/JobLabor";
-import JobFiles from "@/components/job/JobFiles";
+import JobFiles, { addPhoto } from "@/components/job/JobFiles";
+import { STAMP_TAG, stampCustomerMockup, stampName } from "@/lib/mockupStamp";
 import { SITE_URL } from "@/lib/config";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -250,6 +251,37 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       patch((d) => d.groups.forEach((g, i) => { if (g.specialtyInkSet || !want[i]) return; g.specialtyInk = want[i].on || undefined; g.fabricNote = want[i].why || undefined; }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o, catalog]);
+
+  // a customer's own mockup goes in the job's Production files as a reference, stamped "CUSTOMER SUPPLIED MOCKUP"
+  // across it (we remake the mockup ourselves for the separations). Made once per file: the stamped file is named
+  // after the original's path.
+  const [filesBump, setFilesBump] = useState(0);
+  const stamping = useRef(new Set<string>());
+  const custMockKey = o ? `${o.id}|${o.groups.flatMap((g) => (g.customerMockups || []).map((m) => m.path)).join("|")}` : "";
+  useEffect(() => {
+    if (!o || !custMockKey.includes("|") || custMockKey.endsWith("|")) return;
+    const todo = o.groups.flatMap((g, gi) => (g.customerMockups || []).map((m) => ({ m, gi }))).filter(({ m }) => !stamping.current.has(m.path));
+    if (!todo.length) return;
+    todo.forEach(({ m }) => stamping.current.add(m.path));
+    const job = { kind: "o" as const, id: o.id }, many = o.groups.length > 1;
+    (async () => {
+      const lists = await Promise.all(["0", "1"].map((a) => fetch(`/api/jobs/files?kind=o&id=${o.id}&archived=${a}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ items: [] }))));
+      const have = new Set(lists.flatMap((j: { items?: { file_name: string }[] }) => (j.items || []).map((x) => x.file_name)));
+      let added = 0;
+      for (const { m, gi } of todo) {
+        const fname = stampName(m.path);
+        if (have.has(fname)) continue;
+        const { data: blob } = await sb.storage.from("proofs").download(m.path);
+        if (!blob) continue;
+        const f = await stampCustomerMockup(blob, m.name || m.path.split("/").pop() || "mockup").catch(() => null);
+        if (!f) continue;
+        const r = await addPhoto(job, new File([f], fname, { type: f.type }), `Customer supplied mockup: ${m.name || "mockup"}${many ? ` (group ${gi + 1})` : ""}. Reference only; make our own mockup in the Mockup Creator.`, STAMP_TAG);
+        if (r.ok) added++;
+      }
+      if (added) setFilesBump((n) => n + 1);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [custMockKey]);
 
   function patch(fn: (d: Order) => void) {
     setO((prev) => {
@@ -670,7 +702,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div className="field"><label htmlFor="o-notes">Customer notes (shown on quote/invoice)</label><textarea id="o-notes" rows={4} value={o.notes} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
               </div>
             </section>
-            <JobFiles job={{ kind: "o", id: o.id }} />
+            <JobFiles job={{ kind: "o", id: o.id }} bump={filesBump} />
           </div>
         </div>
 

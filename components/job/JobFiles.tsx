@@ -49,8 +49,9 @@ export async function addPhoto(job: { kind: "o" | "a"; id: string }, file: File,
 }
 
 /** The panel on the shop's job page: notes and photos, add either, archive (nothing is deleted). */
-export default function JobFiles({ job, staff = true }: { job: { kind: "o" | "a"; id: string }; staff?: boolean }) {
+export default function JobFiles({ job, staff = true, bump = 0 }: { job: { kind: "o" | "a"; id: string }; staff?: boolean; /** change it to reload (a file was added elsewhere) */ bump?: number }) {
   const { items, err, load } = useJobFiles(job);
+  useEffect(() => { if (bump) load(); }, [bump]); // eslint-disable-line react-hooks/exhaustive-deps
   const [note, setNote] = useState(""), [tag, setTag] = useState("General"), [busy, setBusy] = useState(""), [msg, setMsg] = useState("");
   const [big, setBig] = useState<JobFile | null>(null);
   const file = useRef<HTMLInputElement>(null);
