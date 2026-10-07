@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
 import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, uploadDesign } from "@/lib/designs";
@@ -73,6 +74,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Inbox → Create order: build and save this group's mockup by itself (the art at the size and place the AI read from
    *  the customer's mockup, one-color prints in their ink), then go on to the next group, then the order */
   const auto = sp.get("auto") === "1";
+  /** opened from an email (Inbox → Edit details): carried on to the order, which offers "Save & back to email" */
+  const fromEmail = sp.get("email") || "";
   const sb = useMemo(() => createClient(), []);
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -924,6 +927,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // write the size the mockup actually shows, even if it was never typed (e.g. the 3.5" left chest default)
     const sized = imprints.map((im) => { if (im.size.trim()) return im; const p = place(im); return p.d ? { ...im, size: `${Math.round(p.wIn * 100) / 100}" wide` } : im; });
     g.imprints = sized.map((im) => ({ ...(g.imprints.find((x) => x.id === im.id) || {}), ...im }));
+    // the AI read this print's size / drop off the customer's mockup: what staff saved teaches it (not in auto mode,
+    // where nobody has looked yet)
+    if (!auto) for (const im of g.imprints) {
+      const ai = im.aiPlace; if (!ai) continue;
+      const aw = widthOf(ai.size), sw = widthOf(im.size);
+      if (!aw || !sw) continue;
+      const lesson: MockupLesson = { location: im.location, garment: ai.garment, kind: ai.kind, ai_w: aw, staff_w: sw, ai_drop: ai.drop ? +ai.drop : null, staff_drop: im.drop && !isNaN(+im.drop) ? +im.drop : null, customer_id: order.customer_id || null };
+      const same = Math.abs(aw - sw) < 0.13 && (lesson.ai_drop ?? -1) === (lesson.staff_drop ?? -1);
+      sb.from("ai_suggestions").upsert({ dedupe_key: `mockup-lesson:${order.id}:${im.id}`, kind: LESSON_KIND, source: "staff", status: "done", customer_id: order.customer_id || null, order_id: order.id, title: `${im.location} on ${ai.garment}: AI ${ai.size}${ai.drop ? `, ${ai.drop}" down` : ""} → ${im.size}${im.drop ? `, ${im.drop}" down` : ""}`.slice(0, 300), body: same ? "Kept as the AI read it" : "Changed by staff in the Mockup Creator", payload: lesson, decided_at: new Date().toISOString() }, { onConflict: "dedupe_key" }).then(() => {});
+    }
     if (mockupSaved) g.mockupAt = new Date().toISOString();
     if (thumbs.length) g.mockupThumbs = thumbs;
     const { error } = await sb.from("orders").update({ groups }).eq("id", order.id);
@@ -1089,7 +1102,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const gs = orderGroups(o), at = gs.findIndex((x) => x.id === groupId);
       const next = gs.slice(at + 1).find((x) => x.imprints.some((d) => d.design_id) && !x.mockupAt);
       setMsg(next ? "Saved. On to the next group…" : "Saved. Opening the order…");
-      setTimeout(() => location.assign(next ? `/shop/artwork/mockup?order=${o.id}&group=${next.id}&auto=1` : `/shop/orders/${o.id}`), 900);
+      setTimeout(() => location.assign(next ? `/shop/artwork/mockup?order=${o.id}&group=${next.id}&auto=1${fromEmail ? `&email=${fromEmail}` : ""}` : `/shop/orders/${o.id}${fromEmail ? `?email=${fromEmail}` : ""}`), 900);
     }, 1800);
   }, [auto, order, ready, saving, imprints, paints, designs, urls]); // eslint-disable-line react-hooks/exhaustive-deps
   const notReady = !customerId ? "Pick a customer first — their designs and mockups live on their account." : "Pick at least one garment to put the art on."

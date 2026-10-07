@@ -7,6 +7,8 @@ import { refetchAttachments } from "@/lib/mail/imap";
 import { officeText } from "@/lib/officeText";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
 import { LOCATIONS, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
+import { bodyOf } from "@/lib/garmentBody";
+import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
 import { isPicture, looksLikeSignature, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
 
 /**
@@ -248,7 +250,7 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 2. Say what every attached file is: art (the print file), mockup (the design shown on a garment), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files).
 3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color.
 4. Prints: one per location. Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it, using our names: ${LOCATIONS.join(", ")}. Give size only if it's stated in words.
-4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front (big) or Center Chest (under about 5" tall and wide on adult). Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Give width_in to the nearest quarter inch, and drop_in (collar seam to the top of the print, scaled the same way: a toddler full front usually sits 1.5" to 2.5" down, an adult one about 3"). Never invent these without a mockup.
+4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front (big) or Center Chest (under about 5" tall and wide on adult). Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Measure the inked art only (from its leftmost to rightmost ink), not empty space around it, and judge the chest width at the armpits, not the sleeves. Give width_in to the nearest quarter inch, and drop_in (collar seam to the top of the print, scaled the same way: a toddler full front usually sits 1.5" to 2.5" down, an adult one about 3"). Never invent these without a mockup.
 5. Garments that share the same prints are one group, with the mockup files for them.
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
 7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
@@ -306,17 +308,25 @@ ${String(a.body || "").slice(0, 12000)}
     const extra = proposalToGroups({ groups: (p.groups || []).map((g) => ({ ...g, prints: [], garments: (g.garments || []).filter((x) => !x.reorder_line) })) }).flatMap((g) => g.lines).filter((l) => Object.keys(l.sizes).length);
     if (extra.length && groups[0]) groups[0].lines.push(...extra);
   } else {
+    // what staff changed on earlier mockups the AI measured: scale this reading the same way
+    const { data: ls } = await admin.from("ai_suggestions").select("payload").eq("kind", LESSON_KIND).order("updated_at", { ascending: false }).limit(80);
+    const lessons = (ls || []).map((x) => x.payload as MockupLesson).filter(Boolean);
     for (const pg of p.groups || []) {
       const [g] = proposalToGroups({ groups: [pg] });
       if (!g) continue;
+      const body = bodyOf({ sizes: [...new Set(g.lines.flatMap((l) => Object.keys(l.sizes || {})))] });
       (pg.prints || []).slice(0, 10).forEach((pr, k) => {
         const im = g.imprints[k]; if (!im) return;
         const f = fileAt(pr.art_file); if (f) art[im.id] = f;
         // where and how big the customer's mockup shows it, so our Mockup Creator rebuilds the same picture
-        const w = +(pr.width_in || 0), dr = +(pr.drop_in ?? -1);
-        if (!im.size && w >= 1 && w <= 16) im.size = `${Math.round(w * 4) / 4}" wide`;
+        let w = +(pr.width_in || 0), dr = +(pr.drop_in ?? -1);
+        if (!(w || dr >= 0) || im.size) return;
+        const fix = w ? correction(lessons, im.location, body.kind, (a.customer_id as string) || null) : null;
+        if (fix) { w *= fix.factor; if (dr >= 0) dr = Math.max(0, dr + fix.dropAdd); }
+        if (w >= 1 && w <= 16) im.size = `${Math.round(w * 4) / 4}" wide`;
         if (!im.drop && dr >= 0 && dr <= 10 && /front|back|chest/i.test(im.location)) im.drop = String(Math.round(dr * 4) / 4);
-        if (w || dr >= 0) im.notes = [im.notes, "Size and placement read from the customer's mockup"].filter(Boolean).join(". ").slice(0, 300);
+        im.aiPlace = { size: im.size, drop: im.drop || "", garment: body.size, kind: body.kind };
+        im.notes = [im.notes, `Size and placement read from the customer's mockup${fix ? ` (adjusted from ${fix.n} earlier correction${fix.n === 1 ? "" : "s"})` : ""}`].filter(Boolean).join(". ").slice(0, 300);
       });
       const ms = (pg.mockup_files || []).map(fileAt).filter(Boolean);
       if (ms.length) mockups[g.id] = [...new Set(ms)];

@@ -256,6 +256,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // across it (we remake the mockup ourselves for the separations). Made once per file: the stamped file is named
   // after the original's path.
   const [filesBump, setFilesBump] = useState(0);
+  // opened from an email (Inbox → Edit details): a way back to it once the order is checked
+  const [fromEmail, setFromEmail] = useState("");
+  useEffect(() => { setFromEmail(new URLSearchParams(window.location.search).get("email") || ""); }, []);
   const stamping = useRef(new Set<string>());
   const custMockKey = o ? `${o.id}|${o.groups.flatMap((g) => (g.customerMockups || []).map((m) => m.path)).join("|")}` : "";
   useEffect(() => {
@@ -481,6 +484,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   return (
     <>
       <Link className="back" href="/shop/orders">← Orders</Link>
+      {fromEmail && <div className="from-email">
+        <span>Made from the customer&apos;s email. Check the order and the mockup, then go back to answer the email.</span>
+        <button type="button" className="btn primary sm" onClick={async () => { await save(); router.push(`/shop/inbox?open=${fromEmail}`); }}>Save &amp; back to email</button>
+      </div>}
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
           <div className="eyebrow">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>

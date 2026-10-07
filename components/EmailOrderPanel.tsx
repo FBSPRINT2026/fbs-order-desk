@@ -71,10 +71,11 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
    * files), then the customer's mockup stamped "CUSTOMER SUPPLIED MOCKUP" into Production files, then our own mockup
    * built in the Mockup Creator (auto), which opens the order when it's saved.
    */
-  async function create() {
+  async function create(mode: "new" | "edit" = "new") {
     if (!d) return;
-    // a tab opened now (while it's still a click) so the browser doesn't block it later
-    const w = window.open("", "_blank");
+    // Create order: a tab opened now (while it's still a click) so the browser doesn't block it later.
+    // Edit details: the same order, opened here in the full order screen, with "Save & back to email".
+    const w = mode === "new" ? window.open("", "_blank") : null;
     setBusy("create"); setErr(""); setStep("Creating the order…");
     const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
@@ -88,6 +89,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
       const first = gs.find((g) => g.imprints.some((x) => x.design_id));
       if (first) url = `/shop/artwork/mockup?order=${j.id}&group=${first.id}&auto=1`;
     } catch { /* the order page stamps them when it opens */ }
+    if (mode === "edit") { setStep("Opening the order…"); location.assign(`${url}${url.includes("?") ? "&" : "?"}email=${activityId}`); return; }
     setBusy(""); setStep("");
     if (w) w.location.href = url; else window.open(url, "_blank");
     onCreated(j.id, j.number, true);
@@ -120,9 +122,10 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
           <span className="spacer" />
           {step && <span className="faint">{step}</span>}
           <label>Save as<select value={status} onChange={(e) => setStatus(e.target.value as "quote" | "approved")}><option value="quote">Quote (price it, send for approval)</option><option value="approved">Approved order</option></select></label>
-          <button type="button" className="btn" disabled={!!busy} onClick={() => setEditing(true)}>Edit details</button>
-          <button type="button" className="btn primary" disabled={!!busy || !total || !data.customer} onClick={create}>{busy === "create" ? "Creating…" : "Create order"}</button>
+          <button type="button" className="btn" disabled={!!busy || !total || !data.customer} title="Make the order and open it in the full order screen to change anything; Save & back to email brings you back here" onClick={() => create("edit")}>Edit details</button>
+          <button type="button" className="btn primary" disabled={!!busy || !total || !data.customer} onClick={() => create()}>{busy === "create" ? "Creating…" : "Create order"}</button>
         </div>
+        <div className="eo-quick"><button type="button" className="eo-link" disabled={!!busy} onClick={() => setEditing(true)}>Fix what the AI read before creating (files, sizes, prints)</button></div>
         {!data.customer && <div className="warn">Make the sender a customer first (the yellow box above), then create the order.</div>}
       </>}
       {d && editing && <>
@@ -250,8 +253,8 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
           <span className="spacer" />
           <label>Save as<select value={status} onChange={(e) => setStatus(e.target.value as "quote" | "approved")}><option value="quote">Quote (price it, send for approval)</option><option value="approved">Approved order</option></select></label>
           {step && <span className="faint">{step}</span>}
-          <button type="button" className="btn" disabled={!!busy} onClick={() => setEditing(false)}>Done editing</button>
-          <button type="button" className="btn primary" disabled={!!busy || !total || !data.customer} onClick={create}>{busy === "create" ? "Creating…" : "Create order"}</button>
+          <button type="button" className="btn" disabled={!!busy} onClick={() => setEditing(false)}>Back to summary</button>
+          <button type="button" className="btn primary" disabled={!!busy || !total || !data.customer} onClick={() => create()}>{busy === "create" ? "Creating…" : "Create order"}</button>
         </div>
         {!data.customer && <div className="warn">Make the sender a customer first (the yellow box above), then create the order.</div>}
       </>}
