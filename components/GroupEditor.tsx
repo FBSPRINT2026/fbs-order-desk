@@ -1,5 +1,5 @@
 "use client";
-import { isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { inkNames, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { smallerSpot } from "@/lib/mockup";
 import DesignSearch from "@/components/DesignSearch";
@@ -113,7 +113,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
   const wpl = settings.wholesale;
   const scrImps = gc.wholesale ? g.imprints.filter((d) => d.method === "screen" && d.colors < FULL_COLOR) : [];
   const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, wpl));
-  const scrFee = g.remake && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
+  const num0 = (v: unknown) => (isNaN(+(v as number)) ? 0 : +(v as number));
   const embImps = gc.wholesale ? g.imprints.filter((d) => d.method === "embroidery") : [];
   const inkRate = wpl.specialtyInk?.length ? wpl.specialtyInk[Math.min(gc.ti, wpl.specialtyInk.length - 1)] : 0;
   const setPms = (di: number, name: string, v: boolean | undefined) => update((x) => { const m = { ...(x.imprints[di].pmsCharge || {}) }; if (v == null) delete m[name.toLowerCase()]; else m[name.toLowerCase()] = v; x.imprints[di].pmsCharge = Object.keys(m).length ? m : undefined; });
@@ -298,52 +298,49 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
             {(scrImps.length > 0 || embImps.length > 0) && (
               <div className="sbx">
                 {scrImps.length > 0 && <div className="sbx-sec">
-                  <div className="sbx-h"><span>Screens</span>{wpl.remakeFee != null && <label className="check" title="The screens are on file from an earlier order"><input type="checkbox" checked={!!g.remake} onChange={(e) => update((x) => { x.remake = e.target.checked || undefined; })} />Remake {money(wpl.remakeFee)}</label>}</div>
+                  <div className="sbx-h"><span>Screens</span></div>
                   {scrImps.map((d) => {
-                    const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight);
+                    const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake);
+                    const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
                     return (
                       <div key={d.id} className="sbx-r">
                         <span className="sbx-loc">{d.location || "Print"}</span>
-                        {allLight ? <span className="faint">no underbase</span> : <span>
-                          <label className="check" title={d.underbase == null ? (sc.under ? "Automatic: a light ink needs one" : "Automatic: dark inks print without one") : "Set by hand"}><input type="checkbox" checked={sc.under} onChange={(e) => update((x) => { x.imprints[di].underbase = e.target.checked; x.imprints[di].screens = undefined; })} />Underbase</label>
-                          {d.underbase != null && <button type="button" className="linkbtn" onClick={() => update((x) => { x.imprints[di].underbase = undefined; })}>auto</button>}
+                        {allLight ? <span className="faint">no underbase</span> : <span className={"sbx-ub" + (d.underbase == null ? " auto" : "")}>
+                          <label className="check" title={d.underbase == null ? (sc.under ? "Automatic: a light ink needs one. Click to override." : "Automatic: dark inks print without one. Click to override.") : "Set by hand"}><input type="checkbox" checked={sc.under} onChange={(e) => update((x) => { x.imprints[di].underbase = e.target.checked; x.imprints[di].screens = undefined; })} />Underbase</label>
+                          {d.underbase != null && <span className="sbx-ovr">override <button type="button" aria-label="Back to automatic" title="Back to automatic" onClick={() => update((x) => { x.imprints[di].underbase = undefined; })}>×</button></span>}
                         </span>}
-                        <span className="sbx-n">{d.screens != null
-                          ? <><input type="number" min={1} max={15} aria-label="Screens" value={d.screens} onChange={(e) => update((x) => { x.imprints[di].screens = Math.max(1, Math.min(15, Math.round(+e.target.value) || 1)); })} /><button type="button" className="linkbtn" onClick={() => update((x) => { x.imprints[di].screens = undefined; })}>auto</button></>
-                          : <button type="button" className="linkbtn sbx-cnt" title="Change the number of screens" onClick={() => update((x) => { x.imprints[di].screens = sc.auto; })}>{sc.n} screen{sc.n === 1 ? "" : "s"}</button>}</span>
-                        {!hidePrices && <b className="num">{money(sc.n * (+scrFee || 0))}</b>}
+                        {!hidePrices && <b className="num">{money(sc.n * (+fee || 0))}</b>}
+                        {wpl.remakeFee != null && <label className="check sbx-end" title="The screens are on file from an earlier order"><input type="checkbox" checked={rm} onChange={(e) => update((x) => { x.imprints[di].remake = e.target.checked; })} />Remake {money(wpl.remakeFee)}</label>}
                       </div>
                     );
                   })}
                 </div>}
-                {scrImps.length > 0 && <div className="sbx-sec">
+                {scrImps.some((d) => pmsInks(d).some((x) => x.auto) || (!inkNames(d.inks).length && wpl.pmsFee)) || g.specialtyInk || g.specialtyInkSet ? <div className="sbx-sec">
                   <div className="sbx-h"><span>Inks</span></div>
-                  {scrImps.map((d) => {
-                    const di = g.imprints.indexOf(d), list = pmsInks(d);
-                    if (!list.length) return wpl.pmsFee ? (
-                      <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Print"}</span><span className="faint">inks not named</span>
-                        <label className="sbx-n">PMS matches <input type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /></label>
-                      </div>) : null;
-                    return (
-                      <div key={d.id} className="sbx-r">
-                        <span className="sbx-loc">{d.location || "Print"}</span>
-                        <span className="sbx-inks">{list.map((x) => (
-                          <span key={x.name} className={"sbx-ink" + (x.charge ? " pms" : "")}>
-                            <button type="button" className="sbx-ink-b" title={x.charge ? "PMS match: click for standard, no charge" : "Click to charge a PMS match"} onClick={() => setPms(di, x.name, x.auto === !x.charge ? undefined : !x.charge)}>
-                              {x.name}{x.charge ? !hidePrices && wpl.pmsFee ? ` · PMS match ${money(wpl.pmsFee)}` : " · PMS match" : x.auto || x.set ? " · standard, no charge" : ""}
-                            </button>
-                          </span>
-                        ))}</span>
+                  {scrImps.flatMap((d) => {
+                    const di = g.imprints.indexOf(d);
+                    if (!inkNames(d.inks).length) return wpl.pmsFee ? [
+                      <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Print"}</span><span className="faint">PMS matches</span>
+                        <input className="sbx-num" type="number" min={0} max={12} aria-label="Inks matched to a PMS" value={d.pms ?? ""} placeholder="0" onChange={(e) => update((x) => { x.imprints[di].pms = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} />
+                        {!hidePrices && <b className="num">{money(num0(d.pms) * (+(wpl.pmsFee || 0)))}</b>}
+                      </div>] : [];
+                    return pmsInks(d).filter((x) => x.auto).map((x) => (
+                      <div key={d.id + x.name} className="sbx-r">
+                        <span className="sbx-loc">{x.name}</span><span className="faint">PMS match</span>
+                        {!hidePrices && <b className={"num" + (x.charge ? "" : " sbx-off")}>{money(x.charge ? +(wpl.pmsFee || 0) : 0)}</b>}
+                        <label className="check sbx-end" title="The customer's regular ink: no matching charge"><input type="checkbox" checked={!x.charge} onChange={(e) => setPms(di, x.name, e.target.checked ? false : undefined)} />Standard, no charge</label>
                       </div>
-                    );
+                    ));
                   })}
                   {(g.specialtyInk || g.specialtyInkSet) && inkRate ? (
                     <div className="sbx-r">
-                      <label className="check"><input type="checkbox" checked={!!g.specialtyInk} onChange={(e) => update((x) => { x.specialtyInk = e.target.checked || undefined; x.specialtyInkSet = true; })} />Polyester / dyed garment{!hidePrices && <span className="faint"> · specialty ink {money(inkRate)}/pc per location</span>}</label>
-                      {g.specialtyInkSet ? <button type="button" className="linkbtn" onClick={() => update((x) => { x.specialtyInkSet = undefined; })}>auto</button> : g.fabricNote ? <span className="faint">({g.fabricNote})</span> : null}
+                      <span className="sbx-loc">Poly / dyed</span>
+                      <span className="faint" title={g.fabricNote || ""}>{g.specialtyInkSet ? "set by hand" : g.fabricNote || "specialty ink"}</span>
+                      {!hidePrices && <b className={"num" + (g.specialtyInk ? "" : " sbx-off")}>{money(g.specialtyInk ? inkRate : 0)}/pc</b>}
+                      <label className="check sbx-end"><input type="checkbox" checked={!g.specialtyInk} onChange={(e) => update((x) => { x.specialtyInk = !e.target.checked || undefined; x.specialtyInkSet = e.target.checked || undefined; })} />No charge</label>
                     </div>
                   ) : null}
-                </div>}
+                </div> : null}
                 {embImps.length > 0 && <div className="sbx-sec">
                   <div className="sbx-h"><span>Digitizing</span></div>
                   {embImps.map((d) => (

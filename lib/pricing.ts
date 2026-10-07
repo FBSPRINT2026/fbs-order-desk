@@ -60,7 +60,8 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   /** PMS charge per ink set by hand (lowercase ink name → charge or not): "standard, no charge" for a customer's
    *  regular PMS 186, or a match on an ink that isn't named as a PMS */ pmsCharge?: Record<string, boolean>;
   /** underbase on a dark garment: set by hand (true / false); not set = decided from the inks (black, navy, dark reds don't need one) */ underbase?: boolean;
-  /** screens set by hand (else colors + underbase) */ screens?: number; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string; /** staff confirmed a small print really goes on this big location */ keepLocation?: boolean; };
+  /** screens set by hand (else colors + underbase) */ screens?: number;
+  /** this print's screens are on file from an earlier order: remake price per screen (else group.remake) */ remake?: boolean; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string; /** staff confirmed a small print really goes on this big location */ keepLocation?: boolean; };
 /** A piece of customer art, saved under their account and reused across orders. */
 export type Design = { id: string; number: number; customer_id: string | null; name: string; file_path: string; file_name: string; file_type: string; preview_path: string; width_px: number | null; height_px: number | null; starred?: boolean; archived_at?: string | null; /** made in the shirt designer: where its editable layers are saved */ designer?: { file: string } | null; /** how it prints (lib/printPlan.ts PrintPlan), shared by the Mockup Creator and separations */ print_plan?: unknown;
   /** where the art really sits in the file once its background is removed / empty margins cut (original pixels) */ art_box?: { x: number; y: number; w: number; h: number; of: { w: number; h: number } } | null; method: string; colors: number; inks: string; notes: string; created_by: string; created_at: string };
@@ -438,7 +439,7 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
     const row = (light && s.screenLight ? s.screenLight : s.screen)[ti] || [];
     const n = Math.min(row.length || 6, k);
     const dtg = s.dtg ? num((dtgLight && s.dtgLight ? s.dtgLight : s.dtg)[ti]) : 0;
-    const fee = x.remake && s.remakeFee != null ? s.remakeFee : s.screenFee;
+    const fee = (d.remake ?? x.remake) && s.remakeFee != null ? s.remakeFee : s.screenFee;
     return { each: num(row[n - 1]), setup: Math.min(sc.n, 15) * num(fee), inkFee, dtg, full: false, under, screens: sc.n, custom: k > (row.length || 99) };
   }
   if (d.method === "embroidery") {
