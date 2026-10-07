@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { fmtDate } from "@/lib/format";
-import { ARCHIVE_DAYS, ART_ACCEPT, ART_KINDS, SEP_STATUS, sepStage, artProblem, readVector, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
+import { ARCHIVE_DAYS, ART_ACCEPT, ART_KINDS, SEP_STATUS, sepStage, prepareSepArt, readVector, uploadSepArt, type SepRow } from "@/components/SeparationStudio";
 import { vartSvg } from "@/lib/epsVector";
 import CustomerPick from "@/components/CustomerPick";
 
@@ -114,9 +114,12 @@ function NewFromArt() {
   const [widthIn, setWidthIn] = useState(11), [dims, setDims] = useState<{ w: number; h: number; vector: boolean } | null>(null);
   const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   useEffect(() => () => { if (thumb) URL.revokeObjectURL(thumb); }, [thumb]);
-  async function pickFile(f?: File) {
-    if (!f) return;
-    const bad = await artProblem(f); if (bad) { setErr(bad); return; }
+  const [orig, setOrig] = useState<File | null>(null), [note, setNote] = useState("");
+  async function pickFile(f0?: File) {
+    if (!f0) return;
+    const prep = await prepareSepArt(f0); if ("error" in prep) { setErr(prep.error); return; }
+    // an .ai / PDF with text, strokes or gradients comes back as a high-resolution picture (the original is kept)
+    const f = prep.file; setOrig(prep.original || null); setNote(prep.note);
     const v = await readVector(f, f.name, f.type);
     const url = URL.createObjectURL(v ? new Blob([vartSvg(v)], { type: "image/svg+xml" }) : f);
     setErr(""); setFile(f); setThumb(url); setName(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().slice(0, 60));
@@ -131,7 +134,8 @@ function NewFromArt() {
     if (ins.error) { setErr(ins.error.message); setBusy(false); return; }
     const row = ins.data as SepRow;
     try {
-      const art = await uploadSepArt(sb, row.id, file);
+      const art = await uploadSepArt(sb, row.id, file, orig || undefined);
+      if (note) art.note = note;
       const r = await sb.from("separations").update({ settings: { art, widthIn }, updated_at: new Date().toISOString() }).eq("id", row.id);
       if (r.error) throw new Error(r.error.message);
       router.push(`/shop/separations/${row.id}`);
@@ -175,6 +179,7 @@ function NewFromArt() {
         </div>
       )}
       {err && <div className="pv-err">{err}</div>}
+      {note && !err && <div className="sep-art-note">{note}</div>}
     </section>
   );
 }

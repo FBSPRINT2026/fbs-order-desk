@@ -18,6 +18,7 @@ import { findBackdrop, fitToShapes, withoutBackdrop } from "@/lib/vectorBg";
 import CustomerPick from "@/components/CustomerPick";
 import { adjustInks, colorWord, dropInk, fadesOf, inkName, planFor, planPrint, shown, withMiddle, type PrintPlan } from "@/lib/printPlan";
 import { browserInflate, parsePdf } from "@/lib/pdfVector";
+import { makePreview } from "@/lib/artPrep";
 import { deltaE } from "@/lib/inkColors";
 import { layoutCounts, mergeProduction, withIssue, type EquipRow, type Machine, type Station } from "@/lib/production";
 import PressLayout from "@/components/PressLayout";
@@ -225,7 +226,7 @@ function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false, side
   return { w, h, data };
 }
 /** art uploaded straight to a separation (no order): kept in its folder, remembered in settings.art */
-export type SepArt = { path: string; name: string; type: string; preview?: string };
+export type SepArt = { path: string; name: string; type: string; preview?: string; /** the .ai / PDF this picture was drawn from */ original?: { path: string; name: string }; /** why it's separated as a picture */ note?: string };
 export const ART_ACCEPT = ".png,.jpg,.jpeg,.webp,.svg,.eps,.ai,.pdf,image/png,image/jpeg,image/webp,image/svg+xml,application/postscript,application/pdf,application/illustrator";
 export const ART_KINDS = "PNG, JPG, WebP, SVG, Illustrator (.ai), PDF or EPS";
 const isEps = (name: string, type = "") => /\.eps$/i.test(name) || (/postscript/i.test(type) && !/\.ai$/i.test(name));
@@ -248,12 +249,31 @@ export async function artProblem(f: File): Promise<string | null> {
   const kind = isEps(f.name, f.type) ? "EPS" : /\.ai$/i.test(f.name) ? "Illustrator file" : "PDF";
   return `This ${kind} ${v.why}. Fix that in Illustrator, or save it as PNG (at the print size) to separate it as a picture.`;
 }
-export async function uploadSepArt(sb: ReturnType<typeof createClient>, id: string, f: File): Promise<SepArt> {
+/**
+ * Get uploaded art ready to separate. Vector art that's all filled shapes (EPS, .ai, PDF) is read as shapes. An .ai or
+ * PDF with live text, strokes, gradients or placed pictures is drawn from the file at high resolution (up to 5,000 px)
+ * and separated as a picture, with a note why; the original is kept with it. Only files that can't be opened at all
+ * (an old PostScript-style .ai, or an EPS that isn't flat shapes) are refused.
+ */
+export async function prepareSepArt(f: File): Promise<{ file: File; original?: File; note: string } | { error: string }> {
+  if (!artOk(f)) return { error: `Use a ${ART_KINDS}.` };
+  const v = await readVector(f, f.name, f.type);
+  if (!v || v.ok) return { file: f, note: "" };
+  const kind = isEps(f.name, f.type) ? "EPS" : /\.ai$/i.test(f.name) ? "Illustrator file" : "PDF";
+  if (isPdf(f.name, f.type) && !/PostScript|isn't a PDF/i.test(v.why || "")) {
+    const png = await makePreview(new File([f], f.name, { type: f.type || "application/pdf" }), 5000).catch(() => null);
+    if (png) return { file: new File([png], f.name.replace(/\.[^.]+$/, "") + ".png", { type: "image/png" }), original: f, note: `This ${kind} ${v.why}, so it's separated as a picture drawn from the file at high resolution. For crisp vector films, fix that in Illustrator and upload it again.` };
+  }
+  return { error: `This ${kind} ${v.why}. Fix that in Illustrator, or save it as PNG (at the print size) to separate it as a picture.` };
+}
+export async function uploadSepArt(sb: ReturnType<typeof createClient>, id: string, f: File, original?: File): Promise<SepArt> {
   const stamp = Date.now(), path = `separations/${id}/art-${stamp}-${f.name.replace(/[^\w.-]+/g, "_")}`;
   const type = f.type || (/\.svg$/i.test(f.name) ? "image/svg+xml" : isEps(f.name) ? "application/postscript" : isPdf(f.name) ? "application/pdf" : "application/octet-stream");
   const r = await sb.storage.from("proofs").upload(path, f, { upsert: true, contentType: type });
   if (r.error) throw new Error(r.error.message);
   const art: SepArt = { path, name: f.name, type };
+  // an .ai / PDF separated as a picture: the original file is kept beside it
+  if (original) { const op = `separations/${id}/orig-${stamp}-${original.name.replace(/[^\w.-]+/g, "_")}`; const u = await sb.storage.from("proofs").upload(op, original, { upsert: true, contentType: original.type || "application/pdf" }); if (!u.error) art.original = { path: op, name: original.name }; }
   {
     // vector files (EPS, .ai, PDF): a picture of it for the list (the Studio reads the file itself)
     const v = await readVector(f, f.name, f.type);
@@ -404,8 +424,12 @@ export default function SeparationStudio({ id }: { id: string }) {
       setOrigUrl(su?.signedUrl || "");
       const v = ev ? await readVector(ev, des.file_name || des.file_path, des.file_type || "") : null;
       if (v?.ok) { fromShapes.current = true; setVart(v); return; } // (the picture of it is drawn from the shapes, below)
+      if (v) setVart(v); // shows why, and a picture of it is separated instead
+      // .ai / PDF that isn't flat shapes: drawn from the file itself at high resolution (sharper than the saved preview)
+      const drawn = ev && isPdf(des.file_name || des.file_path, des.file_type || "") && !/PostScript|isn't a PDF/i.test(v?.why || "")
+        ? await makePreview(new File([ev], des.file_name || "art.ai", { type: des.file_type || "application/pdf" }), 5000).catch(() => null) : null;
+      if (drawn) { setArtUrl(URL.createObjectURL(drawn)); return; }
       if (!des.preview_path) { setErr(`This art file ${v?.why || "couldn't be read"}. Fix that in Illustrator, or upload a PNG at the print size.`); setHasArt(false); return; }
-      if (v) setVart(v); // shows why, and the preview picture is separated instead
       const { data: pb } = await sb.storage.from("proofs").download(des.preview_path);
       if (pb) setArtUrl(URL.createObjectURL(pb));
       return;
@@ -828,10 +852,11 @@ export default function SeparationStudio({ id }: { id: string }) {
   /** uploaded art: swap in a new file (the inks are found again) */
   async function replaceArt(f?: File) {
     if (!row || !f) return;
-    const bad = await artProblem(f); if (bad) { setErr(bad); return; }
+    const prep = await prepareSepArt(f); if ("error" in prep) { setErr(prep.error); return; }
     setBusy("Uploading…"); setErr("");
     try {
-      const art = await uploadSepArt(sb, row.id, f);
+      const art = await uploadSepArt(sb, row.id, prep.file, prep.original);
+      if (prep.note) art.note = prep.note;
       const { inks: _i, order: _o, names: _n, mesh: _m, ...keep } = row.settings as Record<string, unknown>; void _i; void _o; void _n; void _m;
       const r = await sb.from("separations").update({ settings: { ...keep, art }, updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
       if (r.error) throw new Error(r.error.message);
@@ -1042,6 +1067,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       </div>
       {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
       {err && <div className="pv-err">{err}</div>}
+      {!!(row?.settings as { art?: SepArt } | undefined)?.art?.note && <div className="sep-art-note">{(row!.settings as { art: SepArt }).art.note}{(row!.settings as { art: SepArt }).art.original ? ` (Original kept: ${(row!.settings as { art: SepArt }).art.original!.name}.)` : ""}</div>}
       <div className="sep-topbar">
       {siblings.length > 1 && (
         <nav className="sep-locs" aria-label="Print locations on this order">
@@ -1410,10 +1436,11 @@ function AddArt({ row, onDone }: { row: SepRow; onDone: (r: SepRow) => void }) {
   const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [over, setOver] = useState(false);
   async function go(f?: File) {
     if (!f) return;
-    const bad = await artProblem(f); if (bad) { setErr(bad); return; }
+    const prep = await prepareSepArt(f); if ("error" in prep) { setErr(prep.error); return; }
     setBusy(true); setErr("");
     try {
-      const art = await uploadSepArt(sb, row.id, f);
+      const art = await uploadSepArt(sb, row.id, prep.file, prep.original);
+      if (prep.note) art.note = prep.note;
       const r = await sb.from("separations").update({ settings: { ...row.settings, art }, updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
       if (r.error) throw new Error(r.error.message);
       onDone(r.data as SepRow);

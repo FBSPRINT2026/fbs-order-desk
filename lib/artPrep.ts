@@ -186,7 +186,7 @@ const canvasToFile = (c: HTMLCanvasElement, name: string) => new Promise<File | 
  * HEIC/HEIF (iPhone photos), PDF and AI (first page), TIFF/BMP where the browser can decode them.
  * Returns null when no preview can be made (e.g. EPS, PSD) — staff can add a preview image by hand.
  */
-export async function makePreview(file: File): Promise<File | null> {
+export async function makePreview(file: File, maxPx = 2400): Promise<File | null> {
   const base = file.name.replace(/\.[^.]+$/, "") || "logo";
   try {
     if (/heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name)) {
@@ -201,7 +201,7 @@ export async function makePreview(file: File): Promise<File | null> {
       const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
       const page = await doc.getPage(1);
       const v1 = page.getViewport({ scale: 1 });
-      const scale = Math.min(6, 2400 / Math.max(v1.width, v1.height));
+      const scale = Math.min(maxPx > 2400 ? 12 : 6, maxPx / Math.max(v1.width, v1.height));
       const vp = page.getViewport({ scale });
       const c = document.createElement("canvas");
       c.width = Math.round(vp.width); c.height = Math.round(vp.height);

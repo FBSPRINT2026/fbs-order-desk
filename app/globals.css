@@ -5562,3 +5562,4 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .mk-sizes{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;font-size:13px}
 .mk-sizes .chip{min-width:46px;justify-content:center;font-weight:700}
 .mk-sizes-n{font-size:12px;flex:1 1 220px}
+.sep-art-note{margin:8px 0;padding:8px 10px;border-radius:8px;background:var(--warn-bg,#fff4d6);color:var(--warn-ink,#8a5a00);font-size:13px}
