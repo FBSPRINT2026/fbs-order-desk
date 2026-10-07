@@ -8,8 +8,8 @@ import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors,
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
-import { filmPdf, filmRollPdf, deflate } from "@/lib/filmPdf";
-import { ripPdf, rollLayout } from "@/lib/ripPdf";
+import { filmPdf, filmRollPdf, filmSinglePdf, filmBox, FILM_HEAD, deflate } from "@/lib/filmPdf";
+import { ripPdf } from "@/lib/ripPdf";
 import { folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder } from "@/lib/filmFolder";
 import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
@@ -788,6 +788,23 @@ export default function SeparationStudio({ id }: { id: string }) {
   }
   /** the films, black and finished (our dots): a page each, or all on one sheet for a roll printer */
   async function filmsFile(rollIn = 0) {
+    const { pages } = await filmPages();
+    return rollIn ? filmRollPdf(pages, rollIn, title, deflate, { crop: st.cropMarks !== false, targets: st.regMarks !== false }) : filmPdf(pages);
+  }
+  /** Print films: one file per screen in print order, each upright (turned only if too wide for the roll) and just the
+   *  size of its film, so FilmMaker (Auto Page, white space removed) trims the film after every screen */
+  async function filmsEach(rollIn: number) {
+    const { pages, names } = await filmPages(), n = pages.length, pad = String(n).length;
+    const out: { name: string; bytes: Uint8Array }[] = [];
+    for (let i = 0; i < n; i++) {
+      const ink = names[i] || `screen ${i + 1}`;
+      const bytes = await filmSinglePdf(pages[i], rollIn, `${title} - film ${i + 1} of ${n}: ${ink} - print at 100%, no fit to page - art ${st.widthIn}" wide`,
+        title.split(" ")[0], deflate, { targets: st.regMarks !== false });
+      out.push({ name: `${slug(title)}-${String(i + 1).padStart(pad, "0")}-of-${n}-${slug(ink)}.pdf`, bytes });
+    }
+    return out;
+  }
+  async function filmPages() {
     const hr = await fullSep();
     setBusy("Making films…"); await new Promise((r) => setTimeout(r, 30));
     // where the art prints at all: halftone dots are cut only at the art's edge
@@ -798,7 +815,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       const f = filmBits(p, hr.w, hr.h, st.widthIn, st.dpi, { halftone: ht, lpi: lpiOf(st, p.key), angle: st.angle, dot: st.dot || "ellipse", mesh: p.mesh, within });
       return { ...f, widthIn: st.widthIn, heightIn: st.widthIn * (hr.h / hr.w), ink: `${p.name}  (${i + 1}/${hr.plates.length})`, label: `${title} - ${i + 1}/${hr.plates.length} ${p.name}`, sub: `${p.kind === "underbase" ? "Underbase (flash after)" : p.kind === "highlight" ? "Highlight white" : "Color"} - mesh ${p.mesh}${ht ? ` - ${st.lpi} lpi ${st.angle} deg ${DOT_NAME[st.dot || "ellipse"]} dot${(st.pressGain ?? PRESS_GAIN) ? ` - ${Math.round((st.pressGain ?? PRESS_GAIN) * 100)}% dot gain allowed for` : ""}` : " - solid"} - print ${st.widthIn}" wide at 100%` };
     });
-    return rollIn ? filmRollPdf(pages, rollIn, title, deflate, { crop: st.cropMarks !== false, targets: st.regMarks !== false }) : filmPdf(pages);
+    return { pages, names: hr.plates.map((p) => p.name) };
   }
   async function save(status: SepRow["status"], done = "Saved."): Promise<SepRow | null> {
     if (!row || !res) return null;
@@ -1400,7 +1417,7 @@ export default function SeparationStudio({ id }: { id: string }) {
           )}
           {defOpen && <PressDefaults presses={presses} start={press?.id} me={me.email} onClose={() => setDefOpen(false)} onSaved={(m, lay) => { const lc = layoutCounts(lay); setPresses((ps) => ps.map((p) => (p.id === m.id ? { ...p, layout: lay, flashes: lc.units, rollers: lc.rollers || undefined } : p))); setDefOpen(false); setMsg(`${m.name.split(" · ")[0]} defaults saved. Every job's setup on it starts from these.`); }} />}
           {rtab === "screens" && res && <PrintFilms n={plates.length} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
-            make={async (rollIn) => { try { return await filmsFile(rollIn); } finally { setBusy(""); } }}
+            make={async (rollIn) => { try { return await filmsEach(rollIn); } finally { setBusy(""); } }}
             onSent={() => { if (row.status !== "cancelled") markPrinted(); }} />}
           {rtab === "screens" && <section className="sep-card">
             <h3>Files</h3>
@@ -1556,9 +1573,9 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
 }
 
 /**
- * Print films: the finished black films (our dots: nothing for FilmMaker to separate, convert or screen), laid out on
- * the film roll (turned when that uses less film), sent straight to FilmMaker's hot folder, which prints it as one
- * black composite job. Nobody opens Illustrator.
+ * Print films: the finished black films (our dots: nothing for FilmMaker to separate, convert or screen), one file per
+ * screen in print order, sent straight to FilmMaker's hot folder. Each is just its film (upright, turned only if too
+ * wide for the roll), so the queue (Auto Page, white space removed) trims after every screen. Nobody opens Illustrator.
  */
 /** the shop's screen meshes (the mesh picker on each screen) */
 const SHOP_MESH = [80, 110, 156, 195, 230, 305];
@@ -1568,15 +1585,14 @@ const LPIS = [35, 40, 45, 50, 55, 60, 65, 75, 85];
 const ROLL_IN = 17;
 function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
   n: number; aspect: number; widthIn: number; dpi: number; title: string; busy: boolean;
-  make: (rollIn: number) => Promise<Uint8Array>; onSent: () => void;
+  make: (rollIn: number) => Promise<{ name: string; bytes: Uint8Array }[]>; onSent: () => void;
 }) {
   const rollIn = ROLL_IN;
   const [folder, setFolder] = useState<string | null>(null), [canFolder, setCanFolder] = useState(false);
   const [msg, setMsg] = useState(""), [err, setErr] = useState(""), [working, setWorking] = useState(false);
   useEffect(() => { setCanFolder(folderPrintable()); savedFolder().then((h) => setFolder(h?.name || null)); }, []);
   const W = widthIn * 72, H = W * aspect;
-  const L = rollIn ? rollLayout(n, W, H, rollIn) : null;
-  const name = `${slug(title)}-films${rollIn ? `-${rollIn}in` : ""}.pdf`;
+  const B = filmBox(W, H, rollIn), total = n * B.lengthIn;
   async function choose() {
     setErr("");
     try { const h = await pickFolder(); setFolder(h.name); return true; }
@@ -1586,50 +1602,58 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
     setErr(""); setMsg(""); setWorking(true);
     try {
       if (canFolder && !folder && !(await choose())) return;
-      const pdf = await make(rollIn);
+      const files = await make(rollIn);
       const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      const many = `${files.length} film${files.length === 1 ? "" : "s"}`;
       if (canFolder) {
-        const r = await sendToFolder(pdf, name);
-        if (r === "sent") { setMsg(`Sent to FilmMaker at ${at}: ${name}`); onSent(); return; }
-        if (r === "gone") { await forgetFolder(); setFolder(null); setErr("The hot folder isn't there any more. Pick it again (Change folder) and print again."); return; }
-        if (r === "denied") { setErr("The browser wasn't allowed to save into the hot folder. Click Print films again and choose Allow (or Allow on every visit)."); return; }
+        // one at a time, in print order, so FilmMaker queues them 1, 2, 3…
+        let sent = 0;
+        for (const f of files) {
+          const r = await sendToFolder(f.bytes, f.name);
+          if (r === "sent") { sent++; continue; }
+          if (r === "gone") { await forgetFolder(); setFolder(null); setErr("The hot folder isn't there any more. Pick it again (Change folder) and print again."); return; }
+          if (r === "denied") { setErr("The browser wasn't allowed to save into the hot folder. Click Print films again and choose Allow (or Allow on every visit)."); return; }
+          if (r === "no-folder") break;
+        }
+        if (sent === files.length) { setMsg(`Sent ${many} to FilmMaker at ${at}, one file per screen (FilmMaker trims after each).`); onSent(); return; }
       }
-      download(pdf, name);
-      setMsg(`Downloaded ${name} at ${at}.${canFolder ? "" : " On the film PC (Chrome or Edge) this goes straight to FilmMaker."}`);
+      for (const f of files) download(f.bytes, f.name);
+      setMsg(`Downloaded ${many} at ${at}.${canFolder ? "" : " On the film PC (Chrome or Edge) these go straight to FilmMaker."}`);
       onSent();
-    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    } catch (e) {
+      // Windows wouldn't let the browser save there (a Dropbox / OneDrive folder kept online-only)
+      if (e instanceof DOMException && e.name === "InvalidStateError") setErr("Windows wouldn't let the browser save into the hot folder. If it's a Dropbox folder, right-click it → Make available offline, wait for the green check, then Print films again.");
+      else setErr(e instanceof Error ? e.message : String(e));
+    }
     finally { setWorking(false); }
   }
-  // the roll, drawn: each screen a box, the ones turned shown turned
+  // the roll, drawn: one film after another down the roll, a dashed cut after each
   const pic = (() => {
-    if (!L || !rollIn) return null;
-    const m = 36, iw = W + 2 * m, ih = H + 2 * m;
-    const RW = rollIn * 72, RL = Math.max(L.lengthIn * 72, 72), k = Math.min(150 / RW, 210 / RL);
+    const RW = rollIn * 72, RL = Math.max(total * 72, 72), k = Math.min(150 / RW, 210 / RL), fh = B.h;
     return (
       <svg className="pf-roll" width={RW * k + 2} height={RL * k + 2} viewBox={`-1 -1 ${RW + 2 / k} ${RL + 2 / k}`} aria-hidden>
         <rect x={0} y={0} width={RW} height={RL} className="pf-film" />
-        {L.place.map((p, i) => {
-          const bw = p.rot ? ih : iw, bh = p.rot ? iw : ih, x = 0.2 * 72 + p.x, y = 22 + p.y;
-          return <g key={i}><rect x={x} y={y} width={bw} height={bh} className={"pf-box" + (L.fits ? "" : " bad")} /><text x={x + bw / 2} y={y + bh / 2} className="pf-n" fontSize={Math.min(bw, bh) * 0.32}>{i + 1}</text></g>;
+        {Array.from({ length: n }, (_, i) => {
+          const y = i * fh, x = 0.2 * 72;
+          return <g key={i}><rect x={x} y={y + FILM_HEAD} width={B.w} height={fh - FILM_HEAD} className={"pf-box" + (B.fits ? "" : " bad")} /><text x={x + B.w / 2} y={y + fh / 2 + FILM_HEAD / 2} className="pf-n" fontSize={Math.min(B.w, fh) * 0.32}>{i + 1}</text>
+            {i < n - 1 && <line x1={0} x2={RW} y1={y + fh} y2={y + fh} stroke="currentColor" strokeDasharray={`${12 / k} ${8 / k}`} strokeWidth={1 / k} />}</g>;
         })}
       </svg>
     );
   })();
   return (
     <section className="sep-card">
-      <div className="pf-head"><h3>Print films</h3><button type="button" className="btn primary" disabled={busy || working || (!!L && !L.fits)} onClick={print}>{working ? "Making films…" : "Print Films"}</button></div>
-      {L ? (
-        <div className="pf-lay">
-          {pic}
-          <div className="pf-txt">
-            {L.fits ? <>
-              <b>{n} screen{n === 1 ? "" : "s"} · {L.lengthIn.toFixed(1)}&quot; of film</b>
-              <span>{L.mixed ? "Some turned sideways to fit more across" : L.rotate ? "Turned sideways" : "Upright"}, {L.cols === 1 ? "one across" : `up to ${L.cols} across`}{L.rows > 1 ? `, ${L.rows} rows` : ""}</span>
-              <span className="faint">{L.widthIn.toFixed(1)}&quot; of the {rollIn}&quot; roll used{L.savedIn >= 0.5 ? ` · saves ${L.savedIn.toFixed(1)}" over one under another` : ""}</span>
-            </> : <span className="pv-err">The art with its marks is {((W + 72) / 72).toFixed(1)}&quot; × {((H + 72) / 72).toFixed(1)}&quot;: too big for the {rollIn}&quot; roll either way. Make the print smaller, or download the Films PDF (a page per screen).</span>}
-          </div>
+      <div className="pf-head"><h3>Print films</h3><button type="button" className="btn primary" disabled={busy || working || !B.fits} onClick={print}>{working ? "Making films…" : "Print Films"}</button></div>
+      <div className="pf-lay">
+        {pic}
+        <div className="pf-txt">
+          {B.fits ? <>
+            <b>{n} film{n === 1 ? "" : "s"}, one per screen · {total.toFixed(1)}&quot; of film</b>
+            <span>{B.rot ? "Turned sideways (too wide for the roll upright)" : "Upright"}, {B.lengthIn.toFixed(1)}&quot; each, trimmed after each one</span>
+            <span className="faint">{B.widthIn.toFixed(1)}&quot; of the {rollIn}&quot; roll used · targets top and bottom, ¾&quot; from the art</span>
+          </> : <span className="pv-err">The film is {B.widthIn.toFixed(1)}&quot; across even turned sideways: too big for the {rollIn}&quot; roll. Make the print smaller.</span>}
         </div>
-      ) : <p className="sep-help">One page per screen, each the art at {widthIn}&quot; wide with its marks: for a sheet printer.</p>}
+      </div>
       <p className="sep-help">Black films, finished: solid and halftone dots made here at {dpi} dpi (Film DPI under Output; set it to the printer&apos;s resolution). FilmMaker just prints black: no separating, no converting colors to black.</p>
       {canFolder && !folder && <div className="pf-folder faint">The first time on the film PC, it asks for FilmMaker&apos;s hot folder.</div>}
       {!canFolder && <div className="pf-folder faint">This browser downloads the file (Chrome or Edge on the film PC sends it straight to FilmMaker).</div>}
@@ -1639,11 +1663,11 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
       <details className="pf-setup">
         <summary className="faint">Set up the film PC (once)</summary>
         <ol>
-          <li><b>FilmMaker: a template for films.</b> Make (or pick) a queue template: the Epson, media = {rollIn || 17}&quot; roll film, black only (composite, no separations), scale 100% (never fit to page), and &quot;Enable application halftoning&quot; on so it keeps our dots. Turn off Auto Nest and rotation in it: the portal already lays the films out.</li>
-          <li><b>FilmMaker: hot folders.</b> Queue → Properties → Hot Folders tab: turn on template hot folders, pick a plain folder such as <code>C:\Films</code> (Chrome won&apos;t write into Program Files, ProgramData or Windows), and check &quot;Delete file after processed by queue&quot;. FilmMaker makes a numbered subfolder for each template; the film template&apos;s subfolder is the one the portal sends to. If the queue holds jobs instead of printing them, click Print in FilmMaker.</li>
+          <li><b>FilmMaker queue for films:</b> the Epson, media = {rollIn || 17}&quot; roll film, black only (composite, no separations), scale 100% (never fit to page), and &quot;Enable application halftoning&quot; on so it keeps our dots. Layout Manager: Layout mode <i>Auto Page</i> with &quot;Remove White Space from Bottom&quot; on, so the Epson trims after every film. Leave rotation off: the portal turns a film only when it&apos;s too wide for the roll.</li>
+          <li><b>FilmMaker: hot folder.</b> Queue → Properties → Hot Folders: check &quot;Enable queue hot folder&quot;, type the folder&apos;s full path in the browse box (its folder list can come up blank), and check &quot;Delete file after processed by queue&quot;. The shop uses <code>Dropbox\FILM DIRECT TO PRINT</code> so any computer can send films; on the film PC that folder must be <i>Make available offline</i> (green check) or the browser can&apos;t save into it.</li>
           <li><b>Dot gain:</b> the dots already allow for it (&quot;Dot gain on press&quot;, 15%), so the film template&apos;s Press Calibration curve stays straight. Keep its film Calibration / ink density so blacks come out dense.</li>
           <li><b>Film DPI:</b> set Film DPI (Output, above) to what FilmMaker prints at on the Epson (usually 720 or 1440) so the dots aren&apos;t resized.</li>
-          <li><b>Chrome or Edge on the film PC:</b> sign in to the portal, open a separation, click Print films, pick the film template&apos;s hot folder, and choose <i>Allow on every visit</i>. From then on Print films sends straight to FilmMaker: no save box, no Illustrator.</li>
+          <li><b>Chrome or Edge on the film PC:</b> sign in to the portal, open a separation, click Print films, pick the hot folder, and choose <i>Allow on every visit</i>. From then on Print films sends straight to FilmMaker: no save box, no Illustrator.</li>
           <li><b>Test it:</b> print one job; measure the art on the film against its width here (it should be exact), and check each film has its ink name at the top.</li>
         </ol>
         <p className="sep-help">Another computer (or Safari) downloads the file instead: drop it into the hot folder, or open it in FilmMaker. Want FilmMaker to make the dots with its own per-ink settings instead? Use &quot;FilmMaker / RIP file&quot; under Save (spot colors, one page per screen).</p>
