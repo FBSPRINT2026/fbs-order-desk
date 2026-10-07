@@ -100,8 +100,19 @@ export default function InkRoom() {
       const has = xs.filter((i) => !exact.includes(i) && !starts.includes(i) && (norm(i.code).includes(t) || norm(i.name).includes(t)));
       xs = [...exact, ...starts, ...has];
     }
-    return xs.slice(0, 240);
+    return xs;
   }, [inks, q]);
+  // the chart in three parts: the regular PMS formulas, then IMS's High Opacity ("… C HO") formulas, then the ones
+  // adjusted for printing over an underbase ("… C UB"); the regular part shows at most 240 at a time
+  const parts = useMemo(() => {
+    const kind = (c: string) => (/(^|[^a-z])ho([^a-z]|$)/i.test(c) ? "ho" : /(^|[^a-z])ub([^a-z]|$)/i.test(c) ? "ub" : "std");
+    const std = list.filter((i) => kind(i.code) === "std");
+    return [
+      { k: "std", title: "", xs: std.slice(0, 240), more: std.length > 240 },
+      { k: "ho", title: "High Opacity", xs: list.filter((i) => kind(i.code) === "ho"), more: false },
+      { k: "ub", title: "Adjusted for Underbase", xs: list.filter((i) => kind(i.code) === "ub"), more: false },
+    ].filter((x) => x.xs.length);
+  }, [list]);
 
   // stock colors, grouped by brand and line, filtered by the search
   const groups = useMemo(() => {
@@ -238,7 +249,10 @@ export default function InkRoom() {
               <span className="faint" style={{ fontSize: 13 }}>{ready} colors read from IMS so far. More are added as they're read.</span>
             </div>
             {!inks ? <div className="faint">Loading…</div> : !list.length ? <div className="faint">{q ? `No formula for “${q}” yet. It hasn't been read from IMS; look it up there for now.` : "No formulas read yet."}</div> : (
-              <div className="ink-grid">{list.map((i) => { const st = i.rec_type === "S" ? stockFor(i.code) : []; return (
+              <>{parts.map((p) => (
+              <div key={p.k} className="ink-group">
+                {p.title && <h3>{p.title} <span className="faint">{p.xs.length}</span></h3>}
+              <div className="ink-grid">{p.xs.map((i) => { const st = i.rec_type === "S" ? stockFor(i.code) : []; return (
                 <button key={i.id} type="button" className={"ink-tile" + (sel?.id === i.id ? " on" : "") + (i.lines?.length ? " has" : "")} onClick={() => pickInk(i)} title={i.name}>
                   <i style={{ background: i.hex || "#ddd" }} />
                   <b data-notranslate>{i.code}</b>
@@ -246,8 +260,10 @@ export default function InkRoom() {
                   {st.length > 0 && <small className="ink-instock">Stock: {st[0].name}{st.length > 1 ? ` +${st.length - 1}` : ""}</small>}
                 </button>
               ); })}</div>
+                {p.more && <div className="faint" style={{ fontSize: 12.5 }}>Showing the first 240. Type more of the number to narrow it down.</div>}
+              </div>
+              ))}</>
             )}
-            {inks && list.length === 240 && <div className="faint" style={{ fontSize: 12.5 }}>Showing the first 240. Type more of the number to narrow it down.</div>}
             </>)}
           </div>
         </section>
