@@ -153,7 +153,11 @@ export async function copyFiles(sb: SupabaseClient, archivedId: string, deadline
       const path = `printavo/${row.id}/${Date.now().toString(36)}${i}-${base}${ext}`;
       const up = await sb.storage.from("proofs").upload(path, buf, { contentType: type, upsert: true });
       if (up.error) {
-        if (/quota|exceed|limit|space|full/i.test(up.error.message)) { storageFull = true; failed.push(up.error.message); break; }
+        // one file over Supabase's upload limit (Storage → Settings): marked too big and skipped, so the rest keep
+        // copying (Files that didn't copy → Copy big files takes it once the limit is raised). Only a full or over-quota
+        // project stops the copying.
+        if (/maximum allowed size|payload too large|entity too large|413/i.test(up.error.message)) { files[url] = "too-big"; continue; }
+        if (/quota|space|storage.*full|full.*storage/i.test(up.error.message)) { storageFull = true; failed.push(up.error.message); break; }
         throw new Error(up.error.message);
       }
       files[url] = path;
