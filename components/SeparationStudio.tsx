@@ -793,10 +793,12 @@ export default function SeparationStudio({ id }: { id: string }) {
   }
   /** Print films: one file per screen in print order, each upright (turned only if too wide for the roll) and just the
    *  size of its film, so FilmMaker (Auto Page, white space removed) trims the film after every screen */
-  async function filmsEach(rollIn: number) {
+  /** `only`: just that film (0-based, print order), for reprinting one that came out wrong */
+  async function filmsEach(rollIn: number, only?: number) {
     const { pages, names } = await filmPages(), n = pages.length, pad = String(n).length;
     const out: { name: string; bytes: Uint8Array }[] = [];
     for (let i = 0; i < n; i++) {
+      if (only != null && i !== only) continue;
       const ink = names[i] || `screen ${i + 1}`;
       // on the film, right of the top target: just the ink, the job # and the location
       const bytes = await filmSinglePdf({ ...pages[i], ink }, rollIn, title, deflate, { targets: st.regMarks !== false });
@@ -1416,8 +1418,8 @@ export default function SeparationStudio({ id }: { id: string }) {
             </section>
           )}
           {defOpen && <PressDefaults presses={presses} start={press?.id} me={me.email} onClose={() => setDefOpen(false)} onSaved={(m, lay) => { const lc = layoutCounts(lay); setPresses((ps) => ps.map((p) => (p.id === m.id ? { ...p, layout: lay, flashes: lc.units, rollers: lc.rollers || undefined } : p))); setDefOpen(false); setMsg(`${m.name.split(" · ")[0]} defaults saved. Every job's setup on it starts from these.`); }} />}
-          {rtab === "screens" && res && <PrintFilms n={plates.length} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
-            make={async (rollIn) => { try { return await filmsEach(rollIn); } finally { setBusy(""); } }}
+          {rtab === "screens" && res && <PrintFilms n={plates.length} inks={plates.map((p) => p.name)} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy}
+            make={async (rollIn, only) => { try { return await filmsEach(rollIn, only); } finally { setBusy(""); } }}
             onSent={() => { if (row.status !== "cancelled") markPrinted(); }} />}
           {rtab === "screens" && <section className="sep-card">
             <h3>Files</h3>
@@ -1583,13 +1585,16 @@ const SHOP_MESH = [80, 110, 156, 195, 230, 305];
 const LPIS = [35, 40, 45, 50, 55, 60, 65, 75, 85];
 /** the film printer's roll (Epson, 17"): every film goes on it */
 const ROLL_IN = 17;
-function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
-  n: number; aspect: number; widthIn: number; dpi: number; title: string; busy: boolean;
-  make: (rollIn: number) => Promise<{ name: string; bytes: Uint8Array }[]>; onSent: () => void;
+function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent }: {
+  n: number; inks: string[]; aspect: number; widthIn: number; dpi: number; title: string; busy: boolean;
+  /** `only`: one film (0-based, print order) */
+  make: (rollIn: number, only?: number) => Promise<{ name: string; bytes: Uint8Array }[]>; onSent: () => void;
 }) {
   const rollIn = ROLL_IN;
   const [folder, setFolder] = useState<string | null>(null), [canFolder, setCanFolder] = useState(false);
   const [msg, setMsg] = useState(""), [err, setErr] = useState(""), [working, setWorking] = useState(false);
+  /** the film being reprinted (0-based), while it's being made and sent */
+  const [again, setAgain] = useState<number | null>(null);
   useEffect(() => { setCanFolder(folderPrintable()); savedFolder().then((h) => setFolder(h?.name || null)); }, []);
   const W = widthIn * 72, H = W * aspect;
   const B = filmBox(W, H, rollIn), total = n * B.lengthIn;
@@ -1598,13 +1603,16 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
     try { const h = await pickFolder(); setFolder(h.name); return true; }
     catch (e) { if (!(e instanceof DOMException && e.name === "AbortError")) setErr(e instanceof Error ? e.message : String(e)); return false; }
   }
-  async function print() {
-    setErr(""); setMsg(""); setWorking(true);
+  /** print every film, or `only` one again (a reprint: ran out of film, a bad film): a reprint doesn't move the
+   *  separation along again */
+  async function print(only?: number) {
+    setErr(""); setMsg(""); setWorking(true); setAgain(only ?? null);
     try {
       if (canFolder && !folder && !(await choose())) return;
-      const files = await make(rollIn);
+      const files = await make(rollIn, only);
       const at = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-      const many = `${files.length} film${files.length === 1 ? "" : "s"}`;
+      const many = only != null ? `film ${only + 1} of ${n} (${inks[only] || "screen"}) again` : `${files.length} film${files.length === 1 ? "" : "s"}`;
+      const done = () => { if (only == null) onSent(); };
       if (canFolder) {
         // one at a time, in print order, so FilmMaker queues them 1, 2, 3…
         let sent = 0;
@@ -1615,17 +1623,17 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
           if (r === "denied") { setErr("The browser wasn't allowed to save into the hot folder. Click Print films again and choose Allow (or Allow on every visit)."); return; }
           if (r === "no-folder") break;
         }
-        if (sent === files.length) { setMsg(`Sent ${many} to FilmMaker at ${at}, one file per screen (FilmMaker trims after each).`); onSent(); return; }
+        if (sent === files.length) { setMsg(only != null ? `Sent ${many} to FilmMaker at ${at}.` : `Sent ${many} to FilmMaker at ${at}, one file per screen (FilmMaker trims after each).`); done(); return; }
       }
       for (const f of files) download(f.bytes, f.name);
       setMsg(`Downloaded ${many} at ${at}.${canFolder ? "" : " On the film PC (Chrome or Edge) these go straight to FilmMaker."}`);
-      onSent();
+      done();
     } catch (e) {
       // Windows wouldn't let the browser save there (a Dropbox / OneDrive folder kept online-only)
       if (e instanceof DOMException && e.name === "InvalidStateError") setErr("Windows wouldn't let the browser save into the hot folder. If it's a Dropbox folder, right-click it → Make available offline, wait for the green check, then Print films again.");
       else setErr(e instanceof Error ? e.message : String(e));
     }
-    finally { setWorking(false); }
+    finally { setWorking(false); setAgain(null); }
   }
   // the roll, drawn: one film after another down the roll, a dashed cut after each
   const pic = (() => {
@@ -1643,7 +1651,7 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
   })();
   return (
     <section className="sep-card">
-      <div className="pf-head"><h3>Print films</h3><button type="button" className="btn primary" disabled={busy || working || !B.fits} onClick={print}>{working ? "Making films…" : "Print Films"}</button></div>
+      <div className="pf-head"><h3>Print films</h3><button type="button" className="btn primary" disabled={busy || working || !B.fits} onClick={() => print()}>{working && again == null ? "Making films…" : "Print Films"}</button></div>
       <div className="pf-lay">
         {pic}
         <div className="pf-txt">
@@ -1654,6 +1662,20 @@ function PrintFilms({ n, aspect, widthIn, dpi, title, busy, make, onSent }: {
           </> : <span className="pv-err">The film is {B.widthIn.toFixed(1)}&quot; across even turned sideways: too big for the {rollIn}&quot; roll. Make the print smaller.</span>}
         </div>
       </div>
+      {B.fits && n > 0 && (
+        <div className="pf-again">
+          <span className="faint">A film came out wrong or the roll ran out? Print just that one again:</span>
+          <ol>
+            {Array.from({ length: n }, (_, i) => (
+              <li key={i}>
+                <span className="pf-again-n">{i + 1}</span>
+                <span className="pf-again-ink" data-notranslate>{inks[i] || `Screen ${i + 1}`}</span>
+                <button type="button" className="linkbtn" disabled={busy || working} onClick={() => print(i)}>{working && again === i ? "Sending…" : "Reprint"}</button>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       <p className="sep-help">Black films, finished: solid and halftone dots made here at {dpi} dpi (Film DPI under Output; set it to the printer&apos;s resolution). FilmMaker just prints black: no separating, no converting colors to black.</p>
       {canFolder && !folder && <div className="pf-folder faint">The first time on the film PC, it asks for FilmMaker&apos;s hot folder.</div>}
       {!canFolder && <div className="pf-folder faint">This browser downloads the file (Chrome or Edge on the film PC sends it straight to FilmMaker).</div>}
