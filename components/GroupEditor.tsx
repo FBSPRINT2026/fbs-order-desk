@@ -233,7 +233,9 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                       </div>
                       {inkMismatch(d) && <div className="ink-warn">{inkMismatch(d)}</div>}
                     </td>
-                    <td><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></td>
+                    <td><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} />
+                      {d.size.trim() && <button type="button" className={"cs-tag" + (d.sizeFrom === "customer" ? " on" : "")} title={d.sizeFrom === "customer" ? "The customer asked for this size: the Mockup Creator asks before changing it. Click to unmark." : "Did the customer ask for this exact size? Mark it so it isn't changed by accident."} onClick={() => update((x) => { x.imprints[di].sizeFrom = x.imprints[di].sizeFrom === "customer" ? undefined : "customer"; })}>{d.sizeFrom === "customer" ? "🔒 Customer's size" : "Customer's size?"}</button>}
+                    </td>
                     <td>
                       <label className="sz-dim">
                         <InchInput label="Drop in inches (blank = standard)" placeholder="Standard" num={d.drop || ""} onNum={(v) => update((x) => { x.imprints[di].drop = v; })} />

@@ -52,3 +52,25 @@ export function bodyOf(g: { sizes?: string[] | null; specs?: GarmentSpecs | null
   const l = sp?.length && sp.length > 8 && sp.length < 45 ? sp.length : t[1];
   return { size, widthIn: w, lengthIn: l, kind: kindOf(size), from: sp?.width ? "supplier" : "typical" };
 }
+
+/** one size of a garment, measured from its size chart or typical numbers */
+export function bodyAt(g: { specs?: GarmentSpecs | null } | null | undefined, size: string): Body {
+  const sp = g?.specs?.sizes?.[size];
+  const t = TYPICAL[size] || TYPICAL.L;
+  const w = sp?.width && sp.width > 5 && sp.width < 40 ? sp.width : t[0];
+  const l = sp?.length && sp.length > 8 && sp.length < 45 ? sp.length : t[1];
+  return { size: TYPICAL[size] ? size : "L", widthIn: w, lengthIn: l, kind: kindOf(TYPICAL[size] ? size : "L"), from: sp?.width ? "supplier" : "typical" };
+}
+/**
+ * The smallest size a print has to fit. One screen prints every size on the order, so a front print sized for the
+ * 3T the mockup is shown on can be too big for the 2T: limits follow the smallest size actually ordered, for kids'
+ * sizes (toddler, infant, youth). Null when nothing smaller is ordered, or the smallest is an adult size.
+ */
+export function smallestOrdered(g: { specs?: GarmentSpecs | null } | null | undefined, ordered: string[], shown: Body): Body | null {
+  const sizes = ORDER.filter((z) => ordered.includes(z));
+  if (!sizes.length) return null;
+  const b = bodyAt(g, sizes[0]);
+  // kids' sizes only: adult prints are sized for the run as usual (one 12" front covers S-XL)
+  if (b.kind === "adult") return null;
+  return b.widthIn < shown.widthIn - 0.01 ? b : null;
+}

@@ -7,7 +7,8 @@ import { refetchAttachments } from "@/lib/mail/imap";
 import { officeText } from "@/lib/officeText";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
 import { LOCATIONS, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
-import { bodyOf } from "@/lib/garmentBody";
+import { bodyOf, smallestOrdered } from "@/lib/garmentBody";
+import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
 import { isPicture, looksLikeSignature, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
 
@@ -207,7 +208,7 @@ function tool(finishingIds: string[]) {
             method: { type: "string", enum: ["screen", "embroidery", "dtf"] }, location: { type: "string" },
             colors: { description: "Ink colors in the art (not the shirt color, not the underbase), or 'full'", anyOf: [{ type: "integer" }, { type: "string", enum: ["full"] }] },
             inks: { type: "string", description: "The ink colors by name, e.g. 'Gold, Black'" },
-            size: { type: "string", description: "Print size only if given or clear, e.g. '10\" wide'" },
+            size: { type: "string", description: "Print size only if the customer states it, e.g. '10\" wide' (it's then kept as theirs)" },
             notes: { type: "string" },
             art_file: { type: ["integer", "null"], description: "The File number of the art printed here" },
             width_in: { type: ["number", "null"], description: "Width of the print in inches, judged from the customer's mockup against the garment (see the sizing note). Null when there is no mockup showing it." },
@@ -318,15 +319,21 @@ ${String(a.body || "").slice(0, 12000)}
       (pg.prints || []).slice(0, 10).forEach((pr, k) => {
         const im = g.imprints[k]; if (!im) return;
         const f = fileAt(pr.art_file); if (f) art[im.id] = f;
+        // a size the customer stated in words is theirs: the Mockup Creator asks before anyone changes it
+        if (im.size && String(pr.size || "").trim()) im.sizeFrom = "customer";
         // where and how big the customer's mockup shows it, so our Mockup Creator rebuilds the same picture
         let w = +(pr.width_in || 0), dr = +(pr.drop_in ?? -1);
         if (!(w || dr >= 0) || im.size) return;
         const fix = w ? correction(lessons, im.location, body.kind, (a.customer_id as string) || null) : null;
         if (fix) { w *= fix.factor; if (dr >= 0) dr = Math.max(0, dr + fix.dropAdd); }
+        // one screen prints every size on the order: never bigger than fits the smallest size ordered (a 2T)
+        const small = smallestOrdered(null, Object.keys(Object.assign({}, ...g.lines.map((l) => l.sizes || {}))), body);
+        let capped = "";
+        if (small && w > 0) { const cap = maxWidthFor(im.location, 0, small); if (w > cap) { w = cap; capped = ` (capped to fit the ${small.size})`; } }
         if (w >= 1 && w <= 16) im.size = `${Math.round(w * 4) / 4}" wide`;
         if (!im.drop && dr >= 0 && dr <= 10 && /front|back|chest/i.test(im.location)) im.drop = String(Math.round(dr * 4) / 4);
         im.aiPlace = { size: im.size, drop: im.drop || "", garment: body.size, kind: body.kind };
-        im.notes = [im.notes, `Size and placement read from the customer's mockup${fix ? ` (adjusted from ${fix.n} earlier correction${fix.n === 1 ? "" : "s"})` : ""}`].filter(Boolean).join(". ").slice(0, 300);
+        im.notes = [im.notes, `Size and placement read from the customer's mockup${fix ? ` (adjusted from ${fix.n} earlier correction${fix.n === 1 ? "" : "s"})` : ""}${capped}`].filter(Boolean).join(". ").slice(0, 300);
       });
       const ms = (pg.mockup_files || []).map(fileAt).filter(Boolean);
       if (ms.length) mockups[g.id] = [...new Set(ms)];

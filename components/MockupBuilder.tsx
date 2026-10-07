@@ -22,7 +22,7 @@ import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
 import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
-import { bodyOf, REF_BODY, type Body } from "@/lib/garmentBody";
+import { bodyOf, smallestOrdered, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
 import { planPrint, pxOfImage, type PrintPlan } from "@/lib/printPlan";
@@ -176,6 +176,20 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   function toggleBg(d: Design) { resetLogo(d); setKeepBg((k) => ({ ...k, [d.id]: !k[d.id] })); }
   const [msg, setMsg] = useState("");
   const autoWant = useRef<Record<string, { colors: number; inks: string }>>({});
+  /** the sizes on the order (2T, 3T, 4T…): one screen prints them all, so prints are capped to the smallest */
+  const [ordered, setOrdered] = useState<string[]>([]);
+  /** prints whose size the customer specified: changing it asks first ("Are you sure you want to override?") */
+  const [sizeOk, setSizeOk] = useState<Record<string, boolean>>({});
+  const [sizeAsk, setSizeAsk] = useState<{ id: string; was: string; go?: () => void } | null>(null);
+  /** run a size change, unless it's a customer-specified size not yet okayed: then ask (the change waits for the answer) */
+  const guardSize = (id: string, go: () => void) => {
+    const im = imprints.find((x) => x.id === id);
+    if (im?.sizeFrom === "customer" && !sizeOk[id]) { setSizeAsk((a) => a || { id, was: im.size, go }); return; }
+    go();
+  };
+  /** phones: a size check for each print when the mockup opens (keep, or pick a size from a scrolling list), then drag */
+  const [sizer, setSizer] = useState<{ ids: string[]; i: number; pick: string | null } | null>(null);
+  const sizerShown = useRef(false);
   const autoState = useRef<"" | "saving" | "done" | "stuck">("");
   const saveOk = useRef(false);
   /** the customer's own mockups for this group: shown beside ours as the picture to match */
@@ -238,6 +252,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setLines(g.lines.filter((l) => l.style || l.color).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })));
           setImprints(g.imprints.map((d) => ({ ...d })));
           autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
+          setOrdered([...new Set(g.lines.flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)))]);
           const cm = (g.customerMockups || []).slice(0, 4);
           if (cm.length) {
             const { data: su } = await sb.storage.from("proofs").createSignedUrls(cm.map((m) => m.path), 3600);
@@ -526,10 +541,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     askedSpecs.current.add(g.id);
     fetch(`/api/garments/specs?id=${encodeURIComponent(g.id)}`).then((r) => r.json()).then((j) => { if (j?.specs) setCatalog((cs) => cs.map((x) => (x.id === g.id ? { ...x, specs: j.specs } : x))); }).catch(() => null);
   }, [shownG?.id, shownG?.specs]); // eslint-disable-line react-hooks/exhaustive-deps
+  // one screen prints every size on the order: sizes and limits follow the smallest size ordered (a 2T), while the
+  // picture stays on the middle size (a 3T)
+  const capBody = smallestOrdered(shownG, ordered, body);
+  const fitBody = (b: Body) => (capBody && capBody.widthIn < b.widthIn ? capBody : b);
   const spotFor = (loc: string, b: Body = body) => spotFor0(loc, b);
-  const maxWidthFor = (loc: string, r: number, b: Body = body) => maxWidthFor0(loc, r, b);
-  const printWidth = (size: string, loc: string, r: number, b: Body = body) => printWidth0(size, loc, r, b);
-  const sideMaxWidth = (loc: string, r: number, b: Body = body) => sideMaxWidth0(loc, r, b);
+  const maxWidthFor = (loc: string, r: number, b: Body = body) => maxWidthFor0(loc, r, fitBody(b));
+  const printWidth = (size: string, loc: string, r: number, b: Body = body) => printWidth0(size, loc, r, fitBody(b));
+  const sideMaxWidth = (loc: string, r: number, b: Body = body) => sideMaxWidth0(loc, r, fitBody(b));
   const autoSpot = (cur: string, v: View, dx: number, top: number, w: number, h: number) => autoSpot0(cur, v, dx, top, w, h, body);
   const basePlacement = (loc: string, wIn: number, r: number, drop: number | null, sc: number, view?: View, fit?: Fit | null, b: Body = body) => basePlacement0(loc, wIn, r, drop, sc, view, fit, b);
   // the art's own proportions: cropped to what's left after the background came out (this session, or saved on the design)
@@ -581,7 +600,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } }))}
-                    onResize={(newWIn) => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); }}
+                    onResize={(newWIn) => guardSize(im.id, () => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); })}
                     onEnd={() => settleHere(im.id)} />
                   </div>
                 );
@@ -1073,6 +1092,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   // a mockup needs a customer (art and mockups save to their account) and at least one garment
   const ready = !!customerId && lines.some((l) => l.style.trim() && garmentFor(l));
+  // on a phone, opening a mockup asks about each print's size first: "Full Front: 9" wide · Keep / Change size"
+  useEffect(() => {
+    if (sizerShown.current || auto || portal || !ready || typeof window === "undefined") return;
+    if (!window.matchMedia?.("(pointer: coarse)").matches || window.innerWidth > 820) return;
+    const ids = imprints.filter((im) => designOf(im) && !isQuick(im.design_id)).map((im) => im.id);
+    if (!ids.length) return;
+    sizerShown.current = true;
+    setSizer({ ids, i: 0, pick: null });
+  }, [ready, imprints, designs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // auto mode (from Inbox → Create order): once the shirt and every logo are loaded, set one-color prints to their
   // ink, save, and move on. Gives up after 30 s with the reason, leaving everything as it is to finish by hand.
@@ -1196,7 +1224,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {Object.keys(offsets).length > 0 && <button className="mk-pill" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
                     </div>
                   )}
-                  {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={`${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}</span></div>}
+                  {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={`${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody ? ` · sized for the ${capBody.size}` : ""}</span></div>}
                 </>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => {
@@ -1214,7 +1242,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   const im = imprints.find((x) => x.id === id); if (!im) return;
                   const old = place(im, v);
                   const inches = newW / (PX_PER_IN * scale * old.k);
-                  if (old.clip) growTo(im, inches); else settle(im, inches);
+                  // a size the customer asked for: ask before the first change (the drag stops until they say yes)
+                  guardSize(id, () => { if (old.clip) growTo(im, inches); else settle(im, inches); });
                 }}
                 onEnd={settleHere}
                 onPick={pickColor} />
@@ -1252,6 +1281,60 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             </div>
           )}
+          {sizeAsk && (() => {
+            const im = imprints.find((x) => x.id === sizeAsk.id);
+            return (
+              <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="cs-t">
+                <div className="mk-modal">
+                  <h2 id="cs-t">Customer specified size</h2>
+                  <p>The customer asked for <b>{sizeAsk.was || "this size"}</b> on the {(im?.location || "print").toLowerCase()}. Are you sure you want to override it?</p>
+                  <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                    <button type="button" className="btn primary" onClick={() => setSizeAsk(null)}>Keep their size</button>
+                    <button type="button" className="btn danger" onClick={() => { const go = sizeAsk.go; setSizeOk((o) => ({ ...o, [sizeAsk.id]: true })); setImprints((xs) => xs.map((x) => (x.id === sizeAsk.id ? { ...x, notes: [x.notes, `Size changed from the customer's ${sizeAsk.was}`].filter(Boolean).join(". ").slice(0, 300) } : x))); setSizeAsk(null); go?.(); }}>Override</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          {sizer && (() => {
+            const im = imprints.find((x) => x.id === sizer.ids[sizer.i]);
+            if (!im) return null;
+            const d = designOf(im), p = place(im), r = ratioOf(d) || 0;
+            const cap = Math.max(1, Math.floor(sideMaxWidth(im.location, r) * 4) / 4);
+            const cur = Math.round(p.wIn * 4) / 4;
+            const steps = Array.from({ length: Math.round((cap - 0.5) / 0.25) + 1 }, (_, k) => 0.5 + k * 0.25);
+            const next = () => { if (sizer.i + 1 < sizer.ids.length) setSizer({ ...sizer, i: sizer.i + 1, pick: null }); else { setSizer(null); setMsg("Drag the design to place it. Pinch or the corner handle to fine-tune."); } };
+            const fmt = (w: number) => `${w % 1 ? w.toFixed(2).replace(/0$/, "") : w}"`;
+            return (
+              <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="sz-t">
+                <div className="mk-modal mk-sizer">
+                  <div className="faint" style={{ fontSize: 12.5 }}>Print {sizer.i + 1} of {sizer.ids.length}</div>
+                  <h2 id="sz-t">{im.location}</h2>
+                  {(painted[im.id] || (d && urls[d.id])) && <img className="mk-sizer-art" src={painted[im.id] || urls[d!.id]} alt="" />}
+                  {sizer.pick == null ? <>
+                    <div className="mk-sizer-now"><b>{fmt(cur)}</b> wide<span>× {(p.hIn || 0).toFixed(2)}&quot; tall</span></div>
+                    {im.sizeFrom === "customer" && <div className="mk-cust-size">The customer asked for this size.</div>}
+                    <div className="mk-sizer-b">
+                      <button type="button" className="btn" onClick={() => setSizer({ ...sizer, pick: String(Math.min(cap, Math.max(0.5, cur))) })}>Change size</button>
+                      <button type="button" className="btn primary" onClick={next}>Keep {fmt(cur)}</button>
+                    </div>
+                  </> : <>
+                    <label className="mk-sizer-pick">Width
+                      <select value={sizer.pick} onChange={(e) => setSizer({ ...sizer, pick: e.target.value })}>
+                        {steps.map((w) => <option key={w} value={String(w)}>{fmt(w)} wide</option>)}
+                      </select>
+                    </label>
+                    <div className="faint" style={{ fontSize: 12.5 }}>Up to {fmt(cap)} on the {im.location.toLowerCase()} of this garment.</div>
+                    <div className="mk-sizer-b">
+                      <button type="button" className="btn" onClick={() => setSizer({ ...sizer, pick: null })}>Back</button>
+                      <button type="button" className="btn primary" onClick={() => { const w = +sizer.pick!; guardSize(im.id, () => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${w}" wide` } : x)))); setSizer({ ...sizer, pick: null }); }}>OK</button>
+                    </div>
+                  </>}
+                  <button type="button" className="eo-link" style={{ alignSelf: "center" }} onClick={() => { setSizer(null); }}>Skip sizes</button>
+                </div>
+              </div>
+            );
+          })()}
           {rasterAsk && (
             <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="rq-t">
               <div className="mk-modal">
@@ -1405,7 +1488,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                             const r = ratioOf(designOf(im)) || 0;
                             const capW = sideMaxWidth(im.location, r), cap = dim === "wide" ? capW : capW * (r || 1);
                             if (t && !t.endsWith(".") && +t > cap) t = String(Math.round(cap * 100) / 100);
-                            setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "" } : x)));
+                            guardSize(im.id, () => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "" } : x))));
                           };
                           return (
                             <>
