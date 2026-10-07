@@ -30,8 +30,26 @@ export async function GET(req: Request) {
   // ingredient lines read from the IMS screen (data/ims/<system>-lines.json, the source of truth for reads): every
   // formula in that file is written as it is there
   // (20 at a time, so a long list still finishes well inside the time limit)
-  let lines = 0;
-  const reads = READS[set.system]?.formulas || [];
+  // Formulas whose saved lines already match the read are skipped, so a rerun only writes what changed.
+  let lines = 0, same = 0;
+  const all = READS[set.system]?.formulas || [];
+  const have = new Map<string, string>();
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await admin.from("ink_formulas").select("ims_id,rec_type,code,base,grams_per_qt,lines").eq("system", set.system).range(from, from + 999);
+    if (error) return NextResponse.json({ error: error.message, rows: n }, { status: 500 });
+    for (const r of data || []) {
+      const v = JSON.stringify([Number(r.grams_per_qt), r.lines]);
+      if (r.ims_id) have.set(`id:${r.ims_id}`, v);
+      if (r.rec_type !== "S" || r.base === set.system) have.set(`${r.rec_type}|${r.code}`, v);
+    }
+    if (!data || data.length < 1000) break;
+  }
+  const reads = all.filter((f) => {
+    const v = have.get(f.ims_id ? `id:${f.ims_id}` : `${f.rec_type}|${f.code}`);
+    const hit = v === JSON.stringify([Number(f.grams_per_qt), f.lines]);
+    if (hit) same++;
+    return !hit;
+  });
   const at = new Date().toISOString();
   for (let i = 0; i < reads.length; i += 20) {
     const out = await Promise.all(reads.slice(i, i + 20).map((f) => {
@@ -44,5 +62,5 @@ export async function GET(req: Request) {
     if (bad?.error) return NextResponse.json({ error: bad.error.message, rows: n, lines }, { status: 500 });
     lines += out.reduce((t, r) => t + (r.data || []).length, 0);
   }
-  return NextResponse.json({ ok: true, system: set.system, rows: n, lines });
+  return NextResponse.json({ ok: true, system: set.system, rows: n, lines, unchanged: same });
 }
