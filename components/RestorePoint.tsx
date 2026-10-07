@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { zipStore } from "@/lib/zipStore";
 
 /**
  * Restore points: a full copy of every database table, to download and keep (owner only). The first one is meant to
@@ -36,6 +37,29 @@ export default function RestorePoint() {
     }
     setBusy(""); load();
   }
+  /** every file of a restore point in one .zip (fresh links first: they last an hour) */
+  const [zipping, setZipping] = useState(""), [zipMsg, setZipMsg] = useState("");
+  async function downloadZip(id: string) {
+    setErr(""); setZipping(id);
+    try {
+      const r = await fetch("/api/backup/full", { cache: "no-store" }); const j = await r.json().catch(() => ({}));
+      const b = ((j.backups || []) as RP[]).find((x) => x.id === id);
+      if (!b?.links.length) throw new Error("No files to download yet.");
+      const folder = `restore-point-${b.created_at.slice(0, 16).replace(/[:T]/g, "-")}`;
+      const files: { name: string; data: Uint8Array }[] = [];
+      for (const [i, f] of b.links.entries()) {
+        setZipMsg(`Downloading ${i + 1} of ${b.links.length}…`);
+        const res = await fetch(f.url);
+        if (!res.ok) throw new Error(`${f.name}: ${res.status}`);
+        files.push({ name: `${folder}/${f.name}`, data: new Uint8Array(await res.arrayBuffer()) });
+      }
+      setZipMsg("Making the zip…");
+      const url = URL.createObjectURL(zipStore(files));
+      const a = document.createElement("a"); a.href = url; a.download = `${folder}.zip`; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) { setErr("Couldn't make the zip: " + (e instanceof Error ? e.message : String(e))); }
+    setZipMsg(""); setZipping("");
+  }
   if (denied) return null;
   return (
     <section className="panel" style={{ marginTop: 14 }}>
@@ -56,7 +80,8 @@ export default function RestorePoint() {
               <span className="faint">{b.status === "done" ? `${b.tables} tables, ${b.rows.toLocaleString()} rows` : `${b.done} of ${b.tables} tables saved`}{b.created_by ? ` · ${b.created_by}` : ""}</span>
             </div>
             {b.status !== "done" && !busy && <button type="button" className="btn sm" onClick={() => make(b.id)}>Continue</button>}
-            {b.links.length > 0 && <details><summary>Download {b.links.length} files</summary>
+            {b.links.length > 0 && <button type="button" className="btn primary sm" style={{ alignSelf: "flex-start" }} disabled={!!zipping || !!busy} onClick={() => downloadZip(b.id)}>{zipping === b.id ? zipMsg || "Working…" : `Download all ${b.links.length} files as one .zip`}</button>}
+            {b.links.length > 0 && <details><summary>Or download them one by one</summary>
               <ul className="rp-files">{b.links.map((f) => <li key={f.name}><a href={f.url} download={f.name}>{f.name}</a> <span className="faint">{size(f.bytes)}</span></li>)}</ul>
               <div className="faint" style={{ fontSize: 12 }}>Links last an hour. Start with README.txt. Keep the files somewhere private: they include customer details and pay rates.</div>
             </details>}
