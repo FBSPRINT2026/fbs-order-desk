@@ -194,6 +194,7 @@ export async function handleSent(admin: SupabaseClient, m: MailMsg, acct: Acct):
     meta: { references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, ...body, mailbox: "sent", account_id: acct.id, account: acct.email },
   });
   await closeAnswered(admin, m, "Answered in Outlook");
+  await closeWrittenTo(admin, [...m.to, ...m.cc].map((x) => lc(x.address)), m.date.toISOString(), "Answered in Outlook");
   return "sent";
 }
 
@@ -202,6 +203,15 @@ export async function closeAnswered(admin: SupabaseClient, m: Pick<MailMsg, "inR
   const ids = [...new Set([m.inReplyTo, ...m.references].filter(Boolean))];
   if (!ids.length) return;
   const { data: acts } = await admin.from("activities").select("id").in("external_id", ids).eq("direction", "in");
+  const aIds = (acts || []).map((x) => x.id as string);
+  if (aIds.length) await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: by }).in("activity_id", aIds).eq("kind", "email_reply").in("status", ["open", "snoozed"]);
+}
+
+/** any later email to a person answers what they sent before it, even outside the thread (lib/inbox.ts agrees) */
+export async function closeWrittenTo(admin: SupabaseClient, addrs: string[], at: string, by: string) {
+  const to = [...new Set(addrs.filter((x) => x && !OWN_DOMAINS.has(domainOf(x))))];
+  if (!to.length) return;
+  const { data: acts } = await admin.from("activities").select("id").eq("kind", "email").eq("direction", "in").in("from_email", to).lt("occurred_at", at).gte("occurred_at", new Date(Date.parse(at) - 60 * 864e5).toISOString());
   const aIds = (acts || []).map((x) => x.id as string);
   if (aIds.length) await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: by }).in("activity_id", aIds).eq("kind", "email_reply").in("status", ["open", "snoozed"]);
 }

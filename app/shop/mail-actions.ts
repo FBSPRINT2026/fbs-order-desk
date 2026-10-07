@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { accountById, accountForUser, cfgOf, DEFAULT_MAIL_HOST, encryptSecret, publicAccount, type MailAccount } from "@/lib/mail/config";
 import { checkSending, sendFromMailbox } from "@/lib/mail/send";
 import { imapClient } from "@/lib/mail/imap";
-import { addContact, closeAnswered, saveBody } from "@/lib/mail/process";
+import { addContact, closeAnswered, closeWrittenTo, saveBody } from "@/lib/mail/process";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 import { detectSignature } from "@/lib/mail/signature";
 import { runAccount } from "@/lib/mail/run";
@@ -95,6 +95,7 @@ export async function sendEmailReply(input: { activityId: string; subject: strin
       created_by: email || "staff", ai_processed_at: new Date().toISOString(), meta: { references: refs.slice(-20), mailbox: "sent", via: "portal", account_id: from.id, account: from.email, ...body, html_checked: true },
     });
     await closeAnswered(admin, { inReplyTo: (a.external_id as string) || "", references: refs }, email || "staff");
+    await closeWrittenTo(admin, [String(a.from_email || "")], new Date().toISOString(), email || "staff");
     if (input.suggestionId) await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: email || "staff" }).eq("id", input.suggestionId);
     return { ok: true as const };
   } catch (e) { return fail(e); }
