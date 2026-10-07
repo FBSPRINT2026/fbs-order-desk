@@ -344,7 +344,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const cvOrig = useRef<HTMLCanvasElement>(null);
   // like Separo's soft proof: the print, the original art, or the two side by side with a slider
-  const [view, setView] = useSticky<"proof" | "original" | "compare">("sep.view", "proof");
+  const [view, setView] = useSticky<"proof" | "original" | "compare" | "films">("sep.view", "proof");
+  // "Films": every screen's film side by side in print order, black = ink, to check before printing
+  const films = view === "films" && !solo;
   const [split, setSplit] = useState(50);
   // where the art sits in the stage (it's shrunk to fit), so the compare slider runs exactly across it
   const [artBox, setArtBox] = useState<{ l: number; w: number } | null>(null);
@@ -901,6 +903,12 @@ export default function SeparationStudio({ id }: { id: string }) {
   // "Shirt color" on an ink: that color is the shirt (knocked out), and the viewer's shirt turns that color; unchecking
   // goes back to the shirt it was
   const shirtBefore = useRef<string | null>(null);
+  // an ink very close to the shirt picked (Rise of the Titans: PMS 2728 C on a Royal shirt, ΔE 5): ask whether the
+  // shirt should be that color, even when it's already left out on its own. Yes = not printed, the shirt shows
+  // through; No = printed. Either answer is kept on the ink, so it's asked once (Nicholas, Oct 7 2026).
+  // 15: close enough to ask (navy art on a royal shirt, ΔE 18, isn't asked)
+  const SHIRT_CLOSE = 15;
+  function answerShirt(i: number, yes: boolean) { setInks((l) => l.map((x, j) => (j === i ? { ...x, shirt: yes } : x))); }
   function shirtInk(i: number, on: boolean) {
     const k = inks[i]; if (!k) return;
     setInks((l) => l.map((x, j) => (j === i ? { ...x, shirt: on } : on && x.shirt === true ? { ...x, shirt: undefined } : x)));
@@ -1101,6 +1109,14 @@ export default function SeparationStudio({ id }: { id: string }) {
       {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
       {err && <div className="pv-err">{err}</div>}
       {/* a customer's mockup (.ai / PDF art on a shirt photo): the shirt was left out and the art read as shapes */}
+      {!noShirt && inks.map((k, i) => ({ k, i, d: deltaE(k.hex, st.garment) })).filter(({ k, d }) => k.shirt === undefined && d < SHIRT_CLOSE).slice(0, 2).map(({ k, i, d }) => (
+        <div key={k.hex + i} className="sep-ask">
+          <span className="sep-ask-sw" style={{ background: shown(k) }} aria-hidden /><span className="sep-ask-sw" style={{ background: st.garment }} aria-hidden />
+          <span><b data-notranslate>{k.name}</b> is very close to the <b>{shirtLabel}</b> shirt{st.dropGarment && d < 12 ? " and is being left to the shirt" : ""}. Let the shirt be that color (don&apos;t print it)?</span>
+          <button type="button" className="btn sm primary" onClick={() => answerShirt(i, true)}>Yes, use the shirt</button>
+          <button type="button" className="btn sm" onClick={() => answerShirt(i, false)}>No, print it</button>
+        </div>
+      ))}
       {vart?.ok && vart.mockup && <div className="sep-art-note">{vart.mockup}. Check the proof: if something you need was under the shirt, upload the art without the shirt.</div>}
       {!!(row?.settings as { art?: SepArt } | undefined)?.art?.note && <div className="sep-art-note">{(row!.settings as { art: SepArt }).art.note}{(row!.settings as { art: SepArt }).art.original ? ` (Original kept: ${(row!.settings as { art: SepArt }).art.original!.name}.)` : ""}</div>}
       <div className="sep-topbar">
@@ -1292,13 +1308,14 @@ export default function SeparationStudio({ id }: { id: string }) {
           )}
           <datalist id="sep-inklist">{[...Object.keys(WILFLEX_NAMES), ...PMS_NAMES].map((n) => <option key={n} value={n} />)}</datalist>
           <div className="sep-vbar">
-            <div className="rv-seg">{([["proof", "Proof"], ["compare", "Compare"], ["original", "Original"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => { setView(k); setSolo(null); }}>{l}</button>)}</div>
+            <div className="rv-seg">{([["proof", "Proof"], ["compare", "Compare"], ["original", "Original"], ["films", "Films"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => { setView(k); setSolo(null); }}>{l}</button>)}</div>
             <div className="rv-seg">{([["shirt", "On the shirt"], ["checker", "Transparent"]] as const).map(([k, l]) => <button key={k} type="button" className={bg === k ? "on" : ""} onClick={() => setBg(k)}>{l}</button>)}</div>
           </div>
-          <div className={"sep-stage" + ((bg === "checker" || noShirt) && !solo ? " checker" : "")} style={{ background: solo ? "#fff" : bg === "shirt" && !noShirt ? st.garment : undefined }}>
-            <div className="sep-canvases">
+          <div className={"sep-stage" + ((bg === "checker" || noShirt) && !solo && !films ? " checker" : "")} style={{ background: solo || films ? "#fff" : bg === "shirt" && !noShirt ? st.garment : undefined }}>
+            {films && res && <FilmsView plates={plates} w={res.w} h={res.h} onOpen={(k) => { setSolo(k); setLoupe(null); }} />}
+            <div className={"sep-canvases" + (films ? " gone" : "")}>
               <canvas ref={cv} className={(pick ? "pick " : solo ? "zoom " : "") + (view === "original" && !solo ? "gone" : "")} onClick={onPick} />
-              <canvas ref={cvOrig} className={"sep-orig" + (view === "proof" || solo ? " gone" : "")} style={view === "compare" && !solo ? { clipPath: `inset(0 ${100 - split}% 0 0)` } : undefined} onClick={onPick} />
+              <canvas ref={cvOrig} className={"sep-orig" + (view === "proof" || view === "films" || solo ? " gone" : "")} style={view === "compare" && !solo ? { clipPath: `inset(0 ${100 - split}% 0 0)` } : undefined} onClick={onPick} />
               {view === "compare" && !solo && <input className="sep-split" type="range" min={0} max={100} value={split} onChange={(e) => setSplit(+e.target.value)} aria-label="Original | proof" style={artBox ? { left: artBox.l, width: artBox.w, right: "auto" } : undefined} />}
             </div>
             {busy && <div className="sep-busy">{busy}</div>}
@@ -1310,7 +1327,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <small>{loupe ? <>{LOUPE_IN}&quot; of film at {st.dpi} dpi{(st.method === "sim" || plates.find((p) => p.key === solo)?.tonal) ? `, ${st.lpi} lpi ${DOT_NAME[st.dot || "ellipse"]} dots` : ", solid"}. Click elsewhere to move.</> : "Film close-up"}</small>
             </div>
           )}
-          <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). Click it for a close-up of the real film. <button type="button" className="linkbtn" onClick={() => { setSolo(null); setLoupe(null); }}>Back to the proof</button></> : view === "compare" ? <>Left of the line: the original art. Right: how it prints.</> : <>{view === "original" ? "The original art" : "Soft proof: how it prints"}{noShirt ? " (no shirt picked: every color prints)" : bg === "shirt" ? ` on a ${shirtLabel} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
+          <div className="sep-legend faint">{solo ? <>Film for <b>{plates.find((p) => p.key === solo)?.name}</b> (black = ink). Click it for a close-up of the real film. <button type="button" className="linkbtn" onClick={() => { setSolo(null); setLoupe(null); }}>{view === "films" ? "Back to all films" : "Back to the proof"}</button></> : films ? <>The films, in print order: black = ink, exactly what prints on each screen. Halftone screens show their tone here; click a film to see it bigger and its real dots up close.</> : view === "compare" ? <>Left of the line: the original art. Right: how it prints.</> : <>{view === "original" ? "The original art" : "Soft proof: how it prints"}{noShirt ? " (no shirt picked: every color prints)" : bg === "shirt" ? ` on a ${shirtLabel} shirt` : ""} · {plates.length} screen{plates.length === 1 ? "" : "s"}{res?.dropped.length ? ` · ${res.dropped.length} color${res.dropped.length === 1 ? "" : "s"} left to the shirt` : ""}</>}</div>
         </section>
 
         {/* screens, press, films, coach */}
@@ -1463,6 +1480,32 @@ async function jpegOf(f: File): Promise<string | null> {
     const g = t.getContext("2d")!; g.fillStyle = "#fff"; g.fillRect(0, 0, t.width, t.height); g.drawImage(im, 0, 0, t.width, t.height);
     URL.revokeObjectURL(u); return t.toDataURL("image/jpeg", 0.85).split(",")[1];
   } catch { return null; }
+}
+
+/** "Films" view: each screen's film in print order, black where the ink goes (a halftone screen in its tone); a film
+ *  opens on its own (with the close-up of the real dots) when clicked */
+function FilmsView({ plates, w, h, onOpen }: { plates: Plate[]; w: number; h: number; onOpen: (key: string) => void }) {
+  return (
+    <div className="sep-films">
+      {plates.map((p, i) => (
+        <button key={p.key} type="button" className="sep-film" onClick={() => onOpen(p.key)} title={`See the ${p.name} film bigger, and its real dots`}>
+          <FilmCanvas p={p} w={w} h={h} />
+          <span className="sep-film-l"><b>{i + 1}</b> <span data-notranslate>{p.name}</span>{p.tonal ? <small> · halftone</small> : null}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+function FilmCanvas({ p, w, h }: { p: Plate; w: number; h: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = ref.current; if (!c) return;
+    c.width = w; c.height = h;
+    const x = c.getContext("2d")!, d = x.createImageData(w, h);
+    for (let i = 0; i < p.alpha.length; i++) { const v = 255 - p.alpha[i]; d.data[i * 4] = d.data[i * 4 + 1] = d.data[i * 4 + 2] = v; d.data[i * 4 + 3] = 255; }
+    x.putImageData(d, 0, 0);
+  }, [p, w, h]);
+  return <canvas ref={ref} aria-label={`${p.name} film`} />;
 }
 
 /** No art yet: upload a picture or SVG straight to this separation. */
