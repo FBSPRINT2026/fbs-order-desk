@@ -5639,3 +5639,7 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .mv-strip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 12px;padding:9px 12px;border-radius:9px;background:var(--warn-bg,#fff4d6);color:var(--warn-ink,#8a5a00);font-size:13.5px}
 .mv-strip > span{flex:1 1 300px}
 .mv-strip.on{background:var(--surface-2);color:var(--ink-2)}
+/* Send to Printavo (40,000-series orders during the move) */
+.pvs-strip{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0;padding:10px 14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:13.5px}
+.pvs-ok{font-size:15px}
+.pvs-who{font-size:14px}

@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getCustomer, getOrder, type PvCustomer } from "@/lib/printavo";
+import { getCustomer, getOrder, PrintavoError, type PvCustomer } from "@/lib/printavo";
 import { fileUrls, orderFiles, type PvAddress, type PvOrder } from "@/lib/archive";
 
 /**
@@ -93,6 +93,9 @@ export async function ensureCustomer(sb: SupabaseClient, printavoCustomerId: str
 
 /** Brings over one Printavo invoice or quote, exactly as it is. Importing again refreshes it (files already copied are kept). */
 export async function importOrder(sb: SupabaseClient, printavoId: string, customerId?: string | null): Promise<{ id: string; visualId: string; filesLeft: number; warnings: string[]; order: PvOrder }> {
+  // sent from the new system (40,000 series): that order is the real one, the Printavo copy is never imported
+  const { data: ours } = await sb.from("orders").select("number").eq("printavo_id", printavoId).maybeSingle();
+  if (ours) throw new PrintavoError(`Not imported: this is order #${ours.number}, sent to Printavo from the new system.`);
   // history before 2026 is locked (migration 082): kept exactly as imported, never read again or rewritten
   const { data: locked } = await sb.from("archived_orders").select("id, visual_id, data, files_total, files_copied, files").eq("printavo_id", printavoId).eq("locked", true).maybeSingle();
   if (locked) {
@@ -100,6 +103,7 @@ export async function importOrder(sb: SupabaseClient, printavoId: string, custom
     return { id: locked.id as string, visualId: locked.visual_id as string, filesLeft: Math.max(0, (locked.files_total as number) - done), warnings: ["Locked history (before 2026): kept as imported."], order: locked.data as PvOrder };
   }
   const o = await getOrder(printavoId);
+  if (+o.visualId >= 40000) throw new PrintavoError(`Not imported: Printavo #${o.visualId} is in the 40,000 series, which belongs to the new system.`);
   const cid = customerId || (o.customer.id ? await ensureCustomer(sb, o.customer.id) : null);
   if (!cid) throw new Error("This order has no customer in Printavo.");
   const { data: prev } = await sb.from("archived_orders").select("id, files, data_hash").eq("printavo_id", o.id).maybeSingle();

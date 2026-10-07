@@ -3,6 +3,7 @@ import JobLabor from "@/components/team/JobLabor";
 import JobFiles from "@/components/job/JobFiles";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
+import SendToPrintavo, { PrintavoLink } from "@/components/SendToPrintavo";
 import { SITE_URL } from "@/lib/config";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -504,6 +505,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <optgroup label="Quote">{STATUSES.filter((s) => s.type === "quote").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>
+          {o.number >= 40000 && o.number < 50000 && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
+            <SendToPrintavo orderId={o.id} onSaved={save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
           {o.type === "quote" && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
           <a className="btn" href={`/print/${o.id}`} target="_blank" rel="noreferrer">{o.type === "quote" ? "Quote PDF" : "Invoice PDF"}</a>
           <a className="btn" href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
@@ -513,6 +516,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <button className={"btn danger" + (armed === "del" ? " armed" : "")} type="button" onClick={del}>{armed === "del" ? "Confirm delete" : "Delete"}</button>
         </div>
       </div>
+      {(() => { const x = o as Order & { printavo_id?: string | null; printavo_visual_id?: string | null; printavo_state?: { url?: string; publicUrl?: string; status?: string } | null }; return x.printavo_id ? <PrintavoLink visualId={x.printavo_visual_id || ""} url={x.printavo_state?.url} publicUrl={x.printavo_state?.publicUrl} status={x.printavo_state?.status} /> : null; })()}
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
       {o.status === "request" && (
         <div className="callout req-callout">

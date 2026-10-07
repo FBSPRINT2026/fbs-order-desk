@@ -2,7 +2,9 @@ import "server-only";
 import type { PvAddress, PvFile, PvGroup, PvLine, PvMessage, PvOrder, PvTransaction } from "@/lib/archive";
 
 /**
- * Printavo API v2 (GraphQL). Read-only: nothing here can change anything in Printavo (see assertReadOnly).
+ * Printavo API v2 (GraphQL). Read-only (see assertReadOnly), with one exception decided on Oct 7, 2026 for the move off
+ * Printavo: a 40,000-series order can be sent into Printavo by a staff click (transitionWrite: creates the quote and
+ * sets its status, nothing else, never on anything that came from Printavo).
  * Limits: 10 requests per 5 seconds per account. We send at most one every 0.8 seconds and back off when Printavo says slow down.
  */
 const PV_URL = "https://www.printavo.com/api/v2";
@@ -35,6 +37,27 @@ export function assertReadOnly(query: string) {
 
 export async function pv<T = Record<string, unknown>>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
   assertReadOnly(query);
+  return request<T>(query, variables, true);
+}
+
+/** The only Printavo changes the portal makes: what "Send to Printavo" needs for a 40,000-series order. */
+const TRANSITION_WRITES = new Set(["quoteCreate", "statusUpdate"]);
+/**
+ * Sends one change to Printavo for a 40,000-series order (40,000-49,999: entered here during the move, produced from
+ * Printavo until Nov 2). Anything else is refused before it leaves our server. Not retried: a write that may have
+ * happened is never sent twice.
+ */
+export async function transitionWrite<T = Record<string, unknown>>(query: string, variables: Record<string, unknown>, orderNumber: number): Promise<T> {
+  if (!(orderNumber >= 40000 && orderNumber < 50000)) throw new PrintavoError("Blocked: only orders #40000-#49999 can be sent to Printavo.");
+  const body = query.replace(/#[^\n]*/g, " ").replace(/"(?:[^"\\]|\\.)*"/g, '""').trim();
+  const m = body.match(/^mutation\b[^{]*\{\s*(\w+)\s*[(:{]/);
+  const fields = [...body.matchAll(/(?:^|[{\s])(\w+)\s*\(/g)].map((x) => x[1]);
+  if (!m || !TRANSITION_WRITES.has(m[1]) || (body.match(/\bmutation\b/g) || []).length !== 1 || /\bsubscription\b/.test(body) || fields.some((f) => /(Create|Update|Delete|Duplicate|Creates|Updates|Deletes)$/.test(f) && !TRANSITION_WRITES.has(f)))
+    throw new PrintavoError("Blocked: the portal only creates the quote and sets its status in Printavo.");
+  return request<T>(query, variables, false);
+}
+
+async function request<T>(query: string, variables: Record<string, unknown>, retry: boolean): Promise<T> {
   const email = process.env.PRINTAVO_EMAIL?.trim(), token = process.env.PRINTAVO_TOKEN?.trim();
   if (!email || !token) throw new PrintavoError("Printavo isn't connected (PRINTAVO_EMAIL / PRINTAVO_TOKEN missing in Vercel).");
   for (let attempt = 0; ; attempt++) {
@@ -45,18 +68,20 @@ export async function pv<T = Record<string, unknown>>(query: string, variables: 
     try {
       r = await fetch(PV_URL, { method: "POST", headers: { "Content-Type": "application/json", email, token }, body: JSON.stringify({ query, variables }), cache: "no-store" });
     } catch (e) {
-      if (attempt < 3) { await sleep(1500 * (attempt + 1)); continue; }
+      if (retry && attempt < 3) { await sleep(1500 * (attempt + 1)); continue; }
       throw new PrintavoError("Couldn't reach Printavo: " + (e instanceof Error ? e.message : String(e)));
     }
     const j = await r.json().catch(() => null) as { data?: T; errors?: { message: string }[] } | null;
     const msg = j?.errors?.map((e) => e.message).join("; ") || "";
     if (r.status === 429 || /rate limit|throttl|too many requests/i.test(msg)) {
       // back off: as long as Printavo says (at least 10 seconds); after 3 tries give up for now
-      if (attempt < 3) { const ra = +(r.headers.get("retry-after") || 0); await sleep(Math.max(10000, Math.min(ra * 1000, 60000)) * (attempt + 1)); continue; }
+      if (retry && attempt < 3) { const ra = +(r.headers.get("retry-after") || 0); await sleep(Math.max(10000, Math.min(ra * 1000, 60000)) * (attempt + 1)); continue; }
       throw new PrintavoThrottled("Printavo asked us to slow down. The sync pauses for a few minutes and then carries on.");
     }
-    if (r.status >= 500 && attempt < 3) { await sleep(2000 * (attempt + 1)); continue; }
+    if (retry && r.status >= 500 && attempt < 3) { await sleep(2000 * (attempt + 1)); continue; }
     if (!r.ok && !j?.data) throw new PrintavoError(`Printavo answered HTTP ${r.status}${msg ? ": " + msg : ""}`);
+    // a change that partly worked (the quote made, a mockup refused) comes back with its warnings: never sent twice
+    if (msg && !retry) { const d = (j?.data || {}) as Record<string, unknown>; if (Object.values(d).every((v) => v == null)) throw new PrintavoError("Printavo: " + msg); return { ...d, __warnings: msg } as T; }
     if (msg && !j?.data) throw new PrintavoError("Printavo: " + msg);
     if (msg) console.warn("[printavo] partial errors:", msg);
     return (j?.data || {}) as T;

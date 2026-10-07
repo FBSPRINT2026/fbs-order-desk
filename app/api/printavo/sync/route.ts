@@ -105,8 +105,13 @@ async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typ
   const ids = orders.map((o) => o.id);
   const { data: have } = await admin.from("printavo_index").select("printavo_id, fingerprint, status, imported_fingerprint, archived_id").in("printavo_id", ids);
   const known = new Map(((have || []) as Idx[]).map((r) => [r.printavo_id, r]));
+  // orders made here and sent into Printavo (the 40,000 series) are ours already: never imported back as a second copy,
+  // nor anything numbered 40,000 or up in Printavo
+  const { data: linked } = await admin.from("orders").select("printavo_id").in("printavo_id", ids);
+  const ours = new Set((linked || []).map((r) => String(r.printavo_id)));
   const back: string[] = [];
   const rows = orders.flatMap((o) => {
+    if (ours.has(o.id) || +o.visualId >= 40000) return [];
     const k = known.get(o.id);
     const row = { printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "pending", seen_sweep: pass || currentPass }; // (every row sends the same columns; an order seen by the quick check counts as seen)
     // older than 30 days: left as it is

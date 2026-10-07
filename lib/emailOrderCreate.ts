@@ -161,7 +161,8 @@ export function confirmationReply(o: { number: number; id: string; nickname: str
     "",
     "Thanks for your order! Please see below.",
     "",
-    `Here's a link to your order confirmation: ${SITE_URL}/portal/orders/${o.id}`,
+    // during the move (40,000 series) customers get Printavo's invoice page: the link is filled in by Send to Printavo
+    `Here's a link to your order confirmation: ${o.number >= 40000 && o.number < 50000 ? "[Printavo link: press Send to Printavo on the order first]" : `${SITE_URL}/portal/orders/${o.id}`}`,
     "",
     `Order #${o.number}${o.nickname ? `: ${o.nickname}` : ""}`,
     ...lines,
