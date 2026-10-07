@@ -144,34 +144,48 @@ function filmDraw(p: FilmPage, tag: string, marks: FilmMarks, i: number, mt: num
   return `q ${aw.toFixed(2)} 0 0 ${ah.toFixed(2)} ${ms} ${mt} cm /Im${i} Do Q\n0 G 0 g 0.75 w\n` +
     (marks.targets === false ? "" : target(tx, tTop) + target(tx, tBot)) + label;
 }
-/** a PDF of one page, the given content, fonts and 1-bit images /Im0…/ImN */
-async function sheetPdf(W: number, H: number, content: string, imgs: FilmPage[], title: string, z: (u8: Uint8Array) => Promise<Uint8Array>) {
+/** a PDF of pages, each its size, content and 1-bit images (/Im0…/ImN on that page) */
+type Sheet = { W: number; H: number; content: string; imgs: FilmPage[] };
+async function sheetsPdf(sheets: Sheet[], title: string, z: (u8: Uint8Array) => Promise<Uint8Array>) {
   const parts: Uint8Array[] = [], offsets: number[] = []; let pos = 0;
   const push = (x: Uint8Array | string) => { const b = typeof x === "string" ? enc.encode(x) : x; parts.push(b); pos += b.length; };
   const obj = (n: number, body: (Uint8Array | string)[]) => { offsets[n] = pos; push(`${n} 0 obj\n`); for (const b of body) push(b); push("\nendobj\n"); };
   push("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+  // 1 catalog, 2 pages, 3 font, then per sheet: page, content, its images
+  const first: number[] = []; let next = 4;
+  for (const sh of sheets) { first.push(next); next += 2 + sh.imgs.length; }
   obj(1, ["<< /Type /Catalog /Pages 2 0 R >>"]);
-  obj(2, ["<< /Type /Pages /Kids [4 0 R] /Count 1 >>"]);
+  obj(2, [`<< /Type /Pages /Kids [${first.map((n) => `${n} 0 R`).join(" ")}] /Count ${sheets.length} >>`]);
   obj(3, ["<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"]);
-  const cz = await z(enc.encode(content));
-  obj(4, [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W.toFixed(2)} ${H.toFixed(2)}] /Resources << /Font << /F1 3 0 R >> /XObject << ${imgs.map((_, i) => `/Im${i} ${6 + i} 0 R`).join(" ")} >> >> /Contents 5 0 R >>`]);
-  obj(5, [`<< /Length ${cz.length} /Filter /FlateDecode >>\nstream\n`, cz, "\nendstream"]);
-  for (let i = 0; i < imgs.length; i++) {
-    const p = imgs[i], img = await z(p.bits);
-    obj(6 + i, [`<< /Type /XObject /Subtype /Image /Width ${p.W} /Height ${p.H} /ColorSpace /DeviceGray /BitsPerComponent 1 /Decode [1 0] /Filter /FlateDecode /Length ${img.length} >>\nstream\n`, img, "\nendstream"]);
+  for (let s2 = 0; s2 < sheets.length; s2++) {
+    const sh = sheets[s2], n = first[s2], cz = await z(enc.encode(sh.content));
+    obj(n, [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${sh.W.toFixed(2)} ${sh.H.toFixed(2)}] /Resources << /Font << /F1 3 0 R >> /XObject << ${sh.imgs.map((_, i) => `/Im${i} ${n + 2 + i} 0 R`).join(" ")} >> >> /Contents ${n + 1} 0 R >>`]);
+    obj(n + 1, [`<< /Length ${cz.length} /Filter /FlateDecode >>\nstream\n`, cz, "\nendstream"]);
+    for (let i = 0; i < sh.imgs.length; i++) {
+      const p = sh.imgs[i], img = await z(p.bits);
+      obj(n + 2 + i, [`<< /Type /XObject /Subtype /Image /Width ${p.W} /Height ${p.H} /ColorSpace /DeviceGray /BitsPerComponent 1 /Decode [1 0] /Filter /FlateDecode /Length ${img.length} >>\nstream\n`, img, "\nendstream"]);
+    }
   }
-  const xref = pos, count = 6 + imgs.length;
+  const xref = pos, count = next;
   let x = `xref\n0 ${count}\n0000000000 65535 f \n`;
   for (let i = 1; i < count; i++) x += `${String(offsets[i] || 0).padStart(10, "0")} 00000 n \n`;
   push(x + `trailer\n<< /Size ${count} /Root 1 0 R /Info << /Title (${esc(title)}) /Creator (FBS Print Separations) >> >>\nstartxref\n${xref}\n%%EOF\n`);
   const out = new Uint8Array(pos); let o = 0; for (const b of parts) { out.set(b, o); o += b.length; }
   return out;
 }
-export async function filmSinglePdf(p: FilmPage, rollIn: number, tag: string, z: (u8: Uint8Array) => Promise<Uint8Array> = deflate, marks: FilmMarks = {}): Promise<Uint8Array> {
+const sheetPdf = (W: number, H: number, content: string, imgs: FilmPage[], title: string, z: (u8: Uint8Array) => Promise<Uint8Array>) => sheetsPdf([{ W, H, content, imgs }], title, z);
+/** one film as a page: just the film, upright unless too wide for the roll */
+function filmSheet(p: FilmPage, rollIn: number, tag: string, marks: FilmMarks): Sheet {
   const B = filmBox(p.widthIn * 72, p.heightIn * 72, rollIn);
-  // the film fills the page; turned a quarter turn when it's too wide for the roll
   const place = B.rot ? `q 0 1 -1 0 ${(B.w).toFixed(2)} 0 cm\n` : `q 1 0 0 1 0 0 cm\n`;
-  return sheetPdf(B.w, B.h, place + filmDraw(p, tag, marks, 0, B.mt) + "Q\n", [p], `${p.ink || p.label} ${tag}`, z);
+  return { W: B.w, H: B.h, content: place + filmDraw(p, tag, marks, 0, B.mt) + "Q\n", imgs: [p] };
+}
+/** every film in one PDF, a page each in print order, the same films Print films sends (the Films PDF download) */
+export async function filmPagesPdf(pages: FilmPage[], rollIn: number, tag: string, z: (u8: Uint8Array) => Promise<Uint8Array> = deflate, marks: FilmMarks = {}): Promise<Uint8Array> {
+  return sheetsPdf(pages.map((p) => filmSheet(p, rollIn, tag, marks)), `${tag} - ${pages.length} films`, z);
+}
+export async function filmSinglePdf(p: FilmPage, rollIn: number, tag: string, z: (u8: Uint8Array) => Promise<Uint8Array> = deflate, marks: FilmMarks = {}): Promise<Uint8Array> {
+  return sheetsPdf([filmSheet(p, rollIn, tag, marks)], `${p.ink || p.label} ${tag}`, z);
 }
 
 /**

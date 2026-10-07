@@ -8,7 +8,7 @@ import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors,
 import { closestPms, colorHex, matchWord, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
-import { filmPdf, filmRollPdf, filmSinglePdf, filmNestPdf, filmBox, nestLayout, deflate } from "@/lib/filmPdf";
+import { filmPagesPdf, filmSinglePdf, filmNestPdf, filmBox, nestLayout, deflate } from "@/lib/filmPdf";
 import { ripPdf } from "@/lib/ripPdf";
 import { folderPrintable, forgetFolder, pickFolder, savedFolder, sendToFolder } from "@/lib/filmFolder";
 import { illustratorPdf } from "@/lib/illustratorPdf";
@@ -787,9 +787,13 @@ export default function SeparationStudio({ id }: { id: string }) {
       sub: (p) => `${p.kind === "underbase" ? "underbase, flash after" : p.kind === "highlight" ? "highlight white" : "color"} - mesh ${p.mesh} - ${tonal || p.tonal ? `halftone: ${lpiOf(st, p.key)} lpi ${st.angle} deg` : "solid"} - print ${st.widthIn}" wide at 100%` }, deflate);
   }
   /** the films, black and finished (our dots): a page each, or all on one sheet for a roll printer */
-  async function filmsFile(rollIn = 0) {
-    const { pages } = await filmPages();
-    return rollIn ? filmRollPdf(pages, rollIn, title, deflate, { crop: st.cropMarks !== false, targets: st.regMarks !== false }) : filmPdf(pages);
+  /** the Films PDF download: the same films Print films sends (targets top and bottom ¾" from the art, the label by
+   *  the top target, no crop marks), a page each; nested on one sheet when "nest instead of trim" is on */
+  async function filmsFile(rollIn = ROLL_IN) {
+    const { pages, names } = await filmPages(), named = pages.map((p, i) => ({ ...p, ink: names[i] || `screen ${i + 1}` }));
+    let nest = false; try { nest = JSON.parse(localStorage.getItem("fbs:sep.films.nest") || "false") === true; } catch { /* no storage */ }
+    return nest && named.length > 1 ? filmNestPdf(named, rollIn, title, deflate, { targets: st.regMarks !== false })
+      : filmPagesPdf(named, rollIn, title, deflate, { targets: st.regMarks !== false });
   }
   /** Print films: one file per screen in print order, each upright (turned only if too wide for the roll) and just the
    *  size of its film, so FilmMaker (Auto Page, white space removed) trims the film after every screen */
