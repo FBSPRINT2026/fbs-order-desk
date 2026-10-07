@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { proposalToGroups } from "@/lib/ai/normalize";
 import { STATUSES, type Group } from "@/lib/pricing";
 import { isPicture, type EODraft } from "@/lib/emailOrderShared";
+import { trimPng } from "@/lib/pngTrim";
 
 /**
  * Make the order staff checked in the Inbox's "Create order" panel (lib/ai/emailOrder.ts suggested it):
@@ -66,10 +67,20 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
       const f = d.files.find((x) => x.path === path);
       const name = f?.name || path.split("/").pop() || "art";
       const to = `designs/${crypto.randomUUID()}/${safe(name.replace(/^[a-z0-9]+-/, ""))}`;
-      const cp = await admin.storage.from("proofs").copy(path, to);
-      if (cp.error) continue;
       let wh: { w: number; h: number } | null = null;
-      if (f && isPicture(f)) { const { data } = await admin.storage.from("proofs").download(to); if (data) wh = dims(Buffer.from(await data.arrayBuffer())); }
+      // pictures: a see-through PNG with empty space around the art is saved cropped to the art, so it scales right
+      const { data: blob } = f && isPicture(f) ? await admin.storage.from("proofs").download(path) : { data: null };
+      const buf = blob ? Buffer.from(await blob.arrayBuffer()) : null;
+      const trimmed = buf ? (() => { try { return trimPng(buf); } catch { return null; } })() : null;
+      if (trimmed) {
+        const up = await admin.storage.from("proofs").upload(to, trimmed.buf, { contentType: "image/png" });
+        if (up.error) continue;
+        wh = { w: trimmed.w, h: trimmed.h };
+      } else {
+        const cp = await admin.storage.from("proofs").copy(path, to);
+        if (cp.error) continue;
+        if (buf) wh = dims(buf);
+      }
       const { data: des } = await admin.from("designs").insert({
         customer_id: custId, name: (d.nickname || name.replace(/\.[^.]+$/, "")).slice(0, 120), file_path: to, file_name: name, file_type: f?.type || "",
         preview_path: f && isPicture(f) ? to : "", width_px: wh?.w || null, height_px: wh?.h || null, method: im.method || "screen",

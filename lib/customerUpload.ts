@@ -1,7 +1,7 @@
 "use client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PREVIEWABLE_TYPES, type Design } from "@/lib/pricing";
-import { makePreview } from "@/lib/artPrep";
+import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import { logoUploadUrl, saveMyLogo } from "@/app/portal/request-actions";
 
 function imageSize(f: File): Promise<{ w: number; h: number } | null> {
@@ -19,6 +19,8 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
  * files a browser can't show (PDF, AI, HEIC…) get a PNG preview made and uploaded too, then the server records it.
  */
 export async function uploadMyLogo(sb: SupabaseClient, f: File, name?: string, opts: { preview?: File; layers?: string; colors?: number; inks?: string } = {}): Promise<{ design: Design; url: string }> {
+  // a see-through logo with empty space around it is saved cropped to the art (not designer saves, which bring a preview)
+  if (!opts.preview && !opts.layers) f = (await cropFileToArt(f)) || f;
   const t = await logoUploadUrl(f.name);
   if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Upload failed");
   const up = await sb.storage.from("proofs").uploadToSignedUrl(t.path, t.token, f, { contentType: f.type || undefined });

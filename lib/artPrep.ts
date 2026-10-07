@@ -132,6 +132,33 @@ export function knockOut(img: HTMLImageElement, opts: { keepInside?: boolean } =
   return cropToArt(c, data, k, W, H, `#${hex(bg[0])}${hex(bg[1])}${hex(bg[2])}`);
 }
 
+/**
+ * At import: a see-through picture (PNG, WebP, GIF) with empty space around the art comes back cropped to the art at
+ * full resolution, so the saved file IS the art and it scales to the size it should print. Null when there's nothing
+ * to gain (no see-through margins, under 3% on every side) or the picture can't be read.
+ */
+export async function cropFileToArt(file: File): Promise<File | null> {
+  if (!/^image\/(png|webp|gif)$/i.test(file.type)) return null;
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const W = img.naturalWidth, H = img.naturalHeight;
+    if (!W || !H || W * H > 40_000_000) return null;
+    const { c, x } = canvasOf(img, W, H);
+    let data: ImageData;
+    try { data = x.getImageData(0, 0, W, H); } catch { return null; }
+    const b = artBox(data.data, W, H);
+    if (!b) return null;
+    const pad = 2, bx = Math.max(0, b.x - pad), by = Math.max(0, b.y - pad), bw = Math.min(W - bx, b.w + pad * 2), bh = Math.min(H - by, b.h + pad * 2);
+    if (bw >= W * 0.97 && bh >= H * 0.97) return null;
+    const out = document.createElement("canvas");
+    out.width = bw; out.height = bh;
+    out.getContext("2d")!.drawImage(c, bx, by, bw, bh, 0, 0, bw, bh);
+    const blob = await new Promise<Blob | null>((res) => out.toBlob(res, "image/png"));
+    return blob ? new File([blob], file.name.replace(/\.(webp|gif)$/i, ".png"), { type: "image/png" }) : null;
+  } catch { return null; } finally { URL.revokeObjectURL(url); }
+}
+
 /** Dots per inch a raster logo will print at, for a print width in inches. */
 export const effectiveDpi = (pxWidth: number, inches: number) => (pxWidth && inches ? Math.round(pxWidth / inches) : 0);
 

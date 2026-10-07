@@ -1,7 +1,7 @@
 "use client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Design } from "@/lib/pricing";
-import { makePreview } from "@/lib/artPrep";
+import { cropFileToArt, makePreview } from "@/lib/artPrep";
 
 /** Files the browser can draw as a preview. AI / EPS / PDF originals need a separate preview image. */
 export const PREVIEWABLE = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/i;
@@ -21,6 +21,8 @@ const safe = (n: string) => n.replace(/[^\w.\-]+/g, "_");
 
 /** Upload customer art as a new design (original file + preview) and return the saved record. */
 export async function uploadDesign(sb: SupabaseClient, opts: { file: File; preview?: File | null; customer_id: string | null; name?: string; colors?: number; inks?: string; notes?: string; method?: string; by?: string }): Promise<Design> {
+  // a see-through logo with empty space around it is saved cropped to the art, so it scales to its real print size
+  if (!opts.preview) { const cropped = await cropFileToArt(opts.file); if (cropped) opts = { ...opts, file: cropped }; }
   const key = crypto.randomUUID();
   const orig = `designs/${key}/${safe(opts.file.name)}`;
   const up = await sb.storage.from("proofs").upload(orig, opts.file, { contentType: opts.file.type || undefined });
