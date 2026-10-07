@@ -20,7 +20,8 @@ import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
-import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot, basePlacement, maxWidthFor, sideMaxWidth, viewsFor, guessHex, measureGarment, printWidth, spotFor, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { bodyOf, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
 import { planPrint, pxOfImage, type PrintPlan } from "@/lib/printPlan";
@@ -492,18 +493,41 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     return im.inks.split(",").map((z) => z.trim()).filter(Boolean).map((n) => ({ name: n, hex: colorHex(n) || "" }));
   };
+  // The garment the mockup is shown on: its middle size (2T-5T → 3T, adult → Large) and that size's measurements
+  // (supplier size chart, else typical). The photo scale and every print area follow it, so a toddler tee isn't sized
+  // like an adult Gildan 5000.
+  const bodyFor = (l?: Line): Body => bodyOf(l ? garmentFor(l) : null);
+  const body = bodyFor(lines[active] || lines[0]);
+  const scaleOf = (b: Body) => REF_BODY.widthIn / b.widthIn;
+  // a style without its size chart yet: ask S&S once (staff), so the body is measured, not typical
+  const askedSpecs = useRef(new Set<string>());
+  const shownG = lines[active] || lines[0] ? garmentFor((lines[active] || lines[0])!) : undefined;
+  useEffect(() => {
+    const g = shownG;
+    if (portal || !g || g.specs || !g.ss_style_id || askedSpecs.current.has(g.id)) return;
+    askedSpecs.current.add(g.id);
+    fetch(`/api/garments/specs?id=${encodeURIComponent(g.id)}`).then((r) => r.json()).then((j) => { if (j?.specs) setCatalog((cs) => cs.map((x) => (x.id === g.id ? { ...x, specs: j.specs } : x))); }).catch(() => null);
+  }, [shownG?.id, shownG?.specs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const spotFor = (loc: string, b: Body = body) => spotFor0(loc, b);
+  const maxWidthFor = (loc: string, r: number, b: Body = body) => maxWidthFor0(loc, r, b);
+  const printWidth = (size: string, loc: string, r: number, b: Body = body) => printWidth0(size, loc, r, b);
+  const sideMaxWidth = (loc: string, r: number, b: Body = body) => sideMaxWidth0(loc, r, b);
+  const autoSpot = (cur: string, v: View, dx: number, top: number, w: number, h: number) => autoSpot0(cur, v, dx, top, w, h, body);
+  const basePlacement = (loc: string, wIn: number, r: number, drop: number | null, sc: number, view?: View, fit?: Fit | null, b: Body = body) => basePlacement0(loc, wIn, r, drop, sc, view, fit, b);
   // the art's own proportions: cropped to what's left after the background came out (this session, or saved on the design)
   const ratioOf = (d?: Design) => {
     const t = d ? trims[d.id] || d.art_box || null : null;
     if (t?.w && t.h) return t.h / t.w;
     return d?.width_px && d?.height_px ? d.height_px / d.width_px : 0;
   };
-  const place = (im: Imprint, view?: View, fit?: Fit | null) => {
+  /** where a print sits on a photo; `on` = draw it on that garment line (its own size and print areas), else the one shown */
+  const place = (im: Imprint, view?: View, fit?: Fit | null, on?: Line) => {
     const d = designOf(im);
     const r = ratioOf(d) || 0.6;
-    const wIn = printWidth(im.size, im.location, ratioOf(d));
+    const bd = on ? bodyFor(on) : body;
+    const wIn = printWidth(im.size, im.location, ratioOf(d), bd);
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
-    const b = basePlacement(im.location, wIn, r, drop, scale, view, fit === undefined ? fitFor(line, view || viewsFor(im.location)[0]) : fit);
+    const b = basePlacement(im.location, wIn, r, drop, scaleOf(bd), view, fit === undefined ? fitFor(on || line, view || viewsFor(im.location)[0]) : fit, bd);
     // hand moves are stored in reference-photo pixels; scale them to this photo
     const o0 = offsets[im.id] || { dx: 0, dy: 0 }, o = { dx: o0.dx * b.k, dy: o0.dy * b.k };
     if (b.clip) {
@@ -521,9 +545,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const locsFor = (t: Side) => LOCATIONS.filter((z) => sideOf(z) === t);
   const views: View[] = (["front", "back"] as View[]).filter((v) => imprints.some((im) => viewsFor(im.location).includes(v)));
   const line = lines[active] || lines[0];
-  // designs are sized on a Large: adult L (22" chest) or youth L (18" chest) for youth styles
-  const isYouthStyle = (l?: Line) => { const z = (l && garmentFor(l)?.sizes) || []; return z.includes("YL") && !z.includes("L"); };
-  const scale = isYouthStyle(line) ? 22 / 18 : 1;
+  // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
+  const scale = scaleOf(body);
+  const shownOn = body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
   const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; const g = garmentFor(l); const ci = g?.color_images?.[l.color]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
 
   /** One close-up box for an imprint (used under the photos and, smaller, beside them for the selected tab). */
@@ -639,7 +663,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const x = layer.getContext("2d")!;
       if (crop) x.translate(-crop.x * k, -crop.y * k);
       for (const im of imprints.filter((m) => viewsFor(m.location).includes(v))) {
-        const p = place(im, v, fit);
+        const p = place(im, v, fit, l);
         if (!p.d || !artUrl(im)) continue;
         const art = await loadImg(artUrl(im)).catch(() => null);
         if (art) {
@@ -694,7 +718,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const u = photo(l, v);
     const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
     const fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
-    const p = place(im, v, fit); if (!p.d) return null;
+    const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
     const side = Math.min(PHOTO_W, Math.max(120, Math.max(p.w, p.h) * (p.rot ? 1.35 : 1.12)));
     const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
@@ -1109,7 +1133,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {Object.keys(offsets).length > 0 && <button className="mk-pill" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
                     </div>
                   )}
-                  {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill">Shown on {isYouthStyle(line) ? "a youth Large" : "an adult Large"}</span></div>}
+                  {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={`${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}</span></div>}
                 </>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => {

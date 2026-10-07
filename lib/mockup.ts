@@ -3,6 +3,8 @@
  * Everything here is in that 1000-wide coordinate space.
  * Calibrated on the Gildan 5000 photos (shirt on a form): print areas land where they do on a real shirt at ~34 px per inch.
  */
+import { REF_BODY, type Body } from "./garmentBody";
+
 export const PHOTO_W = 1000;
 export const PHOTO_H = 1250;
 export const PX_PER_IN = 34;
@@ -130,15 +132,37 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
 /** Which garment photos a location shows on. */
 export const viewsFor = (location: string): View[] => { const s = spotFor(location); return s.wrap ? ["front", "back"] : [s.view]; };
 /** Largest width (inches) that fits the location's max print area for a design of this height/width ratio. */
-export function maxWidthFor(location: string, ratio: number) { const s = spotFor(location); return ratio ? Math.min(s.maxW, s.maxH / ratio) : s.maxW; }
-export const spotFor = (location: string): Loc => LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 12, maxH: 14 };
+export function maxWidthFor(location: string, ratio: number, b?: Body | null) { const s = spotFor(location, b); return ratio ? Math.min(s.maxW, s.maxH / ratio) : s.maxW; }
+
+/**
+ * The print areas above are for an adult Large (22" wide body, 30" long). On a smaller garment (toddler, infant,
+ * youth) they scale to its body: positions move with the body (same spot on the photo), and the max print area grows
+ * a bit faster than the body shrinks (prints on small garments take up more of the shirt), rounded to 1/2".
+ * A 3T toddler tee (12.75" x 16.5") gets a full front of about 8.5" x 9.5".
+ */
+const half = (v: number) => Math.max(1, Math.round(v * 2) / 2);
+const kOf = (b?: Body | null) => {
+  if (!b) return null;
+  const kw = b.widthIn / REF_BODY.widthIn, kl = b.lengthIn / REF_BODY.lengthIn;
+  return kw >= 0.97 && kl >= 0.97 ? null : { kw, kl, gw: Math.min(1, kw * 1.2), gl: Math.min(1, kl * 1.2) };
+};
+function fitSpot(s: Loc, b?: Body | null): Loc {
+  const k = kOf(b);
+  if (!k) return s;
+  const maxW = half(s.maxW * k.gw), maxH = half(s.maxH * k.gl);
+  return { ...s, dx: s.dx ? s.dx * k.kw : s.dx, drop: s.drop != null ? s.drop * k.kl : s.drop, defW: Math.min(maxW, half(s.defW * k.gw)), maxW, maxH };
+}
+export const spotFor = (location: string, b?: Body | null): Loc => fitSpot(LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 12, maxH: 14 }, b);
+/** a print's size on this garment as the adult Large it would be (the location rules are in adult inches) */
+const asAdult = (b: Body | null | undefined, wIn: number, hIn: number) => { const k = kOf(b); return k ? { w: wIn / k.gw, h: hIn / k.gl, x: 1 / k.kw, y: 1 / k.kl } : { w: wIn, h: hIn, x: 1, y: 1 }; };
 
 /**
  * A small design on a big location usually belongs on a smaller one (a 3.5" logo marked Full Front is really a left chest).
  * Returns the better locations, best first (by where it sits: dxIn = inches right of center as you look at the shirt), or [] if it fits.
  */
-export function smallerSpot(location: string, wIn: number, hIn: number, dxIn = 0): string[] {
+export function smallerSpot(location: string, wIn: number, hIn: number, dxIn = 0, b?: Body | null): string[] {
   if (!wIn) return [];
+  { const a = asAdult(b, wIn, hIn); wIn = a.w; hIn = a.h; dxIn *= a.x; }
   const front = location === "Full Front" ? 5 : location === "Medium Front" ? 4 : 0;
   if (front && wIn <= front && (!hIn || hIn <= 5)) {
     const first = dxIn < -2 ? "Right Chest" : "Left Chest";
@@ -150,11 +174,11 @@ export function smallerSpot(location: string, wIn: number, hIn: number, dxIn = 0
 }
 
 /** Bigger locations a print could move to when it's grown past this location's max area (smallest that fits first). */
-export function biggerSpot(location: string, wIn: number, hIn: number): string[] {
-  const spot = spotFor(location);
+export function biggerSpot(location: string, wIn: number, hIn: number, b?: Body | null): string[] {
+  const spot = spotFor(location, b);
   if (spot.wrap) return [];
   const opts = spot.view === "back" ? ["Medium Back", "Full Back"] : ["Medium Front", "Full Front"];
-  return opts.filter((z) => z !== location && LOCATION_SPOTS[z].maxW >= wIn && LOCATION_SPOTS[z].maxH >= (hIn || 0) && LOCATION_SPOTS[z].maxW > spot.maxW);
+  return opts.filter((z) => { const o = spotFor(z, b); return z !== location && o.maxW >= wIn && o.maxH >= (hIn || 0) && o.maxW > spot.maxW; });
 }
 
 type Kind = "side-chest" | "center-chest" | "big" | "vertical" | "bottom" | "yoke";
@@ -171,9 +195,11 @@ const fits = (z: string, wIn: number, hIn: number) => { const s = LOCATION_SPOTS
  * dxIn = inches from center to the art's middle (+ = right as you look at the shirt), topIn = inches from the collar to the art's top.
  * The current location is kept whenever it's the same kind of spot and the print still fits it (a Full Front stays a Full Front).
  */
-export function autoSpot(current: string, view: View, dxIn: number, topIn: number, wIn: number, hIn: number): string {
+export function autoSpot(current: string, view: View, dxIn: number, topIn: number, wIn: number, hIn: number, b?: Body | null): string {
   const cur = LOCATION_SPOTS[current];
   if (!cur || cur.wrap) return current;
+  // judged in adult inches: on a toddler tee a 3" logo off to the side is still a left chest
+  { const a = asAdult(b, wIn, hIn); wIn = a.w; hIn = a.h; dxIn *= a.x; topIn *= a.y; }
   const side = dxIn >= 0 ? "Left" : "Right"; // right of center as you look = the wearer's left
   const off = Math.abs(dxIn);
   let z: string;
@@ -198,15 +224,15 @@ export function autoSpot(current: string, view: View, dxIn: number, topIn: numbe
 }
 
 /** The biggest a print can go on this side of the shirt (any location there), for a design of this height/width ratio. */
-export function sideMaxWidth(location: string, ratio: number) {
-  const s = spotFor(location);
-  if (s.wrap) return maxWidthFor(location, ratio);
-  return Math.max(...Object.keys(LOCATION_SPOTS).filter((z) => !LOCATION_SPOTS[z].wrap && LOCATION_SPOTS[z].view === s.view).map((z) => maxWidthFor(z, ratio)));
+export function sideMaxWidth(location: string, ratio: number, b?: Body | null) {
+  const s = spotFor(location, b);
+  if (s.wrap) return maxWidthFor(location, ratio, b);
+  return Math.max(...Object.keys(LOCATION_SPOTS).filter((z) => !LOCATION_SPOTS[z].wrap && LOCATION_SPOTS[z].view === s.view).map((z) => maxWidthFor(z, ratio, b)));
 }
 
 /** Width in inches from the imprint's print size ("11\" wide", "4\" tall", "MAX wide") and the design's proportions. */
-export function printWidth(size: string, location: string, ratio: number): number {
-  const spot = spotFor(location);
+export function printWidth(size: string, location: string, ratio: number, b?: Body | null): number {
+  const spot = spotFor(location, b);
   const s = (size || "").trim();
   // MAX: as big as fits the location's max print area
   if (/^max/i.test(s)) return ratio ? Math.min(spot.maxW, spot.maxH / ratio) : spot.maxW;
@@ -215,12 +241,12 @@ export function printWidth(size: string, location: string, ratio: number): numbe
   const v = +m[1];
   const w = /tall/i.test(s) ? (ratio ? v / ratio : v) : v;
   // never bigger than the location's max print area
-  return Math.min(w, maxWidthFor(location, ratio));
+  return Math.min(w, maxWidthFor(location, ratio, b));
 }
 
 /** Top-left of a design on the photo, before any hand adjustment. With a Fit, it's placed on that photo's measured shirt. */
-export function basePlacement(location: string, wIn: number, ratio: number, dropIn: number | null, scale: number, view?: View, fit?: Fit | null) {
-  const spot = spotFor(location);
+export function basePlacement(location: string, wIn: number, ratio: number, dropIn: number | null, scale: number, view?: View, fit?: Fit | null, b?: Body | null) {
+  const spot = spotFor(location, b);
   const k = fit?.s || 1;
   if (spot.wrap) {
     // centered on the sleeve's outer fold; half of it shows on this photo

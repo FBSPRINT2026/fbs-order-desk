@@ -1,6 +1,7 @@
 import "server-only";
 import { SIZES } from "@/lib/pricing";
 import { fabricLines } from "@/lib/fabric";
+import { parseInches, type GarmentSpecs } from "@/lib/garmentBody";
 
 /** S&S Activewear API v2 (https://api.ssactivewear.com/V2/Default.aspx). Basic auth: account number / API key. */
 const BASE = "https://api.ssactivewear.com/v2";
@@ -89,7 +90,29 @@ async function findStyle(q: string): Promise<SSStyle | null> {
   return null;
 }
 
-export type SSGarment = { style: string; brand: string; description: string; fabric: string; fabric_at: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; ss_style_id: number; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }> };
+export type SSGarment = { style: string; brand: string; description: string; fabric: string; fabric_at: string; colors: string[]; cost: number; sizes: string[]; size_costs: Record<string, number>; ss_style_id: number; image: string; color_images: Record<string, { front: string; back: string; side: string; hex: string }>; specs?: GarmentSpecs | null };
+
+/**
+ * A style's size chart from S&S (GET /v2/specs/?style=<styleID>): flat body width and body length per size, in
+ * inches. The Mockup Creator sizes the shirt photo and the print areas by it. A chest measured all the way around
+ * ("Chest", "Chest (to fit)") is halved to the flat width.
+ */
+export async function ssSpecs(styleID: number, youth?: boolean): Promise<GarmentSpecs> {
+  const rows = await ssGet<{ sizeName: string; specName: string; value: string }[]>(`/specs/?style=${styleID}`).catch(() => []);
+  const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
+  const sizes: GarmentSpecs["sizes"] = {};
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const raw = SIZE_MAP[(r.sizeName || "").toUpperCase().trim()] || (r.sizeName || "").toUpperCase().trim();
+    const z = youth && YOUTH[raw] ? YOUTH[raw] : raw;
+    const v = parseInches(r.value), n = (r.specName || "").toLowerCase();
+    if (!z || v == null || /sleeve|neck|shoulder|inseam|waist|hip|rise/.test(n)) continue;
+    const e = (sizes[z] ||= {});
+    if (/length/.test(n)) e.length = e.length || v;
+    else if (/width|across|1\/2|half/.test(n)) e.width = v;
+    else if (/chest|bust/.test(n) && !e.width) e.width = v > 30 || /to fit|circumference/.test(n) ? v / 2 : v;
+  }
+  return { sizes, source: "ss", at: new Date().toISOString() };
+}
 
 /** Look up a style on S&S and shape it like a catalog garment. Cost = your price (customerPrice). */
 export async function ssLookup(q: string, styleID?: number): Promise<SSGarment | null> {
@@ -136,6 +159,7 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
     size_costs,
     ss_style_id: st.styleID,
     color_images,
+    specs: await ssSpecs(st.styleID, youth).catch(() => null),
     image: st.styleImage ? `https://www.ssactivewear.com/${st.styleImage}` : "",
   };
 }
