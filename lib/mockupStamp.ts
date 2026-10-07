@@ -50,28 +50,44 @@ export async function stampCustomerMockup(blob: Blob, name: string): Promise<Fil
   return out ? new File([out], name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }) : null;
 }
 
+type SB = import("@supabase/supabase-js").SupabaseClient;
+
 /**
- * Stamp every customer mockup on an order into its Production files (skips ones already there, archived too).
- * Returns how many were added. Used right after Inbox → Create order, and again whenever the order is opened.
+ * Stamp every customer mockup on an order and put it in the order's Production notes & files (the side panel,
+ * `art_files`), skipping ones already there. Returns how many were added. Used right after Inbox → Create order,
+ * and again whenever the order is opened.
+ * Also moves what was first filed under the bottom "Production files & notes" (job_files, tags "Customer mockup" /
+ * "Customer files", Oct 7) into that panel.
  */
-export async function stampOrderMockups(sb: { storage: { from: (b: string) => { download: (p: string) => Promise<{ data: Blob | null }> } } }, orderId: string, groups: { customerMockups?: { path: string; name: string }[] }[]): Promise<number> {
-  const { addPhoto } = await import("@/components/job/JobFiles");
-  const todo = groups.flatMap((g, gi) => (g.customerMockups || []).map((m) => ({ m, gi })));
-  if (!todo.length) return 0;
-  const lists = await Promise.all(["0", "1"].map((a) => fetch(`/api/jobs/files?kind=o&id=${orderId}&archived=${a}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ items: [] }))));
-  const have = new Set(lists.flatMap((j: { items?: { file_name: string }[] }) => (j.items || []).map((x) => x.file_name)));
-  const many = groups.length > 1;
+export async function stampOrderMockups(sb: SB, orderId: string, groups: { customerMockups?: { path: string; name: string }[] }[]): Promise<number> {
+  const { data: af } = await sb.from("art_files").select("file_path").eq("order_id", orderId);
+  const have = new Set(((af || []) as { file_path: string }[]).map((x) => x.file_path));
   let added = 0;
-  for (const { m, gi } of todo) {
-    const fname = stampName(m.path);
-    if (have.has(fname)) continue;
-    have.add(fname);
+  // files filed under job_files earlier today: same storage file, listed in the side panel instead
+  const { data: jf } = await sb.from("job_files").select("id, tag, file_name, file_path, file_type").eq("order_id", orderId).eq("archived", false).in("tag", [STAMP_TAG, "Customer files"]);
+  for (const f of (jf || []) as { id: string; tag: string; file_name: string; file_path: string; file_type: string }[]) {
+    if (!f.file_path) continue;
+    if (!have.has(f.file_path)) {
+      const { error } = await sb.from("art_files").insert({ order_id: orderId, name: f.tag === STAMP_TAG ? `Customer supplied mockup.jpg` : f.file_name, file_path: f.file_path, file_type: f.file_type });
+      if (error) continue;
+      have.add(f.file_path); added++;
+    }
+    await fetch("/api/jobs/files", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id, archived: true }) }).catch(() => null);
+  }
+  const todo = groups.flatMap((g) => g.customerMockups || []);
+  for (const m of todo) {
+    const key = stampKey(m.path);
+    if ([...have].some((p) => p.includes(`custmockup-${key}`))) continue;
     const { data: blob } = await sb.storage.from("proofs").download(m.path);
     if (!blob) continue;
     const f = await stampCustomerMockup(blob, m.name || m.path.split("/").pop() || "mockup").catch(() => null);
     if (!f) continue;
-    const r = await addPhoto({ kind: "o", id: orderId }, new File([f], fname, { type: f.type }), `Customer supplied mockup: ${m.name || "mockup"}${many ? ` (group ${gi + 1})` : ""}. Reference only; we make our own mockup in the Mockup Creator.`, STAMP_TAG);
-    if (r.ok) added++;
+    const path = `art/${orderId}/${stampName(m.path)}`;
+    const up = await sb.storage.from("proofs").upload(path, f, { contentType: "image/jpeg", upsert: true });
+    if (up.error) continue;
+    const base = (m.name || "mockup").replace(/\.[^.]+$/, "");
+    const { error } = await sb.from("art_files").insert({ order_id: orderId, name: `Customer supplied mockup - ${base}.jpg`, file_path: path, file_type: "image/jpeg" });
+    if (!error) { have.add(path); added++; }
   }
   return added;
 }

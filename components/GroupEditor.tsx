@@ -193,10 +193,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
             {onMockup && <button className={"btn sm" + (locked ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
             {blockMsg && mockupBlock && <span className="ink-warn" style={{ margin: 0 }}>{blockMsg}</span>}
             {g.mockupAt && <span className="faint" style={{ fontSize: 12 }}>Mockup saved {new Date(g.mockupAt).toLocaleDateString()}</span>}
-            {(g.customerMockups || []).length > 0 && <span className="faint" style={{ fontSize: 12 }}>Customer&apos;s mockup:</span>}
-            {(g.customerMockups || []).map((m) => thumbUrls?.[m.path] ? (/\.pdf$/i.test(m.path)
-              ? <a key={m.path} href={thumbUrls[m.path]} target="_blank" rel="noreferrer" className="btn sm" title={m.name}>PDF: {m.name.slice(0, 24)}</a>
-              : <a key={m.path} href={thumbUrls[m.path]} target="_blank" rel="noreferrer" className="mk-thumb cust" title={`Customer's mockup: ${m.name}`}><img src={thumbUrls[m.path]} alt="Customer's mockup" /></a>) : null)}
+            {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
             {(g.mockupThumbs || []).map((p) => thumbUrls?.[p] ? <a key={p} href={thumbUrls[p]} target="_blank" rel="noreferrer" className="mk-thumb" title="Open the mockup"><img src={thumbUrls[p]} alt="Mockup" /></a> : null)}
             {!g.mockupAt && g.mockupSkipped && <span className="faint" style={{ fontSize: 12 }}>No mockup</span>}
           </div>

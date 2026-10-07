@@ -259,6 +259,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // opened from an email (Inbox → Edit details): a way back to it once the order is checked
   const [fromEmail, setFromEmail] = useState("");
   useEffect(() => { setFromEmail(new URLSearchParams(window.location.search).get("email") || ""); }, []);
+  // an order made from an email (Create order / Edit details) keeps its way back to that email however it's opened
+  const orderSource = o?.source || "", orderIdNow = o?.id || "";
+  useEffect(() => {
+    if (fromEmail || orderSource !== "email" || !orderIdNow) return;
+    sb.from("activities").select("id").eq("order_id", orderIdNow).eq("kind", "email").order("occurred_at", { ascending: true }).limit(1).then(({ data }) => { const a = (data || [])[0] as { id: string } | undefined; if (a) setFromEmail(a.id); });
+  }, [orderSource, orderIdNow, fromEmail, sb]);
   const stamping = useRef(new Set<string>());
   const custMockKey = o ? `${o.id}|${o.groups.flatMap((g) => (g.customerMockups || []).map((m) => m.path)).join("|")}` : "";
   useEffect(() => {
@@ -266,7 +272,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const todo = o.groups.flatMap((g, gi) => (g.customerMockups || []).map((m) => ({ m, gi }))).filter(({ m }) => !stamping.current.has(m.path));
     if (!todo.length) return;
     todo.forEach(({ m }) => stamping.current.add(m.path));
-    stampOrderMockups(sb, o.id, o.groups).then((n) => { if (n) setFilesBump((k) => k + 1); }).catch(() => {});
+    stampOrderMockups(sb, o.id, o.groups).then((n) => { if (n) { setFilesBump((k) => k + 1); loadSide(); } }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [custMockKey]);
 
@@ -483,11 +489,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
   return (
     <>
-      <Link className="back" href="/shop/orders">← Orders</Link>
-      {fromEmail && <div className="from-email">
-        <span>Made from the customer&apos;s email. Check the order and the mockup, then go back to answer the email.</span>
-        <button type="button" className="btn primary sm" onClick={async () => { await save(); router.push(`/shop/inbox?open=${fromEmail}`); }}>Save &amp; back to email</button>
-      </div>}
+      {fromEmail
+        ? <button type="button" className="back back-btn" title="Saves this order, then opens the customer's email to reply or send the quote" onClick={async () => { await save(); router.push(`/shop/inbox?open=${fromEmail}`); }}>← Save &amp; return to inbox</button>
+        : <Link className="back" href="/shop/orders">← Orders</Link>}
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
           <div className="eyebrow">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
