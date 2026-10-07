@@ -7,7 +7,7 @@ import { refetchAttachments } from "@/lib/mail/imap";
 import { officeText } from "@/lib/officeText";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
 import { LOCATIONS, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
-import { isPicture, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
+import { isPicture, looksLikeSignature, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
 
 /**
  * "Create order" from a customer email. The AI reads the email AND its attachments (pictures and PDFs it looks at,
@@ -17,7 +17,7 @@ import { isPicture, type EODraft, type EOFile, type PastJob } from "@/lib/emailO
  */
 
 type Att = { name: string; path: string; type: string; size: number };
-type AiFile = { file: number; role: "art" | "mockup" | "size_breakdown" | "other"; what?: string };
+type AiFile = { file: number; role: "art" | "mockup" | "size_breakdown" | "signature" | "other"; what?: string };
 type PGroup = NonNullable<ProposedOrder["groups"]>[number];
 type AiGroup = Omit<PGroup, "garments" | "prints"> & {
   garments?: (NonNullable<PGroup["garments"]>[number] & { reorder_line?: number | null })[];
@@ -120,13 +120,29 @@ function jobsText(jobs: PastJob[]) {
 
 // ---------- the attachments ----------
 
-async function readFiles(admin: SupabaseClient, atts: Att[]) {
+/**
+ * The sender's email signature pictures: nameless small pictures, and pictures that came on their other emails too
+ * (same name and size within 3%). They're listed for the AI as signatures and never shown to it or used as art.
+ */
+async function signaturePaths(admin: SupabaseClient, a: { id: string; from_email: string | null }, atts: Att[]): Promise<Set<string>> {
+  const out = new Set(atts.filter((f) => looksLikeSignature(f)).map((f) => f.path));
+  const pics = atts.filter((f) => isPicture(f) && !out.has(f.path));
+  const dom = String(a.from_email || "").split("@")[1];
+  if (!pics.length || !dom) return out;
+  const { data } = await admin.from("activities").select("id, meta").ilike("from_email", `%@${dom}`).neq("id", a.id).order("occurred_at", { ascending: false }).limit(40);
+  const seen = (data || []).flatMap((r) => ((r.meta as { attachments?: Att[] })?.attachments || []));
+  for (const f of pics) if (seen.some((x) => x.name === f.name && Math.abs((x.size || 0) - f.size) <= f.size * 0.03)) out.add(f.path);
+  return out;
+}
+
+async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<string> = new Set()) {
   const images: { media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string; label: string }[] = [];
   const documents: { data: string; label: string }[] = [];
   const listing: string[] = [];
   let budget = 18 * 1024 * 1024;
   for (const [i, a] of atts.slice(0, 12).entries()) {
     const n = i + 1, tag = `File ${n}: "${a.name}"`;
+    if (sigs.has(a.path)) { listing.push(`${tag} (the sender's email signature picture: role signature, ignore it)`); continue; }
     const pic = isPicture(a), pdf = /pdf/i.test(a.type) || /\.pdf$/i.test(a.name);
     const text = /\.(xlsx|xlsm|docx|csv|tsv|txt)$/i.test(a.name) || /spreadsheetml|wordprocessingml|^text\//i.test(a.type);
     if (!pic && !pdf && !text) { listing.push(`${tag} (${a.type || "file"}, can't be opened here; judge it by its name)`); continue; }
@@ -152,7 +168,7 @@ async function readFiles(admin: SupabaseClient, atts: Att[]) {
 
 // ---------- the AI ----------
 
-const FILE_ROLE = { type: "string", enum: ["art", "mockup", "size_breakdown", "other"] };
+const FILE_ROLE = { type: "string", enum: ["art", "mockup", "size_breakdown", "signature", "other"] };
 function tool(finishingIds: string[]) {
   return {
     name: "propose_order",
@@ -219,7 +235,8 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
     a.customer_id ? admin.from("customers").select("id, company, name, email, price_type, notes").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
     pastJobs(admin, a.customer_id as string | null),
   ]);
-  const { images, documents, listing } = await readFiles(admin, atts);
+  const sigs = await signaturePaths(admin, { id: a.id as string, from_email: (a.from_email as string) || null }, atts).catch(() => new Set<string>());
+  const { images, documents, listing } = await readFiles(admin, atts, sigs);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const weekday = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago", weekday: "long" });
   const fin = (settings.finishing || []).map((f) => `${f.id} = ${f.name}`).join("; ");
@@ -228,7 +245,7 @@ More sizes: infant NB, 6M, 12M, 18M, 24M and toddler 2T, 3T, 4T, 5T. Ranges like
 
 Your job: a customer emailed the shop. Read the email and every attached file (pictures, PDFs, spreadsheet contents) and fill in the order for staff to check. Today is ${weekday} ${today}.
 1. Decide what it is. NEW = something built from scratch: a new design, new garments. REORDER = the same job as one we printed before, again ("reorder", "same as last time", "more of the ___ shirts", a past design or job named). For a reorder set reorder_of to the past job's J number and list its garment lines with reorder_line = the L number and the NEW quantities. If they want it exactly as before without numbers, copy the old quantities and ask to confirm.
-2. Say what every attached file is: art (the print file), mockup (the design shown on a garment), size_breakdown (styles, colors, sizes and quantities), other (signature logos, unrelated pictures).
+2. Say what every attached file is: art (the print file), mockup (the design shown on a garment), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files).
 3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color.
 4. Prints: one per location. Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it, using our names: ${LOCATIONS.join(", ")}. Give size only if it's stated in words.
 4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front (big) or Center Chest (under about 5" tall and wide on adult). Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Give width_in to the nearest quarter inch, and drop_in (collar seam to the top of the print, scaled the same way: a toddler full front usually sits 1.5" to 2.5" down, an adult one about 3"). Never invent these without a mockup.
@@ -258,10 +275,10 @@ ${String(a.body || "").slice(0, 12000)}
   const p = r.data;
   const files: EOFile[] = atts.slice(0, 12).map((f, i) => {
     const t = (p.files || []).find((x) => x.file === i + 1);
-    const role = t?.role === "size_breakdown" ? "sheet" : t?.role === "art" || t?.role === "mockup" ? t.role : "other";
+    const role: EOFile["role"] = sigs.has(f.path) || t?.role === "signature" ? "signature" : t?.role === "size_breakdown" ? "sheet" : t?.role === "art" || t?.role === "mockup" ? t.role : "other";
     return { path: f.path, name: f.name, type: f.type, size: f.size, role, what: t?.what || "" };
   });
-  const fileAt = (n?: number | null) => (n && files[n - 1] ? files[n - 1].path : "");
+  const fileAt = (n?: number | null) => (n && files[n - 1] && files[n - 1].role !== "signature" ? files[n - 1].path : "");
 
   const art: Record<string, string> = {}, mockups: Record<string, string[]> = {};
   const finIds = new Set((settings.finishing || []).map((f) => f.id));

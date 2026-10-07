@@ -1,8 +1,10 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { LOCATIONS, METHODS, SIZES, newGLine, newImprint, sizeLabel, type GLine, type Group, type Method } from "@/lib/pricing";
 import { SUPPLIERS } from "@/lib/goods";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
+import { createClient } from "@/lib/supabase/client";
+import { stampOrderMockups } from "@/lib/mockupStamp";
 
 /**
  * Inbox → Create order: the AI's suggested order from the email and its attachments, for staff to check and fix
@@ -16,7 +18,10 @@ const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
 const qtyOf = (l: GLine) => Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0) || 0), 0);
 const uidish = () => Math.random().toString(36).slice(2, 10);
 
-export default function EmailOrderPanel({ activityId, onClose, onCreated }: { activityId: string; onClose: () => void; onCreated: (id: string, number: number) => void }) {
+export default function EmailOrderPanel({ activityId, onClose, onCreated }: { activityId: string; onClose: () => void; onCreated: (id: string, number: number, opened?: boolean) => void }) {
+  /** the AI's order is shown as a summary to approve; Edit details opens the full form */
+  const [editing, setEditing] = useState(false);
+  const [step, setStep] = useState("");
   const [data, setData] = useState<Loaded | null>(null);
   const [d, setD] = useState<EODraft | null>(null);
   const [busy, setBusy] = useState<"" | "read" | "create">(""), [err, setErr] = useState("");
@@ -46,7 +51,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
   }, [activityId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const files = d?.files || data?.files || [];
-  const pics = files.filter(isPicture);
+  const pics = files.filter((f) => isPicture(f) && f.role !== "signature");
   const urlOf = (p: string) => files.find((f) => f.path === p)?.url || "";
   const total = useMemo(() => (d?.groups || []).reduce((a, g) => a + g.lines.reduce((b, l) => b + qtyOf(l), 0), 0), [d]);
   const patch = (fn: (x: EODraft) => void) => setD((x) => { if (!x) return x; const y = clone(x); fn(y); return y; });
@@ -61,14 +66,31 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
     });
   }
 
+  /**
+   * Create order: the order (garments, sizes, prints with the art as designs, the customer's documents in Production
+   * files), then the customer's mockup stamped "CUSTOMER SUPPLIED MOCKUP" into Production files, then our own mockup
+   * built in the Mockup Creator (auto), which opens the order when it's saved.
+   */
   async function create() {
     if (!d) return;
-    setBusy("create"); setErr("");
+    // a tab opened now (while it's still a click) so the browser doesn't block it later
+    const w = window.open("", "_blank");
+    setBusy("create"); setErr(""); setStep("Creating the order…");
     const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
-    setBusy("");
-    if (!r?.ok || !j.id) return setErr(j.error || "Couldn't create the order.");
-    onCreated(j.id, j.number);
+    if (!r?.ok || !j.id) { setBusy(""); setStep(""); w?.close(); return setErr(j.error || "Couldn't create the order."); }
+    let url = `/shop/orders/${j.id}`;
+    try {
+      const sb = createClient();
+      const { data: o } = await sb.from("orders").select("groups").eq("id", j.id).maybeSingle();
+      const gs = ((o?.groups || []) as Group[]);
+      if (gs.some((g) => (g.customerMockups || []).length)) { setStep("Saving the customer's mockup to Production files…"); await Promise.race([stampOrderMockups(sb, j.id, gs), new Promise((res) => setTimeout(res, 25_000))]); }
+      const first = gs.find((g) => g.imprints.some((x) => x.design_id));
+      if (first) url = `/shop/artwork/mockup?order=${j.id}&group=${first.id}&auto=1`;
+    } catch { /* the order page stamps them when it opens */ }
+    setBusy(""); setStep("");
+    if (w) w.location.href = url; else window.open(url, "_blank");
+    onCreated(j.id, j.number, true);
   }
 
   if (!data) return <section className="eo"><div className="eo-h"><b>Create order</b><span className="spacer" /><button type="button" className="btn sm ghost" onClick={onClose}>Close</button></div>{err ? <div className="err">{err}</div> : <p className="faint">Loading…</p>}</section>;
@@ -91,7 +113,19 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
       {!data.ai && !d && <div className="warn">{data.aiReason || "AI is off."} You can still enter the order by hand from the order page.</div>}
       {busy === "read" && <p className="eo-reading">Reading the email{files.length ? ` and ${files.length} attachment${files.length === 1 ? "" : "s"}` : ""}: garments, sizes, art, mockups, and whether it's a reorder. This takes 15 to 40 seconds.</p>}
       {err && <div className="err">{err}</div>}
-      {d && <>
+      {d && !editing && <Review d={d} files={files} urlOf={urlOf} custName={data.customer ? data.customer.company || data.customer.name || "" : ""} job={d.reorderOf ? data.past.find((p) => p.ref === d.reorderOf)?.label || "" : ""} finishing={data.finishing} />}
+      {d && !editing && <>
+        <div className="eo-foot">
+          <b>{total} pcs</b>
+          <span className="spacer" />
+          {step && <span className="faint">{step}</span>}
+          <label>Save as<select value={status} onChange={(e) => setStatus(e.target.value as "quote" | "approved")}><option value="quote">Quote (price it, send for approval)</option><option value="approved">Approved order</option></select></label>
+          <button type="button" className="btn" disabled={!!busy} onClick={() => setEditing(true)}>Edit details</button>
+          <button type="button" className="btn primary" disabled={!!busy || !total || !data.customer} onClick={create}>{busy === "create" ? "Creating…" : "Create order"}</button>
+        </div>
+        {!data.customer && <div className="warn">Make the sender a customer first (the yellow box above), then create the order.</div>}
+      </>}
+      {d && editing && <>
         {d.summary && <p className="eo-sum">✦ {d.summary}</p>}
 
         {files.length > 0 && <div className="eo-files">
@@ -215,10 +249,47 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
           <b>{total} pcs</b>
           <span className="spacer" />
           <label>Save as<select value={status} onChange={(e) => setStatus(e.target.value as "quote" | "approved")}><option value="quote">Quote (price it, send for approval)</option><option value="approved">Approved order</option></select></label>
-          <button type="button" className="btn primary" disabled={!!busy || !total} onClick={create}>{busy === "create" ? "Creating…" : "Create order"}</button>
+          {step && <span className="faint">{step}</span>}
+          <button type="button" className="btn" disabled={!!busy} onClick={() => setEditing(false)}>Done editing</button>
+          <button type="button" className="btn primary" disabled={!!busy || !total || !data.customer} onClick={create}>{busy === "create" ? "Creating…" : "Create order"}</button>
         </div>
         {!data.customer && <div className="warn">Make the sender a customer first (the yellow box above), then create the order.</div>}
       </>}
     </section>
+  );
+}
+
+/** The AI's order as a short summary to approve: what will be made when Create order is pressed. */
+function Review({ d, files, urlOf, custName, job, finishing }: { d: EODraft; files: EOFile[]; urlOf: (p: string) => string; custName: string; job: string; finishing: Fin[] }) {
+  const docs = files.filter((f) => f.role === "sheet" || (f.role === "other" && !isPicture(f)));
+  const mocks = [...new Set(Object.values(d.mockups).flat())].map((p) => files.find((f) => f.path === p)).filter(Boolean) as EOFile[];
+  const sig = files.filter((f) => f.role === "signature");
+  return (
+    <div className="eo-rev">
+      {d.summary && <p className="eo-sum">✦ {d.summary}</p>}
+      <dl className="eo-rev-dl">
+        <dt>Order</dt><dd>{d.kind === "reorder" ? `Reorder of ${job || "a past job"}` : "New order"}{d.nickname ? `: ${d.nickname}` : ""}{custName ? ` for ${custName}` : ""}{d.due_date ? `, in hands ${d.due_date}` : ""}{d.po_number ? `, PO ${d.po_number}` : ""}</dd>
+        {d.goods.supplied && <><dt>Goods</dt><dd>Customer supplied{d.goods.supplier ? `, from ${SUPPLIERS[d.goods.supplier] || d.goods.supplier}` : ""}{d.goods.expected ? `, expected ${d.goods.expected}` : ""}</dd></>}
+        {d.groups.map((g, gi) => (
+          <Fragment key={g.id}>
+            <dt>{d.groups.length > 1 ? g.name || `Group ${gi + 1}` : "Garments"}</dt>
+            <dd>{g.lines.map((l) => <div key={l.id}>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"} {l.color && `· ${l.color}`}: {SIZES.filter((z) => +(l.sizes?.[z] || 0) > 0).map((z) => `${sizeLabel(z)} ${l.sizes[z]}`).join(", ") || "no sizes"} <b>({qtyOf(l)} pcs)</b></div>)}</dd>
+            <dt>Prints</dt>
+            <dd>{g.imprints.length ? g.imprints.map((im) => {
+              const art = d.art[im.id] || "";
+              return <div key={im.id} className="eo-rev-print">{art && urlOf(art) ? <img src={urlOf(art)} alt="" /> : im.design_id ? <span className="eo-art on">Design</span> : <span className="eo-art">No art</span>}<span>{im.location}, {METHODS[im.method] || im.method}{im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}{im.inks ? ` (${im.inks})` : ""}{im.size ? `, ${im.size}` : ""}{im.drop ? `, ${im.drop}" down` : ""}</span></div>;
+            }) : "None"}</dd>
+            {(g.finishing || []).length > 0 && <><dt>Finishing</dt><dd>{(g.finishing || []).map((id) => finishing.find((f) => f.id === id)?.name || id).join(", ")}</dd></>}
+          </Fragment>
+        ))}
+        <dt>Mockup</dt>
+        <dd>{d.groups.some((g) => g.imprints.some((im) => d.art[im.id] || im.design_id)) ? "We build our own in the Mockup Creator from the art, at the size and spot above, then open the order." : "No art yet: make the mockup on the order."}
+          {mocks.length > 0 && <div className="eo-rev-files">{mocks.map((f) => <span key={f.path}>{f.url && <img src={f.url} alt="" />}{f.name}</span>)}<small>Their mockup goes in Production files, stamped &quot;Customer supplied mockup&quot;.</small></div>}</dd>
+        {docs.length > 0 && <><dt>Production files</dt><dd>{docs.map((f) => f.name).join(", ")}</dd></>}
+        {d.notes && <><dt>Notes</dt><dd>{d.notes}</dd></>}
+        {d.questions.length > 0 && <><dt>To ask</dt><dd><ul>{d.questions.map((q, i) => <li key={i}>{q}</li>)}</ul></dd></>}
+        {sig.length > 0 && <><dt>Ignored</dt><dd className="faint">{sig.map((f) => f.name).join(", ")} (email signature)</dd></>}
+      </dl>
+    </div>
   );
 }

@@ -70,6 +70,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const sp = useSearchParams();
   const orderId = portal ? "" : sp.get("order") || "";
   const groupId = sp.get("group") || "";
+  /** Inbox → Create order: build and save this group's mockup by itself (the art at the size and place the AI read from
+   *  the customer's mockup, one-color prints in their ink), then go on to the next group, then the order */
+  const auto = sp.get("auto") === "1";
   const sb = useMemo(() => createClient(), []);
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -169,6 +172,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }
   function toggleBg(d: Design) { resetLogo(d); setKeepBg((k) => ({ ...k, [d.id]: !k[d.id] })); }
   const [msg, setMsg] = useState("");
+  const autoWant = useRef<Record<string, { colors: number; inks: string }>>({});
+  const autoState = useRef<"" | "saving" | "done" | "stuck">("");
+  const saveOk = useRef(false);
   /** the customer's own mockups for this group: shown beside ours as the picture to match */
   const [custMocks, setCustMocks] = useState<{ name: string; url: string; pdf: boolean }[]>([]);
   const [custBig, setCustBig] = useState(false);
@@ -228,6 +234,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setGroupName(g.name || `Group ${groups.indexOf(g) + 1}`);
           setLines(g.lines.filter((l) => l.style || l.color).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })));
           setImprints(g.imprints.map((d) => ({ ...d })));
+          autoWant.current = Object.fromEntries(g.imprints.map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
           const cm = (g.customerMockups || []).slice(0, 4);
           if (cm.length) {
             const { data: su } = await sb.storage.from("proofs").createSignedUrls(cm.map((m) => m.path), 3600);
@@ -961,6 +968,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     } catch (e) { setMsg("Couldn't make the separations: " + (e instanceof Error ? e.message : String(e))); setSaving(false); }
   }
   saveRef.current = (f?: boolean) => { saveAll(!!f); };
+  const autoSave = useRef<() => Promise<boolean>>(async () => false);
+  autoSave.current = async () => { saveOk.current = false; await saveAll(true); return saveOk.current; };
   async function saveAll(force = false) {
     if (!customerId) return setMsg("Pick a customer so the mockups save to their account.");
     if (!force && imprints.some((im) => unsetColors(im).length)) { setAskUploaded(true); return; }
@@ -1042,6 +1051,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         out.push({ title, url: URL.createObjectURL(blob) });
       }
       await syncOrder(true, thumbs);
+      saveOk.current = true;
       setSaved(out);
       setMsg(orderId ? `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the order as proofs and to the customer's account.` : `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the customer's account.`);
     } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }
@@ -1050,6 +1060,38 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   // a mockup needs a customer (art and mockups save to their account) and at least one garment
   const ready = !!customerId && lines.some((l) => l.style.trim() && garmentFor(l));
+
+  // auto mode (from Inbox → Create order): once the shirt and every logo are loaded, set one-color prints to their
+  // ink, save, and move on. Gives up after 30 s with the reason, leaving everything as it is to finish by hand.
+  useEffect(() => {
+    if (!auto || !order) return;
+    const t = setTimeout(() => { if (autoState.current === "") { autoState.current = "stuck"; setMsg("Couldn't build the mockup by itself: the garment or the art didn't load. Check it, then Save."); } }, 30_000);
+    return () => clearTimeout(t);
+  }, [auto, order]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!auto || !order || !ready || saving || autoState.current === "stuck" || autoState.current === "saving" || autoState.current === "done") return;
+    if (!imprints.length || imprints.some((im) => !designOf(im) || paints[im.id]?.design !== im.design_id)) return;
+    autoState.current = "saving";
+    setMsg("Building our mockup from the customer's art…");
+    // one-color prints: every color in the art prints in the ink the order names (e.g. all Black)
+    for (const im of imprints) {
+      const want = autoWant.current[im.id], pt = paints[im.id];
+      if (im.method !== "screen" || !want || want.colors !== 1 || !pt) continue;
+      const name = (want.inks || "").split(/[,;\/+]/)[0].trim(), hex = name ? colorHex(name) : null;
+      if (hex) setInks(im.id, Object.fromEntries(pt.sources.map((x) => [x.hex, { name, hex }])));
+    }
+    // a moment for the art to repaint, then save (not cancelled by the re-renders in between)
+    const o = order;
+    setTimeout(async () => {
+      const ok = await autoSave.current();
+      if (!ok) { autoState.current = "stuck"; return; }
+      autoState.current = "done";
+      const gs = orderGroups(o), at = gs.findIndex((x) => x.id === groupId);
+      const next = gs.slice(at + 1).find((x) => x.imprints.some((d) => d.design_id) && !x.mockupAt);
+      setMsg(next ? "Saved. On to the next group…" : "Saved. Opening the order…");
+      setTimeout(() => location.assign(next ? `/shop/artwork/mockup?order=${o.id}&group=${next.id}&auto=1` : `/shop/orders/${o.id}`), 900);
+    }, 1800);
+  }, [auto, order, ready, saving, imprints, paints, designs, urls]); // eslint-disable-line react-hooks/exhaustive-deps
   const notReady = !customerId ? "Pick a customer first — their designs and mockups live on their account." : "Pick at least one garment to put the art on."
   return (
     <>

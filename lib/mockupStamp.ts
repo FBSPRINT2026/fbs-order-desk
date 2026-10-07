@@ -49,3 +49,29 @@ export async function stampCustomerMockup(blob: Blob, name: string): Promise<Fil
   const out = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.88));
   return out ? new File([out], name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }) : null;
 }
+
+/**
+ * Stamp every customer mockup on an order into its Production files (skips ones already there, archived too).
+ * Returns how many were added. Used right after Inbox → Create order, and again whenever the order is opened.
+ */
+export async function stampOrderMockups(sb: { storage: { from: (b: string) => { download: (p: string) => Promise<{ data: Blob | null }> } } }, orderId: string, groups: { customerMockups?: { path: string; name: string }[] }[]): Promise<number> {
+  const { addPhoto } = await import("@/components/job/JobFiles");
+  const todo = groups.flatMap((g, gi) => (g.customerMockups || []).map((m) => ({ m, gi })));
+  if (!todo.length) return 0;
+  const lists = await Promise.all(["0", "1"].map((a) => fetch(`/api/jobs/files?kind=o&id=${orderId}&archived=${a}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ items: [] }))));
+  const have = new Set(lists.flatMap((j: { items?: { file_name: string }[] }) => (j.items || []).map((x) => x.file_name)));
+  const many = groups.length > 1;
+  let added = 0;
+  for (const { m, gi } of todo) {
+    const fname = stampName(m.path);
+    if (have.has(fname)) continue;
+    have.add(fname);
+    const { data: blob } = await sb.storage.from("proofs").download(m.path);
+    if (!blob) continue;
+    const f = await stampCustomerMockup(blob, m.name || m.path.split("/").pop() || "mockup").catch(() => null);
+    if (!f) continue;
+    const r = await addPhoto({ kind: "o", id: orderId }, new File([f], fname, { type: f.type }), `Customer supplied mockup: ${m.name || "mockup"}${many ? ` (group ${gi + 1})` : ""}. Reference only; we make our own mockup in the Mockup Creator.`, STAMP_TAG);
+    if (r.ok) added++;
+  }
+  return added;
+}

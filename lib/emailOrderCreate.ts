@@ -126,6 +126,14 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   if (priceType === "wholesale" && d.goods?.supplied) {
     await admin.from("order_goods").upsert({ order_id: oid, status: "waiting", supplier: (d.goods.supplier || "").slice(0, 60), expected: [d.goods.expected, d.goods.note].filter(Boolean).join(" · ").slice(0, 200), updated_by: by, updated_at: new Date().toISOString() });
   }
+  // the customer's own documents (size sheet, spreadsheet, PDF order form) go in the job's Production files, so the
+  // shop has them with the job; pictures are art / mockups and the signature is left out
+  for (const f of (d.files || []).filter((x) => x.role === "sheet" || (x.role === "other" && !isPicture(x)))) {
+    const to = `production/jobs/o-${oid}/${Date.now()}-${safe(f.name)}`;
+    const cp = await admin.storage.from("proofs").copy(f.path, to);
+    if (cp.error) continue;
+    await admin.from("job_files").insert({ order_id: oid, customer_id: custId, kind: "file", tag: "Customer files", body: `${f.role === "sheet" ? "Size sheet" : "File"} from the customer's email${a.subject ? ` "${String(a.subject).slice(0, 80)}"` : ""}`, file_path: to, file_name: safe(f.name), file_type: f.type || "", size: f.size || 0, by_name: "Inbox", by_email: by });
+  }
   await admin.from("activities").update({ order_id: oid }).eq("id", a.id);
   await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: by, order_id: oid }).eq("dedupe_key", `email:${a.id}:order`);
   return { ok: true, id: oid, number: o.number as number };

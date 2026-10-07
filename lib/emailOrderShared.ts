@@ -7,7 +7,7 @@ import type { Group } from "@/lib/pricing";
  *    the customer's mockup, where their goods are coming from).
  *  - Reorder: a past job (portal order or Printavo invoice) copied with the new quantities.
  */
-export type EOFile = { path: string; name: string; type: string; size: number; role: "art" | "mockup" | "sheet" | "other"; what?: string; url?: string };
+export type EOFile = { path: string; name: string; type: string; size: number; role: "art" | "mockup" | "sheet" | "signature" | "other"; what?: string; url?: string };
 /** a past job of this customer that a reorder can start from */
 export type PastJob = {
   /** "o:<order id>" or "a:<archived order id>" */ ref: string;
@@ -29,5 +29,11 @@ export type EODraft = {
   questions: string[];
   files: EOFile[];
 };
-export const ROLE_LABEL: Record<EOFile["role"], string> = { art: "Art", mockup: "Mockup", sheet: "Size sheet", other: "Other" };
+export const ROLE_LABEL: Record<EOFile["role"], string> = { art: "Art", mockup: "Mockup", sheet: "Size sheet", signature: "Email signature (ignored)", other: "Other" };
+/**
+ * Pictures that are the sender's email signature (their logo, social icons), not art: a nameless picture under
+ * 120 KB ("image.png", "image001.jpg", "Outlook-xyz.png"), or one that came with their other emails too.
+ */
+export const GENERIC_PIC = /^(image|img|logo|signature|sig|outlook[-\w]*|~wrl\d*)[-_ ]?\d*\.(png|jpe?g|gif|bmp)$/i;
+export const looksLikeSignature = (f: Pick<EOFile, "type" | "name" | "size">) => isPicture(f) && GENERIC_PIC.test(f.name.trim()) && f.size < 120 * 1024;
 export const isPicture = (f: Pick<EOFile, "type" | "name">) => /^image\/(png|jpe?g|gif|webp)$/i.test(f.type) || /\.(png|jpe?g|gif|webp)$/i.test(f.name);
