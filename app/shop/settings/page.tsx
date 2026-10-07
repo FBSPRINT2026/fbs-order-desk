@@ -2,6 +2,7 @@
 import SettingsTabs, { ConnectionsPanel } from "@/components/SettingsTabs";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { FBS_CONTRACT_2024 } from "@/lib/contractPricing";
 import { ROLES, calcGroup, mergeSettings, newGLine, newImprint, uid, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { getAiStatus } from "@/app/shop/ai-actions";
@@ -156,6 +157,10 @@ export default function SettingsPage() {
             )}
             {tab === "wholesale" && (
               <>
+                <div className="row" style={{ gap: 8 }}>
+                  <button type="button" className="btn sm" onClick={() => upd((d) => { d.wholesale = JSON.parse(JSON.stringify(FBS_CONTRACT_2024)); })}>Load the FBS contract price list (2024v1r1)</button>
+                  <span className="faint" style={{ fontSize: 12 }}>Replaces the wholesale prices on this tab with the contract sheet. Check them, then Save changes at the top.</span>
+                </div>
                 <div className="lbl">CONTRACT RULES</div>
                 <label className="check"><input type="checkbox" checked={!!pl.darkAddsColor} onChange={(e) => updPl((d) => { d.darkAddsColor = e.target.checked; })} /> Dark garments add one color for the underbase (any color not on the light list below)</label>
                 <div className="grid g4">
