@@ -1100,6 +1100,8 @@ export default function SeparationStudio({ id }: { id: string }) {
       </div>
       {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
       {err && <div className="pv-err">{err}</div>}
+      {/* a customer's mockup (.ai / PDF art on a shirt photo): the shirt was left out and the art read as shapes */}
+      {vart?.ok && vart.mockup && <div className="sep-art-note">{vart.mockup}. Check the proof: if something you need was under the shirt, upload the art without the shirt.</div>}
       {!!(row?.settings as { art?: SepArt } | undefined)?.art?.note && <div className="sep-art-note">{(row!.settings as { art: SepArt }).art.note}{(row!.settings as { art: SepArt }).art.original ? ` (Original kept: ${(row!.settings as { art: SepArt }).art.original!.name}.)` : ""}</div>}
       <div className="sep-topbar">
       {siblings.length > 1 && (

@@ -9,6 +9,10 @@
  *     (Separation): the swatch name is kept on the shape (`ink`, e.g. "PANTONE 186 C"), so the inks can be named
  *     from the art's own swatches
  *   - q / Q / cm transforms; clipping is ignored (Illustrator's clip to the artboard)
+ *   - customer mockups: art drawn on a photo of a shirt. A placed picture under all the art that covers most of the
+ *     page is the shirt: it's left out, with anything drawn under it (hidden in the mockup anyway, e.g. a "BG" box),
+ *     and the art is read as shapes (`mockup` says what was left out). A picture inside the art still can't be.
+ *   - Lab colors (Illustrator writes PANTONE swatches' look in Lab, as /Lab or an ICC Lab profile)
  * Coordinates come out like SVG: y down, from the top-left of the crop box.
  */
 import type { VArt, VShape } from "./svgVector";
@@ -104,6 +108,21 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
   const shapes: VShape[] = [];
   let why = "";
   const note = (w: string) => { why ||= w; };
+  // placed pictures: where in the drawing order (how many shapes were drawn before) and how much of the page they cover
+  const pics: { at: number; cover: number }[] = [];
+  const pageArea = Math.max(1, (urx - llx) * (ury - lly));
+  const picAt = (m: M) => {
+    const xs = [m[4], m[0] + m[4], m[2] + m[4], m[0] + m[2] + m[4]], ys = [m[5], m[1] + m[5], m[3] + m[5], m[1] + m[3] + m[5]];
+    const w = Math.min(urx, Math.max(...xs)) - Math.max(llx, Math.min(...xs)), h = Math.min(ury, Math.max(...ys)) - Math.max(lly, Math.min(...ys));
+    pics.push({ at: shapes.length, cover: Math.max(0, w) * Math.max(0, h) / pageArea });
+  };
+  // ICC profiles that hold Lab (by their header), cached
+  const labIcc = new Map<Obj, boolean>();
+  const isLabIcc = async (c: Obj[]) => {
+    const st = get(c[1]); if (!isStream(st)) return false;
+    if (!labIcc.has(st)) { let lab = false; try { const b = await decode(st); lab = latin1(b.subarray(16, 20)) === "Lab "; } catch { /* unreadable profile */ } labIcc.set(st, lab); }
+    return labIcc.get(st)!;
+  };
   type Col = { hex: string; ink?: string } | null;
   const colorOf = async (cs: Obj, comps: number[]): Promise<Col> => {
     const c = get(cs);
@@ -111,6 +130,7 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
     const clamp = (v: number) => Math.max(0, Math.min(1, v));
     const hex = (r: number, g: number, b: number) => "#" + [r, g, b].map((v) => Math.round(clamp(v) * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
     if (nm === "DeviceGray" || nm === "CalGray" || (nm === "ICCBased" && comps.length === 1)) return { hex: hex(comps[0], comps[0], comps[0]) };
+    if (nm === "Lab" || (nm === "ICCBased" && comps.length === 3 && Array.isArray(c) && (await isLabIcc(c)))) return { hex: labHex(comps[0], comps[1], comps[2]) };
     if (nm === "DeviceRGB" || nm === "CalRGB" || (nm === "ICCBased" && comps.length === 3)) return { hex: hex(comps[0], comps[1], comps[2]) };
     if (nm === "DeviceCMYK" || (nm === "ICCBased" && comps.length === 4)) return { hex: cmykHex(clamp(comps[0]), clamp(comps[1]), clamp(comps[2]), clamp(comps[3])) };
     if (nm === "Separation" && Array.isArray(c)) {
@@ -190,11 +210,11 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
           if (isStream(xo) && isName(xo.dict.Subtype) && xo.dict.Subtype.n === "Form") {
             const mtx = ((get(xo.dict.Matrix) as number[]) || [1, 0, 0, 1, 0, 0]).map((v) => get(v) as number) as M;
             await run(latin1(await decode(xo)), (get(xo.dict.Resources) as Dict) || res, mul(mtx, ctm), depth + 1);
-          } else if (isStream(xo)) note("has a placed image");
+          } else if (isStream(xo)) picAt(ctm);
           break;
         }
         case "BT": note("has live text (outline it: Type → Create Outlines)"); { const e = code.indexOf("ET", lx.i); lx.i = e < 0 ? code.length : e + 2; } break;
-        case "BI": note("has a placed image"); { const e = code.indexOf("EI", lx.i); lx.i = e < 0 ? code.length : e + 2; } break;
+        case "BI": picAt(ctm); { const e = code.indexOf("EI", lx.i); lx.i = e < 0 ? code.length : e + 2; } break;
         case "sh": note("has gradients"); break;
         default: break; // gs, w, d, J, j, M, i, ri, CS/SC/SCN/G/RG/K (stroke colors), BDC/BMC/EMC/MP/DP…
       }
@@ -203,8 +223,30 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
   };
   await run(content, (inh("Resources") as Dict) || null, [1, 0, 0, 1, 0, 0], 0);
   const W = urx - llx, H = ury - lly;
-  if (!shapes.length) return fail(why || "has no filled shapes");
-  return { ok: !why, ...(why ? { why } : {}), x: 0, y: 0, w: W, h: H, shapes };
+  // a customer mockup: every picture is drawn before the art, and one covers most of the page (the shirt photo)
+  let mockup: string | undefined, art = shapes;
+  if (pics.length) {
+    const last = Math.max(...pics.map((p) => p.at));
+    const shirt = pics.some((p) => p.cover >= 0.4) && shapes.length - last >= 3;
+    if (shirt) {
+      art = shapes.slice(last);
+      const hidden = last;
+      mockup = `It's a mockup on a shirt: the shirt picture${hidden ? ` and ${hidden} shape${hidden === 1 ? "" : "s"} under it` : ""} left out, the art kept as shapes`;
+    } else note("has a placed image");
+  }
+  if (!art.length) return fail(why || "has no filled shapes");
+  return { ok: !why, ...(why ? { why } : {}), x: 0, y: 0, w: W, h: H, shapes: art, ...(mockup ? { mockup } : {}) };
+}
+
+/** CIE Lab (D50, as PDF and ICC use it) → sRGB hex: XYZ, Bradford to D65, then sRGB */
+function labHex(L: number, a: number, b: number): string {
+  const fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
+  const f = (t: number) => (t ** 3 > 0.008856 ? t ** 3 : (t - 16 / 116) / 7.787);
+  const X = 0.9642 * f(fx), Y = 1 * f(fy), Z = 0.8251 * f(fz);
+  // D50 → D65 (Bradford)
+  const x = 0.9555766 * X - 0.0230393 * Y + 0.0631636 * Z, y = -0.0282895 * X + 1.0099416 * Y + 0.0210077 * Z, z = 0.0122982 * X - 0.020483 * Y + 1.3299098 * Z;
+  const lin = [3.2404542 * x - 1.5371385 * y - 0.4985314 * z, -0.969266 * x + 1.8760108 * y + 0.041556 * z, 0.0556434 * x - 0.2040259 * y + 1.0572252 * z];
+  return "#" + lin.map((v) => { const c = v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(Math.max(0, v), 1 / 2.4) - 0.055; return Math.round(Math.max(0, Math.min(1, c)) * 255).toString(16).padStart(2, "0"); }).join("").toUpperCase();
 }
 
 /** Flate for the browser (PDF streams are zlib-wrapped; a few writers leave junk after the end, so fall back to raw) */

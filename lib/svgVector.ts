@@ -11,7 +11,9 @@ export type VGrad = { kind: "linear" | "radial"; x0: number; y0: number; x1: num
 export type VShape = { fill: string; evenodd: boolean; ops: string; /** the spot swatch it was filled with (PDF / .ai art), e.g. "PANTONE 186 C" */ ink?: string;
   /** filled with a gradient (then `fill` is its middle color, for anything that only knows flat colors) */
   grad?: VGrad };
-export type VArt = { ok: boolean; why?: string; x: number; y: number; w: number; h: number; shapes: VShape[] };
+export type VArt = { ok: boolean; why?: string; x: number; y: number; w: number; h: number; shapes: VShape[];
+  /** a customer mockup: what was left out to get the art off the shirt (PDF / .ai) */
+  mockup?: string };
 
 type M = [number, number, number, number, number, number];
 const mul = (a: M, b: M): M => [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3], a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
