@@ -251,7 +251,7 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 2. Say what every attached file is: art (the print file), mockup (the design shown on a garment), size_breakdown (styles, colors, sizes and quantities), signature (the sender's email signature: their company logo, social icons, a banner; never art or a mockup), other (unrelated files).
 3. Garments: style number, brand, color and every size quantity exactly as the email or the size sheet gives them. Read every number from a size sheet; don't round or total. One garment entry per style + color.
 4. Prints: one per location. Count the ink colors in the art (spot colors; don't count the shirt color; a white underbase on dark garments isn't counted), name them, and set art_file. Take the location from the mockup when it shows it, using our names: ${LOCATIONS.join(", ")}. Give size only if it's stated in words.
-4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front (big) or Center Chest (under about 5" tall and wide on adult). Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Measure the inked art only (from its leftmost to rightmost ink), not empty space around it, and judge the chest width at the armpits, not the sleeves. Give width_in to the nearest quarter inch, Leave drop_in null unless the customer states how far down it goes. Never invent these without a mockup.
+4b. When a customer mockup shows the print on the garment, we remake their mockup in our own system so it must look the same: look closely and measure. Location: a small print on the wearer's left chest is Left Chest; a print centered across the chest is Full Front, or Center Chest only for a small logo (under about 5" wide on an adult, about a quarter of the chest width or less). On toddler, infant and youth garments judge by the share of the chest, not inches: a print across half or more of a toddler's chest is Full Front. Width: compare the print's width to the garment's chest width (armpit to armpit) in the picture, then scale to the real garment: adult Large tee 22", adult Medium 20", youth Large 18", youth Small 16", toddler 2T 12", 3T 12.75", 4T 13.5", infant 12M 9.5" (use the middle size of the order's run). Example: a print about 60% of a 3T's chest is about 7.5" wide. Measure the inked art only (from its leftmost to rightmost ink), not empty space around it, and judge the chest width at the armpits, not the sleeves. Give width_in to the nearest quarter inch, Leave drop_in null unless the customer states how far down it goes. Never invent these without a mockup.
 5. Garments that share the same prints are one group, with the mockup files for them.
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
 7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
@@ -326,6 +326,11 @@ ${String(a.body || "").slice(0, 12000)}
         if (!(w || dr >= 0) || im.size) return;
         const fix = w ? correction(lessons, im.location, body.kind, (a.customer_id as string) || null) : null;
         if (fix) { w *= fix.factor; if (dr >= 0) dr = Math.max(0, dr + fix.dropAdd); }
+        // a centered print read wider than its location allows is the bigger location, not a shrunken small one
+        // (an 8.5" toddler front called "Center Chest" was cut to that spot's 3.5" max)
+        let moved = "";
+        const grow: Record<string, string> = { "Center Chest": "Full Front", "Medium Front": "Full Front", "Upper Back (Yoke)": "Full Back", "Medium Back": "Full Back" };
+        if (w > 0 && grow[im.location] && w > maxWidthFor(im.location, 0, body) + 0.25) { moved = `. ${grow[im.location]}, not ${im.location}: their print is about ${Math.round(w * 4) / 4}" wide`; im.location = grow[im.location]; }
         // one screen prints every size on the order: never bigger than fits the smallest size ordered (a 2T)
         const small = smallestOrdered(null, Object.keys(Object.assign({}, ...g.lines.map((l) => l.sizes || {}))), body);
         let capped = "";
@@ -334,7 +339,7 @@ ${String(a.body || "").slice(0, 12000)}
         // the drop isn't taken from their picture (it came out too close to the collar): our standard placement is used
         void dr;
         im.aiPlace = { size: im.size, drop: "", garment: body.size, kind: body.kind };
-        im.notes = [im.notes, `Size and placement read from the customer's mockup${fix ? ` (adjusted from ${fix.n} earlier correction${fix.n === 1 ? "" : "s"})` : ""}${capped}`].filter(Boolean).join(". ").slice(0, 300);
+        im.notes = [im.notes, `Size and placement read from the customer's mockup${fix ? ` (adjusted from ${fix.n} earlier correction${fix.n === 1 ? "" : "s"})` : ""}${moved}${capped}`].filter(Boolean).join(". ").slice(0, 300);
       });
       const ms = (pg.mockup_files || []).map(fileAt).filter(Boolean);
       if (ms.length) mockups[g.id] = [...new Set(ms)];
