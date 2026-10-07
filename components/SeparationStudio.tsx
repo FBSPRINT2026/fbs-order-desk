@@ -1287,9 +1287,16 @@ export default function SeparationStudio({ id }: { id: string }) {
                 {(() => {
                   // this color IS the shirt: knocked out (the shirt shows there); unchecking one that matches the shirt prints it anyway
                   const on = !!res?.dropped.includes(k.hex);
-                  return <label className={"sep-chip-shirt" + (on ? " on" : "")} title={on ? "Knocked out: the shirt shows here. Uncheck to print this color." : "Check if this color is the shirt color: it's knocked out and the shirt shows there."}>
-                    <input type="checkbox" checked={on} onChange={(e) => shirtInk(i, e.target.checked)} /> Shirt color
-                  </label>;
+                  // UB: white underbase under this color (dark shirts); black never, and not on a color left to the shirt
+                  const key = "c" + k.hex.slice(1), never = neverBase(k.hex), ub = !on && !never && (st.baseFor?.[key] ?? baseByDefault(k.hex));
+                  return <div className="sep-chip-ft">
+                    <label className={"sep-chip-shirt" + (on ? " on" : "")} title={on ? "Knocked out: the shirt shows here. Uncheck to print this color." : "Check if this color is the shirt color: it's knocked out and the shirt shows there."}>
+                      <input type="checkbox" checked={on} onChange={(e) => shirtInk(i, e.target.checked)} /> Shirt
+                    </label>
+                    {res?.underbase && <label className={"sep-chip-shirt" + (ub ? " on" : "") + (never || on ? " off" : "")} title={never ? "Black never gets underbase (black ink on white bubbles)" : on ? "Left to the shirt: not printed, so no underbase" : ub ? "White underbase prints under this color. Uncheck to print it straight on the shirt." : "No underbase: prints straight on the shirt. Check to put white under it."}>
+                      <input type="checkbox" checked={ub} disabled={never || on} onChange={(e) => set({ baseFor: { ...(st.baseFor || {}), [key]: e.target.checked } })} /> UB
+                    </label>}
+                  </div>;
                 })()}
                 <button type="button" className="sep-chip-x" onClick={() => { setMatchAt(null); setInks((l) => dropInk(l, i)); }} aria-label={`Remove ${k.name}`} title="Remove (its part of the art goes to the nearest other ink)">×</button>
               </div>
@@ -1353,15 +1360,7 @@ export default function SeparationStudio({ id }: { id: string }) {
                 <span className="sep-sw" style={{ background: p.hex }} />
                 <input className="sep-pname" value={p.name} onChange={(e) => setNames((m) => ({ ...m, [p.key]: e.target.value }))} aria-label="Plate name" />
                 <small className="sep-meta">{p.kind === "underbase" ? "Base · flash after" : p.kind === "highlight" ? "Top white" : "Color"} · {(p.coverage * 100).toFixed(1)}%
-                  {p.kind === "color" && res?.underbase && (() => {
-                    // underbase under this ink or not (black and dark colors like navy: not, by default)
-                    const art = "#" + p.key.slice(1);
-                    if (neverBase(art)) return <span className="sep-base fixed" title="Black never gets underbase: black ink on white bubbles">No base</span>;
-                    const on = st.baseFor?.[p.key] ?? baseByDefault(art);
-                    // underbase under this ink: a plain checkbox (Nicholas, Oct 7: turn the base off for any color)
-                    return <label className={"sep-base" + (on ? " on" : "")} title={on ? "White underbase prints under this ink. Uncheck to leave it off: the ink prints straight on the shirt" : "No underbase under this ink: it prints straight on the shirt. Check to put base under it"}>
-                      <input type="checkbox" checked={on} onChange={(e) => set({ baseFor: { ...(st.baseFor || {}), [p.key]: e.target.checked } })} /> Underbase</label>;
-                  })()}
+
                   {" "}<span className="sep-nw">· mesh <select className="sep-mesh" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh">{[...new Set([...SHOP_MESH, p.mesh])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v}</option>)}</select></span>
                   {(tonal || p.tonal) && <>{" "}<span className="sep-nw">· <select className="sep-mesh sep-lpi" value={lpiOf(st, p.key)} title="Halftone frequency for this screen (lines per inch): lower = bigger dots" aria-label="Halftone LPI"
                     onChange={(e) => { const v = +e.target.value, n = { ...(st.lpiFor || {}) }; if (v === st.lpi) delete n[p.key]; else n[p.key] = v; set({ lpiFor: n }); }}>

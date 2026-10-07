@@ -4876,6 +4876,10 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ua-perm.changed span::after{content:" \2022";color:var(--accent)}
 .ua-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--line)}
 /* ink chip: "Shirt color" (knock it out: the shirt shows there) */
+.sep-chip-ft{display:flex;border-top:1px solid var(--line-2)}
+.sep-chip-ft .sep-chip-shirt{flex:1;border-top:0}
+.sep-chip-ft .sep-chip-shirt+.sep-chip-shirt{border-left:1px solid var(--line-2)}
+.sep-chip-shirt.off{opacity:.45;cursor:default}
 .sep-chip-shirt{display:flex;align-items:center;justify-content:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink-3);padding:3px 4px 5px;border-top:1px solid var(--line-2);cursor:pointer;white-space:nowrap}
 .sep-chip-shirt input{margin:0;width:12px;height:12px}
 .sep-chip-shirt.on{color:var(--accent)}
