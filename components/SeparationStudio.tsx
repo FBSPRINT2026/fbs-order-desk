@@ -1196,6 +1196,17 @@ export default function SeparationStudio({ id }: { id: string }) {
           {ltab === "output" && <section className="sep-card">
             <h3>Underbase{dark ? "" : " (white shirt)"}</h3>
             <div className="rv-seg sep-full">{([["auto", "Auto"], ["on", "On"], ["off", "Off"]] as const).map(([k, l]) => <button key={k} type="button" className={st.underbase === k ? "on" : ""} onClick={() => set({ underbase: k })}>{l}</button>)}</div>
+            {res?.underbase && plates.some((p) => p.kind === "color") && (
+              <div className="sep-basefor">
+                <div className="sep-f-h">Underbase under each color</div>
+                {plates.filter((p) => p.kind === "color").map((p) => {
+                  const art = "#" + p.key.slice(1), never = neverBase(art), on = !never && (st.baseFor?.[p.key] ?? baseByDefault(art));
+                  return <label key={p.key} className={"sep-chk" + (never ? " faint" : "")} title={never ? "Black never gets underbase: black ink on white bubbles" : on ? "Uncheck to print this color straight on the shirt (no white under it)" : "Check to put white underbase under this color"}>
+                    <input type="checkbox" checked={on} disabled={never} onChange={(e) => set({ baseFor: { ...(st.baseFor || {}), [p.key]: e.target.checked } })} />
+                    <span className="sep-sw" style={{ background: p.hex }} /> <span data-notranslate>{p.name}</span>{never ? " (black: never)" : !on ? " (straight on the shirt)" : ""}</label>;
+                })}
+              </div>
+            )}
             <label className="sep-f" title="How far the underbase is pulled in from the edges of the colors, so it never peeks out">Choke <input type="range" min={0} max={3} step={0.25} value={st.chokePt ?? CHOKE_PT} onChange={(e) => set({ chokePt: +e.target.value })} /> <b>{st.chokePt ?? CHOKE_PT} pt</b></label>
             {(() => { const on = (st.finePt ?? FINE_PT) > 0; return (<div className="sep-fine">
               <label className="sep-chk" title="Small type and thin lines (sponsor backs): the full choke would thin their base to nothing. There the base is choked only a little and the color on top gets a small stroke instead, so it still covers the white."><input type="checkbox" checked={on} onChange={(e) => set({ finePt: e.target.checked ? FINE_PT : 0 })} /> Small type &amp; thin lines</label>
@@ -1347,7 +1358,9 @@ export default function SeparationStudio({ id }: { id: string }) {
                     const art = "#" + p.key.slice(1);
                     if (neverBase(art)) return <span className="sep-base fixed" title="Black never gets underbase: black ink on white bubbles">No base</span>;
                     const on = st.baseFor?.[p.key] ?? baseByDefault(art);
-                    return <button type="button" className={"sep-base" + (on ? " on" : "")} title={on ? "White underbase prints under this ink. Click to leave it off (the ink prints straight on the shirt)" : "No underbase under this ink (prints straight on the shirt). Click to put base under it"} onClick={() => set({ baseFor: { ...(st.baseFor || {}), [p.key]: !on } })}>{on ? "Base" : "No base"}</button>;
+                    // underbase under this ink: a plain checkbox (Nicholas, Oct 7: turn the base off for any color)
+                    return <label className={"sep-base" + (on ? " on" : "")} title={on ? "White underbase prints under this ink. Uncheck to leave it off: the ink prints straight on the shirt" : "No underbase under this ink: it prints straight on the shirt. Check to put base under it"}>
+                      <input type="checkbox" checked={on} onChange={(e) => set({ baseFor: { ...(st.baseFor || {}), [p.key]: e.target.checked } })} /> Underbase</label>;
                   })()}
                   {" "}<span className="sep-nw">· mesh <select className="sep-mesh" value={p.mesh} onChange={(e) => setMesh((m) => ({ ...m, [p.key]: +e.target.value }))} aria-label="Mesh">{[...new Set([...SHOP_MESH, p.mesh])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v}</option>)}</select></span>
                   {(tonal || p.tonal) && <>{" "}<span className="sep-nw">· <select className="sep-mesh sep-lpi" value={lpiOf(st, p.key)} title="Halftone frequency for this screen (lines per inch): lower = bigger dots" aria-label="Halftone LPI"

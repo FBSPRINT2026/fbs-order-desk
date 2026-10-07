@@ -10,6 +10,7 @@ import SearchInput from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
 import { canOpen, ROLES } from "@/lib/roles";
 import { setViewAs } from "@/app/shop/view-as-actions";
+import SupportButton from "@/components/SupportButton";
 
 const ICONS: Record<string, React.ReactNode> = {
   home: <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>,
@@ -32,6 +33,7 @@ const ICONS: Record<string, React.ReactNode> = {
   artwork: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-8 9" /></svg>,
   ink: <svg viewBox="0 0 24 24"><path d="M12 3c3.5 4.2 6 7.6 6 10.6A6 6 0 0 1 6 13.6C6 10.6 8.5 7.2 12 3z" /><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.5" /></svg>,
   seps: <svg viewBox="0 0 24 24"><rect x="3" y="3" width="12" height="12" rx="2" /><rect x="6" y="6" width="12" height="12" rx="2" /><rect x="9" y="9" width="12" height="12" rx="2" /></svg>,
+  support: <svg viewBox="0 0 24 24"><path d="M4 13v-1a8 8 0 0 1 16 0v1" /><rect x="3" y="13" width="4" height="6" rx="1.5" /><rect x="17" y="13" width="4" height="6" rx="1.5" /><path d="M19 19c0 1.5-2 2.5-5 2.5" /></svg>,
   settings: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>,
 };
 
@@ -51,6 +53,12 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   const [incoming, setIncoming] = useState(0);
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
   const [hello, setHello] = useState("Hello");
+  // the owner: how many support reports are waiting (the Support link's badge)
+  const [support, setSupport] = useState(0);
+  useEffect(() => {
+    if (realRole !== "owner") return;
+    createClient().from("support_issues").select("id", { count: "exact", head: true }).eq("status", "open").then((r) => { if (!r.error) setSupport(r.count || 0); });
+  }, [realRole, path]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false); // phones: the menu slides open from the top bar
   useEffect(() => { setOpen(false); }, [path]);
@@ -142,6 +150,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
       {href === "/shop/incoming" && incoming > 0 && <span className="badge" title={`${incoming} order request${incoming === 1 ? "" : "s"} to review`}>{incoming}</span>}
+      {href === "/shop/support" && support > 0 && <span className="badge" title={`${support} open support report${support === 1 ? "" : "s"}`}>{support}</span>}
       {href === "/shop" && unread > 0 && <span className="badge" title={`${unread} unread customer message${unread === 1 ? "" : "s"}`}>{unread}</span>}
     </Link>
   );
@@ -204,7 +213,11 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         )}
       </div>
       )}
-      <nav className="nav nav-foot">{link(["/shop/settings", "settings", "Settings"])}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} title="Your own quick links: customers, reports, anything you open all the time">+ Add Shortcut</button>}</nav>
+      <nav className="nav nav-foot">
+        {/* everyone: report a problem with a screenshot; the owner: the Support page with everyone's reports */}
+        <SupportButton email={email} />
+        {realRole === "owner" && link(["/shop/support", "support", "Support"])}
+        {link(["/shop/settings", "settings", "Settings"])}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} title="Your own quick links: customers, reports, anything you open all the time">+ Add Shortcut</button>}</nav>
       <div className="side-user">
         <span>{email}</span>
         <div className="side-user-r">
