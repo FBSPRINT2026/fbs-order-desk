@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import PrintavoSync from "@/components/PrintavoSync";
 import { PrintavoBackup, PrintavoMissedFiles } from "@/components/PrintavoKeep";
+import RestorePoint from "@/components/RestorePoint";
 import SearchInput from "@/components/SearchInput";
 
 type Hit = { id: string; companyName: string; contact: string; email: string; phone: string; orderCount: number; customerId: string | null };
@@ -97,6 +98,7 @@ export default function ImportPage() {
 
       <PrintavoSync />
       <PrintavoMissedFiles />
+      <RestorePoint />
       <PrintavoBackup />
 
       <h2 style={{ marginTop: 22, fontSize: 16 }}>Import one customer now</h2>
