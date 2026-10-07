@@ -29,14 +29,20 @@ export async function GET(req: Request) {
   }
   // ingredient lines read from the IMS screen (data/ims/<system>-lines.json, the source of truth for reads): every
   // formula in that file is written as it is there
+  // (20 at a time, so a long list still finishes well inside the time limit)
   let lines = 0;
-  for (const f of READS[set.system]?.formulas || []) {
-    let q = admin.from("ink_formulas").update({ lines: f.lines, grams_per_qt: f.grams_per_qt, captured_at: new Date().toISOString(), captured_note: f.note || "Read from IMS 3.0 screen (grams for 1 qt)" }).eq("system", set.system);
-    q = f.ims_id ? q.eq("ims_id", f.ims_id) : q.eq("rec_type", f.rec_type).eq("code", f.code);
-    if (f.rec_type === "S" && !f.ims_id) q = q.eq("base", set.system);
-    const { error, data } = await q.select("id");
-    if (error) return NextResponse.json({ error: error.message, rows: n, lines }, { status: 500 });
-    lines += (data || []).length;
+  const reads = READS[set.system]?.formulas || [];
+  const at = new Date().toISOString();
+  for (let i = 0; i < reads.length; i += 20) {
+    const out = await Promise.all(reads.slice(i, i + 20).map((f) => {
+      let q = admin.from("ink_formulas").update({ lines: f.lines, grams_per_qt: f.grams_per_qt, captured_at: at, captured_note: f.note || "Read from IMS 3.0 screen (grams for 1 qt)" }).eq("system", set.system);
+      q = f.ims_id ? q.eq("ims_id", f.ims_id) : q.eq("rec_type", f.rec_type).eq("code", f.code);
+      if (f.rec_type === "S" && !f.ims_id) q = q.eq("base", set.system);
+      return q.select("id");
+    }));
+    const bad = out.find((r) => r.error);
+    if (bad?.error) return NextResponse.json({ error: bad.error.message, rows: n, lines }, { status: 500 });
+    lines += out.reduce((t, r) => t + (r.data || []).length, 0);
   }
   return NextResponse.json({ ok: true, system: set.system, rows: n, lines });
 }
