@@ -7,6 +7,7 @@ import { ROLES, calcGroup, mergeSettings, newGLine, newImprint, uid, type PriceL
 import { money } from "@/lib/format";
 import { getAiStatus } from "@/app/shop/ai-actions";
 import { useSticky } from "@/lib/useSticky";
+import DropboxSettings from "@/components/DropboxSettings";
 
 export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
@@ -237,6 +238,8 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+
+        <DropboxSettings />
 
         <section className="panel" id="staff">
           <div className="panel-h"><h2>Shop staff</h2><span className="faint" style={{ fontSize: 12 }}>These emails sign in to the shop side. Roles will decide what each person sees.</span></div>

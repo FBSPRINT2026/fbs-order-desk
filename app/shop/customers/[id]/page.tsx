@@ -23,6 +23,7 @@ import { orderSearchText } from "@/lib/search";
 import ShopMessages from "@/components/ShopMessages";
 import ShopGoods from "@/components/ShopGoods";
 import CustomerContacts from "@/components/CustomerContacts";
+import FilmFolder from "@/components/FilmFolder";
 import ShopCustomerProjects from "@/components/ShopCustomerProjects";
 import ProgramAdmin from "@/components/ProgramAdmin";
 import { emailStatement, recordLumpPayment } from "@/app/shop/pay-actions";
@@ -101,8 +102,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     const { id: _id, created_at, ...all } = latest.current;
     const { pub: rest0, priv } = splitCustomer(all);
     // the move fields belong to the move checklist: never written from here (a stale copy would undo a move)
-    const { moved_at: _ma, moved_by: _mb, move_checklist: _mc, ...rest } = rest0 as typeof rest0 & { moved_at?: unknown; moved_by?: unknown; move_checklist?: unknown };
-    void _ma; void _mb; void _mc;
+    const { moved_at: _ma, moved_by: _mb, move_checklist: _mc, film_folder: _ff, ...rest } = rest0 as typeof rest0 & { moved_at?: unknown; moved_by?: unknown; move_checklist?: unknown; film_folder?: unknown };
+    void _ma; void _mb; void _mc; void _ff;
     setState("Saving…");
     const sb = createClient();
     const [a, b] = await Promise.all([
@@ -217,6 +218,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                 <div className="field"><label htmlFor="cu-c2p">Phone</label><input id="cu-c2p" type="tel" value={c.contact2_phone || ""} onChange={(e) => set("contact2_phone", e.target.value)} /></div>
               </div>
               <CustomerContacts customerId={id} />
+              <FilmFolder customerId={id} />
               <div className="field"><label htmlFor="cu-type">Customer type</label>
                 <select id="cu-type" value={c.price_type || "retail"} onChange={(e) => set("price_type", e.target.value as Customer["price_type"])}>
                   <option value="retail">Retail: we supply the garments</option>

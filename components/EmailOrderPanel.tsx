@@ -5,7 +5,7 @@ import { SUPPLIERS } from "@/lib/goods";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
-import { artFromMockupPdf, type ArtPiece } from "@/lib/printavoArt";
+import { artFromMockupPdf, filmFor, measureFilm, type ArtPiece, type FilmPiece } from "@/lib/printavoArt";
 import { uploadDesign } from "@/lib/designs";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import dynamic from "next/dynamic";
@@ -87,10 +87,13 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
    * saved as the customer's designs and put on the prints with the size and drop it had, so the Mockup Creator can
    * build our mockup by itself.
    */
+  /** films matched while pulling the art: copied onto the new order's production files */
+  const films: { id: string; name: string }[] = [];
   async function pullPrintavoArt(x: EODraft): Promise<EODraft> {
     const custId = data?.customer?.id;
     if (!custId || !x.groups.some((g) => g.pvArt?.length && g.imprints.some((im) => !im.design_id))) return x;
     const y = clone(x), sb = createClient();
+    const pulled: { imId: string; widthIn: number; heightIn: number }[] = [];
     for (const g of y.groups) {
       if (!g.pvArt?.length || g.imprints.every((im) => im.design_id)) continue;
       let got: ArtPiece[] = [], from = "";
@@ -117,6 +120,32 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
         im.drop = String(pc.dropIn);
         if (!im.inks) { im.inks = pc.ink; im.colors = 1; }
         im.notes = [im.notes, `Art, size (${pc.widthIn}" wide) and placement (${pc.dropIn}" down) from the old mockup; ink looks like ${pc.ink} (${pc.hex})`].filter(Boolean).join(". ").slice(0, 300);
+        pulled.push({ imId: im.id, widthIn: pc.widthIn, heightIn: pc.heightIn });
+      }
+    }
+    // the film folder in Dropbox has the real print sizes: find this job's film and use its sizes
+    if (pulled.length) {
+      setStep("Looking for the film in Dropbox…");
+      films.length = 0;
+      const job = data?.past.find((p) => p.ref === x.reorderOf);
+      const r = await fetch(`/api/dropbox/film?customer=${encodeURIComponent(custId)}&q=${encodeURIComponent(y.nickname || job?.label.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "") || "")}&date=${encodeURIComponent(job?.date || "")}`).catch(() => null);
+      const j = r?.ok ? await r.json().catch(() => null) as { films?: { id: string; name: string; score: number }[] } | null : null;
+      for (const f of (j?.films || []).filter((x) => x.score > 0).slice(0, 3)) {
+        const c = await fetch("/api/dropbox/film", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id }) }).then((x) => x.json()).catch(() => null) as { url?: string; name?: string } | null;
+        if (!c?.url) continue;
+        let fp: FilmPiece[] = [];
+        try { fp = await measureFilm(await (await fetch(c.url)).arrayBuffer()); } catch { continue; }
+        let hit = false;
+        for (const pu of pulled) {
+          const m = filmFor(pu.widthIn, pu.heightIn, fp);
+          if (!m) continue;
+          hit = true;
+          for (const g of y.groups) for (const im of g.imprints) if (im.id === pu.imId) {
+            im.size = `${Math.round(m.widthIn * 4) / 4}" wide`;
+            im.notes = `${(im.notes || "").replace(/size \([\d.]+" wide\) and /, "")}. Size from the film: ${f.name} (${m.widthIn}" × ${m.heightIn}")`.slice(0, 300);
+          }
+        }
+        if (hit) { films.push({ id: f.id, name: f.name }); break; }
       }
     }
     return y;
@@ -138,6 +167,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     if (!r?.ok || !j.id) { setBusy(""); setStep(""); w?.close(); return setErr(j.error || "Couldn't create the order."); }
     let url = `/shop/orders/${j.id}`;
+    for (const f of films) await fetch("/api/dropbox/film", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id, orderId: j.id }) }).catch(() => null);
     try {
       const sb = createClient();
       const { data: o } = await sb.from("orders").select("groups").eq("id", j.id).maybeSingle();

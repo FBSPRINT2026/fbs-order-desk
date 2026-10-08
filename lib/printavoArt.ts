@@ -16,11 +16,13 @@ type Vp = { width: number; height: number };
 type Page = { getViewport: (o: { scale: number }) => Vp; render: (o: Record<string, unknown>) => { promise: Promise<void> } };
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 
-async function openPage(buf: ArrayBuffer): Promise<Page> {
-  const pdfjs = (await import(/* webpackIgnore: true */ PDFJS)) as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<{ getPage: (n: number) => Promise<Page> }> } };
+type Doc = { numPages: number; getPage: (n: number) => Promise<Page> };
+async function openDoc(buf: ArrayBuffer): Promise<Doc> {
+  const pdfjs = (await import(/* webpackIgnore: true */ PDFJS)) as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<Doc> } };
   pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-  return (await pdfjs.getDocument({ data: buf }).promise).getPage(1);
+  return pdfjs.getDocument({ data: buf }).promise;
 }
+const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
 
 /**
  * Draws the page with the big photos skipped: a picture drawn wider than 30% of the page (the shirt photos) is left
@@ -126,4 +128,36 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art"): Promise<
     out.push({ side, file: new File([blob], `${name} ${side}.png`, { type: "image/png" }), widthIn: Math.round(widthIn * 4) / 4, heightIn: Math.round(heightIn * 4) / 4, dropIn: Math.round(dropIn * 4) / 4, offIn: Math.round(offIn * 4) / 4, hex, ink: sug.rec === "pms" ? sug.pms.name : sug.standard.name });
   }
   return out;
+}
+
+/**
+ * A film file (FBS Film Folder/<customer>/<job>.ai): the size of each print on it, from every artboard. Registration
+ * marks and labels (under an inch tall or wide) are left out. Films are at print size, so these are the real sizes.
+ */
+export type FilmPiece = { page: number; widthIn: number; heightIn: number };
+export async function measureFilm(buf: ArrayBuffer): Promise<FilmPiece[]> {
+  const doc = await openDoc(buf);
+  const out: FilmPiece[] = [];
+  for (let n = 1; n <= Math.min(doc.numPages, 12); n++) {
+    const page = await doc.getPage(n);
+    const v1 = page.getViewport({ scale: 1 });
+    const scale = Math.min(4, 3000 / Math.max(v1.width, v1.height));
+    const vp = page.getViewport({ scale });
+    const c = document.createElement("canvas");
+    c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    await page.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(0,0,0,0)" }).promise;
+    for (const r of pieces(c, 0.15 * 72 * scale)) {
+      const w = (r.x1 - r.x0) / scale / 72, h = (r.y1 - r.y0) / scale / 72;
+      if (w >= 1 && h >= 1) out.push({ page: n, widthIn: Math.round(w * 100) / 100, heightIn: Math.round(h * 100) / 100 });
+    }
+  }
+  return out;
+}
+
+/** the film piece that is this print: same shape (within ~12%) and a believable size next to the mockup's reading */
+export function filmFor(widthIn: number, heightIn: number, film: FilmPiece[]) {
+  const a = heightIn / widthIn;
+  return film
+    .filter((f) => Math.abs(Math.log(f.heightIn / f.widthIn / a)) < 0.12 && f.widthIn > widthIn * 0.6 && f.widthIn < widthIn * 1.6)
+    .sort((x, y) => Math.abs(x.widthIn - widthIn) - Math.abs(y.widthIn - widthIn))[0] || null;
 }
