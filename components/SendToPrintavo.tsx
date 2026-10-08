@@ -124,7 +124,7 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
 /* ---------- changes made in Printavo, brought back (40,000-series orders only) ---------- */
 type PvSnap = {
   at: string; visualId: string; status: string; total: number;
-  groups: { lines: { itemNumber: string; color: string; description: string; sizes: Record<string, number>; price: number }[] }[];
+  groups: { lines: { itemNumber: string; color: string; description: string; sizes: Record<string, number>; price: number; mockups?: number }[] }[];
   fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
 };
 const CARD = /credit card processing surcharge/i;
@@ -185,6 +185,16 @@ export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc;
     const card = snap.fees.find((f) => CARD.test(f.description));
     if (card) info.push(`Card surcharge in Printavo: $${card.amount.toFixed(2)} (stays in Printavo: customers pay there until Nov 2).`);
   }
+  // Printavo's invoice page shows the customer only the mockups on the product lines
+  const noArt = snap ? snap.groups.flatMap((g) => g.lines).filter((l) => l.mockups === 0).length : 0;
+  async function pushArt() {
+    setBusy(true); setErr("");
+    const r = await fetch("/api/printavo/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: o.id, action: "mockups" }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+    setBusy(false);
+    if (!r?.ok) return setErr(j.error || "Printavo didn't take the mockup.");
+    setFresh(j.pv);
+  }
   const applyAll = () => patch((d) => { for (const c of changes) c.apply?.(d); });
   return (
     <div className="pvc">
@@ -197,6 +207,7 @@ export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc;
         </span>
       </div>
       {err && <div className="err">{err}</div>}
+      {noArt > 0 && <div className="pvc-art"><span>{noArt === 1 ? "The product line in Printavo has" : `${noArt} product lines in Printavo have`} no mockup, so the customer can&apos;t see the art on their invoice.</span><button type="button" className="btn primary sm" disabled={busy} onClick={pushArt}>Add our mockup in Printavo</button></div>}
       {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span>{c.text}</span>{c.apply && <button type="button" className="btn sm" onClick={() => patch((d) => c.apply!(d))}>Accept</button>}</li>)}</ul>}
       {info.length > 0 && <ul className="pvc-info">{info.map((t, i) => <li key={i} className="faint">{t}</li>)}</ul>}
     </div>

@@ -118,6 +118,11 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   const named = (t: string) => groups.findIndex((g) => !!g.name && t.startsWith(g.name));
   const mockFor = (gi: number) => (proofs || []).map((p, i) => ({ gi: named(String(p.title || "")), u: proofUrls[i] }))
     .filter((p) => p.u && (p.gi === gi || (p.gi < 0 && gi === 0))).map((p) => ({ publicImageUrl: p.u }));
+  // on the product line too: Printavo's public invoice shows line item mockups to the customer, not imprint ones
+  const lineMock = (gi: number, l: { style?: string; color?: string }) => {
+    const own = (proofs || []).map((p, i) => ({ t: String(p.title || ""), u: proofUrls[i] })).filter((p) => p.u && named(p.t) === gi && (!l.style || p.t.includes(l.style)) && (!l.color || p.t.includes(l.color)));
+    return own.length ? own.map((p) => ({ publicImageUrl: p.u })) : mockFor(gi);
+  };
   // types of work, matched by name (Screen Printing, Embroidery, DTF...)
   // and the line items' categories (Screen Printing, Embroidery, Heat Press): Printavo's reports and syncs go by them
   type Named = { id: string; name: string; archived?: boolean };
@@ -140,7 +145,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
         for (const z of SIZES) { const q = +(l.sizes?.[z] || 0); if (q > 0) { const k = PV_SIZE[z] || "size_other"; counts[k] = (counts[k] || 0) + q; } }
         const cat = catFor(g.imprints[0]?.method || "screen");
         return {
-          position: li + 1, itemNumber: l.style || undefined, color: l.color || undefined, ...(cat ? { category: { id: cat.id } } : {}),
+          position: li + 1, itemNumber: l.style || undefined, color: l.color || undefined, ...(cat ? { category: { id: cat.id } } : {}), mockups: lineMock(gi, l),
           description: [l.brand, l.garment].filter(Boolean).join(" ") + (g.name ? ` (${g.name})` : ""),
           price: lc ? lc.each : 0, taxed,
           sizes: Object.entries(counts).map(([size, count]) => ({ size, count })),
@@ -280,7 +285,7 @@ async function fixConfirmationReply(admin: SupabaseClient, orderId: string, numb
 /** What the order looks like in Printavo now (kept on our order as printavo_state.pv, compared on the order page). */
 export type PvSnap = {
   at: string; visualId: string; status: string; total: number; kind: string;
-  groups: { lines: { itemNumber: string; color: string; description: string; category: string; sizes: Record<string, number>; price: number }[] }[];
+  groups: { lines: { itemNumber: string; color: string; description: string; category: string; sizes: Record<string, number>; price: number; mockups: number }[] }[];
   fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
 };
 const OUR_SIZE: Record<string, string> = Object.fromEntries(Object.entries(PV_SIZE).map(([k, v]) => [v, k]));
@@ -297,11 +302,44 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
   const p = await getOrder(String(o.printavo_id));
   const snap: PvSnap = {
     at: new Date().toISOString(), visualId: p.visualId, status: p.status.name, total: p.total, kind: p.kind,
-    groups: p.groups.map((g) => ({ lines: g.lines.map((l) => ({ itemNumber: l.itemNumber, color: l.color, description: l.description, category: l.category, price: l.price,
+    groups: p.groups.map((g) => ({ lines: g.lines.map((l) => ({ itemNumber: l.itemNumber, color: l.color, description: l.description, category: l.category, price: l.price, mockups: l.mockups.length,
       sizes: Object.fromEntries(Object.entries(l.sizes).map(([k, v]) => [OUR_SIZE[k] || k.replace(/^size_/, "").toUpperCase(), v])) })) })),
     fees: p.fees.map((f) => ({ description: f.description, amount: f.amount, quantity: f.quantity, unitPrice: f.unitPrice, pct: f.pct })),
   };
   const st = (o.printavo_state || {}) as Record<string, unknown>;
   await admin.from("orders").update({ printavo_visual_id: p.visualId, printavo_state: { ...st, pv: snap, status: p.status.name, url: p.urls.url || st.url, publicUrl: p.urls.publicUrl || st.publicUrl, ...(fingerprint ? { fp: fingerprint } : {}) } }).eq("id", orderId);
   return snap;
+}
+
+/**
+ * Puts our mockups on the Printavo product lines that have none (the customer's invoice page only shows line item
+ * mockups). Adds pictures only; nothing else changes.
+ */
+export async function pushLineMockups(admin: SupabaseClient, orderId: string) {
+  const { data: o } = await admin.from("orders").select("number, printavo_id, groups").eq("id", orderId).maybeSingle();
+  if (!o?.printavo_id) throw new PrintavoError("This order hasn't been sent to Printavo.");
+  const number = o.number as number;
+  if (!(number >= 40000 && number < 50000)) throw new PrintavoError("Only orders #40000-#49999 sync with Printavo.");
+  const p = await getOrder(String(o.printavo_id));
+  const groups = orderGroups(o as Pick<Order, "groups" | "lines">);
+  const { data: proofs } = await admin.from("proofs").select("title, file_path").eq("order_id", orderId).order("created_at");
+  if (!proofs?.length) throw new PrintavoError("This order has no mockup yet. Make one in the Mockup Creator first.");
+  const { data: su } = await admin.storage.from("proofs").createSignedUrls(proofs.map((x) => x.file_path as string), 60 * 60 * 24 * 3);
+  const urls = (su || []).map((x) => x.signedUrl || "");
+  const named = (t: string) => groups.findIndex((g) => !!g.name && t.startsWith(g.name));
+  let added = 0;
+  for (const [gi, pg] of p.groups.entries()) {
+    for (const pl of pg.lines) {
+      if (pl.mockups.length) continue;
+      const pick = proofs.map((x, i) => ({ t: String(x.title || ""), u: urls[i] })).filter((x) => x.u);
+      const own = pick.filter((x) => named(x.t) === gi && (!pl.itemNumber || x.t.includes(pl.itemNumber)) && (!pl.color || x.t.includes(pl.color)));
+      const use = own.length ? own : pick.filter((x) => named(x.t) === gi || (named(x.t) < 0 && gi === 0));
+      for (const m of use.slice(0, 4)) {
+        await transitionWrite(`mutation($id:ID!,$u:String!){ lineItemMockupCreate(lineItemId:$id, publicImageUrl:$u){ id } }`, { id: pl.id, u: m.u }, number);
+        added++;
+      }
+    }
+  }
+  await refreshFromPrintavo(admin, orderId).catch(() => null);
+  return { added };
 }

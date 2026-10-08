@@ -41,7 +41,7 @@ export async function pv<T = Record<string, unknown>>(query: string, variables: 
 }
 
 /** The only Printavo changes the portal makes: what "Send to Printavo" needs for a 40,000-series order. */
-const TRANSITION_WRITES = new Set(["quoteCreate", "statusUpdate", "quoteUpdate", "invoiceUpdate"]);
+const TRANSITION_WRITES = new Set(["quoteCreate", "statusUpdate", "quoteUpdate", "invoiceUpdate", "lineItemMockupCreate"]);
 /**
  * Sends one change to Printavo for a 40,000-series order (40,000-49,999: entered here during the move, produced from
  * Printavo until Nov 2). Anything else is refused before it leaves our server. Not retried: a write that may have
