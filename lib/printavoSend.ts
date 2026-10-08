@@ -168,7 +168,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
     productionNote: [inp.productionNote, `Entered in the new FBS system as order #${number}.`].filter(Boolean).join("\n\n"),
     salesTax: taxed ? calc.rate : 0,
     ...(discount ? { discount, discountAsPercentage: o.discount_type !== "amt" } : {}),
-    tags: [`FBS #${number}`],
+    tags: [`#FBS${number}`], // Printavo tags start with # and have no spaces
     lineItemGroups, fees,
     productionFiles: fileUrls.map((u) => ({ publicFileUrl: u })),
   };
