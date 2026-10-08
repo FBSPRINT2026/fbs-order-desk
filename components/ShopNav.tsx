@@ -3,7 +3,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { mergeSettings } from "@/lib/pricing";
+import { calcOrder, mergeSettings, type Order } from "@/lib/pricing";
+import { cardFix, printavoChanges, snapOf } from "@/lib/printavoChanges";
 import { saveShortcuts, type Shortcut } from "@/app/shop/shortcut-actions";
 import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 import SearchInput from "@/components/SearchInput";
@@ -16,6 +17,7 @@ const ICONS: Record<string, React.ReactNode> = {
   home: <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>,
   inbox: <svg viewBox="0 0 24 24"><path d="M4 13l2.5-7h11L20 13v6H4z" /><path d="M4 13h4.5l1 2h5l1-2H20" /></svg>,
   assistant: <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg>,
+  pvsync: <svg viewBox="0 0 24 24"><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 4v4h-4" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 20v-4h4" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
   orders: <svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3z" /><path d="M8 9h8M8 13h8M8 17h5" /></svg>,
   // a screen printing press seen from above: the center hub and its platens
@@ -40,7 +42,7 @@ const ICONS: Record<string, React.ReactNode> = {
 const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 
 /** shorter names for the tightest menu (two links a row) */
-const SHORT: Record<string, string> = { "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving" };
+const SHORT: Record<string, string> = { "Printavo Sync": "Printavo", "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving" };
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
 
@@ -51,6 +53,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [incoming, setIncoming] = useState(0);
+  const [pvWaiting, setPvWaiting] = useState(0);
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
   const [hello, setHello] = useState("Hello");
   // the owner: how many support reports are waiting (the Support link's badge)
@@ -132,11 +135,15 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       .then(({ count }) => setUnread(count || 0));
     sb.from("orders").select("id", { count: "exact", head: true }).eq("status", "request").not("submitted_at", "is", null)
       .then(({ count }) => setIncoming(count || 0));
+    // 40,000-series orders with Printavo changes waiting to be accepted
+    Promise.all([sb.from("orders").select("*").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000), sb.from("settings").select("data").eq("id", 1).maybeSingle()])
+      .then(([{ data }, { data: st }]) => { const s = mergeSettings(st?.data); setPvWaiting(((data || []) as Order[]).filter((o) => { const snap = snapOf(o); return printavoChanges(o, calcOrder(o, s), snap).changes.length > 0 || !!cardFix(o, snap); }).length); })
+      .then(undefined, () => null);
   }, [path]);
 
   // the menu, in groups — each group's items are kept in alphabetical order
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
-    { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/inbox", "inbox", "Inbox"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
+    { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/inbox", "inbox", "Inbox"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/printavo-sync", "pvsync", "Printavo Sync"], ["/shop/projects", "projects", "Projects"]] },
     { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/separations", "seps", "Separations"]] },
     { title: "Shop Tools", items: [["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
@@ -149,6 +156,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
     <Link key={href} href={href} className={active(href) ? "on" : ""} title={label}>
       {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
+      {href === "/shop/printavo-sync" && pvWaiting > 0 && <span className="badge" title={`${pvWaiting} order${pvWaiting === 1 ? "" : "s"} changed in Printavo, waiting to be accepted`}>{pvWaiting}</span>}
       {href === "/shop/incoming" && incoming > 0 && <span className="badge" title={`${incoming} order request${incoming === 1 ? "" : "s"} to review`}>{incoming}</span>}
       {href === "/shop/support" && support > 0 && <span className="badge" title={`${support} open support report${support === 1 ? "" : "s"}`}>{support}</span>}
       {href === "/shop" && unread > 0 && <span className="badge" title={`${unread} unread customer message${unread === 1 ? "" : "s"}`}>{unread}</span>}

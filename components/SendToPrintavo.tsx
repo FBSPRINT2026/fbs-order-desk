@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { lineQty, SIZES, type GLine, type Order, type OrderCalc, type Size } from "@/lib/pricing";
+import type { Order, OrderCalc } from "@/lib/pricing";
+import { cardFix, printavoChanges, type PvSnap } from "@/lib/printavoChanges";
 
 /**
  * Send to Printavo (40,000-series orders, until Nov 2): asks for Printavo's status and the two dates, then makes the
@@ -122,19 +123,6 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
 }
 
 /* ---------- changes made in Printavo, brought back (40,000-series orders only) ---------- */
-type PvSnap = {
-  at: string; visualId: string; status: string; total: number;
-  groups: { lines: { itemNumber: string; color: string; description: string; sizes: Record<string, number>; price: number; mockups?: number }[] }[];
-  fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
-};
-// the fees Send to Printavo makes from our setup (screens, digitizing, PMS, ink changes, minimum, 2XL+)
-const SETUP_FEE = /^(new screen fee|repeat screen fee|digitize file|pms match|color change|minimum order charge|sizes above xl)$/i;
-const ADJUST = "Setup adjustment (from Printavo)";
-// the card surcharge is always worked out in Printavo: taken as it is, without asking
-const CARD = /credit card processing surcharge/i;
-const norm = (x: string) => (x || "").replace(/\s+/g, " ").trim().toLowerCase();
-type Change = { key: string; text: string; apply?: (d: Order) => void };
-
 export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc; patch: (fn: (d: Order) => void) => void }) {
   const st = (o as Order & { printavo_state?: { pv?: PvSnap } | null }).printavo_state;
   const pv = st?.pv;
@@ -148,50 +136,9 @@ export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc;
     if (!r?.ok) return setErr(j.error || "Couldn't read the order from Printavo.");
     setFresh(j.pv);
   }
-  const changes: Change[] = [];
-  const info: string[] = [];
-  if (snap) {
-    const groups = o.groups || [];
-    groups.forEach((g, gi) => {
-      const ours = g.lines.filter((l) => lineQty(l) > 0), theirs = snap.groups[gi]?.lines || [];
-      ours.forEach((l, li) => {
-        const t = theirs[li]; if (!t) return;
-        const name = `${[l.style, l.color].filter(Boolean).join(" ")}`;
-        const keys = [...new Set([...Object.keys(l.sizes || {}), ...Object.keys(t.sizes)])].filter((z) => (SIZES as readonly string[]).includes(z));
-        const diff = keys.filter((z) => (+(l.sizes?.[z as Size] || 0)) !== (+(t.sizes[z] || 0)));
-        if (diff.length) changes.push({ key: `q${gi}.${li}`, text: `${name}: ${diff.map((z) => `${z} ${+(l.sizes?.[z as Size] || 0)} → ${+(t.sizes[z] || 0)}`).join(", ")}`,
-          apply: (d) => { const x = d.groups[gi].lines.find((y) => y.id === l.id); if (x) x.sizes = Object.fromEntries(keys.filter((z) => +(t.sizes[z] || 0) > 0).map((z) => [z, +t.sizes[z]])) as GLine["sizes"]; } });
-        const each = calc.groups[gi]?.lines.find((y) => y.id === l.id)?.each ?? 0;
-        if (Math.abs(each - t.price) > 0.005) changes.push({ key: `p${gi}.${li}`, text: `${name}: price $${each.toFixed(2)} → $${t.price.toFixed(2)} each`,
-          apply: (d) => { const x = d.groups[gi].lines.find((y) => y.id === l.id); if (x) x.priceOverride = t.price; } });
-      });
-      theirs.slice(ours.length).forEach((t) => info.push(`New line in Printavo: ${[t.itemNumber, t.color].filter(Boolean).join(" ")} ${Object.entries(t.sizes).map(([z, q]) => `${z} ${q}`).join(", ")} at $${t.price.toFixed(2)}. Add it here by hand.`));
-    });
-    snap.groups.slice(groups.length).forEach(() => info.push("Printavo has a line item group this order doesn't. Add it here by hand."));
-    // fees: the setup ones are compared as a total, the rest one by one
-    const pvSetup = snap.fees.filter((f) => SETUP_FEE.test(norm(f.description))).reduce((a, f) => a + f.amount, 0);
-    const ourSetup = calc.groups.reduce((a, c) => a + c.setup + c.materials, 0);
-    const adj = (o.fees || []).find((f) => f.label === ADJUST);
-    const wantAdj = Math.round((pvSetup - ourSetup) * 100) / 100;
-    if (Math.abs(wantAdj - (+(adj?.amount || 0))) > 0.005) changes.push({ key: "setup", text: `Setup fees in Printavo $${pvSetup.toFixed(2)}, ours $${ourSetup.toFixed(2)}${adj ? ` (+ $${(+(adj.amount || 0)).toFixed(2)} adjustment)` : ""}`,
-      apply: (d) => { d.fees = (d.fees || []).filter((f) => f.label !== ADJUST); if (Math.abs(wantAdj) > 0.005) d.fees.push({ label: ADJUST, amount: wantAdj }); } });
-    // their own fees one by one, the card surcharge included (Printavo's amount, so both invoices show the same total)
-    const theirFees = snap.fees.filter((f) => !SETUP_FEE.test(norm(f.description)) && !CARD.test(f.description));
-    for (const f of theirFees) {
-      const mine = (o.fees || []).find((x) => norm(x.label) === norm(f.description));
-      if (!mine) changes.push({ key: `f+${f.description}`, text: `New fee in Printavo: ${f.description.trim()} $${f.amount.toFixed(2)}`, apply: (d) => { d.fees = [...(d.fees || []), { label: f.description.trim(), amount: f.amount }]; } });
-      else if (Math.abs(+(mine.amount || 0) - f.amount) > 0.005) changes.push({ key: `f=${f.description}`, text: `${f.description.trim()}: $${(+(mine.amount || 0)).toFixed(2)} → $${f.amount.toFixed(2)}`, apply: (d) => { const x = (d.fees || []).find((y) => norm(y.label) === norm(f.description)); if (x) x.amount = f.amount; } });
-    }
-    for (const mine of (o.fees || []).filter((x) => x.label !== ADJUST && !CARD.test(x.label) && +(x.amount || 0) && !theirFees.some((f) => norm(f.description) === norm(x.label))))
-      changes.push({ key: `f-${mine.label}`, text: `Fee removed in Printavo: ${mine.label} $${(+(mine.amount || 0)).toFixed(2)}`, apply: (d) => { d.fees = (d.fees || []).filter((y) => y.label !== mine.label); } });
-  }
-  const pvCard = snap?.fees.find((f) => CARD.test(f.description));
-  const ourCard = (o.fees || []).find((f) => CARD.test(f.label));
-  const cardOff = !!snap && (pvCard ? !ourCard || Math.abs(+(ourCard.amount || 0) - pvCard.amount) > 0.005 : !!ourCard);
-  useEffect(() => {
-    if (!cardOff) return;
-    patch((d) => { d.fees = [...(d.fees || []).filter((f) => !CARD.test(f.label)), ...(pvCard ? [{ label: pvCard.description.trim(), amount: pvCard.amount }] : [])]; });
-  }, [cardOff, pvCard?.amount]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { changes, info } = printavoChanges(o, calc, snap || null);
+  const card = cardFix(o, snap || null);
+  useEffect(() => { if (card) patch(card.apply); }, [!!card, card?.amount]); // eslint-disable-line react-hooks/exhaustive-deps
   // Printavo's invoice page shows the customer only the mockups on the product lines
   const noArt = snap ? snap.groups.flatMap((g) => g.lines).filter((l) => l.mockups === 0).length : 0;
   async function pushArt() {
@@ -215,7 +162,7 @@ export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc;
       </div>
       {err && <div className="err">{err}</div>}
       {noArt > 0 && <div className="pvc-art"><span>{noArt === 1 ? "The product line in Printavo has" : `${noArt} product lines in Printavo have`} no mockup, so the customer can&apos;t see the art on their invoice.</span><button type="button" className="btn primary sm" disabled={busy} onClick={pushArt}>Add our mockup in Printavo</button></div>}
-      {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span>{c.text}</span>{c.apply && <button type="button" className="btn sm" onClick={() => patch((d) => c.apply!(d))}>Accept</button>}</li>)}</ul>}
+      {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span><span className="pvc-what">{c.what}</span> {c.text}</span>{c.apply && <button type="button" className="btn sm" onClick={() => patch((d) => c.apply!(d))}>Accept</button>}</li>)}</ul>}
       {info.length > 0 && <ul className="pvc-info">{info.map((t, i) => <li key={i} className="faint">{t}</li>)}</ul>}
     </div>
   );
