@@ -1,22 +1,48 @@
 "use client";
 import { createClient } from "@/lib/supabase/client";
 import { uploadDesign } from "@/lib/designs";
-import { artFromMockupPdf, filmFor, measureFilm, type ArtPiece, type FilmPiece } from "@/lib/printavoArt";
+import { artFromMockupPdf, artShape, filmFor, measureFilm, type ArtPiece, type FilmPiece } from "@/lib/printavoArt";
 import type { EODraft } from "@/lib/emailOrderShared";
 import { bodyOf, REF_BODY } from "@/lib/garmentBody";
 
 /**
- * A reorder of an old Printavo job whose mockup is our Illustrator PDF (from the Inbox or the archive's Reorder):
- *  1. the art is pulled out of the mockup (front and back), saved as the customer's designs and put on the prints with
- *     the size and drop it had; size and ink are marked "production confirms" (they're readings, not the real thing);
- *  2. the job's film in Dropbox (FBS Film Folder/<customer>) is found and measured: its size replaces the reading.
+ * A reorder of an old Printavo job (from the Inbox or the archive's Reorder), its art in this order:
+ *  1. the original art on the old job (a see-through picture of the logo) becomes the design;
+ *  2. otherwise the art is pulled out of our old Illustrator mockup PDF (front and back) with the size and drop it had;
+ *  3. otherwise the film's own art is used.
+ * The job's film in Dropbox (FBS Film Folder/<customer>) is always found and measured: its size is the print size.
+ * Size and ink are marked "production confirms" unless they're off the film.
  * Returns the films used, to copy onto the new order's production files (attachFilms).
  */
 export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLabel?: string; jobDate?: string; onStep?: (s: string) => void }): Promise<{ draft: EODraft; films: { id: string; name: string }[]; notes: string[] }> {
   const films: { id: string; name: string }[] = [], notes: string[] = [];
   if (!x.groups.some((g) => g.imprints.some((im) => !im.design_id))) return { draft: x, films, notes };
   const y = JSON.parse(JSON.stringify(x)) as EODraft, sb = createClient();
-  const pulled: { imId: string; widthIn: number; heightIn: number }[] = [];
+  const pulled: { imId: string; widthIn: number; heightIn: number; sizeKnown?: boolean }[] = [];
+  // 1. the original art: a see-through picture on the old job (the logo itself, not a photo of the garment). It
+  //    becomes the design; the film says how big it printed.
+  for (const g of y.groups) {
+    if (!g.pvRef?.length || g.imprints.every((im) => im.design_id)) continue;
+    o.onStep?.("Looking for the original art on the old Printavo job…");
+    const open = g.imprints.filter((im) => !im.design_id && !/sleeve/i.test(im.location))
+      .sort((a, b) => Number(/back|yoke/i.test(a.location)) - Number(/back|yoke/i.test(b.location)));
+    for (const f of g.pvRef) {
+      if (!open.length) break;
+      const { data: su } = await sb.storage.from("proofs").createSignedUrl(f.path, 600);
+      const res = su?.signedUrl ? await fetch(su.signedUrl).catch(() => null) : null;
+      const blob = res?.ok ? await res.blob() : null;
+      const shape = blob ? await artShape(blob).catch(() => null) : null;
+      if (!blob || !shape) continue;
+      const im = open.shift()!, job = f.name.replace(/ mockup\.\w+$/i, "");
+      const file = new File([blob], `${y.nickname || "Art"}.${(blob.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: blob.type || "image/png" });
+      const dsg = await uploadDesign(sb, { file, customer_id: o.customerId, name: y.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `The original art from ${job}`, method: im.method });
+      im.design_id = dsg.id;
+      im.notes = [im.notes, `Art: the original from ${job}`].filter(Boolean).join(". ").slice(0, 300);
+      im.confirm = { size: true, ink: true, why: `Reorder of ${job}: the art is the original; no size or ink on file` };
+      pulled.push({ imId: im.id, widthIn: 1, heightIn: shape.ratio, sizeKnown: false });
+    }
+  }
+  // 2. no original art: pulled out of our old Illustrator mockup PDF
   for (const g of y.groups) {
     if (!g.pvArt?.length || g.imprints.every((im) => im.design_id)) continue;
     o.onStep?.("Pulling the art from the old Printavo mockup…");
@@ -73,11 +99,20 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
       if (!fp.length) continue;
       let hit = false;
       for (const pu of pulled) {
-        const m = filmFor(pu.widthIn, pu.heightIn, fp);
+        const m = filmFor(pu.widthIn, pu.heightIn, fp, pu.sizeKnown !== false);
         if (!m) continue;
         hit = true;
         for (const g of y.groups) for (const im of g.imprints) if (im.id === pu.imId) {
           im.size = `${Math.round(m.widthIn * 4) / 4}" wide`; im.sizeFrom = "film";
+          if (pu.sizeKnown === false) {
+            // the original art at the film's size; the location by that size, judged as on an adult tee
+            const body = bodyOf({ sizes: [...new Set(g.lines.flatMap((l) => Object.keys(l.sizes || {})))] });
+            const adultW = m.widthIn / Math.min(1, body.widthIn / REF_BODY.widthIn);
+            if (!/back|yoke/i.test(im.location)) im.location = adultW > 8 ? "Full Front" : adultW > 5 ? "Medium Front" : "Center Chest";
+            im.confirm = { size: false, ink: true, why: `The original art at the film's size (${f.name}); placement is the standard one and the ink isn't on file` };
+            im.notes = [im.notes, `Size from the film: ${f.name} (${Math.round(m.widthIn * 4) / 4}" wide)`].filter(Boolean).join(". ").slice(0, 300);
+            continue;
+          }
           // the film has the real size; the ink is still a guess and placement came from the mockup
           im.confirm = { size: false, ink: true, why: `Size from the film ${f.name}; placement from the old mockup, ink guessed from its color` };
           im.notes = `${(im.notes || "").replace(/size \([\d.]+" wide\) and /, "")}. Size from the film: ${f.name} (${m.widthIn}" × ${m.heightIn}")`.slice(0, 300);

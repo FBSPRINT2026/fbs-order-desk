@@ -135,7 +135,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   }
   // a reorder of an old Printavo job: its mockups (ours) go in Production files for reference
   for (const g of groups) for (const f of [...(g.pvRef || []), ...(g.pvArt || [])]) {
-    await admin.from("art_files").insert({ order_id: oid, name: `Old mockup: ${f.name}`, file_path: f.path, file_type: /\.pdf$/i.test(f.path) ? "application/pdf" : /\.png$/i.test(f.path) ? "image/png" : "image/jpeg" });
+    await admin.from("art_files").insert({ order_id: oid, name: `From the old Printavo job: ${f.name.replace(/ mockup(?=\.\w+$)/i, "")}`, file_path: f.path, file_type: /\.pdf$/i.test(f.path) ? "application/pdf" : /\.png$/i.test(f.path) ? "image/png" : "image/jpeg" });
   }
   // the customer's own documents (size sheet, spreadsheet, PDF order form) go in the order's Production notes & files
   // (art_files, the side panel), so the shop has them with the job; pictures are art / mockups, signatures left out

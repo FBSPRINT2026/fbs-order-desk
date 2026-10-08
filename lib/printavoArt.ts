@@ -168,9 +168,36 @@ export async function measureFilm(buf: ArrayBuffer, withArt = false, name = "fil
 }
 
 /** the film piece that is this print: same shape (within ~12%) and a believable size next to the mockup's reading */
-export function filmFor(widthIn: number, heightIn: number, film: FilmPiece[]) {
+export function filmFor(widthIn: number, heightIn: number, film: FilmPiece[], sizeKnown = true) {
   const a = heightIn / widthIn;
-  return film
-    .filter((f) => Math.abs(Math.log(f.heightIn / f.widthIn / a)) < 0.12 && f.widthIn > widthIn * 0.6 && f.widthIn < widthIn * 1.6)
+  // the same shape (an original art file can be cropped a little differently than the film: more slack)
+  const shaped = film.filter((f) => Math.abs(Math.log(f.heightIn / f.widthIn / a)) < (sizeKnown ? 0.12 : 0.25));
+  // the original art file (its shape, no size): the biggest film piece with that shape
+  if (!sizeKnown) return shaped.sort((x, y) => y.widthIn * y.heightIn - x.widthIn * x.heightIn)[0] || null;
+  return shaped
+    .filter((f) => f.widthIn > widthIn * 0.6 && f.widthIn < widthIn * 1.6)
     .sort((x, y) => Math.abs(x.widthIn - widthIn) - Math.abs(y.widthIn - widthIn))[0] || null;
+}
+
+/**
+ * The original art among an old Printavo job's pictures: a see-through PNG (the logo on nothing) rather than a photo
+ * of the garment. Returns its shape (height / width of the art itself) or null when it's a mockup photo.
+ */
+export async function artShape(blob: Blob): Promise<{ ratio: number } | null> {
+  const bm = await createImageBitmap(blob).catch(() => null);
+  if (!bm) return null;
+  const k = Math.min(1, 600 / Math.max(bm.width, bm.height));
+  const w = Math.max(1, Math.round(bm.width * k)), h = Math.max(1, Math.round(bm.height * k));
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d", { willReadFrequently: true })!;
+  x.drawImage(bm, 0, 0, w, h);
+  const d = x.getImageData(0, 0, w, h).data;
+  let clear = 0, x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+    if (d[(yy * w + xx) * 4 + 3] < 20) { clear++; continue; }
+    if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy;
+  }
+  // a photo is solid; art has the background cut away
+  if (clear < w * h * 0.1 || x1 < x0) return null;
+  return { ratio: (y1 - y0 + 1) / (x1 - x0 + 1) };
 }
