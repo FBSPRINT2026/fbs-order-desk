@@ -123,7 +123,7 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
 }
 
 /* ---------- changes made in Printavo, brought back (40,000-series orders only) ---------- */
-export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc; patch: (fn: (d: Order) => void) => void }) {
+export function PrintavoChanges({ o, calc, patch, prodNote, onProdNote }: { o: Order; calc: OrderCalc; patch: (fn: (d: Order) => void) => void; prodNote?: string; onProdNote?: (v: string) => void }) {
   const st = (o as Order & { printavo_state?: { pv?: PvSnap } | null }).printavo_state;
   const pv = st?.pv;
   const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [fresh, setFresh] = useState<PvSnap | null>(null);
@@ -136,7 +136,8 @@ export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc;
     if (!r?.ok) return setErr(j.error || "Couldn't read the order from Printavo.");
     setFresh(j.pv);
   }
-  const { changes, info } = printavoChanges(o, calc, snap || null);
+  const { changes, info } = printavoChanges(o, calc, snap || null, onProdNote ? prodNote ?? "" : undefined);
+  const take = (cs: typeof changes) => { const fx = cs.filter((c) => c.apply); if (fx.length) patch((d) => { for (const c of fx) c.apply!(d); }); const n = cs.find((c) => c.note !== undefined); if (n && onProdNote) onProdNote(n.note!); };
   const card = cardFix(o, snap || null);
   useEffect(() => { if (card) patch(card.apply); }, [!!card, card?.amount]); // eslint-disable-line react-hooks/exhaustive-deps
   // Printavo's invoice page shows the customer only the mockups on the product lines
@@ -149,7 +150,7 @@ export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc;
     if (!r?.ok) return setErr(j.error || "Printavo didn't take the mockup.");
     setFresh(j.pv);
   }
-  const applyAll = () => patch((d) => { for (const c of changes) c.apply?.(d); });
+  const applyAll = () => take(changes);
   return (
     <div className="pvc">
       <div className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
@@ -162,7 +163,7 @@ export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc;
       </div>
       {err && <div className="err">{err}</div>}
       {noArt > 0 && <div className="pvc-art"><span>{noArt === 1 ? "The product line in Printavo has" : `${noArt} product lines in Printavo have`} no mockup, so the customer can&apos;t see the art on their invoice.</span><button type="button" className="btn primary sm" disabled={busy} onClick={pushArt}>Add our mockup in Printavo</button></div>}
-      {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span><span className="pvc-what">{c.what}</span> {c.text}</span>{c.apply && <button type="button" className="btn sm" onClick={() => patch((d) => c.apply!(d))}>Accept</button>}</li>)}</ul>}
+      {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span><span className="pvc-what">{c.what}</span> {c.text}</span>{(c.apply || c.note !== undefined) && <button type="button" className="btn sm" onClick={() => take([c])}>Accept</button>}</li>)}</ul>}
       {info.length > 0 && <ul className="pvc-info">{info.map((t, i) => <li key={i} className="faint">{t}</li>)}</ul>}
     </div>
   );

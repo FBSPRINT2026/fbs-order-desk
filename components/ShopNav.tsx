@@ -137,7 +137,12 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       .then(({ count }) => setIncoming(count || 0));
     // 40,000-series orders with Printavo changes waiting to be accepted (the owner's view only)
     if (realRole === "owner") Promise.all([sb.from("orders").select("*").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000), sb.from("settings").select("data").eq("id", 1).maybeSingle()])
-      .then(([{ data }, { data: st }]) => { const s = mergeSettings(st?.data); setPvWaiting(((data || []) as Order[]).filter((o) => { const snap = snapOf(o); return printavoChanges(o, calcOrder(o, s), snap).changes.length > 0 || !!cardFix(o, snap); }).length); })
+      .then(async ([{ data }, { data: st }]) => {
+        const s = mergeSettings(st?.data), os = (data || []) as Order[];
+        const { data: oi } = os.length ? await sb.from("order_internal").select("order_id, production_notes").in("order_id", os.map((o) => o.id)) : { data: [] };
+        const nt = Object.fromEntries((oi || []).map((x) => [x.order_id as string, String(x.production_notes || "")]));
+        setPvWaiting(os.filter((o) => { const snap = snapOf(o); return printavoChanges(o, calcOrder(o, s), snap, nt[o.id] ?? "").changes.length > 0 || !!cardFix(o, snap); }).length);
+      })
       .then(undefined, () => null);
   }, [path, realRole]);
 

@@ -18,6 +18,7 @@ export default function PrintavoSyncPage() {
   const { realRole } = useRole();
   const sb = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[] | null>(null), [settings, setSettings] = useState<Settings>(mergeSettings({}));
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const [err, setErr] = useState(""), [busy, setBusy] = useState(""), [showAll, setShowAll] = useState(false);
   const load = useCallback(async () => {
     const [{ data, error }, { data: st }] = await Promise.all([
@@ -25,13 +26,16 @@ export default function PrintavoSyncPage() {
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
     if (error) return setErr(error.message);
+    const ids = (data || []).map((x) => x.id as string);
+    const { data: oi } = ids.length ? await sb.from("order_internal").select("order_id, production_notes").in("order_id", ids) : { data: [] };
+    setNotes(Object.fromEntries((oi || []).map((x) => [x.order_id as string, String(x.production_notes || "")])));
     setSettings(mergeSettings(st?.data)); setRows((data || []) as Row[]);
   }, [sb]);
   useEffect(() => { load(); }, [load]);
 
   const list = (rows || []).map((o) => {
     const calc = calcOrder(o, settings), snap = snapOf(o);
-    const { changes, info } = printavoChanges(o, calc, snap);
+    const { changes, info } = printavoChanges(o, calc, snap, notes[o.id] ?? "");
     return { o, calc, snap, changes, info, card: cardFix(o, snap) };
   });
   const waiting = list.filter((x) => x.changes.length || x.card);
@@ -45,6 +49,8 @@ export default function PrintavoSyncPage() {
     cardFix(d, snapOf(d))?.apply(d);
     const c = calcOrder(d, settings);
     const { error } = await sb.from("orders").update({ groups: d.groups, fees: d.fees, total: c.total, qty: c.qty }).eq("id", o.id);
+    const n = picks.find((x) => x.note !== undefined);
+    if (!error && n) { const r = await sb.from("order_internal").upsert({ order_id: o.id, production_notes: n.note }); if (r.error) setErr(`#${o.number}: ${r.error.message}`); }
     if (error) setErr(`#${o.number}: ${error.message}`);
     else await sb.from("order_events").insert({ order_id: o.id, kind: "printavo", detail: `Accepted from Printavo: ${picks.map((x) => `${x.what}: ${x.text}`).join("; ").slice(0, 900)}`, actor: "" });
     await load(); setBusy("");

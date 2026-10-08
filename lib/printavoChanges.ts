@@ -6,7 +6,7 @@ import { lineQty, SIZES, type GLine, type Order, type OrderCalc, type Size } fro
  * Printavo Sync page.
  */
 export type PvSnap = {
-  at: string; visualId: string; status: string; total: number;
+  at: string; visualId: string; status: string; total: number; productionNote?: string;
   groups: { lines: { itemNumber: string; color: string; description: string; sizes: Record<string, number>; price: number; mockups?: number }[] }[];
   fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
 };
@@ -16,11 +16,16 @@ export const ADJUST = "Setup adjustment (from Printavo)";
 // the card surcharge is always worked out in Printavo: taken as it is, without asking
 export const CARD = /credit card processing surcharge/i;
 const norm = (x: string) => (x || "").replace(/\s+/g, " ").trim().toLowerCase();
-export type Change = { key: string; what: "Quantities" | "Price" | "Setup fees" | "New fee" | "Fee amount" | "Fee removed"; text: string; apply?: (d: Order) => void };
+export type Change = { key: string; what: "Quantities" | "Price" | "Setup fees" | "New fee" | "Fee amount" | "Fee removed" | "Production note"; text: string; apply?: (d: Order) => void;
+  /** a production note change: the text to save as the order's production notes (kept outside the order row) */ note?: string };
+// Send to Printavo adds this line to the production note; it isn't a change
+const SENT_LINE = /\s*Entered in the new FBS system as order #\d+\.\s*$/;
+const noteText = (x: string) => (x || "").replace(/\r\n?/g, "\n").replace(SENT_LINE, "").trim();
 
 export const snapOf = (o: Order) => (o as Order & { printavo_state?: { pv?: PvSnap } | null }).printavo_state?.pv || null;
 
-export function printavoChanges(o: Order, calc: OrderCalc, snap: PvSnap | null) {
+/** `prodNote`: our production notes (order_internal); left out, notes aren't compared. */
+export function printavoChanges(o: Order, calc: OrderCalc, snap: PvSnap | null, prodNote?: string) {
   const changes: Change[] = [];
   const info: string[] = [];
   if (snap) {
@@ -57,6 +62,10 @@ export function printavoChanges(o: Order, calc: OrderCalc, snap: PvSnap | null) 
     }
     for (const mine of (o.fees || []).filter((x) => x.label !== ADJUST && !CARD.test(x.label) && +(x.amount || 0) && !theirFees.some((f) => norm(f.description) === norm(x.label))))
       changes.push({ what: "Fee removed", key: `f-${mine.label}`, text: `Fee removed in Printavo: ${mine.label} $${(+(mine.amount || 0)).toFixed(2)}`, apply: (d) => { d.fees = (d.fees || []).filter((y) => y.label !== mine.label); } });
+  }
+  if (snap && prodNote !== undefined && snap.productionNote !== undefined) {
+    const theirs = noteText(snap.productionNote), ours = noteText(prodNote);
+    if (theirs !== ours) changes.push({ what: "Production note", key: "note", text: theirs ? `"${theirs.length > 240 ? theirs.slice(0, 240) + "…" : theirs}"` : "(cleared in Printavo)", note: theirs });
   }
   return { changes, info };
 }

@@ -286,7 +286,7 @@ async function fixConfirmationReply(admin: SupabaseClient, orderId: string, numb
 
 /** What the order looks like in Printavo now (kept on our order as printavo_state.pv, compared on the order page). */
 export type PvSnap = {
-  at: string; visualId: string; status: string; total: number; kind: string;
+  at: string; visualId: string; status: string; total: number; kind: string; productionNote: string;
   groups: { lines: { itemNumber: string; color: string; description: string; category: string; sizes: Record<string, number>; price: number; mockups: number }[] }[];
   fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
 };
@@ -303,7 +303,7 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
   if (!((o.number as number) >= 40000 && (o.number as number) < 50000)) throw new PrintavoError("Only orders #40000-#49999 sync with Printavo.");
   const p = await getOrder(String(o.printavo_id));
   const snap: PvSnap = {
-    at: new Date().toISOString(), visualId: p.visualId, status: p.status.name, total: p.total, kind: p.kind,
+    at: new Date().toISOString(), visualId: p.visualId, status: p.status.name, total: p.total, kind: p.kind, productionNote: p.productionNote || "",
     groups: p.groups.map((g) => ({ lines: g.lines.map((l) => ({ itemNumber: l.itemNumber, color: l.color, description: l.description, category: l.category, price: l.price, mockups: l.mockups.length,
       sizes: Object.fromEntries(Object.entries(l.sizes).map(([k, v]) => [OUR_SIZE[k] || k.replace(/^size_/, "").toUpperCase(), v])) })) })),
     fees: p.fees.map((f) => ({ description: f.description, amount: f.amount, quantity: f.quantity, unitPrice: f.unitPrice, pct: f.pct })),
