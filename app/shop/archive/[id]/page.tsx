@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { ArchivedRow } from "@/lib/archive";
 import ArchivedOrderView from "@/components/ArchivedOrderView";
+import ArchiveReorder from "@/components/ArchiveReorder";
 import { TRACK, trackWord, trackingUrl } from "@/lib/goods";
 
 /** An archived Printavo invoice or quote (read-only). Artwork shows from our storage copies, or from Printavo until copied. */
@@ -39,6 +40,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
     <>
       <Link className="back" href={`/shop/customers/${row.customer_id}?area=orders`}>← {company || "Customer"} · Orders</Link>
       <div className="row" style={{ gap: 8, flexWrap: "wrap", margin: "6px 0 4px" }}>
+        {row.kind === "invoice" && <ArchiveReorder archivedId={row.id} />}
         <a className="btn" href={`/print/job/${row.visual_id}`} target="_blank" rel="noreferrer" title="A sheet with the job's QR code, for the press">Job ticket (QR)</a>
         <a className="btn" href={`/j/${row.visual_id}`} target="_blank" rel="noreferrer" title="The job's phone menu: press setup, notes, photos, Zebra box labels">Phone menu</a>
       </div>

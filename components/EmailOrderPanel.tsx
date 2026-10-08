@@ -5,8 +5,7 @@ import { SUPPLIERS } from "@/lib/goods";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
-import { artFromMockupPdf, filmFor, measureFilm, type ArtPiece, type FilmPiece } from "@/lib/printavoArt";
-import { uploadDesign } from "@/lib/designs";
+import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import dynamic from "next/dynamic";
 import type { WhenDates } from "@/components/MachineSchedule";
@@ -82,96 +81,23 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
    * files), then the customer's mockup stamped "CUSTOMER SUPPLIED MOCKUP" into Production files, then our own mockup
    * built in the Mockup Creator (auto), which opens the order when it's saved.
    */
-  /**
-   * A reorder of an old Printavo job whose mockup is our Illustrator PDF: the art is pulled out of it (front and back),
-   * saved as the customer's designs and put on the prints with the size and drop it had, so the Mockup Creator can
-   * build our mockup by itself.
-   */
-  /** films matched while pulling the art: copied onto the new order's production files */
-  const films: { id: string; name: string }[] = [];
-  async function pullPrintavoArt(x: EODraft): Promise<EODraft> {
-    const custId = data?.customer?.id;
-    if (!custId || !x.groups.some((g) => g.pvArt?.length && g.imprints.some((im) => !im.design_id))) return x;
-    const y = clone(x), sb = createClient();
-    const pulled: { imId: string; widthIn: number; heightIn: number }[] = [];
-    for (const g of y.groups) {
-      if (!g.pvArt?.length || g.imprints.every((im) => im.design_id)) continue;
-      let got: ArtPiece[] = [], from = "";
-      for (const f of g.pvArt) {
-        const { data: su } = await sb.storage.from("proofs").createSignedUrl(f.path, 600);
-        if (!su?.signedUrl) continue;
-        const res = await fetch(su.signedUrl).catch(() => null);
-        if (!res?.ok) continue;
-        got = await artFromMockupPdf(await res.arrayBuffer(), y.nickname || "Art").catch(() => []);
-        if (got.length) { from = f.name; break; }
-      }
-      const used = new Set<ArtPiece>();
-      for (const im of g.imprints) {
-        if (im.design_id || /sleeve/i.test(im.location)) continue;
-        const side = /back|yoke|shoulder/i.test(im.location) ? "back" : "front";
-        const pc = got.filter((p) => !used.has(p) && p.side === side).sort((a, b) => b.widthIn - a.widthIn)[0];
-        if (!pc) continue;
-        used.add(pc);
-        const dsg = await uploadDesign(sb, { file: pc.file, customer_id: custId, name: `${y.nickname || "Art"} ${side}`, colors: 1, inks: pc.ink, notes: `Pulled from ${from}`, method: im.method });
-        im.design_id = dsg.id;
-        im.size = `${pc.widthIn}" wide`;
-        im.location = side === "back" ? (pc.widthIn <= 4.5 && pc.dropIn < 3.5 ? "Upper Back (Yoke)" : pc.widthIn <= 8 ? "Medium Back" : "Full Back")
-          : pc.widthIn > 8 ? "Full Front" : pc.widthIn > 5 ? "Medium Front" : Math.abs(pc.offIn) >= 1.75 ? (pc.offIn > 0 ? "Left Chest" : "Right Chest") : "Center Chest";
-        im.drop = String(pc.dropIn);
-        if (!im.inks) { im.inks = pc.ink; im.colors = 1; }
-        im.notes = [im.notes, `Art, size (${pc.widthIn}" wide) and placement (${pc.dropIn}" down) from the old mockup; ink looks like ${pc.ink} (${pc.hex})`].filter(Boolean).join(". ").slice(0, 300);
-        im.confirm = { size: true, ink: true, why: `Reorder of ${from.replace(/ mockup\.pdf$/, "")}: size and placement measured off the old mockup, ink guessed from its color` };
-        pulled.push({ imId: im.id, widthIn: pc.widthIn, heightIn: pc.heightIn });
-      }
-    }
-    // the film folder in Dropbox has the real print sizes: find this job's film and use its sizes
-    if (pulled.length) {
-      setStep("Looking for the film in Dropbox…");
-      films.length = 0;
-      const job = data?.past.find((p) => p.ref === x.reorderOf);
-      const r = await fetch(`/api/dropbox/film?customer=${encodeURIComponent(custId)}&q=${encodeURIComponent(y.nickname || job?.label.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "") || "")}&date=${encodeURIComponent(job?.date || "")}`).catch(() => null);
-      const j = r?.ok ? await r.json().catch(() => null) as { films?: { id: string; name: string; score: number }[] } | null : null;
-      // .ai / .pdf films can be measured (EPS and PSD can't be read here)
-      for (const f of (j?.films || []).filter((x) => x.score > 0 && /\.(ai|pdf)$/i.test(x.name)).slice(0, 3)) {
-        const c = await fetch("/api/dropbox/film", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id }) }).then((x) => x.json()).catch(() => null) as { url?: string; name?: string } | null;
-        if (!c?.url) continue;
-        let fp: FilmPiece[] = [];
-        try { fp = await measureFilm(await (await fetch(c.url)).arrayBuffer()); } catch { continue; }
-        let hit = false;
-        for (const pu of pulled) {
-          const m = filmFor(pu.widthIn, pu.heightIn, fp);
-          if (!m) continue;
-          hit = true;
-          for (const g of y.groups) for (const im of g.imprints) if (im.id === pu.imId) {
-            im.size = `${Math.round(m.widthIn * 4) / 4}" wide`;
-            // the film has the real size; the ink is still a guess and placement came from the mockup
-            im.confirm = { size: false, ink: true, why: `Size from the film ${f.name}; placement from the old mockup, ink guessed from its color` };
-            im.notes = `${(im.notes || "").replace(/size \([\d.]+" wide\) and /, "")}. Size from the film: ${f.name} (${m.widthIn}" × ${m.heightIn}")`.slice(0, 300);
-          }
-        }
-        if (hit) { films.push({ id: f.id, name: f.name }); break; }
-      }
-    }
-    return y;
-  }
-
   async function create(mode: "new" | "edit" = "new") {
     if (!d) return;
     // Create order: a tab opened now (while it's still a click) so the browser doesn't block it later.
     // Edit details: the same order, opened here in the full order screen, with "Save & back to email".
     const w = mode === "new" ? window.open("", "_blank") : null;
     setBusy("create"); setErr("");
-    let dd = d;
-    if (d.groups.some((g) => g.pvArt?.length)) {
-      setStep("Pulling the art from the old Printavo mockup…");
-      try { dd = await pullPrintavoArt(d); setD(dd); } catch (e) { setErr("Couldn't pull the art from the old mockup (" + (e instanceof Error ? e.message : String(e)) + "). The order is made without it."); }
+    let dd = d, films: { id: string; name: string }[] = [];
+    if (d.groups.some((g) => g.pvArt?.length) && data?.customer?.id) {
+      const job = data.past.find((p) => p.ref === d.reorderOf);
+      try { const r = await pullReorderArt(d, { customerId: data.customer.id, jobLabel: job?.label, jobDate: job?.date, onStep: setStep }); dd = r.draft; films = r.films; setD(dd); } catch (e) { setErr("Couldn't pull the art from the old mockup (" + (e instanceof Error ? e.message : String(e)) + "). The order is made without it."); }
     }
     setStep("Creating the order…");
     const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: dd, status }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     if (!r?.ok || !j.id) { setBusy(""); setStep(""); w?.close(); return setErr(j.error || "Couldn't create the order."); }
     let url = `/shop/orders/${j.id}`;
-    for (const f of films) await fetch("/api/dropbox/film", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id, orderId: j.id }) }).catch(() => null);
+    await attachFilms(j.id, films);
     try {
       const sb = createClient();
       const { data: o } = await sb.from("orders").select("groups").eq("id", j.id).maybeSingle();

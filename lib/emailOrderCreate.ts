@@ -39,14 +39,16 @@ function dims(b: Buffer): { w: number; h: number } | null {
   return null;
 }
 
-export type CreateInput = { activityId: string; draft: EODraft; status: "quote" | "approved" };
+/** activityId: the email it came from (Inbox), or customerId alone (a reorder from the Printavo archive) */
+export type CreateInput = { activityId?: string; customerId?: string; draft: EODraft; status: "quote" | "approved" };
 
 export async function createOrderFromDraft(admin: SupabaseClient, by: string, input: CreateInput): Promise<{ ok: true; id: string; number: number } | { ok: false; error: string }> {
-  const { data: a } = await admin.from("activities").select("id, customer_id, subject, meta").eq("id", input.activityId).maybeSingle();
-  if (!a) return { ok: false, error: "Email not found." };
-  if (!a.customer_id) return { ok: false, error: "Make the sender a customer first (the yellow box above)." };
+  const { data: a } = input.activityId ? await admin.from("activities").select("id, customer_id, subject, meta").eq("id", input.activityId).maybeSingle() : { data: null };
+  if (input.activityId && !a) return { ok: false, error: "Email not found." };
+  if (a && !a.customer_id) return { ok: false, error: "Make the sender a customer first (the yellow box above)." };
   const d = input.draft;
-  const custId = a.customer_id as string;
+  const custId = (a?.customer_id as string) || input.customerId || "";
+  if (!custId) return { ok: false, error: "No customer." };
   const { data: cust } = await admin.from("customers").select("price_type, tax_exempt").eq("id", custId).maybeSingle();
   // staff may have edited the groups in the panel: run them through the same checks as the AI's
   const groups: Group[] = (d.groups || []).slice(0, 12).map((g) => {
@@ -85,7 +87,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
       const { data: des } = await admin.from("designs").insert({
         customer_id: custId, name: (d.nickname || name.replace(/\.[^.]+$/, "")).slice(0, 120), file_path: to, file_name: name, file_type: f?.type || "",
         preview_path: f && isPicture(f) ? to : "", width_px: wh?.w || null, height_px: wh?.h || null, method: im.method || "screen",
-        colors: im.colors || 1, inks: im.inks || "", notes: `From ${a.subject ? `the email "${String(a.subject).slice(0, 80)}"` : "an email"}`, created_by: by,
+        colors: im.colors || 1, inks: im.inks || "", notes: a ? `From ${a.subject ? `the email "${String(a.subject).slice(0, 80)}"` : "an email"}` : "From an older job", created_by: by,
       }).select("id").single();
       if (des) madeFor.set(path, des.id as string);
     }
@@ -114,16 +116,16 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   const priceType = d.goods?.supplied ? "wholesale" : cust?.price_type || "retail";
   const notes = [d.notes, reorderOf && fromLabel ? `Reorder of ${fromLabel}.` : ""].filter(Boolean).join(" ").slice(0, 2000);
   const { data: o, error } = await admin.from("orders").insert({
-    customer_id: custId, status: st.k, type: st.type, source: "email", groups, lines: [],
+    customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [],
     nickname: (d.nickname || "").slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
     notes, po_number: (d.po_number || "").slice(0, 60),
     delivery_method: ["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup", ship_to: (d.ship_to || "").slice(0, 500),
-    price_type: priceType, tax_exempt: !!cust?.tax_exempt, ...(st.k === "approved" ? { approved_at: new Date().toISOString(), approved_name: `${by} (from the customer's email)` } : {}),
+    price_type: priceType, tax_exempt: !!cust?.tax_exempt, ...(st.k === "approved" ? { approved_at: new Date().toISOString(), approved_name: `${by}${a ? " (from the customer's email)" : ""}` } : {}),
   }).select("id, number").single();
   if (error || !o) return { ok: false, error: error?.message || "Couldn't create the order." };
   const oid = o.id as string;
-  await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}, from the customer's email` : "From the customer's email (Inbox → Create order)", actor: by });
-  if (d.questions?.length) await admin.from("order_internal").upsert({ order_id: oid, production_notes: `Questions for the customer (from the email):\n- ${d.questions.join("\n- ")}` });
+  await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}${a ? ", from the customer's email" : " (Reorder on the archived job)"}` : "From the customer's email (Inbox → Create order)", actor: by });
+  if (d.questions?.length) await admin.from("order_internal").upsert({ order_id: oid, production_notes: `Questions for the customer${a ? " (from the email)" : ""}:\n- ${d.questions.join("\n- ")}` });
   if (priceType === "wholesale" && d.goods?.supplied) {
     await admin.from("order_goods").upsert({ order_id: oid, status: "waiting", supplier: (d.goods.supplier || "").slice(0, 60), expected: [d.goods.expected, d.goods.note].filter(Boolean).join(" · ").slice(0, 200), updated_by: by, updated_at: new Date().toISOString() });
   }
@@ -135,6 +137,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     if (cp.error) continue;
     await admin.from("art_files").insert({ order_id: oid, name: f.name, file_path: to, file_type: f.type || "" });
   }
+  if (!a) return { ok: true, id: oid, number: o.number as number };
   // the email's suggested answer becomes the order confirmation (Nick, Oct 7): thanks, the link, what we have, approve?
   const reply = confirmationReply({ number: o.number as number, id: oid, nickname: d.nickname, due: d.due_date, groups, subject: String(a.subject || ""), first: String(((a.meta as { from_name?: string } | null)?.from_name || "")).trim().split(/\s+/)[0] || "" });
   const meta0 = (a.meta || {}) as { reply_options?: { options?: { label: string; subject: string; body: string }[] } };
