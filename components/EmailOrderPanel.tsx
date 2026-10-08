@@ -130,7 +130,8 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
       const job = data?.past.find((p) => p.ref === x.reorderOf);
       const r = await fetch(`/api/dropbox/film?customer=${encodeURIComponent(custId)}&q=${encodeURIComponent(y.nickname || job?.label.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "") || "")}&date=${encodeURIComponent(job?.date || "")}`).catch(() => null);
       const j = r?.ok ? await r.json().catch(() => null) as { films?: { id: string; name: string; score: number }[] } | null : null;
-      for (const f of (j?.films || []).filter((x) => x.score > 0).slice(0, 3)) {
+      // .ai / .pdf films can be measured (EPS and PSD can't be read here)
+      for (const f of (j?.films || []).filter((x) => x.score > 0 && /\.(ai|pdf)$/i.test(x.name)).slice(0, 3)) {
         const c = await fetch("/api/dropbox/film", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id }) }).then((x) => x.json()).catch(() => null) as { url?: string; name?: string } | null;
         if (!c?.url) continue;
         let fp: FilmPiece[] = [];
