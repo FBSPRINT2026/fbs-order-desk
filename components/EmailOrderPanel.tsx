@@ -5,6 +5,8 @@ import { SUPPLIERS } from "@/lib/goods";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
+import { artFromMockupPdf, type ArtPiece } from "@/lib/printavoArt";
+import { uploadDesign } from "@/lib/designs";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import dynamic from "next/dynamic";
 import type { WhenDates } from "@/components/MachineSchedule";
@@ -80,13 +82,59 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
    * files), then the customer's mockup stamped "CUSTOMER SUPPLIED MOCKUP" into Production files, then our own mockup
    * built in the Mockup Creator (auto), which opens the order when it's saved.
    */
+  /**
+   * A reorder of an old Printavo job whose mockup is our Illustrator PDF: the art is pulled out of it (front and back),
+   * saved as the customer's designs and put on the prints with the size and drop it had, so the Mockup Creator can
+   * build our mockup by itself.
+   */
+  async function pullPrintavoArt(x: EODraft): Promise<EODraft> {
+    const custId = data?.customer?.id;
+    if (!custId || !x.groups.some((g) => g.pvArt?.length && g.imprints.some((im) => !im.design_id))) return x;
+    const y = clone(x), sb = createClient();
+    for (const g of y.groups) {
+      if (!g.pvArt?.length || g.imprints.every((im) => im.design_id)) continue;
+      let got: ArtPiece[] = [], from = "";
+      for (const f of g.pvArt) {
+        const { data: su } = await sb.storage.from("proofs").createSignedUrl(f.path, 600);
+        if (!su?.signedUrl) continue;
+        const res = await fetch(su.signedUrl).catch(() => null);
+        if (!res?.ok) continue;
+        got = await artFromMockupPdf(await res.arrayBuffer(), y.nickname || "Art").catch(() => []);
+        if (got.length) { from = f.name; break; }
+      }
+      const used = new Set<ArtPiece>();
+      for (const im of g.imprints) {
+        if (im.design_id || /sleeve/i.test(im.location)) continue;
+        const side = /back|yoke|shoulder/i.test(im.location) ? "back" : "front";
+        const pc = got.filter((p) => !used.has(p) && p.side === side).sort((a, b) => b.widthIn - a.widthIn)[0];
+        if (!pc) continue;
+        used.add(pc);
+        const dsg = await uploadDesign(sb, { file: pc.file, customer_id: custId, name: `${y.nickname || "Art"} ${side}`, colors: 1, inks: pc.ink, notes: `Pulled from ${from}`, method: im.method });
+        im.design_id = dsg.id;
+        im.size = `${pc.widthIn}" wide`;
+        im.location = side === "back" ? (pc.widthIn <= 4.5 && pc.dropIn < 3.5 ? "Upper Back (Yoke)" : pc.widthIn <= 8 ? "Medium Back" : "Full Back")
+          : pc.widthIn > 8 ? "Full Front" : pc.widthIn > 5 ? "Medium Front" : Math.abs(pc.offIn) >= 1.75 ? (pc.offIn > 0 ? "Left Chest" : "Right Chest") : "Center Chest";
+        im.drop = String(pc.dropIn);
+        if (!im.inks) { im.inks = pc.ink; im.colors = 1; }
+        im.notes = [im.notes, `Art, size (${pc.widthIn}" wide) and placement (${pc.dropIn}" down) from the old mockup; ink looks like ${pc.ink} (${pc.hex})`].filter(Boolean).join(". ").slice(0, 300);
+      }
+    }
+    return y;
+  }
+
   async function create(mode: "new" | "edit" = "new") {
     if (!d) return;
     // Create order: a tab opened now (while it's still a click) so the browser doesn't block it later.
     // Edit details: the same order, opened here in the full order screen, with "Save & back to email".
     const w = mode === "new" ? window.open("", "_blank") : null;
-    setBusy("create"); setErr(""); setStep("Creating the order…");
-    const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status }) }).catch(() => null);
+    setBusy("create"); setErr("");
+    let dd = d;
+    if (d.groups.some((g) => g.pvArt?.length)) {
+      setStep("Pulling the art from the old Printavo mockup…");
+      try { dd = await pullPrintavoArt(d); setD(dd); } catch (e) { setErr("Couldn't pull the art from the old mockup (" + (e instanceof Error ? e.message : String(e)) + "). The order is made without it."); }
+    }
+    setStep("Creating the order…");
+    const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: dd, status }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     if (!r?.ok || !j.id) { setBusy(""); setStep(""); w?.close(); return setErr(j.error || "Couldn't create the order."); }
     let url = `/shop/orders/${j.id}`;

@@ -93,6 +93,8 @@ export type Group = { id: string; name?: string; lines: GLine[]; imprints: Impri
   /** the size the mockup is shown on (2T, 3T…), picked in the Mockup Creator; else the middle size of the run */ mockupSize?: string;
   /** mockups the customer supplied themselves (their own software, or saved from the portal builder): storage paths */
   customerMockups?: { path: string; name: string }[];
+  /** a reorder of an old Printavo job: its mockup PDF(s), where the art is pulled from when the order is made */
+  pvArt?: { path: string; name: string }[];
   /** the garments are polyester, nylon or dyed: specialty (low-bleed) ink, charged per location (contract pricing).
    *  Set from the garments' fabric by the order editor unless staff set it by hand (specialtyInkSet) */ specialtyInk?: boolean;
   /** staff ticked / unticked specialty ink themselves: the garments no longer decide */ specialtyInkSet?: boolean;

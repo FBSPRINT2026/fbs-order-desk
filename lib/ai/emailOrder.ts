@@ -50,7 +50,7 @@ export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
   const out: Group[] = [];
   for (const g of row.data?.groups || []) {
     const lines: GLine[] = [];
-    const mockups: { path: string; name: string }[] = [];
+    const mockups: { path: string; name: string }[] = [], pdfs: { path: string; name: string }[] = [];
     for (const pl of g.lines || []) {
       const l = newGLine();
       l.style = (pl.itemNumber || "").trim().slice(0, 40);
@@ -72,18 +72,25 @@ export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
       if (!Object.keys(l.sizes).length && !(pl.items || 0)) continue;
       if (!Object.keys(l.sizes).length && pl.items) { l.sizes.OS = Math.floor(+pl.items); l.oneSize = true; }
       lines.push(l);
-      for (const m of pl.mockups || []) { const p = m.full ? row.files?.[m.full] : ""; if (p && /\.(png|jpe?g|gif|webp)$/i.test(p)) mockups.push({ path: p, name: `Printavo #${row.visual_id} mockup` }); }
+      for (const m of pl.mockups || []) {
+        const p = m.full ? row.files?.[m.full] : "";
+        if (p && /\.(png|jpe?g|gif|webp)$/i.test(p)) mockups.push({ path: p, name: `Printavo #${row.visual_id} mockup` });
+        // our old Illustrator mockup sheets: the art is pulled out of them when the reorder is made
+        else if (p && /\.pdf$/i.test(p)) pdfs.push({ path: p, name: `Printavo #${row.visual_id} mockup.pdf` });
+      }
     }
     if (!lines.length) continue;
     const steps = needsForPrintavo(ps, { qty: row.qty, status_name: row.status_name || "", nickname: row.nickname || "", data: { groups: [g as never] } }).flatMap((n) => n.steps);
     const imprints: Imprint[] = steps.map((st) => {
-      const im = newImprint(st.location || "Full Front");
+      // Printavo's sides ("Front", "Back") as our locations: the art pulled from the mockup refines them
+      const loc = /^front$/i.test(st.location || "") ? "Full Front" : /^back$/i.test(st.location || "") ? "Full Back" : st.location || "Full Front";
+      const im = newImprint(LOCATIONS.includes(loc) ? loc : "Full Front");
       im.method = st.method === "embroidery" ? "embroidery" : st.method === "heat" ? "dtf" : "screen";
       im.colors = Math.max(1, st.colors || 1);
       im.notes = `From Printavo #${row.visual_id}${st.note ? ` (${st.note})` : ""}`;
       return im;
     });
-    out.push({ id: uid(), lines, imprints, customerMockups: mockups.slice(0, 6) });
+    out.push({ id: uid(), lines, imprints, customerMockups: mockups.slice(0, 6), ...(pdfs.length ? { pvArt: [...new Map(pdfs.map((x) => [x.path, x])).values()].slice(0, 3) } : {}) });
   }
   return out;
 }
