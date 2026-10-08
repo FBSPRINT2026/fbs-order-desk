@@ -45,6 +45,13 @@ export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: 
       if (!(g.imprints || []).length) old.push("  (no imprint details on file)");
     }
     for (const f of d.fees || []) old.push(`  Fee: ${(f.description || "").trim()} x${f.quantity ?? 1} = $${f.amount ?? "?"}`);
+    // the emails on the old job (Printavo's message history): approvals and changes often only live there
+    const msgs = ((a.data as { messages?: { at?: string; incoming?: boolean; subject?: string; text?: string; from?: string }[] }).messages || [])
+      .filter((m) => (m.text || "").trim()).sort((x, y) => String(x.at || "").localeCompare(String(y.at || ""))).slice(-15);
+    if (msgs.length) {
+      old.push("  Emails on the old job (oldest first):");
+      for (const m of msgs) old.push(`   - ${String(m.at || "").slice(0, 10)} ${m.incoming ? `from the customer${m.from ? ` (${m.from})` : ""}` : "from the shop"}: ${m.subject ? `"${m.subject}" ` : ""}${(m.text || "").replace(/\s+/g, " ").slice(0, 600)}`);
+    }
     if (d.productionNote) old.push(`  Production note: ${d.productionNote}`);
     if (d.customerNote) old.push(`  Customer note: ${d.customerNote}`);
   } else {
@@ -117,7 +124,7 @@ Your job: check a REORDER before it goes to the customer and the press. The cust
 - Location and placement: what the old mockup shows (front/back, chest/full), sensible for the garment (onesies and toddler pieces have small print areas).
 - Inks: the ink colors should match the art's colors (name PMS colors when you can tell, e.g. Yellow / PMS 123 C, Violet / PMS 2685 C); the number of colors should match the art and the old job's screen fees (2 new screens = 2 colors).
 - Our new mockup (if attached): the art looks like the old job's, sits where it should, and its size looks right on that garment.
-- Anything in the old job's notes or nickname that still applies (e.g. "No neck labels").
+- Anything in the old job's notes, nickname or emails that still applies (e.g. "No neck labels", an approved change, a color the customer picked).
 When the shop tells you something about the job (e.g. "we used the LA Lakers PMS colors", "the back was 3 inches"), treat it as fact: work out what it means from what you know (a team's official PMS colors, matched to the art's colors) and turn it into fixes on the prints.
 The shop's print locations: ${LOCATIONS.join(", ")}.
 Only list real problems, most important first. Use the print ids given in the order for fixes. If everything lines up, say so and return no issues.`,
