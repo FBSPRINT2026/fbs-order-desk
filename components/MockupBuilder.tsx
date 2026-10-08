@@ -186,7 +186,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** run a size change, unless it's a customer-specified size not yet okayed: then ask (the change waits for the answer) */
   const guardSize = (id: string, go: () => void) => {
     const im = imprints.find((x) => x.id === id);
-    if (im?.sizeFrom === "customer" && !sizeOk[id]) { setSizeAsk((a) => a || { id, was: im.size, go }); return; }
+    if ((im?.sizeFrom === "customer" || im?.sizeFrom === "film") && !sizeOk[id]) { setSizeAsk((a) => a || { id, was: im.size, go }); return; }
     go();
   };
   /** phones: a size check for each print when the mockup opens (keep, or pick a size from a scrolling list), then drag */
@@ -425,7 +425,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const refPos = (im: Imprint) => {
     const d = designOf(im), r = ratioOf(d) || 0.6;
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
-    const b = basePlacement(im.location, printWidth(im.size, im.location, ratioOf(d)), r, drop, scale);
+    const b = basePlacement(im.location, printWidth(im, im.location, ratioOf(d)), r, drop, scale);
     const o = offsets[im.id] || { dx: 0, dy: 0 };
     return { left: b.x + o.dx, top: b.y + o.dy };
   };
@@ -453,7 +453,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const w = /tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1];
     if (w > 0) settle(im, w);
   };
-  const settleHere = (id: string) => { const im = imprints.find((x) => x.id === id); if (im && !spotFor(im.location).wrap) settle(im, printWidth(im.size, im.location, ratioOf(designOf(im)))); };
+  const settleHere = (id: string) => { const im = imprints.find((x) => x.id === id); if (im && !spotFor(im.location).wrap) settle(im, printWidth(im, im.location, ratioOf(designOf(im)))); };
 
   function setInk(im: Imprint, src: string, v: { name: string; hex: string } | null) {
     setPaints((p) => {
@@ -533,7 +533,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // (supplier size chart, else typical). The photo scale and every print area follow it, so a toddler tee isn't sized
   // like an adult Gildan 5000.
   const runSizes = sortSizes(ordered);
-  const bodyFor = (l?: Line): Body => { const g = l ? garmentFor(l) : null; return shownSize && runSizes.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g); };
+  const bodyFor = (l?: Line): Body => { const g = l ? garmentFor(l) : null; return shownSize && runSizes.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g, runSizes); };
   const body = bodyFor(lines[active] || lines[0]);
   const scaleOf = (b: Body) => REF_BODY.widthIn / b.widthIn;
   // a style without its size chart yet: ask S&S once (staff), so the body is measured, not typical
@@ -557,7 +557,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return { ...s0, maxW: Math.min(s0.maxW, c.maxW), maxH: Math.min(s0.maxH, c.maxH), defW: Math.min(s0.defW, c.defW) };
   };
   const maxWidthFor = (loc: string, r: number, b: Body = body) => maxWidthFor0(loc, r, fitBody(b));
-  const printWidth = (size: string, loc: string, r: number, b: Body = body) => printWidth0(size, loc, r, fitBody(b));
+  // a size off the job's film was printed before on these same garments: it's kept (up to what the shown size takes)
+  const printWidth = (im: Imprint, loc: string, r: number, b: Body = body) => printWidth0(im.size, loc, r, im.sizeFrom === "film" ? b : fitBody(b));
   const sideMaxWidth = (loc: string, r: number, b: Body = body) => sideMaxWidth0(loc, r, fitBody(b));
   const autoSpot = (cur: string, v: View, dx: number, top: number, w: number, h: number) => autoSpot0(cur, v, dx, top, w, h, body);
   const basePlacement = (loc: string, wIn: number, r: number, drop: number | null, sc: number, view?: View, fit?: Fit | null, b: Body = body) => basePlacement0(loc, wIn, r, drop, sc, view, fit, b);
@@ -572,7 +573,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const d = designOf(im);
     const r = ratioOf(d) || 0.6;
     const bd = on ? bodyFor(on) : body;
-    const wIn = printWidth(im.size, im.location, ratioOf(d), bd);
+    const wIn = printWidth(im, im.location, ratioOf(d), bd);
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
     const b = basePlacement(im.location, wIn, r, drop, scaleOf(bd), view, fit === undefined ? fitFor(on || line, view || viewsFor(im.location)[0]) : fit, bd);
     // hand moves are stored in reference-photo pixels; scale them to this photo
@@ -600,7 +601,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** One close-up box for an imprint (used under the photos and, smaller, beside them for the selected tab). */
   const closeUp = (im: Imprint, size: number) => {
                 const d = designOf(im); const r = ratioOf(d) || 0.6;
-                const wIn = printWidth(im.size, im.location, ratioOf(d));
+                const wIn = printWidth(im, im.location, ratioOf(d));
                 const o = offsets[im.id] || { dx: 0, dy: 0 };
                 const sp = spotFor(im.location);
                 return (
@@ -626,7 +627,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Where an imprint sits now, in Idea Lab artboard units (50 per inch, 0,0 = top-left of the full print area). */
   const labSpot = (im: Imprint) => {
     const sp = spotFor(im.location); if (sp.wrap) return undefined;
-    const d = designOf(im), r = ratioOf(d) || 0.6, wIn = printWidth(im.size, im.location, ratioOf(d)), ppi = PX_PER_IN * scale, at = refPos(im);
+    const d = designOf(im), r = ratioOf(d) || 0.6, wIn = printWidth(im, im.location, ratioOf(d)), ppi = PX_PER_IN * scale, at = refPos(im);
     const leftIn = (at.left - CENTER_X) / ppi, topIn = (at.top - COLLAR_Y[sp.view]) / ppi - 4;
     return { x: 300 + (leftIn + wIn / 2) * 50, y: (topIn + (wIn * r) / 2) * 50, w: wIn * 50 };
   };
@@ -857,7 +858,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const im = prints[q], col = q % cols, rw = Math.floor(q / cols);
           // one print alone sits in the middle
           const ox = prints.length === 1 ? M + (PW - 2 * M - cellW) / 2 : M + col * (cellW + cGap), oy = cuTop + rw * (cellH + 0.2 * DPI);
-          const d = designOf(im), r = ratioOf(d) || 0.6, wIn = printWidth(im.size, im.location, ratioOf(d)), hIn = wIn * r;
+          const d = designOf(im), r = ratioOf(d) || 0.6, wIn = printWidth(im, im.location, ratioOf(d)), hIn = wIn * r;
           const sp = spotFor(im.location), o = offsets[im.id] || { dx: 0, dy: 0 };
           // heading: location and the max print area
           x.fillStyle = ink; x.font = font(800, 22); x.fillText(im.location.toUpperCase(), ox, oy + 20);
@@ -1109,7 +1110,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (!capBody || !ready) return;
     const fixes: Record<string, { size: string; note: string }> = {};
     for (const im of imprints) {
-      const d = designOf(im); if (!d || im.sizeFrom === "customer") continue; // the customer's own size: warned, not changed
+      const d = designOf(im); if (!d || im.sizeFrom === "customer" || im.sizeFrom === "film") continue; // the customer's own size, or the size printed before (film): not changed
       const r = ratioOf(d) || 0, m = (im.size || "").match(/^([\d.]+)/); if (!m) continue;
       const want = /tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1];
       const cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4;
@@ -1323,10 +1324,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="cs-t">
                 <div className="mk-modal">
                   <h2 id="cs-t">Customer specified size</h2>
-                  <p>The customer asked for <b>{sizeAsk.was || "this size"}</b> on the {(im?.location || "print").toLowerCase()}. Are you sure you want to override it?</p>
+                  <p>{im?.sizeFrom === "film" ? <>This job was printed at <b>{sizeAsk.was || "this size"}</b> on the {(im?.location || "print").toLowerCase()} before (the size is off its film).</> : <>The customer asked for <b>{sizeAsk.was || "this size"}</b> on the {(im?.location || "print").toLowerCase()}.</>} Are you sure you want to override it?</p>
                   <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
                     <button type="button" className="btn primary" onClick={() => setSizeAsk(null)}>Keep their size</button>
-                    <button type="button" className="btn danger" onClick={() => { const go = sizeAsk.go; setSizeOk((o) => ({ ...o, [sizeAsk.id]: true })); setImprints((xs) => xs.map((x) => (x.id === sizeAsk.id ? { ...x, notes: [x.notes, `Size changed from the customer's ${sizeAsk.was}`].filter(Boolean).join(". ").slice(0, 300) } : x))); setSizeAsk(null); go?.(); }}>Override</button>
+                    <button type="button" className="btn danger" onClick={() => { const go = sizeAsk.go; setSizeOk((o) => ({ ...o, [sizeAsk.id]: true })); setImprints((xs) => xs.map((x) => (x.id === sizeAsk.id ? { ...x, notes: [x.notes, x.sizeFrom === "film" ? `Size changed from ${sizeAsk.was} (the film's size)` : `Size changed from the customer's ${sizeAsk.was}`].filter(Boolean).join(". ").slice(0, 300) } : x))); setSizeAsk(null); go?.(); }}>Override</button>
                   </div>
                 </div>
               </div>
@@ -1350,6 +1351,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   {sizer.pick == null ? <>
                     <div className="mk-sizer-now"><b>{fmt(cur)}</b> wide<span>× {(p.hIn || 0).toFixed(2)}&quot; tall</span></div>
                     {im.sizeFrom === "customer" && <div className="mk-cust-size">The customer asked for this size.</div>}
+                    {im.sizeFrom === "film" && <div className="mk-cust-size">Printed at this size before (from the job&apos;s film).</div>}
                     <div className="mk-sizer-b">
                       <button type="button" className="btn" onClick={() => setSizer({ ...sizer, pick: String(Math.min(cap, Math.max(0.5, cur))) })}>Change size</button>
                       <button type="button" className="btn primary" onClick={next}>Keep {fmt(cur)}</button>

@@ -44,11 +44,27 @@ export function parseInches(v: string): number | null {
   return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
 }
 
+/**
+ * A size's row in the supplier's size chart. Infant sizes are named by their range there (Bella 100B: "3/6", "6/12",
+ * Rabbit Skins: "6M", "06M"): our 6M is the 3-6 month size, 12M the 6-12, and so on.
+ */
+const ALIAS: Record<string, string[]> = {
+  NB: ["0/3", "0-3", "0-3M", "03M", "0/3M"], "3M": ["0/3", "0-3", "0-3M", "03M"], "6M": ["3/6", "3-6", "3-6M", "06M", "3/6M"],
+  "12M": ["6/12", "6-12", "6-12M", "6/12M"], "18M": ["12/18", "12-18", "12-18M", "12/18M"], "24M": ["18/24", "18-24", "18-24M", "18/24M"],
+};
+const specOf = (g: { specs?: GarmentSpecs | null } | null | undefined, size: string) => {
+  const all = g?.specs?.sizes;
+  if (!all) return undefined;
+  if (all[size]) return all[size];
+  const key = Object.keys(all).find((k) => (ALIAS[size] || []).some((a) => a.toLowerCase() === k.toLowerCase().replace(/\s+/g, "")));
+  return key ? all[key] : undefined;
+};
+
 /** the body a garment is shown on: its middle size, measured from its size chart or typical numbers */
 export function bodyOf(g: { sizes?: string[] | null; specs?: GarmentSpecs | null } | null | undefined, fallbackRun: string[] = []): Body {
   const run = (g?.sizes?.length ? g.sizes : fallbackRun).filter((z) => z !== "OS");
   const size = middleSize(run);
-  const sp = g?.specs?.sizes?.[size];
+  const sp = specOf(g, size);
   const t = TYPICAL[size] || TYPICAL.L;
   const w = sp?.width && sp.width > 5 && sp.width < 40 ? sp.width : t[0];
   const l = sp?.length && sp.length > 8 && sp.length < 45 ? sp.length : t[1];
@@ -57,7 +73,7 @@ export function bodyOf(g: { sizes?: string[] | null; specs?: GarmentSpecs | null
 
 /** one size of a garment, measured from its size chart or typical numbers */
 export function bodyAt(g: { specs?: GarmentSpecs | null } | null | undefined, size: string): Body {
-  const sp = g?.specs?.sizes?.[size];
+  const sp = specOf(g, size);
   const t = TYPICAL[size] || TYPICAL.L;
   const w = sp?.width && sp.width > 5 && sp.width < 40 ? sp.width : t[0];
   const l = sp?.length && sp.length > 8 && sp.length < 45 ? sp.length : t[1];

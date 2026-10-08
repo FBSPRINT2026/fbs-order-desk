@@ -62,7 +62,7 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   /** underbase on a dark garment: set by hand (true / false); not set = decided from the inks (black, navy, dark reds don't need one) */ underbase?: boolean;
   /** screens set by hand (else colors + underbase) */ screens?: number;
   /** this print's screens are on file from an earlier order: remake price per screen (else group.remake) */ remake?: boolean;
-  /** the customer told us this size ("12 inches wide on the front"): changing it in the Mockup Creator asks first */ sizeFrom?: "customer";
+  /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film";
   /** not known for sure (a reorder of an old Printavo job with no film found): production confirms before printing */
   confirm?: { size?: boolean; ink?: boolean; why: string };
   /** what the AI read off the customer's mockup (size, drop, on which garment size), to learn from staff changes */ aiPlace?: { size: string; drop: string; garment: string; kind: string }; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string; /** staff confirmed a small print really goes on this big location */ keepLocation?: boolean; };

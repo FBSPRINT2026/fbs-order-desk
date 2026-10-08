@@ -77,7 +77,7 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
         if (!m) continue;
         hit = true;
         for (const g of y.groups) for (const im of g.imprints) if (im.id === pu.imId) {
-          im.size = `${Math.round(m.widthIn * 4) / 4}" wide`;
+          im.size = `${Math.round(m.widthIn * 4) / 4}" wide`; im.sizeFrom = "film";
           // the film has the real size; the ink is still a guess and placement came from the mockup
           im.confirm = { size: false, ink: true, why: `Size from the film ${f.name}; placement from the old mockup, ink guessed from its color` };
           im.notes = `${(im.notes || "").replace(/size \([\d.]+" wide\) and /, "")}. Size from the film: ${f.name} (${m.widthIn}" × ${m.heightIn}")`.slice(0, 300);
@@ -90,7 +90,7 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
         hit = true;
         const dsg = await uploadDesign(sb, { file: p.file, customer_id: o.customerId, name: `${y.nickname || "Art"} (from film)`, colors: im.colors || 1, inks: im.inks || "", notes: `From the film ${f.name}`, method: im.method });
         im.design_id = dsg.id;
-        im.size = `${Math.round(p.widthIn * 4) / 4}" wide`;
+        im.size = `${Math.round(p.widthIn * 4) / 4}" wide`; im.sizeFrom = "film";
         // the location by size, judged as on an adult tee (a 5" print on a onesie is its full front)
         const body = bodyOf({ sizes: [...new Set(g.lines.flatMap((l) => Object.keys(l.sizes || {})))] });
         const adultW = p.widthIn / Math.min(1, body.widthIn / REF_BODY.widthIn);
