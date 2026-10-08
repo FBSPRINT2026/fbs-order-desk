@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listCustomerOrders, listCustomers, listOrders, PrintavoError, PrintavoThrottled } from "@/lib/printavo";
 import { copyFiles, importCustomer, importOrder } from "@/lib/printavoImport";
+import { refreshFromPrintavo } from "@/lib/printavoSend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,8 +108,16 @@ async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typ
   const known = new Map(((have || []) as Idx[]).map((r) => [r.printavo_id, r]));
   // orders made here and sent into Printavo (the 40,000 series) are ours already: never imported back as a second copy,
   // nor anything numbered 40,000 or up in Printavo
-  const { data: linked } = await admin.from("orders").select("printavo_id").in("printavo_id", ids);
+  const { data: linked } = await admin.from("orders").select("id, printavo_id, printavo_state").in("printavo_id", ids);
   const ours = new Set((linked || []).map((r) => String(r.printavo_id)));
+  // ours that changed in Printavo since we last looked: read back (two-way during the move), a couple per page
+  let reads = 0;
+  for (const r of linked || []) {
+    const lo = orders.find((x) => x.id === String(r.printavo_id));
+    if (!lo || reads >= 2 || (r.printavo_state as { fp?: string } | null)?.fp === lo.fingerprint) continue;
+    reads++;
+    try { await refreshFromPrintavo(admin, r.id as string, lo.fingerprint); } catch (e) { if (e instanceof PrintavoThrottled) throw e; }
+  }
   // a 40,000+ number in Printavo that we didn't send means Printavo's own counter reached our range: not imported,
   // but listed as a problem on the import page so it isn't missed
   const strays = orders.filter((o) => !ours.has(o.id) && +o.visualId >= 40000 && !known.has(o.id));

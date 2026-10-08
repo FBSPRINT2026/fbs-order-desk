@@ -3,7 +3,7 @@ import JobLabor from "@/components/team/JobLabor";
 import JobFiles from "@/components/job/JobFiles";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
-import SendToPrintavo, { PrintavoLink } from "@/components/SendToPrintavo";
+import SendToPrintavo, { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
 import { SITE_URL } from "@/lib/config";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -517,6 +517,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
       {(() => { const x = o as Order & { printavo_id?: string | null; printavo_visual_id?: string | null; printavo_state?: { url?: string; publicUrl?: string; status?: string } | null }; return x.printavo_id ? <PrintavoLink visualId={x.printavo_visual_id || ""} url={x.printavo_state?.url} publicUrl={x.printavo_state?.publicUrl} status={x.printavo_state?.status} number={o.number} orderId={o.id} onRenumbered={(v) => setO((y) => (y ? ({ ...y, printavo_visual_id: v } as Order) : y))} /> : null; })()}
+      {(o as Order & { printavo_id?: string | null }).printavo_id && o.number >= 40000 && o.number < 50000 && calc && <PrintavoChanges o={o} calc={calc} patch={patch} />}
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
       {o.status === "request" && (
         <div className="callout req-callout">

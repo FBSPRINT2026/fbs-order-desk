@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { lineQty, SIZES, type GLine, type Order, type OrderCalc, type Size } from "@/lib/pricing";
 
 /**
  * Send to Printavo (40,000-series orders, until Nov 2): asks for Printavo's status and the two dates, then makes the
@@ -11,7 +12,7 @@ type Preview = {
   contact: { id: string; name: string; email: string; company: string } | null; problem: string; statuses: Status[]; defaultStatus: string; total: number;
   files: number; mockups: number; sent: { visualId: string; publicUrl: string; url: string; status: string; at: string } | null;
 };
-type Sent = { visualId: string; publicUrl: string; url: string; status: string; statusError?: string; numberError?: string; warnings?: string; sentTotal?: number; ourTotal?: number };
+type Sent = { visualId: string; publicUrl: string; url: string; status: string; statusError?: string; numberError?: string; warnings?: string; sentTotal?: number; ourTotal?: number; cardFee?: number };
 const money = (n: number) => `$${(+n || 0).toFixed(2)}`;
 
 export function PrintavoLink({ visualId, url, publicUrl, status, number, orderId, onRenumbered }: { visualId: string; url?: string; publicUrl?: string; status?: string; number?: number; orderId?: string; onRenumbered?: (visualId: string) => void }) {
@@ -83,7 +84,7 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
                   {done.statusError && <div className="err">The status didn&apos;t change in Printavo ({done.statusError}). Set it there by hand.</div>}
                   {done.numberError && <div className="err">Printavo kept its own number ({done.numberError}). Use &quot;Make it #{p?.number}&quot; on the order to try again.</div>}
                   {done.warnings && <div className="faint">Printavo noted: {done.warnings}</div>}
-                  {done.sentTotal != null && done.ourTotal != null && Math.abs(done.sentTotal - done.ourTotal) > 0.01 && <div className="err">Printavo&apos;s total is {money(done.sentTotal)}; ours is {money(done.ourTotal)}. Check the prices in Printavo.</div>}
+                  {done.sentTotal != null && done.ourTotal != null && Math.abs(done.sentTotal - done.ourTotal - (done.cardFee || 0)) > 0.05 && <div className="err">Printavo&apos;s total is {money(done.sentTotal)}; ours is {money(done.ourTotal)} plus the 3% card surcharge ({money(done.cardFee || 0)}). Check the prices in Printavo.</div>}
                   <div className="faint">The &quot;Order confirmation&quot; reply in the Inbox now links to Printavo&apos;s invoice page.</div>
                   <PrintavoLink visualId={done.visualId} url={done.url} publicUrl={done.publicUrl} status={done.status} />
                   <div className="row" style={{ justifyContent: "flex-end" }}><button type="button" className="btn" onClick={() => setOpen(false)}>Done</button></div>
@@ -105,7 +106,7 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
                     <div className="field" style={{ flex: "1 1 120px" }}><label htmlFor="pvs-po">PO</label><input id="pvs-po" value={f.po} onChange={set("po")} /></div>
                   </div>
                   <div className="field"><label htmlFor="pvs-note">Production note</label><textarea id="pvs-note" rows={3} value={f.productionNote} onChange={set("productionNote")} /></div>
-                  <div className="faint" style={{ fontSize: 12.5 }}>Goes over: garments and sizes, each print with its details, {p.mockups} mockup{p.mockups === 1 ? "" : "s"}, {p.files} production file{p.files === 1 ? "" : "s"} plus the art, setup fees. Total {money(p.total)}. It gets the same number in Printavo: #{p.number}.</div>
+                  <div className="faint" style={{ fontSize: 12.5 }}>Goes over: garments and sizes, each print with its details, {p.mockups} mockup{p.mockups === 1 ? "" : "s"}, {p.files} production file{p.files === 1 ? "" : "s"} plus the art, setup as New/Repeat Screen Fees, and the 3% card surcharge. Total {money(p.total)}. It gets the same number in Printavo: #{p.number}.</div>
                   <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
                     <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
                     <button type="button" className="btn primary" onClick={send} disabled={busy || !f.statusId || !f.productionDue || !f.customerDue}>{busy ? "Sending…" : "Send to Printavo"}</button>
@@ -117,5 +118,87 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
         </div>
       )}
     </>
+  );
+}
+
+/* ---------- changes made in Printavo, brought back (40,000-series orders only) ---------- */
+type PvSnap = {
+  at: string; visualId: string; status: string; total: number;
+  groups: { lines: { itemNumber: string; color: string; description: string; sizes: Record<string, number>; price: number }[] }[];
+  fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
+};
+const CARD = /credit card processing surcharge/i;
+// the fees Send to Printavo makes from our setup (screens, digitizing, PMS, ink changes, minimum, 2XL+)
+const SETUP_FEE = /^(new screen fee|repeat screen fee|digitize file|pms match|color change|minimum order charge|sizes above xl)$/i;
+const ADJUST = "Setup adjustment (from Printavo)";
+const norm = (x: string) => (x || "").replace(/\s+/g, " ").trim().toLowerCase();
+type Change = { key: string; text: string; apply?: (d: Order) => void };
+
+export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc; patch: (fn: (d: Order) => void) => void }) {
+  const st = (o as Order & { printavo_state?: { pv?: PvSnap } | null }).printavo_state;
+  const pv = st?.pv;
+  const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [fresh, setFresh] = useState<PvSnap | null>(null);
+  const snap = fresh && (!pv || fresh.at > pv.at) ? fresh : pv;
+  async function check() {
+    setBusy(true); setErr("");
+    const r = await fetch("/api/printavo/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: o.id, action: "refresh" }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+    setBusy(false);
+    if (!r?.ok) return setErr(j.error || "Couldn't read the order from Printavo.");
+    setFresh(j.pv);
+  }
+  const changes: Change[] = [];
+  const info: string[] = [];
+  if (snap) {
+    const groups = o.groups || [];
+    groups.forEach((g, gi) => {
+      const ours = g.lines.filter((l) => lineQty(l) > 0), theirs = snap.groups[gi]?.lines || [];
+      ours.forEach((l, li) => {
+        const t = theirs[li]; if (!t) return;
+        const name = `${[l.style, l.color].filter(Boolean).join(" ")}`;
+        const keys = [...new Set([...Object.keys(l.sizes || {}), ...Object.keys(t.sizes)])].filter((z) => (SIZES as readonly string[]).includes(z));
+        const diff = keys.filter((z) => (+(l.sizes?.[z as Size] || 0)) !== (+(t.sizes[z] || 0)));
+        if (diff.length) changes.push({ key: `q${gi}.${li}`, text: `${name}: ${diff.map((z) => `${z} ${+(l.sizes?.[z as Size] || 0)} → ${+(t.sizes[z] || 0)}`).join(", ")}`,
+          apply: (d) => { const x = d.groups[gi].lines.find((y) => y.id === l.id); if (x) x.sizes = Object.fromEntries(keys.filter((z) => +(t.sizes[z] || 0) > 0).map((z) => [z, +t.sizes[z]])) as GLine["sizes"]; } });
+        const each = calc.groups[gi]?.lines.find((y) => y.id === l.id)?.each ?? 0;
+        if (Math.abs(each - t.price) > 0.005) changes.push({ key: `p${gi}.${li}`, text: `${name}: price $${each.toFixed(2)} → $${t.price.toFixed(2)} each`,
+          apply: (d) => { const x = d.groups[gi].lines.find((y) => y.id === l.id); if (x) x.priceOverride = t.price; } });
+      });
+      theirs.slice(ours.length).forEach((t) => info.push(`New line in Printavo: ${[t.itemNumber, t.color].filter(Boolean).join(" ")} ${Object.entries(t.sizes).map(([z, q]) => `${z} ${q}`).join(", ")} at $${t.price.toFixed(2)}. Add it here by hand.`));
+    });
+    snap.groups.slice(groups.length).forEach(() => info.push("Printavo has a line item group this order doesn't. Add it here by hand."));
+    // fees: the setup ones are compared as a total; their own fees one by one; the card surcharge stays in Printavo
+    const pvSetup = snap.fees.filter((f) => SETUP_FEE.test(norm(f.description))).reduce((a, f) => a + f.amount, 0);
+    const ourSetup = calc.groups.reduce((a, c) => a + c.setup + c.materials, 0);
+    const adj = (o.fees || []).find((f) => f.label === ADJUST);
+    const wantAdj = Math.round((pvSetup - ourSetup) * 100) / 100;
+    if (Math.abs(wantAdj - (+(adj?.amount || 0))) > 0.005) changes.push({ key: "setup", text: `Setup fees in Printavo $${pvSetup.toFixed(2)}, ours $${ourSetup.toFixed(2)}${adj ? ` (+ $${(+(adj.amount || 0)).toFixed(2)} adjustment)` : ""}`,
+      apply: (d) => { d.fees = (d.fees || []).filter((f) => f.label !== ADJUST); if (Math.abs(wantAdj) > 0.005) d.fees.push({ label: ADJUST, amount: wantAdj }); } });
+    const theirFees = snap.fees.filter((f) => !SETUP_FEE.test(norm(f.description)) && !CARD.test(f.description));
+    for (const f of theirFees) {
+      const mine = (o.fees || []).find((x) => norm(x.label) === norm(f.description));
+      if (!mine) changes.push({ key: `f+${f.description}`, text: `New fee in Printavo: ${f.description.trim()} $${f.amount.toFixed(2)}`, apply: (d) => { d.fees = [...(d.fees || []), { label: f.description.trim(), amount: f.amount }]; } });
+      else if (Math.abs(+(mine.amount || 0) - f.amount) > 0.005) changes.push({ key: `f=${f.description}`, text: `${f.description.trim()}: $${(+(mine.amount || 0)).toFixed(2)} → $${f.amount.toFixed(2)}`, apply: (d) => { const x = (d.fees || []).find((y) => norm(y.label) === norm(f.description)); if (x) x.amount = f.amount; } });
+    }
+    for (const mine of (o.fees || []).filter((x) => x.label !== ADJUST && +(x.amount || 0) && !theirFees.some((f) => norm(f.description) === norm(x.label))))
+      changes.push({ key: `f-${mine.label}`, text: `Fee removed in Printavo: ${mine.label} $${(+(mine.amount || 0)).toFixed(2)}`, apply: (d) => { d.fees = (d.fees || []).filter((y) => y.label !== mine.label); } });
+    const card = snap.fees.find((f) => CARD.test(f.description));
+    if (card) info.push(`Card surcharge in Printavo: $${card.amount.toFixed(2)} (stays in Printavo: customers pay there until Nov 2).`);
+  }
+  const applyAll = () => patch((d) => { for (const c of changes) c.apply?.(d); });
+  return (
+    <div className="pvc">
+      <div className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+        <b>{changes.length ? `Changed in Printavo (${changes.length})` : "Matches Printavo"}</b>
+        <span className="row" style={{ gap: 8 }}>
+          <span className="faint" style={{ fontSize: 12 }}>{snap ? `Checked ${new Date(snap.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · Printavo total $${snap.total.toFixed(2)}` : "Not checked yet"}</span>
+          <button type="button" className="btn sm" disabled={busy} onClick={check}>{busy ? "Checking…" : "Check Printavo now"}</button>
+          {changes.length > 1 && <button type="button" className="btn primary sm" onClick={applyAll}>Accept all</button>}
+        </span>
+      </div>
+      {err && <div className="err">{err}</div>}
+      {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span>{c.text}</span>{c.apply && <button type="button" className="btn sm" onClick={() => patch((d) => c.apply!(d))}>Accept</button>}</li>)}</ul>}
+      {info.length > 0 && <ul className="pvc-info">{info.map((t, i) => <li key={i} className="faint">{t}</li>)}</ul>}
+    </div>
   );
 }

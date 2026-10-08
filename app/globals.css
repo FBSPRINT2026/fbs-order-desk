@@ -5643,3 +5643,6 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .pvs-strip{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0;padding:10px 14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:13.5px}
 .pvs-ok{font-size:15px}
 .pvs-who{font-size:14px}
+.pvc{margin:0 0 12px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13.5px;display:grid;gap:8px}
+.pvc-list,.pvc-info{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.pvc-list li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;background:var(--surface-2)}

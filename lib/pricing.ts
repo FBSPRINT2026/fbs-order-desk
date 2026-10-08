@@ -523,7 +523,24 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   // (screen printing: embroidery has its own 6-11 break)
   const minCharge = pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
   const setup = r2(screens + inkFees + minCharge);
-  return { id: g.id, qty, ti, tierMin: pl.tiers[ti], materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  // the setup charge itemized (as Printavo lists it: new / repeat screens, digitizing, PMS match, ink changes, minimum)
+  const setupItems: { kind: "screens" | "remake" | "digitize" | "pms" | "inkchange" | "min"; qty: number; unit: number; amount: number }[] = [];
+  if (!o.waive_setup) setups.forEach((d, i) => {
+    const im = (g.imprints || [])[i];
+    if (!im || !d.setup) return;
+    if (im.method === "screen") {
+      const n = Math.min(num((d as { screens?: number }).screens), 15) || 1;
+      setupItems.push({ kind: (im.remake ?? ix.remake) && pl.remakeFee != null ? "remake" : "screens", qty: n, unit: r2(d.setup / n), amount: r2(d.setup) });
+    } else setupItems.push({ kind: "digitize", qty: 1, unit: r2(d.setup), amount: r2(d.setup) });
+  });
+  imprints.forEach((_, i) => {
+    const im = (g.imprints || [])[i]; if (!im) return;
+    const pms = im.method === "screen" ? pmsCount(im) : num(im.pms), ic = num(im.inkChanges);
+    if (pms && num(pl.pmsFee)) setupItems.push({ kind: "pms", qty: pms, unit: num(pl.pmsFee), amount: r2(pms * num(pl.pmsFee)) });
+    if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)) });
+  });
+  if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
+  return { id: g.id, qty, ti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;

@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { pv, transitionWrite, PrintavoError } from "@/lib/printavo";
+import { getOrder, pv, transitionWrite, PrintavoError } from "@/lib/printavo";
 import { calcOrder, imprintLabel, mergeSettings, orderGroups, SIZES, type Order } from "@/lib/pricing";
 
 /**
@@ -23,6 +23,8 @@ const PV_SIZE: Record<string, string> = {
   YXS: "size_yxs", YS: "size_ys", YM: "size_ym", YL: "size_yl", YXL: "size_yxl", XS: "size_xs", S: "size_s", M: "size_m", L: "size_l", XL: "size_xl",
   "2XL": "size_2xl", "3XL": "size_3xl", "4XL": "size_4xl", "5XL": "size_5xl", "6XL": "size_6xl",
 };
+/** Printavo's card surcharge fee: Printavo-only (customers pay there during the move), never brought back to our order */
+export const CARD_FEE = "Credit Card Processing Surcharge - ACH Available on Request";
 const day = (d: string | null | undefined) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : "");
 
 export async function printavoStatuses(): Promise<PvStatus[]> {
@@ -117,8 +119,16 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   const mockFor = (gi: number) => (proofs || []).map((p, i) => ({ gi: named(String(p.title || "")), u: proofUrls[i] }))
     .filter((p) => p.u && (p.gi === gi || (p.gi < 0 && gi === 0))).map((p) => ({ publicImageUrl: p.u }));
   // types of work, matched by name (Screen Printing, Embroidery, DTF...)
-  const tow = await pv<{ account: { typesOfWork: { nodes: { id: string; name: string; archived: boolean }[] } } }>(`query{ account{ typesOfWork(first:50){ nodes{ id name archived } } } }`).then((d) => d.account?.typesOfWork?.nodes?.filter((t) => !t.archived) || []).catch(() => []);
-  const towFor = (m: string) => tow.find((t) => (m === "screen" ? /screen/i : m === "embroidery" ? /embroid/i : /dtf|transfer/i).test(t.name));
+  // and the line items' categories (Screen Printing, Embroidery, Heat Press): Printavo's reports and syncs go by them
+  type Named = { id: string; name: string; archived?: boolean };
+  const acct = await pv<{ account: { typesOfWork: { nodes: Named[] }; categories: { nodes: Named[] } } }>(`query{ account{ typesOfWork(first:50){ nodes{ id name archived } } categories(first:100){ nodes{ id name } } } }`).then((d) => d.account).catch(() => null);
+  const tow = (acct?.typesOfWork?.nodes || []).filter((t) => !t.archived), cats = acct?.categories?.nodes || [];
+  const methodRe = (m: string) => (m === "screen" ? /screen\s*print/i : m === "embroidery" ? /embroid/i : /heat\s*press|dtf|transfer/i);
+  const towFor = (m: string) => tow.find((t) => methodRe(m).test(t.name));
+  const catFor = (m: string) => cats.find((c) => methodRe(m).test(c.name.trim()));
+  const missingCat = groups.map((g) => g.imprints[0]?.method).filter((m) => !!m && !catFor(m));
+  if (missingCat.length) await admin.from("orders").update({ printavo_state: { ...(o.printavo_state as object || {}), sending: null } }).eq("id", inp.orderId);
+  if (missingCat.length) throw new PrintavoError(`Printavo has no line item category for ${[...new Set(missingCat)].join(", ")} (looked for Screen Printing / Embroidery / Heat Press).`);
 
   const lineItemGroups = groups.map((g, gi) => {
     const c = calc.groups[gi];
@@ -128,8 +138,9 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
         const lc = c?.lines.find((x) => x.id === l.id);
         const counts: Record<string, number> = {};
         for (const z of SIZES) { const q = +(l.sizes?.[z] || 0); if (q > 0) { const k = PV_SIZE[z] || "size_other"; counts[k] = (counts[k] || 0) + q; } }
+        const cat = catFor(g.imprints[0]?.method || "screen");
         return {
-          position: li + 1, itemNumber: l.style || undefined, color: l.color || undefined,
+          position: li + 1, itemNumber: l.style || undefined, color: l.color || undefined, ...(cat ? { category: { id: cat.id } } : {}),
           description: [l.brand, l.garment].filter(Boolean).join(" ") + (g.name ? ` (${g.name})` : ""),
           price: lc ? lc.each : 0, taxed,
           sizes: Object.entries(counts).map(([size, count]) => ({ size, count })),
@@ -143,14 +154,23 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
     };
   }).filter((g) => g.lineItems.length);
 
-  // screens / setup, 2XL+ charges and the order's own fees as Printavo fees
-  const fees: { description: string; amount: number; quantity?: number; unitPrice?: number; taxable: boolean }[] = [];
-  calc.groups.forEach((c, gi) => {
-    const nm = groups[gi]?.name ? ` (${groups[gi].name})` : "";
-    if (c.setup > 0) fees.push({ description: `Setup: screens${c.inkFees ? " & ink" : ""}${c.minCharge ? " & minimum" : ""}${nm}`, amount: c.setup, quantity: 1, unitPrice: c.setup, taxable: taxed });
-    if (c.materials > 0) fees.push({ description: `2XL+ materials charge${nm}`, amount: c.materials, quantity: 1, unitPrice: c.materials, taxable: taxed });
-  });
+  // setup as Printavo's own fee names (their reports and syncs go by them): New / Repeat Screen Fee per screen,
+  // Digitize File, PMS MATCH, Color Change; 2XL+ as Sizes Above XL; the order's own fees; the 3% card surcharge
+  type PvFee = { description: string; amount?: number; quantity?: number; unitPrice?: number; unitPriceAsPercentage?: boolean; taxable: boolean };
+  const FEE_NAME = { screens: "New Screen Fee ", remake: "Repeat Screen Fee ", digitize: "Digitize File", pms: "PMS MATCH", inkchange: "Color Change", min: "Minimum Order Charge" } as const;
+  const sum = new Map<string, PvFee>();
+  for (const c of calc.groups) {
+    for (const it of c.setupItems) {
+      const key = `${it.kind}|${it.unit}`, f = sum.get(key);
+      if (f) { f.quantity = (f.quantity || 0) + it.qty; f.amount = Math.round(((f.amount || 0) + it.amount) * 100) / 100; }
+      else sum.set(key, { description: FEE_NAME[it.kind], quantity: it.qty, unitPrice: it.unit, amount: it.amount, taxable: taxed });
+    }
+    if (c.materials > 0) { const f = sum.get("materials"); if (f) { f.amount = Math.round(((f.amount || 0) + c.materials) * 100) / 100; f.unitPrice = f.amount; } else sum.set("materials", { description: "Sizes Above XL", quantity: 1, unitPrice: c.materials, amount: c.materials, taxable: taxed }); }
+  }
+  const fees: PvFee[] = [...sum.values()];
   for (const f of (o.fees || []) as { label: string; amount: number | "" }[]) if (+f.amount) fees.push({ description: f.label || "Fee", amount: +f.amount, quantity: 1, unitPrice: +f.amount, taxable: taxed });
+  // customers pay through Printavo during the move: the usual 3% card surcharge goes on every order, as on Printavo's own
+  fees.push({ description: CARD_FEE, quantity: 1, unitPrice: 3, unitPriceAsPercentage: true, taxable: false });
 
   // production files: the customer's files and mockup copies on the order, and each print's art
   const { data: af } = await admin.from("art_files").select("file_path").eq("order_id", inp.orderId);
@@ -201,7 +221,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   // Printavo numbers it from its own counter: give it our number so both systems match (#40003 is #40003)
   let visualId = String(made.visualId || ""), numberError = "", total = made.total;
   try { const m = await matchPrintavoNumber(admin, inp.orderId, inp.by); visualId = m.visualId; total = m.total; } catch (e) { numberError = e instanceof Error ? e.message : String(e); }
-  return { printavoId: made.id, visualId, publicUrl: made.publicUrl, url: made.url, status: String(state.status || ""), statusError: statusErr, numberError, warnings: warn, sentTotal: total, ourTotal: calc.total };
+  return { printavoId: made.id, visualId, publicUrl: made.publicUrl, url: made.url, status: String(state.status || ""), statusError: statusErr, numberError, warnings: warn, sentTotal: total, ourTotal: calc.total, cardFee: Math.round(calc.total * 3) / 100 };
 }
 
 type PvNow = { __typename: "Invoice" | "Quote"; visualId: string; total: number; status: { name: string } | null };
@@ -212,6 +232,7 @@ export async function matchPrintavoNumber(admin: SupabaseClient, orderId: string
   const { data: o } = await admin.from("orders").select("number, printavo_id, printavo_visual_id, printavo_state").eq("id", orderId).maybeSingle();
   if (!o?.printavo_id) throw new PrintavoError("This order hasn't been sent to Printavo.");
   const number = o.number as number, want = String(number);
+  if (!(number >= 40000 && number < 50000)) throw new PrintavoError("Only orders #40000-#49999 sync with Printavo.");
   const now = await readNow(String(o.printavo_id));
   if (!now) throw new PrintavoError("The order wasn't found in Printavo.");
   const old = String(now.visualId || o.printavo_visual_id || "");
@@ -254,4 +275,33 @@ async function fixConfirmationReply(admin: SupabaseClient, orderId: string, numb
     });
     if (changed) await admin.from("activities").update({ meta: { ...meta, reply_options: { ...meta.reply_options, at: new Date().toISOString(), options: next } } }).eq("id", a.id);
   }
+}
+
+/** What the order looks like in Printavo now (kept on our order as printavo_state.pv, compared on the order page). */
+export type PvSnap = {
+  at: string; visualId: string; status: string; total: number; kind: string;
+  groups: { lines: { itemNumber: string; color: string; description: string; category: string; sizes: Record<string, number>; price: number }[] }[];
+  fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
+};
+const OUR_SIZE: Record<string, string> = Object.fromEntries(Object.entries(PV_SIZE).map(([k, v]) => [v, k]));
+
+/**
+ * Reads the order back from Printavo (two-way during the move: quantities, prices and fees changed in Printavo come
+ * back here to be accepted on the order page; the number and status are taken as they are).
+ */
+export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string, fingerprint?: string) {
+  const { data: o } = await admin.from("orders").select("number, printavo_id, printavo_state").eq("id", orderId).maybeSingle();
+  if (!o?.printavo_id) throw new PrintavoError("This order hasn't been sent to Printavo.");
+  // only the 40,000s talk back and forth; everything below (Printavo's history) and above (after Nov 2) is locked
+  if (!((o.number as number) >= 40000 && (o.number as number) < 50000)) throw new PrintavoError("Only orders #40000-#49999 sync with Printavo.");
+  const p = await getOrder(String(o.printavo_id));
+  const snap: PvSnap = {
+    at: new Date().toISOString(), visualId: p.visualId, status: p.status.name, total: p.total, kind: p.kind,
+    groups: p.groups.map((g) => ({ lines: g.lines.map((l) => ({ itemNumber: l.itemNumber, color: l.color, description: l.description, category: l.category, price: l.price,
+      sizes: Object.fromEntries(Object.entries(l.sizes).map(([k, v]) => [OUR_SIZE[k] || k.replace(/^size_/, "").toUpperCase(), v])) })) })),
+    fees: p.fees.map((f) => ({ description: f.description, amount: f.amount, quantity: f.quantity, unitPrice: f.unitPrice, pct: f.pct })),
+  };
+  const st = (o.printavo_state || {}) as Record<string, unknown>;
+  await admin.from("orders").update({ printavo_visual_id: p.visualId, printavo_state: { ...st, pv: snap, status: p.status.name, url: p.urls.url || st.url, publicUrl: p.urls.publicUrl || st.publicUrl, ...(fingerprint ? { fp: fingerprint } : {}) } }).eq("id", orderId);
+  return snap;
 }
