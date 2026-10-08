@@ -135,15 +135,15 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       .then(({ count }) => setUnread(count || 0));
     sb.from("orders").select("id", { count: "exact", head: true }).eq("status", "request").not("submitted_at", "is", null)
       .then(({ count }) => setIncoming(count || 0));
-    // 40,000-series orders with Printavo changes waiting to be accepted
-    Promise.all([sb.from("orders").select("*").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000), sb.from("settings").select("data").eq("id", 1).maybeSingle()])
+    // 40,000-series orders with Printavo changes waiting to be accepted (the owner's view only)
+    if (realRole === "owner") Promise.all([sb.from("orders").select("*").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000), sb.from("settings").select("data").eq("id", 1).maybeSingle()])
       .then(([{ data }, { data: st }]) => { const s = mergeSettings(st?.data); setPvWaiting(((data || []) as Order[]).filter((o) => { const snap = snapOf(o); return printavoChanges(o, calcOrder(o, s), snap).changes.length > 0 || !!cardFix(o, snap); }).length); })
       .then(undefined, () => null);
-  }, [path]);
+  }, [path, realRole]);
 
   // the menu, in groups — each group's items are kept in alphabetical order
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
-    { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/inbox", "inbox", "Inbox"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/printavo-sync", "pvsync", "Printavo Sync"], ["/shop/projects", "projects", "Projects"]] },
+    { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/inbox", "inbox", "Inbox"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
     { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/separations", "seps", "Separations"]] },
     { title: "Shop Tools", items: [["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
@@ -223,6 +223,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       )}
       <nav className="nav nav-foot">
         {/* everyone: report a problem with a screenshot; the owner: the Support page with everyone's reports */}
+        {realRole === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
         <SupportButton email={email} />
         {realRole === "owner" && link(["/shop/support", "support", "Support"])}
         {link(["/shop/settings", "settings", "Settings"])}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} title="Your own quick links: customers, reports, anything you open all the time">+ Add Shortcut</button>}</nav>

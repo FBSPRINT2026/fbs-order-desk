@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { calcOrder, mergeSettings, type Order, type Settings } from "@/lib/pricing";
 import { cardFix, printavoChanges, snapOf, type Change } from "@/lib/printavoChanges";
 import { custLabel } from "@/lib/format";
+import { useRole } from "@/components/RoleContext";
 
 /**
  * Printavo Sync: the 40,000-series orders whose Printavo copy has changes not accepted here yet (quantities, prices,
@@ -14,6 +15,7 @@ type Row = Order & { printavo_visual_id?: string | null; printavo_state?: Record
 const when = (d?: string) => (d ? new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
 
 export default function PrintavoSyncPage() {
+  const { realRole } = useRole();
   const sb = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Row[] | null>(null), [settings, setSettings] = useState<Settings>(mergeSettings({}));
   const [err, setErr] = useState(""), [busy, setBusy] = useState(""), [showAll, setShowAll] = useState(false);
@@ -55,6 +57,7 @@ export default function PrintavoSyncPage() {
     await load(); setBusy("");
   }
 
+  if (realRole !== "owner") return <div className="pvsync-empty">Printavo Sync is in the owner&apos;s view only.</div>;
   return (
     <div className="pvsync">
       <div className="page-head">
