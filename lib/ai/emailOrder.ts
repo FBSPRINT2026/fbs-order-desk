@@ -88,6 +88,8 @@ export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
       im.method = st.method === "embroidery" ? "embroidery" : st.method === "heat" ? "dtf" : "screen";
       im.colors = Math.max(1, st.colors || 1);
       im.notes = `From Printavo #${row.visual_id}${st.note ? ` (${st.note})` : ""}`;
+      // Printavo didn't keep the print size or ink: production confirms them before printing
+      im.confirm = { size: true, ink: true, why: `Reorder of Printavo #${row.visual_id}, which has no size or ink on file` };
       return im;
     });
     out.push({ id: uid(), lines, imprints, customerMockups: mockups.slice(0, 6), ...(pdfs.length ? { pvArt: [...new Map(pdfs.map((x) => [x.path, x])).values()].slice(0, 3) } : {}) });

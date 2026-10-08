@@ -156,7 +156,9 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
       }),
       imprints: g.imprints.map((d, ii) => {
         const t = towFor(d.method);
-        const details = [imprintLabel(d), d.notes].filter(Boolean).join("\n").slice(0, 1000);
+        // production runs from Printavo during the move: an unconfirmed size / ink says so on the print
+        const unconf = d.confirm && (d.confirm.size || d.confirm.ink) ? `*** CONFIRM ${[d.confirm.size && "SIZE & PLACEMENT", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING *** (${d.confirm.why})` : "";
+        const details = [imprintLabel(d), unconf, d.notes].filter(Boolean).join("\n").slice(0, 1000);
         return { details, ...(t ? { typeOfWork: { id: t.id } } : {}), ...(ii === 0 ? { mockups: mockFor(gi) } : {}) };
       }),
     };

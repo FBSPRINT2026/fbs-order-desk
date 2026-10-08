@@ -5660,3 +5660,10 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 /* the customer's film folder (Dropbox) */
 .ff{font-size:13.5px;padding:8px 0;display:grid;gap:6px}
 .ff-list{list-style:none;margin:0;padding:0;display:grid;gap:3px;max-height:220px;overflow:auto}
+/* reorder prints not confirmed yet (size / ink read off an old mockup): grayed until production confirms */
+.unconf{opacity:.55;filter:grayscale(1)}
+.unconf:focus-within{opacity:1;filter:none}
+.imp-unconf td{background:var(--surface-2);font-size:12.5px;padding:6px 10px!important}
+.imp-unconf td{border-left:3px solid #d9a400}
+.imp-unconf td>span{margin-right:10px}
+.wo-unconf{font-size:9pt;font-weight:800;color:#b00;margin-top:2px}

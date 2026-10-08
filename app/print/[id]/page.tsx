@@ -92,7 +92,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
                 <thead><tr><th>Design</th><th>Imprint</th><th>Location</th><th className="c">Colors</th><th>Inks / PMS</th><th>Size</th><th>Drop</th><th>Notes</th></tr></thead>
                 <tbody>
                   {g.imprints.map((d) => (
-                    <tr key={d.id}><td>{d.design_id && dmap[d.design_id] ? <span className="wo-design">{dUrl[d.design_id] && <img src={dUrl[d.design_id]} alt="" />}<b>D-{dmap[d.design_id].number}</b></span> : ""}</td><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? (d.colors >= 11 ? "Full" : d.colors) : d.method === "embroidery" ? d.colors : "Full"}</td><td>{d.inks}</td><td>{d.size}</td><td>{d.drop ? `${d.drop}"` : "Standard"}</td><td>{d.notes}</td></tr>
+                    <tr key={d.id}><td>{d.design_id && dmap[d.design_id] ? <span className="wo-design">{dUrl[d.design_id] && <img src={dUrl[d.design_id]} alt="" />}<b>D-{dmap[d.design_id].number}</b></span> : ""}</td><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? (d.colors >= 11 ? "Full" : d.colors) : d.method === "embroidery" ? d.colors : "Full"}</td><td>{d.inks}{d.confirm?.ink && <div className="wo-unconf">CONFIRM INK</div>}</td><td>{d.size}{d.confirm?.size && <div className="wo-unconf">CONFIRM SIZE &amp; PLACEMENT BEFORE PRINTING</div>}</td><td>{d.drop ? `${d.drop}"` : "Standard"}</td><td>{d.notes}</td></tr>
                   ))}
                 </tbody>
               </table>

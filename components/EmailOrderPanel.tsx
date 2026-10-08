@@ -120,6 +120,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
         im.drop = String(pc.dropIn);
         if (!im.inks) { im.inks = pc.ink; im.colors = 1; }
         im.notes = [im.notes, `Art, size (${pc.widthIn}" wide) and placement (${pc.dropIn}" down) from the old mockup; ink looks like ${pc.ink} (${pc.hex})`].filter(Boolean).join(". ").slice(0, 300);
+        im.confirm = { size: true, ink: true, why: `Reorder of ${from.replace(/ mockup\.pdf$/, "")}: size and placement measured off the old mockup, ink guessed from its color` };
         pulled.push({ imId: im.id, widthIn: pc.widthIn, heightIn: pc.heightIn });
       }
     }
@@ -143,6 +144,8 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
           hit = true;
           for (const g of y.groups) for (const im of g.imprints) if (im.id === pu.imId) {
             im.size = `${Math.round(m.widthIn * 4) / 4}" wide`;
+            // the film has the real size; the ink is still a guess and placement came from the mockup
+            im.confirm = { size: false, ink: true, why: `Size from the film ${f.name}; placement from the old mockup, ink guessed from its color` };
             im.notes = `${(im.notes || "").replace(/size \([\d.]+" wide\) and /, "")}. Size from the film: ${f.name} (${m.widthIn}" × ${m.heightIn}")`.slice(0, 300);
           }
         }
