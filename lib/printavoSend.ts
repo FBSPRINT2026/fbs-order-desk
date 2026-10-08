@@ -75,7 +75,7 @@ export async function sendPreview(admin: SupabaseClient, orderId: string): Promi
   const { count: files } = await admin.from("art_files").select("id", { count: "exact", head: true }).eq("order_id", orderId);
   const { count: mockups } = await admin.from("proofs").select("id", { count: "exact", head: true }).eq("order_id", orderId);
   return {
-    number, nickname: `#${number} ${String(o.nickname || "").trim()}`.trim(), po: String(o.po_number || ""),
+    number, nickname: String(o.nickname || "").trim(), po: String(o.po_number || ""),
     customerDue: day(o.due_date as string), productionDue: day((o.production_date as string) || (o.due_date as string)), productionNote: prodNote,
     contact: checked, problem, statuses, defaultStatus: def?.id || "", total: calc.total, files: files || 0, mockups: mockups || 0,
     sent: o.printavo_id ? { printavoId: String(o.printavo_id), visualId: String(o.printavo_visual_id || ""), publicUrl: ps?.publicUrl || "", url: ps?.url || "", status: ps?.status || "", at: String(o.printavo_sent_at || "") } : null,
@@ -198,7 +198,43 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   }
   await admin.from("order_events").insert({ order_id: inp.orderId, kind: "printavo", detail: `Sent to Printavo as #${made.visualId} (${state.status})`, actor: inp.by });
   await fixConfirmationReply(admin, inp.orderId, number, String(made.visualId || ""), made.publicUrl);
-  return { printavoId: made.id, visualId: String(made.visualId || ""), publicUrl: made.publicUrl, url: made.url, status: String(state.status || ""), statusError: statusErr, warnings: warn, sentTotal: made.total, ourTotal: calc.total };
+  // Printavo numbers it from its own counter: give it our number so both systems match (#40003 is #40003)
+  let visualId = String(made.visualId || ""), numberError = "", total = made.total;
+  try { const m = await matchPrintavoNumber(admin, inp.orderId, inp.by); visualId = m.visualId; total = m.total; } catch (e) { numberError = e instanceof Error ? e.message : String(e); }
+  return { printavoId: made.id, visualId, publicUrl: made.publicUrl, url: made.url, status: String(state.status || ""), statusError: statusErr, numberError, warnings: warn, sentTotal: total, ourTotal: calc.total };
+}
+
+type PvNow = { __typename: "Invoice" | "Quote"; visualId: string; total: number; status: { name: string } | null };
+const readNow = async (id: string) => (await pv<{ order: PvNow | null }>(`query($id:ID!){ order(id:$id){ __typename ... on Invoice{ visualId total status{ name } } ... on Quote{ visualId total status{ name } } } }`, { id })).order;
+
+/** Sets the Printavo order's number to ours (Printavo #34613 → #40003). Only the number changes. */
+export async function matchPrintavoNumber(admin: SupabaseClient, orderId: string, by: string) {
+  const { data: o } = await admin.from("orders").select("number, printavo_id, printavo_visual_id, printavo_state").eq("id", orderId).maybeSingle();
+  if (!o?.printavo_id) throw new PrintavoError("This order hasn't been sent to Printavo.");
+  const number = o.number as number, want = String(number);
+  const now = await readNow(String(o.printavo_id));
+  if (!now) throw new PrintavoError("The order wasn't found in Printavo.");
+  const old = String(now.visualId || o.printavo_visual_id || "");
+  let visualId = old, total = now.total;
+  if (old !== want) {
+    const kind = now.__typename === "Invoice" ? "invoiceUpdate" : "quoteUpdate", type = now.__typename === "Invoice" ? "InvoiceInput" : "QuoteInput";
+    const r = await transitionWrite<Record<string, { visualId: string; total: number } | null>>(`mutation($id:ID!,$input:${type}!){ ${kind}(id:$id, input:$input){ visualId total } }`, { id: String(o.printavo_id), input: { visualId: want } }, number);
+    const got = r[kind];
+    if (!got || String(got.visualId) !== want) throw new PrintavoError(`Printavo kept #${got?.visualId || old}${r.__warnings ? ` (${r.__warnings})` : ""}.`);
+    visualId = String(got.visualId); total = got.total;
+    await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Printavo number changed from #${old} to #${visualId} to match`, actor: by });
+    // the waiting confirmation reply quoted Printavo's old number
+    const { data: acts } = await admin.from("activities").select("id, meta").eq("order_id", orderId).limit(20);
+    for (const a of acts || []) {
+      const meta = (a.meta || {}) as { reply_options?: { at?: string; options?: { label: string; subject: string; body: string }[] } };
+      const opts = meta.reply_options?.options;
+      if (!opts?.some((op) => op.body.includes(`Order #${old}`))) continue;
+      const next = opts.map((op) => ({ ...op, body: op.body.replace(new RegExp(`Order #${old}\\b`, "g"), `Order #${visualId}`) }));
+      await admin.from("activities").update({ meta: { ...meta, reply_options: { ...meta.reply_options, at: new Date().toISOString(), options: next } } }).eq("id", a.id);
+    }
+  }
+  await admin.from("orders").update({ printavo_visual_id: visualId, printavo_state: { ...((o.printavo_state || {}) as object), sentTotal: total, status: now.status?.name || (o.printavo_state as { status?: string } | null)?.status || "" } }).eq("id", orderId);
+  return { visualId, total, status: now.status?.name || "" };
 }
 
 /** The "Thanks for your order" reply waiting in the Inbox: the link becomes Printavo's invoice page and the number Printavo's. */

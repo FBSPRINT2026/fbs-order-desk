@@ -516,7 +516,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <button className={"btn danger" + (armed === "del" ? " armed" : "")} type="button" onClick={del}>{armed === "del" ? "Confirm delete" : "Delete"}</button>
         </div>
       </div>
-      {(() => { const x = o as Order & { printavo_id?: string | null; printavo_visual_id?: string | null; printavo_state?: { url?: string; publicUrl?: string; status?: string } | null }; return x.printavo_id ? <PrintavoLink visualId={x.printavo_visual_id || ""} url={x.printavo_state?.url} publicUrl={x.printavo_state?.publicUrl} status={x.printavo_state?.status} /> : null; })()}
+      {(() => { const x = o as Order & { printavo_id?: string | null; printavo_visual_id?: string | null; printavo_state?: { url?: string; publicUrl?: string; status?: string } | null }; return x.printavo_id ? <PrintavoLink visualId={x.printavo_visual_id || ""} url={x.printavo_state?.url} publicUrl={x.printavo_state?.publicUrl} status={x.printavo_state?.status} number={o.number} orderId={o.id} onRenumbered={(v) => setO((y) => (y ? ({ ...y, printavo_visual_id: v } as Order) : y))} /> : null; })()}
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
       {o.status === "request" && (
         <div className="callout req-callout">

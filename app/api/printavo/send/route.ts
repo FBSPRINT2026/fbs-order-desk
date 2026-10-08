@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendPreview, sendToPrintavo } from "@/lib/printavoSend";
+import { matchPrintavoNumber, sendPreview, sendToPrintavo } from "@/lib/printavoSend";
 import { fail, holdSync, staffOnly } from "../guard";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,8 @@ export async function POST(req: Request) {
   if (!mine) return NextResponse.json({ error: "Order not found." }, { status: 404 });
   try {
     await holdSync(60);
+    // an order already in Printavo under Printavo's own number: give it ours
+    if (b.action === "renumber") return NextResponse.json(await matchPrintavoNumber(createAdminClient(), orderId, g.email));
     const r = await sendToPrintavo(createAdminClient(), { orderId, statusId: s(b.statusId, 64), customerDue: s(b.customerDue, 10), productionDue: s(b.productionDue, 10), nickname: s(b.nickname, 200), po: s(b.po, 100), productionNote: s(b.productionNote, 4000), by: g.email });
     return NextResponse.json(r);
   } catch (e) { return fail(e); }

@@ -11,17 +11,29 @@ type Preview = {
   contact: { id: string; name: string; email: string; company: string } | null; problem: string; statuses: Status[]; defaultStatus: string; total: number;
   files: number; mockups: number; sent: { visualId: string; publicUrl: string; url: string; status: string; at: string } | null;
 };
-type Sent = { visualId: string; publicUrl: string; url: string; status: string; statusError?: string; warnings?: string; sentTotal?: number; ourTotal?: number };
+type Sent = { visualId: string; publicUrl: string; url: string; status: string; statusError?: string; numberError?: string; warnings?: string; sentTotal?: number; ourTotal?: number };
 const money = (n: number) => `$${(+n || 0).toFixed(2)}`;
 
-export function PrintavoLink({ visualId, url, publicUrl, status }: { visualId: string; url?: string; publicUrl?: string; status?: string }) {
+export function PrintavoLink({ visualId, url, publicUrl, status, number, orderId, onRenumbered }: { visualId: string; url?: string; publicUrl?: string; status?: string; number?: number; orderId?: string; onRenumbered?: (visualId: string) => void }) {
+  const [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const off = !!number && !!visualId && visualId !== String(number);
+  async function renumber() {
+    setBusy(true); setErr("");
+    const r = await fetch("/api/printavo/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId, action: "renumber" }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+    setBusy(false);
+    if (!r?.ok) return setErr(j.error || "Printavo didn't change the number.");
+    onRenumbered?.(j.visualId);
+  }
   return (
     <div className="pvs-strip" role="status">
       <span>In Printavo as <b>#{visualId}</b>{status ? <> · {status}</> : null}. Production runs from Printavo; the customer sees Printavo&apos;s invoice.</span>
       <span className="row" style={{ gap: 8 }}>
+        {off && orderId && <button type="button" className="btn primary sm" disabled={busy} onClick={renumber}>{busy ? "Changing…" : `Make it #${number} in Printavo`}</button>}
         {url && <a className="btn sm" href={url} target="_blank" rel="noreferrer">Open in Printavo</a>}
         {publicUrl && <button type="button" className="btn sm" onClick={() => navigator.clipboard?.writeText(publicUrl)} title={publicUrl}>Copy customer link</button>}
       </span>
+      {err && <div className="err" style={{ flexBasis: "100%" }}>{err}</div>}
     </div>
   );
 }
@@ -69,6 +81,7 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
                 <div className="stack" style={{ gap: 10 }}>
                   <div className="pvs-ok">Sent. It&apos;s <b>#{done.visualId}</b> in Printavo{done.status ? <>, set to <b>{done.status}</b></> : null}.</div>
                   {done.statusError && <div className="err">The status didn&apos;t change in Printavo ({done.statusError}). Set it there by hand.</div>}
+                  {done.numberError && <div className="err">Printavo kept its own number ({done.numberError}). Use &quot;Make it #{p?.number}&quot; on the order to try again.</div>}
                   {done.warnings && <div className="faint">Printavo noted: {done.warnings}</div>}
                   {done.sentTotal != null && done.ourTotal != null && Math.abs(done.sentTotal - done.ourTotal) > 0.01 && <div className="err">Printavo&apos;s total is {money(done.sentTotal)}; ours is {money(done.ourTotal)}. Check the prices in Printavo.</div>}
                   <div className="faint">The &quot;Order confirmation&quot; reply in the Inbox now links to Printavo&apos;s invoice page.</div>
@@ -92,7 +105,7 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
                     <div className="field" style={{ flex: "1 1 120px" }}><label htmlFor="pvs-po">PO</label><input id="pvs-po" value={f.po} onChange={set("po")} /></div>
                   </div>
                   <div className="field"><label htmlFor="pvs-note">Production note</label><textarea id="pvs-note" rows={3} value={f.productionNote} onChange={set("productionNote")} /></div>
-                  <div className="faint" style={{ fontSize: 12.5 }}>Goes over: garments and sizes, each print with its details, {p.mockups} mockup{p.mockups === 1 ? "" : "s"}, {p.files} production file{p.files === 1 ? "" : "s"} plus the art, setup fees. Total {money(p.total)}. Printavo gives it its own number; the nickname keeps #{p.number}.</div>
+                  <div className="faint" style={{ fontSize: 12.5 }}>Goes over: garments and sizes, each print with its details, {p.mockups} mockup{p.mockups === 1 ? "" : "s"}, {p.files} production file{p.files === 1 ? "" : "s"} plus the art, setup fees. Total {money(p.total)}. It gets the same number in Printavo: #{p.number}.</div>
                   <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
                     <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
                     <button type="button" className="btn primary" onClick={send} disabled={busy || !f.statusId || !f.productionDue || !f.customerDue}>{busy ? "Sending…" : "Send to Printavo"}</button>

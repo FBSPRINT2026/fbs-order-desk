@@ -41,7 +41,7 @@ export async function pv<T = Record<string, unknown>>(query: string, variables: 
 }
 
 /** The only Printavo changes the portal makes: what "Send to Printavo" needs for a 40,000-series order. */
-const TRANSITION_WRITES = new Set(["quoteCreate", "statusUpdate"]);
+const TRANSITION_WRITES = new Set(["quoteCreate", "statusUpdate", "quoteUpdate", "invoiceUpdate"]);
 /**
  * Sends one change to Printavo for a 40,000-series order (40,000-49,999: entered here during the move, produced from
  * Printavo until Nov 2). Anything else is refused before it leaves our server. Not retried: a write that may have
@@ -53,7 +53,10 @@ export async function transitionWrite<T = Record<string, unknown>>(query: string
   const m = body.match(/^mutation\b[^{]*\{\s*(\w+)\s*[(:{]/);
   const fields = [...body.matchAll(/(?:^|[{\s])(\w+)\s*\(/g)].map((x) => x[1]);
   if (!m || !TRANSITION_WRITES.has(m[1]) || (body.match(/\bmutation\b/g) || []).length !== 1 || /\bsubscription\b/.test(body) || fields.some((f) => /(Create|Update|Delete|Duplicate|Creates|Updates|Deletes)$/.test(f) && !TRANSITION_WRITES.has(f)))
-    throw new PrintavoError("Blocked: the portal only creates the quote and sets its status in Printavo.");
+    throw new PrintavoError("Blocked: the portal only creates the quote and sets its status and number in Printavo.");
+  // an update may only set the order's number (to match ours), nothing else
+  if (/^(quote|invoice)Update$/.test(m[1]) && Object.keys((variables.input || {}) as object).some((k) => k !== "visualId"))
+    throw new PrintavoError("Blocked: only the order number can be changed in Printavo.");
   return request<T>(query, variables, false);
 }
 
