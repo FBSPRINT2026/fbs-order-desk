@@ -8,7 +8,7 @@ import type { EODraft } from "@/lib/emailOrderShared";
  * pulled from the old mockup and sizes from the film in Dropbox; size / ink not known for sure stay "production
  * confirms". Then the Mockup Creator builds our mockup and opens the order.
  */
-export default function ArchiveReorder({ archivedId }: { archivedId: string }) {
+export default function ArchiveReorder({ archivedId, small }: { archivedId: string; small?: boolean }) {
   const [step, setStep] = useState(""), [err, setErr] = useState(""), [custId, setCustId] = useState("");
   async function go() {
     setErr(""); setStep("Copying the job…");
@@ -31,7 +31,7 @@ export default function ArchiveReorder({ archivedId }: { archivedId: string }) {
   }
   return (
     <>
-      <button type="button" className="btn primary" disabled={!!step} onClick={go} title="A new order with the same garments, sizes and prints; the art comes from the old mockup and the film">{step || "Reorder"}</button>
+      <button type="button" className={"btn primary" + (small ? " sm" : "")} disabled={!!step} onClick={go} title="A new order with the same garments, sizes and prints; the art comes from the old mockup and the film">{step || "Reorder"}</button>
       {err && <div className="err" style={{ flexBasis: "100%" }}>{err === "move" ? <>This customer isn&apos;t in the new system yet. <a href={`/shop/customers/${custId}`}>Move them first</a>, then Reorder.</> : err}</div>}
     </>
   );

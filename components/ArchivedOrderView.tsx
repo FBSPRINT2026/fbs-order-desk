@@ -18,7 +18,7 @@ const inkOn = (hex: string) => { const m = hex.replace("#", "").match(/^([0-9a-f
  * header with status, customer and dates, line item groups with size columns and their imprints and mockups,
  * then totals, payments, notes, files, tasks and messages.
  */
-export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref, audience = "shop" }: { o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string; /** "customer": the portal view (no internal details) */ audience?: "shop" | "customer" }) {
+export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref, audience = "shop", actions }: { o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string; /** "customer": the portal view (no internal details) */ audience?: "shop" | "customer"; /** buttons next to Print (the shop's Reorder) */ actions?: ReactNode }) {
   const [zoom, setZoom] = useState<PvFile | null>(null);
   // crew (production, receiving, shipping): the no-money view, quantities and what's ordered only
   const cash = useSeesMoney();
@@ -46,6 +46,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         <span className="pv-arch">Archived order</span>
         <span>{audience === "shop" ? <>Read-only, as it was in Printavo. Stored on our own servers (imported {stamp(importedAt)}).</> : <>This is a past order from our records.</>}</span>
         <span className="spacer" />
+        {actions}
         <button type="button" className="btn sm" onClick={() => window.print()}>Print</button>
       </div>
 

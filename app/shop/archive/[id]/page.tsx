@@ -48,7 +48,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
       <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
       <div style={{ marginTop: 10 }}><JobFiles job={{ kind: "a", id: row.id }} /></div>
       <div style={{ marginTop: 10 }}>
-        <ArchivedOrderView o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} />
+        <ArchivedOrderView o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} actions={row.kind === "invoice" ? <ArchiveReorder archivedId={row.id} small /> : null} />
       </div>
     </>
   );
