@@ -57,6 +57,17 @@ export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
       l.brand = (pl.brand || "").trim().slice(0, 40);
       l.color = (pl.color || "").trim().slice(0, 60);
       l.garment = (pl.description || "").split(/\r?\n/)[0].replace(new RegExp(`^${(pl.brand || "").replace(/[^\w ]/g, ".")}\\s*-?\\s*`, "i"), "").trim().slice(0, 120);
+      // older Printavo jobs often have the garment only in the description ("Next level 6210 - Forest Green")
+      if (!l.style || !l.color) {
+        for (const ln of (pl.description || "").split(/\r?\n/).slice(1, 6)) {
+          const m = ln.trim().match(/^(.*?)\b([A-Za-z]{0,4}\d{3,5}[A-Za-z]{0,4})\s*[-–:]\s*(.+)$/);
+          if (!m) continue;
+          if (!l.style) l.style = m[2].slice(0, 40);
+          if (!l.brand && m[1].trim()) l.brand = m[1].trim().slice(0, 40);
+          if (!l.color) l.color = m[3].trim().slice(0, 60);
+          break;
+        }
+      }
       for (const [k, q] of Object.entries(pl.sizes || {})) { const z = normSize(k); const n = Math.floor(+q || 0); if (z && n > 0) l.sizes[z] = (l.sizes[z] || 0) + n; }
       if (!Object.keys(l.sizes).length && !(pl.items || 0)) continue;
       if (!Object.keys(l.sizes).length && pl.items) { l.sizes.OS = Math.floor(+pl.items); l.oneSize = true; }
@@ -275,7 +286,9 @@ ${String(a.body || "").slice(0, 12000)}
     tool: tool((settings.finishing || []).map((f) => f.id)), system, prompt, images, documents,
   });
   if (!r.ok) return { ok: false, error: r.error };
-  const p = r.data;
+  // the model sometimes wraps its answer as { order: { ... } } (Peticolas, Oct 8: an empty draft): unwrap it
+  const raw = r.data as AiOrder & { order?: AiOrder };
+  const p: AiOrder = !raw.kind && raw.order && typeof raw.order === "object" ? raw.order : raw;
   const files: EOFile[] = atts.slice(0, 12).map((f, i) => {
     const t = (p.files || []).find((x) => x.file === i + 1);
     const role: EOFile["role"] = sigs.has(f.path) || t?.role === "signature" ? "signature" : t?.role === "size_breakdown" ? "sheet" : t?.role === "art" || t?.role === "mockup" ? t.role : "other";
@@ -286,7 +299,9 @@ ${String(a.body || "").slice(0, 12000)}
   const art: Record<string, string> = {}, mockups: Record<string, string[]> = {};
   const finIds = new Set((settings.finishing || []).map((f) => f.id));
   let groups: Group[] = [];
-  const job = p.kind === "reorder" && p.reorder_of ? past[p.reorder_of - 1] : undefined;
+  // the J number of the past job; the model sometimes gives the job's own number instead (#33729), so that's matched too
+  const ro = Math.floor(+(p.reorder_of || 0));
+  const job = p.kind === "reorder" && ro > 0 ? (ro <= past.length ? past[ro - 1] : past.find((j) => new RegExp(`^#${ro}\\b`).test(j.label))) : undefined;
   if (job) {
     // the past job, copied, with the new quantities on the lines they named
     groups = JSON.parse(JSON.stringify(job.groups)) as Group[];
@@ -295,7 +310,13 @@ ${String(a.body || "").slice(0, 12000)}
     if (named.length) {
       const keep = new Set<GLine>();
       for (const x of named) {
-        const t = flat[x.reorder_line! - 1].l;
+        const at = flat[x.reorder_line! - 1];
+        let t = at.l;
+        // the same past line in more colors (Sit Down shirts: one old line, four new colors): a copy for each
+        if (keep.has(t)) { t = { ...JSON.parse(JSON.stringify(t)), id: uid(), sizes: {} }; at.g.lines.push(t); }
+        // an old Printavo line with the garment only in its description: take the style the AI read from it
+        if (!t.style && x.style) t.style = x.style.trim().slice(0, 40);
+        if (!t.brand && x.brand) t.brand = x.brand.trim().slice(0, 40);
         const sizes: GLine["sizes"] = {};
         for (const [raw, q] of Object.entries(x.sizes || {})) { const z = normSize(raw); const n = Math.max(0, Math.min(100000, Math.floor(+q || 0))); if (z && n) sizes[z] = (sizes[z] || 0) + n; }
         if (Object.keys(sizes).length) t.sizes = sizes;
