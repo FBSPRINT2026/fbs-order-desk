@@ -25,6 +25,7 @@ const PV_SIZE: Record<string, string> = {
 };
 /** Printavo's card surcharge fee: Printavo-only (customers pay there during the move), never brought back to our order */
 export const CARD_FEE = "Credit Card Processing Surcharge - ACH Available on Request";
+const CARD_RE = /credit card processing surcharge/i;
 const day = (d: string | null | undefined) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : "");
 
 export async function printavoStatuses(): Promise<PvStatus[]> {
@@ -308,7 +309,19 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
     fees: p.fees.map((f) => ({ description: f.description, amount: f.amount, quantity: f.quantity, unitPrice: f.unitPrice, pct: f.pct })),
   };
   const st = (o.printavo_state || {}) as Record<string, unknown>;
-  await admin.from("orders").update({ printavo_visual_id: p.visualId, printavo_state: { ...st, pv: snap, status: p.status.name, url: p.urls.url || st.url, publicUrl: p.urls.publicUrl || st.publicUrl, ...(fingerprint ? { fp: fingerprint } : {}) } }).eq("id", orderId);
+  // the card surcharge is always worked out in Printavo: taken as it is, no Accept needed
+  const { data: full } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
+  const card = snap.fees.find((f) => CARD_RE.test(f.description));
+  const fees0 = ((full?.fees || []) as { label: string; amount: number | "" }[]);
+  const mine = fees0.find((f) => CARD_RE.test(f.label));
+  const cardPatch: Record<string, unknown> = {};
+  if (full && (card ? !mine || Math.abs(+(mine.amount || 0) - card.amount) > 0.005 : !!mine)) {
+    const fees = [...fees0.filter((f) => !CARD_RE.test(f.label)), ...(card ? [{ label: card.description.trim(), amount: card.amount }] : [])];
+    const { data: sset } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    cardPatch.fees = fees;
+    cardPatch.total = calcOrder({ ...(full as Order), fees }, mergeSettings(sset?.data)).total;
+  }
+  await admin.from("orders").update({ ...cardPatch, printavo_visual_id: p.visualId, printavo_state: { ...st, pv: snap, status: p.status.name, url: p.urls.url || st.url, publicUrl: p.urls.publicUrl || st.publicUrl, ...(fingerprint ? { fp: fingerprint } : {}) } }).eq("id", orderId);
   return snap;
 }
 
