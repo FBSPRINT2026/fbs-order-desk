@@ -11,7 +11,8 @@ import { LOCATIONS, METHODS, orderGroups, type Imprint, type Order, type Setting
  * (size, location, inks, colors, drop) that staff can apply with a click.
  */
 export type ReorderFix = { imprint_id: string; field: "size" | "location" | "inks" | "colors" | "drop"; value: string; why: string };
-export type ReorderCheck = { verdict: "good" | "check" | "problems"; summary: string; issues: { severity: "high" | "medium" | "low"; text: string }[]; fixes: ReorderFix[]; at?: string; model?: string };
+export type ReorderCheck = { verdict: "good" | "check" | "problems"; summary: string; issues: { severity: "high" | "medium" | "low"; text: string }[]; fixes: ReorderFix[]; at?: string; model?: string;
+  /** what staff told it about the job ("we used the LA Lakers PMS colors"): kept and used on every check */ told?: string };
 
 const MAX_IMG = 3_600_000; // the API's 5 MB limit, after base64
 
@@ -24,7 +25,7 @@ async function fileB64(admin: SupabaseClient, path: string) {
 const imgType = (p: string) => (/\.png$/i.test(p) ? "image/png" : /\.jpe?g$/i.test(p) ? "image/jpeg" : /\.webp$/i.test(p) ? "image/webp" : /\.gif$/i.test(p) ? "image/gif" : null);
 const SIZE = (k: string) => k.replace(/^size_/, "").toUpperCase();
 
-export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: string, by: string): Promise<{ ok: true; check: ReorderCheck } | { ok: false; error: string }> {
+export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: string, by: string, told = ""): Promise<{ ok: true; check: ReorderCheck } | { ok: false; error: string }> {
   const { data: o } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
   if (!o) return { ok: false, error: "Order not found." };
   // the job it copies: "Reorder of Printavo #31174" / "Reorder of #40012"
@@ -90,6 +91,7 @@ export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: 
     o.notes ? `Order notes: ${o.notes}` : "",
     "",
     mk ? "" : "No mockup has been made for the new order yet.",
+    told.trim() ? `\nWHAT THE SHOP TOLD YOU ABOUT THIS JOB (facts, use them): ${told.trim()}` : "",
     `Files attached: ${[...documents.map((d) => d.label), ...images.map((i) => i.label)].join(" | ") || "none"}`,
   ].filter((x) => x !== "").join("\n");
 
@@ -116,13 +118,14 @@ Your job: check a REORDER before it goes to the customer and the press. The cust
 - Inks: the ink colors should match the art's colors (name PMS colors when you can tell, e.g. Yellow / PMS 123 C, Violet / PMS 2685 C); the number of colors should match the art and the old job's screen fees (2 new screens = 2 colors).
 - Our new mockup (if attached): the art looks like the old job's, sits where it should, and its size looks right on that garment.
 - Anything in the old job's notes or nickname that still applies (e.g. "No neck labels").
+When the shop tells you something about the job (e.g. "we used the LA Lakers PMS colors", "the back was 3 inches"), treat it as fact: work out what it means from what you know (a team's official PMS colors, matched to the art's colors) and turn it into fixes on the prints.
 The shop's print locations: ${LOCATIONS.join(", ")}.
 Only list real problems, most important first. Use the print ids given in the order for fixes. If everything lines up, say so and return no issues.`,
     prompt,
   });
   if (!r.ok) return { ok: false, error: r.error };
   const ids = new Set(ims.map((i) => i.id));
-  const check: ReorderCheck = { ...r.data, issues: r.data.issues || [], fixes: (r.data.fixes || []).filter((f) => ids.has(f.imprint_id)), at: new Date().toISOString(), model: r.model };
+  const check: ReorderCheck = { ...r.data, issues: r.data.issues || [], fixes: (r.data.fixes || []).filter((f) => ids.has(f.imprint_id)), at: new Date().toISOString(), model: r.model, ...(told.trim() ? { told: told.trim().slice(0, 1000) } : {}) };
   // the latest check is kept on the order (one row, updated each time)
   const row = { kind: "reorder_check", dedupe_key: `reorder_check:${orderId}`, source: "ai", status: "done", priority: 2, order_id: orderId, customer_id: o.customer_id, title: `Reorder check #${o.number}`, body: check.summary, payload: check, model: r.model, run_id: r.runId, updated_at: check.at };
   const { data: had } = await admin.from("ai_suggestions").select("id").eq("dedupe_key", row.dedupe_key).limit(1).maybeSingle();

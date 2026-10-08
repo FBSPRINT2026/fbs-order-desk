@@ -203,7 +203,7 @@ export async function aiProcessEmail(activityId: string) {
 }
 
 /** Reorder check: the AI compares this reorder with the old job it copies (files, film, art, our mockup). */
-export async function aiReorderCheck(orderId: string, onlyIfNone = false) {
+export async function aiReorderCheck(orderId: string, onlyIfNone = false, told?: string) {
   try {
     const { admin, email } = await staff();
     if (onlyIfNone) {
@@ -215,7 +215,10 @@ export async function aiReorderCheck(orderId: string, onlyIfNone = false) {
     }
     const st = await aiState(admin);
     if (!st.ready) return { ok: false as const, off: true, error: st.reason };
-    const r = await reorderCheck(admin, st.settings, orderId, email);
+    // what staff told it before is kept unless they change it
+    let say = told;
+    if (say == null) { const { data: had } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", `reorder_check:${orderId}`).limit(1).maybeSingle(); say = (had?.payload as ReorderCheck | undefined)?.told || ""; }
+    const r = await reorderCheck(admin, st.settings, orderId, email, say);
     return r.ok ? { ok: true as const, check: r.check } : { ok: false as const, error: r.error };
   } catch (e) { return fail(e); }
 }

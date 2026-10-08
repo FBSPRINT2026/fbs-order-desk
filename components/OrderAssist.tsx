@@ -93,13 +93,15 @@ function ReorderCheckBox({ orderId, save }: { orderId: string; save: () => Promi
   const [c, setC] = useState<ReorderCheck | null>(null);
   const [busy, setBusy] = useState<"" | "run" | number>("");
   const [note, setNote] = useState("");
+  const [told, setTold] = useState<string | null>(null);
   async function run(onlyIfNone: boolean) {
     setBusy("run"); setNote("");
     if (!onlyIfNone) await save();
-    const r = await aiReorderCheck(orderId, onlyIfNone);
+    const r = await aiReorderCheck(orderId, onlyIfNone, onlyIfNone || told == null ? undefined : told);
     setBusy("");
     if (!r.ok) return setNote(r.error || "The reorder check didn't work.");
     setC(r.check);
+    setTold(r.check.told || "");
   }
   useEffect(() => { void run(true); }, [orderId]); // eslint-disable-line react-hooks/exhaustive-deps
   async function apply(i: number, f: ReorderFix) {
@@ -131,6 +133,10 @@ function ReorderCheckBox({ orderId, save }: { orderId: string; save: () => Promi
           {c.at && <div className="faint" style={{ fontSize: 12 }}>Checked {new Date(c.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>}
         </>
       )}
+      <label className="stack" style={{ gap: 4, fontSize: 13 }}>
+        <span className="muted">Tell it what you know about this job (it looks the rest up)</span>
+        <textarea rows={2} value={told || ""} placeholder='e.g. "We used the LA Lakers PMS colors" or "The back print was 3 inches wide"' onChange={(e) => setTold(e.target.value)} />
+      </label>
       <div className="row" style={{ gap: 6 }}>
         <button type="button" className="btn sm ghost" onClick={() => run(false)} disabled={busy !== ""}>{busy === "run" ? "Checking…" : c ? "Check again" : "Run the reorder check"}</button>
         {note && <span className="ai-off">{note}</span>}
