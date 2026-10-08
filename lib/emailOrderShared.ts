@@ -27,6 +27,8 @@ export type EODraft = {
   /** the past job a reorder copies (PastJob.ref) */
   reorderOf: string | null;
   questions: string[];
+  /** what the reorder's art pull couldn't do (no film found, flat mockup…): for production, not the customer */
+  artNotes?: string[];
   files: EOFile[];
 };
 export const ROLE_LABEL: Record<EOFile["role"], string> = { art: "Art", mockup: "Mockup", sheet: "Size sheet", signature: "Email signature (ignored)", other: "Other" };

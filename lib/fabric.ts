@@ -17,7 +17,7 @@ const STYLES: [RegExp, number, number, string][] = [
   [/^(G?5000|G?5400|G?2000|G?2400|5000B|2000B|G500|G540|G200|G240|H000)$/i, 0, 50, "Gildan Heavy/Ultra Cotton: 100% cotton; heathers 50/50"],
   [/^(G?64000|64000B|G640|6400L|64400)$/i, 0, 65, "Gildan Softstyle: 100% cotton; heathers 65/35 poly/cotton"],
   [/^(G?8000|8000B|G800|G?8800|G?12000|G?12500|G?18000|G?18500|G?18600|18500B|G180|G185|G186)$/i, 50, 50, "Gildan DryBlend / Heavy Blend: 50/50"],
-  [/^(3001|3001C|3001Y|3001Y?B|3005|3480|3501|6004|8800)$/i, 0, 48, "Bella+Canvas Airlume: 100% cotton; Heather CVC 52/48"],
+  [/^(3001|3001C|3001Y|3001Y?B|3001T|3005|3480|3501|6004|8800|100B|134B|3001B)$/i, 0, 48, "Bella+Canvas Airlume: 100% cotton; Heather CVC 52/48"],
   [/^(3413|3415|8413|3711|3719|3739)$/i, 50, 50, "Bella+Canvas tri-blend / sponge fleece: about 50% poly"],
   [/^(3600|3602|3633|3310|6210|6010)$/i, 0, 40, "Next Level: 100% cotton; CVC 60/40"],
   [/^(1717|1566|6014|1467|C1717)$/i, 0, 0, "Comfort Colors: 100% cotton"],
@@ -29,7 +29,8 @@ const STYLES: [RegExp, number, number, string][] = [
 ];
 const HEATHER = /heather|heathered|marble|tri|melange|sport\s*gr[ae]y|athletic\s*gr[ae]y|graphite|oxford|charcoal\s*h/i;
 const KEYWORDS: [RegExp, number, string][] = [
-  [/100\s*%\s*poly|polyester|performance|dri[- ]?fit|dry\s*fit|posi[- ]?charge|competitor|moisture|wicking|athletic\s*tee|jersey|mesh/i, 100, "performance / polyester"],
+  // ("jersey" alone is the knit of most cotton tees: only sports jerseys count)
+  [/100\s*%\s*poly|polyester|performance|dri[- ]?fit|dry\s*fit|posi[- ]?charge|competitor|moisture|wicking|athletic\s*tee|(?:athletic|sports?|basketball|football|baseball|hockey|soccer|replica|practice)\s*jersey|mesh/i, 100, "performance / polyester"],
   [/tri[- ]?blend/i, 50, "tri-blend"],
   [/50\s*\/\s*50|dryblend|dry\s*blend|nublend|heavy\s*blend|ecosmart|blend|fleece|hood|sweatshirt|crewneck\s*sweat/i, 50, "cotton/poly blend"],
   [/\bcvc\b|60\s*\/\s*40/i, 40, "CVC 60/40"],

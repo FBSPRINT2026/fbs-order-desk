@@ -18,13 +18,14 @@ export default function ArchiveReorder({ archivedId, small }: { archivedId: stri
       if (!r.ok || !j.draft || !j.customer) throw new Error(j.error || "Couldn't copy the job.");
       setCustId(j.customer.id);
       if (!j.customer.moved_at) throw new Error("move");
-      const { draft, films } = await pullReorderArt(j.draft, { customerId: j.customer.id, jobLabel: j.job?.label, jobDate: j.job?.date, onStep: setStep });
+      const { draft, films, notes } = await pullReorderArt(j.draft, { customerId: j.customer.id, jobLabel: j.job?.label, jobDate: j.job?.date, onStep: setStep });
       setStep("Creating the order…");
       const c = await fetch("/api/archive/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: j.customer.id, draft, status: "quote" }) });
       const k = await c.json().catch(() => ({})) as { id?: string; error?: string };
       if (!c.ok || !k.id) throw new Error(k.error || "Couldn't create the order.");
       await attachFilms(k.id, films);
       const first = draft.groups.find((g) => g.imprints.some((x) => x.design_id));
+      if (notes.length) { setStep(notes.join(" ")); await new Promise((res) => setTimeout(res, 2500)); }
       setStep("Opening it…");
       location.assign(first ? `/shop/artwork/mockup?order=${k.id}&group=${first.id}&auto=1` : `/shop/orders/${k.id}`);
     } catch (e) { setStep(""); setErr(e instanceof Error ? e.message : String(e)); }

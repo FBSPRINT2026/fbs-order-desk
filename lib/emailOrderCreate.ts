@@ -125,9 +125,17 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   if (error || !o) return { ok: false, error: error?.message || "Couldn't create the order." };
   const oid = o.id as string;
   await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}${a ? ", from the customer's email" : " (Reorder on the archived job)"}` : "From the customer's email (Inbox → Create order)", actor: by });
-  if (d.questions?.length) await admin.from("order_internal").upsert({ order_id: oid, production_notes: `Questions for the customer${a ? " (from the email)" : ""}:\n- ${d.questions.join("\n- ")}` });
+  const pn = [
+    d.questions?.length ? `Questions for the customer${a ? " (from the email)" : ""}:\n- ${d.questions.join("\n- ")}` : "",
+    d.artNotes?.length ? `Reorder art:\n- ${d.artNotes.join("\n- ")}` : "",
+  ].filter(Boolean).join("\n\n");
+  if (pn) await admin.from("order_internal").upsert({ order_id: oid, production_notes: pn.slice(0, 4000) });
   if (priceType === "wholesale" && d.goods?.supplied) {
     await admin.from("order_goods").upsert({ order_id: oid, status: "waiting", supplier: (d.goods.supplier || "").slice(0, 60), expected: [d.goods.expected, d.goods.note].filter(Boolean).join(" · ").slice(0, 200), updated_by: by, updated_at: new Date().toISOString() });
+  }
+  // a reorder of an old Printavo job: its mockups (ours) go in Production files for reference
+  for (const g of groups) for (const f of [...(g.pvRef || []), ...(g.pvArt || [])]) {
+    await admin.from("art_files").insert({ order_id: oid, name: `Old mockup: ${f.name}`, file_path: f.path, file_type: /\.pdf$/i.test(f.path) ? "application/pdf" : /\.png$/i.test(f.path) ? "image/png" : "image/jpeg" });
   }
   // the customer's own documents (size sheet, spreadsheet, PDF order form) go in the order's Production notes & files
   // (art_files, the side panel), so the shop has them with the job; pictures are art / mockups, signatures left out

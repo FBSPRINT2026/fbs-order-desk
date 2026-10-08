@@ -88,7 +88,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
     const w = mode === "new" ? window.open("", "_blank") : null;
     setBusy("create"); setErr("");
     let dd = d, films: { id: string; name: string }[] = [];
-    if (d.groups.some((g) => g.pvArt?.length) && data?.customer?.id) {
+    if (d.kind === "reorder" && d.reorderOf && data?.customer?.id && d.groups.some((g) => g.imprints.some((im) => !im.design_id))) {
       const job = data.past.find((p) => p.ref === d.reorderOf);
       try { const r = await pullReorderArt(d, { customerId: data.customer.id, jobLabel: job?.label, jobDate: job?.date, onStep: setStep }); dd = r.draft; films = r.films; setD(dd); } catch (e) { setErr("Couldn't pull the art from the old mockup (" + (e instanceof Error ? e.message : String(e)) + "). The order is made without it."); }
     }

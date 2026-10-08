@@ -134,8 +134,8 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art"): Promise<
  * A film file (FBS Film Folder/<customer>/<job>.ai): the size of each print on it, from every artboard. Registration
  * marks and labels (under an inch tall or wide) are left out. Films are at print size, so these are the real sizes.
  */
-export type FilmPiece = { page: number; widthIn: number; heightIn: number };
-export async function measureFilm(buf: ArrayBuffer): Promise<FilmPiece[]> {
+export type FilmPiece = { page: number; widthIn: number; heightIn: number; /** the art itself (black), when asked for */ file?: File };
+export async function measureFilm(buf: ArrayBuffer, withArt = false, name = "film"): Promise<FilmPiece[]> {
   const doc = await openDoc(buf);
   const out: FilmPiece[] = [];
   for (let n = 1; n <= Math.min(doc.numPages, 12); n++) {
@@ -148,7 +148,20 @@ export async function measureFilm(buf: ArrayBuffer): Promise<FilmPiece[]> {
     await page.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(0,0,0,0)" }).promise;
     for (const r of pieces(c, 0.15 * 72 * scale)) {
       const w = (r.x1 - r.x0) / scale / 72, h = (r.y1 - r.y0) / scale / 72;
-      if (w >= 1 && h >= 1) out.push({ page: n, widthIn: Math.round(w * 100) / 100, heightIn: Math.round(h * 100) / 100 });
+      if (w < 1 || h < 1) continue;
+      const piece: FilmPiece = { page: n, widthIn: Math.round(w * 100) / 100, heightIn: Math.round(h * 100) / 100 };
+      if (withArt) {
+        // the art at about 300 dpi of its real size (films are 1:1), at most 4000 px
+        const s2 = Math.min(300 / 72, 4000 / Math.max(w * 72, h * 72));
+        const k = s2 / scale, pad = 6;
+        const vp2 = page.getViewport({ scale: s2 });
+        const cc = document.createElement("canvas");
+        cc.width = Math.round((r.x1 - r.x0) * k + pad * 2); cc.height = Math.round((r.y1 - r.y0) * k + pad * 2);
+        await page.render({ canvasContext: cc.getContext("2d")!, viewport: vp2, background: "rgba(0,0,0,0)", transform: [1, 0, 0, 1, -(r.x0 * k - pad), -(r.y0 * k - pad)] }).promise;
+        const blob = await new Promise<Blob | null>((res) => cc.toBlob(res, "image/png"));
+        if (blob) piece.file = new File([blob], `${name} film ${out.length + 1}.png`, { type: "image/png" });
+      }
+      out.push(piece);
     }
   }
   return out;

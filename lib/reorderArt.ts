@@ -12,14 +12,14 @@ import { bodyOf, REF_BODY } from "@/lib/garmentBody";
  *  2. the job's film in Dropbox (FBS Film Folder/<customer>) is found and measured: its size replaces the reading.
  * Returns the films used, to copy onto the new order's production files (attachFilms).
  */
-export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLabel?: string; jobDate?: string; onStep?: (s: string) => void }): Promise<{ draft: EODraft; films: { id: string; name: string }[] }> {
-  const films: { id: string; name: string }[] = [];
-  if (!x.groups.some((g) => g.pvArt?.length && g.imprints.some((im) => !im.design_id))) return { draft: x, films };
+export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLabel?: string; jobDate?: string; onStep?: (s: string) => void }): Promise<{ draft: EODraft; films: { id: string; name: string }[]; notes: string[] }> {
+  const films: { id: string; name: string }[] = [], notes: string[] = [];
+  if (!x.groups.some((g) => g.imprints.some((im) => !im.design_id))) return { draft: x, films, notes };
   const y = JSON.parse(JSON.stringify(x)) as EODraft, sb = createClient();
   const pulled: { imId: string; widthIn: number; heightIn: number }[] = [];
-  o.onStep?.("Pulling the art from the old Printavo mockup…");
   for (const g of y.groups) {
     if (!g.pvArt?.length || g.imprints.every((im) => im.design_id)) continue;
+    o.onStep?.("Pulling the art from the old Printavo mockup…");
     let got: ArtPiece[] = [], from = "";
     for (const f of g.pvArt) {
       const { data: su } = await sb.storage.from("proofs").createSignedUrl(f.path, 600);
@@ -29,6 +29,7 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
       got = await artFromMockupPdf(await res.arrayBuffer(), y.nickname || "Art").catch(() => []);
       if (got.length) { from = f.name; break; }
     }
+    if (g.pvArt?.length && !got.length) notes.push("The old mockup has no separate art to pull (it's one flat picture).");
     // the mockup photo shows the garment the size of an adult tee: on a toddler or baby piece the art is smaller
     const body = bodyOf({ sizes: [...new Set(g.lines.flatMap((l) => Object.keys(l.sizes || {})))] });
     const kw = body.widthIn / REF_BODY.widthIn < 0.97 ? body.widthIn / REF_BODY.widthIn : 1, kl = body.lengthIn / REF_BODY.lengthIn < 0.97 ? body.lengthIn / REF_BODY.lengthIn : 1;
@@ -53,18 +54,23 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
       pulled.push({ imId: im.id, widthIn: pc.widthIn, heightIn: pc.heightIn });
     }
   }
-  // the film folder in Dropbox has the real print sizes: find this job's film and use its sizes
-  if (pulled.length) {
+  // the film folder in Dropbox has the real print sizes (and the art itself when the old mockup didn't give it up)
+  const bare = y.groups.flatMap((g) => g.imprints.filter((im) => !im.design_id && !/sleeve/i.test(im.location)).map((im) => ({ g, im })));
+  if (pulled.length || bare.length) {
     o.onStep?.("Looking for the film in Dropbox…");
     const q = y.nickname || (o.jobLabel || "").replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "");
     const r = await fetch(`/api/dropbox/film?customer=${encodeURIComponent(o.customerId)}&q=${encodeURIComponent(q)}&date=${encodeURIComponent(o.jobDate || "")}`).catch(() => null);
-    const j = r?.ok ? await r.json().catch(() => null) as { films?: { id: string; name: string; score: number }[] } | null : null;
-    // .ai / .pdf films can be measured (EPS and PSD can't be read here)
-    for (const f of (j?.films || []).filter((z) => z.score > 0 && /\.(ai|pdf)$/i.test(z.name)).slice(0, 3)) {
+    const j = r?.ok ? await r.json().catch(() => null) as { films?: { id: string; name: string; score: number }[]; folder?: string | null; error?: string } | null : null;
+    if (!j) notes.push("Dropbox couldn't be searched for the film.");
+    else if (!j.folder) notes.push("No film folder found for this customer in Dropbox (link it on the customer page).");
+    const cands = (j?.films || []).filter((z) => z.score > 0 && /\.(ai|pdf)$/i.test(z.name)).slice(0, 3);
+    if (j?.folder && !cands.length) notes.push(`No film in ${j.folder.replace(/^\/FBS Film Folder\//i, "")} matches "${q}".`);
+    for (const f of cands) {
       const c = await fetch("/api/dropbox/film", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id }) }).then((z) => z.json()).catch(() => null) as { url?: string } | null;
       if (!c?.url) continue;
       let fp: FilmPiece[] = [];
-      try { fp = await measureFilm(await (await fetch(c.url)).arrayBuffer()); } catch { continue; }
+      try { fp = await measureFilm(await (await fetch(c.url)).arrayBuffer(), bare.length > 0, y.nickname || "Art"); } catch { notes.push(`${f.name} couldn't be read (save it PDF-compatible in Illustrator).`); continue; }
+      if (!fp.length) continue;
       let hit = false;
       for (const pu of pulled) {
         const m = filmFor(pu.widthIn, pu.heightIn, fp);
@@ -77,10 +83,26 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
           im.notes = `${(im.notes || "").replace(/size \([\d.]+" wide\) and /, "")}. Size from the film: ${f.name} (${m.widthIn}" × ${m.heightIn}")`.slice(0, 300);
         }
       }
+      // prints the mockup gave nothing for: the film's art (the biggest pieces first, fronts first) at its real size
+      const left = fp.filter((p) => p.file).sort((a, b) => b.widthIn * b.heightIn - a.widthIn * a.heightIn);
+      for (const { g, im } of bare.sort((a, b) => Number(/back|yoke/i.test(a.im.location)) - Number(/back|yoke/i.test(b.im.location)))) {
+        const p = left.shift(); if (!p?.file) break;
+        hit = true;
+        const dsg = await uploadDesign(sb, { file: p.file, customer_id: o.customerId, name: `${y.nickname || "Art"} (from film)`, colors: im.colors || 1, inks: im.inks || "", notes: `From the film ${f.name}`, method: im.method });
+        im.design_id = dsg.id;
+        im.size = `${Math.round(p.widthIn * 4) / 4}" wide`;
+        // the location by size, judged as on an adult tee (a 5" print on a onesie is its full front)
+        const body = bodyOf({ sizes: [...new Set(g.lines.flatMap((l) => Object.keys(l.sizes || {})))] });
+        const adultW = p.widthIn / Math.min(1, body.widthIn / REF_BODY.widthIn);
+        if (!/back|yoke/i.test(im.location)) im.location = adultW > 8 ? "Full Front" : adultW > 5 ? "Medium Front" : "Center Chest";
+        im.confirm = { size: true, ink: true, why: `Art and size (${p.widthIn}" × ${p.heightIn}") from the film ${f.name}; placement is the standard one and the ink isn't on file` };
+        im.notes = [im.notes, `Art and size from the film: ${f.name} (${p.widthIn}" × ${p.heightIn}")`].filter(Boolean).join(". ").slice(0, 300);
+      }
       if (hit) { films.push({ id: f.id, name: f.name }); break; }
     }
   }
-  return { draft: y, films };
+  if (notes.length) y.artNotes = notes;
+  return { draft: y, films, notes };
 }
 
 /** the films a reorder used, into the order's production files */

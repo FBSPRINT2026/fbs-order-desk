@@ -74,7 +74,8 @@ export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
       lines.push(l);
       for (const m of pl.mockups || []) {
         const p = m.full ? row.files?.[m.full] : "";
-        if (p && /\.(png|jpe?g|gif|webp)$/i.test(p)) mockups.push({ path: p, name: `Printavo #${row.visual_id} mockup` });
+        // our own old mockups (not the customer's): kept for reference, never stamped "customer supplied"
+        if (p && /\.(png|jpe?g|gif|webp)$/i.test(p)) mockups.push({ path: p, name: `Printavo #${row.visual_id} mockup${p.match(/\.[a-z]+$/i)?.[0] || ".png"}` });
         // our old Illustrator mockup sheets: the art is pulled out of them when the reorder is made
         else if (p && /\.pdf$/i.test(p)) pdfs.push({ path: p, name: `Printavo #${row.visual_id} mockup.pdf` });
       }
@@ -92,7 +93,7 @@ export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
       im.confirm = { size: true, ink: true, why: `Reorder of Printavo #${row.visual_id}, which has no size or ink on file` };
       return im;
     });
-    out.push({ id: uid(), lines, imprints, customerMockups: mockups.slice(0, 6), ...(pdfs.length ? { pvArt: [...new Map(pdfs.map((x) => [x.path, x])).values()].slice(0, 3) } : {}) });
+    out.push({ id: uid(), lines, imprints, ...(mockups.length ? { pvRef: [...new Map(mockups.map((x) => [x.path, x])).values()].slice(0, 6) } : {}), ...(pdfs.length ? { pvArt: [...new Map(pdfs.map((x) => [x.path, x])).values()].slice(0, 3) } : {}) });
   }
   return out;
 }
