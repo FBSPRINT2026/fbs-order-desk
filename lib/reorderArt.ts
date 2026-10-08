@@ -1,7 +1,7 @@
 "use client";
 import { createClient } from "@/lib/supabase/client";
 import { uploadDesign } from "@/lib/designs";
-import { artFromMockupPdf, artShape, filmFor, measureFilm, type ArtPiece, type FilmPiece } from "@/lib/printavoArt";
+import { artFromArtPdf, artFromMockupPdf, artShape, filmFor, measureFilm, type ArtPiece, type FilmPiece } from "@/lib/printavoArt";
 import type { EODraft } from "@/lib/emailOrderShared";
 import { bodyOf, REF_BODY } from "@/lib/garmentBody";
 
@@ -47,15 +47,35 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
     if (!g.pvArt?.length || g.imprints.every((im) => im.design_id)) continue;
     o.onStep?.("Pulling the art from the old Printavo mockup…");
     let got: ArtPiece[] = [], from = "";
+    const bufs: { f: { path: string; name: string }; buf: ArrayBuffer }[] = [];
     for (const f of g.pvArt) {
       const { data: su } = await sb.storage.from("proofs").createSignedUrl(f.path, 600);
       if (!su?.signedUrl) continue;
       const res = await fetch(su.signedUrl).catch(() => null);
       if (!res?.ok) continue;
-      got = await artFromMockupPdf(await res.arrayBuffer(), y.nickname || "Art").catch(() => []);
+      const buf = await res.arrayBuffer();
+      bufs.push({ f, buf: buf.slice(0) });
+      got = await artFromMockupPdf(buf, y.nickname || "Art").catch(() => []);
       if (got.length) { from = f.name; break; }
     }
-    if (g.pvArt?.length && !got.length) notes.push("The old mockup has no separate art to pull (it's one flat picture).");
+    // not a mockup sheet: the PDF is the art itself (the customer's Illustrator file); the film says how big it printed
+    if (!got.length) {
+      const open = g.imprints.filter((im) => !im.design_id && !/sleeve/i.test(im.location))
+        .sort((a, b) => Number(/back|yoke/i.test(a.location)) - Number(/back|yoke/i.test(b.location)));
+      for (const { f, buf } of bufs) {
+        if (!open.length) break;
+        const art = await artFromArtPdf(buf, y.nickname || "Art").catch(() => null);
+        if (!art) continue;
+        const im = open.shift()!, job = f.name.replace(/ mockup\.\w+$/i, "");
+        const dsg = await uploadDesign(sb, { file: art.file, customer_id: o.customerId, name: y.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `The original art from ${job}`, method: im.method });
+        im.design_id = dsg.id;
+        im.notes = [im.notes, `Art: the original from ${job}`].filter(Boolean).join(". ").slice(0, 300);
+        im.confirm = { size: true, ink: true, why: `Reorder of ${job}: the art is the original; no size or ink on file` };
+        pulled.push({ imId: im.id, widthIn: 1, heightIn: art.ratio, sizeKnown: false });
+      }
+      if (g.imprints.some((im) => !im.design_id && !/sleeve/i.test(im.location))) notes.push("The old job's PDF has no art that could be pulled out of it.");
+      continue;
+    }
     // the mockup photo shows the garment the size of an adult tee: on a toddler or baby piece the art is smaller
     const body = bodyOf({ sizes: [...new Set(g.lines.flatMap((l) => Object.keys(l.sizes || {})))] });
     const kw = body.widthIn / REF_BODY.widthIn < 0.97 ? body.widthIn / REF_BODY.widthIn : 1, kl = body.lengthIn / REF_BODY.lengthIn < 0.97 ? body.lengthIn / REF_BODY.lengthIn : 1;

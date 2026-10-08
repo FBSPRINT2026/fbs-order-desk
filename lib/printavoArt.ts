@@ -201,3 +201,29 @@ export async function artShape(blob: Blob): Promise<{ ratio: number } | null> {
   if (clear < w * h * 0.1 || x1 < x0) return null;
   return { ratio: (y1 - y0 + 1) / (x1 - x0 + 1) };
 }
+
+/**
+ * An old job's PDF that is the art itself, not a mockup sheet (the customer's Illustrator file: "LA Shakers Final.pdf",
+ * the logo on an empty page, no shirt photos). The first page, drawn on a clear background at about 3000 px and cropped
+ * to the art. Null when the PDF has shirt photos (a mockup) or nothing on a clear background.
+ */
+export async function artFromArtPdf(buf: ArrayBuffer, name = "art"): Promise<{ file: File; ratio: number } | null> {
+  const page = await openPage(buf);
+  const vp1 = page.getViewport({ scale: 1 });
+  const scale = Math.min(3000 / Math.max(vp1.width, vp1.height), 8);
+  const { canvas: c, photos } = await drawWithoutPhotos(page, scale);
+  if (photos.length) return null;
+  const w = c.width, h = c.height, d = c.getContext("2d")!.getImageData(0, 0, w, h).data;
+  let clear = 0, x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
+    if (d[(y * w + x) * 4 + 3] < 20) { clear++; continue; }
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (x1 < x0 || clear < (w * h) / 4 * 0.1) return null;
+  x0 = Math.max(0, x0 - 4); y0 = Math.max(0, y0 - 4); x1 = Math.min(w - 1, x1 + 4); y1 = Math.min(h - 1, y1 + 4);
+  const cc = document.createElement("canvas");
+  cc.width = x1 - x0 + 1; cc.height = y1 - y0 + 1;
+  cc.getContext("2d")!.drawImage(c, x0, y0, cc.width, cc.height, 0, 0, cc.width, cc.height);
+  const blob = await new Promise<Blob | null>((res) => cc.toBlob(res, "image/png"));
+  return blob ? { file: new File([blob], `${name}.png`, { type: "image/png" }), ratio: cc.height / cc.width } : null;
+}
