@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { calcOrder, mergeSettings, type Order, type Settings } from "@/lib/pricing";
-import { cardFix, printavoChanges, snapOf, type Change } from "@/lib/printavoChanges";
+import { cardFix, printavoChanges, sigOf, snapOf, type Change } from "@/lib/printavoChanges";
 import { custLabel } from "@/lib/format";
 import { useRole } from "@/components/RoleContext";
 
@@ -55,6 +55,14 @@ export default function PrintavoSyncPage() {
     else await sb.from("order_events").insert({ order_id: o.id, kind: "printavo", detail: `Accepted from Printavo: ${picks.map((x) => `${x.what}: ${x.text}`).join("; ").slice(0, 900)}`, actor: "" });
     await load(); setBusy("");
   }
+  /** keep ours: hidden until Printavo changes that thing again */
+  async function ignore(o: Row, c: Change) {
+    setBusy(o.id); setErr("");
+    const st0 = (o.printavo_state || {}) as { ignored?: string[] };
+    const { error } = await sb.from("orders").update({ printavo_state: { ...st0, ignored: [...new Set([...(st0.ignored || []), sigOf(c)])].slice(-200) } }).eq("id", o.id);
+    if (error) setErr(`#${o.number}: ${error.message}`);
+    await load(); setBusy("");
+  }
   async function check(o: Row) {
     setBusy(o.id); setErr("");
     const r = await fetch("/api/printavo/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: o.id, action: "refresh" }) }).catch(() => null);
@@ -90,7 +98,7 @@ export default function PrintavoSyncPage() {
                 {(changes.length > 0 || card) && <button type="button" className="btn primary sm" disabled={busy === o.id} onClick={() => accept(o, changes)}>{busy === o.id ? "Saving…" : changes.length > 1 ? `Accept all ${changes.length}` : "Accept"}</button>}
               </div>
             </div>
-            {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span><span className="pvc-what">{c.what}</span> {c.text}</span><button type="button" className="btn sm" disabled={busy === o.id} onClick={() => accept(o, [c])}>Accept</button></li>)}</ul>}
+            {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span><span className="pvc-what">{c.what}</span> {c.text}</span><span className="row" style={{ gap: 6 }}><button type="button" className="btn ghost sm" disabled={busy === o.id} title="Keep ours; hidden until Printavo changes this again" onClick={() => ignore(o, c)}>Ignore</button><button type="button" className="btn sm" disabled={busy === o.id} onClick={() => accept(o, [c])}>Accept</button></span></li>)}</ul>}
             {card && !changes.length && <div className="faint" style={{ fontSize: 12.5 }}>Card surcharge to update: ${card.amount.toFixed(2)} (saved when you open or accept the order).</div>}
             {info.length > 0 && <ul className="pvc-info">{info.map((t, i) => <li key={i} className="faint">{t}</li>)}</ul>}
             {showAll && !changes.length && !card && <div className="faint" style={{ fontSize: 12.5 }}>Matches Printavo.</div>}

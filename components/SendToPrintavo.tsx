@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { Order, OrderCalc } from "@/lib/pricing";
-import { cardFix, printavoChanges, type PvSnap } from "@/lib/printavoChanges";
+import { cardFix, printavoChanges, sigOf, type PvSnap } from "@/lib/printavoChanges";
+import { createClient } from "@/lib/supabase/client";
 
 /**
  * Send to Printavo (40,000-series orders, until Nov 2): asks for Printavo's status and the two dates, then makes the
@@ -136,7 +137,9 @@ export function PrintavoChanges({ o, calc, patch, prodNote, onProdNote }: { o: O
     if (!r?.ok) return setErr(j.error || "Couldn't read the order from Printavo.");
     setFresh(j.pv);
   }
-  const { changes, info } = printavoChanges(o, calc, snap || null, onProdNote ? prodNote ?? "" : undefined);
+  const { changes: all, info } = printavoChanges(o, calc, snap || null, onProdNote ? prodNote ?? "" : undefined);
+  const [ignored, setIgnored] = useState<string[]>([]);
+  const changes = all.filter((c) => !ignored.includes(sigOf(c)));
   const take = (cs: typeof changes) => { const fx = cs.filter((c) => c.apply); if (fx.length) patch((d) => { for (const c of fx) c.apply!(d); }); const n = cs.find((c) => c.note !== undefined); if (n && onProdNote) onProdNote(n.note!); };
   const card = cardFix(o, snap || null);
   useEffect(() => { if (card) patch(card.apply); }, [!!card, card?.amount]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -151,6 +154,15 @@ export function PrintavoChanges({ o, calc, patch, prodNote, onProdNote }: { o: O
     setFresh(j.pv);
   }
   const applyAll = () => take(changes);
+  // "Ignore": keep ours; it stays hidden until Printavo changes that thing again
+  async function ignore(c: (typeof changes)[number]) {
+    const sb = createClient();
+    const { data } = await sb.from("orders").select("printavo_state").eq("id", o.id).maybeSingle();
+    const st0 = (data?.printavo_state || {}) as { ignored?: string[] };
+    const next = [...new Set([...(st0.ignored || []), sigOf(c)])].slice(-200);
+    const { error } = await sb.from("orders").update({ printavo_state: { ...st0, ignored: next } }).eq("id", o.id);
+    if (error) setErr(error.message); else setIgnored((x) => [...x, sigOf(c)]);
+  }
   return (
     <div className="pvc">
       <div className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
@@ -163,7 +175,7 @@ export function PrintavoChanges({ o, calc, patch, prodNote, onProdNote }: { o: O
       </div>
       {err && <div className="err">{err}</div>}
       {noArt > 0 && <div className="pvc-art"><span>{noArt === 1 ? "The product line in Printavo has" : `${noArt} product lines in Printavo have`} no mockup, so the customer can&apos;t see the art on their invoice.</span><button type="button" className="btn primary sm" disabled={busy} onClick={pushArt}>Add our mockup in Printavo</button></div>}
-      {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span><span className="pvc-what">{c.what}</span> {c.text}</span>{(c.apply || c.note !== undefined) && <button type="button" className="btn sm" onClick={() => take([c])}>Accept</button>}</li>)}</ul>}
+      {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span><span className="pvc-what">{c.what}</span> {c.text}</span><span className="row" style={{ gap: 6 }}><button type="button" className="btn ghost sm" title="Keep ours; hidden until Printavo changes this again" onClick={() => ignore(c)}>Ignore</button>{(c.apply || c.note !== undefined) && <button type="button" className="btn sm" onClick={() => take([c])}>Accept</button>}</span></li>)}</ul>}
       {info.length > 0 && <ul className="pvc-info">{info.map((t, i) => <li key={i} className="faint">{t}</li>)}</ul>}
     </div>
   );

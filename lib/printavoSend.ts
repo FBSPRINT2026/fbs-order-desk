@@ -27,6 +27,8 @@ const PV_SIZE: Record<string, string> = {
 export const CARD_FEE = "Credit Card Processing Surcharge - ACH Available on Request";
 const CARD_RE = /credit card processing surcharge/i;
 const day = (d: string | null | undefined) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : "");
+/** a Printavo date-time as the shop's calendar day (Central) */
+const centralDay = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString("en-CA", { timeZone: "America/Chicago" }) : "");
 
 export async function printavoStatuses(): Promise<PvStatus[]> {
   const d = await pv<{ statuses: { nodes: PvStatus[] } }>(`query{ statuses(first:100){ nodes{ id name color position type } } }`);
@@ -193,6 +195,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
     customerDueAt: inp.customerDue,
     dueAt: `${inp.productionDue}T17:00:00-05:00`,
     productionNote: [inp.productionNote, `Entered in the new FBS system as order #${number}.`].filter(Boolean).join("\n\n"),
+    customerNote: String(o.notes || "").trim() || undefined,
     salesTax: taxed ? calc.rate : 0,
     ...(discount ? { discount, discountAsPercentage: o.discount_type !== "amt" } : {}),
     tags: [`#FBS${number}`], // Printavo tags start with # and have no spaces
@@ -287,6 +290,8 @@ async function fixConfirmationReply(admin: SupabaseClient, orderId: string, numb
 /** What the order looks like in Printavo now (kept on our order as printavo_state.pv, compared on the order page). */
 export type PvSnap = {
   at: string; visualId: string; status: string; total: number; kind: string; productionNote: string;
+  customerNote: string; nickname: string; po: string; customerDue: string; productionDue: string; discount: number; discountPct: boolean; salesTax: number;
+  imprints: string[][]; payments: { id: string; kind: string; amount: number; category: string; date: string; processing: boolean }[];
   groups: { lines: { itemNumber: string; color: string; description: string; category: string; sizes: Record<string, number>; price: number; mockups: number }[] }[];
   fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
 };
@@ -304,6 +309,10 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
   const p = await getOrder(String(o.printavo_id));
   const snap: PvSnap = {
     at: new Date().toISOString(), visualId: p.visualId, status: p.status.name, total: p.total, kind: p.kind, productionNote: p.productionNote || "",
+    customerNote: p.customerNote || "", nickname: p.nickname || "", po: p.poNumber || "", customerDue: day(p.customerDueAt), productionDue: centralDay(p.dueAt),
+    discount: p.discount || 0, discountPct: !!p.discountAsPercentage, salesTax: p.salesTax || 0,
+    imprints: p.groups.map((g) => g.imprints.map((i) => i.details || "")),
+    payments: p.transactions.filter((t) => /^(Payment|Refund|Return)$/.test(t.kind)).map((t) => ({ id: t.id, kind: t.kind, amount: t.amount, category: t.category, date: day(t.date) || t.date, processing: t.processing })),
     groups: p.groups.map((g) => ({ lines: g.lines.map((l) => ({ itemNumber: l.itemNumber, color: l.color, description: l.description, category: l.category, price: l.price, mockups: l.mockups.length,
       sizes: Object.fromEntries(Object.entries(l.sizes).map(([k, v]) => [OUR_SIZE[k] || k.replace(/^size_/, "").toUpperCase(), v])) })) })),
     fees: p.fees.map((f) => ({ description: f.description, amount: f.amount, quantity: f.quantity, unitPrice: f.unitPrice, pct: f.pct })),
@@ -320,6 +329,21 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
     const { data: sset } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     cardPatch.fees = fees;
     cardPatch.total = calcOrder({ ...(full as Order), fees }, mergeSettings(sset?.data)).total;
+  }
+  // payments made in Printavo are registered here as they are (once each; refunds and returns as negative amounts)
+  const settled = snap.payments.filter((t) => !t.processing && t.amount);
+  if (settled.length) {
+    const keys = settled.map((t) => `printavo:${t.id}`);
+    const { data: have } = await admin.from("payments").select("processor_id").in("processor_id", keys);
+    const got = new Set((have || []).map((x) => x.processor_id as string));
+    const METHOD: Record<string, string> = { CREDIT_CARD: "Credit card", ECHECK: "ACH", CHECK: "Check", CASH: "Cash" };
+    const add = settled.filter((t) => !got.has(`printavo:${t.id}`)).map((t) => ({ order_id: orderId, amount: t.kind === "Payment" ? Math.abs(t.amount) : -Math.abs(t.amount), method: METHOD[t.category] || "Other",
+      paid_on: /^\d{4}-\d{2}-\d{2}/.test(t.date) ? t.date.slice(0, 10) : new Date().toISOString().slice(0, 10), processor_id: `printavo:${t.id}`, fee: 0,
+      note: `${t.kind === "Payment" ? "Paid" : t.kind} in Printavo (#${p.visualId})` }));
+    if (add.length) {
+      const { error } = await admin.from("payments").insert(add);
+      if (!error) await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Payment from Printavo: ${add.map((x) => `$${x.amount.toFixed(2)} ${x.method}`).join(", ")}`, actor: "Printavo" });
+    }
   }
   await admin.from("orders").update({ ...cardPatch, printavo_visual_id: p.visualId, printavo_state: { ...st, pv: snap, status: p.status.name, url: p.urls.url || st.url, publicUrl: p.urls.publicUrl || st.publicUrl, ...(fingerprint ? { fp: fingerprint } : {}) } }).eq("id", orderId);
   return snap;
