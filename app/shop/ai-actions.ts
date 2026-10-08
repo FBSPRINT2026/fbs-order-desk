@@ -8,7 +8,8 @@ import { emailContext, orderFacts, writeReplyOptions } from "@/lib/ai/replies";
 import { describeGroups, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
 import { processEmailActivity } from "@/lib/ai/email";
 import { storeInboundEmail } from "@/lib/crm/inbound";
-import { orderGroups, type Group, type Order } from "@/lib/pricing";
+import { LOCATIONS, orderGroups, type Group, type Imprint, type Order } from "@/lib/pricing";
+import { reorderCheck, type ReorderCheck, type ReorderFix } from "@/lib/ai/reorderCheck";
 
 // Staff-only server actions for the Assistant, the CRM timeline and the AI helpers.
 // AI helpers return { ok:false, off:true } until AI is turned on, so the UI can say how to turn it on.
@@ -199,4 +200,56 @@ export async function aiProcessEmail(activityId: string) {
     const { admin } = await staff();
     return await processEmailActivity(admin, activityId);
   } catch (e) { return { ...fail(e), created: 0 }; }
+}
+
+/** Reorder check: the AI compares this reorder with the old job it copies (files, film, art, our mockup). */
+export async function aiReorderCheck(orderId: string, onlyIfNone = false) {
+  try {
+    const { admin, email } = await staff();
+    if (onlyIfNone) {
+      const { data: had } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", `reorder_check:${orderId}`).limit(1).maybeSingle();
+      // checked already, and no newer mockup since: show that one
+      const { data: mk } = await admin.from("mockups").select("created_at").eq("order_id", orderId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const c = had?.payload as ReorderCheck | undefined;
+      if (c && !(mk && c.at && mk.created_at > c.at)) return { ok: true as const, check: c };
+    }
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false as const, off: true, error: st.reason };
+    const r = await reorderCheck(admin, st.settings, orderId, email);
+    return r.ok ? { ok: true as const, check: r.check } : { ok: false as const, error: r.error };
+  } catch (e) { return fail(e); }
+}
+
+/** The last reorder check on this order, if any. */
+export async function lastReorderCheck(orderId: string) {
+  try {
+    const { admin } = await staff();
+    const { data } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", `reorder_check:${orderId}`).limit(1).maybeSingle();
+    return { ok: true as const, check: (data?.payload as ReorderCheck | undefined) || null };
+  } catch (e) { return fail(e); }
+}
+
+/** Apply one fix from the reorder check to the print it names. */
+export async function applyReorderFix(orderId: string, fix: ReorderFix) {
+  try {
+    const { admin, email } = await staff();
+    const { data: o } = await admin.from("orders").select("id, groups").eq("id", orderId).maybeSingle();
+    if (!o) return { ok: false as const, error: "Order not found." };
+    const groups = (o.groups || []) as Group[];
+    let hit: Imprint | null = null;
+    for (const g of groups) for (const im of g.imprints) if (im.id === fix.imprint_id) hit = im;
+    if (!hit) return { ok: false as const, error: "That print isn't on the order anymore." };
+    const v = String(fix.value || "").trim().slice(0, 120);
+    if (fix.field === "size") hit.size = /^\d/.test(v) && !/wide|tall/i.test(v) ? `${parseFloat(v)}" wide` : v;
+    else if (fix.field === "location") { if (!(LOCATIONS as readonly string[]).includes(v)) return { ok: false as const, error: `"${v}" isn't one of the locations.` }; hit.location = v; }
+    else if (fix.field === "inks") hit.inks = v;
+    else if (fix.field === "colors") { const n = parseInt(v, 10); if (!(n > 0 && n < 13)) return { ok: false as const, error: "Not a number of colors." }; hit.colors = n; }
+    else if (fix.field === "drop") hit.drop = String(parseFloat(v) || "");
+    else return { ok: false as const, error: "Unknown fix." };
+    hit.notes = [hit.notes, `Reorder check: ${fix.field} → ${v} (${fix.why})`].filter(Boolean).join(". ").slice(0, 300);
+    const { error } = await admin.from("orders").update({ groups }).eq("id", orderId);
+    if (error) return { ok: false as const, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "edited", detail: `Reorder check fix: ${fix.field} → ${v}`, actor: email });
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
 }

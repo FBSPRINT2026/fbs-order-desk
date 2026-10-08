@@ -776,7 +776,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type }))}
             onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }} />
 
-          <ChecksPanel checks={checks} orderId={o.id} save={save} />
+          <ChecksPanel checks={checks} orderId={o.id} save={save} reorder={/Reorder of (Printavo )?#\d+/.test(o.notes || "")} />
 
           {!seesMoney && (
             <section className="panel">

@@ -1,12 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { Check } from "@/lib/orderChecks";
 import type { ProposedOrder } from "@/lib/ai/normalize";
-import { aiOrderFromText, aiReviewOrder } from "@/app/shop/ai-actions";
+import { aiOrderFromText, aiReorderCheck, aiReviewOrder, applyReorderFix } from "@/app/shop/ai-actions";
+import type { ReorderCheck, ReorderFix } from "@/lib/ai/reorderCheck";
 
 /** "Order check" panel: rule checks now, plus an optional AI review. */
-export function ChecksPanel({ checks, orderId, save }: { checks: Check[]; orderId: string; save: () => Promise<void> }) {
+export function ChecksPanel({ checks, orderId, save, reorder }: { checks: Check[]; orderId: string; save: () => Promise<void>; /** a reorder of an earlier job: the AI compares it with that job */ reorder?: boolean }) {
   const [ai, setAi] = useState<null | { summary: string; issues: Check[] }>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -33,6 +34,7 @@ export function ChecksPanel({ checks, orderId, save }: { checks: Check[]; orderI
             <div className="chk-list">{ai.issues.length ? ai.issues.map((c, i) => <div key={i} className={"chk " + c.level}>{c.text}</div>) : <div className="chk ok">Nothing else stood out.</div>}</div>
           </div>
         )}
+        {reorder && <ReorderCheckBox orderId={orderId} save={save} />}
         <div className="row" style={{ gap: 6 }}>
           <button type="button" className="btn sm ghost" onClick={review} disabled={busy}>{busy ? "Reviewing…" : "✦ AI review"}</button>
           {note && <span className="ai-off">{note}</span>}
@@ -78,6 +80,61 @@ export function FillFromText({ orderId, hasContent, onApply }: { orderId: string
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const FIELD: Record<ReorderFix["field"], string> = { size: "Size", location: "Location", inks: "Inks", colors: "Colors", drop: "Drop" };
+/**
+ * Reorder check: the AI looks over the reorder next to the old job (its files, the film, the art on each print and
+ * our mockup). Runs by itself the first time the order opens; each suggested fix applies with a click.
+ */
+function ReorderCheckBox({ orderId, save }: { orderId: string; save: () => Promise<void> }) {
+  const [c, setC] = useState<ReorderCheck | null>(null);
+  const [busy, setBusy] = useState<"" | "run" | number>("");
+  const [note, setNote] = useState("");
+  async function run(onlyIfNone: boolean) {
+    setBusy("run"); setNote("");
+    if (!onlyIfNone) await save();
+    const r = await aiReorderCheck(orderId, onlyIfNone);
+    setBusy("");
+    if (!r.ok) return setNote(r.error || "The reorder check didn't work.");
+    setC(r.check);
+  }
+  useEffect(() => { void run(true); }, [orderId]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function apply(i: number, f: ReorderFix) {
+    setBusy(i); setNote("");
+    await save();
+    const r = await applyReorderFix(orderId, f);
+    if (!r.ok) { setBusy(""); return setNote(r.error || "Couldn't apply that."); }
+    location.reload();
+  }
+  const tone = c?.verdict === "good" ? "ok" : c?.verdict === "problems" ? "high" : "medium";
+  return (
+    <div className="ai-box">
+      <h3>✦ Reorder check</h3>
+      {busy === "run" && !c && <div className="muted" style={{ fontSize: 13 }}>Comparing with the old job: its files, the film, the art and our mockup…</div>}
+      {c && (
+        <>
+          <div className={"chk " + tone}>{c.summary}</div>
+          {c.issues.length > 0 && <div className="chk-list">{c.issues.map((x, i) => <div key={i} className={"chk " + x.severity}>{x.text}</div>)}</div>}
+          {c.fixes.length > 0 && (
+            <div className="stack" style={{ gap: 4 }}>
+              {c.fixes.map((f, i) => (
+                <div key={i} className="row" style={{ gap: 8, fontSize: 13, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <span><b>{FIELD[f.field] || f.field} → {f.value}</b> <span className="muted">{f.why}</span></span>
+                  <button type="button" className="btn sm" disabled={busy !== ""} onClick={() => apply(i, f)}>{busy === i ? "Applying…" : "Apply"}</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {c.at && <div className="faint" style={{ fontSize: 12 }}>Checked {new Date(c.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>}
+        </>
+      )}
+      <div className="row" style={{ gap: 6 }}>
+        <button type="button" className="btn sm ghost" onClick={() => run(false)} disabled={busy !== ""}>{busy === "run" ? "Checking…" : c ? "Check again" : "Run the reorder check"}</button>
+        {note && <span className="ai-off">{note}</span>}
+      </div>
     </div>
   );
 }
