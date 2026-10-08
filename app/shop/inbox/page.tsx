@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "../mail-actions";
-import { aiReplyOptions, aiWriteReply, markNoReply } from "../ai-actions";
+import { aiReplyOptions, aiWriteReply, markNoReply, putBackInInbox } from "../ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
 
 /**
@@ -212,7 +212,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           {x.order_id && <Link className="btn sm" href={`/shop/orders/${x.order_id}`}>Order</Link>}
           <span className="spacer" />
           {needs ? <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id), "Off your Needs a reply list.")}>No reply needed</button>
-            : x.meta?.no_reply ? <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id, false), "Back on Needs a reply.")}>Needs a reply after all</button> : null}
+            : x.meta?.no_reply ? <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id, false), "Back on Needs a reply.")}>Needs a reply after all</button>
+            : x.direction === "in" && answered ? <button type="button" className="btn sm ghost" disabled={!!busy} title="Answered, but there's still something to do (an order to make): back on Needs a reply" onClick={() => run("back", () => putBackInInbox(x.id), "Back in the Inbox.")}>Back to inbox</button> : null}
           <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`)}>Not a customer</button>
         </div>
         {!x.customer_id && <div className="ibx-lead">

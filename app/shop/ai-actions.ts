@@ -69,6 +69,18 @@ export async function aiWriteReply(input: { activityId: string; instruction?: st
   } catch (e) { return fail(e); }
 }
 
+/** "Back to inbox": an answered email goes back on Needs a reply (e.g. "Got it" was sent, the order still has to be made) */
+export async function putBackInInbox(activityId: string) {
+  try {
+    const { admin } = await staff();
+    const { data: a } = await admin.from("activities").select("id, meta").eq("id", activityId).maybeSingle();
+    if (!a) return { ok: false as const, error: "That email isn't on file." };
+    const meta = (a.meta || {}) as { triage?: Record<string, unknown> };
+    await admin.from("activities").update({ meta: { ...meta, no_reply: false, reopened_at: new Date().toISOString(), triage: { ...(meta.triage || {}), needs_reply: true } } }).eq("id", activityId);
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
 /** "No reply needed": off the Needs a reply list (the email stays on file) */
 export async function markNoReply(activityId: string, noReply = true) {
   try {
