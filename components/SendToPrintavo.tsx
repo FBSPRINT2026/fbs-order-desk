@@ -85,6 +85,7 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
                   {done.numberError && <div className="err">Printavo kept its own number ({done.numberError}). Use &quot;Make it #{p?.number}&quot; on the order to try again.</div>}
                   {done.warnings && <div className="faint">Printavo noted: {done.warnings}</div>}
                   {done.sentTotal != null && done.ourTotal != null && Math.abs(done.sentTotal - done.ourTotal - (done.cardFee || 0)) > 0.05 && <div className="err">Printavo&apos;s total is {money(done.sentTotal)}; ours is {money(done.ourTotal)} plus the 3% card surcharge ({money(done.cardFee || 0)}). Check the prices in Printavo.</div>}
+                  <div className="faint">The card surcharge shows up on the order here as &quot;Changed in Printavo&quot; once Printavo has worked it out: press Accept so both invoices match.</div>
                   <div className="faint">The &quot;Order confirmation&quot; reply in the Inbox now links to Printavo&apos;s invoice page.</div>
                   <PrintavoLink visualId={done.visualId} url={done.url} publicUrl={done.publicUrl} status={done.status} />
                   <div className="row" style={{ justifyContent: "flex-end" }}><button type="button" className="btn" onClick={() => setOpen(false)}>Done</button></div>
@@ -127,7 +128,6 @@ type PvSnap = {
   groups: { lines: { itemNumber: string; color: string; description: string; sizes: Record<string, number>; price: number; mockups?: number }[] }[];
   fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
 };
-const CARD = /credit card processing surcharge/i;
 // the fees Send to Printavo makes from our setup (screens, digitizing, PMS, ink changes, minimum, 2XL+)
 const SETUP_FEE = /^(new screen fee|repeat screen fee|digitize file|pms match|color change|minimum order charge|sizes above xl)$/i;
 const ADJUST = "Setup adjustment (from Printavo)";
@@ -167,14 +167,15 @@ export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc;
       theirs.slice(ours.length).forEach((t) => info.push(`New line in Printavo: ${[t.itemNumber, t.color].filter(Boolean).join(" ")} ${Object.entries(t.sizes).map(([z, q]) => `${z} ${q}`).join(", ")} at $${t.price.toFixed(2)}. Add it here by hand.`));
     });
     snap.groups.slice(groups.length).forEach(() => info.push("Printavo has a line item group this order doesn't. Add it here by hand."));
-    // fees: the setup ones are compared as a total; their own fees one by one; the card surcharge stays in Printavo
+    // fees: the setup ones are compared as a total, the rest one by one
     const pvSetup = snap.fees.filter((f) => SETUP_FEE.test(norm(f.description))).reduce((a, f) => a + f.amount, 0);
     const ourSetup = calc.groups.reduce((a, c) => a + c.setup + c.materials, 0);
     const adj = (o.fees || []).find((f) => f.label === ADJUST);
     const wantAdj = Math.round((pvSetup - ourSetup) * 100) / 100;
     if (Math.abs(wantAdj - (+(adj?.amount || 0))) > 0.005) changes.push({ key: "setup", text: `Setup fees in Printavo $${pvSetup.toFixed(2)}, ours $${ourSetup.toFixed(2)}${adj ? ` (+ $${(+(adj.amount || 0)).toFixed(2)} adjustment)` : ""}`,
       apply: (d) => { d.fees = (d.fees || []).filter((f) => f.label !== ADJUST); if (Math.abs(wantAdj) > 0.005) d.fees.push({ label: ADJUST, amount: wantAdj }); } });
-    const theirFees = snap.fees.filter((f) => !SETUP_FEE.test(norm(f.description)) && !CARD.test(f.description));
+    // their own fees one by one, the card surcharge included (Printavo's amount, so both invoices show the same total)
+    const theirFees = snap.fees.filter((f) => !SETUP_FEE.test(norm(f.description)));
     for (const f of theirFees) {
       const mine = (o.fees || []).find((x) => norm(x.label) === norm(f.description));
       if (!mine) changes.push({ key: `f+${f.description}`, text: `New fee in Printavo: ${f.description.trim()} $${f.amount.toFixed(2)}`, apply: (d) => { d.fees = [...(d.fees || []), { label: f.description.trim(), amount: f.amount }]; } });
@@ -182,8 +183,6 @@ export function PrintavoChanges({ o, calc, patch }: { o: Order; calc: OrderCalc;
     }
     for (const mine of (o.fees || []).filter((x) => x.label !== ADJUST && +(x.amount || 0) && !theirFees.some((f) => norm(f.description) === norm(x.label))))
       changes.push({ key: `f-${mine.label}`, text: `Fee removed in Printavo: ${mine.label} $${(+(mine.amount || 0)).toFixed(2)}`, apply: (d) => { d.fees = (d.fees || []).filter((y) => y.label !== mine.label); } });
-    const card = snap.fees.find((f) => CARD.test(f.description));
-    if (card) info.push(`Card surcharge in Printavo: $${card.amount.toFixed(2)} (stays in Printavo: customers pay there until Nov 2).`);
   }
   // Printavo's invoice page shows the customer only the mockups on the product lines
   const noArt = snap ? snap.groups.flatMap((g) => g.lines).filter((l) => l.mockups === 0).length : 0;

@@ -173,7 +173,8 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
     if (c.materials > 0) { const f = sum.get("materials"); if (f) { f.amount = Math.round(((f.amount || 0) + c.materials) * 100) / 100; f.unitPrice = f.amount; } else sum.set("materials", { description: "Sizes Above XL", quantity: 1, unitPrice: c.materials, amount: c.materials, taxable: taxed }); }
   }
   const fees: PvFee[] = [...sum.values()];
-  for (const f of (o.fees || []) as { label: string; amount: number | "" }[]) if (+f.amount) fees.push({ description: f.label || "Fee", amount: +f.amount, quantity: 1, unitPrice: +f.amount, taxable: taxed });
+  // (a card surcharge already on our order is Printavo's, brought back: the percentage one below replaces it)
+  for (const f of (o.fees || []) as { label: string; amount: number | "" }[]) if (+f.amount && !/credit card processing surcharge/i.test(f.label)) fees.push({ description: f.label || "Fee", amount: +f.amount, quantity: 1, unitPrice: +f.amount, taxable: taxed });
   // customers pay through Printavo during the move: the usual 3% card surcharge goes on every order, as on Printavo's own
   fees.push({ description: CARD_FEE, quantity: 1, unitPrice: 3, unitPriceAsPercentage: true, taxable: false });
 
