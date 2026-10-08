@@ -6,7 +6,8 @@ export async function middleware(request: NextRequest) {
   // Sign-in links can land on any page (e.g. the home page) carrying ?code= or ?token_hash=.
   // Send them to the page that finishes signing in.
   const sp = request.nextUrl.searchParams;
-  if ((sp.get("code") || sp.get("token_hash")) && !request.nextUrl.pathname.startsWith("/auth/")) {
+  // (not API routes: Dropbox's sign-in also comes back with ?code=, to /api/dropbox/callback)
+  if ((sp.get("code") || sp.get("token_hash")) && !request.nextUrl.pathname.startsWith("/auth/") && !request.nextUrl.pathname.startsWith("/api/")) {
     const url = request.nextUrl.clone();
     const target = request.nextUrl.pathname === "/login" ? sp.get("next") || "/" : request.nextUrl.pathname;
     url.pathname = "/auth/confirm";
