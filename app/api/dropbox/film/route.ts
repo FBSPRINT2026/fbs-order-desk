@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cacheFilm, filmFolders, findFilms, guessFolder } from "@/lib/filmFolder";
+import { cacheFilm, filmFolders, findFilms, guessFolder } from "@/lib/dropboxFilms";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
