@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchInput from "@/components/SearchInput";
@@ -17,46 +17,77 @@ function SearchInner() {
   const q0 = sp.get("q") || "";
   const [q, setQ] = useState(q0);
   const [res, setRes] = useState<Results | null>(null);
+  const [pending, setPending] = useState(0);
+  const searchedFor = useRef("");
   const [ai, setAi] = useState<{ answer?: string; refs?: { label: string; href: string }[]; off?: boolean; reason?: string; error?: string; busy?: boolean } | null>(null);
   // the AI answer: asked once the keyword results are in (it reads them too)
   useEffect(() => {
     const t = q0.trim();
-    if (!res || t.length < 3) { setAi(null); return; }
+    if (t.length < 3) { setAi(null); return; }
+    if (!res || pending || searchedFor.current !== q0) return;
     const found = (["orders", "printavo", "customers", "shipments"] as (keyof Results)[]).flatMap((k) => res[k].slice(0, 15).map((h) => ({ ref: h.href.replace("/shop/orders/", "o:").replace("/shop/archive/", "a:").replace("/shop/customers/", "c:"), text: `${h.title} · ${h.sub}` })));
     let live = true;
     setAi({ busy: true });
     fetch("/api/ai/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q: t, found }) })
       .then((r) => r.json()).then((j) => { if (live) setAi(j.skip ? null : j); }).catch(() => { if (live) setAi({ error: "The AI couldn't answer right now." }); });
     return () => { live = false; };
-  }, [res, q0]);
+  }, [pending, q0]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setQ(q0); }, [q0]);
+  // results show section by section as they come in: a number (#31174) is looked up directly, a name finds the
+  // customers first and then their orders (the Printavo archive is 23k jobs: only indexed lookups, no full scans)
   useEffect(() => {
     const t = q0.trim().replace(/[%,()*]/g, " ").trim();
-    if (t.length < 2) { setRes(EMPTY); return; }
-    setRes(null);
+    searchedFor.current = q0;
+    if (t.length < 2) { setRes(EMPTY); setPending(0); return; }
+    setRes({ ...EMPTY }); setPending(6);
+    let live = true;
     const sb = createClient();
     const like = `%${t}%`;
     const num = /^#?\d{3,7}$/.test(t) ? t.replace("#", "") : "";
+    type C = { customers: { company: string; name: string } | null };
+    const who = (x: C) => x.customers?.company || x.customers?.name || "";
+    const put = (k: keyof Results, hits: Hit[]) => { if (!live) return; setRes((r) => { const cur = r || { ...EMPTY }; const seen = new Set(cur[k].map((h) => h.href)); return { ...cur, [k]: [...cur[k], ...hits.filter((h) => !seen.has(h.href))].slice(0, 25) }; }); };
+    const done = () => { if (live) setPending((n) => Math.max(0, n - 1)); };
+    const ord = (rows: unknown[]) => (rows as ({ id: string; number: number; nickname: string; po_number: string; status: string; due_date: string | null } & C)[]).map((x) => ({ href: `/shop/orders/${x.id}`, title: `#${x.number} ${x.nickname || ""}`.trim(), sub: [who(x), x.po_number ? `PO ${x.po_number}` : "", x.due_date ? `due ${day(x.due_date)}` : ""].filter(Boolean).join(" · "), tag: x.status }));
+    const arc = (rows: unknown[]) => (rows as ({ id: string; visual_id: string; nickname: string; po_number: string; status_name: string; due_date: string | null } & C)[]).map((x) => ({ href: `/shop/archive/${x.id}`, title: `#${x.visual_id} ${x.nickname || ""}`.trim(), sub: [who(x), x.po_number && x.po_number !== x.nickname ? `PO ${x.po_number}` : "", x.due_date ? `due ${day(x.due_date)}` : ""].filter(Boolean).join(" · "), tag: x.status_name }));
+    const OSEL = "id, number, nickname, po_number, status, due_date, customers(company, name)", ASEL = "id, visual_id, nickname, po_number, status_name, due_date, customers(company, name)";
+    // orders and Printavo jobs
     (async () => {
-      const [o, a, c, p, d, m] = await Promise.all([
-        sb.from("orders").select("id, number, nickname, po_number, status, due_date, customers(company, name)").or([`nickname.ilike.${like}`, `po_number.ilike.${like}`, ...(num ? [`number.eq.${num}`] : [])].join(",")).order("number", { ascending: false }).limit(25),
-        sb.from("archived_orders").select("id, visual_id, nickname, po_number, status_name, due_date, customers(company, name)").or([`search_staff.ilike.${like}`, `nickname.ilike.${like}`, `po_number.ilike.${like}`, ...(num ? [`visual_id.eq.${num}`] : [])].join(",")).order("visual_id", { ascending: false }).limit(25),
-        sb.from("customers").select("id, company, name, email").or(`company.ilike.${like},name.ilike.${like},email.ilike.${like}`).order("company").limit(25),
-        sb.from("projects").select("id, name, status, customers(company, name)").ilike("name", like).limit(15),
-        sb.from("designs").select("id, number, name, customers(company, name)").or([`name.ilike.${like}`, ...(num ? [`number.eq.${num}`] : [])].join(",")).order("number", { ascending: false }).limit(15),
-        fetch(`/api/goods/manifest?q=${encodeURIComponent(t)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({})),
+      if (num) {
+        const [o, a] = await Promise.all([sb.from("orders").select(OSEL).eq("number", +num).limit(5), sb.from("archived_orders").select(ASEL).eq("visual_id", num).limit(5)]);
+        put("orders", ord(o.data || [])); put("printavo", arc(a.data || []));
+      }
+      const [o, a] = await Promise.all([
+        sb.from("orders").select(OSEL).or(`nickname.ilike.${like},po_number.ilike.${like}`).order("number", { ascending: false }).limit(25),
+        num ? Promise.resolve({ data: [] }) : sb.from("archived_orders").select(ASEL).ilike("search_staff", like.toLowerCase()).order("order_date", { ascending: false, nullsFirst: false }).limit(25),
       ]);
-      type C = { customers: { company: string; name: string } | null };
-      const who = (x: C) => x.customers?.company || x.customers?.name || "";
-      setRes({
-        orders: ((o.data || []) as unknown as ({ id: string; number: number; nickname: string; po_number: string; status: string; due_date: string | null } & C)[]).map((x) => ({ href: `/shop/orders/${x.id}`, title: `#${x.number} ${x.nickname || ""}`.trim(), sub: [who(x), x.po_number ? `PO ${x.po_number}` : "", x.due_date ? `due ${day(x.due_date)}` : ""].filter(Boolean).join(" · "), tag: x.status })),
-        printavo: ((a.data || []) as unknown as ({ id: string; visual_id: string; nickname: string; po_number: string; status_name: string; due_date: string | null } & C)[]).map((x) => ({ href: `/shop/archive/${x.id}`, title: `#${x.visual_id} ${x.nickname || ""}`.trim(), sub: [who(x), x.po_number && x.po_number !== x.nickname ? `PO ${x.po_number}` : "", x.due_date ? `due ${day(x.due_date)}` : ""].filter(Boolean).join(" · "), tag: x.status_name })),
-        customers: ((c.data || []) as { id: string; company: string; name: string; email: string }[]).map((x) => ({ href: `/shop/customers/${x.id}`, title: x.company || x.name, sub: [x.company ? x.name : "", x.email].filter(Boolean).join(" · ") })),
-        projects: ((p.data || []) as unknown as ({ id: string; name: string; status: string } & C)[]).map((x) => ({ href: `/shop/projects/${x.id}`, title: x.name, sub: who(x), tag: x.status })),
-        artwork: ((d.data || []) as unknown as ({ id: string; number: number; name: string } & C)[]).map((x) => ({ href: `/shop/artwork/${x.id}`, title: `${x.number ? `#${x.number} ` : ""}${x.name || "Design"}`, sub: who(x) })),
-        shipments: ((m.hits || []) as { who: string; supplier: string; supplier_order: string; po: string; ship_date: string | null; boxes: number; pcs: number; order: { number: number; href: string } | null }[]).map((x) => ({ href: x.order?.href || `/shop/receiving`, title: `${x.who} · ${x.supplier === "sanmar" ? "SanMar" : "S&S"} ${x.supplier_order}`, sub: [x.po ? `PO ${x.po}` : "", `${x.boxes} box${x.boxes === 1 ? "" : "es"}, ${x.pcs} pcs`, x.ship_date ? `shipped ${day(x.ship_date)}` : "", x.order ? `on #${x.order.number}` : "not linked yet"].filter(Boolean).join(" · ") })),
-      });
+      put("orders", ord(o.data || [])); done();
+      put("printavo", arc(a.data || [])); done();
     })();
+    // customers, then their latest orders and Printavo jobs
+    (async () => {
+      const { data: c } = await sb.from("customers").select("id, company, name, email").or(`company.ilike.${like},name.ilike.${like},email.ilike.${like}`).order("company").limit(25);
+      const cs = (c || []) as { id: string; company: string; name: string; email: string }[];
+      put("customers", cs.map((x) => ({ href: `/shop/customers/${x.id}`, title: x.company || x.name, sub: [x.company ? x.name : "", x.email].filter(Boolean).join(" · ") }))); done();
+      const ids = cs.slice(0, 5).map((x) => x.id);
+      if (ids.length && !num) {
+        const [o, a] = await Promise.all([
+          sb.from("orders").select(OSEL).in("customer_id", ids).order("number", { ascending: false }).limit(15),
+          sb.from("archived_orders").select(ASEL).in("customer_id", ids).order("order_date", { ascending: false, nullsFirst: false }).limit(15),
+        ]);
+        put("orders", ord(o.data || [])); put("printavo", arc(a.data || []));
+      }
+    })();
+    sb.from("projects").select("id, name, status, customers(company, name)").ilike("name", like).limit(15).then(({ data }) => {
+      put("projects", ((data || []) as unknown as ({ id: string; name: string; status: string } & C)[]).map((x) => ({ href: `/shop/projects/${x.id}`, title: x.name, sub: who(x), tag: x.status }))); done();
+    });
+    sb.from("designs").select("id, number, name, customers(company, name)").or([`name.ilike.${like}`, ...(num ? [`number.eq.${num}`] : [])].join(",")).order("number", { ascending: false }).limit(15).then(({ data }) => {
+      put("artwork", ((data || []) as unknown as ({ id: string; number: number; name: string } & C)[]).map((x) => ({ href: `/shop/artwork/${x.id}`, title: `${x.number ? `#${x.number} ` : ""}${x.name || "Design"}`, sub: who(x) }))); done();
+    });
+    fetch(`/api/goods/manifest?q=${encodeURIComponent(t)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({})).then((m) => {
+      put("shipments", ((m.hits || []) as { who: string; supplier: string; supplier_order: string; po: string; ship_date: string | null; boxes: number; pcs: number; order: { number: number; href: string } | null }[]).map((x) => ({ href: x.order?.href || `/shop/receiving`, title: `${x.who} · ${x.supplier === "sanmar" ? "SanMar" : "S&S"} ${x.supplier_order}`, sub: [x.po ? `PO ${x.po}` : "", `${x.boxes} box${x.boxes === 1 ? "" : "es"}, ${x.pcs} pcs`, x.ship_date ? `shipped ${day(x.ship_date)}` : "", x.order ? `on #${x.order.number}` : "not linked yet"].filter(Boolean).join(" · ") }))); done();
+    });
+    return () => { live = false; };
   }, [q0]);
   const SECTIONS: [keyof Results, string][] = [["orders", "Orders"], ["printavo", "Printavo orders"], ["customers", "Customers"], ["projects", "Projects"], ["artwork", "Artwork"], ["shipments", "Supplier shipments"]];
   const total = res ? SECTIONS.reduce((n, [k]) => n + res[k].length, 0) : 0;
@@ -79,7 +110,7 @@ function SearchInner() {
         </section>
       )}
       {ai?.off && <div className="faint" style={{ fontSize: 12.5, marginBottom: 10 }}>AI answers are off: {ai.reason}</div>}
-      {!res ? <div className="empty">Searching…</div> : q0.trim().length < 2 ? <div className="empty">Type at least 2 characters.</div> : !total ? <div className="empty">Nothing found for “{q0}”.</div> : (
+      {!res ? <div className="empty">Searching…</div> : q0.trim().length < 2 ? <div className="empty">Type at least 2 characters.</div> : !total ? <div className="empty">{pending ? "Searching…" : `Nothing found for “${q0}”.`}</div> : (
         <div className="srch-grid">
           {SECTIONS.filter(([k]) => res[k].length).map(([k, label]) => (
             <section key={k} className="panel">
