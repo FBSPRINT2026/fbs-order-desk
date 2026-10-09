@@ -540,7 +540,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const g = garmentFor(l);
     // SanMar names colors without spaces ("TrueRoyal" for True Royal): matched ignoring spaces and case
     const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
-    const p = ci ? (view === "front" ? ci.front : ci.back) : "";
+    // a bag with no back photo: its back looks like its front (same bag, other side), never a drawn tee
+    const p = ci ? (view === "front" ? ci.front : ci.back || (isBag(l) ? ci.front : "")) : "";
     return p ? ssImg(p) : teeSvg(guessHex(l.color), view);
   };
 
