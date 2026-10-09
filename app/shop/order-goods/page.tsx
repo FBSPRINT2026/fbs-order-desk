@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { money } from "@/lib/format";
+import { sizeRank } from "@/lib/sizeOrder";
 import SearchInput from "@/components/SearchInput";
 import { askRepForQuote, findOrdersAndCustomers, goodsPayInfo, goodsSearch, goodsStart, goodsStyle, linkGoods, placeGoods, recentGoods, type StyleColor } from "./actions";
 
@@ -99,7 +100,9 @@ function OrderGoods() {
     setLines((ls) => { const out = [...ls]; for (const a of add) { const i = out.findIndex((x) => x.key === a.key); if (i >= 0) out[i] = { ...out[i], qty: out[i].qty + a.qty }; else out.push(a); } return out; });
     setQty({}); setDry(null); setSure(false);
   }
-  const orderable = lines.filter((l) => l.sku && l.qty > 0);
+  // garment by garment, each in size order (XS … 4XL), never alphabetical
+  const sorted = useMemo(() => lines.map((l, i) => ({ l, i })).sort((a, b) => `${a.l.brand}|${a.l.style}|${a.l.color}`.localeCompare(`${b.l.brand}|${b.l.style}|${b.l.color}`) || sizeRank(a.l.size) - sizeRank(b.l.size)), [lines]);
+  const orderable = sorted.map((x) => x.l).filter((l) => l.sku && l.qty > 0);
   const pcs = orderable.reduce((a, l) => a + l.qty, 0), total = orderable.reduce((a, l) => a + l.price * l.qty, 0);
   const po = (label || (order ? `#${order.number}` : cust ? `${cust.name} (ahead of order)` : "Stock")).trim();
   const payload = (test: boolean) => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: l.qty, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, test, label: po, quote, orderId: order?.id || null, customerId: cust?.id || null, activityId: email?.id || null });
@@ -204,7 +207,7 @@ function OrderGoods() {
           {lines.length > 0 ? (
             <div style={{ overflowX: "auto" }}><table className="rv-tbl">
               <thead><tr><th>Garment</th>{asks && <th>Requested</th>}<th>{asks ? "Found color" : "Color"}</th><th>Size</th><th className="r">Qty</th><th className="r">Price</th><th className="r">In stock</th><th /></tr></thead>
-              <tbody>{lines.map((l, i) => (
+              <tbody>{sorted.map(({ l, i }) => (
                 <tr key={l.key} className={!l.sku ? "miss" : l.stock < l.qty ? "low" : ""}>
                   <td>{l.style && ssUrl(l.brand, l.style) ? <a className="og-ss" href={ssUrl(l.brand, l.style)} target="_blank" rel="noreferrer" title="Open this style on ssactivewear.com (all its colors)">{[l.brand, l.style].filter(Boolean).join(" ")} ↗</a> : [l.brand, l.style].filter(Boolean).join(" ") || "—"}</td>
                   {asks && <td>{l.asked || ""}</td>}

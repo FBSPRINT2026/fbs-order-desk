@@ -1,5 +1,6 @@
 "use client";
 import JobLabor from "@/components/team/JobLabor";
+import { bySizeOrder } from "@/lib/sizeOrder";
 import JobFiles from "@/components/job/JobFiles";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
@@ -65,7 +66,7 @@ function ArchivedGoods({ id, groups }: { id: string; groups: PvGroup[] }) {
   useEffect(() => { createClient().from("supplier_manifest_lines").select("*").eq("archived_order_id", id).in("kind", ["goods", "blanks"]).then(({ data }) => setLines((data || []) as GLine[])); }, [id]);
   if (!lines?.length) return null;
   const sz = (z: string) => z.replace(/^size_/, "").toUpperCase().replace(/^XXL$/, "2XL").replace(/^XXXL$/, "3XL");
-  const want = groups.flatMap((g) => (g.lines || []).flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +q > 0).map(([z, q]) => ({ style: l.itemNumber || "", color: l.color || "", size: sz(z), qty: +q }))));
+  const want = groups.flatMap((g) => (g.lines || []).flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +q > 0).map(([z, q]) => ({ style: l.itemNumber || "", color: l.color || "", size: sz(z), qty: +q })).sort((a, b) => bySizeOrder(a.size, b.size))));
   const got = (w: { style: string; color: string; size: string }) => lines.filter((l) => (n(l.style) === n(w.style) || n(w.style).endsWith(n(l.style))) && (n(l.color) === n(w.color) || n(w.color).includes(n(l.color)) || n(l.color).includes(n(w.color))) && l.size.toUpperCase() === w.size).reduce((a, l) => a + l.qty_shipped, 0);
   const trk = [...new Map(lines.map((l) => [l.tracking || l.supplier_order, l])).values()];
   return (

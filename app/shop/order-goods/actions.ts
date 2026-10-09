@@ -1,7 +1,8 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
+import { sizeRank } from "@/lib/sizeOrder";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { mergeSettings, orderGroups, SIZES, type Group, type Order } from "@/lib/pricing";
+import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricing";
 import { SS_REP, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
 import { matchToSS, shopEmails, type GoodsRow } from "@/lib/ssMatch";
 import { accountForUser, cfgOf } from "@/lib/mail/config";
@@ -20,7 +21,6 @@ async function staff() {
   return v;
 }
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) });
-const sizeRank = (z: string) => { const i = (SIZES as readonly string[]).indexOf(z); return i < 0 ? 999 : i; };
 
 export type StyleColor = { name: string; sizes: { size: string; sku: string; price: number; qty: number }[] };
 
@@ -64,7 +64,8 @@ export async function goodsStart(p: { email?: string; order?: string }) {
         if (have) have.qty += qty;
         else rows.push({ key, brand: l.brand || "", style: l.style || "", color: l.color || "", size: z, qty, sku: "", price: 0, stock: 0, found: false, note: "" });
       }
-      return rows;
+      // garment by garment, each in size order (XS … 4XL), never alphabetical
+      return rows.sort((a, b) => `${a.brand}|${a.style}|${a.color}`.localeCompare(`${b.brand}|${b.style}|${b.color}`) || sizeRank(a.size) - sizeRank(b.size));
     };
     if (p.order) {
       const { data: o } = await admin.from("orders").select("id, number, nickname, groups, lines, customer_id, customers(id, company, name)").eq("id", p.order).maybeSingle();

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { bySizeOrder } from "@/lib/sizeOrder";
 import Link from "next/link";
 import { carrierOf, CARRIERS, GOODS, GOODS_ORDER, goodsNeedInfo, ISSUES, supplierLabel, TRACK, trackWord, trackingUrl, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
 import GoodsInfoFields, { cleanGoodsInfo, type GoodsInfoValue } from "@/components/GoodsInfoFields";
@@ -191,7 +192,7 @@ function CountForm({ it, busy, onSave, onCancel }: { it: GoodsItem; busy: boolea
   const lines = it.lines || [];
   const [n, setN] = useState<Record<string, string>>({});
   const key = (li: number, z: string) => `${li}|${z}`;
-  const diffs = lines.flatMap((l, li) => Object.entries(l.sizes).map(([z, want]) => ({ l, z, want, got: n[key(li, z)] === undefined || n[key(li, z)] === "" ? null : +n[key(li, z)] })));
+  const diffs = lines.flatMap((l, li) => Object.entries(l.sizes).sort(([a], [b]) => bySizeOrder(a, b)).map(([z, want]) => ({ l, z, want, got: n[key(li, z)] === undefined || n[key(li, z)] === "" ? null : +n[key(li, z)] })));
   const counted = diffs.every((d) => d.got !== null);
   const off = diffs.filter((d) => d.got !== null && d.got !== d.want);
   const short = off.some((d) => (d.got ?? 0) < d.want), over = off.some((d) => (d.got ?? 0) > d.want);
@@ -203,7 +204,7 @@ function CountForm({ it, busy, onSave, onCancel }: { it: GoodsItem; busy: boolea
           <div key={li} className="gc-count-l">
             <b>{l.label}</b>
             <div className="gc-count-sz">
-              {Object.entries(l.sizes).map(([z, want]) => {
+              {Object.entries(l.sizes).sort(([a], [b]) => bySizeOrder(a, b)).map(([z, want]) => {
                 const v = n[key(li, z)] ?? "", bad = v !== "" && +v !== want;
                 return (
                   <label key={z} className={bad ? "bad" : v !== "" ? "ok" : ""}>
@@ -218,7 +219,7 @@ function CountForm({ it, busy, onSave, onCancel }: { it: GoodsItem; busy: boolea
         ))}
       </div>
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-        <button type="button" className="btn sm" onClick={() => setN(Object.fromEntries(lines.flatMap((l, li) => Object.entries(l.sizes).map(([z, want]) => [key(li, z), String(want)]))))}>Everything matches</button>
+        <button type="button" className="btn sm" onClick={() => setN(Object.fromEntries(lines.flatMap((l, li) => Object.entries(l.sizes).sort(([a], [b]) => bySizeOrder(a, b)).map(([z, want]) => [key(li, z), String(want)]))))}>Everything matches</button>
         <span className="faint" style={{ fontSize: 12.5 }}>{!counted ? "Type what you counted for each size (empty = not counted yet)." : off.length ? `${off.length} size${off.length === 1 ? " doesn't" : "s don't"} match. Saving marks it as an issue and tells the customer.` : "All counts match."}</span>
       </div>
       {counted && off.length > 0 && <pre className="gc-count-note">{note}</pre>}
