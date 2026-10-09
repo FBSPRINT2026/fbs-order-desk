@@ -48,7 +48,9 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
  */
 export type Fit = { s: number; cx: number; top: number; /** PNG data URL: opaque where the shirt is, clear on the background */ mask: string; sleeve: { left: { x: number; y: number; rot: number }; right: { x: number; y: number; rot: number } };
   /** a bag or tote (flat, no collar): its body on the photo (px) and pixels per inch from its real width */
-  flat?: { cx: number; top: number; w: number; h: number; ppi: number } };
+  flat?: { cx: number; top: number; w: number; h: number; ppi: number };
+  /** a shirt: its side seams across the body (px) and the bottom of the hem, as found on this photo */
+  body?: { l: number; r: number; hem: number } };
 const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
 /** Center of the sleeve print area: this far (reference px) up the fold from the sleeve tip, i.e. area bottom ~0.5" above the hem. */
 const SLEEVE_UP = 76.5;
@@ -138,7 +140,7 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
   if (!ok(left.rot) && ok(right.rot)) left = { ...left, rot: -right.rot };
   if (!ok(right.rot) && ok(left.rot)) right = { ...right, rot: -left.rot };
   if (!ok(left.rot) && !ok(right.rot)) { left = { ...left, rot: 35 }; right = { ...right, rot: -35 }; }
-  return { s, cx, top: T, mask, sleeve: { left, right } };
+  return { s, cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B } };
 }
 
 /**

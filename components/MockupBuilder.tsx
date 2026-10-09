@@ -678,14 +678,29 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     );
     return (
       <svg className="mk-measure" viewBox={`0 0 ${PHOTO_W} ${PHOTO_H}`} preserveAspectRatio="none" aria-label="Measured view">
-        {/* inch grid over the garment */}
-        {Array.from({ length: Math.floor(gw) + 1 }, (_, i) => <line key={"x" + i} x1={gx + i * ppi} x2={gx + i * ppi} y1={gy} y2={gy + H} stroke="rgba(0,0,0,.28)" strokeWidth={i % 6 === 0 || i === Math.floor(gw) ? 1.6 : 0.8} vectorEffect="non-scaling-stroke" />)}
-        {Array.from({ length: Math.floor(gh) + 1 }, (_, i) => <line key={"y" + i} y1={gy + i * ppi} y2={gy + i * ppi} x1={gx} x2={gx + W} stroke="rgba(0,0,0,.28)" strokeWidth={i % 6 === 0 || i === Math.floor(gh) ? 1.6 : 0.8} vectorEffect="non-scaling-stroke" />)}
-        <rect x={gx} y={gy} width={W} height={H} fill="none" stroke="#111" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-        {/* inch numbers across the top and down the side */}
-        {Array.from({ length: Math.floor(gw / every) + 1 }, (_, i) => i * every).filter((i) => i > 0).map((i) => <g key={"tx" + i}>{tag(gx + i * ppi, gy - fs * 0.4, String(i), "#111")}</g>)}
-        {Array.from({ length: Math.floor(gh / every) + 1 }, (_, i) => i * every).filter((i) => i > 0).map((i) => <g key={"ty" + i}>{tag(gx - fs * 0.4, gy + i * ppi + fs * 0.35, String(i), "#111", "end")}</g>)}
-        {tag(gx + W / 2, gy + H + fs * 1.3, `${n(gw)}" × ${n(gh)}" ${body.cap ? (body.cap.label.split(" ").pop() || "bag") : `body (${shownOn.replace(/^an? /, "")})`}`, "#111")}
+        {/* inch grid over the garment. A shirt on the form is wrapped: 22 columns from side seam to side seam, full
+            inches across the middle of the chest and narrower toward the sides as the body curves away, and the
+            rows run from the top of the collar to the hem. A bag is flat: straight inches. */}
+        {(() => {
+          const sh = !f && fit?.body ? fit.body : null;
+          const c0 = sh ? (sh.l + sh.r) / 2 : gx + W / 2, rv = sh ? (sh.r - sh.l) / 2 : W / 2;
+          const X = (i: number) => (sh ? c0 + rv * Math.sin(((i - gw / 2) / (gw / 2)) * (Math.PI / 2)) : gx + i * ppi);
+          const y0 = gy, Y = (i: number) => (sh ? y0 + (i * (sh.hem - y0)) / gh : gy + i * ppi);
+          const nx = Math.floor(gw), ny = Math.floor(gh), x0 = X(0), x1 = X(gw), y1 = Y(gh);
+          const across: number[] = []; let last = -1e9;
+          // numbers across the top: every inch (every 2 on a shirt), skipped where the wrap squeezes them together
+          for (let i = every; i <= nx; i += every) { const xi = X(i); if (xi - last >= fs * 1.3) { across.push(i); last = xi; } }
+          return (
+            <>
+              {Array.from({ length: nx + 1 }, (_, i) => <line key={"x" + i} x1={X(i)} x2={X(i)} y1={y0} y2={y1} stroke="rgba(0,0,0,.28)" strokeWidth={i % 6 === 0 || i === nx ? 1.6 : 0.8} vectorEffect="non-scaling-stroke" />)}
+              {Array.from({ length: ny + 1 }, (_, i) => <line key={"y" + i} y1={Y(i)} y2={Y(i)} x1={x0} x2={x1} stroke="rgba(0,0,0,.28)" strokeWidth={i % 6 === 0 || i === ny ? 1.6 : 0.8} vectorEffect="non-scaling-stroke" />)}
+              <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill="none" stroke="#111" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+              {across.map((i) => <g key={"tx" + i}>{tag(X(i), y0 - fs * 0.4, String(i), "#111")}</g>)}
+              {Array.from({ length: Math.floor(gh / every) + 1 }, (_, i) => i * every).filter((i) => i > 0).map((i) => <g key={"ty" + i}>{tag(x0 - fs * 0.4, Y(i) + fs * 0.35, String(i), "#111", "end")}</g>)}
+              {tag((x0 + x1) / 2, y1 + fs * 1.3, body.cap ? `${n(gw)}" × ${n(gh)}" ${body.cap.label.split(" ").pop() || "bag"}` : `${n(gw)}" chest (laid flat, wraps around the form) × ${n(gh)}" long · ${shownOn.replace(/^an? /, "")}`, "#111")}
+            </>
+          );
+        })()}
         {ims.map((im) => {
           const p = place(im, v), sp = spotFor(im.location);
           return (
