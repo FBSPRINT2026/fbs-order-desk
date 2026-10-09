@@ -194,6 +194,18 @@ export function measureBag(img: HTMLImageElement, widthIn: number): Fit | null {
   return { s: 1, cx, top, mask: mc.toDataURL("image/png"), sleeve: { left: none, right: none }, flat: { cx, top, w, h, ppi: w / Math.max(4, widthIn) } };
 }
 
+/**
+ * Every shirt photo shown at the same size: S&S and SanMar frame their photos differently (a PC54 sits smaller and
+ * lower in its frame than a Gildan 5000), so each photo is zoomed and shifted until its measured shirt matches the
+ * reference Gildan 5000 (same width, height, center and collar). Point p on the photo is drawn at z·p + t. Bags and
+ * drawn tees are left as they are.
+ */
+export function normOf(fit: Fit | null | undefined, view: View): { z: number; tx: number; ty: number } {
+  if (!fit || fit.flat || !fit.body || !(fit.s > 0)) return { z: 1, tx: 0, ty: 0 };
+  const z = Math.max(0.8, Math.min(1.4, 1 / fit.s));
+  return { z, tx: CENTER_X - z * fit.cx, ty: REF[view].top - z * fit.top };
+}
+
 /** Which garment photos a location shows on. */
 export const viewsFor = (location: string): View[] => { const s = spotFor(location); return s.wrap ? ["front", "back"] : [s.view]; };
 /** Largest width (inches) that fits the location's max print area for a design of this height/width ratio. */

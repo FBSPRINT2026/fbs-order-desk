@@ -22,7 +22,7 @@ import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
-import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, measureBag, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, measureBag, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
@@ -822,8 +822,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], ox = i * (pw + gap), oy = 0;
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
-      main.drawImage(bg, ox, oy, pw, ph);
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
+      // the shirt at the same size as on screen (every photo zoomed to fill the frame like the reference tee); kept to its own cell
+      const nm = normOf(fit, v);
+      main.save(); main.beginPath(); main.rect(ox, oy, pw, ph); main.clip();
+      main.drawImage(bg, ox + nm.tx * k, oy + nm.ty * k, pw * nm.z, ph * nm.z);
+      main.restore();
       // art goes on its own layer, then gets cut to the shirt outline before it's added to the picture
       const layer = document.createElement("canvas"); layer.width = c.width; layer.height = c.height;
       const x = layer.getContext("2d")!;
@@ -834,16 +838,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const art = await loadImg(artUrl(im)).catch(() => null);
         if (art) {
           x.save();
-          x.translate(ox + (p.x + p.w / 2) * k, oy + (p.y + p.h / 2) * k);
+          x.translate(ox + (nm.tx + nm.z * (p.x + p.w / 2)) * k, oy + (nm.ty + nm.z * (p.y + p.h / 2)) * k);
           if (p.rot) x.rotate((p.rot * Math.PI) / 180);
-          if (p.clip) { x.beginPath(); x.rect(p.clip === "left" ? (-p.w / 2) * k : 0, (-p.h / 2) * k, (p.w / 2) * k, p.h * k); x.clip(); }
-          x.drawImage(art, (-p.w / 2) * k, (-p.h / 2) * k, p.w * k, p.h * k);
+          const kz = k * nm.z;
+          if (p.clip) { x.beginPath(); x.rect(p.clip === "left" ? (-p.w / 2) * kz : 0, (-p.h / 2) * kz, (p.w / 2) * kz, p.h * kz); x.clip(); }
+          x.drawImage(art, (-p.w / 2) * kz, (-p.h / 2) * kz, p.w * kz, p.h * kz);
           x.restore();
         }
       }
       if (fit?.mask) {
         const m = await loadImg(fit.mask).catch(() => null);
-        if (m) { x.globalCompositeOperation = "destination-in"; x.drawImage(m, ox, oy, pw, ph); x.globalCompositeOperation = "source-over"; }
+        if (m) { x.globalCompositeOperation = "destination-in"; x.drawImage(m, ox + nm.tx * k, oy + nm.ty * k, pw * nm.z, ph * nm.z); x.globalCompositeOperation = "source-over"; }
       }
       main.save(); main.setTransform(1, 0, 0, 1, 0, 0); main.drawImage(layer, 0, 0); main.restore();
     }
@@ -886,8 +891,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
     const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
-    const side = Math.min(PHOTO_W, Math.max(120, Math.max(p.w, p.h) * (p.rot ? 1.35 : 1.12)));
-    const cx = p.x + p.w / 2, cy = p.y + p.h / 2;
+    const nm = normOf(fit, v);
+    const side = Math.min(PHOTO_W, Math.max(120, Math.max(p.w, p.h) * nm.z * (p.rot ? 1.35 : 1.12)));
+    const cx = nm.tx + nm.z * (p.x + p.w / 2), cy = nm.ty + nm.z * (p.y + p.h / 2);
     const crop = { x: Math.max(0, Math.min(PHOTO_W - side, cx - side / 2)), y: Math.max(0, Math.min(PHOTO_H - side, cy - side / 2)), w: side, h: side };
     return photosCanvas(l, size / side, 0, [v], crop);
   }
@@ -1371,7 +1377,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             )}
             {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
-              <Stage key={v} grid={grid} cx={fitFor(line, v)?.cx}
+              <Stage key={v} grid={grid} norm={normOf(fitFor(line, v), v)} cx={normOf(fitFor(line, v), v).z !== 1 ? CENTER_X : fitFor(line, v)?.cx}
                 corner={<>
                   {(v === "front" || single) && (
                     <div className="mk-corner l">
@@ -1678,8 +1684,9 @@ let tipSeen = false;
 const tipWasSeen = () => { if (tipSeen) return true; try { tipSeen = localStorage.getItem("mk-tip-seen") === "1"; } catch { /* private window */ } return tipSeen; };
 const markTipSeen = () => { tipSeen = true; try { localStorage.setItem("mk-tip-seen", "1"); } catch { /* private window */ } };
 
-function Stage({ src, label, items, grid, mask, cx, corner, overlay, onMove, onResize, onEnd, onPick }: {
+function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick }: {
   /** drawn over the photo (the measured view) */ overlay?: ReactNode;
+  /** zoom and shift that make this photo's shirt fill the frame like the reference tee (normOf) */ norm?: { z: number; tx: number; ty: number };
   src: string; label: string; /** the shirt's center on this photo, so the label sits under the shirt */ cx?: number; corner?: ReactNode; onEnd?: (id: string) => void; grid?: boolean; /** shirt-shaped mask: art never shows past the edge of the shirt */ mask?: string;
   items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; clip?: "" | "left" | "right"; area: { x: number; y: number; w: number; h: number } }; url: string }[];
   onMove: (id: string, dx: number, dy: number) => void;
@@ -1704,7 +1711,8 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, onMove, onR
     document.addEventListener("pointerdown", off);
     return () => document.removeEventListener("pointerdown", off);
   }, [sel]);
-  const k = () => (box.current ? box.current.clientWidth / PHOTO_W : 0.42);
+  const z = norm?.z || 1;
+  const k = () => (box.current ? box.current.clientWidth / PHOTO_W : 0.42) * z;
   const s = 100 / PHOTO_W, sy = 100 / PHOTO_H;
   return (
     <div className="mk-stage">
@@ -1744,7 +1752,8 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, onMove, onR
         }}
         onPointerCancel={(e) => { pts.current.delete(e.pointerId); if (pinch.current && pts.current.size < 2) { const id = pinch.current.id; pinch.current = null; onEnd?.(id); } drag.current = null; }}
         onPointerLeave={(e) => { if (e.pointerType === "touch") return; const d = drag.current; drag.current = null; if (d && onEnd && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 3) onEnd(d.id); }}
-        onPointerDown={(e) => { if (pts.current.size > 1) return; if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg")) setSel(""); }}>
+        onPointerDown={(e) => { if (pts.current.size > 1) return; if (e.target === box.current || (e.target as HTMLElement).classList.contains("mk-bg") || (e.target as HTMLElement).classList.contains("mk-norm")) setSel(""); }}>
+        <div className="mk-norm" style={norm && norm.z !== 1 ? { transform: `translate(${(norm.tx / PHOTO_W) * 100}%, ${(norm.ty / PHOTO_H) * 100}%) scale(${norm.z})` } : undefined}>
         <img src={src} alt="" draggable={false} className="mk-bg" />
         {grid && items.map((it) => <div key={"a" + it.id} className="mk-area" style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }} />)}
         {/* the art itself, cut to the shirt outline */}
@@ -1774,7 +1783,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, onMove, onR
               if (last && last.id === it.id && now - last.t < 450 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 8) {
                 const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect();
                 const cx = r.left + r.width / 2, cy = r.top + r.height / 2, a = (-(it.p.rot || 0) * Math.PI) / 180;
-                const vx = e.clientX - cx, vy = e.clientY - cy;
+                const vx = (e.clientX - cx) / z, vy = (e.clientY - cy) / z; // screen px back to the element's own (the photo may be zoomed)
                 const ux = vx * Math.cos(a) - vy * Math.sin(a), uy = vx * Math.sin(a) + vy * Math.cos(a);
                 onPick(it.id, ux / el.offsetWidth + 0.5, uy / el.offsetHeight + 0.5, e.clientX, e.clientY);
                 lastDown.current = null;
@@ -1784,7 +1793,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, onMove, onR
               (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
               // grabbing the bottom-right corner resizes right away (no need to select first)
               const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect();
-              const a = (-(it.p.rot || 0) * Math.PI) / 180, vx = e.clientX - (r.left + r.width / 2), vy = e.clientY - (r.top + r.height / 2);
+              const a = (-(it.p.rot || 0) * Math.PI) / 180, vx = (e.clientX - (r.left + r.width / 2)) / z, vy = (e.clientY - (r.top + r.height / 2)) / z;
               const lx = vx * Math.cos(a) - vy * Math.sin(a) + el.offsetWidth / 2, ly = vx * Math.sin(a) + vy * Math.cos(a) + el.offsetHeight / 2;
               // a finger needs a bigger corner than a mouse
               const corner = Math.max(e.pointerType === "touch" ? 30 : 10, Math.min(el.offsetWidth, el.offsetHeight) * (e.pointerType === "touch" ? 0.3 : 0.18));
@@ -1806,6 +1815,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, onMove, onR
         {tip && (() => { const it = items.find((x) => x.id === tip); return it ? (
           <div className="mk-hint" style={{ left: `${(it.p.x + it.p.w / 2) * s}%`, top: `${it.p.y * sy}%` }}>{touch ? "Double-tap to change a color" : "Double-click to change a color"}<span>{touch ? "Drag to move · pinch or drag the corner to resize" : "Drag to move · drag the corner to resize"}</span></div>
         ) : null; })()}
+        </div>
         {corner}
       </div>
       <div className="mk-label" style={cx ? { transform: `translateX(${((cx / PHOTO_W) - 0.5) * 100}%)` } : undefined}>{label}</div>
