@@ -95,6 +95,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
   const [paints, setPaints] = useState<Record<string, Paint>>({});
   const [grid, setGrid] = useState(false);
+  const [measure, setMeasure] = useState(false);
   const [tab, setTab] = useState<"" | Side>("");
   // close-ups fill the column between the photos and the Imprints panel
   const cuRef = useRef<HTMLDivElement>(null);
@@ -658,6 +659,47 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const scale = scaleOf(body);
   const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
   const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
+
+  /**
+   * The measured view: an inch grid over the garment at the size we're drawing it (a 13" × 13" tote → 13 × 13 squares,
+   * an adult Large → 22" × 30"), the max print area and each print's width × height, so the scale can be checked by eye.
+   */
+  const measured = (v: View) => {
+    const fit = fitFor(line, v), f = fit?.flat;
+    const sc = scaleOf(body);
+    const ppi = f ? f.ppi : PX_PER_IN * sc * (fit?.s || 1);
+    const gw = f && body.cap && line ? bagWidth(line) : body.widthIn, gh = f && body.cap && line ? bagLength(line) : body.lengthIn;
+    const gx = (f ? f.cx : fit?.cx ?? CENTER_X) - (gw * ppi) / 2, gy = f ? f.top : fit?.top ?? COLLAR_Y[v];
+    const W = gw * ppi, H = gh * ppi, fs = Math.max(13, Math.min(22, ppi * 0.45)), every = gw > 16 ? 2 : 1;
+    const ims = imprints.filter((im) => viewsFor(im.location).length === 1 && viewsFor(im.location)[0] === v);
+    const n = (x: number) => (Math.round(x * 100) / 100).toString();
+    const tag = (x: number, y: number, t: string, c: string, anchor: "start" | "middle" | "end" = "middle") => (
+      <text x={x} y={y} fontSize={fs} fontWeight={700} textAnchor={anchor} fill={c} stroke="#fff" strokeWidth={fs / 4} paintOrder="stroke">{t}</text>
+    );
+    return (
+      <svg className="mk-measure" viewBox={`0 0 ${PHOTO_W} ${PHOTO_H}`} preserveAspectRatio="none" aria-label="Measured view">
+        {/* inch grid over the garment */}
+        {Array.from({ length: Math.floor(gw) + 1 }, (_, i) => <line key={"x" + i} x1={gx + i * ppi} x2={gx + i * ppi} y1={gy} y2={gy + H} stroke="rgba(0,0,0,.28)" strokeWidth={i % 6 === 0 || i === Math.floor(gw) ? 1.6 : 0.8} vectorEffect="non-scaling-stroke" />)}
+        {Array.from({ length: Math.floor(gh) + 1 }, (_, i) => <line key={"y" + i} y1={gy + i * ppi} y2={gy + i * ppi} x1={gx} x2={gx + W} stroke="rgba(0,0,0,.28)" strokeWidth={i % 6 === 0 || i === Math.floor(gh) ? 1.6 : 0.8} vectorEffect="non-scaling-stroke" />)}
+        <rect x={gx} y={gy} width={W} height={H} fill="none" stroke="#111" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        {/* inch numbers across the top and down the side */}
+        {Array.from({ length: Math.floor(gw / every) + 1 }, (_, i) => i * every).filter((i) => i > 0).map((i) => <g key={"tx" + i}>{tag(gx + i * ppi, gy - fs * 0.4, String(i), "#111")}</g>)}
+        {Array.from({ length: Math.floor(gh / every) + 1 }, (_, i) => i * every).filter((i) => i > 0).map((i) => <g key={"ty" + i}>{tag(gx - fs * 0.4, gy + i * ppi + fs * 0.35, String(i), "#111", "end")}</g>)}
+        {tag(gx + W / 2, gy + H + fs * 1.3, `${n(gw)}" × ${n(gh)}" ${body.cap ? (body.cap.label.split(" ").pop() || "bag") : `body (${shownOn.replace(/^an? /, "")})`}`, "#111")}
+        {ims.map((im) => {
+          const p = place(im, v), sp = spotFor(im.location);
+          return (
+            <g key={im.id}>
+              <rect x={p.area.x} y={p.area.y} width={p.area.w} height={p.area.h} fill="rgba(10,123,166,.08)" stroke="#0a7ba6" strokeWidth={2} strokeDasharray="8 6" vectorEffect="non-scaling-stroke" />
+              {tag(p.area.x + p.area.w / 2, p.area.y + p.area.h - fs * 0.4, `max ${sp.maxW}" × ${sp.maxH}"`, "#0a7ba6")}
+              <rect x={p.x} y={p.y} width={p.w} height={p.h} fill="none" stroke="#d6336c" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+              {tag(p.x + p.w / 2, p.y - fs * 0.4, `${n(p.wIn)}" × ${n(p.hIn)}"`, "#d6336c")}
+            </g>
+          );
+        })}
+      </svg>
+    );
+  };
 
   /** One close-up box for an imprint (used under the photos and, smaller, beside them for the selected tab). */
   const closeUp = (im: Imprint, size: number) => {
@@ -1319,11 +1361,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   {(v === "front" || single) && (
                     <div className="mk-corner l">
                       <label className="mk-pill"><input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} /> Print areas</label>
+                      <label className="mk-pill" title="An inch grid over the garment: its size, the max print area and each print's size"><input type="checkbox" checked={measure} onChange={(e) => setMeasure(e.target.checked)} /> Measure</label>
                       {Object.keys(offsets).length > 0 && <button className="mk-pill" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
                     </div>
                   )}
                   {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={body.cap ? `Max print area ${body.cap.maxW}" × ${body.cap.maxH}" (the bag less 1.5" around)` : `${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody && !body.cap ? ` · sized for the ${capBody.size}` : ""}</span></div>}
-                </>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
+                </>} overlay={measure ? measured(v) : undefined} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => {
                   const im = imprints.find((x) => x.id === id);
@@ -1620,7 +1663,8 @@ let tipSeen = false;
 const tipWasSeen = () => { if (tipSeen) return true; try { tipSeen = localStorage.getItem("mk-tip-seen") === "1"; } catch { /* private window */ } return tipSeen; };
 const markTipSeen = () => { tipSeen = true; try { localStorage.setItem("mk-tip-seen", "1"); } catch { /* private window */ } };
 
-function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, onEnd, onPick }: {
+function Stage({ src, label, items, grid, mask, cx, corner, overlay, onMove, onResize, onEnd, onPick }: {
+  /** drawn over the photo (the measured view) */ overlay?: ReactNode;
   src: string; label: string; /** the shirt's center on this photo, so the label sits under the shirt */ cx?: number; corner?: ReactNode; onEnd?: (id: string) => void; grid?: boolean; /** shirt-shaped mask: art never shows past the edge of the shirt */ mask?: string;
   items: { id: string; p: { x: number; y: number; w: number; h: number; rot: number; clip?: "" | "left" | "right"; area: { x: number; y: number; w: number; h: number } }; url: string }[];
   onMove: (id: string, dx: number, dy: number) => void;
@@ -1696,6 +1740,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, onMove, onResize, on
             </div>
           ) : null)}
         </div>
+        {overlay}
         {/* invisible handles on top for dragging, resizing and double-click */}
         {items.map((it) => (
           <div key={it.id} className={"mk-art mk-hit" + (sel === it.id ? " sel" : "") + (it.url ? "" : " mk-missing")}
