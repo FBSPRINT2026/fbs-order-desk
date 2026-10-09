@@ -480,7 +480,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const st = l.style.trim();
       if (!st || garmentFor(l) || tried.current.has(st.toUpperCase())) return;
       tried.current.add(st.toUpperCase());
-      if (orderId) lookupStyle(st);
+      // SanMar's brands (Port Authority, Sport-Tek, District…) go straight to SanMar
+      if (orderId) lookupStyle(st, undefined, /port authority|port & company|sport-?tek|district|ogio|cornerstone|red kap|eddie bauer|new era|travis ?mathew|mercer|nike/i.test(l.brand || "") ? "sanmar" : undefined);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, catalog]);

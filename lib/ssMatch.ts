@@ -49,3 +49,42 @@ export async function shopEmails(me?: string | null, admin?: SupabaseClient) {
   return [me || "", d.shop?.email || "", d.ship?.from?.email || "", ...(d.owners || []).map((o) => o.email || ""), "nicholas@fbsprint.com", ...((mb || []) as { email: string }[]).map((m) => m.email)]
     .map((e) => e.trim().toLowerCase()).filter((e, i, a) => /@/.test(e) && a.indexOf(e) === i).slice(0, 8);
 }
+
+/**
+ * The S&S website login our saved card belongs to (an order names the card by that login's email). The one a dry run
+ * proved is kept in settings (ss_pay_email); until then a dry run tries the card's own email and then the likely ones.
+ * A real order only uses a proven email (or the card's own), never guesses.
+ */
+export async function ssPayEmail(admin: SupabaseClient, cardEmail: string, me?: string | null, test?: boolean): Promise<{ ok: true; emails: string[] } | { ok: false; error: string }> {
+  const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const proven = String((st?.data as { ss_pay_email?: string } | null)?.ss_pay_email || "").trim().toLowerCase();
+  if (proven) return { ok: true, emails: [proven] };
+  if (!test) {
+    if (cardEmail.includes("@")) return { ok: true, emails: [cardEmail.toLowerCase()] };
+    return { ok: false, error: "Run the dry run first: it finds which S&S login our card is saved under." };
+  }
+  const list = [cardEmail, ...(await shopEmails(me, admin))].map((e) => e.trim().toLowerCase()).filter((e, i, a) => e.includes("@") && a.indexOf(e) === i);
+  return { ok: true, emails: list };
+}
+
+/** Place (or dry-run) the order with each login email in turn while S&S says the email isn't one of ours; keep the one it takes. */
+export async function placeWithLogin<T>(emails: string[], place: (email: string) => Promise<T>, admin: SupabaseClient, test: boolean): Promise<T> {
+  let last: unknown = null;
+  for (const e of emails) {
+    try {
+      const r = await place(e);
+      // remember the login S&S accepted (a dry run proves it)
+      const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+      const d = (st?.data || {}) as Record<string, unknown>;
+      if (d.ss_pay_email !== e) await admin.from("settings").update({ data: { ...d, ss_pay_email: e } }).eq("id", 1);
+      return r;
+    } catch (err) {
+      last = err;
+      const m = err instanceof Error ? err.message : String(err);
+      // only a wrong login email is worth another try (and only on a dry run)
+      if (!test || !/website user email|not assigned to your customer/i.test(m)) throw err;
+    }
+  }
+  const tried = emails.join(", ");
+  throw new Error(`S&S didn't accept any of our emails as the login the 5488 card is saved under (tried ${tried}). What email do you sign in to ssactivewear.com with? ${last instanceof Error ? `(${last.message})` : ""}`.trim());
+}

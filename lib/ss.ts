@@ -84,7 +84,10 @@ async function findStyle(q: string): Promise<SSStyle | null> {
     const eq = (s: SSStyle) => [s.styleName, s.partNumber, `${s.brandName} ${s.styleName}`].some((x) => (x || "").toLowerCase() === t.toLowerCase() || (x || "").toLowerCase() === stripped.toLowerCase());
     const hits = list.filter(eq);
     const prefix = t.match(/^([A-Za-z]{1,2})(?=\d)/)?.[1]?.toLowerCase();
-    const pick = (prefix && hits.find((s) => s.brandName.toLowerCase().startsWith(prefix))) || hits[0];
+    // the letters dropped ("G5000" → 5000): only a style of a brand those letters stand for. "BG424" (Port Authority,
+    // a SanMar tote) must not become Augusta's 424 (Oct 9): no such brand here, so it's left for SanMar.
+    const pick = term === t ? (prefix && hits.find((s) => s.brandName.toLowerCase().startsWith(prefix))) || hits[0]
+      : prefix ? hits.find((s) => s.brandName.toLowerCase().startsWith(prefix)) : hits[0];
     if (pick) return pick;
   }
   return null;

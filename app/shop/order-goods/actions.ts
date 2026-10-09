@@ -4,7 +4,7 @@ import { sizeRank } from "@/lib/sizeOrder";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricing";
 import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
-import { matchToSS, shopEmails, type GoodsRow } from "@/lib/ssMatch";
+import { matchToSS, placeWithLogin, shopEmails, ssPayEmail, type GoodsRow } from "@/lib/ssMatch";
 import { accountForUser, cfgOf } from "@/lib/mail/config";
 import { sendFromMailbox } from "@/lib/mail/send";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
@@ -125,12 +125,15 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
     if (alloc.short.length) return { ok: false as const, error: `S&S doesn't have enough of: ${alloc.short.join("; ")}.` };
     const card = await ssOurCard(await shopEmails(v.user?.email));
     if (!card.ok) return { ok: false as const, error: card.error };
-    const res = await ssPlaceOrder({
-      payment: { email: card.profile.email, profileID: card.profile.profileID }, quote: p.quote,
+    // the S&S website login the card belongs to: the one a dry run proved, else each likely email until S&S takes one
+    const payEmail = await ssPayEmail(admin, card.profile.email, v.user?.email, p.test);
+    if (!payEmail.ok) return { ok: false as const, error: payEmail.error };
+    const res = await placeWithLogin(payEmail.emails, (email) => ssPlaceOrder({
+      payment: { email, profileID: card.profile.profileID }, quote: p.quote,
       lines: alloc.lines, po, test: p.test, shippingMethod: p.shippingMethod || "40",
       shipTo: { customer: from.company || "FBS Print", attn: from.name || "Receiving", address: [from.street1, from.street2].filter(Boolean).join(" "), city: from.city, state: from.state, zip: from.zip },
       email: p.test ? undefined : v.user!.email || undefined,
-    });
+    }), admin, p.test);
     const results = res.map((r) => ({ orderNumber: r.orderNumber, warehouse: r.warehouseAbbr, total: r.total, expected: r.expectedDeliveryDate }));
     if (!p.test) {
       const expected = results.map((r) => r.expected).filter(Boolean).sort().pop() || null;
