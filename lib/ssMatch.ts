@@ -33,3 +33,19 @@ export async function matchToSS(admin: SupabaseClient, rows: GoodsRow[], opts: {
   }
   return rows;
 }
+
+/**
+ * Emails that may be the S&S website login our card is saved under: whoever is ordering, the shop's email and its
+ * owners, and the connected mailboxes (S&S keeps saved cards per website login).
+ */
+export async function shopEmails(me?: string | null, admin?: SupabaseClient) {
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const db = admin || createAdminClient();
+  const [{ data: st }, { data: mb }] = await Promise.all([
+    db.from("settings").select("data").eq("id", 1).maybeSingle(),
+    db.from("mail_accounts").select("email").limit(20),
+  ]);
+  const d = (st?.data || {}) as { shop?: { email?: string }; owners?: { email?: string }[]; ship?: { from?: { email?: string } } };
+  return [me || "", d.shop?.email || "", d.ship?.from?.email || "", ...(d.owners || []).map((o) => o.email || ""), "nicholas@fbsprint.com", ...((mb || []) as { email: string }[]).map((m) => m.email)]
+    .map((e) => e.trim().toLowerCase()).filter((e, i, a) => /@/.test(e) && a.indexOf(e) === i).slice(0, 8);
+}

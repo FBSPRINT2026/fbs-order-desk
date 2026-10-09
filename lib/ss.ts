@@ -199,8 +199,32 @@ export const SS_CARD_LAST4 = "5488";
 /** our S&S account rep: custom quotes for bigger orders (Order goods → Ask for a better price) */
 export const SS_REP = { name: "Tiffany Clark", email: "tiffany.clark@ssactivewear.com" };
 export type SSPayProfile = { profileID: number; email: string; label: string; last4: string };
-export async function ssPaymentProfiles(): Promise<SSPayProfile[]> {
-  const raw = await ssGet<unknown>("/paymentprofiles/");
+/** a GET that keeps S&S's own error message (a 400 says what's missing) */
+async function ssGetRaw(path: string): Promise<{ ok: boolean; status: number; body: unknown; text: string }> {
+  const auth = btoa(`${process.env.SS_ACCOUNT_NUMBER!.trim()}:${process.env.SS_API_KEY!.trim()}`);
+  const r = await fetch(BASE + path, { headers: { Authorization: `Basic ${auth}`, Accept: "application/json" }, cache: "no-store" });
+  const text = await r.text();
+  let body: unknown = null; try { body = JSON.parse(text); } catch { /* not JSON */ }
+  return { ok: r.ok, status: r.status, body, text };
+}
+const ssErr = (x: { status: number; body: unknown; text: string }) => {
+  const b = x.body as { message?: string; errors?: { message?: string }[] } | null;
+  return b?.errors?.map((e) => e.message).filter(Boolean).join("; ") || b?.message || x.text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200) || `HTTP ${x.status}`;
+};
+/**
+ * The saved cards on our S&S account. S&S keeps them per website login, so the call may need that login's email:
+ * tried as-is, then with each email given (whoever is ordering, then the shop's).
+ */
+export async function ssPaymentProfiles(emails: string[] = []): Promise<SSPayProfile[]> {
+  const tries = ["/paymentprofiles/", ...[...new Set(emails.filter(Boolean).map((e) => e.trim().toLowerCase()))].flatMap((e) => [`/paymentprofiles/?email=${encodeURIComponent(e)}`, `/paymentprofiles/${encodeURIComponent(e)}`])];
+  let raw: unknown = null, last = "";
+  for (const t of tries) {
+    const x = await ssGetRaw(t);
+    if (x.status === 401 || x.status === 403) throw new Error("S&S rejected the account number or API key.");
+    if (x.ok && x.body && (!Array.isArray(x.body) || x.body.length)) { raw = x.body; break; }
+    last = x.ok ? "no saved cards" : `S&S said: ${ssErr(x)} (${x.status}, ${t.split("?")[0]})`;
+  }
+  if (raw == null) throw new Error(last || "no answer");
   const list = (Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw as object).find(Array.isArray) || [raw] : []) as Record<string, unknown>[];
   return list.filter((x) => x && typeof x === "object").map((x) => {
     const val = (re: RegExp) => { const k = Object.keys(x).find((z) => re.test(z)); return k ? x[k] : undefined; };
@@ -214,9 +238,9 @@ export async function ssPaymentProfiles(): Promise<SSPayProfile[]> {
   }).filter((p) => p.profileID);
 }
 /** our card on S&S (ending SS_CARD_LAST4), or why it can't be used */
-export async function ssOurCard(): Promise<{ ok: true; profile: SSPayProfile } | { ok: false; error: string }> {
+export async function ssOurCard(emails: string[] = []): Promise<{ ok: true; profile: SSPayProfile } | { ok: false; error: string }> {
   let all: SSPayProfile[] = [];
-  try { all = await ssPaymentProfiles(); } catch (e) { return { ok: false, error: `Couldn't read the saved cards from S&S (${e instanceof Error ? e.message : String(e)}).` }; }
+  try { all = await ssPaymentProfiles(emails); } catch (e) { return { ok: false, error: `Couldn't read the saved cards from S&S (${e instanceof Error ? e.message : String(e)}).` }; }
   const p = all.find((x) => x.last4 === SS_CARD_LAST4);
   if (p) return { ok: true, profile: p };
   return { ok: false, error: `S&S has no saved card ending ${SS_CARD_LAST4} on our account${all.length ? ` (saved: ${all.map((x) => x.label).join("; ")})` : ""}. Save it at ssactivewear.com → My Account → Payment Methods, then try again.` };

@@ -3,7 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, SIZES, type Order } from "@/lib/pricing";
 import { ssConfigured, ssOurCard, ssPlaceOrder } from "@/lib/ss";
-import { matchToSS } from "@/lib/ssMatch";
+import { matchToSS, shopEmails } from "@/lib/ssMatch";
 
 async function staff() {
   const v = await getViewer();
@@ -62,7 +62,7 @@ export async function orderBlanksSS(orderId: string, p: { lines: { sku: string; 
     const c = (o as unknown as { customers: { company: string; name: string } | null })?.customers;
     const po = `#${o?.number} ${c?.company || c?.name || o?.nickname || ""}`.trim();
     // paid with our saved card (ending 5488), never the account's terms
-    const card = await ssOurCard();
+    const card = await ssOurCard(await shopEmails(v.user?.email));
     if (!card.ok) return { ok: false as const, error: card.error };
     const res = await ssPlaceOrder({
       payment: { email: card.profile.email, profileID: card.profile.profileID },

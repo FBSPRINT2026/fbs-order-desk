@@ -3,7 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, SIZES, type Group, type Order } from "@/lib/pricing";
 import { SS_REP, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
-import { matchToSS, type GoodsRow } from "@/lib/ssMatch";
+import { matchToSS, shopEmails, type GoodsRow } from "@/lib/ssMatch";
 import { accountForUser, cfgOf } from "@/lib/mail/config";
 import { sendFromMailbox } from "@/lib/mail/send";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
@@ -119,7 +119,7 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
     if (!from.street1 || !from.zip) return { ok: false as const, error: "Add our street address in Shipping center → Settings first (S&S ships here)." };
     const po = (p.label || "Stock").trim().slice(0, 50);
     // paid with our saved card (ending 5488), never the account's terms
-    const card = await ssOurCard();
+    const card = await ssOurCard(await shopEmails(v.user?.email));
     if (!card.ok) return { ok: false as const, error: card.error };
     const res = await ssPlaceOrder({
       payment: { email: card.profile.email, profileID: card.profile.profileID }, quote: p.quote,
@@ -174,9 +174,9 @@ export async function linkGoods(goodsId: string, orderId: string) {
 /** How S&S orders are paid and shipped, to show before ordering: our saved card, closest warehouse first. */
 export async function goodsPayInfo() {
   try {
-    await staff();
+    const v = await staff();
     if (!ssConfigured()) return { ok: false as const, error: "S&S isn't connected." };
-    const c = await ssOurCard();
+    const c = await ssOurCard(await shopEmails(v.user?.email));
     return c.ok ? { ok: true as const, card: c.profile.label } : { ok: false as const, error: c.error };
   } catch (e) { return fail(e); }
 }
