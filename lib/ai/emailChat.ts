@@ -70,7 +70,7 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     task: "email_chat", model: s.assistant.ai.model, maxTokens: 2000, timeoutMs: 55_000, admin, images, documents,
     ctx: { activity_id: a.id as string, customer_id: cid, by },
     tool: { name: "answer", description: "Your reply to staff and the next steps they can take with a click.", input_schema: { type: "object", properties: {
-      reply: { type: "string", description: "Plain words, short: what the email is, what you'd do, and why." },
+      reply: { type: "string", description: "1-2 short sentences, under 40 words: what you'd do and why." },
       actions: { type: "array", description: "1-3 next steps, best first.", items: { type: "object", properties: {
         kind: { type: "string", enum: ["create_order", "reply", "file_under", "no_reply", "order_goods"] },
         label: { type: "string", description: 'Button text, e.g. "Create the reorder of #31174", "Reply: we need more time", "Reply: we can\'t take this one"' },
@@ -83,7 +83,7 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     system: `${SHOP_CONTEXT(s)}
 
 You're helping staff handle a customer email, like an experienced shop manager reading over their shoulder. Read the email and its files, and use the customer's past jobs, open orders and how busy the shop is. Say plainly what it is and what you'd do: make a new order, make a reorder of a past job (name it), answer a question, ask for missing details, say we need more time (when the date they want is too soon for how busy we are), or turn the job down (when it's something the shop doesn't do or can't do in time). Offer the next steps as actions. When the garments are clear and the job is likely (a reorder, an approved quote, a tight date), you can offer order_goods: buying the blanks from S&S now, ahead of the order. Replies to the customer are written in the shop's voice (${s.assistant.ai.voice}), short, and never promise prices or exact dates unless staff gave them.
-Follow what staff tell you; it's fact. Keep your own reply to a few sentences, no headings.`,
+Follow what staff tell you; it's fact. Be brief: your reply is 1-2 short sentences (under 40 words), no headings, no lists, no restating the email (staff can read it). Put the detail into the actions instead: 1-3 actions, best first.`,
     prompt,
   });
   if (!r.ok) return { ok: false, error: r.error };

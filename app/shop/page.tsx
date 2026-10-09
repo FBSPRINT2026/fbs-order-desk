@@ -47,14 +47,13 @@ export default function Dashboard() {
   const boss = perms.money; // owners / admins see the sales numbers; crew (production, receiving, shipping) get the production dashboard
   const crew = !boss;
   const [seps, setSeps] = useState<SepLite[]>([]);
-  const [msgTab, setMsgTab] = useState<"reply" | "email">("reply");
   const [prodTab, setProdTab] = useState<string | null>(null);
   const [owed, setOwed] = useState<{ id: string; number: string; nickname: string; customer_id: string | null; balance: number; due: string | null }[]>([]);
   const [mine, setMine] = useSticky("dash.mine", false);
   const [custs, setCusts] = useState<Record<string, Cust>>({});
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [mails, setMails] = useState<Mail[]>([]), [mailNeeds, setMailNeeds] = useState<Mail[]>([]), [mailUrgent, setMailUrgent] = useState<Mail[]>([]), [myBox, setMyBox] = useState<string | null>(null);
+  const [mailNeeds, setMailNeeds] = useState<Mail[]>([]), [mailUrgent, setMailUrgent] = useState<Mail[]>([]), [myBox, setMyBox] = useState<string | null>(null);
   const [reorders, setReorders] = useState<Reorder[]>([]);
   const [goods, setGoods] = useState({ today: 0, arrived: 0 });
   const [owners, setOwners] = useState<Record<string, string>>({}); // customer → account owner (first name)
@@ -105,7 +104,6 @@ export default function Dashboard() {
         const mr = mailRows(allMail, (sg || []) as MailSug[]);
         setMailNeeds(mr.filter((r) => r.needs).map((r) => r.x));
         setMailUrgent(mr.filter((r) => r.urgent).map((r) => r.x));
-        setMails(allMail.filter((x) => x.direction === "in" && !x.meta?.ignored && x.occurred_at >= new Date(Date.now() - 7 * 86400000).toISOString()).slice(0, 40));
       })().catch(() => null);
       getMailStatus().then((r) => { if (r.ok && r.mine?.enabled) setMyBox(r.mine.id); }).catch(() => null);
       // reorder reminders: ordered around this time last year, nothing since (in the last 60 days)
@@ -162,10 +160,12 @@ export default function Dashboard() {
   const myMsgs = msgs.filter((x) => isMine(x.customer_id));
   // an email is mine when it came to my mailbox (or it's one of my customers')
   const mailMine = (x: Mail) => !mine || (!!myBox && x.meta?.account_id === myBox) || (!!x.customer_id && isMine(x.customer_id));
-  const myMails = mails.filter(mailMine);
   const myNeeds = mailNeeds.filter(mailMine);
   const myUrgent = mailUrgent.filter(mailMine).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)); // longest waiting first
-  const replyItems = [...myMsgs.map((x) => ({ at: x.created_at, msg: x, mail: null as Mail | null })), ...myNeeds.map((x) => ({ at: x.occurred_at, msg: null as Msg | null, mail: x }))].sort((a, b) => b.at.localeCompare(a.at));
+  // one list of everything waiting on a reply: urgent emails first (longest waiting first), then the rest, newest first
+  const urgentIds = new Set(myUrgent.map((x) => x.id));
+  const replyItems = [...myMsgs.map((x) => ({ at: x.created_at, msg: x, mail: null as Mail | null })), ...myNeeds.map((x) => ({ at: x.occurred_at, msg: null as Msg | null, mail: x }))]
+    .sort((a, b) => Number(!!b.mail && urgentIds.has(b.mail.id)) - Number(!!a.mail && urgentIds.has(a.mail.id)) || (a.mail && b.mail && urgentIds.has(a.mail.id) && urgentIds.has(b.mail.id) ? a.at.localeCompare(b.at) : b.at.localeCompare(a.at)));
   const openMail = (id: string) => router.push(`/shop/inbox?open=${id}`);
   const myReorders = reorders.filter((x) => isMine(x.customer_id, x.owner));
 
@@ -312,17 +312,6 @@ export default function Dashboard() {
 
       {!v ? <div className="empty">Loading your day…</div> : (
         <div className="dash">
-          {/* 0. urgent replies: customers who need a fast answer (rush, near deadline, same-day pickup…), only when there are any */}
-          {myUrgent.length > 0 && <section className="db-card db-bad db-urgent">
-            <div className="db-card-h"><h2>Urgent replies</h2><span className="db-n">{myUrgent.length}</span><span className="faint db-h-note">customers waiting on a fast answer · oldest first</span><span className="spacer" /><Link href="/shop/inbox" className="linkbtn">Inbox →</Link></div>
-            <ul className="db-list">{myUrgent.map((e) => (
-              <li key={e.id} className="db-row db-msg db-click" onDoubleClick={() => openMail(e.id)} title="Double-click to answer it">
-                <span className="db-main"><b>{who(e.customer_id) || e.meta?.from_name || e.from_email}</b><span className="db-sub">{e.meta?.triage?.urgent_reason || e.subject || "(no subject)"}</span><span className="db-body">{e.meta?.triage?.summary || e.body.slice(0, 160)}</span></span>
-                <span className="db-side"><span className={(Date.now() - Date.parse(e.occurred_at)) / 36e5 > 4 ? "db-late" : "faint"}>waiting {ago(e.occurred_at).replace(" ago", "")}</span><Link href={`/shop/inbox?open=${e.id}`} className="btn sm primary">Reply</Link></span>
-              </li>
-            ))}</ul>
-          </section>}
-
           {/* 1. the assistant: what needs doing */}
           {panel("Assistant", "fade", null, <AssistantStrip />, ["/shop/assistant", "All follow-ups"], <span className="faint db-h-note">follow-ups, approvals and suggestions for today</span>)}
 
@@ -330,36 +319,24 @@ export default function Dashboard() {
           <div className="dash-row dash-2-1 dash-fill">
             <section className="db-card db-blue db-msgs">
               <div className="db-card-h">
-                <h2>Messages</h2>
-                <div className="aa-sub db-tabs" role="tablist">
-                  <button type="button" className={msgTab === "reply" ? "on" : ""} onClick={() => setMsgTab("reply")}>Needs a reply<span className="aa-n">{replyItems.length}</span></button>
-                  <button type="button" className={msgTab === "email" ? "on" : ""} onClick={() => setMsgTab("email")}>Customer emails<span className="aa-n">{myMails.length}</span></button>
-                </div>
+                <h2>Needs a reply</h2><span className="db-n">{replyItems.length}</span>
+                {myUrgent.length > 0 && <span className="db-urgent-tag">{myUrgent.length} urgent</span>}
+                <span className="spacer" /><Link href="/shop/inbox" className="linkbtn">Inbox →</Link>
               </div>
               <div className="db-scroll">
-                {msgTab === "reply" ? list(replyItems.length, (
-                  <ul className="db-list">{replyItems.map(({ msg: x, mail: e }) => x ? (
-                    <li key={x.id} className="db-row db-msg">
-                      <span className="db-main"><b>{who(x.customer_id) || x.author_name || x.author_email}</b><span className="db-body">{x.body.slice(0, 200)}{x.body.length > 200 ? "…" : ""}</span></span>
-                      <span className="db-side"><span className="faint">portal · {ago(x.created_at)}</span>{x.order_id ? <Link href={`/shop/orders/${x.order_id}`} className="btn sm primary">Reply</Link> : x.customer_id ? <Link href={`/shop/customers/${x.customer_id}?area=messages`} className="btn sm primary">Reply</Link> : null}</span>
+                {list(replyItems.length, (
+                  <ul className="db-list db-replies">{replyItems.map(({ msg: x, mail: e }) => x ? (
+                    <li key={x.id} className="db-row db-reply">
+                      <span className="db-main"><b>{who(x.customer_id) || x.author_name || x.author_email}</b><span className="db-one">{x.body.replace(/\s+/g, " ").slice(0, 160)}</span></span>
+                      <span className="db-side"><span className="faint">portal · {ago(x.created_at)}</span>{x.order_id ? <Link href={`/shop/orders/${x.order_id}`} className="btn sm">Reply</Link> : x.customer_id ? <Link href={`/shop/customers/${x.customer_id}?area=messages`} className="btn sm">Reply</Link> : null}</span>
                     </li>
                   ) : e ? (
-                    <li key={e.id} className="db-row db-msg db-click" onDoubleClick={() => openMail(e.id)} title="Double-click to answer it">
-                      <span className="db-main"><b>{who(e.customer_id) || e.meta?.from_name || e.from_email}</b><span className="db-sub">{e.subject || "(no subject)"}</span><span className="db-body">{e.meta?.triage?.summary || `${e.body.slice(0, 160)}${e.body.length > 160 ? "…" : ""}`}</span></span>
-                      <span className="db-side">{e.meta?.triage?.urgency === "high" && <span className="db-urgent-tag">Urgent</span>}<span className="faint">email · {ago(e.occurred_at)}</span><Link href={`/shop/inbox?open=${e.id}`} className="btn sm primary">Reply</Link></span>
+                    <li key={e.id} className={"db-row db-reply db-click" + (urgentIds.has(e.id) ? " hot" : "")} onClick={() => openMail(e.id)} title="Open it in the Inbox, ready to answer">
+                      <span className="db-main"><b>{who(e.customer_id) || e.meta?.from_name || e.from_email}</b><span className="db-one">{urgentIds.has(e.id) && e.meta?.triage?.urgent_reason ? <em>{e.meta.triage.urgent_reason} · </em> : null}{e.meta?.triage?.summary || e.subject || "(no subject)"}</span></span>
+                      <span className="db-side"><span className={urgentIds.has(e.id) && (Date.now() - Date.parse(e.occurred_at)) / 36e5 > 4 ? "db-late" : "faint"}>{ago(e.occurred_at)}</span><Link href={`/shop/inbox?open=${e.id}`} className={"btn sm" + (urgentIds.has(e.id) ? " primary" : "")} onClick={(ev) => ev.stopPropagation()}>Reply</Link></span>
                     </li>
                   ) : null)}</ul>
-                ), <MsgEmpty title="You're all caught up" text="No customer emails or portal messages waiting on a reply. They land here the moment a customer writes." />) : list(myMails.length, (
-                  <ul className="db-list">{myMails.map((x) => (
-                    <li key={x.id} className="db-row db-msg db-click" onDoubleClick={() => openMail(x.id)} title="Double-click to open it in the Inbox">
-                      <span className="db-main"><b>{who(x.customer_id) || x.from_email}</b><span className="db-sub">{x.subject || "(no subject)"}</span><span className="db-body">{x.body.slice(0, 160)}{x.body.length > 160 ? "…" : ""}</span></span>
-                      <span className="db-side"><span className="faint">{ago(x.occurred_at)}</span>
-                        {x.order_id ? <Link href={`/shop/orders/${x.order_id}`} className="btn sm">On its job</Link>
-                          : <AttachToJob mail={x} jobs={(jobs || []).filter((j) => !j.printavo && j.customer_id && j.customer_id === x.customer_id)} onDone={(orderId) => setMails(mails.map((m) => (m.id === x.id ? { ...m, order_id: orderId } : m)))} />}
-                      </span>
-                    </li>
-                  ))}</ul>
-                ), <MsgEmpty title="No customer emails yet" text="Once your inbox is connected, emails from customers show up here and the Assistant suggests the job each one belongs to." />)}
+                ), <MsgEmpty title="You're all caught up" text="No customer emails or portal messages waiting on a reply. They land here the moment a customer writes." />)}
               </div>
             </section>
             {boss ? panel("Sales", "orange", null, <SalesAnalytics part="side" />) : panel("Today", "orange", null, (
@@ -435,25 +412,4 @@ function MsgEmpty({ title, text }: { title: string; text: string }) {
   );
 }
 
-/** Tie an email to one of the customer's open jobs (it then shows on that job). */
-function AttachToJob({ mail, jobs, onDone }: { mail: Mail; jobs: Job[]; onDone: (orderId: string) => void }) {
-  const [pick, setPick] = useState("");
-  const [busy, setBusy] = useState(false);
-  if (!mail.customer_id) return <Link href="/shop/customers" className="btn sm">Find customer</Link>;
-  if (!jobs.length) return <Link href={`/shop/customers/${mail.customer_id}`} className="btn sm">Open customer</Link>;
-  return (
-    <span className="db-attach">
-      <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Which job is this email about">
-        <option value="">Which job?</option>
-        {jobs.map((j) => <option key={j.id} value={j.id}>#{j.number} {j.nickname}</option>)}
-      </select>
-      <button type="button" className="btn sm primary" disabled={!pick || busy} onClick={async () => {
-        setBusy(true);
-        const { error } = await createClient().from("activities").update({ order_id: pick }).eq("id", mail.id);
-        setBusy(false);
-        if (!error) onDone(pick);
-      }}>Attach</button>
-    </span>
-  );
-}
 

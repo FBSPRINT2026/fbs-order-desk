@@ -10,7 +10,7 @@ import { MicButton } from "@/components/SearchInput";
  * it would do (new order, a reorder of a past job, ask for details, more time, turn it down), with buttons for those
  * steps: open Create order with what to know, put a reply in the answer box, file it under an order, no reply needed.
  */
-export default function EmailChat({ activityId, onAction, busyOutside, bump = 0 }: { activityId: string; onAction: (a: EmailAction) => void; busyOutside?: boolean; /** changes when something happened outside (an order made): reload */ bump?: number }) {
+export default function EmailChat({ activityId, onAction, busyOutside, bump = 0, summary }: { activityId: string; onAction: (a: EmailAction) => void; busyOutside?: boolean; /** changes when something happened outside (an order made): reload */ bump?: number; /** the AI's one-line read of the email, shown first */ summary?: string }) {
   const [msgs, setMsgs] = useState<EmailChatMsg[]>([]);
   const [text, setText] = useState(""), [busy, setBusy] = useState(""), [note, setNote] = useState(""), [all, setAll] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null), boxRef = useRef<HTMLTextAreaElement | null>(null);
@@ -32,7 +32,8 @@ export default function EmailChat({ activityId, onAction, busyOutside, bump = 0 
   const starters = ["What should I do with this?", "Is this a reorder?", "Can we make their date?", "What's missing to quote it?"];
   return (
     <div className="oc ibx-chat">
-      <h3>✦ Talk it over with the AI</h3>
+      <h3>✦ Assistant</h3>
+      {summary && <div className="oc-summary">{summary}</div>}
       {msgs.length > 0 && (
         <div className="oc-list" ref={listRef}>
           {/* compact: the last few messages; earlier ones on request */}

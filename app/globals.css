@@ -5783,3 +5783,132 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .og-ss:hover{color:var(--accent);border-bottom-color:var(--accent)}
 .og-wh{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:var(--ok-soft);margin:1px 4px 1px 0;white-space:nowrap}
 .og-wh.away{background:var(--warn-soft);color:var(--warn);font-weight:700}
+
+/* ---------- Inbox, reworked Oct 9: list · email (answer docked at the bottom) · Assistant ---------- */
+.ibx2-head{align-items:flex-end}
+.ibx2-status{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ibx2-box{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3)}
+.ibx2-box i{width:8px;height:8px;border-radius:50%;background:#1F7A47}
+.ibx2-box.bad{color:var(--danger)}.ibx2-box.bad i{background:var(--danger)}
+.ibx2-toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:50;background:var(--ink,#1d2433);color:#fff;font-size:13.5px;padding:9px 16px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:min(560px,92vw)}
+.ibx2{display:grid;grid-template-columns:300px minmax(0,1fr);gap:12px;height:calc(100vh - 150px);min-height:520px}
+.ibx2.nolist{grid-template-columns:minmax(0,1fr)}.ibx2.nolist .ibx2-list{display:none}
+.ibx2-list,.ibx2-mail,.ibx2-ai,.ibx2-empty{background:var(--surface);border:1px solid var(--line);border-radius:12px;min-height:0;min-width:0;overflow:hidden;display:flex;flex-direction:column}
+.ibx2-empty{align-items:center;justify-content:center;gap:4px;text-align:center;padding:40px;color:var(--ink-3)}.ibx2-empty b{color:var(--ink)}
+/* the list */
+.ibx2-list-h{padding:10px 10px 8px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)}
+.ibx2-tabs{display:flex;gap:2px;background:var(--bg,#f1f3f6);border-radius:9px;padding:3px}
+.ibx2-tabs button{flex:1;border:0;background:none;padding:5px 6px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.ibx2-tabs button span{font-size:11.5px;font-weight:700;color:var(--ink-3);margin-left:2px}
+.ibx2-tabs button span.hot{color:var(--danger)}
+.ibx2-tabs button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.ibx2-find{display:flex;gap:6px}
+.ibx2-find input,.ibx2-find select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:0}
+.ibx2-find input{flex:1;width:auto}.ibx2-find select{flex:none;width:auto}
+.ibx2-items{flex:1;overflow-y:auto;min-height:0}
+.ibx2-none{padding:18px 14px;color:var(--ink-3);font-size:13.5px}
+.ibx2-item{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-left:3px solid transparent;background:none;padding:9px 12px 9px 11px;font:inherit;color:inherit;cursor:pointer}
+.ibx2-item:hover{background:var(--bg,#f6f7f9)}
+.ibx2-item.on{background:var(--accent-soft);border-left-color:var(--accent)}
+.ibx2-item.urgent{border-left-color:var(--danger)}
+.ibx2-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.ibx2-item-1{display:flex;align-items:baseline;gap:6px;min-width:0}
+.ibx2-item-1 b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:600}
+.ibx2-item.needs .ibx2-item-1 b{font-weight:800}
+.ibx2-item-1 em{font-style:normal;font-size:11px;font-weight:700;color:var(--danger)}
+.ibx2-item-1 time{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.ibx2-item-1 time.late{color:var(--danger);font-weight:700}
+.ibx2-item-2{font-size:12.5px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
+.ibx2-item-3{display:flex;gap:8px;font-size:11.5px;color:var(--ink-3)}
+/* the email + the Assistant */
+.ibx2-work{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;min-height:0;min-width:0}
+.ibx2-sw{display:none}
+.ibx2-mh{padding:12px 16px 10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px;flex:none}
+.ibx2-mh-1{display:flex;align-items:center;gap:8px;min-width:0;font-size:13.5px}
+.ibx2-listbtn{border:1px solid var(--line);background:var(--surface);border-radius:7px;width:26px;height:26px;cursor:pointer;color:var(--ink-2);font:inherit;font-size:13px;flex:none}
+.ibx2-who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ibx2-who span{color:var(--ink-3)}
+.ibx2-when{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.ibx2-mh h2{margin:0;font-size:17px;line-height:1.3}
+.ibx2-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px}
+.ibx2-chip{border:1px solid var(--line);border-radius:999px;padding:1px 9px;color:var(--ink-2);text-decoration:none;font-weight:600}
+.ibx2-chip.link:hover{border-color:var(--accent);color:var(--accent)}
+.ibx2-chip.ok{border-color:transparent;background:var(--ok-soft,#E3F4EA);color:#1F7A47}
+.ibx2-urgent{background:var(--danger);color:#fff;border-radius:999px;padding:1px 9px;font-weight:700}
+.ibx2-acts{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:2px}
+.ibx2-file{font:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);width:auto;max-width:132px}
+.ibx2-more{position:relative}
+.ibx2-more summary{list-style:none;cursor:pointer}.ibx2-more summary::-webkit-details-marker{display:none}
+.ibx2-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:6;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);display:flex;flex-direction:column;min-width:240px;padding:4px}
+.ibx2-menu a,.ibx2-menu button{font:inherit;font-size:13.5px;text-align:left;background:none;border:0;padding:8px 10px;border-radius:7px;cursor:pointer;color:var(--ink);text-decoration:none}
+.ibx2-menu a:hover,.ibx2-menu button:hover{background:var(--bg,#f2f5f8)}
+.ibx2-made{font-size:13px;background:var(--ok-soft,#E3F4EA);border-radius:8px;padding:6px 10px}
+.ibx2-read{flex:1;overflow-y:auto;min-height:0;padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px}
+.ibx2-order{flex:1;overflow-y:auto;min-height:0}
+.ibx2-order .eo{margin:10px 12px}
+.ibx2-new{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:13px;background:#fff7e6;border:1px solid #f3d9a4;border-radius:9px;padding:7px 10px}
+.ibx2-new input{font:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:7px;width:200px}
+.ibx2-pick{position:relative;display:inline-flex;gap:6px}
+.ibx2-files{display:flex;gap:6px;flex-wrap:wrap}
+.ibx2-files button{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:4px 9px;cursor:pointer}
+.ibx2-files button:hover{border-color:var(--accent)}
+.ibx2-thread summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);padding:4px 0}
+.ibx2-thread[open]{display:flex;flex-direction:column;gap:6px}
+/* the answer, docked at the bottom */
+.ibx2-compose{flex:none;border-top:1px solid var(--line);background:var(--surface-2,#f7f8fa);padding:8px 12px 10px;display:flex;flex-direction:column;gap:6px;max-height:62%;overflow-y:auto}
+.ibx2-sugs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.ibx2-sug{flex:none;font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 11px;cursor:pointer;color:var(--ink-2);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ibx2-sug:hover,.ibx2-sug.on{border-color:var(--accent);color:var(--accent)}
+.ibx2-sug.on{background:var(--accent-soft)}
+.ibx2-sug.ghost{border-style:dashed}
+.ibx2-thinking{font-size:12.5px;color:var(--ink-3);padding:3px 0}
+.ibx2-replybar{font:inherit;font-size:14px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:9px 12px;color:var(--ink-3);cursor:text}
+.ibx2-replybar:hover{border-color:var(--accent)}
+.ibx2-to{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink-3)}
+.ibx2-to span{white-space:nowrap}
+.ibx2-to input{flex:1;min-width:0;font:inherit;font-size:13.5px;font-weight:600;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.ibx2-compose textarea{font:inherit;font-size:14px;line-height:1.45;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);resize:vertical;min-height:120px}
+.ibx2-tell{display:flex;gap:6px}
+.ibx2-tell input{flex:1;min-width:0;font:inherit;font-size:13px;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.ibx2-send{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+.ibx2-send .spacer{flex:1}
+/* the Assistant */
+.ibx2-ai{background:var(--surface-2,#f7f8fa)}
+.ibx2-ai .ibx-chat{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:12px;margin:0}
+.ibx2-ai .ibx-chat h3{margin:0;font-size:13.5px}
+.oc-summary{font-size:13px;line-height:1.4;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;color:var(--ink-2)}
+.ibx2-ai .oc-list{flex:1;max-height:none;min-height:0;overflow-y:auto;gap:6px}
+.ibx2-ai .oc-msg{font-size:13px;padding:6px 10px;border-radius:10px;max-width:96%}
+.ibx2-ai .oc-msg.ai{background:var(--surface);border:1px solid var(--line)}
+.ibx2-ai .oc-acts{gap:4px}
+.ibx2-ai .oc-starters{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.ibx2-ai .oc-form{margin-top:auto;background:var(--surface-2,#f7f8fa);align-items:flex-end}
+.ibx2-ai .oc-form textarea{resize:none;overflow-y:auto;min-height:34px;padding:7px 9px}
+/* narrower screens: the Assistant slims, then shares the column with the email (switch at the top) */
+@media (max-width:1320px){.ibx2-work{grid-template-columns:minmax(0,1fr) 290px}.ibx2{grid-template-columns:270px minmax(0,1fr)}}
+@media (max-width:1080px){
+  .ibx2-work{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:8px}
+  .ibx2-sw{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px}
+  .ibx2-sw button{flex:1;border:0;background:none;font:inherit;font-size:13.5px;font-weight:600;padding:6px;border-radius:7px;cursor:pointer;color:var(--ink-2)}
+  .ibx2-sw button.on{background:var(--accent-soft);color:var(--accent)}
+  .ibx2-sw .ibx2-back{flex:none;display:none}
+  .ibx2-work[data-side="mail"] .ibx2-ai,.ibx2-work[data-side="ai"] .ibx2-mail{display:none}
+}
+@media (max-width:760px){
+  .ibx2{grid-template-columns:1fr;height:calc(100vh - 130px)}
+  .ibx2 .ibx2-work,.ibx2 .ibx2-empty{display:none}
+  .ibx2.picked .ibx2-list{display:none}
+  .ibx2.picked .ibx2-work{display:grid}
+  .ibx2-sw .ibx2-back{display:block}
+  .ibx2-listbtn{display:none}
+  .ibx2-compose{max-height:70%}
+}
+
+/* dashboard: one "Needs a reply" list (urgent first), one line per customer (Oct 9) */
+.db-replies .db-reply{align-items:center;padding-top:8px;padding-bottom:8px}
+.db-reply .db-main{min-width:0}
+.db-reply .db-one{display:block;font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.db-reply .db-one em{font-style:normal;font-weight:700;color:var(--danger)}
+.db-reply.hot{border-left:3px solid var(--danger);padding-left:10px;background:color-mix(in srgb,var(--danger) 4%,transparent)}
+.db-reply.db-click{cursor:pointer}
+.db-reply.db-click:hover{background:var(--bg,#f6f7f9)}
