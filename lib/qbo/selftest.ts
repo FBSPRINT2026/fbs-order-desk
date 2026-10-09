@@ -46,6 +46,8 @@ export function selfTest(inp: SelfTestInput): { checks: Check[]; samples: Record
   ok("address: one line with commas", a2?.Line1 === "811 Alpha Dr" && a2?.Line2 === "STE 343" && a2?.City === "Richardson" && a2?.CountrySubDivisionCode === "TX" && a2?.PostalCode === "75081", JSON.stringify(a2));
   const a3 = parseAddress("7506 Ridgebluff ln\nSachse TX 75048");
   ok("address: no comma before the state", a3?.City === "Sachse" && a3?.CountrySubDivisionCode === "TX" && a3?.PostalCode === "75048", JSON.stringify(a3));
+  const a4 = parseAddress("3184 Quebec Street\nDallas 75204");
+  ok("address: city and zip with no state (Texas zip → TX)", a4?.City === "Dallas" && a4?.PostalCode === "75204" && a4?.CountrySubDivisionCode === "TX" && a4?.Line1 === "3184 Quebec Street", JSON.stringify(a4));
   ok("address: unparseable text kept as lines", parseAddress("Behind the gym\nAsk for Bob")?.Line2 === "Ask for Bob");
   ok("email: cleaned (Printavo's stray '>')", cleanEmail("Mike.Mitchell@findfreedom.church>") === "mike.mitchell@findfreedom.church");
   ok("display name: no colon (QuickBooks sub-customer mark)", displayNameOf({ company: "A: B" }) === "A - B");

@@ -133,6 +133,15 @@ export function parseAddress(text: string | null | undefined): QboAddr | null {
     if (z && stateCode(z[1]) && lines.length >= 3) {
       out.CountrySubDivisionCode = stateCode(z[1]); out.PostalCode = z[2]; out.City = lines[lines.length - 2].replace(/,$/, "");
       lines = lines.slice(0, -2);
+    } else {
+      // "Dallas 75204" (no state): the city and zip; the state only when the zip is a Texas one (750-799, 885)
+      const cz = last.match(/^([A-Za-z][A-Za-z .'-]*?)[,\s]+(\d{5}(?:-\d{4})?)$/);
+      if (cz && lines.length >= 2 && !stateCode(cz[1])) {
+        out.City = cz[1].trim(); out.PostalCode = cz[2];
+        const z3 = +cz[2].slice(0, 3);
+        if ((z3 >= 750 && z3 <= 799) || z3 === 885) out.CountrySubDivisionCode = "TX";
+        lines = lines.slice(0, -1);
+      }
     }
   }
   const keys = ["Line1", "Line2", "Line3", "Line4"] as const;

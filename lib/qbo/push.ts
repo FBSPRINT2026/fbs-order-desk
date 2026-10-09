@@ -299,6 +299,12 @@ export class Pusher {
       if (io.status === "done") inv = await this.link("invoice", o.id);
     }
     if (!inv) {
+      if (fromPrintavo(p)) {
+        const why = `Came from Printavo, which sends its own payments to QuickBooks: once invoice #${n} is linked it's matched to Printavo's copy, never made by us.`;
+        if (!this.qbo || !this.live) return { status: "pending", reason: `${this.qbo ? "Preview" : "Not connected"}: ${why}`, preview: { action: "match only", amount: r2(+p.amount), paid_on: p.paid_on } };
+        if (row.attempts >= 12) return { status: "skipped", reason: why };
+        return { status: "pending", reason: `Waiting for invoice #${n} to be linked. ${why}`, retryMin: 60 };
+      }
       const preview = { action: "create", body: paymentPayload({ payment: p, orderNumber: n, invoiceId: "(invoice #" + n + ")", customerRef: "(the invoice's customer)", qs: this.qs }).body };
       if (!this.qbo || !this.live) return { status: "pending", reason: `${this.qbo ? "Preview" : "Not connected"}: would apply ${r2(+p.amount).toFixed(2)} to QuickBooks invoice #${n} once it's there.`, preview };
       await this.admin.rpc("qbo_enqueue", { p_entity: "invoice", p_local_id: o.id, p_op: "upsert", p_reason: "for a payment" });
