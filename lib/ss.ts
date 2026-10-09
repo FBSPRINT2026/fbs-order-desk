@@ -190,6 +190,36 @@ export async function ssSkus(styleIdOrQuery: number | string): Promise<{ styleID
   };
 }
 
+/**
+ * How we pay S&S: the card saved on our ssactivewear.com account that ends in SS_CARD_LAST4 (Nick, Oct 9: the 5488 card).
+ * S&S's API never takes a card number: an order names a saved payment profile (GET /v2/paymentprofiles/: its profile id
+ * and the email of the website user who saved it).
+ */
+export const SS_CARD_LAST4 = "5488";
+export type SSPayProfile = { profileID: number; email: string; label: string; last4: string };
+export async function ssPaymentProfiles(): Promise<SSPayProfile[]> {
+  const raw = await ssGet<unknown>("/paymentprofiles/");
+  const list = (Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw as object).find(Array.isArray) || [raw] : []) as Record<string, unknown>[];
+  return list.filter((x) => x && typeof x === "object").map((x) => {
+    const val = (re: RegExp) => { const k = Object.keys(x).find((z) => re.test(z)); return k ? x[k] : undefined; };
+    const strs = Object.entries(x).filter(([, v]) => typeof v === "string" || typeof v === "number").map(([k, v]) => [k, String(v)] as const);
+    // the last four digits: a masked number (****5488 / XXXX-5488) or a "last four" field
+    const masked = strs.find(([k, v]) => /last ?4|lastfour|last_four/i.test(k) && /\d{4}/.test(v)) || strs.find(([k, v]) => /(card|account|number|mask)/i.test(k) && /[*xX•]+[- ]?\d{4}$/.test(v)) || strs.find(([, v]) => /[*xX•]{2,}[- ]?\d{4}$/.test(v));
+    const last4 = masked ? (masked[1].match(/(\d{4})\D*$/) || [])[1] || "" : "";
+    const type = String(val(/^(card)?type$|brand|cardtype|paymenttype|method/i) || "");
+    const exp = String(val(/exp/i) || "");
+    return { profileID: +(val(/profile.?id/i) as number) || 0, email: String(val(/email/i) || ""), last4, label: [type || "Card", last4 ? `ending ${last4}` : String(val(/desc|name|nick/i) || ""), exp ? `exp ${exp}` : ""].filter(Boolean).join(" ") };
+  }).filter((p) => p.profileID);
+}
+/** our card on S&S (ending SS_CARD_LAST4), or why it can't be used */
+export async function ssOurCard(): Promise<{ ok: true; profile: SSPayProfile } | { ok: false; error: string }> {
+  let all: SSPayProfile[] = [];
+  try { all = await ssPaymentProfiles(); } catch (e) { return { ok: false, error: `Couldn't read the saved cards from S&S (${e instanceof Error ? e.message : String(e)}).` }; }
+  const p = all.find((x) => x.last4 === SS_CARD_LAST4);
+  if (p) return { ok: true, profile: p };
+  return { ok: false, error: `S&S has no saved card ending ${SS_CARD_LAST4} on our account${all.length ? ` (saved: ${all.map((x) => x.label).join("; ")})` : ""}. Save it at ssactivewear.com → My Account → Payment Methods, then try again.` };
+}
+
 export type SSOrderResult = { orderNumber: string; warehouseAbbr: string; expectedDeliveryDate: string | null; total: number; orderStatus: string };
 
 /**
@@ -199,6 +229,8 @@ export type SSOrderResult = { orderNumber: string; warehouseAbbr: string; expect
 export async function ssPlaceOrder(o: {
   lines: { identifier: string; qty: number }[]; po: string; shipTo: { customer: string; attn: string; address: string; city: string; state: string; zip: string };
   shippingMethod: string; test: boolean; email?: string;
+  /** the saved card to charge (ssOurCard); without one S&S bills the account's terms */
+  payment?: { email: string; profileID: number };
 }): Promise<SSOrderResult[]> {
   const auth = btoa(`${process.env.SS_ACCOUNT_NUMBER!.trim()}:${process.env.SS_API_KEY!.trim()}`);
   const r = await fetch(BASE + "/orders/", {
@@ -206,7 +238,10 @@ export async function ssPlaceOrder(o: {
     headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
       shippingAddress: { customer: o.shipTo.customer, attn: o.shipTo.attn, address: o.shipTo.address, city: o.shipTo.city, state: o.shipTo.state, zip: o.shipTo.zip, residential: false },
-      shippingMethod: o.shippingMethod || "1", poNumber: o.po.slice(0, 50), testOrder: o.test, autoselectWarehouse: true, AutoSelectWarehouse_Preference: "fewest",
+      shippingMethod: o.shippingMethod || "1", poNumber: o.po.slice(0, 50), testOrder: o.test, autoselectWarehouse: true,
+      // the closest warehouse that has it first (S&S's "fastest" Freight Optimizer); splits only when the closest is short
+      AutoSelectWarehouse_Preference: "fastest",
+      ...(o.payment ? { paymentProfile: { email: o.payment.email, profileID: o.payment.profileID } } : {}),
       rejectLineErrors: true, ...(o.email ? { emailConfirmation: o.email } : {}),
       lines: o.lines.map((l) => ({ identifier: l.identifier, qty: l.qty })),
     }),

@@ -2,7 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, SIZES, type Group, type Order } from "@/lib/pricing";
-import { ssConfigured, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
+import { ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
 import { matchToSS, type GoodsRow } from "@/lib/ssMatch";
 
 /**
@@ -115,7 +115,11 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
     const from = mergeSettings(st?.data).ship.from;
     if (!from.street1 || !from.zip) return { ok: false as const, error: "Add our street address in Shipping center → Settings first (S&S ships here)." };
     const po = (p.label || "Stock").trim().slice(0, 50);
+    // paid with our saved card (ending 5488), never the account's terms
+    const card = await ssOurCard();
+    if (!card.ok) return { ok: false as const, error: card.error };
     const res = await ssPlaceOrder({
+      payment: { email: card.profile.email, profileID: card.profile.profileID },
       lines: lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), po, test: p.test, shippingMethod: p.shippingMethod || "1",
       shipTo: { customer: from.company || "FBS Print", attn: from.name || "Receiving", address: [from.street1, from.street2].filter(Boolean).join(" "), city: from.city, state: from.state, zip: from.zip },
       email: p.test ? undefined : v.user!.email || undefined,
@@ -161,5 +165,15 @@ export async function linkGoods(goodsId: string, orderId: string) {
     if (error) return { ok: false as const, error: error.message };
     await admin.from("orders").update({ status: "blanks" }).eq("id", orderId).in("status", ["approved", "art"]);
     return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** How S&S orders are paid and shipped, to show before ordering: our saved card, closest warehouse first. */
+export async function goodsPayInfo() {
+  try {
+    await staff();
+    if (!ssConfigured()) return { ok: false as const, error: "S&S isn't connected." };
+    const c = await ssOurCard();
+    return c.ok ? { ok: true as const, card: c.profile.label } : { ok: false as const, error: c.error };
   } catch (e) { return fail(e); }
 }

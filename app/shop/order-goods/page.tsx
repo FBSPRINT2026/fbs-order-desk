@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { money } from "@/lib/format";
 import SearchInput from "@/components/SearchInput";
-import { findOrdersAndCustomers, goodsSearch, goodsStart, goodsStyle, linkGoods, placeGoods, recentGoods, type StyleColor } from "./actions";
+import { findOrdersAndCustomers, goodsPayInfo, goodsSearch, goodsStart, goodsStyle, linkGoods, placeGoods, recentGoods, type StyleColor } from "./actions";
 
 /**
  * Order goods (Shop Tools): buy blanks from S&S right now, with or without an order. Open it from an email
@@ -41,6 +41,8 @@ function OrderGoods() {
   const [recent, setRecent] = useState<Recent[] | null>(null), [recentErr, setRecentErr] = useState("");
   const [linkFor, setLinkFor] = useState<string | null>(null), [linkQ, setLinkQ] = useState(""), [linkHits, setLinkHits] = useState<{ id: string; number: number; nickname: string | null }[]>([]);
 
+  const [pay, setPay] = useState<{ card?: string; error?: string } | null>(null);
+  useEffect(() => { goodsPayInfo().then((r) => setPay(r.ok ? { card: r.card } : { error: r.error })).catch(() => null); }, []);
   const loadRecent = () => recentGoods().then((r) => { if (r.ok) { setRecent(r.list as Recent[]); setRecentErr(""); } else setRecentErr(r.error || ""); });
   useEffect(() => { void loadRecent(); }, []);
   // opened from an email or an order: fill in who it's for and the garments
@@ -189,6 +191,9 @@ function OrderGoods() {
             <label className="row" style={{ gap: 6, fontSize: 13 }}>Ship by<select value={method} onChange={(e) => { setMethod(e.target.value); setDry(null); setSure(false); }} style={{ width: "auto" }}>{SS_METHODS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
             {lowStock && <span className="bad" style={{ fontSize: 12.5 }}>Some sizes are short at S&amp;S; the dry run shows what they can send.</span>}
             {lines.some((l) => !l.sku) && <span className="bad" style={{ fontSize: 12.5 }}>Red lines aren&apos;t carried by S&amp;S and won&apos;t be ordered.</span>}
+          </div>
+          <div className="faint" style={{ fontSize: 12.5 }}>
+            {pay?.card ? <>Paid with our S&amp;S card: <b>{pay.card}</b> · ships from the closest warehouse that has it (split only when it&apos;s short).</> : pay?.error ? <span className="bad">{pay.error}</span> : "Checking the card on file at S&S…"}
           </div>
           {dry && <div className="okmsg">S&amp;S accepted the dry run (nothing was bought): {dry.map((d) => `${d.warehouse || "warehouse"} · ${money(d.total)}${d.expected ? ` · arrives ${day(d.expected)}` : ""}`).join("; ")}.</div>}
           {err && <div className="pv-err">{err}</div>}
