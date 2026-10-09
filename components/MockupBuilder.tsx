@@ -1789,6 +1789,8 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
                 lastDown.current = null;
                 return;
               }
+              // phones: the first tap only picks the logo (a swipe across it still scrolls the page); once picked, drag to move
+              if (e.pointerType === "touch" && sel !== it.id) { setSel(it.id); return; }
               setSel(it.id);
               (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
               // grabbing the bottom-right corner resizes right away (no need to select first)
@@ -1904,6 +1906,8 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
               onPick((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, e.clientX, e.clientY);
               return;
             }
+            // phones: tap to pick it first, then drag (a swipe across an unpicked logo scrolls the page)
+            if (e.pointerType === "touch" && !sel) { setSel(true); return; }
             setSel(true);
             const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect();
             const corner = Math.max(e.pointerType === "touch" ? 30 : 10, Math.min(r.width, r.height) * (e.pointerType === "touch" ? 0.3 : 0.18));

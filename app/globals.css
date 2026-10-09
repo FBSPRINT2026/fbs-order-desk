@@ -576,8 +576,9 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-closeups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 14px;align-items:start;min-width:0;max-width:934px}
 .mk-sleeve{display:flex;flex-direction:column;gap:4px}
 .mk-sleeve-box{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;touch-action:pan-y;user-select:none}
-/* phones: a finger on the photo scrolls the page; only a finger on the logo itself (or its resize corner) moves it */
-.mk-photo .mk-hit,.mk-sleeve-box .mk-art,.mk-handle{touch-action:none}
+/* phones: a finger on the photo scrolls the page, even on a logo; tap a logo to pick it, then a finger on the picked logo (or its resize corner) moves it */
+.mk-photo .mk-hit,.mk-sleeve-box .mk-art{touch-action:pan-y}
+.mk-photo .mk-hit.sel,.mk-sleeve-box .mk-art.sel,.mk-handle{touch-action:none}
 .mk-sleeve-max{position:absolute;border:1.5px dashed rgba(255,255,255,.55);outline:1px dashed rgba(0,0,0,.25);pointer-events:none}
 .mk-sleeve-seam{position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed rgba(255,255,255,.4);pointer-events:none}
 
