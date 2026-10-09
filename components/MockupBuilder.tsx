@@ -739,7 +739,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const labShirt = (side: Side): LabShirt | null => {
     if (side === "sleeve" || !line) return null;
     const v = side as View;
-    const b = basePlacement(v === "front" ? "Full Front" : "Full Back", 12, 14 / 12, null, scale, v, fitFor(line, v));
+    const b = v === "front" ? basePlacement("Full Front", 13, 18 / 13, null, scale, v, fitFor(line, v)) : basePlacement("Full Back", 12, 14 / 12, null, scale, v, fitFor(line, v));
     return { src: photo(line, v), hex: shirtHex(line), area: b.area, label: `${v === "front" ? "Front" : "Back"} of the ${[line.color, line.style].filter(Boolean).join(" ") || "shirt"}` };
   };
   /** Where an imprint sits now, in Idea Lab artboard units (50 per inch, 0,0 = top-left of the full print area). */

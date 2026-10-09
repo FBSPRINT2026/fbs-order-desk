@@ -20,7 +20,7 @@ type Loc = { view: View; dx?: number; drop?: number; /** art starts at the top o
 /** Where each order-form location sits (dx = inches right of center as you look at the shirt; drop = inches below the collar). */
 export const LOCATION_SPOTS: Record<string, Loc> = {
   // max print areas from the FBS apparel placement guide (width x height)
-  "Full Front": { view: "front", dx: 0, drop: 4, top: true, defW: 11, maxW: 12, maxH: 14 },
+  "Full Front": { view: "front", dx: 0, drop: 4, top: true, defW: 11, maxW: 13, maxH: 18 },
   "Medium Front": { view: "front", dx: 0, drop: 3, defW: 8, maxW: 8, maxH: 8 },
   "Center Chest": { view: "front", dx: 0, drop: 3, defW: 4.5, maxW: 5, maxH: 5 },
   "Across Chest": { view: "front", dx: 0, drop: 3, defW: 11, maxW: 12, maxH: 4 },
