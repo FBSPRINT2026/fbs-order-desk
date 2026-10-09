@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { Check } from "@/lib/orderChecks";
 import type { ProposedOrder } from "@/lib/ai/normalize";
 import { aiLookUp, aiOrderChat, aiOrderFromText, aiReorderCheck, aiReviewOrder, applyReorderFix, orderChatThread } from "@/app/shop/ai-actions";
 import type { ChatMsg } from "@/lib/ai/orderChat";
+import { MicButton } from "@/components/SearchInput";
 import type { ReorderCheck, ReorderFix } from "@/lib/ai/reorderCheck";
 
 /** "Order check" panel: rule checks now, plus an optional AI review. */
@@ -163,6 +164,7 @@ export function OrderChat({ orderId, save, reorder }: { orderId: string; save: (
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(""), [note, setNote] = useState("");
+  const boxRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => { orderChatThread(orderId).then((r) => { if (r.ok) setMsgs(r.messages); }).catch(() => null); }, [orderId]);
   async function send(t = text) {
     const q = t.trim(); if (!q || busy) return;
@@ -207,8 +209,9 @@ export function OrderChat({ orderId, save, reorder }: { orderId: string; save: (
       {!msgs.length && <div className="eo-chips">{starters.map((q) => <button key={q} type="button" className="eo-chip" disabled={!!busy} onClick={() => send(q)}>{q}</button>)}</div>}
       {busy && <div className="muted" style={{ fontSize: 13 }}>{busy}</div>}
       <form className="oc-form" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-        <textarea rows={2} value={text} aria-label="Ask about this order" placeholder='e.g. "Looks good. Did you go into the film folder and pull the previous sizing?"'
+        <textarea ref={boxRef} rows={2} value={text} aria-label="Ask about this order" placeholder='e.g. "Looks good. Did you go into the film folder and pull the previous sizing?"'
           onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+        <MicButton target={() => boxRef.current} append keepListening label="Talk to the AI (microphone)" className="sc-mic oc-mic" />
         <button type="submit" className="btn sm primary" disabled={!!busy || !text.trim()}>Send</button>
       </form>
       {note && <span className="ai-off">{note}</span>}

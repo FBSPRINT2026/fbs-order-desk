@@ -5748,3 +5748,8 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
   .ibx-work[data-pane="mail"] .ibx-col-mail,.ibx-work[data-pane="ai"] .ibx-col-ai,.ibx-work[data-pane="resp"] .ibx-col-resp{display:flex}
   .ibx-listbtn{display:none}
 }
+
+/* the chats' microphone: beside Send */
+.oc-form .mic.oc-mic{position:static;transform:none;flex:none;width:32px;height:32px;border:1px solid var(--line);background:var(--surface)}
+.oc-form .mic.oc-mic svg{width:17px;height:17px}
+.oc-form .mic.oc-mic.on{border-color:var(--fbs-salmon);background:var(--fbs-salmon)}

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { aiEmailChat, aiLookUp, emailChatHistory } from "@/app/shop/ai-actions";
 import type { EmailAction, EmailChatMsg } from "@/lib/ai/emailChat";
 import { wantsLookup } from "@/components/OrderAssist";
+import { MicButton } from "@/components/SearchInput";
 
 /**
  * Inbox chat: talk an email through with the AI. "What should I do with this?" → it says what the email is and what
@@ -12,7 +13,7 @@ import { wantsLookup } from "@/components/OrderAssist";
 export default function EmailChat({ activityId, onAction, busyOutside, bump = 0 }: { activityId: string; onAction: (a: EmailAction) => void; busyOutside?: boolean; /** changes when something happened outside (an order made): reload */ bump?: number }) {
   const [msgs, setMsgs] = useState<EmailChatMsg[]>([]);
   const [text, setText] = useState(""), [busy, setBusy] = useState(""), [note, setNote] = useState(""), [all, setAll] = useState(false);
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null), boxRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => { setMsgs([]); setNote(""); }, [activityId]);
   useEffect(() => { emailChatHistory(activityId).then((r) => { if (r.ok) setMsgs(r.messages); }).catch(() => null); }, [activityId, bump]);
   useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [msgs.length, busy]);
@@ -54,8 +55,9 @@ export default function EmailChat({ activityId, onAction, busyOutside, bump = 0 
       {!msgs.length && !busy && <div className="eo-chips oc-starters">{starters.map((q) => <button key={q} type="button" className="eo-chip" onClick={() => send(q)}>{q}</button>)}</div>}
       {busy && <div className="muted" style={{ fontSize: 13 }}>{busy}</div>}
       <form className="oc-form" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-        <textarea rows={1} value={text} aria-label="Talk about this email with the AI" ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 120)}px`; } }} placeholder="Ask about this email…"
+        <textarea rows={1} value={text} aria-label="Talk about this email with the AI" ref={(el) => { boxRef.current = el; if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 120)}px`; } }} placeholder="Ask about this email…"
           onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+        <MicButton target={() => boxRef.current} append keepListening label="Talk to the AI (microphone)" className="sc-mic oc-mic" />
         <button type="submit" className="btn sm primary" disabled={!!busy || !text.trim()}>Send</button>
       </form>
       {note && <span className="ai-off">{note}</span>}
