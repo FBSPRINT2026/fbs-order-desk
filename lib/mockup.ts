@@ -155,9 +155,18 @@ export function measureBag(img: HTMLImageElement, widthIn: number): Fit | null {
   const md = x.createImageData(W, H);
   for (let p = 0; p < W * H; p++) md.data[p * 4 + 3] = bg[p] ? 0 : 255;
   const mc = document.createElement("canvas"); mc.width = W; mc.height = H; mc.getContext("2d")!.putImageData(md, 0, 0);
-  const width = new Int16Array(H), L = new Int16Array(H).fill(-1), R = new Int16Array(H).fill(-1);
-  for (let y = 0; y < H; y++) { for (let X = 0; X < W; X++) if (!bg[y * W + X]) { if (L[y] < 0) L[y] = X; R[y] = X; } width[y] = L[y] < 0 ? 0 : R[y] - L[y]; }
-  const max = Math.max(...Array.from(width));
+  // the bag's edges: the photos have a soft gray shadow around the bag that isn't white, so it isn't background either.
+  // Count only pixels clearly darker or more colored than that shadow; a white or natural tote (nothing that strong)
+  // falls back to everything that isn't the white background.
+  const strong = (p: number) => { const r = d[p * 4], g = d[p * 4 + 1], b = d[p * 4 + 2]; return Math.min(r, g, b) < 205 || Math.max(r, g, b) - Math.min(r, g, b) > 28; };
+  const rows = (is: (p: number) => boolean) => {
+    const width = new Int16Array(H), L = new Int16Array(H).fill(-1), R = new Int16Array(H).fill(-1);
+    for (let y = 0; y < H; y++) { for (let X = 0; X < W; X++) if (is(y * W + X)) { if (L[y] < 0) L[y] = X; R[y] = X; } width[y] = L[y] < 0 ? 0 : R[y] - L[y]; }
+    return { width, L, R, max: Math.max(...Array.from(width)) };
+  };
+  let m = rows((p) => !bg[p] && strong(p));
+  if (m.max < 200) m = rows((p) => !bg[p]);
+  const { width, L, R, max } = m;
   if (max < 200) return null;
   // the body: rows nearly as wide as the widest (the handles are much narrower)
   let top = -1, bot = -1;
