@@ -124,7 +124,7 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
     if (!card.ok) return { ok: false as const, error: card.error };
     const res = await ssPlaceOrder({
       payment: { email: card.profile.email, profileID: card.profile.profileID }, quote: p.quote,
-      lines: lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), po, test: p.test, shippingMethod: p.shippingMethod || "1",
+      lines: lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), po, test: p.test, shippingMethod: p.shippingMethod || "40",
       shipTo: { customer: from.company || "FBS Print", attn: from.name || "Receiving", address: [from.street1, from.street2].filter(Boolean).join(" "), city: from.city, state: from.state, zip: from.zip },
       email: p.test ? undefined : v.user!.email || undefined,
     });

@@ -86,7 +86,8 @@ const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLoc
 /** Plain words for a package: arrived, a real problem, or just "On the way" (carrier scan details stay in the tooltip). */
 const PROBLEMS = ["failure", "return_to_sender", "error", "available_for_pickup", "cancelled"];
 const stLabel = (st: string | undefined) => (st === "delivered" ? "Arrived" : st && PROBLEMS.includes(st) ? TRACK[st] || st : "On the way");
-const SS_METHODS: [string, string][] = [["1", "Ground (S&S picks)"], ["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
+// UPS Ground always (Nick, Oct 9): "Ground (S&S picks)" can land on UPS Ground Advantage, which is slower
+const SS_METHODS: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
 
 /**
  * Goods & receiving: everything coming to us, in one daily view.
@@ -665,7 +666,7 @@ function BlankCard({ b, o, who, need, ships, onChange }: { b: BO; o: O; who: str
 function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: () => void; onDone: (msg: string) => void }) {
   const [plan, setPlan] = useState<{ lines: BlankLine[]; ss: boolean } | null>(null);
   const [qty, setQty] = useState<Record<string, number>>({});
-  const [method, setMethod] = useState("1");
+  const [method, setMethod] = useState("40");
   const [dry, setDry] = useState<{ orderNumber: string; warehouse: string; total: number; expected: string | null }[] | null>(null);
   const [busy, setBusy] = useState(""), [err, setErr] = useState("");
   const [other, setOther] = useState(false);

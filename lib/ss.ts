@@ -266,7 +266,7 @@ export async function ssPlaceOrder(o: {
     headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
       shippingAddress: { customer: o.shipTo.customer, attn: o.shipTo.attn, address: o.shipTo.address, city: o.shipTo.city, state: o.shipTo.state, zip: o.shipTo.zip, residential: false },
-      shippingMethod: o.shippingMethod || "1", poNumber: o.po.slice(0, 50), testOrder: o.test, autoselectWarehouse: true,
+      shippingMethod: o.shippingMethod && o.shippingMethod !== "1" ? o.shippingMethod : "40", // UPS Ground, never "S&S picks" poNumber: o.po.slice(0, 50), testOrder: o.test, autoselectWarehouse: true,
       // the closest warehouse that has it first (S&S's "fastest" Freight Optimizer); splits only when the closest is short
       AutoSelectWarehouse_Preference: "fastest",
       ...(o.payment ? { paymentProfile: { email: o.payment.email, profileID: o.payment.profileID } } : {}),

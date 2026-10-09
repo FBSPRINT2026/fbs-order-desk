@@ -17,7 +17,8 @@ type Line = { key: string; brand: string; style: string; color: string; size: st
   /** from an email: what the customer asked for, the style's colors to pick from, whether the match is sure */ asked?: string; options?: string[]; sure?: boolean; styleID?: number };
 type Hit = { styleID: number; brand: string; style: string; title: string; image: string };
 type Recent = { id: string; order_id: string | null; number: number | null; label: string; supplier_order: string; status: string; total: number | null; expected_date: string | null; lines: { qty: number; label: string }[]; created_by: string; created_at: string };
-const SS_METHODS: [string, string][] = [["1", "Ground (S&S picks)"], ["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
+// UPS Ground always (Nick, Oct 9): "Ground (S&S picks)" can land on UPS Ground Advantage, which is slower
+const SS_METHODS: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
 /** the style's page on ssactivewear.com (every color with swatches): /p/next_level/6210; Bella + Canvas is "bella" there */
 const ssUrl = (brand: string, style: string) => {
   const b = /bella/i.test(brand) ? "bella" : brand.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -42,7 +43,7 @@ function OrderGoods() {
   const [q, setQ] = useState(""), [hits, setHits] = useState<Hit[]>([]), [pick, setPick] = useState<{ brand: string; style: string; colors: StyleColor[] } | null>(null);
   const [color, setColor] = useState(""), [qty, setQty] = useState<Record<string, number>>({});
   // ordering
-  const [method, setMethod] = useState("1"), [quote, setQuote] = useState("");
+  const [method, setMethod] = useState("40"), [quote, setQuote] = useState("");
   const [dry, setDry] = useState<{ orderNumber: string; warehouse: string; total: number; expected: string | null }[] | null>(null);
   const [busy, setBusy] = useState(""), [err, setErr] = useState(""), [msg, setMsg] = useState(""), [sure, setSure] = useState(false);
   const [recent, setRecent] = useState<Recent[] | null>(null), [recentErr, setRecentErr] = useState("");
