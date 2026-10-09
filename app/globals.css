@@ -5454,6 +5454,10 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .eo-conf{font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
 .eo-conf.high{background:#E3F4EA;color:#1F7A47}.eo-conf.low{background:#FDEBD8;color:#B54708}
 .eo-reading{margin:0;font-size:13.5px;color:var(--ink-2)}
+.eo-tell{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface-2)}
+.eo-tell.ask{border-color:var(--accent);background:var(--accent-soft)}
+.eo-tell label{font-size:13.5px;font-weight:600}
+.eo-tell textarea{width:100%;min-width:0;font:inherit;font-size:13.5px;resize:vertical}
 .eo-sum{margin:0;font-size:14px}
 .eo-files{display:flex;flex-wrap:wrap;gap:10px}
 .eo-file{display:flex;flex-direction:column;gap:3px;width:132px;font-size:12px}

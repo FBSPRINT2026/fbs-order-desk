@@ -51,7 +51,7 @@ export async function POST(req: Request) {
   const v = await staff(); if (!v) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   const admin = createAdminClient();
-  const r = await suggestEmailOrder(admin, String(b.activity || ""), v.user!.email || "staff");
+  const r = await suggestEmailOrder(admin, String(b.activity || ""), v.user!.email || "staff", typeof b.told === "string" ? b.told : "");
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
   const files = await signed(admin, r.draft.files);
   return NextResponse.json({ draft: { ...r.draft, files }, files, past: r.past });

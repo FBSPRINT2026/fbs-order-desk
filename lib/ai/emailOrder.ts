@@ -130,6 +130,36 @@ export async function pastJobs(admin: SupabaseClient, customerId: string | null)
   return jobs.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 25);
 }
 
+/**
+ * Jobs staff named by number in what they told the AI ("it's a reorder of 31174"): looked up even when they're older
+ * than the recent jobs listed (portal orders by number, Printavo jobs by their number), this customer's first.
+ */
+async function jobsNamed(admin: SupabaseClient, told: string, customerId: string | null, have: PastJob[]): Promise<PastJob[]> {
+  const nums = [...new Set((told.match(/(?<![\d.$])#?(\d{4,6})(?![\d.])/g) || []).map((x) => x.replace("#", "")))].slice(0, 4);
+  if (!nums.length) return [];
+  const out: PastJob[] = [];
+  const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const prod = (st?.data as { production?: unknown } | null)?.production;
+  for (const n of nums) {
+    if (have.some((j) => new RegExp(`^#${n}\\b`).test(j.label))) continue;
+    const { data: os } = await admin.from("orders").select("id, number, nickname, status, created_at, groups, lines, customer_id").eq("number", +n).limit(1);
+    const o = os?.[0] as (Order & { created_at: string; customer_id: string | null }) | undefined;
+    if (o && (!customerId || o.customer_id === customerId)) {
+      const groups = groupsFromOrder(o);
+      out.push({ ref: `o:${o.id}`, label: `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}`, date: (o.created_at || "").slice(0, 10), qty: qtyOf(groups), groups });
+      continue;
+    }
+    const { data: as } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").eq("visual_id", n).limit(2);
+    // this customer's job (a stray number like part of a phone number shouldn't pull in someone else's job)
+    const r = ((as || []) as (PvRow & { customer_id: string | null })[]).find((x) => !customerId || x.customer_id === customerId);
+    if (r) {
+      const groups = groupsFromPrintavo(r, prod);
+      if (groups.length) out.push({ ref: `a:${r.id}`, label: `#${r.visual_id}${r.nickname ? ` ${r.nickname}` : ""} (Printavo)`, date: r.order_date || "", qty: r.qty || qtyOf(groups), groups, note: "Printavo job named by staff." });
+    }
+  }
+  return out;
+}
+
 /** the past jobs as the AI reads them: J numbers, and L numbers for every garment line */
 function jobsText(jobs: PastJob[]) {
   return jobs.map((j, ji) => {
@@ -249,16 +279,19 @@ function tool(finishingIds: string[]) {
 const supplierKey = (s: string) => (/san\s*mar/i.test(s) ? "sanmar" : /s\s*&\s*s|ss\s*active/i.test(s) ? "ss" : s.trim().slice(0, 60));
 
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
-export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
+export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, told = ""): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
   const { settings, ready, reason } = await aiState(admin);
   if (!ready) return { ok: false, error: reason };
   const { data: a } = await admin.from("activities").select("id, customer_id, subject, body, from_email, occurred_at, meta").eq("id", activityId).maybeSingle();
   if (!a) return { ok: false, error: "Email not found." };
   const atts = (await refetchAttachments(admin, activityId).catch(() => null)) || ((a.meta as { attachments?: Att[] })?.attachments || []);
-  const [{ data: cust }, past] = await Promise.all([
+  told = told.trim().slice(0, 1500);
+  const [{ data: cust }, recent] = await Promise.all([
     a.customer_id ? admin.from("customers").select("id, company, name, email, price_type, notes").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
     pastJobs(admin, a.customer_id as string | null),
   ]);
+  // a job staff named goes first, so it's J1
+  const past = [...(told ? await jobsNamed(admin, told, (a.customer_id as string) || null, recent).catch(() => []) : []), ...recent];
   const sigs = await signaturePaths(admin, { id: a.id as string, from_email: (a.from_email as string) || null }, atts).catch(() => new Set<string>());
   const { images, documents, listing } = await readFiles(admin, atts, sigs);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
@@ -276,7 +309,8 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 5. Garments that share the same prints are one group, with the mockup files for them.
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
 7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
-Never invent prices or dates. Anything unclear or missing goes in questions, written to the customer in plain words.`;
+Never invent prices or dates. Anything unclear or missing goes in questions, written to the customer in plain words.
+When staff tell you something about this email (which past job it is, that it's a reorder, what the customer wants changed, colors used before), it's fact: follow it over your own reading.`;
   const custText = cust ? `Customer: ${cust.company || cust.name} <${cust.email || a.from_email}>. ${cust.price_type === "wholesale" ? "WHOLESALE customer: they supply their own garments (we only print)." : "Retail customer: we normally supply the garments."}${cust.notes ? ` Notes on file: ${String(cust.notes).slice(0, 400)}` : ""}` : `Sender ${a.from_email} isn't a customer on file yet.`;
   const prompt = `${custText}
 
@@ -289,7 +323,10 @@ The email (${String(a.occurred_at).slice(0, 10)}):
 Subject: ${a.subject || ""}
 """
 ${String(a.body || "").slice(0, 12000)}
-"""`;
+"""${told ? `
+
+WHAT STAFF TOLD YOU ABOUT THIS EMAIL (facts, follow them):
+${told}` : ""}`;
   const r = await askClaude<AiOrder>({
     task: "order_from_email", model: settings.assistant.ai.model, maxTokens: 4000, timeoutMs: 55_000,
     ctx: { activity_id: a.id as string, customer_id: (a.customer_id as string) || null, by }, admin,
@@ -393,6 +430,7 @@ ${String(a.body || "").slice(0, 12000)}
     goods: { supplied, supplier: supplierKey(p.goods?.supplier || ""), expected: (p.goods?.expected || "").slice(0, 120), note: (p.goods?.note || "").slice(0, 300) },
     groups, art, mockups, reorderOf: job?.ref || null,
     questions: (p.questions || []).map((q) => String(q).slice(0, 300)).slice(0, 10), files,
+    ...(told ? { told } : {}), ...(p.kind === "reorder" ? { looksReorder: true } : {}),
   };
   const row = {
     kind: "draft_order", dedupe_key: `email:${a.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",

@@ -35,9 +35,11 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
   const [busy, setBusy] = useState<"" | "read" | "create">(""), [err, setErr] = useState("");
   const [status, setStatus] = useState<"quote" | "approved">("quote");
 
+  // what staff tell the AI before it reads the email ("it's a reorder of 31174, the art is on the old job")
+  const [told, setTold] = useState(""), [tellOpen, setTellOpen] = useState(false);
   async function read() {
     setBusy("read"); setErr("");
-    const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId }) }).catch(() => null);
+    const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     setBusy("");
     if (!r?.ok || !j.draft) return setErr(j.error || "The AI couldn't read this email. Try again.");
@@ -52,7 +54,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
       if (!live) return;
       if (!r?.ok || !j) return setErr(j?.error || "Couldn't load the email.");
       setData(j);
-      if (j.draft) setD(j.draft);
+      if (j.draft) { setD(j.draft); if (j.draft.told) setTold(j.draft.told); }
       else if (j.ai) read();
     })();
     return () => { live = false; };
@@ -135,6 +137,25 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
       {!data.ai && !d && <div className="warn">{data.aiReason || "AI is off."} You can still enter the order by hand from the order page.</div>}
       {busy === "read" && <p className="eo-reading">Reading the email{files.length ? ` and ${files.length} attachment${files.length === 1 ? "" : "s"}` : ""}: garments, sizes, art, mockups, and whether it's a reorder. This takes 15 to 40 seconds.</p>}
       {err && <div className="err">{err}</div>}
+      {data.ai && busy !== "read" && (() => {
+        // a reorder (or what looks like one): ask what staff know before pricing it
+        const ask = !!d && (d.kind === "reorder" || !!d.looksReorder) && !d.told;
+        if (!ask && !tellOpen && !d?.told) return <button type="button" className="eo-link eo-tell-link" onClick={() => setTellOpen(true)}>✦ Tell the AI something about this email</button>;
+        return (
+          <div className={"eo-tell" + (ask ? " ask" : "")}>
+            <label htmlFor={`tell-${activityId}`}>
+              {ask ? (job ? <>This looks like a reorder of <b>{job.label}</b>. Anything I should know?</> : <>This looks like a reorder, but I couldn&apos;t tell which job. Anything I should know?</>)
+                : d?.told ? "What you told the AI" : "Anything the AI should know first?"}
+            </label>
+            <textarea id={`tell-${activityId}`} rows={2} value={told} onChange={(e) => setTold(e.target.value)}
+              placeholder='e.g. "Reorder of 31174, art and mockup are on that job" · "Same as last time but navy instead of black" · "We used the LA Lakers PMS colors"' />
+            <div className="row" style={{ gap: 6 }}>
+              <button type="button" className="btn sm primary" disabled={!told.trim()} onClick={() => { setTellOpen(false); void read(); }}>{d ? "Read it again with this" : "Read the email with this"}</button>
+              {!ask && !d?.told && <button type="button" className="btn sm ghost" onClick={() => setTellOpen(false)}>Cancel</button>}
+            </div>
+          </div>
+        );
+      })()}
       {d && total > 0 && <div hidden><WhenCalc key={whenKey} when={{ groups: d.groups, onDates: setWhen }} /></div>}
       {d && mustMove && data.customer && <NotMovedBanner customerId={data.customer.id} name={data.customer.company || data.customer.name || ""} what="an order for them"
         onMoved={() => setData((x) => (x && x.customer ? { ...x, customer: { ...x.customer, moved_at: new Date().toISOString() } } : x))} />}
