@@ -2,7 +2,8 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, SIZES, type Order } from "@/lib/pricing";
-import { ssConfigured, ssPlaceOrder, ssSkus } from "@/lib/ss";
+import { ssConfigured, ssPlaceOrder } from "@/lib/ss";
+import { matchToSS } from "@/lib/ssMatch";
 
 async function staff() {
   const v = await getViewer();
@@ -30,22 +31,7 @@ export async function blanksPlan(orderId: string): Promise<{ ok: boolean; error?
       else rows.push({ key, brand: l.brand || "", style: l.style || "", color: l.color || "", size: z, qty, sku: "", price: 0, stock: 0, found: false, note: "" });
     }
     const ss = ssConfigured();
-    if (ss) {
-      // one S&S lookup per style (our catalog remembers the S&S style id)
-      const styles = [...new Set(rows.map((r) => `${r.brand}|${r.style}`))];
-      for (const st of styles) {
-        const [brand, style] = st.split("|");
-        if (!style) continue;
-        const { data: gar } = await admin.from("garments").select("ss_style_id").ilike("style", style).not("ss_style_id", "is", null).limit(1).maybeSingle();
-        const info = await ssSkus(gar?.ss_style_id ? +gar.ss_style_id : `${brand} ${style}`.trim()).catch(() => null);
-        for (const r of rows.filter((x) => `${x.brand}|${x.style}` === st)) {
-          if (!info) { r.note = "Style not found at S&S"; continue; }
-          const sku = info.skus.find((k) => k.colorName.toLowerCase() === r.color.toLowerCase() && k.size === r.size);
-          if (!sku) { r.note = info.skus.some((k) => k.colorName.toLowerCase() === r.color.toLowerCase()) ? "Size not carried in this color" : "Color not found at S&S"; continue; }
-          Object.assign(r, { sku: sku.sku, price: sku.price, stock: sku.qty, found: true, note: sku.qty < r.qty ? `Only ${sku.qty} in stock` : "" });
-        }
-      }
-    }
+    if (ss) await matchToSS(admin, rows);
     const c = (o as unknown as { customers: { company: string; name: string } | null }).customers;
     return { ok: true, ss, lines: rows, order: { number: o.number, nickname: o.nickname || "", due_date: o.due_date, customer: c?.company || c?.name || "" } };
   } catch (e) { return fail(e); }

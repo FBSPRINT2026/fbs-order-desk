@@ -124,6 +124,11 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   }).select("id, number").single();
   if (error || !o) return { ok: false, error: error?.message || "Couldn't create the order." };
   const oid = o.id as string;
+  // goods already bought for this email (Order goods, before the order existed): now they belong to it
+  if (a) {
+    const { data: got } = await admin.from("blank_orders").update({ order_id: oid }).eq("activity_id", a.id).is("order_id", null).select("supplier_order");
+    if (got?.length) await admin.from("order_events").insert({ order_id: oid, kind: "blanks", detail: `Goods already ordered from S&S for this email: ${got.map((g) => g.supplier_order).join(", ")}`, actor: by });
+  }
   await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}${a ? ", from the customer's email" : " (Reorder on the archived job)"}` : "From the customer's email (Inbox → Create order)", actor: by });
   const pn = [
     d.questions?.length ? `Questions for the customer${a ? " (from the email)" : ""}:\n- ${d.questions.join("\n- ")}` : "",

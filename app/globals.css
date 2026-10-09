@@ -5753,3 +5753,23 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .oc-form .mic.oc-mic{position:static;transform:none;flex:none;width:32px;height:32px;border:1px solid var(--line);background:var(--surface)}
 .oc-form .mic.oc-mic svg{width:17px;height:17px}
 .oc-form .mic.oc-mic.on{border-color:var(--fbs-salmon);background:var(--fbs-salmon)}
+
+/* Order goods (app/shop/order-goods) */
+.og{display:flex;flex-direction:column;gap:14px;max-width:1100px}
+.og-chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);border-radius:999px;padding:3px 6px 3px 12px;font-size:13px;max-width:100%;overflow-wrap:anywhere}
+.og-chip button{border:0;background:none;cursor:pointer;color:var(--ink-3);font-size:12px;padding:2px 6px}
+.og-find{position:relative;display:inline-flex;flex-direction:column;min-width:0}
+.og-find input{min-width:0}
+.og-hits{position:absolute;top:100%;left:0;z-index:6;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.12);display:flex;flex-direction:column;min-width:240px;max-height:340px;overflow-y:auto}
+.og-hits.wide{min-width:min(520px,90vw)}
+.og-hits button{display:flex;gap:10px;align-items:center;text-align:left;border:0;border-bottom:1px solid var(--line-2);background:none;padding:7px 10px;font:inherit;font-size:13px;cursor:pointer;color:inherit}
+.og-hits button:hover{background:var(--surface-2)}
+.og-hits img{width:36px;height:36px;object-fit:contain;flex:none}
+.og-add{display:flex;gap:8px;align-items:flex-start}
+.og-add .og-find .sx{width:100%}
+.og-pick{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:10px;background:var(--surface-2)}
+.og-pick select{width:auto;max-width:100%}
+.og-sizes{display:flex;flex-wrap:wrap;gap:8px}
+.og-sizes label{display:flex;flex-direction:column;gap:2px;align-items:center;width:84px;font-size:12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px}
+.og-sizes label.out{opacity:.55}
+.og-sizes input{width:64px;text-align:center}

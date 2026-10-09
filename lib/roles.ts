@@ -65,7 +65,7 @@ export const PAGE_PERMS: [string, PermKey][] = [
   ["/shop/customers", "customers"], ["/shop/inbox", "customers"], ["/shop/incoming", "incoming"], ["/shop/printavo-sync", "quotes"], ["/shop/projects", "projects"], ["/shop/stores", "stores"], ["/shop/assistant", "assistant"],
   ["/shop/settings", "settings"], ["/shop/catalog", "settings"], ["/shop/artwork", "artwork"], ["/shop/separations", "separations"],
   ["/shop/board", "schedule"], ["/shop/calendar", "schedule"], ["/shop/employees", "employees"], ["/shop/shipping", "shipping"],
-  ["/shop/receiving", "receiving"], ["/shop/time", "timeclock"],
+  ["/shop/receiving", "receiving"], ["/shop/order-goods", "receiving"], ["/shop/time", "timeclock"],
 ];
 export const permForPath = (path: string): PermKey | null => PAGE_PERMS.find(([p]) => path === p || path.startsWith(p + "/"))?.[1] ?? null;
 export const canOpen = (path: string, perms: Perms) => { const k = permForPath(path); return !k || perms[k]; };

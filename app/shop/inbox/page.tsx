@@ -188,6 +188,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
     else if (a.kind === "reply") { if (a.subject) setSubject(a.subject); setBody(a.body); setPicked(-1); setResp("reply"); setPane("resp"); setTimeout(() => boxRef.current?.focus(), 30); }
     else if (a.kind === "file_under") { const o = orders.find((z) => z.number === a.order_number); if (o) void run("ord", () => setEmailOrder(x.id, o.id), `Filed under #${o.number}.`); else setErr(`#${a.order_number} isn't one of their open orders.`); }
     else if (a.kind === "no_reply") void run("nr", () => markNoReply(x.id), "Off your Needs a reply list.");
+    else if (a.kind === "order_goods") window.open(`/shop/order-goods?email=${x.id}`, "_blank");
   }
   const orderish = ["new_order", "reorder"].includes(x.meta?.triage?.intent || "") || !!quote;
   async function loadOpts(fresh = false) {
@@ -233,6 +234,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           {x.customer_id && <select aria-label="File under an order" value={x.order_id || ""} disabled={!!busy} onChange={(e) => run("ord", () => setEmailOrder(x.id, e.target.value || null), "Filed under the order.")}>
             <option value="">Not about an order</option>{orders.slice(0, 40).map((o) => <option key={o.id} value={o.id}>#{o.number} {o.nickname || ""} ({o.status})</option>)}
           </select>}
+          {x.direction === "in" && <a className="btn sm" href={`/shop/order-goods?email=${x.id}`} target="_blank" rel="noreferrer" title="Buy the blanks from S&S now, before the order is made (the garments the AI read from the email are filled in)">Order goods</a>}
           {x.customer_id && <Link className="btn sm" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
           {x.order_id && <Link className="btn sm" href={`/shop/orders/${x.order_id}`}>Order</Link>}
           <span className="spacer" />

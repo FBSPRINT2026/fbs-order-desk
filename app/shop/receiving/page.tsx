@@ -210,7 +210,8 @@ export default function GoodsReceiving() {
     ]);
     const orders = (os || []) as (O & { type: string; submitted_at: string | null })[];
     const blanks = (bo || []) as BO[];
-    const ids = [...new Set([...blanks.map((b) => b.order_id)])];
+    // goods bought ahead of an order (Order goods) have no order yet
+    const ids = [...new Set([...blanks.map((b) => b.order_id).filter(Boolean)])];
     const [{ data: bs }, { data: cs }] = await Promise.all([
       ids.length ? sb.from("blank_shipments").select("*").in("order_id", ids) : Promise.resolve({ data: [] }),
       sb.from("customers").select("*").in("id", [...new Set(orders.map((o) => o.customer_id).filter(Boolean))] as string[]),

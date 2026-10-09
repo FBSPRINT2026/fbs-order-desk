@@ -30,6 +30,7 @@ const ICONS: Record<string, React.ReactNode> = {
   team: <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3" /><circle cx="16.5" cy="9" r="2.5" /><path d="M2.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5" /><path d="M14 14.3c.8-.4 1.6-.6 2.5-.6 2.2 0 3.9 1.5 4.5 4.3" /></svg>,
   clock: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>,
   // a t-shirt (the blanks we receive)
+  cart: <svg viewBox="0 0 24 24"><path d="M3 4h2.5l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.1L21 8H6.6" /><circle cx="9.5" cy="19.5" r="1.4" /><circle cx="17" cy="19.5" r="1.4" /></svg>,
   goods: <svg viewBox="0 0 24 24"><path d="M9 3.5L4 5.8 2.5 10.2l3.2 1.3.9-2.2V20.5h10.8V9.3l.9 2.2 3.2-1.3L20 5.8 15 3.5c-.4 1.6-1.6 2.6-3 2.6s-2.6-1-3-2.6z" /></svg>,
   shipping: <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z" /><path d="M3 7l9 4 9-4M12 11v10" /></svg>,
   artwork: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-8 9" /></svg>,
@@ -42,7 +43,7 @@ const ICONS: Record<string, React.ReactNode> = {
 const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 
 /** shorter names for the tightest menu (two links a row) */
-const SHORT: Record<string, string> = { "Printavo Sync": "Printavo", "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving" };
+const SHORT: Record<string, string> = { "Printavo Sync": "Printavo", "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving", "Order Goods": "Order" };
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
 
@@ -150,7 +151,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
     { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/inbox", "inbox", "Inbox"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
     { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/separations", "seps", "Separations"]] },
-    { title: "Shop Tools", items: [["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"]] },
+    { title: "Shop Tools", items: [["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 

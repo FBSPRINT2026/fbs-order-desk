@@ -16,7 +16,8 @@ export type EmailAction =
   | { kind: "create_order"; label: string; told?: string; job?: string }
   | { kind: "reply"; label: string; subject?: string; body: string }
   | { kind: "file_under"; label: string; order_number: number }
-  | { kind: "no_reply"; label: string };
+  | { kind: "no_reply"; label: string }
+  | { kind: "order_goods"; label: string };
 export type EmailChatMsg = { role: "staff" | "ai" | "event"; text: string; at: string; by?: string; actions?: EmailAction[]; lookedUp?: LookedUp; /** event: where it leads (the order made) */ href?: string };
 type Att = { name: string; path: string; type: string; size: number };
 
@@ -71,7 +72,7 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     tool: { name: "answer", description: "Your reply to staff and the next steps they can take with a click.", input_schema: { type: "object", properties: {
       reply: { type: "string", description: "Plain words, short: what the email is, what you'd do, and why." },
       actions: { type: "array", description: "1-3 next steps, best first.", items: { type: "object", properties: {
-        kind: { type: "string", enum: ["create_order", "reply", "file_under", "no_reply"] },
+        kind: { type: "string", enum: ["create_order", "reply", "file_under", "no_reply", "order_goods"] },
         label: { type: "string", description: 'Button text, e.g. "Create the reorder of #31174", "Reply: we need more time", "Reply: we can\'t take this one"' },
         told: { type: "string", description: "create_order: what the order reader should know (the job, changes, colors) in one or two sentences" },
         job: { type: "number", description: "create_order for a reorder: the J number of the past job" },
@@ -81,7 +82,7 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     }, required: ["reply"] } },
     system: `${SHOP_CONTEXT(s)}
 
-You're helping staff handle a customer email, like an experienced shop manager reading over their shoulder. Read the email and its files, and use the customer's past jobs, open orders and how busy the shop is. Say plainly what it is and what you'd do: make a new order, make a reorder of a past job (name it), answer a question, ask for missing details, say we need more time (when the date they want is too soon for how busy we are), or turn the job down (when it's something the shop doesn't do or can't do in time). Offer the next steps as actions. Replies to the customer are written in the shop's voice (${s.assistant.ai.voice}), short, and never promise prices or exact dates unless staff gave them.
+You're helping staff handle a customer email, like an experienced shop manager reading over their shoulder. Read the email and its files, and use the customer's past jobs, open orders and how busy the shop is. Say plainly what it is and what you'd do: make a new order, make a reorder of a past job (name it), answer a question, ask for missing details, say we need more time (when the date they want is too soon for how busy we are), or turn the job down (when it's something the shop doesn't do or can't do in time). Offer the next steps as actions. When the garments are clear and the job is likely (a reorder, an approved quote, a tight date), you can offer order_goods: buying the blanks from S&S now, ahead of the order. Replies to the customer are written in the shop's voice (${s.assistant.ai.voice}), short, and never promise prices or exact dates unless staff gave them.
 Follow what staff tell you; it's fact. Keep your own reply to a few sentences, no headings.`,
     prompt,
   });
@@ -95,6 +96,7 @@ Follow what staff tell you; it's fact. Keep your own reply to a few sentences, n
     } else if (x.kind === "reply" && x.body) actions.push({ kind: "reply", label, subject: String(x.subject || "").slice(0, 200), body: String(x.body).slice(0, 6000) });
     else if (x.kind === "file_under" && x.order_number) actions.push({ kind: "file_under", label, order_number: Math.floor(x.order_number) });
     else if (x.kind === "no_reply") actions.push({ kind: "no_reply", label });
+    else if (x.kind === "order_goods") actions.push({ kind: "order_goods", label });
   }
   const now = new Date().toISOString();
   const messages: EmailChatMsg[] = [...thread,
