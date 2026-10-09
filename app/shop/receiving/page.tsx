@@ -705,10 +705,10 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
                 {lines.some((l) => !l.found) && <span className="bad" style={{ fontSize: 12.5 }}>Lines S&amp;S doesn&apos;t carry aren&apos;t included; order those elsewhere.</span>}
               </div>
               {!plan.ss && <div className="banner">S&amp;S isn&apos;t connected, so ordering here is off. Record an order placed elsewhere instead.</div>}
-              {dry && (
+              {dry && (<>
                 <div className="okmsg">Checked (nothing sent to S&amp;S): {dry.map((d) => `${WH[d.warehouse] || d.warehouse || "warehouse"} · ~${money(d.total)}`).join("; ")} · UPS Ground. Place the real order below.</div>
                 {dry.some((d) => d.warehouse !== "TX") && <div className="banner">Heads up: part of this ships from outside Fort Worth ({dry.filter((d) => d.warehouse !== "TX").map((d) => WH[d.warehouse] || d.warehouse).join(", ")}), so it&apos;ll take longer.</div>}
-              )}
+              </>)}
               {err && <div className="pv-err">{err}</div>}
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <button type="button" className="btn" disabled={!plan.ss || !orderable.length || !!busy} onClick={test}>{busy === "test" ? "Checking…" : "1. Check stock & card (dry run)"}</button>
