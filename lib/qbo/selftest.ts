@@ -1,7 +1,7 @@
 import { calcOrder, mergeSettings, r2 } from "@/lib/pricing";
 import {
   cleanEmail, customerCreateBody, customerDiff, DEFAULT_QBO_SETTINGS, displayNameOf, fromPrintavo, invoiceFingerprint, invoicePayload, matchPayment,
-  ownedFromQbo, parseAddress, paymentPayload, type OrderRow, type OurCustomer, type OurPayment, type QboSettings,
+  ownedFromOurs, ownedFromQbo, parseAddress, paymentPayload, type OrderRow, type OurCustomer, type OurPayment, type QboSettings,
 } from "@/lib/qbo/map";
 import { HIGH_CONFIDENCE, proposeMatches, type OrderRef, type OurCustomerLite, type QboCustomerLite, type QboInvoiceLite } from "@/lib/qbo/match";
 
@@ -75,6 +75,8 @@ export function selfTest(inp: SelfTestInput): { checks: Check[]; samples: Record
     }
   }
   ok(`invoices: ${n} real order/tax-mode payloads add up to our total exactly`, worst < 0.005, `largest difference ${worst.toFixed(4)}`);
+  const savedDiff = inp.orders.filter((o) => r2(+o.total || 0) !== calcOrder(o, settings).total);
+  ok("invoices: orders whose saved total differs from today's recalculation are found (they go to review, not sent)", true, `${savedDiff.length} of ${inp.orders.length}: ${savedDiff.slice(0, 6).map((o) => `#${o.number} saved ${r2(+o.total || 0)} vs ${calcOrder(o, settings).total}`).join("; ")}`);
   samples.invoiceTotals = totals;
 
   // a real order with tax, a discount, fees and setup on it (the variants the shop's real orders don't have yet)
@@ -198,24 +200,33 @@ export function selfTest(inp: SelfTestInput): { checks: Check[]; samples: Record
     const pick = res.proposals.find((p) => p.isPrimary && p.method === "invoices" && (oursById.get(p.localId)?.company || "").toLowerCase() !== p.qboName.toLowerCase()) || res.proposals.find((p) => p.isPrimary);
     if (pick) {
       const ours = inp.customers.find((c) => c.id === pick.localId) || ({ id: pick.localId, company: oursById.get(pick.localId)?.company, name: oursById.get(pick.localId)?.name } as OurCustomer);
-      const qboRec = { Id: pick.qboId, SyncToken: "3", DisplayName: pick.qboName, CompanyName: pick.qboName } as Record<string, unknown> & { Id: string; SyncToken: string };
-      const d1 = customerDiff(ours, qboRec, null, QS);
-      ok("rename: linked by Id, our current name is sent to that same QuickBooks customer", d1.conflicts.length === 0 && (!d1.rename || (d1.body?.DisplayName === displayNameOf(ours))), `QuickBooks #${pick.qboId} "${pick.qboName}" → "${displayNameOf(ours)}" (changes: ${d1.change.join(", ") || "none"})`);
+      const qboRec = { Id: pick.qboId, SyncToken: "3", DisplayName: pick.qboName, CompanyName: pick.qboName, PrimaryEmailAddr: { Address: "ap@accountant-cleaned.com" } } as Record<string, unknown> & { Id: string; SyncToken: string };
+      // linked by matching: baselines = ours now, QuickBooks now
+      const base = ownedFromOurs(ours, QS), sent0 = ownedFromQbo(qboRec);
+      const d0 = customerDiff(ours, qboRec, sent0, QS, [], [], base);
+      ok("link: linking sends nothing; Printavo's / the accountant's QuickBooks values stay (listed as differences)", !d0.body && d0.conflicts.length === 0, `differences: ${d0.differences.map((x) => x.label).join(", ") || "none"}`);
+      const optIn = { ...base }; delete optIn.DisplayName; delete optIn.CompanyName;
+      const d1 = customerDiff(ours, qboRec, sent0, QS, [], [], optIn);
+      ok("link: \"Send our names\" sends only the name to that same QuickBooks customer (by Id)", d1.change.includes("DisplayName") && !d1.change.includes("PrimaryEmailAddr") && d1.body?.DisplayName === displayNameOf(ours), `QuickBooks #${pick.qboId} "${pick.qboName}" → "${displayNameOf(ours)}"; changes ${d1.change.join(", ")}`);
       const after = { ...qboRec, ...(d1.body || {}), SyncToken: "4" };
-      const sent = ownedFromQbo(after);
+      const sent = ownedFromQbo(after), base2 = ownedFromOurs(ours, QS);
       const renamed = { ...ours, company: `${ours.company || ours.name} Renamed` };
-      const d2 = customerDiff(renamed, after, sent, QS);
-      ok("rename: renamed here later → the same QuickBooks customer (same Id) is renamed", d2.change.includes("DisplayName") && !d2.conflicts.length && d2.body?.DisplayName === displayNameOf(renamed), JSON.stringify(d2.body));
+      const d2 = customerDiff(renamed, after, sent, QS, [], [], base2);
+      ok("rename: renamed here after linking → the same QuickBooks customer (same Id) is renamed", d2.change.includes("DisplayName") && !d2.conflicts.length && d2.body?.DisplayName === displayNameOf(renamed), JSON.stringify(d2.body));
       const theirs = { ...after, DisplayName: "Renamed By The Accountant" };
-      const d3 = customerDiff(ours, theirs, sent, QS);
-      ok("rename: renamed in QuickBooks → flagged for the owner, not overwritten", d3.conflicts.some((c) => c.field === "DisplayName") && !d3.change.includes("DisplayName"), JSON.stringify(d3.conflicts));
-      const d4 = customerDiff(ours, theirs, sent, QS, ["DisplayName"]);
+      const d3a = customerDiff(ours, theirs, sent, QS, [], [], base2);
+      ok("rename: renamed only in QuickBooks → left alone (not overwritten)", !d3a.change.includes("DisplayName"));
+      const d3 = customerDiff(renamed, theirs, sent, QS, [], [], base2);
+      ok("rename: renamed on both sides → flagged for the owner, not overwritten", d3.conflicts.some((c) => c.field === "DisplayName") && !d3.change.includes("DisplayName"), JSON.stringify(d3.conflicts));
+      const d4 = customerDiff(renamed, theirs, sent, QS, ["DisplayName"], [], base2);
       ok("rename: after 'Keep QuickBooks', the name is left alone for good", !d4.conflicts.length && !d4.change.includes("DisplayName"));
-      const d5 = customerDiff(ours, theirs, sent, QS, [], ["DisplayName"]);
-      ok("rename: after 'Ours wins', our name is sent", d5.change.includes("DisplayName") && d5.body?.DisplayName === displayNameOf(ours));
-      const blank = customerDiff({ ...ours, email: "", phone: "" }, { ...after, PrimaryEmailAddr: { Address: "ap@theirs.com" }, PrimaryPhone: { FreeFormNumber: "555" } }, sent, QS);
+      const d5 = customerDiff(renamed, theirs, sent, QS, [], ["DisplayName"], base2);
+      ok("rename: after 'Ours wins', our name is sent", d5.change.includes("DisplayName") && d5.body?.DisplayName === displayNameOf(renamed));
+      const blank = customerDiff({ ...ours, email: "", phone: "" }, { ...after, PrimaryEmailAddr: { Address: "ap@theirs.com" }, PrimaryPhone: { FreeFormNumber: "555" } }, sent, QS, [], [], null);
       ok("customer: a field we have blank never blanks QuickBooks", !blank.change.includes("PrimaryEmailAddr") && !blank.change.includes("PrimaryPhone"));
-      samples.rename = { qboId: pick.qboId, printavoName: pick.qboName, ourName: displayNameOf(ours), firstPush: d1.body, evidence: pick.evidence };
+      const nullTax = { ...ours, tax_exempt: null };
+      ok("customer: tax-exempt not set → taxable is never sent (create or update)", !("Taxable" in customerCreateBody(nullTax, QS)) && !customerDiff(nullTax, { ...after, Taxable: false }, sent, QS, [], [], null).change.includes("Taxable"));
+      samples.rename = { qboId: pick.qboId, printavoName: pick.qboName, ourName: displayNameOf(ours), onLink: d0.differences, sendOurNames: d1.body, evidence: pick.evidence };
       samples.customerCreate = customerCreateBody(ours, QS);
     }
   }
