@@ -5,7 +5,9 @@
  * Measurements come from the supplier's size chart when we have it (S&S specs, saved on the garment as `specs`),
  * otherwise from typical numbers for that size.
  */
-export type Body = { size: string; widthIn: number; lengthIn: number; kind: "adult" | "youth" | "toddler" | "infant"; from: "supplier" | "typical" };
+export type Body = { size: string; widthIn: number; lengthIn: number; kind: "adult" | "youth" | "toddler" | "infant"; from: "supplier" | "typical";
+  /** a non-shirt (bag, tote): its own max print area (the garment less a margin), which no location can go past */
+  cap?: { maxW: number; maxH: number; label: string } };
 export type GarmentSpecs = { sizes: Record<string, { width?: number; length?: number }>; source?: string; at?: string };
 
 /** the reference everything was drawn for: an adult Large (Gildan 5000) */

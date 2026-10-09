@@ -551,6 +551,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const m = `${g?.description || ""} ${l.garment || ""}`.match(/(\d+(?:\.\d+)?)\s*["”]?\s*w\b/i);
     return m ? +m[1] : 15;
   };
+  const bagLength = (l: Line) => {
+    const g = garmentFor(l), sp = g?.specs?.sizes?.OS;
+    if (sp?.length && sp.length > 4) return sp.length;
+    const m = `${g?.description || ""} ${l.garment || ""}`.match(/(\d+(?:\.\d+)?)\s*["”]?\s*h\b/i);
+    return m ? +m[1] : bagWidth(l);
+  };
   const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v));
   // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
   const [fits, setFits] = useState<Record<string, Fit | null>>({});
@@ -580,7 +586,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // (supplier size chart, else typical). The photo scale and every print area follow it, so a toddler tee isn't sized
   // like an adult Gildan 5000.
   const runSizes = sortSizes(ordered);
-  const bodyFor = (l?: Line): Body => { const g = l ? garmentFor(l) : null; return shownSize && runSizes.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g, runSizes); };
+  const bodyFor = (l?: Line): Body => {
+    const g = l ? garmentFor(l) : null;
+    const b = shownSize && runSizes.includes(shownSize) ? bodyAt(g, shownSize) : bodyOf(g, runSizes);
+    if (!l || !isBag(l)) return b;
+    // a bag or tote: its max print area is the bag less 1.5" all around (a 13" × 13" tote takes 10" × 10")
+    const bw = bagWidth(l), bl = bagLength(l), r2 = (v: number) => Math.max(2, Math.round(v * 2) / 2);
+    const what = /tote/i.test(`${g?.description || ""} ${l.garment || ""}`) ? "tote" : "bag";
+    return { ...b, cap: { maxW: r2(bw - 3), maxH: r2(bl - 3), label: `a ${bw}" × ${bl}" ${what}` } };
+  };
   const body = bodyFor(lines[active] || lines[0]);
   const scaleOf = (b: Body) => REF_BODY.widthIn / b.widthIn;
   // a style without its size chart yet: ask S&S once (staff), so the body is measured, not typical
@@ -595,7 +609,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // one screen prints every size on the order: sizes and limits follow the smallest size ordered (a 2T), while the
   // picture stays on the middle size (a 3T)
   const capBody = smallestOrdered(shownG, ordered, body);
-  const fitBody = (b: Body) => (capBody && capBody.widthIn < b.widthIn ? capBody : b);
+  const fitBody = (b: Body) => (!b.cap && capBody && capBody.widthIn < b.widthIn ? capBody : b);
   // where a print sits follows the shown size; how big it can be follows the smallest size ordered
   const spotFor = (loc: string, b: Body = body) => {
     const s0 = spotFor0(loc, b), cb = fitBody(b);
@@ -642,7 +656,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const line = lines[active] || lines[0];
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
   const scale = scaleOf(body);
-  const shownOn = body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
+  const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
   const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
 
   /** One close-up box for an imprint (used under the photos and, smaller, beside them for the selected tab). */
@@ -1308,7 +1322,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {Object.keys(offsets).length > 0 && <button className="mk-pill" type="button" onClick={() => setOffsets({})}>Reset positions</button>}
                     </div>
                   )}
-                  {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={`${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody ? ` · sized for the ${capBody.size}` : ""}</span></div>}
+                  {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={body.cap ? `Max print area ${body.cap.maxW}" × ${body.cap.maxH}" (the bag less 1.5" around)` : `${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody && !body.cap ? ` · sized for the ${capBody.size}` : ""}</span></div>}
                 </>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : teeSvg("#9aa1ab", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im) }))}
                 onMove={(id, dx, dy) => {

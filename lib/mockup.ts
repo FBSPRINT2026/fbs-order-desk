@@ -164,8 +164,11 @@ export function measureBag(img: HTMLImageElement, widthIn: number): Fit | null {
   for (let y = 0; y < H; y++) if (width[y] >= max * 0.85) { if (top < 0) top = y; bot = y; }
   if (top < 0 || bot - top < 150) return null;
   let sum = 0, n = 0;
-  for (let y = top; y <= bot; y++) if (width[y] >= max * 0.85) { sum += (L[y] + R[y]) / 2; n++; }
-  const cx = sum / n, w = max, h = bot - top;
+  const ws: number[] = [];
+  for (let y = top; y <= bot; y++) if (width[y] >= max * 0.85) { sum += (L[y] + R[y]) / 2; n++; ws.push(width[y]); }
+  // the body's width: the typical row, not the widest (a flared opening or a soft shadow at an edge reads wider than the bag)
+  ws.sort((a, b) => a - b);
+  const cx = sum / n, w = ws[Math.floor(ws.length / 2)] || max, h = bot - top;
   const none = { x: cx, y: top, rot: 0 };
   return { s: 1, cx, top, mask: mc.toDataURL("image/png"), sleeve: { left: none, right: none }, flat: { cx, top, w, h, ppi: w / Math.max(4, widthIn) } };
 }
@@ -196,7 +199,13 @@ function fitSpot(s: Loc, b?: Body | null): Loc {
   const dropK = k.kl < 1 ? Math.sqrt(k.kl) : k.kl;
   return { ...s, dx: s.dx ? s.dx * k.kw : s.dx, drop: s.drop != null ? s.drop * dropK : s.drop, defW: Math.min(maxW, half(s.defW * k.gw)), maxW, maxH };
 }
-export const spotFor = (location: string, b?: Body | null): Loc => fitSpot(LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 12, maxH: 14 }, b);
+export const spotFor = (location: string, b?: Body | null): Loc => {
+  const s = fitSpot(LOCATION_SPOTS[location] || { view: "front", dx: 0, drop: 3, defW: 4, maxW: 12, maxH: 14 }, b);
+  // a bag or tote: never past its own print area, and centered on it (no collar to hang from)
+  if (!b?.cap || s.wrap) return s;
+  const maxW = Math.min(s.maxW, b.cap.maxW), maxH = Math.min(s.maxH, b.cap.maxH);
+  return { ...s, maxW, maxH, defW: Math.min(s.defW, maxW), top: false };
+};
 /** a print's size on this garment as the adult Large it would be (the location rules are in adult inches) */
 const asAdult = (b: Body | null | undefined, wIn: number, hIn: number) => { const k = kOf(b); return k ? { w: wIn / k.gw, h: hIn / k.gl, x: 1 / k.kw, y: 1 / k.kl } : { w: wIn, h: hIn, x: 1, y: 1 }; };
 
