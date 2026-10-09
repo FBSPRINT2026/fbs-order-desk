@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { aiState, askClaude } from "@/lib/ai/claude";
+import { aiState, askClaude, type LookedUp } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { normSize, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
 import { refetchAttachments } from "@/lib/mail/imap";
@@ -279,19 +279,29 @@ function tool(finishingIds: string[]) {
 const supplierKey = (s: string) => (/san\s*mar/i.test(s) ? "sanmar" : /s\s*&\s*s|ss\s*active/i.test(s) ? "ss" : s.trim().slice(0, 60));
 
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
-export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, told = ""): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
+export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; reorderOk?: boolean; lookedUp?: LookedUp | null } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
   const { settings, ready, reason } = await aiState(admin);
   if (!ready) return { ok: false, error: reason };
   const { data: a } = await admin.from("activities").select("id, customer_id, subject, body, from_email, occurred_at, meta").eq("id", activityId).maybeSingle();
   if (!a) return { ok: false, error: "Email not found." };
   const atts = (await refetchAttachments(admin, activityId).catch(() => null)) || ((a.meta as { attachments?: Att[] })?.attachments || []);
-  told = told.trim().slice(0, 1500);
+  const told = (o.told || "").trim().slice(0, 1500);
   const [{ data: cust }, recent] = await Promise.all([
     a.customer_id ? admin.from("customers").select("id, company, name, email, price_type, notes").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
     pastJobs(admin, a.customer_id as string | null),
   ]);
-  // a job staff named goes first, so it's J1
-  const past = [...(told ? await jobsNamed(admin, told, (a.customer_id as string) || null, recent).catch(() => []) : []), ...recent];
+  // a job staff picked or named goes first, so it's J1
+  let past = [...(told ? await jobsNamed(admin, told, (a.customer_id as string) || null, recent).catch(() => []) : []), ...recent];
+  const picked = o.jobRef ? past.find((j) => j.ref === o.jobRef) : undefined;
+  if (picked) past = [picked, ...past.filter((j) => j !== picked)];
+  // facts the note points to that have to be looked up online ("we used the LA Lakers PMS colors")
+  // (looked up first by the panel, so staff see it while the email is read)
+  const lookedUp = told && o.lookedUp?.text ? { text: String(o.lookedUp.text).slice(0, 600), sources: (o.lookedUp.sources || []).slice(0, 3).map((x) => ({ title: String(x.title || "").slice(0, 120), url: String(x.url || "") })).filter((x) => /^https?:\/\//.test(x.url)) } : null;
+  const staffSays = [
+    picked ? `Staff confirmed: this is a reorder of ${picked.label} (J1).` : "",
+    told,
+    lookedUp ? `Looked up online for that note: ${lookedUp.text}` : "",
+  ].filter(Boolean).join("\n");
   const sigs = await signaturePaths(admin, { id: a.id as string, from_email: (a.from_email as string) || null }, atts).catch(() => new Set<string>());
   const { images, documents, listing } = await readFiles(admin, atts, sigs);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
@@ -323,10 +333,10 @@ The email (${String(a.occurred_at).slice(0, 10)}):
 Subject: ${a.subject || ""}
 """
 ${String(a.body || "").slice(0, 12000)}
-"""${told ? `
+"""${staffSays ? `
 
-WHAT STAFF TOLD YOU ABOUT THIS EMAIL (facts, follow them):
-${told}` : ""}`;
+WHAT STAFF TOLD YOU ABOUT THIS EMAIL (facts, follow them; put looked-up ink colors on the prints' inks):
+${staffSays}` : ""}`;
   const r = await askClaude<AiOrder>({
     task: "order_from_email", model: settings.assistant.ai.model, maxTokens: 4000, timeoutMs: 55_000,
     ctx: { activity_id: a.id as string, customer_id: (a.customer_id as string) || null, by }, admin,
@@ -430,7 +440,8 @@ ${told}` : ""}`;
     goods: { supplied, supplier: supplierKey(p.goods?.supplier || ""), expected: (p.goods?.expected || "").slice(0, 120), note: (p.goods?.note || "").slice(0, 300) },
     groups, art, mockups, reorderOf: job?.ref || null,
     questions: (p.questions || []).map((q) => String(q).slice(0, 300)).slice(0, 10), files,
-    ...(told ? { told } : {}), ...(p.kind === "reorder" ? { looksReorder: true } : {}),
+    ...(told ? { told } : {}), ...(p.kind === "reorder" || picked ? { looksReorder: true } : {}),
+    ...(lookedUp ? { lookedUp } : {}), ...(o.reorderOk && job ? { reorderOk: true } : {}),
   };
   const row = {
     kind: "draft_order", dedupe_key: `email:${a.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",

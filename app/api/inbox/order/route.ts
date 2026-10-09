@@ -8,7 +8,7 @@ import type { EODraft, EOFile } from "@/lib/emailOrderShared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /**
  * Inbox → Create order (staff only).
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
   const v = await staff(); if (!v) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   const admin = createAdminClient();
-  const r = await suggestEmailOrder(admin, String(b.activity || ""), v.user!.email || "staff", typeof b.told === "string" ? b.told : "");
+  const r = await suggestEmailOrder(admin, String(b.activity || ""), v.user!.email || "staff", { told: typeof b.told === "string" ? b.told : "", jobRef: typeof b.job === "string" ? b.job : null, reorderOk: !!b.reorderOk, lookedUp: b.lookedUp && typeof b.lookedUp === "object" ? b.lookedUp : null });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
   const files = await signed(admin, r.draft.files);
   return NextResponse.json({ draft: { ...r.draft, files }, files, past: r.past });

@@ -5458,6 +5458,12 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .eo-tell.ask{border-color:var(--accent);background:var(--accent-soft)}
 .eo-tell label{font-size:13.5px;font-weight:600}
 .eo-tell textarea{width:100%;min-width:0;font:inherit;font-size:13.5px;resize:vertical}
+.eo-tell select{max-width:100%;min-width:0}
+.eo-tell-line{display:inline-block;margin-left:8px;font-weight:400;color:var(--ink-2);font-size:12.5px}
+.eo-chips{display:flex;flex-wrap:wrap;gap:6px}
+.eo-chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink)}
+.eo-chip:hover{border-color:var(--accent)}
+.eo-found{font-size:13px;border-left:3px solid var(--accent);padding:4px 10px;background:var(--surface-2);border-radius:0 8px 8px 0;overflow-wrap:anywhere}
 .eo-sum{margin:0;font-size:14px}
 .eo-files{display:flex;flex-wrap:wrap;gap:10px}
 .eo-file{display:flex;flex-direction:column;gap:3px;width:132px;font-size:12px}

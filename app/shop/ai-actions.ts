@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { aiState, hasAiKey } from "@/lib/ai/claude";
+import { aiState, hasAiKey, lookUpFacts, type LookedUp } from "@/lib/ai/claude";
 import { draftMessage, orderFromText, reviewOrder } from "@/lib/ai/tasks";
 import { emailContext, orderFacts, writeReplyOptions } from "@/lib/ai/replies";
 import { describeGroups, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
@@ -203,7 +203,18 @@ export async function aiProcessEmail(activityId: string) {
 }
 
 /** Reorder check: the AI compares this reorder with the old job it copies (files, film, art, our mockup). */
-export async function aiReorderCheck(orderId: string, onlyIfNone = false, told?: string) {
+/** Look up online what a staff note points to ("we used the LA Lakers PMS colors"); null when nothing to look up. */
+export async function aiLookUp(note: string, ctx: { orderId?: string; activityId?: string } = {}) {
+  try {
+    const { admin, email } = await staff();
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false as const, off: true, error: st.reason };
+    const r = await lookUpFacts({ model: st.settings.assistant.ai.model, note, admin, ctx: { order_id: ctx.orderId || null, activity_id: ctx.activityId || null, by: email } });
+    return { ok: true as const, lookedUp: r };
+  } catch (e) { return fail(e); }
+}
+
+export async function aiReorderCheck(orderId: string, onlyIfNone = false, told?: string, lookedUp?: LookedUp | null) {
   try {
     const { admin, email } = await staff();
     if (onlyIfNone) {
@@ -216,9 +227,9 @@ export async function aiReorderCheck(orderId: string, onlyIfNone = false, told?:
     const st = await aiState(admin);
     if (!st.ready) return { ok: false as const, off: true, error: st.reason };
     // what staff told it before is kept unless they change it
-    let say = told;
-    if (say == null) { const { data: had } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", `reorder_check:${orderId}`).limit(1).maybeSingle(); say = (had?.payload as ReorderCheck | undefined)?.told || ""; }
-    const r = await reorderCheck(admin, st.settings, orderId, email, say);
+    let say = told, found = lookedUp ?? undefined;
+    if (say == null) { const { data: had } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", `reorder_check:${orderId}`).limit(1).maybeSingle(); const pc = had?.payload as ReorderCheck | undefined; say = pc?.told || ""; found = found || pc?.lookedUp; }
+    const r = await reorderCheck(admin, st.settings, orderId, email, say, found);
     return r.ok ? { ok: true as const, check: r.check } : { ok: false as const, error: r.error };
   } catch (e) { return fail(e); }
 }

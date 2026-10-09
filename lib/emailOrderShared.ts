@@ -33,6 +33,10 @@ export type EODraft = {
   told?: string;
   /** the AI read it as a reorder (even when it couldn't tell which job) */
   looksReorder?: boolean;
+  /** staff said yes to "I found this job: place a reorder?" */
+  reorderOk?: boolean;
+  /** what was looked up online for staff's note (team PMS colors…), with sources */
+  lookedUp?: { text: string; sources: { title: string; url: string }[] };
   files: EOFile[];
 };
 export const ROLE_LABEL: Record<EOFile["role"], string> = { art: "Art", mockup: "Mockup", sheet: "Size sheet", signature: "Email signature (ignored)", other: "Other" };

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { Check } from "@/lib/orderChecks";
 import type { ProposedOrder } from "@/lib/ai/normalize";
-import { aiOrderFromText, aiReorderCheck, aiReviewOrder, applyReorderFix } from "@/app/shop/ai-actions";
+import { aiLookUp, aiOrderFromText, aiReorderCheck, aiReviewOrder, applyReorderFix } from "@/app/shop/ai-actions";
 import type { ReorderCheck, ReorderFix } from "@/lib/ai/reorderCheck";
 
 /** "Order check" panel: rule checks now, plus an optional AI review. */
@@ -97,7 +97,10 @@ function ReorderCheckBox({ orderId, save }: { orderId: string; save: () => Promi
   async function run(onlyIfNone: boolean) {
     setBusy("run"); setNote("");
     if (!onlyIfNone) await save();
-    const r = await aiReorderCheck(orderId, onlyIfNone, onlyIfNone || told == null ? undefined : told);
+    // a new note: look up online what it points to first (team PMS colors…)
+    let found: ReorderCheck["lookedUp"] | null | undefined;
+    if (!onlyIfNone && told && told.trim() && told.trim() !== (c?.told || "")) { const lu = await aiLookUp(told, { orderId }).catch(() => null); found = lu?.ok ? lu.lookedUp : null; }
+    const r = await aiReorderCheck(orderId, onlyIfNone, onlyIfNone || told == null ? undefined : told, found);
     setBusy("");
     if (!r.ok) return setNote(r.error || "The reorder check didn't work.");
     setC(r.check);
@@ -119,6 +122,7 @@ function ReorderCheckBox({ orderId, save }: { orderId: string; save: () => Promi
       {c && (
         <>
           <div className={"chk " + tone}>{c.summary}</div>
+          {c.lookedUp && <div className="eo-found"><b>Looked up online:</b> {c.lookedUp.text}{c.lookedUp.sources.length > 0 && <span className="faint"> ({c.lookedUp.sources.map((x, i) => <a key={i} href={x.url} target="_blank" rel="noreferrer">{i ? ", " : ""}{x.title || "source"}</a>)})</span>}</div>}
           {c.issues.length > 0 && <div className="chk-list">{c.issues.map((x, i) => <div key={i} className={"chk " + x.severity}>{x.text}</div>)}</div>}
           {c.fixes.length > 0 && (
             <div className="stack" style={{ gap: 4 }}>

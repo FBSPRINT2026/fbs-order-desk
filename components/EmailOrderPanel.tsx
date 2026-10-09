@@ -6,6 +6,7 @@ import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "
 import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
+import { aiLookUp } from "@/app/shop/ai-actions";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import dynamic from "next/dynamic";
 import type { WhenDates } from "@/components/MachineSchedule";
@@ -37,9 +38,20 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
 
   // what staff tell the AI before it reads the email ("it's a reorder of 31174, the art is on the old job")
   const [told, setTold] = useState(""), [tellOpen, setTellOpen] = useState(false);
-  async function read() {
+  // a reorder: "I found this job, place a reorder?" → "Anything I should know?"
+  const [askStep, setAskStep] = useState(false), [lookStep, setLookStep] = useState("");
+  async function read(o: { job?: string | null; reorderOk?: boolean } = {}) {
     setBusy("read"); setErr("");
-    const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told }) }).catch(() => null);
+    // what the note points to that has to be looked up online (team PMS colors…), shown while the email is read
+    let lookedUp: EODraft["lookedUp"] | null = null;
+    if (told.trim()) {
+      setLookStep("Checking your note for anything to look up online…");
+      const lu = await aiLookUp(told, { activityId }).catch(() => null);
+      lookedUp = lu?.ok ? lu.lookedUp : null;
+      setLookStep(lookedUp ? `Looked up: ${lookedUp.text}` : "");
+    }
+    const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told, job: o.job || null, reorderOk: !!o.reorderOk, lookedUp }) }).catch(() => null);
+    setLookStep("");
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     setBusy("");
     if (!r?.ok || !j.draft) return setErr(j.error || "The AI couldn't read this email. Try again.");
@@ -55,7 +67,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
       if (!r?.ok || !j) return setErr(j?.error || "Couldn't load the email.");
       setData(j);
       if (j.draft) { setD(j.draft); if (j.draft.told) setTold(j.draft.told); }
-      else if (j.ai) read();
+      else if (j.ai) void read();
     })();
     return () => { live = false; };
   }, [activityId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -131,27 +143,80 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
         <b>{d ? (d.kind === "reorder" ? "Reorder" : "New order") : "Create order"}</b>
         {d && <span className={"eo-conf " + d.confidence}>{d.confidence === "high" ? "AI is confident" : d.confidence === "medium" ? "Check the details" : "AI wasn't sure: check everything"}</span>}
         <span className="spacer" />
-        {data.ai && <button type="button" className="btn sm ghost" disabled={!!busy} onClick={read}>{busy === "read" ? "Reading…" : d ? "Read it again" : "Read the email"}</button>}
+        {data.ai && <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => read({ job: d?.reorderOf, reorderOk: d?.reorderOk })}>{busy === "read" ? "Reading…" : d ? "Read it again" : "Read the email"}</button>}
         <button type="button" className="btn sm ghost" onClick={onClose}>Close</button>
       </div>
       {!data.ai && !d && <div className="warn">{data.aiReason || "AI is off."} You can still enter the order by hand from the order page.</div>}
       {busy === "read" && <p className="eo-reading">Reading the email{files.length ? ` and ${files.length} attachment${files.length === 1 ? "" : "s"}` : ""}: garments, sizes, art, mockups, and whether it's a reorder. This takes 15 to 40 seconds.</p>}
       {err && <div className="err">{err}</div>}
-      {data.ai && busy !== "read" && (() => {
-        // a reorder (or what looks like one): ask what staff know before pricing it
-        const ask = !!d && (d.kind === "reorder" || !!d.looksReorder) && !d.told;
-        if (!ask && !tellOpen && !d?.told) return <button type="button" className="eo-link eo-tell-link" onClick={() => setTellOpen(true)}>✦ Tell the AI something about this email</button>;
+      {busy === "read" && lookStep && <p className="eo-reading">{lookStep}</p>}
+      {data.ai && busy !== "read" && d && (d.kind === "reorder" || d.looksReorder) && !d.reorderOk && !askStep && (
+        // 1. "I found this job: place a reorder?"
+        <div className="eo-tell ask">
+          {job ? (
+            <>
+              <label>I found a past job that matches: <b>{job.label}</b>{job.date ? `, ${job.date}` : ""}, {job.qty} pcs
+                {job.groups.flatMap((g) => g.lines).slice(0, 3).map((l, i) => <span key={i} className="eo-tell-line">{[l.brand, l.style, l.color].filter(Boolean).join(" ")}</span>)}
+                <br />Would you like me to place a reorder of it?</label>
+              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                <button type="button" className="btn sm primary" onClick={() => setAskStep(true)}>Yes, reorder it</button>
+                <select aria-label="A different job" value="" onChange={(e) => { if (e.target.value) { pickJob(e.target.value); setAskStep(true); } }}>
+                  <option value="">A different job…</option>
+                  {data.past.filter((p) => p.ref !== job.ref).map((p) => <option key={p.ref} value={p.ref}>{p.label}, {p.date}, {p.qty} pcs</option>)}
+                </select>
+                <button type="button" className="btn sm ghost" onClick={() => { pickJob(""); patch((x) => { x.looksReorder = false; }); }}>No, it&apos;s a new order</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label>This looks like a reorder, but I couldn&apos;t tell which job. Pick it, or tell me the job number below.</label>
+              <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                <select aria-label="Past job" value="" onChange={(e) => { if (e.target.value) { pickJob(e.target.value); setAskStep(true); } }}>
+                  <option value="">Pick the job…</option>
+                  {data.past.map((p) => <option key={p.ref} value={p.ref}>{p.label}, {p.date}, {p.qty} pcs</option>)}
+                </select>
+                <button type="button" className="btn sm ghost" onClick={() => patch((x) => { x.looksReorder = false; })}>It&apos;s a new order</button>
+              </div>
+              <textarea rows={2} value={told} onChange={(e) => setTold(e.target.value)} placeholder='e.g. "Reorder of 31174"' aria-label="The job number" />
+              <div><button type="button" className="btn sm primary" disabled={!told.trim()} onClick={() => void read()}>Find it</button></div>
+            </>
+          )}
+        </div>
+      )}
+      {data.ai && busy !== "read" && d && askStep && !d.reorderOk && (
+        // 2. "Anything I should know?"
+        <div className="eo-tell ask">
+          <label htmlFor={`tell-${activityId}`}>Reorder of <b>{job?.label || "the past job"}</b>. Anything I should know?</label>
+          <div className="eo-chips">
+            {["Exactly the same as last time", "The art and mockup are on the old job", "The customer wants changes: ", "We used the ___ PMS colors, look them up"].map((c) => (
+              <button key={c} type="button" className="eo-chip" onClick={() => setTold((t) => (t.trim() ? `${t.trim()}. ${c}` : c))}>{c.replace(/: $/, "…")}</button>
+            ))}
+          </div>
+          <textarea id={`tell-${activityId}`} rows={3} value={told} onChange={(e) => setTold(e.target.value)}
+            placeholder='e.g. "Same as last time but add 10 more 12M" · "We used the LA Lakers PMS colors, look them up"' />
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            <button type="button" className="btn sm primary" disabled={!told.trim()} onClick={() => { setAskStep(false); void read({ job: d.reorderOf, reorderOk: true }); }}>Build the reorder with this</button>
+            <button type="button" className="btn sm ghost" onClick={() => { setAskStep(false); patch((x) => { x.reorderOk = true; }); }}>Nothing else, build it</button>
+          </div>
+        </div>
+      )}
+      {d?.lookedUp && (
+        <div className="eo-found">
+          <b>Looked up online:</b> {d.lookedUp.text}
+          {d.lookedUp.sources.length > 0 && <span className="faint"> ({d.lookedUp.sources.map((x, i) => <a key={i} href={x.url} target="_blank" rel="noreferrer">{i ? ", " : ""}{x.title || "source"}</a>)})</span>}
+        </div>
+      )}
+      {data.ai && busy !== "read" && !(d && (d.kind === "reorder" || d.looksReorder) && !d.reorderOk) && (() => {
+        // any other email: tell the AI something before it reads it (again)
+        if (!tellOpen && !d?.told) return <button type="button" className="eo-link eo-tell-link" onClick={() => setTellOpen(true)}>✦ Tell the AI something about this email</button>;
         return (
-          <div className={"eo-tell" + (ask ? " ask" : "")}>
-            <label htmlFor={`tell-${activityId}`}>
-              {ask ? (job ? <>This looks like a reorder of <b>{job.label}</b>. Anything I should know?</> : <>This looks like a reorder, but I couldn&apos;t tell which job. Anything I should know?</>)
-                : d?.told ? "What you told the AI" : "Anything the AI should know first?"}
-            </label>
-            <textarea id={`tell-${activityId}`} rows={2} value={told} onChange={(e) => setTold(e.target.value)}
-              placeholder='e.g. "Reorder of 31174, art and mockup are on that job" · "Same as last time but navy instead of black" · "We used the LA Lakers PMS colors"' />
+          <div className="eo-tell">
+            <label htmlFor={`tell2-${activityId}`}>{d?.told ? "What you told the AI" : "Anything the AI should know first?"}</label>
+            <textarea id={`tell2-${activityId}`} rows={2} value={told} onChange={(e) => setTold(e.target.value)}
+              placeholder='e.g. "Reorder of 31174" · "Same as last time but navy" · "We used the LA Lakers PMS colors, look them up"' />
             <div className="row" style={{ gap: 6 }}>
-              <button type="button" className="btn sm primary" disabled={!told.trim()} onClick={() => { setTellOpen(false); void read(); }}>{d ? "Read it again with this" : "Read the email with this"}</button>
-              {!ask && !d?.told && <button type="button" className="btn sm ghost" onClick={() => setTellOpen(false)}>Cancel</button>}
+              <button type="button" className="btn sm primary" disabled={!told.trim()} onClick={() => { setTellOpen(false); void read({ job: d?.reorderOf, reorderOk: d?.reorderOk }); }}>{d ? "Read it again with this" : "Read the email with this"}</button>
+              {!d?.told && <button type="button" className="btn sm ghost" onClick={() => setTellOpen(false)}>Cancel</button>}
             </div>
           </div>
         );

@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { askClaude } from "@/lib/ai/claude";
+import { askClaude, type LookedUp } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { LOCATIONS, METHODS, orderGroups, type Imprint, type Order, type Settings } from "@/lib/pricing";
 
@@ -12,7 +12,8 @@ import { LOCATIONS, METHODS, orderGroups, type Imprint, type Order, type Setting
  */
 export type ReorderFix = { imprint_id: string; field: "size" | "location" | "inks" | "colors" | "drop"; value: string; why: string };
 export type ReorderCheck = { verdict: "good" | "check" | "problems"; summary: string; issues: { severity: "high" | "medium" | "low"; text: string }[]; fixes: ReorderFix[]; at?: string; model?: string;
-  /** what staff told it about the job ("we used the LA Lakers PMS colors"): kept and used on every check */ told?: string };
+  /** what staff told it about the job ("we used the LA Lakers PMS colors"): kept and used on every check */ told?: string;
+  /** what was looked up online for that */ lookedUp?: LookedUp };
 
 const MAX_IMG = 3_600_000; // the API's 5 MB limit, after base64
 
@@ -25,7 +26,7 @@ async function fileB64(admin: SupabaseClient, path: string) {
 const imgType = (p: string) => (/\.png$/i.test(p) ? "image/png" : /\.jpe?g$/i.test(p) ? "image/jpeg" : /\.webp$/i.test(p) ? "image/webp" : /\.gif$/i.test(p) ? "image/gif" : null);
 const SIZE = (k: string) => k.replace(/^size_/, "").toUpperCase();
 
-export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: string, by: string, told = ""): Promise<{ ok: true; check: ReorderCheck } | { ok: false; error: string }> {
+export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: string, by: string, told = "", lookedUp?: LookedUp): Promise<{ ok: true; check: ReorderCheck } | { ok: false; error: string }> {
   const { data: o } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
   if (!o) return { ok: false, error: "Order not found." };
   // the job it copies: "Reorder of Printavo #31174" / "Reorder of #40012"
@@ -99,6 +100,7 @@ export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: 
     "",
     mk ? "" : "No mockup has been made for the new order yet.",
     told.trim() ? `\nWHAT THE SHOP TOLD YOU ABOUT THIS JOB (facts, use them): ${told.trim()}` : "",
+    lookedUp?.text ? `Looked up online for that: ${lookedUp.text}` : "",
     `Files attached: ${[...documents.map((d) => d.label), ...images.map((i) => i.label)].join(" | ") || "none"}`,
   ].filter((x) => x !== "").join("\n");
 
@@ -132,7 +134,7 @@ Only list real problems, most important first. Use the print ids given in the or
   });
   if (!r.ok) return { ok: false, error: r.error };
   const ids = new Set(ims.map((i) => i.id));
-  const check: ReorderCheck = { ...r.data, issues: r.data.issues || [], fixes: (r.data.fixes || []).filter((f) => ids.has(f.imprint_id)), at: new Date().toISOString(), model: r.model, ...(told.trim() ? { told: told.trim().slice(0, 1000) } : {}) };
+  const check: ReorderCheck = { ...r.data, issues: r.data.issues || [], fixes: (r.data.fixes || []).filter((f) => ids.has(f.imprint_id)), at: new Date().toISOString(), model: r.model, ...(told.trim() ? { told: told.trim().slice(0, 1000) } : {}), ...(lookedUp?.text ? { lookedUp } : {}) };
   // the latest check is kept on the order (one row, updated each time)
   const row = { kind: "reorder_check", dedupe_key: `reorder_check:${orderId}`, source: "ai", status: "done", priority: 2, order_id: orderId, customer_id: o.customer_id, title: `Reorder check #${o.number}`, body: check.summary, payload: check, model: r.model, run_id: r.runId, updated_at: check.at };
   const { data: had } = await admin.from("ai_suggestions").select("id").eq("dedupe_key", row.dedupe_key).limit(1).maybeSingle();

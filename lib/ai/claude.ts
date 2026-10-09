@@ -94,3 +94,47 @@ export async function askClaude<T>(opts: {
     clearTimeout(timer);
   }
 }
+
+export type LookedUp = { text: string; sources: { title: string; url: string }[] };
+/**
+ * Look something up online for a note staff wrote ("we used the LA Lakers PMS colors"): Claude with web search
+ * finds the facts the note points to and returns them short, with where they came from. Null when the note
+ * needs nothing from outside (or search isn't available).
+ */
+export async function lookUpFacts(opts: { model: string; note: string; context?: string; ctx?: AiCtx; admin?: SupabaseClient }): Promise<LookedUp | null> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key || !opts.note.trim()) return null;
+  const admin = opts.admin || createAdminClient();
+  const started = Date.now();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 40_000);
+  let usage: { input_tokens?: number; output_tokens?: number } = {};
+  try {
+    const res = await fetch(API, {
+      method: "POST", signal: ctrl.signal,
+      headers: { "x-api-key": key, "anthropic-version": VERSION, "content-type": "application/json" },
+      body: JSON.stringify({
+        model: opts.model, max_tokens: 800,
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+        system: "You help a screen printing shop. Staff wrote a note about a customer's job. If the note points to facts that have to be looked up (a sports team's or brand's official colors and their PMS / Pantone numbers, a font, a garment's specs), search the web and give just those facts in 1-4 short lines, e.g. \"LA Lakers: Purple PMS 2685 C, Gold PMS 123 C\". Prefer official brand or league sources. If the note needs nothing looked up, answer exactly NONE.",
+        messages: [{ role: "user", content: `${opts.context ? `${opts.context}\n\n` : ""}Staff note: ${opts.note.slice(0, 1500)}` }],
+      }),
+    });
+    const j = await res.json().catch(() => ({}));
+    usage = j?.usage || {};
+    if (!res.ok) throw new Error(j?.error?.message || `Claude API error ${res.status}`);
+    type Block = { type: string; text?: string; citations?: { url?: string; title?: string }[]; content?: { type: string; url?: string; title?: string }[] };
+    const blocks = (j.content || []) as Block[];
+    const text = blocks.filter((b) => b.type === "text").map((b) => b.text || "").join("").trim();
+    const seen = new Map<string, string>();
+    for (const b of blocks) for (const c of b.citations || []) if (c.url && !seen.has(c.url)) seen.set(c.url, c.title || c.url);
+    if (!seen.size) for (const b of blocks) if (b.type === "web_search_tool_result" && Array.isArray(b.content)) for (const r of b.content) if (r.url && seen.size < 3) seen.set(r.url, r.title || r.url);
+    await admin.from("ai_runs").insert({ task: "look_up", model: opts.model, ms: Date.now() - started, created_by: opts.ctx?.by || "system", order_id: opts.ctx?.order_id || null, customer_id: opts.ctx?.customer_id || null, activity_id: opts.ctx?.activity_id || null, input_tokens: usage.input_tokens || 0, output_tokens: usage.output_tokens || 0, status: "ok" });
+    if (!text || /^NONE\.?$/i.test(text)) return null;
+    return { text: text.slice(0, 600), sources: [...seen].slice(0, 3).map(([url, title]) => ({ url, title: title.slice(0, 120) })) };
+  } catch (e) {
+    const error = e instanceof Error ? (e.name === "AbortError" ? "The lookup took too long." : e.message) : "Lookup failed.";
+    await admin.from("ai_runs").insert({ task: "look_up", model: opts.model, ms: Date.now() - started, created_by: opts.ctx?.by || "system", order_id: opts.ctx?.order_id || null, customer_id: opts.ctx?.customer_id || null, activity_id: opts.ctx?.activity_id || null, input_tokens: usage.input_tokens || 0, output_tokens: usage.output_tokens || 0, status: "error", error });
+    return null;
+  } finally { clearTimeout(timer); }
+}
