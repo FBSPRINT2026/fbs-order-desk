@@ -12,7 +12,8 @@ import { findOrdersAndCustomers, goodsPayInfo, goodsSearch, goodsStart, goodsSty
  * garments. Or search any style, pick a color and fill in sizes. Check with S&S (a dry run: nothing is bought), then
  * place the order: it ships to the shop and is kept here, linked to its order now or once it's made.
  */
-type Line = { key: string; brand: string; style: string; color: string; size: string; qty: number; sku: string; price: number; stock: number; note: string };
+type Line = { key: string; brand: string; style: string; color: string; size: string; qty: number; sku: string; price: number; stock: number; note: string;
+  /** from an email: what the customer asked for, the style's colors to pick from, whether the match is sure */ asked?: string; options?: string[]; sure?: boolean; styleID?: number };
 type Hit = { styleID: number; brand: string; style: string; title: string; image: string };
 type Recent = { id: string; order_id: string | null; number: number | null; label: string; supplier_order: string; status: string; total: number | null; expected_date: string | null; lines: { qty: number; label: string }[]; created_by: string; created_at: string };
 const SS_METHODS: [string, string][] = [["1", "Ground (S&S picks)"], ["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
@@ -56,7 +57,7 @@ function OrderGoods() {
       if ("order" in r && r.order) setOrder(r.order);
       if ("customer" in r && r.customer) setCust(r.customer);
       if ("label" in r && r.label) setLabel(r.label);
-      setLines((r.rows || []).map((x) => ({ key: x.key, brand: x.brand, style: x.style, color: x.color, size: x.size, qty: x.qty, sku: x.sku, price: x.price, stock: x.stock, note: x.found ? x.note : x.note || "Not found at S&S" })));
+      setLines((r.rows || []).map((x) => ({ key: x.key, brand: x.brand, style: x.style, color: x.color, size: x.size, qty: x.qty, sku: x.sku, price: x.price, stock: x.stock, note: x.found ? x.note : x.note || "Not found at S&S", asked: x.asked, options: x.options, sure: x.sure, styleID: x.styleID })));
       if ("read" in r && r.read === false) setMsg("The AI hasn't read this email into an order yet, so nothing is filled in. Add the garments below (or open Create order on the email first).");
     });
   }, [emailId, orderParam]);
@@ -108,6 +109,21 @@ function OrderGoods() {
     setLines([]); setDry(null); void loadRecent();
   }
   const lowStock = orderable.some((l) => l.stock < l.qty);
+  // from an email: the customer's color matched to the style's real colors; picking another updates every size of it
+  const asks = lines.some((l) => l.asked);
+  const styleCache = useMemo(() => new Map<number, StyleColor[]>(), []);
+  async function pickColor(l: Line, color: string) {
+    if (!l.styleID) return;
+    let cs = styleCache.get(l.styleID);
+    if (!cs) { const r = await goodsStyle(l.styleID); if (!r.ok) return setErr(r.error || "Couldn't load that style's colors."); cs = r.colors; styleCache.set(l.styleID, cs); }
+    const c = cs.find((x) => x.name === color);
+    setLines((ls) => ls.map((x) => {
+      if (x.styleID !== l.styleID || (x.asked || "") !== (l.asked || "") || x.color !== l.color) return x;
+      const z = c?.sizes.find((y) => y.size === x.size);
+      return { ...x, color, sure: true, key: `${x.brand}|${x.style}|${color}|${x.size}`.toLowerCase(), sku: z?.sku || "", price: z?.price || 0, stock: z?.qty || 0, note: !z ? "Size not carried in this color" : z.qty < x.qty ? `Only ${z.qty} in stock` : "" };
+    }));
+    setDry(null); setSure(false);
+  }
   const sizesShown = useMemo(() => pc?.sizes || [], [pc]);
 
   return (
@@ -169,10 +185,19 @@ function OrderGoods() {
 
           {lines.length > 0 ? (
             <div style={{ overflowX: "auto" }}><table className="rv-tbl">
-              <thead><tr><th>Garment</th><th>Color</th><th>Size</th><th className="r">Qty</th><th className="r">Price</th><th className="r">In stock</th><th /></tr></thead>
+              <thead><tr><th>Garment</th>{asks && <th>Requested</th>}<th>{asks ? "Found color" : "Color"}</th><th>Size</th><th className="r">Qty</th><th className="r">Price</th><th className="r">In stock</th><th /></tr></thead>
               <tbody>{lines.map((l, i) => (
                 <tr key={l.key} className={!l.sku ? "miss" : l.stock < l.qty ? "low" : ""}>
-                  <td>{[l.brand, l.style].filter(Boolean).join(" ") || "—"}</td><td>{l.color}</td><td>{l.size}</td>
+                  <td>{[l.brand, l.style].filter(Boolean).join(" ") || "—"}</td>
+                  {asks && <td>{l.asked || ""}</td>}
+                  <td>{l.asked && l.options?.length ? (
+                    <span className={"og-color" + (l.sure ? "" : " check")} title={l.sure ? "" : "A best guess: check it"}>
+                      <select value={l.options.includes(l.color) ? l.color : ""} onChange={(e) => void pickColor(l, e.target.value)} aria-label={`Color for ${l.style} ${l.size}`}>
+                        {!l.options.includes(l.color) && <option value="">Pick the color…</option>}
+                        {l.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                      </select>{!l.sure && <span className="og-check">check</span>}
+                    </span>
+                  ) : l.color}</td><td>{l.size}</td>
                   <td className="r"><input type="number" min={0} value={l.qty} onChange={(e) => { const v = Math.max(0, Math.round(+e.target.value || 0)); setLines((ls) => ls.map((x, k) => (k === i ? { ...x, qty: v, note: x.sku && x.stock < v ? `Only ${x.stock} in stock` : x.sku ? "" : x.note } : x))); setDry(null); setSure(false); }} style={{ width: 70, textAlign: "right" }} aria-label={`${l.style} ${l.color} ${l.size} quantity`} /></td>
                   <td className="r">{l.sku ? money(l.price) : ""}</td>
                   <td className="r">{l.sku ? l.stock.toLocaleString() : <span className="bad">{l.note || "Not at S&S"}</span>}{l.sku && l.note && <div className="bad" style={{ fontSize: 11.5 }}>{l.note}</div>}</td>

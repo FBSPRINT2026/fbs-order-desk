@@ -5773,3 +5773,7 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .og-sizes label{display:flex;flex-direction:column;gap:2px;align-items:center;width:84px;font-size:12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px}
 .og-sizes label.out{opacity:.55}
 .og-sizes input{width:64px;text-align:center}
+.og-color{display:inline-flex;align-items:center;gap:6px}
+.og-color select{max-width:200px}
+.og-color.check select{border-color:var(--warn);background:var(--warn-soft)}
+.og-check{font-size:11px;font-weight:700;color:var(--warn)}

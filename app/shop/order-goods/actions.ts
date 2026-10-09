@@ -79,7 +79,7 @@ export async function goodsStart(p: { email?: string; order?: string }) {
       const { data: sg } = await admin.from("ai_suggestions").select("payload").eq("activity_id", a.id).eq("kind", "draft_order").order("updated_at", { ascending: false }).limit(1).maybeSingle();
       const pl = sg?.payload as { draft?: { groups?: Group[] }; groups?: Group[] } | null;
       const rows = rowsOf(pl?.draft?.groups || pl?.groups || []);
-      if (rows.length && ssConfigured()) await matchToSS(admin, rows);
+      if (rows.length && ssConfigured()) await matchToSS(admin, rows, { fixColors: true });
       return { ok: true as const, email: { id: a.id as string, subject: (a.subject as string) || "", from: (a.from_email as string) || "" }, customer: c ? { id: c.id as string, name: (c.company as string) || (c.name as string) } : null, rows, label: `${c?.company || c?.name || a.from_email} (ahead of order)`, read: !!pl };
     }
     return { ok: true as const, rows: [] as GoodsRow[] };
