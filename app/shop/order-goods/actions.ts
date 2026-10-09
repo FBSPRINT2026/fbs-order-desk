@@ -108,7 +108,7 @@ export async function findOrdersAndCustomers(q: string) {
  * Buy from S&S, shipped to the shop. `test` = dry run (S&S creates and cancels it: nothing is bought). Only a staff
  * click places a real order.
  */
-export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string }) {
+export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; warehouses?: "fewest" | "fastest"; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string }) {
   try {
     const v = await staff();
     if (!ssConfigured()) return { ok: false as const, error: "S&S isn't connected (SS_ACCOUNT_NUMBER / SS_API_KEY in Vercel)." };
@@ -121,7 +121,7 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
     const po = (p.label || "Stock").trim().slice(0, 50);
     // paid with our saved card (ending 5488), never the account's terms
     // each line from the closest warehouse that has it (Fort Worth first)
-    const alloc = await ssAllocate(lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })));
+    const alloc = await ssAllocate(lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), p.warehouses === "fastest" ? "fastest" : "fewest");
     if (alloc.short.length) return { ok: false as const, error: `S&S doesn't have enough of: ${alloc.short.join("; ")}.` };
     const card = await ssOurCard(await shopEmails(v.user?.email));
     if (!card.ok) return { ok: false as const, error: card.error };

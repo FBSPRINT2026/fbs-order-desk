@@ -44,6 +44,8 @@ function OrderGoods() {
   const [color, setColor] = useState(""), [qty, setQty] = useState<Record<string, number>>({});
   // ordering
   const [method, setMethod] = useState("40"), [quote, setQuote] = useState("");
+  // warehouses: fewest shipments by default (a small order whole from one place); fastest = closest first, may split
+  const [whMode, setWhMode] = useState<"fewest" | "fastest">("fewest");
   const [dry, setDry] = useState<{ orderNumber: string; warehouse: string; total: number; expected: string | null }[] | null>(null);
   // where each line ships from (the check): sku → warehouses and quantities
   const [from, setFrom] = useState<Record<string, { warehouse: string; qty: number }[]>>({});
@@ -108,7 +110,7 @@ function OrderGoods() {
   const orderable = sorted.map((x) => x.l).filter((l) => l.sku && l.qty > 0);
   const pcs = orderable.reduce((a, l) => a + l.qty, 0), total = orderable.reduce((a, l) => a + l.price * l.qty, 0);
   const po = (label || (order ? `#${order.number}` : cust ? `${cust.name} (ahead of order)` : "Stock")).trim();
-  const payload = (test: boolean) => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: l.qty, price: l.price, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, test, label: po, quote, orderId: order?.id || null, customerId: cust?.id || null, activityId: email?.id || null });
+  const payload = (test: boolean) => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: l.qty, price: l.price, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, test, warehouses: whMode, label: po, quote, orderId: order?.id || null, customerId: cust?.id || null, activityId: email?.id || null });
   async function check() {
     setBusy("test"); setErr(""); setDry(null); setSure(false); setFrom({});
     const r = await placeGoods(payload(true)); setBusy("");
@@ -248,6 +250,7 @@ function OrderGoods() {
           <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "center" }}>
             <b>{pcs} pcs · about {money(total)}</b>
             <label className="row" style={{ gap: 6, fontSize: 13 }} title="The quote number Tiffany sends back: the order is priced against it">S&amp;S quote #<input type="text" value={quote} onChange={(e) => { setQuote(e.target.value.trim()); setDry(null); setSure(false); }} placeholder="optional" style={{ width: 110 }} /></label>
+            <label className="row" style={{ gap: 6, fontSize: 13 }} title="Fewest shipments: everything from one warehouse when one has it all (closest of those). Fastest: each item from the closest warehouse that has it (may split).">Warehouses<select value={whMode} onChange={(e) => { setWhMode(e.target.value as "fewest" | "fastest"); setDry(null); setSure(false); setFrom({}); }} style={{ width: "auto" }}><option value="fewest">Fewest shipments</option><option value="fastest">Fastest (closest first)</option></select></label>
             <label className="row" style={{ gap: 6, fontSize: 13 }}>Ship by<select value={method} onChange={(e) => { setMethod(e.target.value); setDry(null); setSure(false); }} style={{ width: "auto" }}>{SS_METHODS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
             {lowStock && <span className="bad" style={{ fontSize: 12.5 }}>Some sizes are short at S&amp;S; the dry run shows what they can send.</span>}
             {lines.some((l) => !l.sku) && <span className="bad" style={{ fontSize: 12.5 }}>Red lines aren&apos;t carried by S&amp;S and won&apos;t be ordered.</span>}

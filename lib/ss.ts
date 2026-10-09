@@ -255,7 +255,7 @@ export async function ssOurCard(emails: string[] = []): Promise<{ ok: true; prof
  * `short` lists what no warehouse has enough of.
  */
 const WH_ORDER = ["TX", "KS", "GA", "IL", "OH", "KY", "PA", "NV", "NJ", "FL", "CA", "MA", "FO", "CC", "CN", "DS"];
-export async function ssAllocate(lines: { identifier: string; qty: number }[]) {
+export async function ssAllocate(lines: { identifier: string; qty: number }[], mode: "fewest" | "fastest" = "fewest") {
   const skus = [...new Set(lines.map((l) => l.identifier))];
   const stock = new Map<string, { warehouseAbbr: string; qty: number }[]>();
   for (let i = 0; i < skus.length; i += 40) {
@@ -265,6 +265,22 @@ export async function ssAllocate(lines: { identifier: string; qty: number }[]) {
   }
   const rank = (w: string) => { const i = WH_ORDER.indexOf(w.toUpperCase()); return i < 0 ? 50 : i; };
   const out: { identifier: string; qty: number; warehouseAbbr: string }[] = [], short: string[] = [];
+  // fewest shipments (default, Nick Oct 9: a small order is better whole from one warehouse than split): one warehouse
+  // that has everything (the closest of those); else take the warehouse that covers the most, then the next…
+  if (mode === "fewest") {
+    const need = new Map(lines.map((l) => [l.identifier, (lines.filter((x) => x.identifier === l.identifier).reduce((a, x) => a + x.qty, 0))]));
+    const whs = [...new Set([...stock.values()].flat().map((w) => w.warehouseAbbr))].sort((a, b) => rank(a) - rank(b));
+    const has = (w: string, sku: string) => stock.get(sku)?.find((x) => x.warehouseAbbr === w)?.qty || 0;
+    while ([...need.values()].some((q) => q > 0)) {
+      const cover = (w: string) => [...need].reduce((a, [sku, q]) => a + Math.min(q, has(w, sku)), 0);
+      const best = whs.filter((w) => cover(w) > 0).sort((a, b) => cover(b) - cover(a) || rank(a) - rank(b))[0];
+      if (!best) break;
+      for (const [sku, q] of need) { const t = Math.min(q, has(best, sku)); if (t > 0) { out.push({ identifier: sku, qty: t, warehouseAbbr: best }); need.set(sku, q - t); } }
+      whs.splice(whs.indexOf(best), 1);
+    }
+    for (const [sku, q] of need) if (q > 0) short.push(`${sku}: ${q} more than S&S has`);
+    return { lines: out, short };
+  }
   for (const l of lines) {
     let need = l.qty;
     for (const w of [...(stock.get(l.identifier) || [])].sort((a, b) => rank(a.warehouseAbbr) - rank(b.warehouseAbbr))) {

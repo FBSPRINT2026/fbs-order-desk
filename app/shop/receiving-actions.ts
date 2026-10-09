@@ -46,7 +46,7 @@ async function markOrdered(admin: ReturnType<typeof createAdminClient>, orderId:
  * Order the blanks from S&S, shipped to our shop. `test: true` is a dry run: S&S creates the order and cancels it
  * right away, so we see stock, price and warehouses without buying anything.
  */
-export async function orderBlanksSS(orderId: string, p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean }): Promise<{ ok: boolean; error?: string; card?: string; from?: { sku: string; qty: number; warehouse: string }[]; results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }> {
+export async function orderBlanksSS(orderId: string, p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; warehouses?: "fewest" | "fastest" }): Promise<{ ok: boolean; error?: string; card?: string; from?: { sku: string; qty: number; warehouse: string }[]; results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }> {
   try {
     const v = await staff();
     if (!ssConfigured()) return { ok: false, error: "S&S isn't connected (SS_ACCOUNT_NUMBER / SS_API_KEY)." };
@@ -63,7 +63,7 @@ export async function orderBlanksSS(orderId: string, p: { lines: { sku: string; 
     const po = `#${o?.number} ${c?.company || c?.name || o?.nickname || ""}`.trim();
     // paid with our saved card (ending 5488), never the account's terms
     // each line from the closest warehouse that has it (Fort Worth first)
-    const alloc = await ssAllocate(lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })));
+    const alloc = await ssAllocate(lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), p.warehouses === "fastest" ? "fastest" : "fewest");
     if (alloc.short.length) return { ok: false as const, error: `S&S doesn't have enough of: ${alloc.short.join("; ")}.` };
     const card = await ssOurCard(await shopEmails(v.user?.email));
     if (!card.ok) return { ok: false as const, error: card.error };

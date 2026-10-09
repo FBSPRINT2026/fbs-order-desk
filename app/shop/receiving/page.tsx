@@ -667,7 +667,7 @@ function BlankCard({ b, o, who, need, ships, onChange }: { b: BO; o: O; who: str
 function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: () => void; onDone: (msg: string) => void }) {
   const [plan, setPlan] = useState<{ lines: BlankLine[]; ss: boolean } | null>(null);
   const [qty, setQty] = useState<Record<string, number>>({});
-  const [method, setMethod] = useState("40");
+  const [method, setMethod] = useState("40"), [whMode, setWhMode] = useState<"fewest" | "fastest">("fewest");
   const [dry, setDry] = useState<{ orderNumber: string; warehouse: string; total: number; expected: string | null }[] | null>(null);
   const [busy, setBusy] = useState(""), [err, setErr] = useState("");
   const [other, setOther] = useState(false);
@@ -676,7 +676,7 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
   const lines = plan?.lines || [];
   const orderable = lines.filter((l) => l.found && (qty[l.key] || 0) > 0);
   const total = orderable.reduce((a, l) => a + l.price * (qty[l.key] || 0), 0);
-  const payload = () => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: qty[l.key] || 0, price: l.price, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method });
+  const payload = () => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: qty[l.key] || 0, price: l.price, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, warehouses: whMode });
   async function test() { setBusy("test"); setErr(""); setDry(null); const r = await orderBlanksSS(o.id, { ...payload(), test: true }); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); setDry(r.results || []); }
   async function place() { setBusy("place"); setErr(""); const r = await orderBlanksSS(o.id, { ...payload(), test: false }); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); onDone(`Ordered from S&S for #${o.number}: order ${r.results?.map((x) => x.orderNumber).join(", ")}.`); }
   async function record() { setBusy("rec"); setErr(""); const r = await recordBlanks(o.id, { ...m, expected_date: m.expected_date || null }); setBusy(""); if (!r.ok) return setErr(r.error || "Couldn't save."); onDone(`Recorded the blanks order for #${o.number}.`); }
@@ -701,6 +701,7 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
               </table></div>
               <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
                 <b>{orderable.reduce((a, l) => a + (qty[l.key] || 0), 0)} pcs · about {money(total)}</b>
+                <label className="row" style={{ gap: 6, fontSize: 13 }}>Warehouses<select value={whMode} onChange={(e) => { setWhMode(e.target.value as "fewest" | "fastest"); setDry(null); }} style={{ width: "auto" }}><option value="fewest">Fewest shipments</option><option value="fastest">Fastest (closest first)</option></select></label>
                 <label className="row" style={{ gap: 6, fontSize: 13 }}>Ship by<select value={method} onChange={(e) => { setMethod(e.target.value); setDry(null); }} style={{ width: "auto" }}>{SS_METHODS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
                 {lines.some((l) => !l.found) && <span className="bad" style={{ fontSize: 12.5 }}>Lines S&amp;S doesn&apos;t carry aren&apos;t included; order those elsewhere.</span>}
               </div>

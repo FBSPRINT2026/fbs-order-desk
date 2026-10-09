@@ -7,7 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
 import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
-import { DESIGN_ACCEPT, previewUrls, uploadDesign } from "@/lib/designs";
+import { DESIGN_ACCEPT, previewUrls, setDesignPreview, uploadDesign } from "@/lib/designs";
+import { makePreview } from "@/lib/artPrep";
 import { mockupUploadUrls, myLogos, portalCatalog, saveMyMockup } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
@@ -41,6 +42,9 @@ const inkNames = (pt: Paint, map = pt.map) => {
   const names = pt.sources.map((x) => map[x.hex]).filter((x) => x && x.name !== "none").map((x) => x!.name);
   return pt.unite === false ? names : [...new Set(names)];
 };
+/** a color name to compare by: "True Royal", "TrueRoyal" and "true royal" are the same */
+const colorKey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
 /** Rows to show for a logo's colors: united colors that share an ink sit on one row. */
 const colorRows = (pt: Paint) => {
   const rows: { hexes: string[]; cur?: { name: string; hex: string } }[] = [];
@@ -265,6 +269,28 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }
     })();
   }, [sb, orderId, groupId, portal]);
+
+  // art saved without a picture to draw (a PDF / AI from an email made into a design on the server): the preview is
+  // made here, once, and kept on the design, so the logo shows on the mockup instead of "No logo yet"
+  const madePv = useRef(new Set<string>());
+  useEffect(() => {
+    if (portal) return;
+    for (const d of designs) {
+      if (d.preview_path || madePv.current.has(d.id) || !d.file_path || !imprints.some((im) => im.design_id === d.id)) continue;
+      madePv.current.add(d.id);
+      (async () => {
+        const { data: blob } = await sb.storage.from("proofs").download(d.file_path);
+        if (!blob) return;
+        const pv = await makePreview(new File([blob], d.file_name || "art", { type: d.file_type || blob.type })).catch(() => null);
+        if (!pv) return;
+        const nd = await setDesignPreview(sb, d, pv).catch(() => null);
+        if (!nd) return;
+        setDesigns((xs) => xs.map((x) => (x.id === nd.id ? nd : x)));
+        const u = await previewUrls(sb, [nd]);
+        setUrls((x) => ({ ...x, ...u }));
+      })();
+    }
+  }, [designs, imprints]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the customer's designs
   useEffect(() => {
@@ -501,7 +527,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   const photo = (l: Line, view: View) => {
     const g = garmentFor(l);
-    const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => k.toLowerCase() === l.color.toLowerCase())?.[1];
+    // SanMar names colors without spaces ("TrueRoyal" for True Royal): matched ignoring spaces and case
+    const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
     const p = ci ? (view === "front" ? ci.front : ci.back) : "";
     return p ? ssImg(p) : teeSvg(guessHex(l.color), view);
   };
@@ -597,7 +624,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
   const scale = scaleOf(body);
   const shownOn = body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
-  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; const g = garmentFor(l); const ci = g?.color_images?.[l.color]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
+  const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color); };
 
   /** One close-up box for an imprint (used under the photos and, smaller, beside them for the selected tab). */
   const closeUp = (im: Imprint, size: number) => {

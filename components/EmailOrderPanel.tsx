@@ -1,5 +1,6 @@
 "use client";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { makePreview } from "@/lib/artPrep";
 import { LOCATIONS, METHODS, SIZES, newGLine, newImprint, sizeLabel, type GLine, type Group, type Method } from "@/lib/pricing";
 import { SUPPLIERS } from "@/lib/goods";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
@@ -249,7 +250,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start 
         {files.length > 0 && <div className="eo-files">
           {files.map((f, i) => (
             <div key={f.path} className="eo-file">
-              {isPicture(f) && f.url ? <a href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt="" /></a> : <a className="eo-doc" href={f.url || undefined} target="_blank" rel="noreferrer">{(f.name.split(".").pop() || "file").toUpperCase()}</a>}
+              {isPicture(f) && f.url ? <a href={f.url} target="_blank" rel="noreferrer"><img src={f.url} alt="" /></a> : /\.(pdf|ai)$/i.test(f.name) && f.url ? <a href={f.url} target="_blank" rel="noreferrer"><Thumb url={f.url} name={f.name} /></a> : <a className="eo-doc" href={f.url || undefined} target="_blank" rel="noreferrer">{(f.name.split(".").pop() || "file").toUpperCase()}</a>}
               <span className="eo-fname" title={f.name}>{f.name}</span>
               <select aria-label={`What ${f.name} is`} value={f.role} onChange={(e) => patch((x) => { x.files[i].role = e.target.value as EOFile["role"]; })}>
                 {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -321,7 +322,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start 
               return (
                 <div key={im.id} className="eo-print">
                   {im.design_id ? <span className="eo-art on" title="Uses the design from the past job">Design</span>
-                    : art && urlOf(art) ? <img className="eo-art" src={urlOf(art)} alt="" /> : <span className="eo-art">No art</span>}
+                    : art && urlOf(art) ? <Thumb className="eo-art" url={urlOf(art)} name={art} /> : <span className="eo-art">No art</span>}
                   <input list="eo-locs" aria-label="Location" value={im.location} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].location = e.target.value; })} />
                   <select aria-label="Method" value={im.method} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                   {im.method !== "dtf" && <label className="eo-n">Colors<input inputMode="numeric" value={im.colors} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].colors = Math.max(1, Math.min(15, +e.target.value.replace(/\D/g, "") || 1)); })} /></label>}
@@ -342,7 +343,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start 
                 {(g.customerMockups || []).map((m) => <span key={m.path} className="eo-mock on" title={m.name}>{m.name}</span>)}
                 {pics.map((f) => {
                   const on = (d.mockups[g.id] || []).includes(f.path);
-                  return <label key={f.path} className={"eo-mock" + (on ? " on" : "")}><input type="checkbox" checked={on} onChange={() => patch((x) => { const cur = x.mockups[g.id] || []; x.mockups[g.id] = on ? cur.filter((p) => p !== f.path) : [...cur, f.path]; })} />{f.url && <img src={f.url} alt="" />}<span>{f.name}</span></label>;
+                  return <label key={f.path} className={"eo-mock" + (on ? " on" : "")}><input type="checkbox" checked={on} onChange={() => patch((x) => { const cur = x.mockups[g.id] || []; x.mockups[g.id] = on ? cur.filter((p) => p !== f.path) : [...cur, f.path]; })} />{f.url && <Thumb url={f.url} name={f.name} />}<span>{f.name}</span></label>;
                 })}
               </div>
             </>}
@@ -395,14 +396,14 @@ function Review({ d, files, urlOf, custName, job, finishing }: { d: EODraft; fil
             <dt>Prints</dt>
             <dd>{g.imprints.length ? g.imprints.map((im) => {
               const art = d.art[im.id] || "";
-              return <div key={im.id} className="eo-rev-print">{art && urlOf(art) ? <img src={urlOf(art)} alt="" /> : im.design_id ? <span className="eo-art on">Design</span> : <span className="eo-art">No art</span>}<span>{im.location}, {METHODS[im.method] || im.method}{im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}{im.inks ? ` (${im.inks})` : ""}{im.size ? `, ${im.size}` : ""}{im.drop ? `, ${im.drop}" down` : ""}</span></div>;
+              return <div key={im.id} className="eo-rev-print">{art && urlOf(art) ? <Thumb url={urlOf(art)} name={art} /> : im.design_id ? <span className="eo-art on">Design</span> : <span className="eo-art">No art</span>}<span>{im.location}, {METHODS[im.method] || im.method}{im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}{im.inks ? ` (${im.inks})` : ""}{im.size ? `, ${im.size}` : ""}{im.drop ? `, ${im.drop}" down` : ""}</span></div>;
             }) : "None"}</dd>
             {(g.finishing || []).length > 0 && <><dt>Finishing</dt><dd>{(g.finishing || []).map((id) => finishing.find((f) => f.id === id)?.name || id).join(", ")}</dd></>}
           </Fragment>
         ))}
         <dt>Mockup</dt>
         <dd>{d.groups.some((g) => g.imprints.some((im) => d.art[im.id] || im.design_id)) ? "We build our own in the Mockup Creator from the art, at the size and spot above, then open the order." : "No art yet: make the mockup on the order."}
-          {mocks.length > 0 && <div className="eo-rev-files">{mocks.map((f) => <span key={f.path}>{f.url && <img src={f.url} alt="" />}{f.name}</span>)}<small>Their mockup goes in Production files, stamped &quot;Customer supplied mockup&quot;.</small></div>}</dd>
+          {mocks.length > 0 && <div className="eo-rev-files">{mocks.map((f) => <span key={f.path}>{f.url && <Thumb url={f.url} name={f.name} />}{f.name}</span>)}<small>Their mockup goes in Production files, stamped &quot;Customer supplied mockup&quot;.</small></div>}</dd>
         {docs.length > 0 && <><dt>Production files</dt><dd>{docs.map((f) => f.name).join(", ")}</dd></>}
         {d.notes && <><dt>Notes</dt><dd>{d.notes}</dd></>}
         {d.questions.length > 0 && <><dt>To ask</dt><dd><ul>{d.questions.map((q, i) => <li key={i}>{q}</li>)}</ul></dd></>}
@@ -432,4 +433,28 @@ function WhenLine({ when, due, onUse }: { when: WhenDates | null | undefined; du
         : when.regular ? <button type="button" className="eo-link" onClick={() => onUse(when.regular!)}>No date asked: use {dLbl(when.regular)} (regular turn) as the in-hands date</button> : null}
     </div>
   );
+}
+
+/**
+ * A file's thumbnail: a picture as it is; a PDF or AI file's first page drawn small (an <img> of a PDF shows a broken,
+ * grayed-out box). Anything else, or while it's drawing, a small tile with its type.
+ */
+const thumbCache = new Map<string, string>();
+function Thumb({ url, name, className }: { url: string; name: string; className?: string }) {
+  const doc = /\.(pdf|ai)$/i.test(name.split("?")[0]);
+  const [src, setSrc] = useState(doc ? thumbCache.get(url) || "" : url);
+  useEffect(() => {
+    if (!doc || thumbCache.has(url)) return;
+    let live = true;
+    (async () => {
+      const r = await fetch(url).catch(() => null);
+      if (!r?.ok) return;
+      const pv = await makePreview(new File([await r.blob()], name.split("/").pop() || "file.pdf", { type: "application/pdf" }), 320).catch(() => null);
+      if (!pv || !live) return;
+      const u = URL.createObjectURL(pv);
+      thumbCache.set(url, u); setSrc(u);
+    })();
+    return () => { live = false; };
+  }, [url, doc, name]);
+  return src ? <img className={className} src={src} alt="" /> : <span className={"eo-doc" + (className ? " " + className : "")}>{(name.split(".").pop() || "file").toUpperCase().slice(0, 4)}</span>;
 }

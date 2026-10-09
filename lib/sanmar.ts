@@ -97,14 +97,16 @@ export async function sanmarLookup(style: string): Promise<SanMarGarment | null>
   if (!t) return null;
   const skus = await sanmarSkus(t);
   if (!skus.length) return null;
-  const colors = [...new Set(skus.map((s) => s.catalogColor).filter(Boolean))];
+  // the color names people use ("True Royal"), not SanMar's catalog codes ("TrueRoyal")
+  const nameOf = (s: SanMarSku) => (s.color || s.catalogColor || "").trim();
+  const colors = [...new Set(skus.map(nameOf).filter(Boolean))];
   const sizes = [...new Set(skus.map((s) => s.size).filter(Boolean))].sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
   const cost = (s: SanMarSku) => s.myPrice || s.casePrice || s.piecePrice;
   const size_costs: Record<string, number> = {};
   for (const z of sizes) { const cs = skus.filter((s) => s.size === z).map(cost).filter((x) => x > 0); if (cs.length) size_costs[z] = Math.min(...cs); }
   const base = Math.min(...Object.values(size_costs).filter((x) => x > 0), Infinity);
   const color_images: SanMarGarment["color_images"] = {};
-  for (const c of colors) { const s = skus.find((x) => x.catalogColor === c && (x.front || x.image)); if (s) color_images[c] = { front: s.front || s.image, back: s.back, side: "", hex: "" }; }
+  for (const c of colors) { const s = skus.find((x) => nameOf(x) === c && (x.front || x.image)); if (s) color_images[c] = { front: s.front || s.image, back: s.back, side: "", hex: "" }; }
   const first = skus[0];
   return {
     style: t, brand: first.brand || "SanMar", description: first.title || first.description.replace(/<[^>]+>/g, " ").slice(0, 200),
