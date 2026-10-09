@@ -45,6 +45,8 @@ function OrderGoods() {
   // ordering
   const [method, setMethod] = useState("40"), [quote, setQuote] = useState("");
   const [dry, setDry] = useState<{ orderNumber: string; warehouse: string; total: number; expected: string | null }[] | null>(null);
+  // where each line ships from (the check): sku → warehouses and quantities
+  const [from, setFrom] = useState<Record<string, { warehouse: string; qty: number }[]>>({});
   const [busy, setBusy] = useState(""), [err, setErr] = useState(""), [msg, setMsg] = useState(""), [sure, setSure] = useState(false);
   const [recent, setRecent] = useState<Recent[] | null>(null), [recentErr, setRecentErr] = useState("");
   const [linkFor, setLinkFor] = useState<string | null>(null), [linkQ, setLinkQ] = useState(""), [linkHits, setLinkHits] = useState<{ id: string; number: number; nickname: string | null }[]>([]);
@@ -106,8 +108,17 @@ function OrderGoods() {
   const orderable = sorted.map((x) => x.l).filter((l) => l.sku && l.qty > 0);
   const pcs = orderable.reduce((a, l) => a + l.qty, 0), total = orderable.reduce((a, l) => a + l.price * l.qty, 0);
   const po = (label || (order ? `#${order.number}` : cust ? `${cust.name} (ahead of order)` : "Stock")).trim();
-  const payload = (test: boolean) => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: l.qty, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, test, label: po, quote, orderId: order?.id || null, customerId: cust?.id || null, activityId: email?.id || null });
-  async function check() { setBusy("test"); setErr(""); setDry(null); setSure(false); const r = await placeGoods(payload(true)); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); setDry(r.results || []); }
+  const payload = (test: boolean) => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: l.qty, price: l.price, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, test, label: po, quote, orderId: order?.id || null, customerId: cust?.id || null, activityId: email?.id || null });
+  async function check() {
+    setBusy("test"); setErr(""); setDry(null); setSure(false); setFrom({});
+    const r = await placeGoods(payload(true)); setBusy("");
+    if (!r.ok) return setErr(r.error || "S&S said no.");
+    const f: Record<string, { warehouse: string; qty: number }[]> = {};
+    for (const x of ("from" in r && r.from) || []) f[x.sku] = [...(f[x.sku] || []), { warehouse: x.warehouse, qty: x.qty }];
+    setFrom(f); setDry(r.results || []);
+  }
+  const whName = (w: string) => ({ TX: "Fort Worth", KS: "Kansas", IL: "Illinois", GA: "Georgia", OH: "Ohio", KY: "Kentucky", PA: "Pennsylvania", NV: "Nevada", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Massachusetts", DS: "Mill direct" } as Record<string, string>)[w] || w;
+  const away = Object.values(from).flat().filter((x) => x.warehouse !== "TX");
   async function place() {
     if (!sure) { setSure(true); return; }
     setBusy("place"); setErr("");
@@ -207,7 +218,7 @@ function OrderGoods() {
 
           {lines.length > 0 ? (
             <div style={{ overflowX: "auto" }}><table className="rv-tbl">
-              <thead><tr><th>Garment</th>{asks && <th>Requested</th>}<th>{asks ? "Found color" : "Color"}</th><th>Size</th><th className="r">Qty</th><th className="r">Price</th><th className="r">In stock</th><th /></tr></thead>
+              <thead><tr><th>Garment</th>{asks && <th>Requested</th>}<th>{asks ? "Found color" : "Color"}</th><th>Size</th><th className="r">Qty</th><th className="r">Price</th><th className="r">In stock</th>{dry && <th>Ships from</th>}<th /></tr></thead>
               <tbody>{sorted.map(({ l, i }) => (
                 <tr key={l.key} className={!l.sku ? "miss" : l.stock < l.qty ? "low" : ""}>
                   <td>{l.style && ssUrl(l.brand, l.style) ? <a className="og-ss" href={ssUrl(l.brand, l.style)} target="_blank" rel="noreferrer" title="Open this style on ssactivewear.com (all its colors)">{[l.brand, l.style].filter(Boolean).join(" ")} ↗</a> : [l.brand, l.style].filter(Boolean).join(" ") || "—"}</td>
@@ -223,6 +234,7 @@ function OrderGoods() {
                   <td className="r"><input type="number" min={0} value={l.qty} onChange={(e) => { const v = Math.max(0, Math.round(+e.target.value || 0)); setLines((ls) => ls.map((x, k) => (k === i ? { ...x, qty: v, note: x.sku && x.stock < v ? `Only ${x.stock} in stock` : x.sku ? "" : x.note } : x))); setDry(null); setSure(false); }} style={{ width: 70, textAlign: "right" }} aria-label={`${l.style} ${l.color} ${l.size} quantity`} /></td>
                   <td className="r">{l.sku ? money(l.price) : ""}</td>
                   <td className="r">{l.sku ? l.stock.toLocaleString() : <span className="bad">{l.note || "Not at S&S"}</span>}{l.sku && l.note && <div className="bad" style={{ fontSize: 11.5 }}>{l.note}</div>}</td>
+                  {dry && <td>{(from[l.sku] || []).map((w) => <span key={w.warehouse} className={"og-wh" + (w.warehouse === "TX" ? "" : " away")}>{whName(w.warehouse)}{(from[l.sku] || []).length > 1 ? ` (${w.qty})` : ""}</span>)}</td>}
                   <td><button type="button" className="btn ghost sm" aria-label="Remove" onClick={() => { setLines((ls) => ls.filter((_, k) => k !== i)); setDry(null); setSure(false); }}>✕</button></td>
                 </tr>
               ))}</tbody>
@@ -243,10 +255,11 @@ function OrderGoods() {
           <div className="faint" style={{ fontSize: 12.5 }}>
             {pay?.card ? <>Paid with our S&amp;S card: <b>{pay.card}</b> · ships from the closest warehouse that has it (split only when it&apos;s short).</> : pay?.error ? <span className="bad">{pay.error}</span> : "Checking the card on file at S&S…"}
           </div>
-          {dry && <div className="okmsg">S&amp;S accepted the dry run (nothing was bought): {dry.map((d) => `${d.warehouse || "warehouse"} · ${money(d.total)}${d.expected ? ` · arrives ${day(d.expected)}` : ""}`).join("; ")}.</div>}
+          {dry && away.length > 0 && <div className="banner">Heads up: {away.reduce((a, x) => a + x.qty, 0)} pcs ship from outside Fort Worth ({[...new Set(away.map((x) => whName(x.warehouse)))].join(", ")}), so they&apos;ll take longer. See &quot;Ships from&quot; above.</div>}
+          {dry && <div className="okmsg">Checked (nothing sent to S&amp;S): {dry.map((d) => `${whName(d.warehouse) || "warehouse"} · ~${money(d.total)}`).join("; ")} · UPS Ground. Place the order when it looks right.</div>}
           {err && <div className="pv-err">{err}</div>}
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <button type="button" className="btn" disabled={!orderable.length || !!busy} onClick={check}>{busy === "test" ? "Checking…" : "1. Check with S&S (dry run)"}</button>
+            <button type="button" className="btn" disabled={!orderable.length || !!busy} onClick={check}>{busy === "test" ? "Checking…" : "1. Check stock & card (dry run)"}</button>
             <button type="button" className={"btn " + (sure ? "danger" : "primary")} disabled={!dry || !orderable.length || !!busy} onClick={place} title={dry ? "" : "Run the dry run first"}>
               {busy === "place" ? "Ordering…" : sure ? `Yes, buy ${pcs} pcs from S&S · ~${money(total)}` : `2. Place the order with S&S${total ? ` · ~${money(total)}` : ""}`}</button>
             {sure && <button type="button" className="btn ghost" onClick={() => setSure(false)}>Cancel</button>}

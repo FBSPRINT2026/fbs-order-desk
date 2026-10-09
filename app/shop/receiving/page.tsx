@@ -87,6 +87,7 @@ const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLoc
 const PROBLEMS = ["failure", "return_to_sender", "error", "available_for_pickup", "cancelled"];
 const stLabel = (st: string | undefined) => (st === "delivered" ? "Arrived" : st && PROBLEMS.includes(st) ? TRACK[st] || st : "On the way");
 // UPS Ground always (Nick, Oct 9): "Ground (S&S picks)" can land on UPS Ground Advantage, which is slower
+const WH: Record<string, string> = { TX: "Fort Worth", KS: "Kansas", IL: "Illinois", GA: "Georgia", OH: "Ohio", KY: "Kentucky", PA: "Pennsylvania", NV: "Nevada", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Massachusetts", DS: "Mill direct" };
 const SS_METHODS: [string, string][] = [["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
 
 /**
@@ -675,7 +676,7 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
   const lines = plan?.lines || [];
   const orderable = lines.filter((l) => l.found && (qty[l.key] || 0) > 0);
   const total = orderable.reduce((a, l) => a + l.price * (qty[l.key] || 0), 0);
-  const payload = () => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: qty[l.key] || 0, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method });
+  const payload = () => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: qty[l.key] || 0, price: l.price, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method });
   async function test() { setBusy("test"); setErr(""); setDry(null); const r = await orderBlanksSS(o.id, { ...payload(), test: true }); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); setDry(r.results || []); }
   async function place() { setBusy("place"); setErr(""); const r = await orderBlanksSS(o.id, { ...payload(), test: false }); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); onDone(`Ordered from S&S for #${o.number}: order ${r.results?.map((x) => x.orderNumber).join(", ")}.`); }
   async function record() { setBusy("rec"); setErr(""); const r = await recordBlanks(o.id, { ...m, expected_date: m.expected_date || null }); setBusy(""); if (!r.ok) return setErr(r.error || "Couldn't save."); onDone(`Recorded the blanks order for #${o.number}.`); }
@@ -705,11 +706,12 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
               </div>
               {!plan.ss && <div className="banner">S&amp;S isn&apos;t connected, so ordering here is off. Record an order placed elsewhere instead.</div>}
               {dry && (
-                <div className="okmsg">S&amp;S accepted the dry run (nothing was bought): {dry.map((d) => `${d.warehouse || "warehouse"} · ${money(d.total)}${d.expected ? ` · arrives ${day(d.expected)}` : ""}`).join("; ")}. Place the real order below.</div>
+                <div className="okmsg">Checked (nothing sent to S&amp;S): {dry.map((d) => `${WH[d.warehouse] || d.warehouse || "warehouse"} · ~${money(d.total)}`).join("; ")} · UPS Ground. Place the real order below.</div>
+                {dry.some((d) => d.warehouse !== "TX") && <div className="banner">Heads up: part of this ships from outside Fort Worth ({dry.filter((d) => d.warehouse !== "TX").map((d) => WH[d.warehouse] || d.warehouse).join(", ")}), so it&apos;ll take longer.</div>}
               )}
               {err && <div className="pv-err">{err}</div>}
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <button type="button" className="btn" disabled={!plan.ss || !orderable.length || !!busy} onClick={test}>{busy === "test" ? "Checking…" : "1. Check with S&S (dry run)"}</button>
+                <button type="button" className="btn" disabled={!plan.ss || !orderable.length || !!busy} onClick={test}>{busy === "test" ? "Checking…" : "1. Check stock & card (dry run)"}</button>
                 <button type="button" className="btn primary" disabled={!plan.ss || !dry || !orderable.length || !!busy} onClick={place} title={dry ? "" : "Run the dry run first"}>{busy === "place" ? "Ordering…" : `2. Place the order with S&S${total ? ` · ~${money(total)}` : ""}`}</button>
                 <span className="spacer" />
                 <button type="button" className="btn ghost" onClick={() => setOther((x) => !x)}>{other ? "Hide" : "Ordered it elsewhere?"}</button>

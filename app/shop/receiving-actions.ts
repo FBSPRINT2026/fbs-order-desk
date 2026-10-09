@@ -3,7 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, SIZES, type Order } from "@/lib/pricing";
 import { ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder } from "@/lib/ss";
-import { matchToSS, placeWithLogin, shopEmails, ssPayEmail } from "@/lib/ssMatch";
+import { matchToSS, checkOnly, placeWithLogin, shopEmails, ssPayEmail } from "@/lib/ssMatch";
 
 async function staff() {
   const v = await getViewer();
@@ -46,7 +46,7 @@ async function markOrdered(admin: ReturnType<typeof createAdminClient>, orderId:
  * Order the blanks from S&S, shipped to our shop. `test: true` is a dry run: S&S creates the order and cancels it
  * right away, so we see stock, price and warehouses without buying anything.
  */
-export async function orderBlanksSS(orderId: string, p: { lines: { sku: string; qty: number; label: string }[]; shippingMethod: string; test: boolean }): Promise<{ ok: boolean; error?: string; results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }> {
+export async function orderBlanksSS(orderId: string, p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean }): Promise<{ ok: boolean; error?: string; card?: string; from?: { sku: string; qty: number; warehouse: string }[]; results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }> {
   try {
     const v = await staff();
     if (!ssConfigured()) return { ok: false, error: "S&S isn't connected (SS_ACCOUNT_NUMBER / SS_API_KEY)." };
@@ -67,6 +67,8 @@ export async function orderBlanksSS(orderId: string, p: { lines: { sku: string; 
     if (alloc.short.length) return { ok: false as const, error: `S&S doesn't have enough of: ${alloc.short.join("; ")}.` };
     const card = await ssOurCard(await shopEmails(v.user?.email));
     if (!card.ok) return { ok: false as const, error: card.error };
+    // the dry run stops here: checked in the portal, nothing sent to S&S's ordering
+    if (p.test) return { ok: true, results: checkOnly(alloc, (sku) => lines.find((l) => l.sku === sku)?.price || 0), card: card.profile.label, from: alloc.lines.map((l) => ({ sku: l.identifier, qty: l.qty, warehouse: l.warehouseAbbr })) };
     const payEmail = await ssPayEmail(admin, card.profile.email, v.user?.email, p.test);
     if (!payEmail.ok) return { ok: false, error: payEmail.error };
     const res = await placeWithLogin(payEmail.emails, (email) => ssPlaceOrder({

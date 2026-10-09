@@ -4,7 +4,7 @@ import { sizeRank } from "@/lib/sizeOrder";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricing";
 import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
-import { matchToSS, placeWithLogin, shopEmails, ssPayEmail, type GoodsRow } from "@/lib/ssMatch";
+import { matchToSS, checkOnly, placeWithLogin, shopEmails, ssPayEmail, type GoodsRow } from "@/lib/ssMatch";
 import { accountForUser, cfgOf } from "@/lib/mail/config";
 import { sendFromMailbox } from "@/lib/mail/send";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
@@ -108,7 +108,7 @@ export async function findOrdersAndCustomers(q: string) {
  * Buy from S&S, shipped to the shop. `test` = dry run (S&S creates and cancels it: nothing is bought). Only a staff
  * click places a real order.
  */
-export async function placeGoods(p: { lines: { sku: string; qty: number; label: string }[]; shippingMethod: string; test: boolean; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string }) {
+export async function placeGoods(p: { lines: { sku: string; qty: number; label: string; price?: number }[]; shippingMethod: string; test: boolean; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string }) {
   try {
     const v = await staff();
     if (!ssConfigured()) return { ok: false as const, error: "S&S isn't connected (SS_ACCOUNT_NUMBER / SS_API_KEY in Vercel)." };
@@ -126,6 +126,8 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
     const card = await ssOurCard(await shopEmails(v.user?.email));
     if (!card.ok) return { ok: false as const, error: card.error };
     // the S&S website login the card belongs to: the one a dry run proved, else each likely email until S&S takes one
+    // the dry run stops here: checked in the portal, nothing sent to S&S's ordering
+    if (p.test) return { ok: true as const, results: checkOnly(alloc, (sku) => lines.find((l) => l.sku === sku)?.price || 0), card: card.profile.label, from: alloc.lines.map((l) => ({ sku: l.identifier, qty: l.qty, warehouse: l.warehouseAbbr })) };
     const payEmail = await ssPayEmail(admin, card.profile.email, v.user?.email, p.test);
     if (!payEmail.ok) return { ok: false as const, error: payEmail.error };
     const res = await placeWithLogin(payEmail.emails, (email) => ssPlaceOrder({

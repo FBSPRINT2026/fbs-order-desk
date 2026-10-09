@@ -59,10 +59,7 @@ export async function ssPayEmail(admin: SupabaseClient, cardEmail: string, me?: 
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const proven = String((st?.data as { ss_pay_email?: string } | null)?.ss_pay_email || "").trim().toLowerCase();
   if (proven) return { ok: true, emails: [proven] };
-  if (!test) {
-    if (cardEmail.includes("@")) return { ok: true, emails: [cardEmail.toLowerCase()] };
-    return { ok: false, error: "Run the dry run first: it finds which S&S login our card is saved under." };
-  }
+  void test;
   const list = [cardEmail, ...(await shopEmails(me, admin))].map((e) => e.trim().toLowerCase()).filter((e, i, a) => e.includes("@") && a.indexOf(e) === i);
   return { ok: true, emails: list };
 }
@@ -81,10 +78,23 @@ export async function placeWithLogin<T>(emails: string[], place: (email: string)
     } catch (err) {
       last = err;
       const m = err instanceof Error ? err.message : String(err);
-      // only a wrong login email is worth another try (and only on a dry run)
-      if (!test || !/website user email|not assigned to your customer/i.test(m)) throw err;
+      // only a wrong login email is worth another try (S&S rejects the whole order then: nothing is created)
+      if (!/website user email|not assigned to your customer/i.test(m)) throw err;
     }
   }
   const tried = emails.join(", ");
   throw new Error(`S&S didn't accept any of our emails as the login the 5488 card is saved under (tried ${tried}). What email do you sign in to ssactivewear.com with? ${last instanceof Error ? `(${last.message})` : ""}`.trim());
 }
+
+/**
+ * The dry run, done in the portal (nothing sent to S&S's ordering): stock and the closest warehouses (ssAllocate), our
+ * card, and the cost per warehouse from the prices on the lines.
+ */
+export function checkOnly(alloc: { lines: { identifier: string; qty: number; warehouseAbbr: string }[] }, price: (sku: string) => number) {
+  const by = new Map<string, number>();
+  for (const l of alloc.lines) by.set(l.warehouseAbbr, (by.get(l.warehouseAbbr) || 0) + price(l.identifier) * l.qty);
+  return [...by].map(([warehouse, total]) => ({ orderNumber: "", warehouse, total: Math.round(total * 100) / 100, expected: null as string | null }));
+}
+
+/** S&S warehouse codes as staff know them (Fort Worth is ours, the closest) */
+export const WAREHOUSE_NAME: Record<string, string> = { TX: "Fort Worth, TX", KS: "Kansas", IL: "Illinois", GA: "Georgia", OH: "Ohio", KY: "Kentucky", PA: "Pennsylvania", NV: "Nevada", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Massachusetts", DS: "Mill direct" };

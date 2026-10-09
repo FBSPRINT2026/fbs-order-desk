@@ -5779,3 +5779,5 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .og-check{font-size:11px;font-weight:700;color:var(--warn)}
 .og-ss{color:inherit;text-decoration:none;border-bottom:1px dotted var(--ink-3)}
 .og-ss:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.og-wh{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:var(--ok-soft);margin:1px 4px 1px 0;white-space:nowrap}
+.og-wh.away{background:var(--warn-soft);color:var(--warn);font-weight:700}

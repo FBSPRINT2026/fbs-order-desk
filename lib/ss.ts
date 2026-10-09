@@ -299,7 +299,7 @@ export async function ssPlaceOrder(o: {
     // UPS Ground always, never "S&S picks" (code 1: it can be the slower UPS Ground Advantage)
     shippingMethod: o.shippingMethod && o.shippingMethod !== "1" ? o.shippingMethod : "40",
     poNumber: o.po.slice(0, 50),
-    testOrder: o.test === true,
+    testOrder: false,
     autoselectWarehouse: !picked,
     ...(picked ? {} : { AutoSelectWarehouse_Preference: "fastest" }),
     ...(o.payment ? { paymentProfile: { email: o.payment.email, profileID: o.payment.profileID } } : {}),
@@ -308,8 +308,9 @@ export async function ssPlaceOrder(o: {
     ...(o.email ? { emailConfirmation: o.email } : {}),
     lines: o.lines.map((l) => ({ identifier: l.identifier, qty: l.qty, ...(picked ? { warehouseAbbr: l.warehouseAbbr } : {}) })),
   };
-  // a dry run must never reach S&S without the test flag
-  if (o.test && body.testOrder !== true) throw new Error("Dry run stopped: the test flag wasn't set.");
+  // S&S's "test order" is created on our account and then cancelled (Oct 9: it showed up as an order). A dry run never
+  // comes here: it's checked in the portal (ssCheckOnly). Only a real, confirmed order is ever sent to S&S.
+  if (o.test || body.testOrder) throw new Error("Dry runs are checked in the portal and never sent to S&S.");
   const auth = btoa(`${process.env.SS_ACCOUNT_NUMBER!.trim()}:${process.env.SS_API_KEY!.trim()}`);
   const r = await fetch(BASE + "/orders/", {
     method: "POST", cache: "no-store",
