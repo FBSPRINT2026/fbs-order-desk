@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { Check } from "@/lib/orderChecks";
 import type { ProposedOrder } from "@/lib/ai/normalize";
-import { aiLookUp, aiOrderFromText, aiReorderCheck, aiReviewOrder, applyReorderFix } from "@/app/shop/ai-actions";
+import { aiLookUp, aiOrderChat, aiOrderFromText, aiReorderCheck, aiReviewOrder, applyReorderFix, orderChatThread } from "@/app/shop/ai-actions";
+import type { ChatMsg } from "@/lib/ai/orderChat";
 import type { ReorderCheck, ReorderFix } from "@/lib/ai/reorderCheck";
 
 /** "Order check" panel: rule checks now, plus an optional AI review. */
@@ -35,6 +36,7 @@ export function ChecksPanel({ checks, orderId, save, reorder }: { checks: Check[
           </div>
         )}
         {reorder && <ReorderCheckBox orderId={orderId} save={save} />}
+        <OrderChat orderId={orderId} save={save} reorder={!!reorder} />
         <div className="row" style={{ gap: 6 }}>
           <button type="button" className="btn sm ghost" onClick={review} disabled={busy}>{busy ? "Reviewing…" : "✦ AI review"}</button>
           {note && <span className="ai-off">{note}</span>}
@@ -145,6 +147,71 @@ function ReorderCheckBox({ orderId, save }: { orderId: string; save: () => Promi
         <button type="button" className="btn sm ghost" onClick={() => run(false)} disabled={busy !== ""}>{busy === "run" ? "Checking…" : c ? "Check again" : "Run the reorder check"}</button>
         {note && <span className="ai-off">{note}</span>}
       </div>
+    </div>
+  );
+}
+
+/** a message that asks for something to be looked up online first */
+export const wantsLookup = (t: string) => /\b(look(\s|-)?(it|them|that)?\s*up|pms|pantone|official|online|search|google)\b/i.test(t);
+
+/**
+ * Order chat: talk the order through with the AI ("looks good, did you pull the previous sizing from the film?").
+ * Answers from the order, its notes, history and files (the old job, the film, the art, our mockup); fixes apply
+ * with a click. The conversation is kept on the order.
+ */
+export function OrderChat({ orderId, save, reorder }: { orderId: string; save: () => Promise<void>; reorder?: boolean }) {
+  const [msgs, setMsgs] = useState<ChatMsg[]>([]);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(""), [note, setNote] = useState("");
+  useEffect(() => { orderChatThread(orderId).then((r) => { if (r.ok) setMsgs(r.messages); }).catch(() => null); }, [orderId]);
+  async function send(t = text) {
+    const q = t.trim(); if (!q || busy) return;
+    setNote(""); setText("");
+    setMsgs((m) => [...m, { role: "staff", text: q, at: new Date().toISOString() }]);
+    await save();
+    let found = null;
+    if (wantsLookup(q)) { setBusy("Looking it up online…"); const lu = await aiLookUp(q, { orderId }).catch(() => null); found = lu?.ok ? lu.lookedUp : null; }
+    setBusy("Looking over the order…");
+    const r = await aiOrderChat(orderId, q, found);
+    setBusy("");
+    if (!r.ok) { setNote(r.error || "The AI didn't answer."); setText(q); setMsgs((m) => m.slice(0, -1)); return; }
+    setMsgs(r.messages);
+  }
+  async function apply(f: ReorderFix) {
+    setBusy("Applying…");
+    await save();
+    const r = await applyReorderFix(orderId, f);
+    if (!r.ok) { setBusy(""); return setNote(r.error || "Couldn't apply that."); }
+    location.reload();
+  }
+  const starters = reorder ? ["Did you pull the size from the film folder?", "Does the art match the old job?", "What ink colors did we use last time?"] : ["Anything missing before this prints?", "Do the print sizes fit these garments?"];
+  return (
+    <div className="ai-box oc">
+      <h3>✦ Ask about this order</h3>
+      {msgs.length > 0 && (
+        <div className="oc-list">
+          {msgs.map((m, i) => (
+            <div key={i} className={"oc-msg " + m.role}>
+              <div className="oc-text">{m.text}</div>
+              {m.lookedUp && <div className="eo-found"><b>Looked up online:</b> {m.lookedUp.text}{m.lookedUp.sources.length > 0 && <span className="faint"> ({m.lookedUp.sources.map((x, k) => <a key={k} href={x.url} target="_blank" rel="noreferrer">{k ? ", " : ""}{x.title || "source"}</a>)})</span>}</div>}
+              {(m.fixes || []).map((f, k) => (
+                <div key={k} className="row" style={{ gap: 8, fontSize: 13, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <span><b>{FIELD[f.field] || f.field} → {f.value}</b> <span className="muted">{f.why}</span></span>
+                  <button type="button" className="btn sm" disabled={!!busy} onClick={() => apply(f)}>Apply</button>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+      {!msgs.length && <div className="eo-chips">{starters.map((q) => <button key={q} type="button" className="eo-chip" disabled={!!busy} onClick={() => send(q)}>{q}</button>)}</div>}
+      {busy && <div className="muted" style={{ fontSize: 13 }}>{busy}</div>}
+      <form className="oc-form" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+        <textarea rows={2} value={text} aria-label="Ask about this order" placeholder='e.g. "Looks good. Did you go into the film folder and pull the previous sizing?"'
+          onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+        <button type="submit" className="btn sm primary" disabled={!!busy || !text.trim()}>Send</button>
+      </form>
+      {note && <span className="ai-off">{note}</span>}
     </div>
   );
 }

@@ -26,18 +26,23 @@ async function fileB64(admin: SupabaseClient, path: string) {
 const imgType = (p: string) => (/\.png$/i.test(p) ? "image/png" : /\.jpe?g$/i.test(p) ? "image/jpeg" : /\.webp$/i.test(p) ? "image/webp" : /\.gif$/i.test(p) ? "image/gif" : null);
 const SIZE = (k: string) => k.replace(/^size_/, "").toUpperCase();
 
-export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: string, by: string, told = "", lookedUp?: LookedUp): Promise<{ ok: true; check: ReorderCheck } | { ok: false; error: string }> {
+/**
+ * Everything about an order for the AI to read: the order (prints with their ids), its notes and production files,
+ * and for a reorder the old job (lines, fees, emails); plus the pictures and PDFs to look at (the old job's files,
+ * the film, each print's art, our latest mockup). Used by the reorder check and the order chat.
+ */
+export async function orderBrief(admin: SupabaseClient, orderId: string, needReorder = false) {
   const { data: o } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
-  if (!o) return { ok: false, error: "Order not found." };
+  if (!o) return { ok: false as const, error: "Order not found." };
   // the job it copies: "Reorder of Printavo #31174" / "Reorder of #40012"
   const { data: ev } = await admin.from("order_events").select("detail").eq("order_id", orderId).eq("kind", "reorder").order("created_at").limit(1).maybeSingle();
   const ref = String(ev?.detail || o.notes || "").match(/Reorder of (Printavo )?#(\d+)/);
-  if (!ref) return { ok: false, error: "This order isn't a reorder of an earlier job." };
+  if (!ref && needReorder) return { ok: false as const, error: "This order isn't a reorder of an earlier job." };
 
   const old: string[] = [];
-  if (ref[1]) {
+  if (ref?.[1]) {
     const { data: a } = await admin.from("archived_orders").select("visual_id, nickname, order_date, data").eq("visual_id", ref[2]).maybeSingle();
-    if (!a) return { ok: false, error: `Printavo #${ref[2]} isn't in the archive.` };
+    if (!a) return { ok: false as const, error: `Printavo #${ref[2]} isn't in the archive.` };
     const d = (a.data || {}) as { groups?: { lines?: { description?: string; itemNumber?: string; color?: string; sizes?: Record<string, number>; items?: number; price?: number }[]; imprints?: { details?: string; typeOfWork?: string }[] }[]; fees?: { description?: string; quantity?: number; amount?: number }[]; productionNote?: string; customerNote?: string };
     old.push(`Printavo #${a.visual_id} "${a.nickname || ""}", ${a.order_date || ""}`);
     for (const g of d.groups || []) {
@@ -55,9 +60,9 @@ export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: 
     }
     if (d.productionNote) old.push(`  Production note: ${d.productionNote}`);
     if (d.customerNote) old.push(`  Customer note: ${d.customerNote}`);
-  } else {
+  } else if (ref) {
     const { data: p } = await admin.from("orders").select("*").eq("number", +ref[2]).maybeSingle();
-    if (!p) return { ok: false, error: `#${ref[2]} wasn't found.` };
+    if (!p) return { ok: false as const, error: `#${ref[2]} wasn't found.` };
     old.push(`#${p.number} "${p.nickname || ""}"`, describe(orderGroups(p as Order)));
   }
 
@@ -92,18 +97,28 @@ export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: 
   const mk = mks?.[0];
   if (mk && imgType(mk.file_path)) { const b = await fileB64(admin, mk.file_path); if (b) images.push({ media_type: imgType(mk.file_path)!, data: b, label: `Our new mockup: ${mk.title || ""}` }); }
 
-  const prompt = [
-    "THE OLD JOB (what the customer is reordering):", ...old, "",
-    `THE NEW REORDER #${o.number} "${o.nickname || ""}":`, describe(groups),
+  const text = [
+    ...(ref ? ["THE OLD JOB (what the customer is reordering):", ...old, ""] : []),
+    `${ref ? "THE NEW REORDER" : "THE ORDER"} #${o.number} "${o.nickname || ""}" (status ${o.status}${o.due_date ? `, in hands ${o.due_date}` : ""}):`, describe(groups),
     inn?.production_notes ? `Production notes: ${inn.production_notes}` : "",
     o.notes ? `Order notes: ${o.notes}` : "",
-    "",
-    mk ? "" : "No mockup has been made for the new order yet.",
+    `Production files on the order: ${(files || []).map((f) => f.name).join(" | ") || "none"}`,
+    mk ? "" : "No mockup has been made for this order yet.",
+    `Files attached for you to look at: ${[...documents.map((d) => d.label), ...images.map((i) => i.label)].join(" | ") || "none"}`,
+  ].filter((x) => x !== "").join("\n");
+  return { ok: true as const, o, ims, images, documents, text, isReorder: !!ref };
+}
+
+
+export async function reorderCheck(admin: SupabaseClient, s: Settings, orderId: string, by: string, told = "", lookedUp?: LookedUp): Promise<{ ok: true; check: ReorderCheck } | { ok: false; error: string }> {
+  const b = await orderBrief(admin, orderId, true);
+  if (!b.ok) return b;
+  const { o, ims, images, documents } = b;
+  const prompt = [
+    b.text,
     told.trim() ? `\nWHAT THE SHOP TOLD YOU ABOUT THIS JOB (facts, use them): ${told.trim()}` : "",
     lookedUp?.text ? `Looked up online for that: ${lookedUp.text}` : "",
-    `Files attached: ${[...documents.map((d) => d.label), ...images.map((i) => i.label)].join(" | ") || "none"}`,
-  ].filter((x) => x !== "").join("\n");
-
+  ].filter(Boolean).join("\n");
   const r = await askClaude<ReorderCheck>({
     task: "reorder_check", model: s.assistant.ai.model, maxTokens: 2000, timeoutMs: 55_000, admin, images, documents,
     ctx: { order_id: orderId, customer_id: o.customer_id, by },

@@ -5684,3 +5684,12 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .main a[href^="mailto:"],.main td,.main dd{overflow-wrap:anywhere}
 .pv-dates{min-width:0}
 .pv-tbl th,.pv-tbl td{word-break:normal}
+
+/* Order chat (components/OrderAssist.tsx OrderChat) */
+.oc-list{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto;padding-right:2px}
+.oc-msg{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:10px;font-size:13.5px;max-width:92%;overflow-wrap:anywhere}
+.oc-msg.staff{align-self:flex-end;background:var(--accent-soft)}
+.oc-msg.ai{align-self:flex-start;background:var(--surface-2)}
+.oc-text{white-space:pre-wrap}
+.oc-form{display:flex;gap:6px;align-items:flex-end}
+.oc-form textarea{flex:1;min-width:0;font:inherit;font-size:13.5px;resize:vertical}

@@ -10,6 +10,7 @@ import { processEmailActivity } from "@/lib/ai/email";
 import { storeInboundEmail } from "@/lib/crm/inbound";
 import { LOCATIONS, orderGroups, type Group, type Imprint, type Order } from "@/lib/pricing";
 import { reorderCheck, type ReorderCheck, type ReorderFix } from "@/lib/ai/reorderCheck";
+import { chatThread, orderChat } from "@/lib/ai/orderChat";
 
 // Staff-only server actions for the Assistant, the CRM timeline and the AI helpers.
 // AI helpers return { ok:false, off:true } until AI is turned on, so the UI can say how to turn it on.
@@ -265,5 +266,24 @@ export async function applyReorderFix(orderId: string, fix: ReorderFix) {
     if (error) return { ok: false as const, error: error.message };
     await admin.from("order_events").insert({ order_id: orderId, kind: "edited", detail: `Reorder check fix: ${fix.field} → ${v}`, actor: email });
     return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** Order chat: the conversation so far. */
+export async function orderChatThread(orderId: string) {
+  try {
+    const { admin } = await staff();
+    return { ok: true as const, messages: await chatThread(admin, orderId) };
+  } catch (e) { return fail(e); }
+}
+
+/** Order chat: ask the AI about this order ("did you pull the previous sizing from the film?"). */
+export async function aiOrderChat(orderId: string, message: string, lookedUp?: LookedUp | null) {
+  try {
+    const { admin, email } = await staff();
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false as const, off: true, error: st.reason };
+    const r = await orderChat(admin, st.settings, orderId, email, message, lookedUp);
+    return r.ok ? { ok: true as const, messages: r.messages } : { ok: false as const, error: r.error };
   } catch (e) { return fail(e); }
 }
