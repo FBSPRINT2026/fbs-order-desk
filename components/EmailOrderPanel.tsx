@@ -26,7 +26,8 @@ const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
 const qtyOf = (l: GLine) => Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0) || 0), 0);
 const uidish = () => Math.random().toString(36).slice(2, 10);
 
-export default function EmailOrderPanel({ activityId, onClose, onCreated }: { activityId: string; onClose: () => void; onCreated: (id: string, number: number, opened?: boolean) => void }) {
+export default function EmailOrderPanel({ activityId, onClose, onCreated, start }: { activityId: string; onClose: () => void; onCreated: (id: string, number: number, opened?: boolean) => void;
+  /** opened from the Inbox chat: what to tell the AI, and the past job it's a reorder of */ start?: { told?: string; job?: string } }) {
   /** the AI's order is shown as a summary to approve; Edit details opens the full form */
   const [editing, setEditing] = useState(false);
   const [step, setStep] = useState("");
@@ -37,11 +38,13 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
   const [status, setStatus] = useState<"quote" | "approved">("quote");
 
   // what staff tell the AI before it reads the email ("it's a reorder of 31174, the art is on the old job")
-  const [told, setTold] = useState(""), [tellOpen, setTellOpen] = useState(false);
+  const [told0, setTold] = useState(start?.told || ""), [tellOpen, setTellOpen] = useState(false);
+  const told = told0;
   // a reorder: "I found this job, place a reorder?" → "Anything I should know?"
   const [askStep, setAskStep] = useState(false), [lookStep, setLookStep] = useState("");
-  async function read(o: { job?: string | null; reorderOk?: boolean } = {}) {
+  async function read(o: { job?: string | null; reorderOk?: boolean; told?: string } = {}) {
     setBusy("read"); setErr("");
+    const told = o.told ?? told0;
     // what the note points to that has to be looked up online (team PMS colors…), shown while the email is read
     let lookedUp: EODraft["lookedUp"] | null = null;
     if (told.trim()) {
@@ -66,7 +69,9 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated }: { ac
       if (!live) return;
       if (!r?.ok || !j) return setErr(j?.error || "Couldn't load the email.");
       setData(j);
-      if (j.draft) { setD(j.draft); if (j.draft.told) setTold(j.draft.told); }
+      // opened from the Inbox chat with what to know: read it with that
+      if (start?.told || start?.job) { if (j.ai) void read({ told: start.told || "", job: start.job || null, reorderOk: !!start.job }); else if (j.draft) setD(j.draft); }
+      else if (j.draft) { setD(j.draft); if (j.draft.told) setTold(j.draft.told); }
       else if (j.ai) void read();
     })();
     return () => { live = false; };

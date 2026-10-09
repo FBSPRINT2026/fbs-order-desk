@@ -161,7 +161,7 @@ async function jobsNamed(admin: SupabaseClient, told: string, customerId: string
 }
 
 /** the past jobs as the AI reads them: J numbers, and L numbers for every garment line */
-function jobsText(jobs: PastJob[]) {
+export function jobsText(jobs: PastJob[]) {
   return jobs.map((j, ji) => {
     let n = 0;
     const lines = j.groups.flatMap((g) => [
@@ -178,7 +178,7 @@ function jobsText(jobs: PastJob[]) {
  * The sender's email signature pictures: nameless small pictures, and pictures that came on their other emails too
  * (same name and size within 3%). They're listed for the AI as signatures and never shown to it or used as art.
  */
-async function signaturePaths(admin: SupabaseClient, a: { id: string; from_email: string | null }, atts: Att[]): Promise<Set<string>> {
+export async function signaturePaths(admin: SupabaseClient, a: { id: string; from_email: string | null }, atts: Att[]): Promise<Set<string>> {
   const out = new Set(atts.filter((f) => looksLikeSignature(f)).map((f) => f.path));
   const pics = atts.filter((f) => isPicture(f) && !out.has(f.path));
   const dom = String(a.from_email || "").split("@")[1];
@@ -189,7 +189,7 @@ async function signaturePaths(admin: SupabaseClient, a: { id: string; from_email
   return out;
 }
 
-async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<string> = new Set()) {
+export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<string> = new Set()) {
   const images: { media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string; label: string }[] = [];
   const documents: { data: string; label: string }[] = [];
   const listing: string[] = [];

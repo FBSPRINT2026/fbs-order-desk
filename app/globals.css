@@ -5693,3 +5693,5 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .oc-text{white-space:pre-wrap}
 .oc-form{display:flex;gap:6px;align-items:flex-end}
 .oc-form textarea{flex:1;min-width:0;font:inherit;font-size:13.5px;resize:vertical}
+.oc-acts{display:flex;flex-wrap:wrap;gap:6px}
+.ibx-chat{margin:8px 0}

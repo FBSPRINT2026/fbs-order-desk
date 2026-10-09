@@ -8,6 +8,8 @@ import { mailRows } from "@/lib/inbox";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "../mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, putBackInInbox } from "../ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
+import EmailChat from "@/components/EmailChat";
+import type { EmailAction } from "@/lib/ai/emailChat";
 
 /**
  * Inbox, laid out like Outlook: the customer email on the left (what needs an answer first), the picked email on the
@@ -173,8 +175,15 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const [opts, setOpts] = useState<Opt[] | null>(x.meta?.reply_options?.options || null), [picked, setPicked] = useState(confirm ? 0 : reply?.draft?.body ? -2 : -1), [ask, setAsk] = useState("");
   const boxRef = useRef<HTMLTextAreaElement | null>(null);
   // Create order: the AI's suggested order from this email and its attachments, to check and create
-  const [ordering, setOrdering] = useState(false);
-  useEffect(() => { setOrdering(false); }, [x.id]);
+  const [ordering, setOrdering] = useState(false), [orderStart, setOrderStart] = useState<{ told?: string; job?: string; n: number } | null>(null);
+  useEffect(() => { setOrdering(false); setOrderStart(null); }, [x.id]);
+  // a step the Inbox chat suggested: open Create order with what to know, put a reply in the box, file it, no reply
+  function act(a: EmailAction) {
+    if (a.kind === "create_order") { setOrderStart((p) => ({ told: a.told, job: a.job, n: (p?.n || 0) + 1 })); setOrdering(true); }
+    else if (a.kind === "reply") { if (a.subject) setSubject(a.subject); setBody(a.body); setPicked(-1); setTimeout(() => boxRef.current?.focus(), 30); }
+    else if (a.kind === "file_under") { const o = orders.find((z) => z.number === a.order_number); if (o) void run("ord", () => setEmailOrder(x.id, o.id), `Filed under #${o.number}.`); else setErr(`#${a.order_number} isn't one of their open orders.`); }
+    else if (a.kind === "no_reply") void run("nr", () => markNoReply(x.id), "Off your Needs a reply list.");
+  }
   const orderish = ["new_order", "reorder"].includes(x.meta?.triage?.intent || "") || !!quote;
   async function loadOpts(fresh = false) {
     setBusy("opts"); setErr("");
@@ -226,7 +235,9 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
         </div>}
       </header>
 
-      {ordering && <EmailOrderPanel key={x.id} activityId={x.id} onClose={() => setOrdering(false)} onCreated={(id, n, opened) => { setOrdering(false); if (!opened) window.open(`/shop/orders/${id}`, "_blank"); done(`Order #${n} created from the email. Our mockup is being built in a new tab; the order opens there when it's saved.`); }} />}
+      {x.direction === "in" && <EmailChat activityId={x.id} onAction={act} busyOutside={!!busy} />}
+
+      {ordering && <EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={x.id} start={orderStart || undefined} onClose={() => setOrdering(false)} onCreated={(id, n, opened) => { setOrdering(false); if (!opened) window.open(`/shop/orders/${id}`, "_blank"); done(`Order #${n} created from the email. Our mockup is being built in a new tab; the order opens there when it's saved.`); }} />}
 
       <div className="ibx-answer">
         <div className="ibx-answer-h"><b>Your answer</b>
