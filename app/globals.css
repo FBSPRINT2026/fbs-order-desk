@@ -5956,3 +5956,10 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .db-reply.hot{border-left:3px solid var(--danger);padding-left:10px;background:color-mix(in srgb,var(--danger) 4%,transparent)}
 .db-reply.db-click{cursor:pointer}
 .db-reply.db-click:hover{background:var(--bg,#f6f7f9)}
+
+/* Mockup Creator: "Need more than a logo?" box (Oct 9) */
+.mk-more-acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.mk-more-btn{display:flex;flex-direction:column;gap:2px;text-align:left;font:inherit;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 11px;cursor:pointer;color:var(--ink)}
+.mk-more-btn:hover{border-color:var(--accent)}
+.mk-more-btn b{font-size:13.5px;color:var(--accent)}
+.mk-more-btn span{font-size:12px;color:var(--ink-3)}

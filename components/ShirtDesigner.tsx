@@ -327,7 +327,7 @@ function TemplateCard({ t, onUse }: { t: Template; onUse: () => void }) {
  * Saving gives back an SVG (the art, fonts built in), a PNG (for mockups and previews), the editable layers and where it sits.
  */
 export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClose, saveLabel = "Save design" }: {
-  start?: { doc?: DesignDoc | null; imageUrl?: string; name?: string; /** where a picture sits now (artboard units: center + width) */ at?: { x: number; y: number; w: number } };
+  start?: { doc?: DesignDoc | null; imageUrl?: string; name?: string; /** where a picture sits now (artboard units: center + width) */ at?: { x: number; y: number; w: number }; /** the panel to open on ("" = none: just the shirt) */ tool?: Tool | "" };
   shirt?: LabShirt | null;
   logos?: { id: string; name: string; url: string }[];
   onSave: (out: DesignerOut) => Promise<string | void> | string | void;
@@ -338,7 +338,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const [sel, setSel] = useState("");
   const [name, setName] = useState(start?.name || "");
   const [bg, setBg] = useState(shirt?.hex || SHIRT_BG[0].hex);
-  const [tool, setTool] = useState<Tool | "">(start?.doc || start?.imageUrl ? "" : "ideas");
+  const [tool, setTool] = useState<Tool | "">(start?.tool !== undefined ? start.tool : start?.doc || start?.imageUrl ? "" : "ideas");
   const [tplCat, setTplCat] = useState(TEMPLATE_CATS[0]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");

@@ -203,7 +203,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [custMocks, setCustMocks] = useState<{ name: string; url: string; pdf: boolean }[]>([]);
   const [custBig, setCustBig] = useState(false);
   // the shirt designer, opened for one imprint (new design, or editing its logo)
-  const [designerFor, setDesignerFor] = useState<{ imId: string; side: Side; shirt: LabShirt | null; start: { doc?: DesignDoc | null; imageUrl?: string; name?: string; at?: { x: number; y: number; w: number } } } | null>(null);
+  const [designerFor, setDesignerFor] = useState<{ imId: string; side: Side; shirt: LabShirt | null; start: { doc?: DesignDoc | null; imageUrl?: string; name?: string; at?: { x: number; y: number; w: number }; tool?: "ideas" | "text" | "art" | "upload" | "names" | "ai" | "" } } | null>(null);
   // quick text typed right into an imprint (shown as a stand-in logo "qt-<imprint>" until the mockup is saved)
   const [qt, setQt] = useState<Record<string, QuickText>>({});
   const qtDone = useRef<Record<string, string>>({});
@@ -750,11 +750,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return { x: 300 + (leftIn + wIn / 2) * 50, y: (topIn + (wIn * r) / 2) * 50, w: wIn * 50 };
   };
   /** Open the Idea Lab on one side of the shirt: for one imprint (edit its art or typed text), or to make something new. */
-  async function openLab(side: Side, im?: Imprint) {
+  async function openLab(side: Side, im?: Imprint, tool?: "ideas" | "art") {
     if (!customerId) return setMsg("Pick the customer first. Designs are saved to their account.");
     if (!line?.style) return setMsg("Pick a garment first so the Idea Lab can show the shirt.");
     const shirt = labShirt(side);
-    if (!im) return setDesignerFor({ imId: "", side, shirt, start: {} });
+    if (!im) return setDesignerFor({ imId: "", side, shirt, start: tool ? { tool } : {} });
     if (qt[im.id]?.text.trim()) return setDesignerFor({ imId: im.id, side, shirt, start: { doc: quickTextDoc(qt[im.id]), name: qt[im.id].text.split("\n")[0].slice(0, 40) } });
     const d = designOf(im);
     if (!d || isQuick(d.id)) return setDesignerFor({ imId: im.id, side, shirt, start: {} });
@@ -762,6 +762,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setDesignerFor({ imId: im.id, side, shirt, start: doc ? { doc, name: d.name } : { imageUrl: urls[d.id], name: d.name, at: labSpot(im) } });
   }
   const openDesigner = (im: Imprint) => openLab(sideOf(im.location), im);
+  /** Type words right onto the shirt: a new text location (the big one on this side when it's free) */
+  const addText = () => {
+    const opts = locsFor(curTab), big = curTab === "front" ? "Full Front" : curTab === "back" ? "Full Back" : "";
+    const loc = big && !imprints.some((i) => i.location === big) ? big : opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0];
+    const im = { ...newImprint(loc), size: big === loc ? '10" wide' : "" };
+    setImprints([...imprints, im]); setTab(curTab); textMode(im, true);
+  };
   /** A design back from the Idea Lab goes on the shirt where it was drawn: size and spot pick the location. */
   function placeFromLab(side: Side, imId: string, d: Design, box: { x: number; y: number; w: number; h: number }, notes = "") {
     const target = imprints.find((x) => x.id === imId) || imprints.find((x) => sideOf(x.location) === side && !x.design_id && !qt[x.id]);
@@ -1570,18 +1577,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             </section>
           )}
-          {/* Idea Lab: design on this side of the shirt (sits above the Imprints panel) */}
-          <button type="button" className={"mk-lab" + (ready ? "" : " mk-off")} disabled={!ready} onClick={() => openLab(curTab)}>
-            <span className="mk-lab-ic" aria-hidden="true">✦</span>
-            <span><b>Add clip art, text, names &amp; numbers to the {curTab === "sleeve" ? "sleeve" : curTab}</b><span>Opens the {curTab === "sleeve" ? "sleeve" : curTab} of this shirt in the Idea Lab: 20,000+ clip art pieces, 1,800 fonts and 60 design ideas. What you make comes right back here.</span></span>
-          </button>
           <section className={"panel" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
-            <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button><button className="btn sm" type="button" title="Type words right onto the shirt" onClick={() => {
-                const opts = locsFor(curTab), big = curTab === "front" ? "Full Front" : curTab === "back" ? "Full Back" : "";
-                const loc = big && !imprints.some((i) => i.location === big) ? big : opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0];
-                const im = { ...newImprint(loc), size: big === loc ? '10" wide' : "" };
-                setImprints([...imprints, im]); setTab(curTab); textMode(im, true);
-              }}>+ Add text</button></div></div>
+            <div className="panel-h"><h2>Imprints</h2><div className="row" style={{ gap: 4 }}><button className="btn sm" type="button" onClick={() => { const opts = locsFor(curTab); setImprints([...imprints, newImprint(opts.find((z) => !imprints.some((i) => i.location === z)) || opts[0])]); setTab(curTab); }}title={`Add a ${curTab === "sleeve" ? "sleeve" : curTab} print location`}>+ Add location</button></div></div>
             <div className="chips mk-tabs">
               {SIDES.map((t) => { const n = imprints.filter((im) => sideOf(im.location) === t.id).length; return <button key={t.id} type="button" className={"chip" + (curTab === t.id ? " on" : "")} onClick={() => setTab(t.id)}>{t.label}{n ? ` (${n})` : ""}</button>; })}
             </div>
@@ -1662,7 +1659,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioOf(designOf(im)) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
                       {/* the location's actions together on the right (Oct 9, Nick) */}
                       <div className="mk-imp-acts">
-                        <button type="button" className="btn sm ghost" onClick={() => openDesigner(im)} title="Do more with this design: text, clip art, pictures">{qt[im.id] ? "Idea Lab" : p.d ? "Open in Idea Lab" : "Idea Lab"}</button>
                         <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
                       </div>
                     </div>
@@ -1670,6 +1666,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 );
               })}
               {orderId && <div className="faint" style={{ fontSize: 12 }}>Changes here (locations, designs, sizes, inks) go back to the order when you save.</div>}
+            </div>
+          </section>
+          {/* more than a logo: its own box, apart from the Imprints panel (Oct 9, Nick) */}
+          <section className={"panel mk-more-box" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
+            <div className="panel-h"><h2>Need more than a logo?</h2></div>
+            <div className="panel-b">
+              <div className="mk-more-acts">
+                <button type="button" className="mk-more-btn" onClick={addText}><b>Add text</b><span>Type words right onto the {curTab === "sleeve" ? "sleeve" : curTab}</span></button>
+                <button type="button" className="mk-more-btn" onClick={() => openLab(curTab, undefined, "ideas")}><b>Use a preset design</b><span>60 design ideas to start from</span></button>
+                <button type="button" className="mk-more-btn" onClick={() => openLab(curTab, undefined, "art")}><b>Open the Idea Lab</b><span>Clip art, 1,800 fonts, names &amp; numbers</span></button>
+              </div>
             </div>
           </section>
         </div>
