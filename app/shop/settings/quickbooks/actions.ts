@@ -3,8 +3,8 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { qboEnv } from "@/lib/qbo/config";
 import { loadTokens, Qbo } from "@/lib/qbo/client";
-import { OWNED_FIELDS, type QboSettings } from "@/lib/qbo/map";
-import { loadQboSettings, runQueue } from "@/lib/qbo/runner";
+import { customerDiff, OWNED_FIELDS, ownedFromOurs, ownedFromQbo, type OurCustomer, type Owned, type OwnedField, type QboSettings } from "@/lib/qbo/map";
+import { claimLock, loadQboSettings, releaseLock, runQueue } from "@/lib/qbo/runner";
 import { adoptExisting, confirmProposals, runMatching, setPrimary } from "@/lib/qbo/matchRun";
 import { SITE_URL } from "@/lib/config";
 
@@ -22,6 +22,7 @@ export type QboStatus = {
   env: ReturnType<typeof qboEnv>; webhookUrl: string; callbackUrl: string;
   connected: boolean; realm: string; company: string; connectedBy: string; connectedAt: string; accessExpires: string; refreshExpires: string; tokenEnv: string;
   settings: QboSettings; counts: Record<string, number>; lastRunAt: string | null; lastError: string | null; lastErrorAt: string | null; matchedAt: string | null; cdcAt: string | null; locked: boolean;
+  realmWarning: string | null; previousRealm: string; liveSince: string | null; envMismatch: string | null;
 };
 
 export async function qboStatus(): Promise<R<QboStatus>> {
@@ -43,6 +44,8 @@ export async function qboStatus(): Promise<R<QboStatus>> {
       accessExpires: t?.access_expires_at || "", refreshExpires: t?.refresh_expires_at || "", tokenEnv: t?.env || "",
       settings, counts, lastRunAt: s?.last_run_at || null, lastError: s?.last_error || null, lastErrorAt: s?.last_error_at || null,
       matchedAt: s?.matched_at || null, cdcAt: s?.cdc_at || null, locked: !!(s?.lock_until && new Date(s.lock_until).getTime() > Date.now()),
+      realmWarning: s?.realm_warning || null, previousRealm: String(s?.previous_realm_id || ""), liveSince: s?.live_since || null,
+      envMismatch: t?.env && env.env && t.env !== env.env ? `The QuickBooks sign-in is for ${t.env}, but QBO_ENV is ${env.env}. Nothing runs until you connect again.` : null,
     } };
   } catch (e) { return fail(e); }
 }
@@ -91,7 +94,10 @@ export async function qboLists(): Promise<R<QboLists>> {
 }
 
 const EDITABLE = ["enabled", "mode", "live_from_number", "adopt_from_number", "item_map", "deposit_account_id", "payment_method_map", "tax_mode", "tax_code_id", "exemption_reason_id", "term_map", "default_term_id", "discount_account_id", "po_field_id", "po_field_name", "class_id", "department_id"] as const;
-export async function qboSaveSettings(patch: Partial<QboSettings>): Promise<R> {
+/** The SQL that starts order numbers at `n` (Nicholas runs it at the cutover; the portal never changes numbering itself). */
+const restartSql = (n: number) => `alter sequence public.order_number_seq restart with ${n};`;
+
+export async function qboSaveSettings(patch: Partial<QboSettings>, opts: { allowLowLiveFrom?: boolean } = {}): Promise<R> {
   try {
     const { admin, email } = await owner();
     const row: Record<string, unknown> = {};
@@ -99,17 +105,44 @@ export async function qboSaveSettings(patch: Partial<QboSettings>): Promise<R> {
     if (row.mode && !["preview", "live"].includes(String(row.mode))) return { ok: false, error: "Mode is preview or live." };
     if (row.tax_mode && !["qbo_ast", "tax_line", "none"].includes(String(row.tax_mode))) return { ok: false, error: "Unknown sales tax setting." };
     for (const k of ["live_from_number", "adopt_from_number"] as const) if (row[k] !== undefined && !(Number.isInteger(+row[k]!) && +row[k]! > 0)) return { ok: false, error: "Order numbers must be whole numbers." };
-    const live = +(row.live_from_number ?? 0), adopt = +(row.adopt_from_number ?? 0);
-    if (live && adopt && adopt > live) return { ok: false, error: "The adopt-from number can't be above the live-from number." };
-    if (row.mode === "live" || row.enabled === true) {
-      const cur = await loadQboSettings(admin);
-      const next = { ...cur, ...row } as QboSettings;
-      if (next.enabled && next.mode === "live" && !(await loadTokens(admin))) return { ok: false, error: "Connect QuickBooks before turning live sending on." };
+    const cur = await loadQboSettings(admin);
+    const next = { ...cur, ...row } as QboSettings & { realm_warning?: string | null };
+    if (next.adopt_from_number > next.live_from_number) return { ok: false, error: "Printavo's invoices can't start above the number our own invoices start at." };
+    if (next.live_from_number < 50000 && !opts.allowLowLiveFrom) return { ok: false, error: `Invoices from #${next.live_from_number}: below #50,000 means the portal would make QuickBooks invoices for transition orders Printavo also sends. Confirm to save it anyway.` };
+    if (next.adopt_from_number < 40000 && !opts.allowLowLiveFrom) return { ok: false, error: "Printavo's invoices from below #40,000 would touch Printavo's own history. Confirm to save it anyway." };
+    const wasLive = cur.enabled && cur.mode === "live", goingLive = next.enabled && next.mode === "live" && !wasLive;
+    if (goingLive) {
+      if (!(await loadTokens(admin))) return { ok: false, error: "Connect QuickBooks before turning live sending on." };
+      const { data: s0 } = await admin.from("qbo_settings").select("realm_warning").eq("id", 1).maybeSingle();
+      if (s0?.realm_warning) return { ok: false, error: "QuickBooks was connected to a different company than before. Check the warning at the top (and run Customer matching again) before going live." };
+      // new orders must already be numbered from live_from up, or they'd be treated as Printavo's and never invoiced
+      const { data: nextNo, error: seqErr } = await admin.rpc("qbo_next_order_number");
+      if (seqErr) return { ok: false, error: `Couldn't check the order numbering: ${seqErr.message}` };
+      if (+(nextNo as number) < next.live_from_number) {
+        return { ok: false, error: `New orders are still numbered #${(+(nextNo as number)).toLocaleString("en-US")}. Start numbering at ${next.live_from_number.toLocaleString("en-US")} first (Supabase → SQL editor: ${restartSql(next.live_from_number)}), then switch to Live.` };
+      }
+      row.live_since = new Date().toISOString();
     }
     const { error } = await admin.from("qbo_settings").update({ ...row, updated_at: new Date().toISOString(), updated_by: email }).eq("id", 1);
     if (error) return { ok: false, error: error.message };
-    return { ok: true, msg: "Saved." };
+    return { ok: true, msg: goingLive ? "Saved: live from now on." : "Saved." };
   } catch (e) { return fail(e); }
+}
+
+/** The next order number (for the cutover checklist). */
+export async function qboNextOrderNumber(): Promise<R<{ next: number; sql: string }>> {
+  try {
+    const { admin } = await owner();
+    const qs = await loadQboSettings(admin);
+    const { data, error } = await admin.rpc("qbo_next_order_number");
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: { next: +(data as number), sql: restartSql(qs.live_from_number) } };
+  } catch (e) { return fail(e); }
+}
+
+/** Clear the "connected to a different company" warning once the owner has looked at it. */
+export async function qboDismissRealmWarning(): Promise<R> {
+  try { const { admin, email } = await owner(); await admin.from("qbo_settings").update({ realm_warning: null, updated_by: email }).eq("id", 1); return { ok: true }; } catch (e) { return fail(e); }
 }
 
 /* ---------- queue ---------- */
@@ -176,14 +209,14 @@ export async function qboQueueAction(id: number, action: "retry" | "skip" | "res
 export async function qboRunNow(preview: boolean): Promise<R<Record<string, unknown>>> {
   try {
     const { admin } = await owner();
-    const { data: got } = await admin.rpc("qbo_claim", { p_seconds: 295 });
-    if (!got) return { ok: false, error: "A sync is running right now; try again in a minute." };
+    const lockId = await claimLock(admin);
+    if (!lockId) return { ok: false, error: "A sync is running right now; try again in a minute." };
     try {
       const qs = await loadQboSettings(admin);
       const mode = preview || !qs.enabled ? "preview" : "auto";
-      const stats = await runQueue(admin, { mode, deadline: Date.now() + 240000 });
+      const stats = await runQueue(admin, { mode, deadline: Date.now() + 240000, lockId });
       return { ok: true, data: stats as unknown as Record<string, unknown>, msg: `${stats.mode === "live" ? "Sent" : "Previewed"} ${stats.processed}: ${Object.entries(stats.byStatus).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(", ") || "nothing waiting"}.${stats.error ? " " + stats.error : ""}` };
-    } finally { await admin.rpc("qbo_release"); }
+    } finally { await releaseLock(admin, lockId); }
   } catch (e) { return fail(e); }
 }
 
@@ -284,7 +317,10 @@ export async function qboLinkManual(localId: string, qboId: string): Promise<R> 
     const { data: ex } = await admin.from("qbo_links").select("local_id").eq("realm_id", qs.realm_id).eq("entity", "customer").eq("qbo_id", id).maybeSingle();
     if (ex) return { ok: false, error: `"${rec.DisplayName}" is already linked${ex.local_id === localId ? " to this customer" : " to another customer"}.` };
     const { data: has } = await admin.from("qbo_links").select("id").eq("realm_id", qs.realm_id).eq("entity", "customer").eq("local_id", localId).eq("is_primary", true).maybeSingle();
-    const { error } = await admin.from("qbo_links").insert({ realm_id: qs.realm_id, entity: "customer", local_id: localId, qbo_id: id, source: "manual", is_primary: !has, sync_token: rec.SyncToken, last_seen_qbo: rec, last_seen_at: new Date().toISOString(), created_by: email });
+    // baselines on both sides: only what changes here from now on is sent (Differences lists the rest)
+    const { data: ours } = await admin.from("customers").select("id, company, name, email, phone, address, ship_address, tax_exempt, payment_terms").eq("id", localId).maybeSingle();
+    if (!ours) return { ok: false, error: "That customer of ours wasn't found." };
+    const { error } = await admin.from("qbo_links").insert({ realm_id: qs.realm_id, entity: "customer", local_id: localId, qbo_id: id, source: "manual", is_primary: !has, sync_token: rec.SyncToken, last_seen_qbo: rec, last_seen_at: new Date().toISOString(), created_by: email, ours_base: ownedFromOurs(ours as OurCustomer, qs), last_sent: ownedFromQbo(rec as Parameters<typeof ownedFromQbo>[0]) });
     if (error) return { ok: false, error: error.message };
     await admin.from("qbo_match_proposals").update({ status: "confirmed", local_id: localId, decided_by: email, decided_at: new Date().toISOString() }).eq("realm_id", qs.realm_id).eq("qbo_id", id).in("status", ["proposed", "unmatched"]);
     return { ok: true, msg: `Linked to "${rec.DisplayName}".` };
@@ -324,3 +360,81 @@ export async function qboLog(onlyErrors: boolean): Promise<R<LogRow[]>> {
   } catch (e) { return fail(e); }
 }
 
+/* ---------- differences between ours and QuickBooks (linked customers) ---------- */
+
+/** Field groups the owner can opt in to send, all at once. */
+const FIELD_GROUPS: Record<string, OwnedField[]> = { names: ["DisplayName", "CompanyName"], emails: ["PrimaryEmailAddr"], phones: ["PrimaryPhone"], addresses: ["BillAddr", "ShipAddr"], terms: ["SalesTermRef"], taxable: ["Taxable"] };
+export type DiffRow = { linkId: number; localId: string; localName: string; qboId: string; fields: { field: string; label: string; ours: string; qbo: string }[]; seenAt: string | null };
+
+/** Linked customers (primary links) whose QuickBooks values differ from ours in fields that weren't changed here since linking. */
+export async function qboDifferences(): Promise<R<{ rows: DiffRow[]; unread: number }>> {
+  try {
+    const { admin } = await owner();
+    const qs = await loadQboSettings(admin);
+    const { data: links } = await admin.from("qbo_links").select("id, local_id, qbo_id, last_sent, last_seen_qbo, last_seen_at, qbo_owned_fields, ours_base").eq("realm_id", qs.realm_id).eq("entity", "customer").eq("is_primary", true).limit(5000);
+    const ls = links || [];
+    const ids = [...new Set(ls.map((l) => String(l.local_id)))];
+    const cs = new Map<string, OurCustomer>();
+    for (let i = 0; i < ids.length; i += 300) {
+      const { data } = await admin.from("customers").select("id, company, name, email, phone, address, ship_address, tax_exempt, payment_terms").in("id", ids.slice(i, i + 300));
+      for (const c of (data || []) as OurCustomer[]) cs.set(c.id, c);
+    }
+    const rows: DiffRow[] = [];
+    let unread = 0;
+    for (const l of ls) {
+      const c = cs.get(String(l.local_id));
+      if (!c) continue;
+      if (!l.last_seen_qbo) { unread++; continue; }
+      const cur = l.last_seen_qbo as Parameters<typeof ownedFromQbo>[0] & { Id: string; SyncToken: string };
+      const d = customerDiff(c, cur, (l.last_sent as Owned) || ownedFromQbo(cur), qs, l.qbo_owned_fields || [], [], (l.ours_base as Owned) || ownedFromOurs(c, qs));
+      if (d.differences.length) rows.push({ linkId: l.id, localId: c.id, localName: String(c.company || c.name || ""), qboId: String(l.qbo_id), fields: d.differences, seenAt: l.last_seen_at });
+    }
+    rows.sort((a, b) => a.localName.localeCompare(b.localName));
+    return { ok: true, data: { rows, unread } };
+  } catch (e) { return fail(e); }
+}
+
+/** Read every linked customer from QuickBooks (100 at a time) so the differences are current. Read only. */
+export async function qboReadLinkedCustomers(): Promise<R> {
+  try {
+    const { admin } = await owner();
+    const qs = await loadQboSettings(admin);
+    const { data: links } = await admin.from("qbo_links").select("id, qbo_id, last_sent").eq("realm_id", qs.realm_id).eq("entity", "customer").limit(5000);
+    const byQ = new Map<string, Record<string, unknown>>((links || []).map((l: Record<string, unknown>) => [String(l.qbo_id), l] as [string, Record<string, unknown>]));
+    const q = new Qbo(admin, { entity: "customer" });
+    const all = [...byQ.keys()];
+    let n = 0;
+    for (let i = 0; i < all.length; i += 100) {
+      const recs = await q.query<{ Id: string; SyncToken: string }>("Customer", `WHERE Id IN (${all.slice(i, i + 100).map((x) => `'${x}'`).join(", ")}) AND Active IN (true, false)`);
+      for (const r of recs) {
+        const l = byQ.get(String(r.Id)); if (!l) continue;
+        await admin.from("qbo_links").update({ last_seen_qbo: r, last_seen_at: new Date().toISOString(), sync_token: r.SyncToken, ...(l.last_sent ? {} : { last_sent: ownedFromQbo(r as Parameters<typeof ownedFromQbo>[0]) }) }).eq("id", l.id);
+        n++;
+      }
+    }
+    return { ok: true, msg: `Read ${n} linked customers from QuickBooks.` };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * Opt in: send ours for a group of fields (names, emails, phones, addresses, terms, taxable), for every linked customer
+ * with a difference there, or only the ones given. Their baseline for those fields is cleared so the next run sends ours.
+ */
+export async function qboSendOurs(group: string, linkIds?: number[]): Promise<R> {
+  try {
+    const { admin } = await owner();
+    const fields = FIELD_GROUPS[group];
+    if (!fields) return { ok: false, error: "Unknown field group." };
+    const r = await qboDifferences();
+    if (!r.ok) return r;
+    const pick = r.data!.rows.filter((x) => (!linkIds || linkIds.includes(x.linkId)) && x.fields.some((f) => fields.includes(f.field as OwnedField)));
+    for (const x of pick) {
+      const { data: l } = await admin.from("qbo_links").select("ours_base").eq("id", x.linkId).maybeSingle();
+      const base = { ...((l?.ours_base as Record<string, unknown>) || {}) };
+      for (const f of fields) delete base[f];
+      await admin.from("qbo_links").update({ ours_base: base, updated_at: new Date().toISOString() }).eq("id", x.linkId);
+      await admin.rpc("qbo_enqueue", { p_entity: "customer", p_local_id: x.localId, p_op: "upsert", p_reason: `send ours: ${group}` });
+    }
+    return { ok: true, msg: `${pick.length} customer${pick.length === 1 ? "" : "s"} queued to send our ${group}. They go with the next run (preview first, if the sync is in preview).` };
+  } catch (e) { return fail(e); }
+}

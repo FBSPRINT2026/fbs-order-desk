@@ -6,7 +6,8 @@ import { ITEM_KEYS, type QboSettings } from "@/lib/qbo/map";
 import {
   qboAdopt, qboClearChanged, qboConfirm, qboFindCustomers, qboLinkManual, qboLists, qboLog, qboMatching, qboQueue, qboQueueAction, qboQueueAll,
   qboReject, qboRunMatching, qboRunNow, qboSaveSettings, qboSetPrimary, qboStatus, qboTest, qboUnlink,
-  type LinkRow, type LogRow, type Option, type ProposalRow, type QboLists, type QboStatus, type QueueItem,
+  qboDifferences, qboDismissRealmWarning, qboNextOrderNumber, qboReadLinkedCustomers, qboSendOurs,
+  type DiffRow, type LinkRow, type LogRow, type Option, type ProposalRow, type QboLists, type QboStatus, type QueueItem,
 } from "@/app/shop/settings/quickbooks/actions";
 
 /**
@@ -37,6 +38,8 @@ export default function QuickBooksSettings() {
   return (
     <div className="stack" style={{ gap: 14 }}>
       {flash && <div className={flash.startsWith("Connected") ? "faint" : "err"} style={{ fontSize: 14 }}>{flash}</div>}
+      {st.realmWarning && <div className="err" style={{ fontSize: 14 }}>{st.realmWarning} <button className="btn sm ghost" type="button" onClick={() => qboDismissRealmWarning().then(load)}>I&apos;ve checked: dismiss</button></div>}
+      {st.envMismatch && <div className="err" style={{ fontSize: 14 }}>{st.envMismatch}</div>}
       <p className="faint" style={{ margin: 0, maxWidth: 860 }}>
         Sends our customers, invoices (#{st.settings.live_from_number} and up) and payments to QuickBooks, taking over from Printavo&apos;s QuickBooks sync at the cutover.
         Customers are linked by QuickBooks&apos; own customer number, so renaming a customer here renames the same customer in QuickBooks and its history stays with it.
@@ -75,7 +78,11 @@ function Setup({ st, reload }: { st: QboStatus; reload: () => void }) {
     const r = await f();
     setBusy(""); setMsg(r.ok ? r.msg || "Done." : r.error || "Didn't work."); reload();
   };
-  const save = (patch: Partial<QboSettings> = s) => run("save", () => qboSaveSettings(patch));
+  const save = (patch: Partial<QboSettings> = s) => run("save", async () => {
+    const r = await qboSaveSettings(patch);
+    if (!r.ok && /Confirm to save it anyway/.test(r.error) && confirm(r.error)) return qboSaveSettings(patch, { allowLowLiveFrom: true });
+    return r;
+  });
   const disconnect = async () => {
     if (!confirm("Disconnect QuickBooks? The sync is turned off. Links and history are kept; connect again to carry on.")) return;
     setBusy("disc");
@@ -127,6 +134,8 @@ function Setup({ st, reload }: { st: QboStatus; reload: () => void }) {
           </div>
         </div>
       </section>
+
+      <Cutover st={st} />
 
       <section className="panel">
         <div className="panel-h"><h2>What goes where in QuickBooks</h2><span className="faint" style={{ fontSize: 12 }}>{st.connected ? (lists ? "Lists from QuickBooks." : listErr ? `Couldn't read QuickBooks' lists: ${listErr}` : "Reading QuickBooks' lists…") : "Connect to pick from QuickBooks' lists; until then, type QuickBooks ids."}</span></div>
@@ -198,6 +207,68 @@ function Pick({ value, options, onChange, blank = "(not set)" }: { value: string
       {!known && <option value={value}>#{value} (not found)</option>}
       {options.map((o) => <option key={o.id} value={o.id}>{o.name}{o.note ? ` (${o.note})` : ""}</option>)}
     </select>
+  );
+}
+
+function Cutover({ st }: { st: QboStatus }) {
+  const [seq, setSeq] = useState<{ next: number; sql: string } | null>(null);
+  useEffect(() => { qboNextOrderNumber().then((r) => r.ok && setSeq(r.data!)); }, []);
+  const lf = st.settings.live_from_number;
+  const numbered = !!seq && seq.next >= lf;
+  const steps: [boolean, ReactNode][] = [
+    [st.connected, "Connect QuickBooks and check the connection."],
+    [!!st.matchedAt, "Customer matching: run it, confirm, link stragglers, then \"Link Printavo's invoices and payments\"."],
+    [st.settings.enabled, "A week before: turn the sync on in preview, press Queue everything, then Preview now. Clear everything under Needs review."],
+    [false, "Nov 1, after Printavo's last QuickBooks sync: turn off Printavo's QuickBooks integration, then press \"Link Printavo's invoices and payments\" once more."],
+    [numbered, <>Start numbering orders at {lf.toLocaleString("en-US")}: next order is #{seq ? seq.next.toLocaleString("en-US") : "…"}.{!numbered && seq && <> In Supabase → SQL editor run <code data-notranslate>{seq.sql}</code> (Live won&apos;t switch on until this is done).</>}</>],
+    [st.settings.enabled && st.settings.mode === "live", <>Switch the mode to Live and Save.{st.liveSince ? ` (Live since ${when(st.liveSince)}.)` : ""} Watch the queue and the log for the first hour.</>],
+  ];
+  return (
+    <section className="panel">
+      <div className="panel-h"><h2>Cutover checklist</h2><span className="faint" style={{ fontSize: 12 }}>Printavo off, the portal takes over QuickBooks (Nov 1–2)</span></div>
+      <div className="panel-b stack" style={{ gap: 6 }}>
+        {steps.map(([done, text], i) => <Check key={i} ok={done}><span style={{ fontSize: 13.5 }}>{i + 1}. {text}</span></Check>)}
+      </div>
+    </section>
+  );
+}
+
+const GROUP_OF: Record<string, string> = { DisplayName: "names", CompanyName: "names", PrimaryEmailAddr: "emails", PrimaryPhone: "phones", BillAddr: "addresses", ShipAddr: "addresses", SalesTermRef: "terms", Taxable: "taxable" };
+function Differences() {
+  const [d, setD] = useState<{ rows: DiffRow[]; unread: number } | null>(null);
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState("");
+  const load = useCallback(() => qboDifferences().then((r) => (r.ok ? setD(r.data!) : setMsg(r.error))), []);
+  useEffect(() => { load(); }, [load]);
+  const run = async (key: string, f: () => Promise<{ ok: boolean; error?: string; msg?: string }>) => { setBusy(key); const r = await f(); setBusy(""); setMsg(r.ok ? r.msg || "Done." : r.error || "Didn't work."); load(); };
+  const counts: Record<string, number> = {};
+  for (const r of d?.rows || []) for (const g of new Set(r.fields.map((f) => GROUP_OF[f.field]))) counts[g] = (counts[g] || 0) + 1;
+  return (
+    <section className="panel">
+      <div className="panel-h"><h2>Differences between ours and QuickBooks</h2><span className="faint" style={{ fontSize: 12 }}>Linked customers whose details differ. Nothing here is sent unless you choose to: only what changes here after linking goes on its own.</span></div>
+      <div className="panel-b stack" style={{ gap: 8 }}>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <button className="btn sm" type="button" disabled={!!busy} onClick={() => run("read", qboReadLinkedCustomers)}>{busy === "read" ? "Reading…" : "Read linked customers from QuickBooks"}</button>
+          {Object.entries(counts).map(([g, n]) => <button key={g} className="btn sm ghost" type="button" disabled={!!busy} onClick={() => { if (confirm(`Send our ${g} to QuickBooks for ${n} customer${n === 1 ? "" : "s"}? QuickBooks' ${g} for them are replaced by ours.`)) run("g" + g, () => qboSendOurs(g)); }}>Send our {g} ({n})</button>)}
+        </div>
+        {msg && <div className="faint">{msg}</div>}
+        {d && d.unread > 0 && <div className="faint" style={{ fontSize: 12.5 }}>{d.unread} linked customer{d.unread === 1 ? "" : "s"} not read from QuickBooks yet.</div>}
+        {!d ? <div className="empty">Loading…</div> : !d.rows.length ? <div className="empty">No differences.</div> : (
+          <div className="tbl-wrap"><table className="tbl" style={{ minWidth: 760 }}>
+            <thead><tr><th>Our customer</th><th>Field</th><th>Ours</th><th>QuickBooks</th><th /></tr></thead>
+            <tbody>
+              {d.rows.slice(0, 500).flatMap((r) => r.fields.map((f, i) => (
+                <tr key={r.linkId + f.field} style={{ cursor: "default" }}>
+                  <td>{i === 0 ? <a href={`/shop/customers/${r.localId}`}>{r.localName}</a> : ""}{i === 0 && <span className="faint" style={{ fontSize: 12 }}> #{r.qboId}</span>}</td>
+                  <td>{f.label}</td><td style={{ fontSize: 13 }}>{f.ours}</td><td style={{ fontSize: 13 }} className="faint">{f.qbo || "(blank)"}</td>
+                  <td className="r"><button className="btn sm ghost" type="button" disabled={!!busy} onClick={() => run("one", () => qboSendOurs(GROUP_OF[f.field], [r.linkId]))}>Send ours</button></td>
+                </tr>
+              )))}
+            </tbody>
+          </table></div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -311,6 +382,8 @@ function Matching({ st }: { st: QboStatus }) {
           )}
         </div>
       </section>
+
+      <Differences />
 
       {(data?.ourWithout.length || 0) > 0 && (
         <section className="panel">
