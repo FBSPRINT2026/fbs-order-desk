@@ -57,3 +57,8 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke execute on function public.search_archived_orders(text[], int) from public, anon;
 grant execute on function public.search_archived_orders(text[], int) to authenticated, service_role;
+
+-- Note (Oct 9, 2026, QuickBooks review): the live database has two search_archived_orders functions:
+-- search_archived_orders(p_words text[], p_limit integer), the current one, and an older
+-- search_archived_orders(p_q text, p_limit integer) left from before. The older one is unused; it's recorded here
+-- and deliberately not dropped.
