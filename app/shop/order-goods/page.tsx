@@ -17,6 +17,11 @@ type Line = { key: string; brand: string; style: string; color: string; size: st
 type Hit = { styleID: number; brand: string; style: string; title: string; image: string };
 type Recent = { id: string; order_id: string | null; number: number | null; label: string; supplier_order: string; status: string; total: number | null; expected_date: string | null; lines: { qty: number; label: string }[]; created_by: string; created_at: string };
 const SS_METHODS: [string, string][] = [["1", "Ground (S&S picks)"], ["40", "UPS Ground"], ["14", "FedEx Ground"], ["16", "UPS 3 Day Select"], ["3", "UPS 2nd Day Air"], ["2", "UPS Next Day Air"], ["6", "Will call (we pick up)"]];
+/** the style's page on ssactivewear.com (every color with swatches): /p/next_level/6210; Bella + Canvas is "bella" there */
+const ssUrl = (brand: string, style: string) => {
+  const b = /bella/i.test(brand) ? "bella" : brand.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return b && style ? `https://www.ssactivewear.com/p/${b}/${encodeURIComponent(style.toLowerCase())}` : "";
+};
 const day = (s: string | null) => (s ? new Date(s.length === 10 ? s + "T12:00:00" : s).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "");
 
 export default function OrderGoodsPage() {
@@ -165,7 +170,7 @@ function OrderGoods() {
           {pick && (
             <div className="og-pick">
               <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <b>{pick.brand} {pick.style}</b>
+                <a className="og-ss" href={ssUrl(pick.brand, pick.style)} target="_blank" rel="noreferrer" title="Open this style on ssactivewear.com (all its colors)"><b>{pick.brand} {pick.style}</b> ↗</a>
                 <select value={color} onChange={(e) => { setColor(e.target.value); setQty({}); }} aria-label="Color">{pick.colors.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}</select>
                 <button type="button" className="btn ghost sm" onClick={() => setPick(null)}>Close</button>
               </div>
@@ -188,7 +193,7 @@ function OrderGoods() {
               <thead><tr><th>Garment</th>{asks && <th>Requested</th>}<th>{asks ? "Found color" : "Color"}</th><th>Size</th><th className="r">Qty</th><th className="r">Price</th><th className="r">In stock</th><th /></tr></thead>
               <tbody>{lines.map((l, i) => (
                 <tr key={l.key} className={!l.sku ? "miss" : l.stock < l.qty ? "low" : ""}>
-                  <td>{[l.brand, l.style].filter(Boolean).join(" ") || "—"}</td>
+                  <td>{l.style && ssUrl(l.brand, l.style) ? <a className="og-ss" href={ssUrl(l.brand, l.style)} target="_blank" rel="noreferrer" title="Open this style on ssactivewear.com (all its colors)">{[l.brand, l.style].filter(Boolean).join(" ")} ↗</a> : [l.brand, l.style].filter(Boolean).join(" ") || "—"}</td>
                   {asks && <td>{l.asked || ""}</td>}
                   <td>{l.asked && l.options?.length ? (
                     <span className={"og-color" + (l.sure ? "" : " check")} title={l.sure ? "" : "A best guess: check it"}>
