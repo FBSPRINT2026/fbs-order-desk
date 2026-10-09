@@ -1595,10 +1595,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       <select aria-label="Location" className="mk-loc" value={im.location} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: e.target.value } : x)))}>{!LOCATIONS.includes(im.location) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}</select>
                       <select aria-label={`Decoration method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x))); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                     </div>
-                    <div className="mk-kind" role="group" aria-label="Logo or text">
-                      <button type="button" className={qt[im.id] ? "" : "on"} onClick={() => qt[im.id] && textMode(im, false)}>Logo</button>
-                      <button type="button" className={qt[im.id] ? "on" : ""} onClick={() => !qt[im.id] && textMode(im, true)}>Text</button>
-                    </div>
+                    {/* Upload logo right under the location (Oct 9, Nick: no Logo / Text switch; text comes from + Add Text) */}
+                    <label className="btn sm mk-upload" style={{ cursor: "pointer" }}>Upload logo<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; if (qt[im.id]) textMode(im, false); uploadNew(im, f); }} /></label>
                     {qt[im.id] ? (() => {
                       const q = qt[im.id];
                       const setQ = (patch: Partial<QuickText>) => setQt((all) => ({ ...all, [im.id]: { ...all[im.id], ...patch } }));
@@ -1665,7 +1663,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {/* the location's actions together on the right (Oct 9, Nick) */}
                       <div className="mk-imp-acts">
                         <button type="button" className="btn sm ghost" onClick={() => openDesigner(im)} title="Do more with this design: text, clip art, pictures">{qt[im.id] ? "Idea Lab" : p.d ? "Open in Idea Lab" : "Idea Lab"}</button>
-                        <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
                         <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
                       </div>
                     </div>
