@@ -678,7 +678,8 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
   const total = orderable.reduce((a, l) => a + l.price * (qty[l.key] || 0), 0);
   const payload = () => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: qty[l.key] || 0, price: l.price, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, warehouses: whMode });
   async function test() { setBusy("test"); setErr(""); setDry(null); const r = await orderBlanksSS(o.id, { ...payload(), test: true }); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); setDry(r.results || []); }
-  async function place() { setBusy("place"); setErr(""); const r = await orderBlanksSS(o.id, { ...payload(), test: false }); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); onDone(`Ordered from S&S for #${o.number}: order ${r.results?.map((x) => x.orderNumber).join(", ")}.`); }
+  const [sure, setSure] = useState(false);
+  async function place() { if (!sure) { setSure(true); return; } setSure(false); setBusy("place"); setErr(""); const r = await orderBlanksSS(o.id, { ...payload(), test: false }); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); onDone(`Ordered from S&S for #${o.number}: order ${r.results?.map((x) => x.orderNumber).join(", ")}.`); }
   async function record() { setBusy("rec"); setErr(""); const r = await recordBlanks(o.id, { ...m, expected_date: m.expected_date || null }); setBusy(""); if (!r.ok) return setErr(r.error || "Couldn't save."); onDone(`Recorded the blanks order for #${o.number}.`); }
   return (
     <div className="pp-modal" role="dialog" aria-modal="true" aria-label={`Order blanks for #${o.number}`} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
@@ -712,8 +713,9 @@ function OrderBlanks({ o, who, onClose, onDone }: { o: O; who: string; onClose: 
               </>)}
               {err && <div className="pv-err">{err}</div>}
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <button type="button" className="btn" disabled={!plan.ss || !orderable.length || !!busy} onClick={test}>{busy === "test" ? "Checking…" : "1. Check stock & card (dry run)"}</button>
-                <button type="button" className="btn primary" disabled={!plan.ss || !dry || !orderable.length || !!busy} onClick={place} title={dry ? "" : "Run the dry run first"}>{busy === "place" ? "Ordering…" : `2. Place the order with S&S${total ? ` · ~${money(total)}` : ""}`}</button>
+                <button type="button" className="btn" disabled={!plan.ss || !orderable.length || !!busy} onClick={test} title="Where it ships from and what it costs (nothing is ordered)">{busy === "test" ? "Checking…" : "Where does it ship from?"}</button>
+                <button type="button" className={"btn " + (sure ? "danger" : "primary")} disabled={!plan.ss || !orderable.length || !!busy} onClick={place} title="Click, then confirm">{busy === "place" ? "Ordering…" : sure ? `Yes, buy from S&S${total ? ` · ~${money(total)}` : ""}` : `Place the order with S&S${total ? ` · ~${money(total)}` : ""}`}</button>
+                {sure && <button type="button" className="btn ghost" onClick={() => setSure(false)}>Cancel</button>}
                 <span className="spacer" />
                 <button type="button" className="btn ghost" onClick={() => setOther((x) => !x)}>{other ? "Hide" : "Ordered it elsewhere?"}</button>
               </div>

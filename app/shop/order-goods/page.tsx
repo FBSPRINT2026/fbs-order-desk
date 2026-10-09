@@ -111,14 +111,7 @@ function OrderGoods() {
   const pcs = orderable.reduce((a, l) => a + l.qty, 0), total = orderable.reduce((a, l) => a + l.price * l.qty, 0);
   const po = (label || (order ? `#${order.number}` : cust ? `${cust.name} (ahead of order)` : "Stock")).trim();
   const payload = (test: boolean) => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: l.qty, price: l.price, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, test, warehouses: whMode, label: po, quote, orderId: order?.id || null, customerId: cust?.id || null, activityId: email?.id || null });
-  async function check() {
-    setBusy("test"); setErr(""); setDry(null); setSure(false); setFrom({});
-    const r = await placeGoods(payload(true)); setBusy("");
-    if (!r.ok) return setErr(r.error || "S&S said no.");
-    const f: Record<string, { warehouse: string; qty: number }[]> = {};
-    for (const x of ("from" in r && r.from) || []) f[x.sku] = [...(f[x.sku] || []), { warehouse: x.warehouse, qty: x.qty }];
-    setFrom(f); setDry(r.results || []);
-  }
+
   const whName = (w: string) => ({ TX: "Fort Worth", KS: "Kansas", IL: "Illinois", GA: "Georgia", OH: "Ohio", KY: "Kentucky", PA: "Pennsylvania", NV: "Nevada", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Massachusetts", DS: "Mill direct" } as Record<string, string>)[w] || w;
   const away = Object.values(from).flat().filter((x) => x.warehouse !== "TX");
   // live: where the list ships from, as soon as it has goods and whenever a line, quantity or the choice changes
@@ -281,9 +274,8 @@ function OrderGoods() {
           {dry && <div className="okmsg">Checked (nothing sent to S&amp;S): {dry.map((d) => `${whName(d.warehouse) || "warehouse"} · ~${money(d.total)}`).join("; ")} · UPS Ground. Place the order when it looks right.</div>}
           {err && <div className="pv-err">{err}</div>}
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <button type="button" className="btn" disabled={!orderable.length || !!busy} onClick={check}>{busy === "test" ? "Checking…" : "1. Check stock & card (dry run)"}</button>
-            <button type="button" className={"btn " + (sure ? "danger" : "primary")} disabled={!dry || !orderable.length || !!busy} onClick={place} title={dry ? "" : "Run the dry run first"}>
-              {busy === "place" ? "Ordering…" : sure ? `Yes, buy ${pcs} pcs from S&S · ~${money(total)}` : `2. Place the order with S&S${total ? ` · ~${money(total)}` : ""}`}</button>
+            <button type="button" className={"btn " + (sure ? "danger" : "primary")} disabled={!orderable.length || !!busy || whShort.length > 0} onClick={place} title={whShort.length ? "S&S is short on something above" : "Click, then confirm"}>
+              {busy === "place" ? "Ordering…" : sure ? `Yes, buy ${pcs} pcs from S&S · ~${money(total)}` : `Place the order with S&S${total ? ` · ~${money(total)}` : ""}`}</button>
             {sure && <button type="button" className="btn ghost" onClick={() => setSure(false)}>Cancel</button>}
             <span className="spacer" />
             <button type="button" className="btn" disabled={!orderable.length || !!busy} onClick={askQuote} title="Emails Tiffany Clark (our S&S rep) this list for a custom quote, from your email">{busy === "quote" ? "Sending…" : "✉ Email for custom quote"}</button>
