@@ -16,6 +16,7 @@ export type QboSettings = {
   tax_mode: TaxMode; tax_code_id: string; exemption_reason_id: string;
   term_map: Record<string, string>; default_term_id: string; discount_account_id: string;
   po_field_id: string; po_field_name: string; class_id: string; department_id: string;
+  /** when live sending was switched on (null = never) */ live_since?: string | null;
 };
 export const DEFAULT_QBO_SETTINGS: QboSettings = {
   enabled: false, mode: "preview", live_from_number: 50000, adopt_from_number: 40000, realm_id: "", company_name: "",
@@ -163,7 +164,8 @@ export type Owned = Partial<Record<OwnedField, string>>;
 export function ownedFromOurs(c: OurCustomer, qs: Pick<QboSettings, "term_map" | "default_term_id">): Owned {
   const o: Owned = {
     DisplayName: displayNameOf(c), CompanyName: s(c.company).slice(0, 100), PrimaryEmailAddr: cleanEmail(c.email), PrimaryPhone: s(c.phone).slice(0, 30),
-    BillAddr: addrKey(parseAddress(c.address)), ShipAddr: addrKey(parseAddress(c.ship_address)), Taxable: c.tax_exempt ? "false" : "true",
+    // taxable: only when we know (a customer with tax_exempt not set never flips QuickBooks' setting)
+    BillAddr: addrKey(parseAddress(c.address)), ShipAddr: addrKey(parseAddress(c.ship_address)), Taxable: c.tax_exempt == null ? "" : c.tax_exempt ? "false" : "true",
     SalesTermRef: (c.payment_terms && qs.term_map[c.payment_terms]) || qs.default_term_id || "",
   };
   return o;
@@ -189,14 +191,15 @@ export function ownedBody(c: OurCustomer, qs: QboSettings, fields: readonly Owne
     else if (f === "PrimaryPhone") b.PrimaryPhone = { FreeFormNumber: o.PrimaryPhone };
     else if (f === "BillAddr") b.BillAddr = parseAddress(c.address) || {};
     else if (f === "ShipAddr") b.ShipAddr = parseAddress(c.ship_address) || {};
-    else if (f === "Taxable") { b.Taxable = !c.tax_exempt; if (c.tax_exempt && qs.exemption_reason_id) b.TaxExemptionReasonId = qs.exemption_reason_id; }
+    else if (f === "Taxable" && c.tax_exempt != null) { b.Taxable = !c.tax_exempt; if (c.tax_exempt && qs.exemption_reason_id) b.TaxExemptionReasonId = qs.exemption_reason_id; }
     else if (f === "SalesTermRef" && o.SalesTermRef) b.SalesTermRef = { value: o.SalesTermRef };
   }
   return b;
 }
 /** A new QuickBooks customer from ours. */
 export function customerCreateBody(c: OurCustomer, qs: QboSettings): Record<string, unknown> {
-  const fields = OWNED_FIELDS.filter((f) => { const v = ownedFromOurs(c, qs)[f]; return f === "Taxable" || !!v; });
+  const own = ownedFromOurs(c, qs);
+  const fields = OWNED_FIELDS.filter((f) => !!own[f]);
   const body = ownedBody(c, qs, fields);
   const [given, ...rest] = s(c.name).split(/\s+/);
   if (given) { body.GivenName = given.slice(0, 100); if (rest.length) body.FamilyName = rest.join(" ").slice(0, 100); }
@@ -205,25 +208,32 @@ export function customerCreateBody(c: OurCustomer, qs: QboSettings): Record<stri
 }
 export type FieldConflict = { field: OwnedField; label: string; ours: string; qbo: string; sent: string };
 /**
- * What to change on a linked QuickBooks customer. `lastSent` is what we last sent (null when the link was made by
- * matching and we've never sent anything). A field someone changed in QuickBooks since we last sent it isn't
- * overwritten: it comes back as a conflict for the owner (unless the owner said ours wins: `force`). Fields the owner
- * gave to QuickBooks (`keepQbo`) and fields we have blank are never sent (we never blank out QuickBooks).
+ * What to change on a linked QuickBooks customer. Two baselines, per field:
+ *   oursBase  our values when the link was made / last sent. Only a field changed HERE since then is sent, so linking
+ *             to a customer Printavo made never overwrites the accountant's QuickBooks data. (null: everything of ours
+ *             counts as changed, e.g. a customer we made; a field missing from it = the owner opted in to send ours.)
+ *   lastSent  QuickBooks' values right after we last sent (or when first read after linking). A field changed THERE
+ *             since then isn't overwritten: it comes back as a conflict for the owner (unless `force` lists it).
+ * Fields the owner gave to QuickBooks (`keepQbo`) and fields we have blank are never sent (we never blank QuickBooks).
+ * `differences` lists the fields that differ but weren't changed here (shown for the owner to opt in).
  */
-export function customerDiff(c: OurCustomer, current: QCust, lastSent: Owned | null, qs: QboSettings, keepQbo: string[] = [], force: string[] = []) {
+export function customerDiff(c: OurCustomer, current: QCust, lastSent: Owned | null, qs: QboSettings, keepQbo: string[] = [], force: string[] = [], oursBase: Owned | null = null) {
   const ours = ownedFromOurs(c, qs), now = ownedFromQbo(current);
-  const change: OwnedField[] = [], conflicts: FieldConflict[] = [], rename = !same("DisplayName", ours.DisplayName, now.DisplayName);
+  const change: OwnedField[] = [], conflicts: FieldConflict[] = [], differences: { field: OwnedField; label: string; ours: string; qbo: string }[] = [];
   for (const f of OWNED_FIELDS) {
     if (keepQbo.includes(f)) continue;
     const o = ours[f] || "";
-    if (!o && f !== "Taxable") continue;
+    if (!o) continue;
     if (same(f, o, now[f])) continue;
+    const changedHere = !oursBase || oursBase[f] === undefined || !same(f, oursBase[f], o);
+    if (!changedHere && !force.includes(f)) { differences.push({ field: f, label: FIELD_LABEL[f], ours: o, qbo: now[f] || "" }); continue; }
     const sent = lastSent?.[f];
     const changedThere = lastSent != null && sent !== undefined && !same(f, sent, now[f]);
     if (changedThere && !force.includes(f)) { conflicts.push({ field: f, label: FIELD_LABEL[f], ours: o, qbo: now[f] || "", sent: sent || "" }); continue; }
     change.push(f);
   }
-  return { change, conflicts, rename, ours, now, body: change.length ? ownedBody(c, qs, change) : null };
+  const rename = change.includes("DisplayName");
+  return { change, conflicts, differences, rename, ours, now, body: change.length ? ownedBody(c, qs, change) : null };
 }
 
 /* ---------------- invoices ---------------- */

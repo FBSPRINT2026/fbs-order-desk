@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Qbo, QboError } from "@/lib/qbo/client";
-import { matchPayment, type OurPayment } from "@/lib/qbo/map";
+import { matchPayment, ownedFromOurs, type OurCustomer, type OurPayment } from "@/lib/qbo/map";
 import { HIGH_CONFIDENCE, proposeMatches, type OrderRef, type OurCustomerLite, type QboCustomerLite, type QboInvoiceLite } from "@/lib/qbo/match";
 import { loadQboSettings } from "@/lib/qbo/runner";
 
@@ -106,11 +106,20 @@ export async function confirmProposals(admin: SupabaseClient, by: string, sel: {
   let linked = 0;
   const skipped: string[] = [];
   const locals = new Set<string>();
+  // our side's baseline: our values right now. Only what changes here after linking is sent; the accountant's
+  // QuickBooks data isn't overwritten by our clean-up (the owner can opt in under Differences)
+  const ids = [...new Set(props.map((p) => p.local_id))];
+  const ourNow = new Map<string, OurCustomer>();
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data: cs } = await admin.from("customers").select("id, company, name, email, phone, address, ship_address, tax_exempt, payment_terms").in("id", ids.slice(i, i + 300));
+    for (const c of (cs || []) as OurCustomer[]) ourNow.set(c.id, c);
+  }
   for (const p of props) {
     const { data: ex } = await admin.from("qbo_links").select("id, local_id").eq("realm_id", qs.realm_id).eq("entity", "customer").eq("qbo_id", p.qbo_id).maybeSingle();
     if (ex && ex.local_id !== p.local_id) { skipped.push(`${p.qbo_name} is already linked to another customer`); continue; }
     if (!ex) {
-      const { error } = await admin.from("qbo_links").insert({ realm_id: qs.realm_id, entity: "customer", local_id: p.local_id, qbo_id: p.qbo_id, source: `matched_${p.method === "invoices" ? "invoice" : p.method}`, confidence: p.confidence, is_primary: false, created_by: by });
+      const c = ourNow.get(p.local_id);
+      const { error } = await admin.from("qbo_links").insert({ realm_id: qs.realm_id, entity: "customer", local_id: p.local_id, qbo_id: p.qbo_id, source: `matched_${p.method === "invoices" ? "invoice" : p.method}`, confidence: p.confidence, is_primary: false, created_by: by, ours_base: c ? ownedFromOurs(c, qs) : null });
       if (error) { skipped.push(`${p.qbo_name}: ${error.message}`); continue; }
     }
     linked++;
