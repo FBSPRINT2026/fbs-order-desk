@@ -5896,14 +5896,51 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
   .ibx2-sw .ibx2-back{flex:none;display:none}
   .ibx2-work[data-side="mail"] .ibx2-ai,.ibx2-work[data-side="ai"] .ibx2-mail{display:none}
 }
+/* phones: one column that scrolls like a normal page (no boxes inside boxes): the list, then the email (compact
+   header, the whole email, then the answer under it with Send pinned to the bottom of the screen) or the Assistant */
 @media (max-width:760px){
-  .ibx2{grid-template-columns:1fr;height:calc(100vh - 130px)}
+  .ibx2-head .ibx2-status{width:100%;justify-content:flex-start}
+  .ibx2{grid-template-columns:1fr;height:auto;min-height:0;gap:8px}
+  .ibx2-list{max-height:none}
+  .ibx2-items{overflow:visible}
   .ibx2 .ibx2-work,.ibx2 .ibx2-empty{display:none}
   .ibx2.picked .ibx2-list{display:none}
-  .ibx2.picked .ibx2-work{display:grid}
-  .ibx2-sw .ibx2-back{display:block}
+  .ibx2.picked .ibx2-work{display:flex;flex-direction:column;gap:8px}
+  .ibx2-sw .ibx2-back{display:block;font-size:18px;padding:4px 10px}
   .ibx2-listbtn{display:none}
-  .ibx2-compose{max-height:70%}
+  .ibx2-mail,.ibx2-ai{overflow:visible;border-radius:10px}
+  .ibx2-ai{min-height:60vh}
+  .ibx2-ai .ibx-chat{min-height:60vh}
+  .ibx2-ai .oc-form{position:sticky;bottom:0;padding:6px 0 8px}
+  /* the header: one line for who (the time under it), the subject, the summary, small chips */
+  .ibx2-mh{padding:10px 12px;gap:5px}
+  .ibx2-mh-1{flex-wrap:wrap;row-gap:0}
+  .ibx2-who{flex-basis:100%;font-size:14px}
+  .ibx2-when{font-size:12px}
+  .ibx2-mh h2{font-size:16px}
+  .ibx2-sum{font-size:13px;line-height:1.35}
+  .ibx2-meta{gap:4px}
+  .ibx2-chip{font-size:11.5px;padding:0 8px}
+  .ibx2-urgent{border-radius:7px;font-size:12.5px;padding:4px 9px;flex-basis:100%;background:color-mix(in srgb,var(--danger) 10%,var(--surface));color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent)}
+  /* the buttons: Reply and Create order side by side, File under across, then No reply and More */
+  .ibx2-acts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .ibx2-acts > .btn,.ibx2-acts > details > summary{width:100%;justify-content:center;text-align:center}
+  .ibx2-acts .ibx2-file{grid-column:1 / -1;max-width:none;width:100%;padding:6px 8px}
+  .ibx2-more .ibx2-menu{right:0;left:auto;min-width:220px}
+  /* the email at its full length; the answer follows it */
+  .ibx2-read{overflow:visible;padding:10px 12px 12px}
+  .ibx2-read .ibx-html iframe{max-width:100%}
+  .ibx2-compose{max-height:none;overflow:visible;border-radius:0 0 10px 10px;padding:10px 12px 0}
+  .ibx2-to{flex-direction:column;align-items:stretch;gap:4px}
+  .ibx2-compose textarea{min-height:180px;font-size:16px}
+  .ibx2-to input,.ibx2-tell input{font-size:16px}
+  .ibx2-tell button{flex:none}
+  .ibx2-send{position:sticky;bottom:0;z-index:4;background:var(--surface-2,#f7f8fa);margin:0 -12px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+  .ibx2-send .faint,.ibx2-send .spacer{display:none}
+  .ibx2-send .btn.primary{flex:1;justify-content:center}
+  .ibx2-replybar{margin-bottom:10px}
+  .ibx2-order{overflow:visible}
+  .ibx2-order .eo{margin:8px}
 }
 
 /* dashboard: one "Needs a reply" list (urgent first), one line per customer (Oct 9) */
