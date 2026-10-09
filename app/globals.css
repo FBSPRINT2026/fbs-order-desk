@@ -839,7 +839,8 @@ td > .sz-dim.on input{padding-right:24px}
 .mk-imp-top select{flex:1 1 0;min-width:0}
 .mk-loc{font-weight:700}
 .mk-imp-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-top:1px dashed var(--line-2,var(--line));padding-top:8px}
-.mk-imp-foot .mk-wh{flex:1 1 auto;justify-content:center}
+.mk-imp-foot .mk-wh{flex:1 1 100%;justify-content:flex-start}
+.mk-imp-acts{flex:1 1 100%;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
 .mk-raster{flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px 8px}
 .mk-raster .check{font-size:12px}
 .lc{display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border-radius:8px;padding:8px}

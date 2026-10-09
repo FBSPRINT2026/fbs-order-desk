@@ -1639,8 +1639,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     )}
                     </>)}
                     <div className="mk-imp-foot">
-                      <button type="button" className="btn sm ghost" onClick={() => openDesigner(im)} title="Do more with this design: text, clip art, pictures">{qt[im.id] ? "Idea Lab" : p.d ? "Open in Idea Lab" : "Idea Lab"}</button>
-                      <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
                       <div className="row mk-wh" style={{ gap: 4 }}>
                         {(() => {
                           const tall = /tall/i.test(im.size);
@@ -1664,7 +1662,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       </div>
                       {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioOf(designOf(im)) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
                       {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioOf(designOf(im)) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
-                      <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
+                      {/* the location's actions together on the right (Oct 9, Nick) */}
+                      <div className="mk-imp-acts">
+                        <button type="button" className="btn sm ghost" onClick={() => openDesigner(im)} title="Do more with this design: text, clip art, pictures">{qt[im.id] ? "Idea Lab" : p.d ? "Open in Idea Lab" : "Idea Lab"}</button>
+                        <label className="btn sm ghost" style={{ cursor: "pointer" }}>Upload new art<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadNew(im, f); }} /></label>
+                        <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
+                      </div>
                     </div>
                   </div>
                 );
