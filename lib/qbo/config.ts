@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "crypto";
 import { SITE_URL } from "@/lib/config";
 
 /**
@@ -30,4 +31,11 @@ export function qboEnv(): QboEnvStatus {
     configured: !missing.length && !problems.length, missing, env, problems, redirectUri, webhook: !!e.QBO_WEBHOOK_TOKEN?.trim(),
     apiBase: env === "sandbox" ? "https://sandbox-quickbooks.api.intuit.com" : "https://quickbooks.api.intuit.com",
   };
+}
+
+/** Constant-time comparison for the runner's token (x-sync-token). */
+export function tokenMatches(given: string | null | undefined, want: string | null | undefined): boolean {
+  if (!given || !want) return false;
+  const a = createHash("sha256").update(String(given)).digest(), b = createHash("sha256").update(String(want)).digest();
+  return timingSafeEqual(a, b);
 }

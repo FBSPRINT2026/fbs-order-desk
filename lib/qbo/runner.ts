@@ -23,10 +23,23 @@ export async function loadQboSettings(admin: SupabaseClient): Promise<QboSetting
 
 export type RunStats = { mode: "live" | "preview" | "off"; processed: number; byStatus: Record<string, number>; changes: number; note?: string; error?: string };
 
-export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "preview"; deadline: number; max?: number; ids?: number[] }): Promise<RunStats> {
+/** The runner's lock: owned by the run that claimed it (only it extends or releases it). TTL longer than a run. */
+export const LOCK_SECONDS = 330;
+export async function claimLock(admin: SupabaseClient): Promise<string | null> {
+  const { data } = await admin.rpc("qbo_lock_claim", { p_seconds: LOCK_SECONDS });
+  return (data as string | null) || null;
+}
+export async function releaseLock(admin: SupabaseClient, id: string) { await admin.rpc("qbo_lock_release", { p_id: id }); }
+
+export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "preview"; deadline: number; lockId: string; max?: number; ids?: number[] }): Promise<RunStats> {
   const qs = await loadQboSettings(admin);
   const stats: RunStats = { mode: "off", processed: 0, byStatus: {}, changes: 0 };
-  const connected = qboEnv().configured && !!(await loadTokens(admin));
+  const env = qboEnv();
+  const tokens = env.configured ? await loadTokens(admin) : null;
+  const connected = !!tokens;
+  const done = async () => { await admin.from("qbo_settings").update({ last_run_at: new Date().toISOString(), ...(stats.error ? { last_error: stats.error, last_error_at: new Date().toISOString() } : {}) }).eq("id", 1); return stats; };
+  // the sign-in was made for the other QuickBooks (sandbox vs production): refuse to run at all
+  if (tokens?.env && env.env && tokens.env !== env.env) { stats.error = `The QuickBooks sign-in is for ${tokens.env}, but QBO_ENV is now ${env.env}. Nothing runs until QuickBooks is connected again.`; return done(); }
   if (opts.mode === "auto" && !qs.enabled) {
     // off: only keep the sign-in alive (about once a day)
     if (connected && (!qs.keepalive_at || Date.now() - new Date(qs.keepalive_at).getTime() > 20 * 3600000)) {
@@ -41,11 +54,17 @@ export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "pr
   const qbo = connected ? new Qbo(admin) : null;
   let realm = qs.realm_id;
   if (qbo) { try { realm = await qbo.realm(); } catch (e) { stats.error = e instanceof Error ? e.message : String(e); } }
+  // live and the sign-in can't be refreshed: stop before touching any row (no tries are used up)
+  if (live && stats.error) return done();
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const pusher = new Pusher(admin, qs, mergeSettings(st?.data), stats.error ? null : qbo, realm, live && !stats.error);
 
-  // rows left "running" by a run that was cut off: back in line
-  await admin.from("qbo_queue").update({ status: "error", last_error: "The run was cut off; trying again." }).eq("status", "running").lt("run_after", new Date(Date.now() - 10 * 60000).toISOString());
+  // rows left "running" by a run that was cut off: back in line one by one (closed if a newer change is waiting)
+  const { data: stuck } = await admin.from("qbo_queue").select("id, reason").eq("status", "running").lt("run_after", new Date(Date.now() - 10 * 60000).toISOString()).limit(200);
+  for (const r of stuck || []) {
+    const { error } = await admin.from("qbo_queue").update({ status: "error", last_error: "The run was cut off; trying again." }).eq("id", r.id).eq("status", "running");
+    if (error) await admin.from("qbo_queue").update({ status: "skipped", reason: `Superseded by a newer change (a run was cut off). ${r.reason || ""}`.slice(0, 2000), done_at: new Date().toISOString() }).eq("id", r.id).eq("status", "running");
+  }
 
   // QuickBooks-side changes first (cheap), so conflicts are known before we push
   if (qbo && !stats.error) { try { stats.changes = await processChanges(admin, qbo, realm, qs); } catch (e) { stats.note = `Change check: ${e instanceof Error ? e.message : String(e)}`; } }
@@ -54,7 +73,7 @@ export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "pr
   let stop = false;
   const after: Record<string, number> = { customer: 0, invoice: 0, payment: 0 };
   while (!stop && stats.processed < max && Date.now() < opts.deadline - 15000) {
-    let did = 0, fetched = 0;
+    let fetched = 0;
     for (const entity of ORDER) {
       let q = admin.from("qbo_queue").select("*").eq("entity", entity).gt("id", after[entity]).in("status", ["pending", "error"]).lte("run_after", new Date().toISOString()).order("id").limit(25);
       if (opts.ids?.length) q = admin.from("qbo_queue").select("*").eq("entity", entity).gt("id", after[entity]).in("id", opts.ids).in("status", ["pending", "error", "needs_review"]).order("id").limit(25);
@@ -65,23 +84,36 @@ export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "pr
         // in preview, a row already previewed and unchanged since isn't built again
         if (!live && !opts.ids && row.previewed_at && row.previewed_at >= row.updated_at) continue;
         if (Date.now() > opts.deadline - 15000 || stats.processed >= max) { stop = true; break; }
+        // still ours to run? (the lock is extended row by row; another run can't take over mid-row)
+        const { data: held } = await admin.rpc("qbo_lock_extend", { p_id: opts.lockId, p_seconds: LOCK_SECONDS });
+        if (!held) { stats.note = "Lost the runner lock: stopped."; stop = true; break; }
+        // a live run stops as soon as the owner turns the sync off or back to preview
+        if (live) {
+          const { data: now } = await admin.from("qbo_settings").select("enabled, mode").eq("id", 1).maybeSingle();
+          if (!now?.enabled || now.mode !== "live") { stats.note = "The sync was turned off or set to preview: stopped."; stop = true; break; }
+        }
         const claim = await admin.from("qbo_queue").update({ status: "running", run_after: new Date().toISOString(), ...(live ? { attempts: row.attempts + 1 } : {}) }).eq("id", row.id).in("status", ["pending", "error", "needs_review"]).select("id");
         if (!claim.data?.length) continue;
         const r = { ...row, attempts: live ? row.attempts + 1 : row.attempts };
         let out: Outcome;
         try { out = await pusher.process(r); }
-        catch (e) { out = failed(e, r, live); if (e instanceof QboNotConnected) stop = true; }
+        catch (e) {
+          if (e instanceof QboNotConnected) {
+            // the sign-in failed mid-run: put the row back exactly as it was (no try used up) and stop
+            await admin.from("qbo_queue").update({ status: row.status, attempts: row.attempts, run_after: new Date(Date.now() + 5 * 60000).toISOString(), last_error: e.message }).eq("id", row.id);
+            stats.error = e.message; stop = true; break;
+          }
+          out = failed(e, r, live);
+        }
         await finish(admin, r, out, live);
-        stats.processed++; did++;
+        stats.processed++;
         stats.byStatus[out.status] = (stats.byStatus[out.status] || 0) + 1;
-        if (stop) break;
       }
       if (stop) break;
     }
     if (!fetched) break;
   }
-  await admin.from("qbo_settings").update({ last_run_at: new Date().toISOString(), ...(stats.error ? { last_error: stats.error, last_error_at: new Date().toISOString() } : {}) }).eq("id", 1);
-  return stats;
+  return done();
 }
 
 function failed(e: unknown, row: QRow, live: boolean): Outcome {
@@ -102,7 +134,10 @@ function failed(e: unknown, row: QRow, live: boolean): Outcome {
 async function finish(admin: SupabaseClient, row: QRow, out: Outcome, live: boolean) {
   const t = new Date().toISOString();
   const keepResult = out.result ?? (row.result as Record<string, unknown> | null) ?? null;
-  const base: Record<string, unknown> = { reason: out.reason.slice(0, 2000), ...(out.preview !== undefined ? { payload_preview: out.preview } : {}), result: keepResult };
+  // "Send ours anyway" (force) counts for one run only; any other choice stays until the row is done
+  const res = (row.resolution || null) as Record<string, unknown> | null;
+  const resolution = res && "force" in res ? (({ force: _f, ...rest }) => (Object.keys(rest).length ? rest : null))(res) : res;
+  const base: Record<string, unknown> = { reason: out.reason.slice(0, 2000), ...(out.preview !== undefined ? { payload_preview: out.preview } : {}), result: keepResult, resolution };
   let patch: Record<string, unknown>;
   if (out.status === "pending") {
     // previews and waits stay in line; a preview doesn't count as a change (updated_at stays)

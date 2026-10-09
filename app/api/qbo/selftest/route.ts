@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ourCustomersForMatching } from "@/lib/qbo/matchRun";
+import { tokenMatches } from "@/lib/qbo/config";
 import { selfTest, type ArchivedRef } from "@/lib/qbo/selftest";
 import type { OrderRow, OurCustomer, OurPayment } from "@/lib/qbo/map";
 
@@ -29,7 +30,7 @@ async function archivedRefs(admin: ReturnType<typeof createAdminClient>) {
 export async function GET(req: Request) {
   const admin = createAdminClient();
   const { data: s } = await admin.from("qbo_settings").select("token").eq("id", 1).maybeSingle();
-  if (!s || req.headers.get("x-sync-token") !== String(s.token)) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
+  if (!s || !tokenMatches(req.headers.get("x-sync-token"), String(s.token))) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   const page = async <T,>(q: (a: number, b: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) => {
     const out: T[] = [];
     for (let a = 0; ; a += 1000) { const { data, error } = await q(a, a + 999); if (error) throw new Error(error.message); out.push(...(data || [])); if ((data || []).length < 1000) break; }

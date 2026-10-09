@@ -57,13 +57,22 @@ async function saveTokens(admin: SupabaseClient, t: QboTokens, by: string) {
 /** Back from Intuit's sign-in: trade the code for tokens and keep them with the company (realm) id. */
 export async function connectWithCode(admin: SupabaseClient, code: string, realmId: string, by: string) {
   const env = qboEnv();
+  const { data: was } = await admin.from("qbo_settings").select("realm_id, previous_realm_id").eq("id", 1).maybeSingle();
+  const { data: tokWas } = await admin.from("integration_tokens").select("data").eq("name", "quickbooks").maybeSingle();
+  const before = String(was?.realm_id || (tokWas?.data as { previous_realm_id?: string } | null)?.previous_realm_id || "");
   const t = await tokenCall({ grant_type: "authorization_code", code, redirect_uri: env.redirectUri });
   const tokens: QboTokens = { realm_id: realmId, ...t, connected_by: by, connected_at: new Date().toISOString(), env: env.env };
   await saveTokens(admin, tokens, by);
   let company = "";
   try { const c = await new Qbo(admin).companyInfo(); company = c?.CompanyName || ""; } catch { /* shown as unknown */ }
-  await admin.from("qbo_settings").update({ realm_id: realmId, company_name: company, updated_at: new Date().toISOString(), updated_by: by }).eq("id", 1);
-  return { realmId, company };
+  // a different QuickBooks company than before: the sync is turned off and back to preview, and the page warns
+  // (links, matching and the queue belong to the old company; nothing is sent to the new one until the owner checks)
+  const changed = !!before && before !== realmId;
+  await admin.from("qbo_settings").update({
+    realm_id: realmId, company_name: company, updated_at: new Date().toISOString(), updated_by: by,
+    ...(changed ? { enabled: false, mode: "preview", live_since: null, previous_realm_id: before, realm_warning: `Connected to a different QuickBooks company (${company || realmId}) than before (company ${before}). The sync was turned off and set to preview. Links and matching from the other company don't apply here: run Customer matching again before turning it back on.` } : {}),
+  }).eq("id", 1);
+  return { realmId, company, changed };
 }
 
 /** Disconnect: revoke at Intuit (best effort) and forget the tokens. Links and history stay. */
@@ -79,23 +88,43 @@ export async function disconnect(admin: SupabaseClient, by: string) {
 let cache: { realm: string; token: string; until: number } | null = null;
 let refreshing: Promise<{ realm: string; token: string }> | null = null;
 
-/** A current access token (refreshed when it has under 5 minutes left, or when `force`). */
+/**
+ * A current access token (refreshed when it has under 5 minutes left, or when `force`). Several server instances can
+ * run at once: the token row is re-read first (another may have refreshed already), one refresher at a time holds a
+ * short lease, and the new tokens are saved only if the refresh token is still the one used (compare-and-swap).
+ */
 async function accessToken(admin: SupabaseClient, force = false): Promise<{ realm: string; token: string }> {
   if (!force && cache && cache.until > Date.now()) return cache;
   if (refreshing) return refreshing;
   refreshing = (async () => {
     const env = qboEnv();
     if (!env.configured) throw new QboNotConnected(`QuickBooks isn't set up: add ${[...env.missing, ...env.problems].join(", ")} in Vercel.`);
-    const t = await loadTokens(admin);
-    if (!t) throw new QboNotConnected("QuickBooks isn't connected (Settings → QuickBooks → Connect).");
-    if (!force && new Date(t.access_expires_at).getTime() - 5 * 60000 > Date.now()) {
-      cache = { realm: t.realm_id, token: t.access_token, until: new Date(t.access_expires_at).getTime() - 5 * 60000 };
+    const fresh = (t: QboTokens) => new Date(t.access_expires_at).getTime() - 5 * 60000 > Date.now();
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const t = await loadTokens(admin);
+      if (!t) throw new QboNotConnected("QuickBooks isn't connected (Settings → QuickBooks → Connect).");
+      if (t.env && env.env && t.env !== env.env) throw new QboNotConnected(`The QuickBooks sign-in is for ${t.env}, but QBO_ENV is ${env.env}. Connect again (Settings → QuickBooks).`);
+      if (fresh(t) && !(force && attempt === 0)) {
+        cache = { realm: t.realm_id, token: t.access_token, until: new Date(t.access_expires_at).getTime() - 5 * 60000 };
+        return cache;
+      }
+      if (new Date(t.refresh_expires_at).getTime() < Date.now()) throw new QboNotConnected("The QuickBooks sign-in expired (100 days unused): connect again in Settings → QuickBooks.");
+      const { data: lease } = await admin.rpc("qbo_token_lease", { p_seconds: 30 });
+      if (!lease) { await sleep(1500); force = false; continue; } // another instance is refreshing: use its result
+      let n: Awaited<ReturnType<typeof tokenCall>>;
+      try { n = await tokenCall({ grant_type: "refresh_token", refresh_token: t.refresh_token }); }
+      catch (e) {
+        await admin.from("integration_tokens").update({ data: { ...t, refresh_lease_until: null } }).eq("name", "quickbooks").eq("data->>refresh_token", t.refresh_token);
+        if (e instanceof QboError && !e.transient) throw new QboNotConnected(`QuickBooks refused the sign-in refresh (${e.message}): connect again in Settings → QuickBooks.`);
+        throw e;
+      }
+      const next: QboTokens = { ...t, ...n };
+      const { data: swapped } = await admin.rpc("qbo_token_swap", { p_old_refresh: t.refresh_token, p_new: next });
+      if (!swapped) { force = false; continue; } // someone else saved a newer one meanwhile: re-read and use theirs
+      cache = { realm: next.realm_id, token: next.access_token, until: new Date(next.access_expires_at).getTime() - 5 * 60000 };
       return cache;
     }
-    if (new Date(t.refresh_expires_at).getTime() < Date.now()) throw new QboNotConnected("The QuickBooks sign-in expired (100 days unused): connect again in Settings → QuickBooks.");
-    const n = await tokenCall({ grant_type: "refresh_token", refresh_token: t.refresh_token });
-    await saveTokens(admin, { ...t, ...n }, "refresh");
-    return { realm: t.realm_id, token: n.access_token };
+    throw new QboError("Couldn't get a QuickBooks sign-in (another refresh kept it busy). Will try again.", 0, "", true);
   })();
   try { return await refreshing; } finally { refreshing = null; }
 }
@@ -141,7 +170,8 @@ export class Qbo {
       if (status === 401 && !refreshed) { refreshed = true; auth = await accessToken(this.admin, true); continue; }
       const transient = !!netErr || status === 429 || status >= 500 || status === 0;
       if (transient && attempt < 4) {
-        const ra = Number(r?.headers.get("retry-after")) || 0;
+        // capped so a run can't sleep past its lock (QuickBooks' Retry-After can be long: the row just retries later)
+        const ra = Math.min(10, Number(r?.headers.get("retry-after")) || 0);
         await sleep(ra ? ra * 1000 : [0, 1000, 3000, 8000][attempt]);
         continue;
       }
