@@ -51,6 +51,38 @@ function unwrap(u: string): string | null {
   return null;
 }
 
+/**
+ * url.emailprotection.link (the filter Methodist and others use) answers with a "scanning this website" page: its
+ * script opens a WebSocket to /scanning, sends the page's data-urlinfo, and gets back { redirect: { url } }
+ * (or { refresh: { meta } } to send again). Done the same way here.
+ */
+async function emailProtection(pageUrl: string, html: string): Promise<string | null> {
+  let info = html.match(/data-urlinfo=["']([^"']+)["']/i)?.[1];
+  const WS = (globalThis as unknown as { WebSocket?: typeof WebSocket }).WebSocket;
+  if (!info || !WS) return null;
+  const host = new URL(pageUrl).host;
+  for (let round = 0; round < 3 && info; round++) {
+    const got = await new Promise<{ url?: string; meta?: string } | null>((done) => {
+      let settled = false;
+      const end = (v: { url?: string; meta?: string } | null) => { if (settled) return; settled = true; try { sock.close(); } catch { /* closed */ } done(v); };
+      const sock = new WS(`wss://${host}/scanning`);
+      const timer = setTimeout(() => end(null), 25_000);
+      sock.onopen = () => sock.send(info!);
+      sock.onerror = () => { clearTimeout(timer); end(null); };
+      sock.onmessage = (ev: MessageEvent) => {
+        try {
+          const d = JSON.parse(String(ev.data)) as { redirect?: { url?: string }; refresh?: { meta?: string } };
+          if (d.redirect?.url) { clearTimeout(timer); end({ url: d.redirect.url }); }
+          else if (d.refresh?.meta) { clearTimeout(timer); end({ meta: d.refresh.meta }); }
+        } catch { /* keep waiting */ }
+      };
+    });
+    if (got?.url) return new URL(got.url, pageUrl).toString();
+    info = got?.meta;
+  }
+  return null;
+}
+
 /** follow redirects (HTTP, meta refresh, a script redirect) to the real address, at most 8 hops */
 export async function resolveLink(url: string): Promise<string> {
   let u = url;
@@ -63,6 +95,7 @@ export async function resolveLink(url: string): Promise<string> {
     // wrappers that answer with a page that sends you on (meta refresh or window.location)
     if (/text\/html/i.test(r.headers.get("content-type") || "") && !/canva\.com|dropbox\.com|drive\.google\.com/i.test(new URL(u).hostname)) {
       const html = (await r.text().catch(() => "")).slice(0, 200_000);
+      if (/emailprotection\.link$/i.test(new URL(u).hostname)) { const real = await emailProtection(u, html); if (real) { u = real; continue; } return u; }
       const m = html.match(/http-equiv=["']?refresh["']?[^>]*content=["'][^"']*url=([^"'>]+)/i) || html.match(/(?:window\.)?location(?:\.href)?\s*=\s*["']([^"']+)["']/i) || html.match(/location\.replace\(\s*["']([^"']+)["']/i);
       if (m) { u = new URL(m[1].replace(/&amp;/g, "&"), u).toString(); continue; }
     }
@@ -124,8 +157,11 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
   if (meta.link_art_at && !opts.force) return { ok: true, found: [] };
   const have = new Set((meta.attachments || []).map((f) => (f as LinkFile).from_link).filter(Boolean));
   const found: Found[] = [];
-  for (const url of linksIn(newPart(String(a.body || "")))) {
-    const final = await resolveLink(url);
+  // resolved all at once (each wrapper can take a few seconds to "scan")
+  const urls = linksIn(newPart(String(a.body || "")));
+  const finals = await Promise.all(urls.map((u) => resolveLink(u).catch(() => u)));
+  for (const [i, url] of urls.entries()) {
+    const final = finals[i];
     const kind = kindOf(final);
     const f: Found = { url, final, kind };
     found.push(f);
