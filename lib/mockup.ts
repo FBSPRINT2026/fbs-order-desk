@@ -53,6 +53,16 @@ const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 
 /** Center of the sleeve print area: this far (reference px) up the fold from the sleeve tip, i.e. area bottom ~0.5" above the hem. */
 const SLEEVE_UP = 76.5;
 
+/**
+ * Draw a photo the way the page shows it (object-fit: contain, centered on white): S&S photos are already 4:5 and fill
+ * the frame, but SanMar's aren't, and stretching them to fill made a 13" tote measure ~19% wider than it shows.
+ */
+function drawContained(x: CanvasRenderingContext2D, img: HTMLImageElement, W: number, H: number) {
+  const iw = img.naturalWidth || W, ih = img.naturalHeight || H, k = Math.min(W / iw, H / ih), dw = iw * k, dh = ih * k;
+  x.fillStyle = "#fff"; x.fillRect(0, 0, W, H);
+  x.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+}
+
 /** Measure the shirt outline on a photo (white background). Returns null when it can't find a clean outline (e.g. drawn tee). */
 export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
   const W = PHOTO_W, H = PHOTO_H;
@@ -60,7 +70,7 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
   c.width = W; c.height = H;
   const x = c.getContext("2d", { willReadFrequently: true });
   if (!x) return null;
-  x.drawImage(img, 0, 0, W, H);
+  drawContained(x, img, W, H);
   let d: Uint8ClampedArray;
   try { d = x.getImageData(0, 0, W, H).data; } catch { return null; }
   // background = near-white pixels connected to the photo's border (flood fill), so white shirts with bright spots still count as shirt
@@ -141,7 +151,7 @@ export function measureBag(img: HTMLImageElement, widthIn: number): Fit | null {
   c.width = W; c.height = H;
   const x = c.getContext("2d", { willReadFrequently: true });
   if (!x) return null;
-  x.drawImage(img, 0, 0, W, H);
+  drawContained(x, img, W, H);
   let d: Uint8ClampedArray;
   try { d = x.getImageData(0, 0, W, H).data; } catch { return null; }
   const bg = new Uint8Array(W * H);
