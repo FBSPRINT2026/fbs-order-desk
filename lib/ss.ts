@@ -246,6 +246,35 @@ export async function ssOurCard(emails: string[] = []): Promise<{ ok: true; prof
   return { ok: false, error: `S&S has no saved card ending ${SS_CARD_LAST4} on our account${all.length ? ` (saved: ${all.map((x) => x.label).join("; ")})` : ""}. Save it at ssactivewear.com → My Account → Payment Methods, then try again.` };
 }
 
+/**
+ * Where each line ships from: the closest S&S warehouse that has the stock (Nick, Oct 9: closest first, Fort Worth for us
+ * in Richardson TX), splitting a line only when that warehouse is short. Stock comes from S&S per sku and warehouse.
+ * `short` lists what no warehouse has enough of.
+ */
+const WH_ORDER = ["TX", "KS", "GA", "IL", "OH", "KY", "PA", "NV", "NJ", "FL", "CA", "MA", "FO", "CC", "CN", "DS"];
+export async function ssAllocate(lines: { identifier: string; qty: number }[]) {
+  const skus = [...new Set(lines.map((l) => l.identifier))];
+  const stock = new Map<string, { warehouseAbbr: string; qty: number }[]>();
+  for (let i = 0; i < skus.length; i += 40) {
+    const part = skus.slice(i, i + 40);
+    const rows = await ssGet<{ sku: string; warehouses?: { warehouseAbbr: string; qty: number }[] }[]>(`/products/${part.map(encodeURIComponent).join(",")}?fields=sku,warehouses`);
+    for (const p of Array.isArray(rows) ? rows : []) stock.set(p.sku, (p.warehouses || []).filter((w) => w.qty > 0));
+  }
+  const rank = (w: string) => { const i = WH_ORDER.indexOf(w.toUpperCase()); return i < 0 ? 50 : i; };
+  const out: { identifier: string; qty: number; warehouseAbbr: string }[] = [], short: string[] = [];
+  for (const l of lines) {
+    let need = l.qty;
+    for (const w of [...(stock.get(l.identifier) || [])].sort((a, b) => rank(a.warehouseAbbr) - rank(b.warehouseAbbr))) {
+      if (need <= 0) break;
+      const take = Math.min(need, w.qty);
+      out.push({ identifier: l.identifier, qty: take, warehouseAbbr: w.warehouseAbbr });
+      need -= take;
+    }
+    if (need > 0) short.push(`${l.identifier}: ${need} more than S&S has`);
+  }
+  return { lines: out, short };
+}
+
 export type SSOrderResult = { orderNumber: string; warehouseAbbr: string; expectedDeliveryDate: string | null; total: number; orderStatus: string };
 
 /**
@@ -253,27 +282,36 @@ export type SSOrderResult = { orderNumber: string; warehouseAbbr: string; expect
  * that checks stock, price and the address). S&S may split an order across warehouses: one result per warehouse.
  */
 export async function ssPlaceOrder(o: {
-  lines: { identifier: string; qty: number }[]; po: string; shipTo: { customer: string; attn: string; address: string; city: string; state: string; zip: string };
+  lines: { identifier: string; qty: number; warehouseAbbr?: string }[]; po: string; shipTo: { customer: string; attn: string; address: string; city: string; state: string; zip: string };
   shippingMethod: string; test: boolean; email?: string;
   /** the saved card to charge (ssOurCard); without one S&S bills the account's terms */
   payment?: { email: string; profileID: number };
   /** an S&S quote number (from our rep) to price the order against */
   quote?: string;
 }): Promise<SSOrderResult[]> {
+  // each line's warehouse is picked here (closest with stock, ssAllocate); S&S's own picker is only a fallback
+  const picked = o.lines.every((l) => l.warehouseAbbr);
+  const body: Record<string, unknown> = {
+    shippingAddress: { customer: o.shipTo.customer, attn: o.shipTo.attn, address: o.shipTo.address, city: o.shipTo.city, state: o.shipTo.state, zip: o.shipTo.zip, residential: false },
+    // UPS Ground always, never "S&S picks" (code 1: it can be the slower UPS Ground Advantage)
+    shippingMethod: o.shippingMethod && o.shippingMethod !== "1" ? o.shippingMethod : "40",
+    poNumber: o.po.slice(0, 50),
+    testOrder: o.test === true,
+    autoselectWarehouse: !picked,
+    ...(picked ? {} : { AutoSelectWarehouse_Preference: "fastest" }),
+    ...(o.payment ? { paymentProfile: { email: o.payment.email, profileID: o.payment.profileID } } : {}),
+    ...(o.quote?.trim() ? { quoteNumber: o.quote.trim().slice(0, 40) } : {}),
+    rejectLineErrors: true,
+    ...(o.email ? { emailConfirmation: o.email } : {}),
+    lines: o.lines.map((l) => ({ identifier: l.identifier, qty: l.qty, ...(picked ? { warehouseAbbr: l.warehouseAbbr } : {}) })),
+  };
+  // a dry run must never reach S&S without the test flag
+  if (o.test && body.testOrder !== true) throw new Error("Dry run stopped: the test flag wasn't set.");
   const auth = btoa(`${process.env.SS_ACCOUNT_NUMBER!.trim()}:${process.env.SS_API_KEY!.trim()}`);
   const r = await fetch(BASE + "/orders/", {
     method: "POST", cache: "no-store",
     headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      shippingAddress: { customer: o.shipTo.customer, attn: o.shipTo.attn, address: o.shipTo.address, city: o.shipTo.city, state: o.shipTo.state, zip: o.shipTo.zip, residential: false },
-      shippingMethod: o.shippingMethod && o.shippingMethod !== "1" ? o.shippingMethod : "40", // UPS Ground, never "S&S picks" poNumber: o.po.slice(0, 50), testOrder: o.test, autoselectWarehouse: true,
-      // the closest warehouse that has it first (S&S's "fastest" Freight Optimizer); splits only when the closest is short
-      AutoSelectWarehouse_Preference: "fastest",
-      ...(o.payment ? { paymentProfile: { email: o.payment.email, profileID: o.payment.profileID } } : {}),
-      ...(o.quote?.trim() ? { quoteNumber: o.quote.trim().slice(0, 40) } : {}),
-      rejectLineErrors: true, ...(o.email ? { emailConfirmation: o.email } : {}),
-      lines: o.lines.map((l) => ({ identifier: l.identifier, qty: l.qty })),
-    }),
+    body: JSON.stringify(body),
   });
   const text = await r.text();
   let j: unknown = null; try { j = JSON.parse(text); } catch { /* not JSON */ }

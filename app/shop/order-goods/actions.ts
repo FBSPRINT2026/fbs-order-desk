@@ -3,7 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { sizeRank } from "@/lib/sizeOrder";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricing";
-import { SS_REP, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
+import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
 import { matchToSS, shopEmails, type GoodsRow } from "@/lib/ssMatch";
 import { accountForUser, cfgOf } from "@/lib/mail/config";
 import { sendFromMailbox } from "@/lib/mail/send";
@@ -120,11 +120,14 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
     if (!from.street1 || !from.zip) return { ok: false as const, error: "Add our street address in Shipping center → Settings first (S&S ships here)." };
     const po = (p.label || "Stock").trim().slice(0, 50);
     // paid with our saved card (ending 5488), never the account's terms
+    // each line from the closest warehouse that has it (Fort Worth first)
+    const alloc = await ssAllocate(lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })));
+    if (alloc.short.length) return { ok: false as const, error: `S&S doesn't have enough of: ${alloc.short.join("; ")}.` };
     const card = await ssOurCard(await shopEmails(v.user?.email));
     if (!card.ok) return { ok: false as const, error: card.error };
     const res = await ssPlaceOrder({
       payment: { email: card.profile.email, profileID: card.profile.profileID }, quote: p.quote,
-      lines: lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), po, test: p.test, shippingMethod: p.shippingMethod || "40",
+      lines: alloc.lines, po, test: p.test, shippingMethod: p.shippingMethod || "40",
       shipTo: { customer: from.company || "FBS Print", attn: from.name || "Receiving", address: [from.street1, from.street2].filter(Boolean).join(" "), city: from.city, state: from.state, zip: from.zip },
       email: p.test ? undefined : v.user!.email || undefined,
     });

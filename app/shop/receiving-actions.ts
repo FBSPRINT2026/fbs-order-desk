@@ -2,7 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, SIZES, type Order } from "@/lib/pricing";
-import { ssConfigured, ssOurCard, ssPlaceOrder } from "@/lib/ss";
+import { ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder } from "@/lib/ss";
 import { matchToSS, shopEmails } from "@/lib/ssMatch";
 
 async function staff() {
@@ -62,11 +62,14 @@ export async function orderBlanksSS(orderId: string, p: { lines: { sku: string; 
     const c = (o as unknown as { customers: { company: string; name: string } | null })?.customers;
     const po = `#${o?.number} ${c?.company || c?.name || o?.nickname || ""}`.trim();
     // paid with our saved card (ending 5488), never the account's terms
+    // each line from the closest warehouse that has it (Fort Worth first)
+    const alloc = await ssAllocate(lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })));
+    if (alloc.short.length) return { ok: false as const, error: `S&S doesn't have enough of: ${alloc.short.join("; ")}.` };
     const card = await ssOurCard(await shopEmails(v.user?.email));
     if (!card.ok) return { ok: false as const, error: card.error };
     const res = await ssPlaceOrder({
       payment: { email: card.profile.email, profileID: card.profile.profileID },
-      lines: lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), po, test: p.test, shippingMethod: p.shippingMethod,
+      lines: alloc.lines, po, test: p.test, shippingMethod: p.shippingMethod,
       shipTo: { customer: from.company || "FBS Print", attn: from.name || "Receiving", address: [from.street1, from.street2].filter(Boolean).join(" "), city: from.city, state: from.state, zip: from.zip },
       email: p.test ? undefined : v.email,
     });
