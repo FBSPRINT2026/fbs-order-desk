@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +9,7 @@ import { useShopData, type OrderRow } from "@/lib/shopData";
 import { Due } from "@/components/bits";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
+import { useRole } from "@/components/RoleContext";
 
 /**
  * Order pipeline (a sales tool, on the dashboard): one column per status, compact cards (order #, job, due,
@@ -30,15 +31,9 @@ export default function OrderBoard({ mine: mineProp }: { mine?: boolean }) {
   const mine = mineProp ?? mineOwn;
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [me, setMe] = useState({ email: "", name: "" });
-  useEffect(() => {
-    const sb = createClient();
-    sb.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user?.email) return;
-      const { data } = await sb.from("staff").select("name").eq("email", user.email.toLowerCase()).maybeSingle();
-      setMe({ email: user.email.toLowerCase(), name: (data?.name as string) || "" });
-    });
-  }, []);
+  // who's signed in comes from the shop layout (no sign-in check and staff lookup from the browser)
+  const { email: myEmail = "", staffName = "" } = useRole();
+  const me = useMemo(() => ({ email: myEmail, name: staffName }), [myEmail, staffName]);
 
   const cols = STATUSES.filter((s) => showQuotes || s.type === "invoice");
   const owners = settings.accountOwners || [];

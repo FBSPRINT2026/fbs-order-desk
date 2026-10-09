@@ -40,8 +40,9 @@ const PV_DONE = /job completed|quote - closed|cancel/i;
 const pvKind = (s: string) => /ship|delivery/i.test(s) ? "ship" : /^quote/i.test(s) ? "quote" : /ready for production|scheduling|pre production|holder|waiting on details/i.test(s) ? "queue" : /issue/i.test(s) ? "issue" : "production";
 
 export default function Dashboard() {
-  const [me, setMe] = useState("");
-  const { perms } = useRole();
+  const { perms, email: myEmail = "", staffName = "" } = useRole();
+  // who "Mine" means: the signed-in person's first name (from the layout, no extra round trip before the data loads)
+  const me = myEmail ? (staffName || myEmail.split("@")[0]).split(/[\s._-]+/)[0].toLowerCase() : "";
   const router = useRouter();
   const boss = perms.money; // owners / admins see the sales numbers; crew (production, receiving, shipping) get the production dashboard
   const crew = !boss;
@@ -61,11 +62,10 @@ export default function Dashboard() {
   useEffect(() => {
     const sb = createClient();
     (async () => {
-      const { data: { user } } = await sb.auth.getUser();
-      if (user?.email) { const { data: st } = await sb.from("staff").select("name, role").eq("email", user.email.toLowerCase()).maybeSingle(); setMe(((st?.name as string) || user.email.split("@")[0]).split(/[\s._-]+/)[0].toLowerCase()); }
       const lastYearFrom = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); d.setDate(d.getDate() - 7); return iso(d); })();
       const lastYearTo = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); d.setDate(d.getDate() + 21); return iso(d); })();
-      const [o, a, m, e, ly, recent, sml, bal] = await Promise.all([
+      // everything the page needs, asked for at once (each query used to wait for the one before it)
+      const [o, a, m, e, ly, recent, sml, bal, sepQ, aoQ] = await Promise.all([
         sb.from("orders").select("id, number, nickname, customer_id, due_date, status, type, total, delivery_method, submitted_at").not("status", "in", "(completed)").limit(800),
         sb.from("archived_orders").select("id, visual_id, nickname, customer_id, due_date, status_name, kind, total, owner:data->>owner").not("status_name", "in", '("Job Completed","Quote - Closed")').limit(800),
         sb.from("messages").select("id, order_id, customer_id, author_name, author_email, body, created_at, topic").eq("author_type", "customer").is("read_at", null).order("created_at", { ascending: false }).limit(30),
@@ -74,16 +74,17 @@ export default function Dashboard() {
         sb.from("archived_orders").select("customer_id, order_date, owner:data->>owner").gte("order_date", addDays(-240)).order("order_date", { ascending: false }).limit(3000),
         sb.from("supplier_manifest_lines").select("tracking, track_status, est_delivery, delivered_at, ship_date, method").neq("kind", "ignored").gte("created_at", new Date(Date.now() - 20 * 86400000).toISOString()).limit(3000),
         sb.from("archived_orders").select("id, visual_id, nickname, customer_id, balance, due_date").eq("kind", "invoice").gt("balance", 0.5).order("balance", { ascending: false }).limit(60),
+        sb.from("separations").select("id, number, order_id, location, garment_color, status, due_date, customer_id, channels, updated_at").not("status", "in", "(cancelled,films)").order("due_date", { ascending: true, nullsFirst: false }).limit(200),
+        sb.from("customer_private").select("customer_id, account_owner").neq("account_owner", "").limit(5000),
       ]);
-      const { data: sp } = await sb.from("separations").select("id, number, order_id, location, garment_color, status, due_date, customer_id, channels, updated_at").not("status", "in", "(cancelled,films)").order("due_date", { ascending: true, nullsFirst: false }).limit(200);
+      const sp = sepQ.data;
       setSeps((sp || []) as SepLite[]);
       setOwed(((bal.data || []) as { id: string; visual_id: string; nickname: string; customer_id: string | null; balance: number; due_date: string | null }[]).map((b) => ({ id: b.id, number: b.visual_id, nickname: b.nickname, customer_id: b.customer_id, balance: +b.balance || 0, due: b.due_date })));
       // account owners: the owner on the customer's latest Printavo order
       const own: Record<string, string> = {};
       for (const r of (recent.data || []) as { customer_id: string | null; owner: string | null }[]) if (r.customer_id && r.owner && !own[r.customer_id]) own[r.customer_id] = r.owner.split(/\s+/)[0].toLowerCase();
       // …unless the customer has an account owner set here (Settings → Staff → Account owners)
-      const { data: ao } = await sb.from("customer_private").select("customer_id, account_owner").neq("account_owner", "").limit(5000);
-      for (const r of (ao || []) as { customer_id: string; account_owner: string }[]) own[r.customer_id] = r.account_owner.split(/\s+/)[0].toLowerCase();
+      for (const r of (aoQ.data || []) as { customer_id: string; account_owner: string }[]) own[r.customer_id] = r.account_owner.split(/\s+/)[0].toLowerCase();
       setOwners(own);
       const js: Job[] = [
         ...((o.data || []) as { id: string; number: number; nickname: string; customer_id: string | null; due_date: string | null; status: string; type: string; total: number; delivery_method: string; submitted_at: string | null }[])
@@ -95,14 +96,17 @@ export default function Dashboard() {
       ];
       setJobs(js);
       setMsgs((m.data || []) as Msg[]);
-      // customer email: the ones still waiting on an answer (same rule as the Inbox), and whose mailbox is mine
+      // customer email: the ones still waiting on an answer (same rule as the Inbox), and whose mailbox is mine.
+      // Runs alongside the customer-name lookup below instead of holding it up.
       const allMail = (e.data || []) as Mail[];
-      const inIds = allMail.filter((x) => x.direction === "in").map((x) => x.id);
-      const { data: sg } = inIds.length ? await sb.from("ai_suggestions").select("id, kind, status, activity_id").in("activity_id", inIds) : { data: [] };
-      const mr = mailRows(allMail, (sg || []) as MailSug[]);
-      setMailNeeds(mr.filter((r) => r.needs).map((r) => r.x));
-      setMailUrgent(mr.filter((r) => r.urgent).map((r) => r.x));
-      setMails(allMail.filter((x) => x.direction === "in" && !x.meta?.ignored && x.occurred_at >= new Date(Date.now() - 7 * 86400000).toISOString()).slice(0, 40));
+      (async () => {
+        const inIds = allMail.filter((x) => x.direction === "in").map((x) => x.id);
+        const { data: sg } = inIds.length ? await sb.from("ai_suggestions").select("id, kind, status, activity_id").in("activity_id", inIds) : { data: [] };
+        const mr = mailRows(allMail, (sg || []) as MailSug[]);
+        setMailNeeds(mr.filter((r) => r.needs).map((r) => r.x));
+        setMailUrgent(mr.filter((r) => r.urgent).map((r) => r.x));
+        setMails(allMail.filter((x) => x.direction === "in" && !x.meta?.ignored && x.occurred_at >= new Date(Date.now() - 7 * 86400000).toISOString()).slice(0, 40));
+      })().catch(() => null);
       getMailStatus().then((r) => { if (r.ok && r.mine?.enabled) setMyBox(r.mine.id); }).catch(() => null);
       // reorder reminders: ordered around this time last year, nothing since (in the last 60 days)
       const recentBuyers = new Set(((recent.data || []) as { customer_id: string | null; order_date: string | null }[]).filter((r) => r.order_date && r.order_date >= addDays(-60)).map((r) => r.customer_id));
@@ -128,10 +132,11 @@ export default function Dashboard() {
       // customer names for everything on the page
       const ids = [...new Set([...js.map((x) => x.customer_id), ...((m.data || []) as Msg[]).map((x) => x.customer_id), ...((e.data || []) as Mail[]).map((x) => x.customer_id), ...((ly.data || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...((bal.data || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...((sp || []) as SepLite[]).map((x) => x.customer_id)].filter(Boolean))] as string[];
       const out: Record<string, Cust> = {};
-      for (let i = 0; i < ids.length; i += 300) {
-        const { data } = await sb.from("customers").select("id, company, name").in("id", ids.slice(i, i + 300));
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += 300) chunks.push(ids.slice(i, i + 300));
+      // the batches go out together instead of one after another
+      for (const { data } of await Promise.all(chunks.map((c) => sb.from("customers").select("id, company, name").in("id", c))))
         for (const c of (data || []) as Cust[]) out[c.id] = c;
-      }
       setCusts(out);
     })();
   }, []);

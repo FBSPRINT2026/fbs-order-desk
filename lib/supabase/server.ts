@@ -21,12 +21,16 @@ export async function createClient() {
   });
 }
 
-/** The signed-in user plus whether they are shop staff, and their staff role (owner, admin, production, receiving, shipping). */
-export async function getViewer() {
+/**
+ * The signed-in user plus whether they are shop staff, and their staff role (owner, admin, production, receiving, shipping).
+ * `extra` adds more staff columns to the same lookup (e.g. ", name, shortcuts") so a caller doesn't need a second query.
+ */
+export async function getViewer(extra = "") {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, email: "", isStaff: false, role: "" };
+  if (!user) return { supabase, user: null, email: "", isStaff: false, role: "", staff: null as Record<string, unknown> | null };
   const email = (user.email || "").toLowerCase();
-  const { data } = await supabase.from("staff").select("email, role").eq("email", email).maybeSingle();
-  return { supabase, user, email, isStaff: !!data, role: ((data?.role as string) || "") };
+  const { data } = await supabase.from("staff").select("email, role" + extra).eq("email", email).maybeSingle();
+  const staff = (data || null) as Record<string, unknown> | null;
+  return { supabase, user, email, isStaff: !!staff, role: ((staff?.role as string) || ""), staff };
 }
