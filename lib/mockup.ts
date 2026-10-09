@@ -46,7 +46,9 @@ export const LOCATION_SPOTS: Record<string, Loc> = {
  * and each color is shot on a slightly different form, so the shirt's size, height and sleeve angle change from photo to photo.
  * s = size vs the reference, cx = body center, top = top of the collar; sleeves = where each sleeve print sits on this photo.
  */
-export type Fit = { s: number; cx: number; top: number; /** PNG data URL: opaque where the shirt is, clear on the background */ mask: string; sleeve: { left: { x: number; y: number; rot: number }; right: { x: number; y: number; rot: number } } };
+export type Fit = { s: number; cx: number; top: number; /** PNG data URL: opaque where the shirt is, clear on the background */ mask: string; sleeve: { left: { x: number; y: number; rot: number }; right: { x: number; y: number; rot: number } };
+  /** a bag or tote (flat, no collar): its body on the photo (px) and pixels per inch from its real width */
+  flat?: { cx: number; top: number; w: number; h: number; ppi: number } };
 const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
 /** Center of the sleeve print area: this far (reference px) up the fold from the sleeve tip, i.e. area bottom ~0.5" above the hem. */
 const SLEEVE_UP = 76.5;
@@ -127,6 +129,45 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
   if (!ok(right.rot) && ok(left.rot)) right = { ...right, rot: -left.rot };
   if (!ok(left.rot) && !ok(right.rot)) { left = { ...left, rot: 35 }; right = { ...right, rot: -35 }; }
   return { s, cx, top: T, mask, sleeve: { left, right } };
+}
+
+/**
+ * A bag or tote photo (white background): the body of the bag (the wide part under the handles) and its scale from the
+ * bag's real width. Prints are placed on the body, centered, at real size (no shirt geometry).
+ */
+export function measureBag(img: HTMLImageElement, widthIn: number): Fit | null {
+  const W = PHOTO_W, H = PHOTO_H;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const x = c.getContext("2d", { willReadFrequently: true });
+  if (!x) return null;
+  x.drawImage(img, 0, 0, W, H);
+  let d: Uint8ClampedArray;
+  try { d = x.getImageData(0, 0, W, H).data; } catch { return null; }
+  const bg = new Uint8Array(W * H);
+  const light = (p: number) => Math.min(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]) >= 245;
+  const stack = new Int32Array(W * H);
+  let sp = 0;
+  const push = (p: number) => { if (!bg[p] && light(p)) { bg[p] = 1; stack[sp++] = p; } };
+  for (let X = 0; X < W; X++) { push(X); push((H - 1) * W + X); }
+  for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+  while (sp) { const p = stack[--sp], X = p % W; if (X > 0) push(p - 1); if (X < W - 1) push(p + 1); if (p >= W) push(p - W); if (p < W * (H - 1)) push(p + W); }
+  const md = x.createImageData(W, H);
+  for (let p = 0; p < W * H; p++) md.data[p * 4 + 3] = bg[p] ? 0 : 255;
+  const mc = document.createElement("canvas"); mc.width = W; mc.height = H; mc.getContext("2d")!.putImageData(md, 0, 0);
+  const width = new Int16Array(H), L = new Int16Array(H).fill(-1), R = new Int16Array(H).fill(-1);
+  for (let y = 0; y < H; y++) { for (let X = 0; X < W; X++) if (!bg[y * W + X]) { if (L[y] < 0) L[y] = X; R[y] = X; } width[y] = L[y] < 0 ? 0 : R[y] - L[y]; }
+  const max = Math.max(...Array.from(width));
+  if (max < 200) return null;
+  // the body: rows nearly as wide as the widest (the handles are much narrower)
+  let top = -1, bot = -1;
+  for (let y = 0; y < H; y++) if (width[y] >= max * 0.85) { if (top < 0) top = y; bot = y; }
+  if (top < 0 || bot - top < 150) return null;
+  let sum = 0, n = 0;
+  for (let y = top; y <= bot; y++) if (width[y] >= max * 0.85) { sum += (L[y] + R[y]) / 2; n++; }
+  const cx = sum / n, w = max, h = bot - top;
+  const none = { x: cx, y: top, rot: 0 };
+  return { s: 1, cx, top, mask: mc.toDataURL("image/png"), sleeve: { left: none, right: none }, flat: { cx, top, w, h, ppi: w / Math.max(4, widthIn) } };
 }
 
 /** Which garment photos a location shows on. */
@@ -258,6 +299,13 @@ export function basePlacement(location: string, wIn: number, ratio: number, drop
     const ppi0 = PX_PER_IN * scale * k, w0 = wIn * ppi0, h0 = ratio ? w0 * ratio : w0, a0 = spot.maxW * ppi0, b0 = spot.maxH * ppi0;
     return { view: view || "front", x: pt.x - w0 / 2, y: pt.y - h0 / 2, w: w0, h: h0, rot: pt.rot, clip: hf.show, area: { x: pt.x - a0 / 2, y: pt.y - b0 / 2, w: a0, h: b0 }, k };
   }
+  if (fit?.flat) {
+    // a bag: centered on its body (or the set drop below the body's top), at real size from the bag's width
+    const f = fit.flat, p = f.ppi, w = wIn * p, h = ratio ? w * ratio : w;
+    const x = f.cx - w / 2 + (spot.dx || 0) * p, y = dropIn != null ? f.top + dropIn * p : f.top + Math.max(0, (f.h - h) / 2);
+    const area = { x: f.cx - f.w / 2 + p, y: f.top + p, w: Math.max(p, f.w - 2 * p), h: Math.max(p, f.h - 2 * p) };
+    return { view: spot.view, x, y, w, h, rot: 0, clip: "" as "" | "left" | "right", area, k: p / (PX_PER_IN * scale) };
+  }
   const ppi = PX_PER_IN * scale;
   const w = wIn * ppi;
   const h = ratio ? w * ratio : w;
@@ -284,7 +332,14 @@ export const SHIRT_COLORS: { group: string; colors: [string, string][] }[] = [
   { group: "Purples & browns", colors: [["Orchid", "#c9a3cf"], ["Violet", "#8a74b5"], ["Purple", "#4b2a7b"], ["Brown Savana", "#8b6f56"], ["Russet", "#6d3b2b"], ["Dark Chocolate", "#3b2a24"]] },
 ];
 const NAMED: Record<string, string> = Object.fromEntries(SHIRT_COLORS.flatMap((g) => g.colors.map(([n, h]) => [n.toLowerCase(), h])));
-export const guessHex = (color: string) => NAMED[(color || "").toLowerCase().trim()] || NAMED[(color || "").toLowerCase().replace(/\s*\(.*\)|heather\s*/g, "").trim()] || "#9aa1ab";
+const NAMED_LONGEST = () => Object.keys(NAMED).sort((a, b) => b.length - a.length);
+/** a color name's color: exact, then without "heather"/(…), then any known color named inside it ("True Royal" → Royal) */
+export const guessHex = (color: string) => {
+  const c = (color || "").toLowerCase().trim().replace(/([a-z])([A-Z])/g, "$1 $2");
+  const spaced = (color || "").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().trim();
+  return NAMED[c] || NAMED[spaced] || NAMED[spaced.replace(/\s*\(.*\)|heather\s*/g, "").trim()]
+    || NAMED[NAMED_LONGEST().find((k) => new RegExp(`(^|\\s)${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|\\s)`).test(spaced)) || ""] || "#9aa1ab";
+};
 /** a shirt color name's color, when it's one we know (else null) */
 export const shirtHex = (color: string): string | null => NAMED[(color || "").toLowerCase().trim()] || null;
 

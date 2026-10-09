@@ -22,7 +22,7 @@ import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
-import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, measureBag, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
@@ -376,10 +376,20 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // each color of the logo (fade steps and combined colors too) already set to the ink it prints as
           const sources = plan.inks.flatMap((k) => [k.hex, ...(k.also || [])].map((hex) => ({ hex, share: 0 })));
           const map: Paint["map"] = {};
-          for (const k of plan.inks) for (const hex of [k.hex, ...(k.also || [])]) map[hex] = { name: k.name, hex: colorHex(k.name) || k.hex };
-          const names = [...new Set(plan.inks.map((k) => k.name))];
+          // inks already named on the order (the customer's proof: "White, PMS 368 C") win over our closest guess:
+          // each logo color gets the nearest of those (Oct 9: a guessed PMS 360 C replaced her PMS 368 C)
+          const asked = (im.inks || "").split(/\s*[,;+]\s*|\s+\/\s+|\s+and\s+/i).map((z) => z.trim()).filter((z) => z && colorHex(z));
+          const rgb = (h: string) => { const v = h.replace("#", ""); return [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0); };
+          const dist = (a: string, b: string) => { const x = rgb(a), y = rgb(b); return (x[0] - y[0]) ** 2 + (x[1] - y[1]) ** 2 + (x[2] - y[2]) ** 2; };
+          const nearestAsked = (hex: string) => asked.slice().sort((a, b) => dist(hex, colorHex(a)!) - dist(hex, colorHex(b)!))[0];
+          const useAsked = asked.length > 0 && asked.length >= Math.min(plan.inks.length, asked.length);
+          for (const k of plan.inks) {
+            const name = useAsked ? nearestAsked(k.hex) : k.name;
+            for (const hex of [k.hex, ...(k.also || [])]) map[hex] = { name, hex: colorHex(name) || k.hex };
+          }
+          const names = useAsked ? asked : [...new Set(plan.inks.map((k) => k.name))];
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map, unite: true, plan: plan! } }));
-          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: plan!.colors } : x)));
+          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: useAsked ? asked.length : plan!.colors } : x)));
           return;
         }
         const sources = detectColors(img);
@@ -533,6 +543,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return p ? ssImg(p) : teeSvg(guessHex(l.color), view);
   };
 
+  // bags and totes: flat, no collar; measured as a bag and printed centered on the body at real size (Oct 9: totes)
+  const isBag = (l?: Line) => { if (!l) return false; const g = garmentFor(l); return /\b(tote|bag|backpack|duffel|cinch|sack|pouch)\b/i.test(`${g?.description || ""} ${l.garment || ""} ${g?.style || ""}`); };
+  const bagWidth = (l: Line) => {
+    const g = garmentFor(l), sp = g?.specs?.sizes?.OS;
+    if (sp?.width && sp.width > 4) return sp.width;
+    const m = `${g?.description || ""} ${l.garment || ""}`.match(/(\d+(?:\.\d+)?)\s*["”]?\s*w\b/i);
+    return m ? +m[1] : 15;
+  };
+  const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v));
   // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
   const [fits, setFits] = useState<Record<string, Fit | null>>({});
   const fitFor = (l: Line | undefined, v: View) => { if (!l) return null; const u = photo(l, v); return u.startsWith("data:") ? null : fits[u] || null; };
@@ -541,7 +560,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const u = photo(l, v);
       if (u.startsWith("data:") || u in fits) continue;
       setFits((f) => ({ ...f, [u]: null }));
-      loadImg(u).then((img) => { const fit = measureGarment(img, v); setFits((f) => ({ ...f, [u]: fit })); }).catch(() => {});
+      loadImg(u).then((img) => { const fit = measureFor(l, img, v); setFits((f) => ({ ...f, [u]: fit })); }).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, catalog]);
@@ -733,7 +752,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const v = vs[i], ox = i * (pw + gap), oy = 0;
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
       main.drawImage(bg, ox, oy, pw, ph);
-      const u = photo(l, v), fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
+      const u = photo(l, v), fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
       // art goes on its own layer, then gets cut to the shirt outline before it's added to the picture
       const layer = document.createElement("canvas"); layer.width = c.width; layer.height = c.height;
       const x = layer.getContext("2d")!;
@@ -793,7 +812,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const v = viewsFor(im.location)[0]; if (!v) return null;
     const u = photo(l, v);
     const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
-    const fit = u.startsWith("data:") ? null : fits[u] || measureGarment(bg, v);
+    const fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
     const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
     const side = Math.min(PHOTO_W, Math.max(120, Math.max(p.w, p.h) * (p.rot ? 1.35 : 1.12)));
@@ -1280,7 +1299,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 {(["front", "back"] as View[]).map((v) => <button key={v} type="button" className={"chip" + (shownView === v ? " on" : "")} onClick={() => setTab(v)}>{v === "front" ? "Front" : "Back"}</button>)}
               </div>
             )}
-            {(single ? [shownView] : (["front", "back"] as View[])).map((v) => (
+            {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
               <Stage key={v} grid={grid} cx={fitFor(line, v)?.cx}
                 corner={<>
                   {(v === "front" || single) && (
