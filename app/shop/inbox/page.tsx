@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "../mail-actions";
-import { aiReplyOptions, aiWriteReply, markNoReply, putBackInInbox } from "../ai-actions";
+import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "../ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
 import EmailChat from "@/components/EmailChat";
 import type { EmailAction } from "@/lib/ai/emailChat";
@@ -32,6 +32,8 @@ export default function Inbox() {
   const [tab, setTab] = useSticky<"reply" | "leads" | "all">("inbox.tab", "reply");
   const [whose, setWhose] = useSticky<"mine" | "everyone">("inbox.whose", "mine");
   const [connecting, setConnecting] = useState(false);
+  // the email list beside the three panes: hide it to make room (remembered)
+  const [listOpen, setListOpen] = useSticky<boolean>("inbox.list", true);
   const [open, setOpen] = useState<string | null>(null), [focus, setFocus] = useState<string | null>(null), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
 
   const load = useCallback(async () => {
@@ -106,7 +108,7 @@ export default function Inbox() {
       {st?.mine?.enabled && st.mine.last_error && <div className="pv-err" style={{ marginBottom: 12 }}>{st.mine.last_error}</div>}
       {st && st.all.length > 0 && <div className="faint ibx-boxes">Connected: {st.all.map((b) => <span key={b.id} className={b.enabled ? (b.last_error ? "bad" : "ok") : "off"} title={b.last_error || (b.last_ok_at ? `checked ${ago(b.last_ok_at)}` : "")}>{b.email}{!b.enabled ? " (off)" : b.last_error ? " (problem)" : ""}</span>)}</div>}
       {msg && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)", marginBottom: 10 }}>{msg}</div>}
-      <div className={"ibx-split" + (picked && sel ? " picked" : "")}>
+      <div className={"ibx-split" + (picked && sel ? " picked" : "") + (sel ? " reading" : "") + (sel && !listOpen ? " nolist" : "")}>
         <section className="ibx-pane ibx-left" aria-label="Emails">
           <div className="ibx-left-h">
             <div className="ibx-tabs" role="tablist">
@@ -151,7 +153,7 @@ export default function Inbox() {
             : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "") + ((sel.x.meta as { reply_options?: { at?: string } } | null)?.reply_options?.at || "")} focus={focus === sel.x.id} x={sel.x} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
                 orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
                 thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
-                back={() => setPicked(false)} busy={busy} setBusy={setBusy} done={(t) => { flash(t); load(); }} />}
+                back={() => setPicked(false)} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} busy={busy} setBusy={setBusy} done={(t) => { flash(t); load(); }} />}
         </section>
       </div>
     </>
@@ -164,7 +166,7 @@ type Opt = { label: string; subject: string; body: string };
  * The right-hand pane: who and what at the top, then the answer (suggested answers first, so they're the first thing
  * you see), then the email itself and the conversation before it.
  */
-function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done }: { x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string) => void }) {
+function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList }: { x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string) => void; listOpen: boolean; toggleList: () => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
@@ -176,11 +178,14 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const boxRef = useRef<HTMLTextAreaElement | null>(null);
   // Create order: the AI's suggested order from this email and its attachments, to check and create
   const [ordering, setOrdering] = useState(false), [orderStart, setOrderStart] = useState<{ told?: string; job?: string; n: number } | null>(null);
-  useEffect(() => { setOrdering(false); setOrderStart(null); }, [x.id]);
+  // three panes: the email, the AI chat, the response (answer or order); on a narrow screen one at a time
+  const [pane, setPane] = useState<"mail" | "ai" | "resp">(focus ? "resp" : "ai"), [resp, setResp] = useState<"reply" | "order">("reply");
+  const [made, setMade] = useState<{ id: string; number: number } | null>(null), [bump, setBump] = useState(0);
+  useEffect(() => { setOrdering(false); setOrderStart(null); setMade(null); }, [x.id]);
   // a step the Inbox chat suggested: open Create order with what to know, put a reply in the box, file it, no reply
   function act(a: EmailAction) {
-    if (a.kind === "create_order") { setOrderStart((p) => ({ told: a.told, job: a.job, n: (p?.n || 0) + 1 })); setOrdering(true); }
-    else if (a.kind === "reply") { if (a.subject) setSubject(a.subject); setBody(a.body); setPicked(-1); setTimeout(() => boxRef.current?.focus(), 30); }
+    if (a.kind === "create_order") { setOrderStart((p) => ({ told: a.told, job: a.job, n: (p?.n || 0) + 1 })); setOrdering(true); setResp("order"); setPane("resp"); }
+    else if (a.kind === "reply") { if (a.subject) setSubject(a.subject); setBody(a.body); setPicked(-1); setResp("reply"); setPane("resp"); setTimeout(() => boxRef.current?.focus(), 30); }
     else if (a.kind === "file_under") { const o = orders.find((z) => z.number === a.order_number); if (o) void run("ord", () => setEmailOrder(x.id, o.id), `Filed under #${o.number}.`); else setErr(`#${a.order_number} isn't one of their open orders.`); }
     else if (a.kind === "no_reply") void run("nr", () => markNoReply(x.id), "Off your Needs a reply list.");
   }
@@ -205,15 +210,26 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else done(ok); };
   const when = new Date(x.occurred_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   return (
-    <div className="ibx-read">
+    <div className="ibx-work" data-pane={pane}>
+      <div className="ibx-work-tabs" role="tablist" aria-label="Panes">
+        <button type="button" role="tab" aria-selected={pane === "mail"} className={pane === "mail" ? "on" : ""} onClick={() => setPane("mail")}>Email</button>
+        <button type="button" role="tab" aria-selected={pane === "ai"} className={pane === "ai" ? "on" : ""} onClick={() => setPane("ai")}>✦ AI</button>
+        <button type="button" role="tab" aria-selected={pane === "resp"} className={pane === "resp" ? "on" : ""} onClick={() => setPane("resp")}>{resp === "order" && ordering ? "Order" : "Answer"}</button>
+      </div>
+
+      {/* 1. the email */}
+      <section className="ibx-col ibx-col-mail" aria-label="The email">
       <header className="ibx-read-h">
-        <button type="button" className="btn sm ghost ibx-back" onClick={back}>← Emails</button>
+        <div className="row" style={{ gap: 6 }}>
+          <button type="button" className="btn sm ghost ibx-back" onClick={back}>← Emails</button>
+          <button type="button" className="btn sm ghost ibx-listbtn" onClick={toggleList} title={listOpen ? "Hide the email list to make room" : "Show the email list"}>{listOpen ? "⟨ Hide list" : "☰ Emails"}</button>
+        </div>
         <h2>{x.subject || "(no subject)"}</h2>
         <div className="ibx-read-from"><b>{who}</b>{who !== (x.meta?.from_name || x.from_email) && <span> · {x.meta?.from_name || ""} &lt;{x.from_email}&gt;</span>}{who === (x.meta?.from_name || x.from_email) && who !== x.from_email && <span> &lt;{x.from_email}&gt;</span>}<span className="faint"> · {when}{answered ? " · answered" : ""}</span></div>
         {urgent && <div className="ibx-read-urgent"><b>Urgent</b>{x.meta?.triage?.urgent_reason ? ` · ${x.meta.triage.urgent_reason}` : " · the customer needs a fast answer"}</div>}
         {x.meta?.triage?.summary && <div className="ibx-read-sum">✦ {x.meta.triage.summary}</div>}
         <div className="ibx-read-tools">
-          {x.direction === "in" && <button type="button" className={"btn sm" + (orderish && !x.order_id ? " primary" : "")} disabled={!!busy} onClick={() => setOrdering((v) => !v)} title="The AI reads the email and its attachments and suggests the order (new, or a reorder of a past job) for you to check">{ordering ? "Hide order" : x.meta?.triage?.intent === "reorder" ? "Create reorder" : "Create order"}</button>}
+          {x.direction === "in" && <button type="button" className={"btn sm" + (orderish && !x.order_id ? " primary" : "")} disabled={!!busy} onClick={() => { setOrdering(true); setResp("order"); setPane("resp"); }} title="The AI reads the email and its attachments and suggests the order (new, or a reorder of a past job) for you to check">{x.meta?.triage?.intent === "reorder" ? "Create reorder" : "Create order"}</button>}
           {x.customer_id && <select aria-label="File under an order" value={x.order_id || ""} disabled={!!busy} onChange={(e) => run("ord", () => setEmailOrder(x.id, e.target.value || null), "Filed under the order.")}>
             <option value="">Not about an order</option>{orders.slice(0, 40).map((o) => <option key={o.id} value={o.id}>#{o.number} {o.nickname || ""} ({o.status})</option>)}
           </select>}
@@ -234,11 +250,28 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {hits.length > 0 && <span className="ibx-hits">{hits.map((c) => <button key={c.id} type="button" onClick={() => run("cust", () => setEmailCustomer(x.id, c.id), `${x.meta?.from_name || x.from_email} is now a contact at ${c.company || c.name}. Their email will file there from now on.`)}>{c.company || c.name}</button>)}</span>}</span>
         </div>}
       </header>
+      <div className="ibx-msg">
+        <div className="ibx-msg-h"><b>{x.meta?.from_name || x.from_email}</b><span className="faint"> wrote · {when}</span></div>
+        <EmailBody x={x} />
+        {(x.meta?.attachments || []).length > 0 && <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>{x.meta!.attachments!.map((f) => <button key={f.path} type="button" className="btn sm" onClick={() => urlFor(f.path)}>📎 {f.name}</button>)}</div>}
+      </div>
+      {thread.length > 0 && <div className="ibx-thread"><div className="ibx-msg-h"><b>Earlier in this conversation</b></div>{[...thread].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)).map((t) => <div key={t.id} className={"ibx-t " + t.direction}><b>{t.direction === "out" ? "You" : t.meta?.from_name || t.from_email}</b> · {new Date(t.occurred_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}<div>{t.body.slice(0, 700)}</div></div>)}</div>}
+      </section>
 
-      {x.direction === "in" && <EmailChat activityId={x.id} onAction={act} busyOutside={!!busy} />}
+      {/* 2. the AI: stays open while answers are written and orders made */}
+      <section className="ibx-col ibx-col-ai" aria-label="Talk it over with the AI">
+        {x.direction === "in" ? <EmailChat activityId={x.id} onAction={act} busyOutside={!!busy} bump={bump} /> : <div className="faint" style={{ padding: 16 }}>Your sent email.</div>}
+      </section>
 
-      {ordering && <EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={x.id} start={orderStart || undefined} onClose={() => setOrdering(false)} onCreated={(id, n, opened) => { setOrdering(false); if (!opened) window.open(`/shop/orders/${id}`, "_blank"); done(`Order #${n} created from the email. Our mockup is being built in a new tab; the order opens there when it's saved.`); }} />}
-
+      {/* 3. the response: the answer, or the order being made */}
+      <section className="ibx-col ibx-col-resp" aria-label="Your response">
+        <div className="ibx-resp-tabs">
+          <button type="button" className={resp === "reply" ? "on" : ""} onClick={() => setResp("reply")}>Answer</button>
+          {x.direction === "in" && <button type="button" className={resp === "order" ? "on" : ""} onClick={() => { setOrdering(true); setResp("order"); }}>{x.meta?.triage?.intent === "reorder" ? "Reorder" : "Order"}</button>}
+        </div>
+        {made && <div className="ibx-made">Order <b>#{made.number}</b> created. <a href={`/shop/orders/${made.id}`} target="_blank" rel="noreferrer">Open #{made.number}</a></div>}
+        {ordering && <div hidden={resp !== "order"}><EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={x.id} start={orderStart || undefined} onClose={() => { setOrdering(false); setResp("reply"); }} onCreated={(id, n, opened) => { setOrdering(false); setResp("reply"); setMade({ id, number: n }); if (!opened) window.open(`/shop/orders/${id}`, "_blank"); void noteEmailChat(x.id, `Order #${n} created from this email.`, `/shop/orders/${id}`).then(() => setBump((b) => b + 1)); done(`Order #${n} created from the email. Our mockup is being built in a new tab; the order opens there when it's saved.`); }} /></div>}
+        {(resp === "reply" || !ordering) && (
       <div className="ibx-answer">
         <div className="ibx-answer-h"><b>Your answer</b>
           {busy === "opts" ? <span className="faint">✦ Thinking of answers…</span> : <button type="button" className="linkbtn" disabled={!!busy} onClick={() => loadOpts(!!opts)}>{opts ? "✦ Other answers" : "✦ Suggest answers"}</button>}
@@ -260,13 +293,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
         </div>
         {err && <div className="pv-err">{err}</div>}
       </div>
-
-      <div className="ibx-msg">
-        <div className="ibx-msg-h"><b>{x.meta?.from_name || x.from_email}</b><span className="faint"> wrote · {when}</span></div>
-        <EmailBody x={x} />
-        {(x.meta?.attachments || []).length > 0 && <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>{x.meta!.attachments!.map((f) => <button key={f.path} type="button" className="btn sm" onClick={() => urlFor(f.path)}>📎 {f.name}</button>)}</div>}
-      </div>
-      {thread.length > 0 && <div className="ibx-thread"><div className="ibx-msg-h"><b>Earlier in this conversation</b></div>{[...thread].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)).map((t) => <div key={t.id} className={"ibx-t " + t.direction}><b>{t.direction === "out" ? "You" : t.meta?.from_name || t.from_email}</b> · {new Date(t.occurred_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}<div>{t.body.slice(0, 700)}</div></div>)}</div>}
+        )}
+      </section>
     </div>
   );
 }

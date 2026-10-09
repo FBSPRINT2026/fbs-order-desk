@@ -11,7 +11,7 @@ import { storeInboundEmail } from "@/lib/crm/inbound";
 import { LOCATIONS, orderGroups, type Group, type Imprint, type Order } from "@/lib/pricing";
 import { reorderCheck, type ReorderCheck, type ReorderFix } from "@/lib/ai/reorderCheck";
 import { chatThread, orderChat } from "@/lib/ai/orderChat";
-import { emailChat, emailChatThread } from "@/lib/ai/emailChat";
+import { emailChat, emailChatThread, noteEmail } from "@/lib/ai/emailChat";
 
 // Staff-only server actions for the Assistant, the CRM timeline and the AI helpers.
 // AI helpers return { ok:false, off:true } until AI is turned on, so the UI can say how to turn it on.
@@ -305,5 +305,14 @@ export async function aiEmailChat(activityId: string, message: string, lookedUp?
     if (!st.ready) return { ok: false as const, off: true, error: st.reason };
     const r = await emailChat(admin, st.settings, activityId, email, message, lookedUp);
     return r.ok ? { ok: true as const, messages: r.messages } : { ok: false as const, error: r.error };
+  } catch (e) { return fail(e); }
+}
+
+/** Inbox chat: note something that happened (an order made from the email), with a link to it. */
+export async function noteEmailChat(activityId: string, text: string, href?: string) {
+  try {
+    const { admin } = await staff();
+    await noteEmail(admin, activityId, text, href);
+    return { ok: true as const };
   } catch (e) { return fail(e); }
 }

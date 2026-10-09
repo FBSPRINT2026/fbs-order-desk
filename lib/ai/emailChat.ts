@@ -17,7 +17,7 @@ export type EmailAction =
   | { kind: "reply"; label: string; subject?: string; body: string }
   | { kind: "file_under"; label: string; order_number: number }
   | { kind: "no_reply"; label: string };
-export type EmailChatMsg = { role: "staff" | "ai"; text: string; at: string; by?: string; actions?: EmailAction[]; lookedUp?: LookedUp };
+export type EmailChatMsg = { role: "staff" | "ai" | "event"; text: string; at: string; by?: string; actions?: EmailAction[]; lookedUp?: LookedUp; /** event: where it leads (the order made) */ href?: string };
 type Att = { name: string; path: string; type: string; size: number };
 
 export async function emailChatThread(admin: SupabaseClient, activityId: string): Promise<EmailChatMsg[]> {
@@ -60,7 +60,7 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     (earlier || []).length ? `Earlier emails with them (newest first):\n${(earlier || []).map((e) => `- ${String(e.occurred_at).slice(0, 10)} ${e.direction === "out" ? "we wrote" : "they wrote"}: ${e.subject ? `"${e.subject}" ` : ""}${String(e.body || "").replace(/\s+/g, " ").slice(0, 400)}`).join("\n")}` : "",
     `Attached files:\n${listing.join("\n") || "(none)"}`,
     `THE EMAIL (${String(a.occurred_at).slice(0, 10)}):\nSubject: ${a.subject || ""}\n"""\n${String(a.body || "").slice(0, 10000)}\n"""`,
-    thread.length ? `The conversation with staff so far:\n${thread.slice(-16).map((m) => `${m.role === "staff" ? "Staff" : "You"}: ${m.text}`).join("\n")}` : "",
+    thread.length ? `The conversation with staff so far:\n${thread.slice(-16).map((m) => `${m.role === "staff" ? "Staff" : m.role === "event" ? "(What happened)" : "You"}: ${m.text}`).join("\n")}` : "",
     `Staff now says: ${msg}`,
     lookedUp?.text ? `Looked up online for that: ${lookedUp.text}` : "",
   ].filter(Boolean).join("\n\n");
@@ -106,4 +106,16 @@ Follow what staff tell you; it's fact. Keep your own reply to a few sentences, n
   if (had) await admin.from("ai_suggestions").update(row).eq("id", had.id);
   else await admin.from("ai_suggestions").insert(row);
   return { ok: true, messages };
+}
+
+/** something that happened while staff worked the email (an order made from it), into the conversation */
+export async function noteEmail(admin: SupabaseClient, activityId: string, text: string, href?: string) {
+  const thread = await emailChatThread(admin, activityId);
+  const messages: EmailChatMsg[] = [...thread, { role: "event" as const, text: text.slice(0, 300), at: new Date().toISOString(), ...(href && href.startsWith("/") ? { href } : {}) }].slice(-60);
+  const { data: had } = await admin.from("ai_suggestions").select("id").eq("dedupe_key", `email_chat:${activityId}`).limit(1).maybeSingle();
+  if (had) await admin.from("ai_suggestions").update({ payload: { messages }, updated_at: new Date().toISOString() }).eq("id", had.id);
+  else {
+    const { data: a } = await admin.from("activities").select("customer_id, subject").eq("id", activityId).maybeSingle();
+    await admin.from("ai_suggestions").insert({ kind: "email_chat", dedupe_key: `email_chat:${activityId}`, source: "ai", status: "done", priority: 3, customer_id: a?.customer_id || null, activity_id: activityId, title: `Email chat: ${String(a?.subject || "").slice(0, 80)}`, body: text.slice(0, 300), payload: { messages } });
+  }
 }
