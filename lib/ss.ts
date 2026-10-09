@@ -196,6 +196,8 @@ export async function ssSkus(styleIdOrQuery: number | string): Promise<{ styleID
  * and the email of the website user who saved it).
  */
 export const SS_CARD_LAST4 = "5488";
+/** our S&S account rep: custom quotes for bigger orders (Order goods → Ask for a better price) */
+export const SS_REP = { name: "Tiffany Clark", email: "tiffany.clark@ssactivewear.com" };
 export type SSPayProfile = { profileID: number; email: string; label: string; last4: string };
 export async function ssPaymentProfiles(): Promise<SSPayProfile[]> {
   const raw = await ssGet<unknown>("/paymentprofiles/");
@@ -231,6 +233,8 @@ export async function ssPlaceOrder(o: {
   shippingMethod: string; test: boolean; email?: string;
   /** the saved card to charge (ssOurCard); without one S&S bills the account's terms */
   payment?: { email: string; profileID: number };
+  /** an S&S quote number (from our rep) to price the order against */
+  quote?: string;
 }): Promise<SSOrderResult[]> {
   const auth = btoa(`${process.env.SS_ACCOUNT_NUMBER!.trim()}:${process.env.SS_API_KEY!.trim()}`);
   const r = await fetch(BASE + "/orders/", {
@@ -242,6 +246,7 @@ export async function ssPlaceOrder(o: {
       // the closest warehouse that has it first (S&S's "fastest" Freight Optimizer); splits only when the closest is short
       AutoSelectWarehouse_Preference: "fastest",
       ...(o.payment ? { paymentProfile: { email: o.payment.email, profileID: o.payment.profileID } } : {}),
+      ...(o.quote?.trim() ? { quoteNumber: o.quote.trim().slice(0, 40) } : {}),
       rejectLineErrors: true, ...(o.email ? { emailConfirmation: o.email } : {}),
       lines: o.lines.map((l) => ({ identifier: l.identifier, qty: l.qty })),
     }),

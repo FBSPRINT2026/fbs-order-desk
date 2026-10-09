@@ -2,8 +2,11 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, orderGroups, SIZES, type Group, type Order } from "@/lib/pricing";
-import { ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
+import { SS_REP, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus } from "@/lib/ss";
 import { matchToSS, type GoodsRow } from "@/lib/ssMatch";
+import { accountForUser, cfgOf } from "@/lib/mail/config";
+import { sendFromMailbox } from "@/lib/mail/send";
+import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 
 /**
  * Order goods (Shop Tools): buy blanks from S&S straight through their API, with or without an order — from an email
@@ -104,7 +107,7 @@ export async function findOrdersAndCustomers(q: string) {
  * Buy from S&S, shipped to the shop. `test` = dry run (S&S creates and cancels it: nothing is bought). Only a staff
  * click places a real order.
  */
-export async function placeGoods(p: { lines: { sku: string; qty: number; label: string }[]; shippingMethod: string; test: boolean; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null }) {
+export async function placeGoods(p: { lines: { sku: string; qty: number; label: string }[]; shippingMethod: string; test: boolean; label: string; orderId?: string | null; customerId?: string | null; activityId?: string | null; quote?: string }) {
   try {
     const v = await staff();
     if (!ssConfigured()) return { ok: false as const, error: "S&S isn't connected (SS_ACCOUNT_NUMBER / SS_API_KEY in Vercel)." };
@@ -119,7 +122,7 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
     const card = await ssOurCard();
     if (!card.ok) return { ok: false as const, error: card.error };
     const res = await ssPlaceOrder({
-      payment: { email: card.profile.email, profileID: card.profile.profileID },
+      payment: { email: card.profile.email, profileID: card.profile.profileID }, quote: p.quote,
       lines: lines.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), po, test: p.test, shippingMethod: p.shippingMethod || "1",
       shipTo: { customer: from.company || "FBS Print", attn: from.name || "Receiving", address: [from.street1, from.street2].filter(Boolean).join(" "), city: from.city, state: from.state, zip: from.zip },
       email: p.test ? undefined : v.user!.email || undefined,
@@ -131,7 +134,7 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
         order_id: p.orderId || null, customer_id: p.customerId || null, activity_id: p.activityId || null, label: po,
         supplier: "ss", supplier_order: results.map((r) => r.orderNumber).join(", "), po, status: "ordered", placed_via: "api",
         lines: lines.map((l) => ({ sku: l.sku, qty: l.qty, label: l.label })), total: results.reduce((a, r) => a + r.total, 0) || null,
-        expected_date: expected ? expected.slice(0, 10) : null, created_by: v.user!.email || "staff", note: "",
+        expected_date: expected ? expected.slice(0, 10) : null, created_by: v.user!.email || "staff", note: p.quote?.trim() ? `S&S quote ${p.quote.trim()}` : "",
       };
       const { error } = await admin.from("blank_orders").insert(row);
       // bought already: say so plainly if it couldn't be recorded (the migration isn't run yet)
@@ -175,5 +178,32 @@ export async function goodsPayInfo() {
     if (!ssConfigured()) return { ok: false as const, error: "S&S isn't connected." };
     const c = await ssOurCard();
     return c.ok ? { ok: true as const, card: c.profile.label } : { ok: false as const, error: c.error };
+  } catch (e) { return fail(e); }
+}
+
+/** our S&S rep (for the page: who a quote request goes to) */
+export async function goodsRep() { return { ...SS_REP }; }
+
+/**
+ * Ask our S&S rep (Tiffany Clark) for a custom quote on these goods: an email from your own mailbox with the list.
+ * She replies with a quote number; put it in "S&S quote #" and the order is priced against it.
+ */
+export async function askRepForQuote(p: { subject: string; body: string }) {
+  try {
+    const v = await staff();
+    if (!p.body.trim()) return { ok: false as const, error: "Write the email first." };
+    const admin = createAdminClient();
+    const from = await accountForUser(admin, v.user!.id);
+    if (!from?.enabled) return { ok: false as const, error: "Connect your email in the Inbox first, so the request goes out from your address." };
+    const signature = from.signature_on !== false ? from.signature_html || "" : "";
+    const page = replyHtml({ body: p.body, signature, css: signature ? from.signature_css : "" });
+    const { html, attachments } = inlineImages(page);
+    const subject = (p.subject || "Quote request").slice(0, 200);
+    const { messageId } = await sendFromMailbox(cfgOf(from), { to: SS_REP.email, subject, text: replyText({ body: p.body, signature }), html, attachments });
+    await admin.from("activities").insert({
+      customer_id: null, kind: "email", direction: "out", subject, body: p.body.trim(), from_email: from.email, to_email: SS_REP.email, external_id: messageId,
+      occurred_at: new Date().toISOString(), created_by: v.user!.email || "staff", ai_processed_at: new Date().toISOString(), meta: { mailbox: "sent", via: "portal", account_id: from.id, account: from.email, goods_quote: true },
+    }).then(() => null, () => null);
+    return { ok: true as const };
   } catch (e) { return fail(e); }
 }

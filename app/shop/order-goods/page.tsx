@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { money } from "@/lib/format";
 import SearchInput from "@/components/SearchInput";
-import { findOrdersAndCustomers, goodsPayInfo, goodsSearch, goodsStart, goodsStyle, linkGoods, placeGoods, recentGoods, type StyleColor } from "./actions";
+import { askRepForQuote, findOrdersAndCustomers, goodsPayInfo, goodsSearch, goodsStart, goodsStyle, linkGoods, placeGoods, recentGoods, type StyleColor } from "./actions";
 
 /**
  * Order goods (Shop Tools): buy blanks from S&S right now, with or without an order. Open it from an email
@@ -41,7 +41,7 @@ function OrderGoods() {
   const [q, setQ] = useState(""), [hits, setHits] = useState<Hit[]>([]), [pick, setPick] = useState<{ brand: string; style: string; colors: StyleColor[] } | null>(null);
   const [color, setColor] = useState(""), [qty, setQty] = useState<Record<string, number>>({});
   // ordering
-  const [method, setMethod] = useState("1");
+  const [method, setMethod] = useState("1"), [quote, setQuote] = useState("");
   const [dry, setDry] = useState<{ orderNumber: string; warehouse: string; total: number; expected: string | null }[] | null>(null);
   const [busy, setBusy] = useState(""), [err, setErr] = useState(""), [msg, setMsg] = useState(""), [sure, setSure] = useState(false);
   const [recent, setRecent] = useState<Recent[] | null>(null), [recentErr, setRecentErr] = useState("");
@@ -102,7 +102,7 @@ function OrderGoods() {
   const orderable = lines.filter((l) => l.sku && l.qty > 0);
   const pcs = orderable.reduce((a, l) => a + l.qty, 0), total = orderable.reduce((a, l) => a + l.price * l.qty, 0);
   const po = (label || (order ? `#${order.number}` : cust ? `${cust.name} (ahead of order)` : "Stock")).trim();
-  const payload = (test: boolean) => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: l.qty, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, test, label: po, orderId: order?.id || null, customerId: cust?.id || null, activityId: email?.id || null });
+  const payload = (test: boolean) => ({ lines: orderable.map((l) => ({ sku: l.sku, qty: l.qty, label: `${l.brand} ${l.style} ${l.color} ${l.size}`.trim() })), shippingMethod: method, test, label: po, quote, orderId: order?.id || null, customerId: cust?.id || null, activityId: email?.id || null });
   async function check() { setBusy("test"); setErr(""); setDry(null); setSure(false); const r = await placeGoods(payload(true)); setBusy(""); if (!r.ok) return setErr(r.error || "S&S said no."); setDry(r.results || []); }
   async function place() {
     if (!sure) { setSure(true); return; }
@@ -114,6 +114,19 @@ function OrderGoods() {
     setLines([]); setDry(null); void loadRecent();
   }
   const lowStock = orderable.some((l) => l.stock < l.qty);
+  // a custom quote from our S&S rep (Tiffany Clark): one click emails her the list from your own mailbox
+  const [quoteSent, setQuoteSent] = useState("");
+  async function askQuote() {
+    const byColor = new Map<string, Line[]>();
+    for (const l of orderable) { const k = `${[l.brand, l.style].filter(Boolean).join(" ")} - ${l.color}`; byColor.set(k, [...(byColor.get(k) || []), l]); }
+    const list = [...byColor].map(([k, ls]) => `${k}: ${ls.map((l) => `${l.size} ${l.qty}`).join(", ")} (${ls.reduce((a, l) => a + l.qty, 0)} pcs)`).join("\n");
+    const body = `Hi Tiffany,\n\nHello! We need to get a custom quote on the following:\n\n${list}\n\nTotal: ${pcs} pcs${po ? `\nPO: ${po}` : ""}\nShipping to our shop.\n\nThanks,`;
+    setBusy("quote"); setErr("");
+    const r = await askRepForQuote({ subject: `Custom quote request: ${pcs} pcs${po ? ` (${po})` : ""}`, body });
+    setBusy("");
+    if (!r.ok) return setErr(r.error || "Couldn't send the email.");
+    setQuoteSent(new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }));
+  }
   // from an email: the customer's color matched to the style's real colors; picking another updates every size of it
   const asks = lines.some((l) => l.asked);
   const styleCache = useMemo(() => new Map<number, StyleColor[]>(), []);
@@ -218,6 +231,7 @@ function OrderGoods() {
         <div className="panel-b stack" style={{ gap: 10 }}>
           <div className="row" style={{ gap: 12, flexWrap: "wrap", alignItems: "center" }}>
             <b>{pcs} pcs · about {money(total)}</b>
+            <label className="row" style={{ gap: 6, fontSize: 13 }} title="The quote number Tiffany sends back: the order is priced against it">S&amp;S quote #<input type="text" value={quote} onChange={(e) => { setQuote(e.target.value.trim()); setDry(null); setSure(false); }} placeholder="optional" style={{ width: 110 }} /></label>
             <label className="row" style={{ gap: 6, fontSize: 13 }}>Ship by<select value={method} onChange={(e) => { setMethod(e.target.value); setDry(null); setSure(false); }} style={{ width: "auto" }}>{SS_METHODS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}</select></label>
             {lowStock && <span className="bad" style={{ fontSize: 12.5 }}>Some sizes are short at S&amp;S; the dry run shows what they can send.</span>}
             {lines.some((l) => !l.sku) && <span className="bad" style={{ fontSize: 12.5 }}>Red lines aren&apos;t carried by S&amp;S and won&apos;t be ordered.</span>}
@@ -232,7 +246,10 @@ function OrderGoods() {
             <button type="button" className={"btn " + (sure ? "danger" : "primary")} disabled={!dry || !orderable.length || !!busy} onClick={place} title={dry ? "" : "Run the dry run first"}>
               {busy === "place" ? "Ordering…" : sure ? `Yes, buy ${pcs} pcs from S&S · ~${money(total)}` : `2. Place the order with S&S${total ? ` · ~${money(total)}` : ""}`}</button>
             {sure && <button type="button" className="btn ghost" onClick={() => setSure(false)}>Cancel</button>}
+            <span className="spacer" />
+            <button type="button" className="btn" disabled={!orderable.length || !!busy} onClick={askQuote} title="Emails Tiffany Clark (our S&S rep) this list for a custom quote, from your email">{busy === "quote" ? "Sending…" : "✉ Email for custom quote"}</button>
           </div>
+          {quoteSent && <div className="okmsg">Sent to Tiffany Clark (tiffany.clark@ssactivewear.com) at {quoteSent}. When she sends the quote number, put it in &quot;S&amp;S quote #&quot; and run the dry run: the order is priced against her quote.</div>}
           {sure && <div className="faint" style={{ fontSize: 12.5 }}>This buys the goods from S&amp;S on our account (PO &quot;{po}&quot;), shipped to the shop. Click again to confirm.</div>}
         </div>
       </section>
