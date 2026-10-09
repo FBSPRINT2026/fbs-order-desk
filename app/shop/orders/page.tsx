@@ -90,8 +90,9 @@ export default function OrdersPage() {
     const timer = setTimeout(async () => {
       const sb = createClient();
       const esc = (s: string) => s.replace(/[\\%_]/g, (m) => "\\" + m);
-      let byText = sb.from("archived_orders").select(ARCHIVE_LIST_COLS).order("order_date", { ascending: false }).limit(100);
-      for (const x of w) byText = byText.ilike("search_staff", `%${esc(x)}%`);
+      // every word must appear (search_archived_orders, a staff-only database function that can use the text index;
+      // a filter from here can't under row security). Longest word first: the index looks that one up.
+      const byText = sb.rpc("search_archived_orders", { p_words: [...w].sort((x, y) => y.length - x.length).map(esc), p_limit: 100 }).select(ARCHIVE_LIST_COLS).order("order_date", { ascending: false });
       // customer names count too: orders of customers whose name matches every word
       const custIds = Object.values(customers).filter((c) => matches(q, c.company, c.name, c.email)).map((c) => c.id).slice(0, 50);
       const [a, b] = await Promise.all([

@@ -59,7 +59,9 @@ function SearchInner() {
       }
       const [o, a] = await Promise.all([
         sb.from("orders").select(OSEL).or(`nickname.ilike.${like},po_number.ilike.${like}`).order("number", { ascending: false }).limit(25),
-        num ? Promise.resolve({ data: [] }) : sb.from("archived_orders").select(ASEL).ilike("search_staff", like.toLowerCase()).order("order_date", { ascending: false, nullsFirst: false }).limit(25),
+        // the Printavo archive's text search goes through search_archived_orders (a staff-only database function):
+        // a plain filter here can't use the text index under row security, so it read all 23k jobs each time
+        num ? Promise.resolve({ data: [] }) : sb.rpc("search_archived_orders", { p_words: [t.toLowerCase()], p_limit: 25 }).select(ASEL).order("order_date", { ascending: false, nullsFirst: false }),
       ]);
       put("orders", ord(o.data || [])); done();
       put("printavo", arc(a.data || [])); done();
