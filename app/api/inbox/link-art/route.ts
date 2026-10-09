@@ -36,6 +36,26 @@ export async function GET(req: Request) {
     const body = await r.text().catch(() => "");
     return NextResponse.json({ status: r.status, location: r.headers.get("location"), type: r.headers.get("content-type"), body: body.slice(0, 6000) });
   }
+  // the emailprotection hand-off step by step (what the WebSocket says), for troubleshooting
+  if (q.get("wsdebug")) {
+    const log: string[] = [];
+    const WS = (globalThis as unknown as { WebSocket?: typeof WebSocket }).WebSocket;
+    log.push(`node ${process.version}, WebSocket ${WS ? "yes" : "no"}`);
+    const r = await fetch(q.get("wsdebug")!, { headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" } });
+    const html = await r.text(); const info = html.match(/data-urlinfo=["']([^"']+)["']/i)?.[1];
+    log.push(`page ${r.status}, urlinfo ${info ? info.length : 0} chars, set-cookie ${r.headers.get("set-cookie") ? "yes" : "no"}`);
+    if (WS && info) {
+      await new Promise<void>((done) => {
+        const sock = new WS(`wss://${new URL(q.get("wsdebug")!).host}/scanning`);
+        const t = setTimeout(() => { log.push("timeout"); try { sock.close(); } catch { /* */ } done(); }, 30_000);
+        sock.onopen = () => { log.push("open"); sock.send(info); };
+        sock.onerror = (e) => { log.push(`error ${String((e as unknown as { message?: string }).message || e.type)}`); };
+        sock.onclose = (e) => { log.push(`close ${e.code} ${e.reason}`); clearTimeout(t); done(); };
+        sock.onmessage = (e) => { log.push(`msg ${String(e.data).slice(0, 600)}`); if (/redirect/.test(String(e.data))) { clearTimeout(t); try { sock.close(); } catch { /* */ } done(); } };
+      });
+    }
+    return NextResponse.json({ log });
+  }
   const id = q.get("activity") || "";
   if (q.get("file") != null) {
     const { data: a } = await admin.from("activities").select("meta").eq("id", id).maybeSingle();
