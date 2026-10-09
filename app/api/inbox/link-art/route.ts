@@ -29,6 +29,13 @@ export async function GET(req: Request) {
   const { data: tk } = await admin.from("integration_tokens").select("data").eq("name", "tooling").maybeSingle();
   const t = (tk?.data || {}) as { token?: string; expires_at?: string };
   if (!t.token || !t.expires_at || t.expires_at < new Date().toISOString() || q.get("t") !== t.token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
+  // a look at what a link answers with (status, where it sends you, the start of the page): for teaching new wrappers
+  if (q.get("peek")) {
+    const r = await fetch(q.get("peek")!, { redirect: "manual", headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" }, signal: AbortSignal.timeout(15_000) }).catch((e) => e as Error);
+    if (r instanceof Error) return NextResponse.json({ error: r.message });
+    const body = await r.text().catch(() => "");
+    return NextResponse.json({ status: r.status, location: r.headers.get("location"), type: r.headers.get("content-type"), body: body.slice(0, 6000) });
+  }
   const id = q.get("activity") || "";
   if (q.get("file") != null) {
     const { data: a } = await admin.from("activities").select("meta").eq("id", id).maybeSingle();
