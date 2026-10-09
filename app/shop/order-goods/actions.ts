@@ -216,3 +216,18 @@ export async function askRepForQuote(p: { subject: string; body: string }) {
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * Where the list would ship from right now (live, as the list changes): each sku's warehouses and quantities, by the
+ * Fewest / Fastest choice, and anything short. Read-only: nothing is sent to S&S's ordering.
+ */
+export async function goodsWarehouses(lines: { sku: string; qty: number }[], mode: "fewest" | "fastest" = "fewest") {
+  try {
+    await staff();
+    if (!ssConfigured()) return { ok: false as const, error: "S&S isn't connected." };
+    const ls = lines.filter((l) => l.sku && l.qty > 0);
+    if (!ls.length) return { ok: true as const, from: [], short: [] as string[] };
+    const a = await ssAllocate(ls.map((l) => ({ identifier: l.sku, qty: Math.round(l.qty) })), mode === "fastest" ? "fastest" : "fewest");
+    return { ok: true as const, from: a.lines.map((l) => ({ sku: l.identifier, qty: l.qty, warehouse: l.warehouseAbbr })), short: a.short };
+  } catch (e) { return fail(e); }
+}

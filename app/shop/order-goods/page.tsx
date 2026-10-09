@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { money } from "@/lib/format";
 import { sizeRank } from "@/lib/sizeOrder";
 import SearchInput from "@/components/SearchInput";
-import { askRepForQuote, findOrdersAndCustomers, goodsPayInfo, goodsSearch, goodsStart, goodsStyle, linkGoods, placeGoods, recentGoods, type StyleColor } from "./actions";
+import { askRepForQuote, findOrdersAndCustomers, goodsPayInfo, goodsSearch, goodsWarehouses, goodsStart, goodsStyle, linkGoods, placeGoods, recentGoods, type StyleColor } from "./actions";
 
 /**
  * Order goods (Shop Tools): buy blanks from S&S right now, with or without an order. Open it from an email
@@ -121,6 +121,24 @@ function OrderGoods() {
   }
   const whName = (w: string) => ({ TX: "Fort Worth", KS: "Kansas", IL: "Illinois", GA: "Georgia", OH: "Ohio", KY: "Kentucky", PA: "Pennsylvania", NV: "Nevada", NJ: "New Jersey", FL: "Florida", CA: "California", MA: "Massachusetts", DS: "Mill direct" } as Record<string, string>)[w] || w;
   const away = Object.values(from).flat().filter((x) => x.warehouse !== "TX");
+  // live: where the list ships from, as soon as it has goods and whenever a line, quantity or the choice changes
+  const [whBusy, setWhBusy] = useState(false), [whShort, setWhShort] = useState<string[]>([]);
+  const whKey = lines.filter((l) => l.sku && l.qty > 0).map((l) => `${l.sku}:${l.qty}`).sort().join("|") + "|" + whMode;
+  useEffect(() => {
+    const ls = lines.filter((l) => l.sku && l.qty > 0);
+    if (!ls.length) { setFrom({}); setWhShort([]); return; }
+    setWhBusy(true);
+    const t = setTimeout(() => {
+      goodsWarehouses(ls.map((l) => ({ sku: l.sku, qty: l.qty })), whMode).then((r) => {
+        setWhBusy(false);
+        if (!r.ok) return;
+        const f: Record<string, { warehouse: string; qty: number }[]> = {};
+        for (const x of r.from) f[x.sku] = [...(f[x.sku] || []), { warehouse: x.warehouse, qty: x.qty }];
+        setFrom(f); setWhShort(r.short);
+      }).catch(() => setWhBusy(false));
+    }, 700);
+    return () => clearTimeout(t);
+  }, [whKey]); // eslint-disable-line react-hooks/exhaustive-deps
   async function place() {
     if (!sure) { setSure(true); return; }
     setBusy("place"); setErr("");
@@ -220,7 +238,7 @@ function OrderGoods() {
 
           {lines.length > 0 ? (
             <div style={{ overflowX: "auto" }}><table className="rv-tbl">
-              <thead><tr><th>Garment</th>{asks && <th>Requested</th>}<th>{asks ? "Found color" : "Color"}</th><th>Size</th><th className="r">Qty</th><th className="r">Price</th><th className="r">In stock</th>{dry && <th>Ships from</th>}<th /></tr></thead>
+              <thead><tr><th>Garment</th>{asks && <th>Requested</th>}<th>{asks ? "Found color" : "Color"}</th><th>Size</th><th className="r">Qty</th><th className="r">Price</th><th className="r">In stock</th><th title="Live from S&S stock, by the Warehouses choice below">Ships from{whBusy ? " …" : ""}</th><th /></tr></thead>
               <tbody>{sorted.map(({ l, i }) => (
                 <tr key={l.key} className={!l.sku ? "miss" : l.stock < l.qty ? "low" : ""}>
                   <td>{l.style && ssUrl(l.brand, l.style) ? <a className="og-ss" href={ssUrl(l.brand, l.style)} target="_blank" rel="noreferrer" title="Open this style on ssactivewear.com (all its colors)">{[l.brand, l.style].filter(Boolean).join(" ")} ↗</a> : [l.brand, l.style].filter(Boolean).join(" ") || "—"}</td>
@@ -236,7 +254,7 @@ function OrderGoods() {
                   <td className="r"><input type="number" min={0} value={l.qty} onChange={(e) => { const v = Math.max(0, Math.round(+e.target.value || 0)); setLines((ls) => ls.map((x, k) => (k === i ? { ...x, qty: v, note: x.sku && x.stock < v ? `Only ${x.stock} in stock` : x.sku ? "" : x.note } : x))); setDry(null); setSure(false); }} style={{ width: 70, textAlign: "right" }} aria-label={`${l.style} ${l.color} ${l.size} quantity`} /></td>
                   <td className="r">{l.sku ? money(l.price) : ""}</td>
                   <td className="r">{l.sku ? l.stock.toLocaleString() : <span className="bad">{l.note || "Not at S&S"}</span>}{l.sku && l.note && <div className="bad" style={{ fontSize: 11.5 }}>{l.note}</div>}</td>
-                  {dry && <td>{(from[l.sku] || []).map((w) => <span key={w.warehouse} className={"og-wh" + (w.warehouse === "TX" ? "" : " away")}>{whName(w.warehouse)}{(from[l.sku] || []).length > 1 ? ` (${w.qty})` : ""}</span>)}</td>}
+                  {<td>{l.sku && !from[l.sku] && whBusy ? <span className="faint">…</span> : null}{(from[l.sku] || []).map((w) => <span key={w.warehouse} className={"og-wh" + (w.warehouse === "TX" ? "" : " away")}>{whName(w.warehouse)}{(from[l.sku] || []).length > 1 ? ` (${w.qty})` : ""}</span>)}</td>}
                   <td><button type="button" className="btn ghost sm" aria-label="Remove" onClick={() => { setLines((ls) => ls.filter((_, k) => k !== i)); setDry(null); setSure(false); }}>✕</button></td>
                 </tr>
               ))}</tbody>
@@ -258,7 +276,8 @@ function OrderGoods() {
           <div className="faint" style={{ fontSize: 12.5 }}>
             {pay?.card ? <>Paid with our S&amp;S card: <b>{pay.card}</b> · ships from the closest warehouse that has it (split only when it&apos;s short).</> : pay?.error ? <span className="bad">{pay.error}</span> : "Checking the card on file at S&S…"}
           </div>
-          {dry && away.length > 0 && <div className="banner">Heads up: {away.reduce((a, x) => a + x.qty, 0)} pcs ship from outside Fort Worth ({[...new Set(away.map((x) => whName(x.warehouse)))].join(", ")}), so they&apos;ll take longer. See &quot;Ships from&quot; above.</div>}
+          {whShort.length > 0 && <div className="pv-err">S&amp;S doesn&apos;t have enough of: {whShort.join("; ")}.</div>}
+          {away.length > 0 && <div className="banner">Heads up: {away.reduce((a, x) => a + x.qty, 0)} pcs ship from outside Fort Worth ({[...new Set(away.map((x) => whName(x.warehouse)))].join(", ")}), so they&apos;ll take longer. See &quot;Ships from&quot; above.</div>}
           {dry && <div className="okmsg">Checked (nothing sent to S&amp;S): {dry.map((d) => `${whName(d.warehouse) || "warehouse"} · ~${money(d.total)}`).join("; ")} · UPS Ground. Place the order when it looks right.</div>}
           {err && <div className="pv-err">{err}</div>}
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
