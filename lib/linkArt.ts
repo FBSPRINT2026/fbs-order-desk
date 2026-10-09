@@ -65,7 +65,8 @@ async function emailProtection(pageUrl: string, html: string): Promise<string | 
     const got = await new Promise<{ url?: string; meta?: string } | null>((done) => {
       let settled = false;
       const end = (v: { url?: string; meta?: string } | null) => { if (settled) return; settled = true; try { sock.close(); } catch { /* closed */ } done(v); };
-      const sock = new WS(`wss://${host}/scanning`);
+      // first ask; after a "refresh" (its "continue anyway?" step), continue the way the page's button does: /scanning/force
+      const sock = new WS(`wss://${host}/scanning${round ? "/force" : ""}`);
       const timer = setTimeout(() => end(null), 25_000);
       sock.onopen = () => sock.send(info!);
       sock.onerror = () => { clearTimeout(timer); end(null); };
