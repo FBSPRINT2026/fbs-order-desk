@@ -12,6 +12,20 @@ export const maxDuration = 120;
  * The QuickBooks self-test on the real data (read only; nothing is written, QuickBooks isn't contacted). Same token
  * as the runner (x-sync-token). Returns each check and some samples of what would be sent.
  */
+/** archived invoices with the Printavo customer on each (keyset pages: the rows carry big JSON, offsets time out) */
+async function archivedRefs(admin: ReturnType<typeof createAdminClient>) {
+  const out: Record<string, unknown>[] = [];
+  let after = "00000000-0000-0000-0000-000000000000";
+  for (;;) {
+    const { data, error } = await admin.from("archived_orders").select("id, visual_id, customer_id, total, order_date, pcust:data->customer").eq("kind", "invoice").gt("id", after).order("id").limit(1000);
+    if (error) throw new Error(error.message);
+    out.push(...(data || []));
+    if ((data || []).length < 1000) break;
+    after = String(data![data!.length - 1].id);
+  }
+  return out;
+}
+
 export async function GET(req: Request) {
   const admin = createAdminClient();
   const { data: s } = await admin.from("qbo_settings").select("token").eq("id", 1).maybeSingle();
@@ -26,7 +40,7 @@ export async function GET(req: Request) {
     page<OrderRow>((a, b) => admin.from("orders").select("*").gte("number", 40000).order("number").range(a, b)),
     page<OurCustomer>((a, b) => admin.from("customers").select("id, company, name, email, phone, address, ship_address, tax_exempt, payment_terms, is_test").order("id").range(a, b)),
     page<OurPayment>((a, b) => admin.from("payments").select("*").order("id").range(a, b)),
-    page<Record<string, unknown>>((a, b) => admin.from("archived_orders").select("visual_id, customer_id, total, order_date, pcust:data->customer").eq("kind", "invoice").order("id").range(a, b)),
+    archivedRefs(admin),
     page<Record<string, unknown>>((a, b) => admin.from("printavo_customers").select("printavo_id, data->primaryContact").order("printavo_id").range(a, b)),
     ourCustomersForMatching(admin),
   ]);

@@ -300,3 +300,11 @@ begin
   return n;
 end $$;
 revoke execute on function public.qbo_enqueue_all() from public, anon, authenticated;
+
+-- the schedule (pg_cron + pg_net, like the Printavo sync): every minute; qbo_sync_tick() does nothing while the
+-- sync is off, except the daily sign-in refresh once QuickBooks is connected
+do $c$ begin
+  if not exists (select 1 from cron.job where jobname = 'qbo-sync') then
+    perform cron.schedule('qbo-sync', '* * * * *', 'select public.qbo_sync_tick()');
+  end if;
+end $c$;
