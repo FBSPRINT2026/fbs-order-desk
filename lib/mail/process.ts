@@ -1,4 +1,5 @@
 import "server-only";
+import { linkArtForEmail } from "@/lib/linkArt";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState } from "@/lib/ai/claude";
 import { triageEmail } from "@/lib/ai/tasks";
@@ -174,6 +175,8 @@ export async function handleIncoming(admin: SupabaseClient, m: MailMsg, acct: Ac
     meta: { from_name: m.from.name.slice(0, 200), match: match.how, lead, references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, ...body, mailbox: "inbox", account_id: acct.id, account: acct.email },
   }).select("id").single();
   if (error) throw new Error(error.message);
+  // art sent as a link (Canva, Dropbox, Google Drive): saved with the email before the AI reads it
+  await linkArtForEmail(admin, ins.id as string).catch(() => null);
   await processEmailActivity(admin, ins.id as string).catch(() => null);
   return lead ? "lead" : "customer";
 }
