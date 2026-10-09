@@ -94,6 +94,8 @@ export default function Inbox() {
   const sel = listed.find((r) => r.x.id === open) || (open ? rows.find((r) => r.x.id === open) : undefined) || listed[0];
   const [picked, setPicked] = useState(false); // phones: the list until an email is picked, then the email
   const pickRow = (id: string, answer = false) => { setOpen(id); setPicked(true); if (answer) setFocus(id); };
+  // the email showing stays put: a new email arriving at the top of the list never swaps it out from under you
+  useEffect(() => { if (!open && sel) setOpen(sel.x.id); }, [open, sel?.x.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const listRef = useRef<HTMLDivElement | null>(null);
   const onKeys = (e: React.KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -160,10 +162,10 @@ export default function Inbox() {
 
         {/* 2 + 3. the email and the Assistant */}
         {!sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
-          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "") + ((sel.x.meta as { reply_options?: { at?: string } } | null)?.reply_options?.at || "")} focus={focus === sel.x.id} x={sel.x} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
+          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} focus={focus === sel.x.id} x={sel.x} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
               orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
               thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
-              back={() => setPicked(false)} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} busy={busy} setBusy={setBusy} done={(t) => { flash(t); load(); }} />}
+              back={() => setPicked(false)} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} busy={busy} setBusy={setBusy} done={(t, next) => { flash(t); void load().then(() => { if (next) setOpen(null); }); }} />}
       </div>
     </>
   );
@@ -175,7 +177,7 @@ type Opt = { label: string; subject: string; body: string };
  * The email column and the Assistant column for one email. The email column is either the email (with the answer box
  * docked at the bottom) or, after Create order, the order being made from it; the Assistant stays beside it.
  */
-function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList }: { x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string) => void; listOpen: boolean; toggleList: () => void }) {
+function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList }: { x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
@@ -221,7 +223,16 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   useEffect(() => { if ((needs || focus) && !opts && !busy) loadOpts(); }, [x.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (focus) setTimeout(() => boxRef.current?.focus(), 60); }, [focus]);
   async function urlFor(path: string) { const { data } = await createClient().storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
-  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else done(ok); };
+  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else done(ok, key === "send" || key === "nr" || key === "ign"); };
+  // the order confirmation arrives after the order is made: into the empty answer box, never over what's typed
+  const confirmAt = x.meta?.reply_options?.at;
+  useEffect(() => { if (confirm && !body.trim()) { setSubject(confirm.subject); setBody(confirm.body); setPicked(0); setWriting(true); } }, [confirmAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the More menu closes when you click anywhere else
+  useEffect(() => {
+    const off = (e: PointerEvent) => { const m = moreRef.current; if (m?.open && !m.contains(e.target as Node)) m.open = false; };
+    document.addEventListener("pointerdown", off);
+    return () => document.removeEventListener("pointerdown", off);
+  }, []);
   const when = new Date(x.occurred_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const filed = orders.find((o) => o.id === x.order_id);
   const fromName = x.meta?.from_name || x.from_email;
@@ -247,6 +258,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             <span className="ibx2-when">{when}</span>
           </div>
           <h2>{x.subject || "(no subject)"}</h2>
+          {x.meta?.triage?.summary && <div className="ibx2-sum">✦ {x.meta.triage.summary}</div>}
           <div className="ibx2-meta">
             {urgent && <span className="ibx2-urgent">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
             {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="ibx2-chip">{INTENT[x.meta.triage.intent]}</span>}
@@ -255,27 +267,28 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {answered && <span className="ibx2-chip ok">Answered</span>}
           </div>
           {/* the everyday buttons in one row; the rest under More */}
-          {x.direction === "in" && <div className="ibx2-acts">
-            {view === "order"
+          <div className="ibx2-acts">
+            {x.direction !== "in" ? null : view === "order"
               ? <button type="button" className="btn sm" onClick={() => setView("mail")}>← Back to the email</button>
               : <>
                 <button type="button" className={"btn sm" + (!orderish || x.order_id ? " primary" : "")} onClick={() => write()}>Reply</button>
                 <button type="button" className={"btn sm" + (orderish && !x.order_id ? " primary" : "")} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check">{ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"}</button>
               </>}
-            {x.customer_id && <select className="ibx2-file" aria-label="File under an order" value={x.order_id || ""} disabled={!!busy} onChange={(e) => run("ord", () => setEmailOrder(x.id, e.target.value || null), "Filed under the order.")}>
+            {x.customer_id && <select className="ibx2-file" aria-label="File under an order" value={x.order_id || ""} disabled={!!busy} onChange={(e) => run("ord", () => setEmailOrder(x.id, e.target.value || null), e.target.value ? "Filed under the order." : "Not filed under an order now.")}>
               <option value="">File under…</option>{orders.slice(0, 40).map((o) => <option key={o.id} value={o.id}>#{o.number} {o.nickname || ""} ({o.status})</option>)}
             </select>}
             {needs && <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id), "Off your Needs reply list.")}>No reply needed</button>}
+            {x.direction === "in" ? 
             <details className="ibx2-more" ref={moreRef}>
               <summary className="btn sm ghost">More</summary>
               <div className="ibx2-menu">
-                <a href={`/shop/order-goods?email=${x.id}`} target="_blank" rel="noreferrer">Order goods from S&amp;S</a>
-                {!needs && x.meta?.no_reply && <button type="button" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id, false), "Back on Needs reply.")}>Needs a reply after all</button>}
+                {x.direction === "in" && <a href={`/shop/order-goods?email=${x.id}`} target="_blank" rel="noreferrer" onClick={() => { if (moreRef.current) moreRef.current.open = false; }}>Order goods from S&amp;S</a>}
+                {!needs && x.meta?.no_reply && <button type="button" disabled={!!busy} onClick={() => run("nr-undo", () => markNoReply(x.id, false), "Back on Needs reply.")}>Needs a reply after all</button>}
                 {!needs && !x.meta?.no_reply && answered && <button type="button" disabled={!!busy} onClick={() => run("back", () => putBackInInbox(x.id), "Back in the Inbox.")}>Back to Needs reply</button>}
                 <button type="button" disabled={!!busy} onClick={() => run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`)}>Not a customer (stop reading their email)</button>
               </div>
-            </details>
-          </div>}
+            </details> : null}
+          </div>
           {made && <div className="ibx2-made">Order <b>#{made.number}</b> created. <a href={`/shop/orders/${made.id}`} target="_blank" rel="noreferrer">Open it</a></div>}
           {err && <div className="pv-err">{err}</div>}
         </header>
