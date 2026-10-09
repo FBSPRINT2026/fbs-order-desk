@@ -88,30 +88,31 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const arm = (k: string) => { setArmed(k); setTimeout(() => setArmed((a) => (a === k ? "" : a)), 3500); };
 
   const loadSide = useCallback(async () => {
-    const [p, pr, m, e] = await Promise.all([
+    const [p, pr, m, e, a] = await Promise.all([
       sb.from("payments").select("*").eq("order_id", id).order("paid_on"),
       sb.from("proofs").select("*").eq("order_id", id).order("created_at", { ascending: false }),
       sb.from("messages").select("*").eq("order_id", id).order("created_at"),
       sb.from("order_events").select("*").eq("order_id", id).order("created_at", { ascending: false }),
+      sb.from("art_files").select("*").eq("order_id", id).order("created_at"),
     ]);
     setPayments((p.data || []) as Payment[]);
     setMessages((m.data || []) as Message[]);
     setEvents((e.data || []) as OrderEvent[]);
-    const { data: af } = await sb.from("art_files").select("*").eq("order_id", id).order("created_at");
-    const arts = (af || []) as ArtFile[];
-    if (arts.length) {
-      const { data: urls } = await sb.storage.from("proofs").createSignedUrls(arts.map((x) => x.file_path), 3600);
-      setArt(arts.map((x, i) => ({ ...x, url: urls?.[i]?.signedUrl || undefined })));
-    } else setArt([]);
+    const arts = (a.data || []) as ArtFile[];
     const list = (pr.data || []) as Proof[];
-    if (list.length) {
-      const { data: urls } = await sb.storage.from("proofs").createSignedUrls(list.map((x) => x.file_path), 3600);
-      setProofs(list.map((x, i) => ({ ...x, url: urls?.[i]?.signedUrl || undefined })));
-    } else setProofs([]);
+    // the art and proof links are signed together, not one after the other
+    const [au, pu] = await Promise.all([
+      arts.length ? sb.storage.from("proofs").createSignedUrls(arts.map((x) => x.file_path), 3600) : Promise.resolve({ data: [] }),
+      list.length ? sb.storage.from("proofs").createSignedUrls(list.map((x) => x.file_path), 3600) : Promise.resolve({ data: [] }),
+    ]);
+    setArt(arts.map((x, i) => ({ ...x, url: au.data?.[i]?.signedUrl || undefined })));
+    setProofs(list.map((x, i) => ({ ...x, url: pu.data?.[i]?.signedUrl || undefined })));
   }, [sb, id]);
 
   useEffect(() => {
     (async () => {
+      // payments, proofs, messages, history and art load alongside the order instead of after it
+      const side = loadSide();
       const [ord, cu, st, inn, cat] = await Promise.all([
         sb.from("orders").select("*").eq("id", id).maybeSingle(),
         sb.from("customers").select("*"),
@@ -119,7 +120,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         sb.from("order_internal").select("production_notes").eq("order_id", id).maybeSingle(),
         sb.from("garments").select("*").order("style"),
       ]);
-      if (!ord.data) { setMissing(true); return; }
+      if (!ord.data) { setMissing(true); await side.catch(() => null); return; }
       const d = ord.data as Order;
       d.groups = orderGroups(d);
       if (!d.groups.length) d.groups = [newGroup()];
@@ -137,7 +138,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       setCatalog((cat.data || []) as Garment[]);
       setProdNotes(inn.data?.production_notes || "");
       setSaveState("Saved");
-      await loadSide();
+      await side;
       // mark customer messages read
       await sb.from("messages").update({ read_at: new Date().toISOString() }).eq("order_id", id).eq("author_type", "customer").is("read_at", null);
     })();

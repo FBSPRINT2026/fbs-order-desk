@@ -76,15 +76,35 @@ export async function fetchAll<T>(make: () => any, cap = 20000): Promise<T[]> {
   return out;
 }
 
+/**
+ * Shares one load between callers that ask at the same moment with the same client (the menu's Assistant badge and
+ * the dashboard's Assistant strip both load on the same page). Once it finishes the next call reads fresh data.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function shareInFlight<T>(cache: WeakMap<object, Promise<T>>, sb: SupabaseClient<any, any, any>, load: () => Promise<T>): Promise<T> {
+  const cur = cache.get(sb);
+  if (cur) return cur;
+  const p = load().finally(() => { if (cache.get(sb) === p) cache.delete(sb); });
+  cache.set(sb, p);
+  return p;
+}
+type Decision = { dedupe_key: string | null; status: string; snoozed_until: string | null };
+const decisionsLoading = new WeakMap<object, Promise<Decision[]>>();
+const assistantLoading = new WeakMap<object, Promise<AssistantData>>();
+
 /** Saved Assistant decisions (done / dismissed / snoozed) for the follow-up rules. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function loadDecisions(sb: SupabaseClient<any, any, any>) {
-  return fetchAll<{ dedupe_key: string | null; status: string; snoozed_until: string | null }>(() => sb.from("ai_suggestions").select("dedupe_key,status,snoozed_until").eq("source", "rules").order("created_at"));
+  return shareInFlight(decisionsLoading, sb, () => fetchAll<Decision>(() => sb.from("ai_suggestions").select("dedupe_key,status,snoozed_until").eq("source", "rules").order("created_at")));
 }
 
 /** Loads what the rules need. Works with the browser client (staff session) or the admin client (cron). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function loadAssistantData(sb: SupabaseClient<any, any, any>): Promise<AssistantData> {
+export function loadAssistantData(sb: SupabaseClient<any, any, any>): Promise<AssistantData> {
+  return shareInFlight(assistantLoading, sb, () => loadAssistantDataNow(sb));
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function loadAssistantDataNow(sb: SupabaseClient<any, any, any>): Promise<AssistantData> {
   const since = new Date(Date.now() - 120 * 86400000).toISOString();
   const [orders, customers, payments, proofs, messages, readyEvents] = await Promise.all([
     fetchAll<O>(() => sb.from("orders").select("id,number,nickname,status,type,due_date,total,customer_id,created_at,updated_at,sent_at,approved_at,submitted_at,completed_at,tracking,delivery_method").order("number", { ascending: false })),

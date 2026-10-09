@@ -14,10 +14,11 @@ export async function withPrivate<T extends Customer>(sb: SupabaseClient<any, an
   if (!customers.length) return customers;
   const rows: Priv[] = [];
   const ids = customers.map((c) => c.id);
-  for (let i = 0; i < ids.length; i += 200) {
-    const { data } = await sb.from("customer_private").select("*").in("customer_id", ids.slice(i, i + 200));
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
+  // all the batches at once (one after another, 650 customers took four round trips in a row)
+  for (const { data } of await Promise.all(chunks.map((c) => sb.from("customer_private").select("*").in("customer_id", c))))
     rows.push(...((data || []) as Priv[]));
-  }
   const m = new Map(rows.map((r) => [r.customer_id, r]));
   return customers.map((c) => {
     const p = m.get(c.id);
