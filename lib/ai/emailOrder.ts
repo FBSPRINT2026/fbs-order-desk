@@ -1,4 +1,5 @@
 import "server-only";
+import { newPart } from "@/lib/linkArt";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState, askClaude, type LookedUp } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
@@ -195,7 +196,8 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
   const listing: string[] = [];
   let budget = 18 * 1024 * 1024;
   for (const [i, a] of atts.slice(0, 12).entries()) {
-    const n = i + 1, tag = `File ${n}: "${a.name}"`;
+    const fromLink = (a as { from_link?: string; source?: string }).from_link, prev = (a as { source?: string }).source === "canva-preview";
+    const n = i + 1, tag = `File ${n}: "${a.name}"${fromLink ? ` (from a link the customer sent${prev ? ": a preview picture of their Canva design, not a print file" : ""})` : ""}`;
     if (sigs.has(a.path)) { listing.push(`${tag} (the sender's email signature picture: role signature, ignore it)`); continue; }
     const pic = isPicture(a), pdf = /pdf/i.test(a.type) || /\.pdf$/i.test(a.name);
     const text = /\.(xlsx|xlsm|docx|csv|tsv|txt)$/i.test(a.name) || /spreadsheetml|wordprocessingml|^text\//i.test(a.type);
@@ -282,8 +284,22 @@ const supplierKey = (s: string) => (/san\s*mar/i.test(s) ? "sanmar" : /s\s*&\s*s
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; reorderOk?: boolean; lookedUp?: LookedUp | null } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
   const { settings, ready, reason } = await aiState(admin);
   if (!ready) return { ok: false, error: reason };
-  const { data: a } = await admin.from("activities").select("id, customer_id, subject, body, from_email, occurred_at, meta").eq("id", activityId).maybeSingle();
+  const { data: a } = await admin.from("activities").select("id, customer_id, subject, body, from_email, occurred_at, thread_id, meta").eq("id", activityId).maybeSingle();
   if (!a) return { ok: false, error: "Email not found." };
+  // the whole conversation, not just this email (Oct 9, Nick: "we've been back and forth for a month… read all the
+  // emails"): every email with this customer (or in this thread) in the 90 days before it, both ways, oldest first,
+  // just the new text of each (not the quoted thread under it)
+  const since = new Date(new Date(a.occurred_at as string).getTime() - 90 * 864e5).toISOString();
+  const { data: conv } = await admin.from("activities").select("direction, occurred_at, from_email, subject, body")
+    .eq("kind", "email").neq("id", a.id).lt("occurred_at", a.occurred_at as string).gte("occurred_at", since)
+    .or(a.customer_id ? `customer_id.eq.${a.customer_id}${a.thread_id ? `,thread_id.eq.${a.thread_id}` : ""}` : `thread_id.eq.${a.thread_id || "none"}`)
+    .order("occurred_at", { ascending: false }).limit(14);
+  let convLeft = 14000;
+  const convText = [...(conv || [])].reverse().map((e) => {
+    const t = newPart(String(e.body || "")).replace(/\n{3,}/g, "\n\n").trim().slice(0, 2200);
+    const line = `- ${String(e.occurred_at).slice(0, 10)} ${e.direction === "out" ? "WE wrote" : `${e.from_email} wrote`}${e.subject ? ` ("${String(e.subject).slice(0, 90)}")` : ""}:\n${t}`;
+    if (convLeft <= 0) return ""; convLeft -= line.length; return line;
+  }).filter(Boolean).join("\n\n");
   const atts = (await refetchAttachments(admin, activityId).catch(() => null)) || ((a.meta as { attachments?: Att[] })?.attachments || []);
   const told = (o.told || "").trim().slice(0, 1500);
   const [{ data: cust }, recent] = await Promise.all([
@@ -319,6 +335,8 @@ Your job: a customer emailed the shop. Read the email and every attached file (p
 5. Garments that share the same prints are one group, with the mockup files for them.
 6. Wholesale customers usually buy their own blanks and send them to us: set garments_supplied_by and the goods (supplier, when they should arrive).
 7. Finishing (only if asked, or this customer's past jobs always had it): ${fin || "none set up"}.
+8. Read the WHOLE conversation, not just the newest email: customers decide over many emails (the garment and color picked from our options, the sizes, a price we agreed, the date they need it, then the art last). The latest decision wins (a size list sent later replaces an earlier one; the style they finally chose replaces the ones they considered). Prices and terms WE wrote are what was agreed: put them in the notes for staff, and don't ask the customer again for anything already settled in the conversation.
+9. Art sent as a link (a file marked "from a link", e.g. a Canva design preview): use it as the art for the mockup. A Canva preview is a picture, not a print file: say in questions that we'll need the print file (PDF or SVG) unless a real file came with it.
 Never invent prices or dates. Anything unclear or missing goes in questions, written to the customer in plain words.
 When staff tell you something about this email (which past job it is, that it's a reorder, what the customer wants changed, colors used before), it's fact: follow it over your own reading.`;
   const custText = cust ? `Customer: ${cust.company || cust.name} <${cust.email || a.from_email}>. ${cust.price_type === "wholesale" ? "WHOLESALE customer: they supply their own garments (we only print)." : "Retail customer: we normally supply the garments."}${cust.notes ? ` Notes on file: ${String(cust.notes).slice(0, 400)}` : ""}` : `Sender ${a.from_email} isn't a customer on file yet.`;
@@ -329,7 +347,10 @@ ${past.length ? `This customer's past jobs (newest first):\n${jobsText(past)}` :
 Attached files:
 ${listing.join("\n") || "(none)"}
 
-The email (${String(a.occurred_at).slice(0, 10)}):
+${convText ? `THE CONVERSATION BEFORE THIS EMAIL (oldest first; what was decided along the way counts):
+${convText}
+
+` : ""}The email (${String(a.occurred_at).slice(0, 10)}):
 Subject: ${a.subject || ""}
 """
 ${String(a.body || "").slice(0, 12000)}
