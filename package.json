@@ -28,7 +28,8 @@
     "imapflow": "^1.0.170",
     "mailparser": "^3.7.2",
     "nodemailer": "^6.9.16",
-    "nodemailer-ntlm-auth": "^1.0.4"
+    "nodemailer-ntlm-auth": "^1.0.4",
+    "pdfjs-dist": "4.10.38"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
