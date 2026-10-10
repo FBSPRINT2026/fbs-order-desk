@@ -39,6 +39,8 @@ export default function Inbox() {
   const [settings, setSettings] = useState(false);
   // the list can be hidden to give the email more room (remembered)
   const [listOpen, setListOpen] = useSticky<boolean>("inbox.list", true);
+  // pane sizes, dragged like Outlook (remembered)
+  const [listW, setListW] = useSticky<number>("inbox.listW", 300);
   const [open, setOpen] = useState<string | null>(null), [focus, setFocus] = useState<string | null>(null), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
 
   const load = useCallback(async () => {
@@ -121,7 +123,8 @@ export default function Inbox() {
       {box?.enabled && box.last_error && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
 
-      <div className={"ibx2" + (picked && sel ? " picked" : "") + (!listOpen && sel ? " nolist" : "")}>
+      <div className={"ibx2" + (picked && sel ? " picked" : "") + (!listOpen && sel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
+        {(listOpen || !sel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
         {/* 1. the list */}
         <section className="ibx2-list" aria-label="Emails">
           <div className="ibx2-list-h">
@@ -174,6 +177,28 @@ export default function Inbox() {
 type Opt = { label: string; subject: string; body: string };
 
 /**
+ * A border between two panes that can be dragged, like Outlook (Oct 10, Nick): left/right for the list and the
+ * Assistant, up/down for the answer box. Arrow keys move it too. `invert`: dragging toward the start makes it bigger.
+ */
+function Splitter({ dir, value, min, max, onChange, invert, className, style, label }: { dir: "x" | "y"; value: number; min: number; max: number; onChange: (v: number) => void; invert?: boolean; className: string; style?: React.CSSProperties; label: string }) {
+  const start = useRef<{ p: number; v: number } | null>(null);
+  const clamp = (v: number) => Math.round(Math.max(min, Math.min(max, v)));
+  return (
+    <div role="separator" aria-orientation={dir === "x" ? "vertical" : "horizontal"} aria-label={label} aria-valuenow={value} aria-valuemin={min} aria-valuemax={max} tabIndex={0}
+      className={className} style={style} title={label}
+      onPointerDown={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); start.current = { p: dir === "x" ? e.clientX : e.clientY, v: value }; document.body.classList.add(dir === "x" ? "ibx2-dragx" : "ibx2-dragy"); }}
+      onPointerMove={(e) => { const s0 = start.current; if (!s0) return; const d = (dir === "x" ? e.clientX : e.clientY) - s0.p; onChange(clamp(s0.v + (invert ? -d : d))); }}
+      onPointerUp={() => { start.current = null; document.body.classList.remove("ibx2-dragx", "ibx2-dragy"); }}
+      onPointerCancel={() => { start.current = null; document.body.classList.remove("ibx2-dragx", "ibx2-dragy"); }}
+      onKeyDown={(e) => {
+        const step = e.shiftKey ? 48 : 16, back = dir === "x" ? "ArrowLeft" : "ArrowUp", fwd = dir === "x" ? "ArrowRight" : "ArrowDown";
+        if (e.key !== back && e.key !== fwd) return;
+        e.preventDefault(); onChange(clamp(value + (e.key === fwd ? step : -step) * (invert ? -1 : 1)));
+      }} />
+  );
+}
+
+/**
  * The email column and the Assistant column for one email. The email column is either the email (with the answer box
  * docked at the bottom) or, after Create order, the order being made from it; the Assistant stays beside it.
  */
@@ -194,6 +219,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   // phones: one column at a time
   const [side, setSide] = useState<"mail" | "ai">("mail");
   const [made, setMade] = useState<{ id: string; number: number } | null>(null), [bump, setBump] = useState(0);
+  const [aiW, setAiW] = useSticky<number>("inbox.aiW", 330), [composeH, setComposeH] = useSticky<number>("inbox.composeH", 0);
   useEffect(() => { setOrdering(false); setOrderStart(null); setMade(null); setView("mail"); }, [x.id]);
   const startOrder = (s?: { told?: string; job?: string }) => { if (s) setOrderStart((p) => ({ ...s, n: (p?.n || 0) + 1 })); setOrdering(true); setView("order"); setSide("mail"); };
   const write = (focusBox = true) => { setWriting(true); setView("mail"); setSide("mail"); if (focusBox) setTimeout(() => boxRef.current?.focus(), 40); };
@@ -242,7 +268,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   ];
 
   return (
-    <div className="ibx2-work" data-side={side}>
+    <div className="ibx2-work" data-side={side} style={{ ["--ibx-ai" as string]: `${aiW}px` }}>
+      <Splitter dir="x" value={aiW} min={240} max={720} invert onChange={setAiW} className="ibx2-sv ibx2-sv-ai" style={{ right: aiW + 2 }} label="Drag to make the Assistant wider or narrower" />
       <div className="ibx2-sw" role="tablist" aria-label="Show">
         <button type="button" className="ibx2-back" onClick={back} aria-label="Back to the emails">←</button>
         <button type="button" role="tab" aria-selected={side === "mail"} className={side === "mail" ? "on" : ""} onClick={() => setSide("mail")}>{view === "order" ? "Order" : "Email"}</button>
@@ -312,7 +339,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           </div>
 
           {/* the answer, docked at the bottom like Outlook */}
-          {x.direction === "in" && <div className={"ibx2-compose" + (writing ? " open" : "")}>
+          {x.direction === "in" && writing && <Splitter dir="y" value={composeH || 300} min={160} max={900} invert onChange={setComposeH} className="ibx2-sh" label="Drag to make the answer box taller or shorter" />}
+          {x.direction === "in" && <div className={"ibx2-compose" + (writing ? " open" : "") + (writing && composeH ? " sized" : "")} style={writing && composeH ? { height: composeH } : undefined}>
             {suggestions.length > 0 || busy === "opts" ? <div className="ibx2-sugs" role="list" aria-label="Suggested answers">
               {busy === "opts" ? <span className="ibx2-thinking">✦ Thinking of answers…</span> : suggestions.map((s) => (
                 <button key={s.i} type="button" role="listitem" className={"ibx2-sug" + (picked === s.i ? " on" : "")} title={s.text.slice(0, 400)} onClick={() => pick(s.i)}>{s.label}</button>
