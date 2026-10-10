@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCustomer, getOrder, PrintavoError, type PvCustomer } from "@/lib/printavo";
 import { fileUrls, orderFiles, type PvAddress, type PvOrder } from "@/lib/archive";
+import { pvHandle } from "@/lib/printavoNames";
+import { fetchFileMeta, saveFileMeta } from "@/lib/printavoFileMeta";
 
 /**
  * Bringing Printavo data into our database. Used by the Import page (one customer) and the background sync (everything).
@@ -155,7 +157,18 @@ export async function copyFiles(sb: SupabaseClient, archivedId: string, deadline
       const buf = new Uint8Array(await r.arrayBuffer());
       if (buf.byteLength > MAX) { files[url] = "too-big"; continue; }
       const type = (r.headers.get("content-type") || "application/octet-stream").split(";")[0].trim();
-      const base = (names.get(url) || url.split("?")[0].split("/").pop() || "file").replace(/[^\w.\-]+/g, "_").slice(-80);
+      // the original file (not a thumbnail made from it): its upload name from Filestack (Printavo's API doesn't give
+      // mockups a name), kept in printavo_file_names and used for our copy's name
+      let orig = names.get(url) || "";
+      const h = pvHandle(url);
+      if (h && new RegExp(`^https?://[^/]+/(?:api/file/)?${h}(?:[?+/]|$)`).test(url)) {
+        try {
+          const m = await fetchFileMeta(h, 6000);
+          await saveFileMeta(sb, h, m);
+          if (!orig && m !== "missing" && m.filename) orig = m.filename;
+        } catch { /* the name is looked up later (/api/printavo/file-names) */ }
+      }
+      const base = (orig || url.split("?")[0].split("/").pop() || "file").replace(/[^\w.\-]+/g, "_").slice(-80);
       const ext = /\.[a-z0-9]{2,5}$/i.test(base) ? "" : "." + (EXT[type] || "bin");
       const path = `printavo/${row.id}/${Date.now().toString(36)}${i}-${base}${ext}`;
       const up = await sb.storage.from("proofs").upload(path, buf, { contentType: type, upsert: true });
