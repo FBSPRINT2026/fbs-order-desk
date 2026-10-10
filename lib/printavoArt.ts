@@ -135,6 +135,15 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art"): Promise<
     const pad = 4 * (s2 / s1);
     const crop = { x0: (r.x0 * s2) / s1 - pad, y0: (r.y0 * s2) / s1 - pad, x1: (r.x1 * s2) / s1 + pad, y1: (r.y1 * s2) / s1 + pad };
     const hi = await drawWithoutPhotos(page, s2, crop, { photos: look.photos, scale: s1 });
+    // see-through bits become holes: a "distressed" texture laid over the whole logo at 15-50% (Illustrator
+    // opacity masks, Peticolas Sit Down) leaves faint white over the knockouts, which the ink mapping then filled solid
+    // cream. A screen can't print 20% white: under ~60% coverage is clear, the rest solid (edges stay smooth)
+    {
+      const cx2 = hi.canvas.getContext("2d", { willReadFrequently: true })!;
+      const img = cx2.getImageData(0, 0, hi.canvas.width, hi.canvas.height), px = img.data;
+      for (let i = 3; i < px.length; i += 4) px[i] = px[i] < 140 ? 0 : px[i] < 175 ? Math.round(((px[i] - 140) / 35) * 255) : 255;
+      cx2.putImageData(img, 0, 0);
+    }
     const blob = await new Promise<Blob | null>((res) => hi.canvas.toBlob(res, "image/png"));
     if (!blob) continue;
     const hex = mainHex(hi.canvas), sug = suggestInk(hex);
