@@ -8,7 +8,22 @@ const SAME: Record<string, string> = { gray: "grey", hthr: "heather", htr: "heat
 const words = (s: string) => s.toLowerCase().replace(/&/g, " ").replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(Boolean).map((w) => SAME[w] || w);
 const key = (s: string) => words(s).join(" ");
 
+/** printing-trade names suppliers spell differently: rust / burnt orange are the Next Level "Redwood" family */
+const ALIAS: Record<string, string> = { rust: "redwood", "burnt orange": "redwood", forest: "forest green", wine: "maroon", burgundy: "maroon", "vintage black": "black" };
+
 export function matchColor(asked: string, options: string[]): { color: string; sure: boolean } | null {
+  // "Rust/Burnt Orange", "Vintage Black/Charcoal": an old job's two names for one color; the best match of either
+  const parts = asked.split(/\s*\/\s*/).filter(Boolean);
+  if (parts.length > 1) {
+    const each = parts.map((x) => matchColor(x, options)).filter(Boolean) as { color: string; sure: boolean }[];
+    return each.find((x) => x.sure) ? { ...each.find((x) => x.sure)!, sure: false } : each[0] || null;
+  }
+  const al = ALIAS[key(asked)];
+  if (al && al !== key(asked)) { const m = matchColor(al, options); if (m) return { color: m.color, sure: false }; }
+  return matchOne(asked, options);
+}
+
+function matchOne(asked: string, options: string[]): { color: string; sure: boolean } | null {
   const a = key(asked);
   if (!a || !options.length) return null;
   // the same name (any case or spelling of gray/grey)

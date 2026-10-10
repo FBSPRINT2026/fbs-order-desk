@@ -28,7 +28,7 @@ const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
  * Draws the page with the big photos skipped: a picture drawn wider than 30% of the page (the shirt photos) is left
  * out and its place on the page recorded. pdf.js's own scratch canvases (page sized) still go through.
  */
-async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect) {
+async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?: { photos: Rect[]; scale: number }) {
   const vp = page.getViewport({ scale });
   const c = document.createElement("canvas");
   const W = crop ? Math.round(crop.x1 - crop.x0) : Math.round(vp.width), H = crop ? Math.round(crop.y1 - crop.y0) : Math.round(vp.height);
@@ -45,6 +45,19 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect) {
         const ys = [dx, dx + dw].flatMap((x) => [dy, dy + dh].map((y) => m.b * x + m.d * y + m.f));
         const r = { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
         const fullW = vp.width;
+        if (known) {
+          // drawn again sharper: skip only the shirt photos found on the first look (same place on the page). pdf.js
+          // paints masked art (an Illustrator opacity mask: a flat color + a soft mask holding the design) as one big
+          // layer, which the size rule below took for a photo, leaving just the flat circle (Peticolas, Oct 10)
+          const k = scale / known.scale, ox = crop ? crop.x0 : 0, oy = crop ? crop.y0 : 0;
+          const same = known.photos.some((ph) => {
+            const q = { x0: ph.x0 * k - ox, y0: ph.y0 * k - oy, x1: ph.x1 * k - ox, y1: ph.y1 * k - oy };
+            const tol = 0.03 * (q.x1 - q.x0);
+            return Math.abs(q.x0 - r.x0) < tol && Math.abs(q.x1 - r.x1) < tol && Math.abs(q.y0 - r.y0) < tol && Math.abs(q.y1 - r.y1) < tol;
+          });
+          if (same) return;
+          return (t.drawImage as (...x: unknown[]) => void).apply(t, a);
+        }
         if (r.x1 - r.x0 > fullW * 0.3 && src.width < fullW * 0.9 && src.width < 4000) { photos.push(r); return; }
         return (t.drawImage as (...x: unknown[]) => void).apply(t, a);
       };
@@ -121,7 +134,7 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art"): Promise<
     const s2 = s1 * (want / (r.x1 - r.x0));
     const pad = 4 * (s2 / s1);
     const crop = { x0: (r.x0 * s2) / s1 - pad, y0: (r.y0 * s2) / s1 - pad, x1: (r.x1 * s2) / s1 + pad, y1: (r.y1 * s2) / s1 + pad };
-    const hi = await drawWithoutPhotos(page, s2, crop);
+    const hi = await drawWithoutPhotos(page, s2, crop, { photos: look.photos, scale: s1 });
     const blob = await new Promise<Blob | null>((res) => hi.canvas.toBlob(res, "image/png"));
     if (!blob) continue;
     const hex = mainHex(hi.canvas), sug = suggestInk(hex);

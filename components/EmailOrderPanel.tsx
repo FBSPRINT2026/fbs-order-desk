@@ -7,6 +7,7 @@ import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "
 import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
+import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import { aiLookUp } from "@/app/shop/ai-actions";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import dynamic from "next/dynamic";
@@ -101,6 +102,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start 
    * files), then the customer's mockup stamped "CUSTOMER SUPPLIED MOCKUP" into Production files, then our own mockup
    * built in the Mockup Creator (auto), which opens the order when it's saved.
    */
+  const [colorAsk, setColorAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
   async function create(mode: "new" | "edit" = "new") {
     if (!d) return;
     // Create order: a tab opened now (while it's still a click) so the browser doesn't block it later.
@@ -108,6 +110,18 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start 
     const w = mode === "new" ? window.open("", "_blank") : null;
     setBusy("create"); setErr("");
     let dd = d, films: { id: string; name: string }[] = [];
+    // the shirt colors checked against the style's real colors first ("Forest Green" → "Heather Forest Green"), so
+    // the mockup shows the real shirt; anything not an exact match is asked
+    setStep("Checking the shirt colors…");
+    const cc = await checkColors(dd.groups).catch(() => ({ rows: [] as ColorRow[], ask: [] as ColorRow[] }));
+    let rows = cc.rows;
+    if (cc.ask.length) {
+      const picked = await new Promise<ColorRow[] | null>((done) => setColorAsk({ rows: cc.rows, done }));
+      setColorAsk(null);
+      if (!picked) { setBusy(""); setStep(""); w?.close(); return; }
+      rows = picked;
+    }
+    if (rows.length) { dd = { ...dd, groups: applyColors(dd.groups, rows) }; setD(dd); }
     if (d.kind === "reorder" && d.reorderOf && data?.customer?.id && d.groups.some((g) => g.imprints.some((im) => !im.design_id))) {
       const job = data.past.find((p) => p.ref === d.reorderOf);
       try { const r = await pullReorderArt(d, { customerId: data.customer.id, jobLabel: job?.label, jobDate: job?.date, onStep: setStep }); dd = r.draft; films = r.films; setD(dd); } catch (e) { setErr("Couldn't pull the art from the old mockup (" + (e instanceof Error ? e.message : String(e)) + "). The order is made without it."); }
@@ -232,6 +246,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start 
         onMoved={() => setData((x) => (x && x.customer ? { ...x, customer: { ...x.customer, moved_at: new Date().toISOString() } } : x))} />}
       {d && !editing && <WhenLine when={when} due={d.due_date} onUse={(day) => patch((x) => { x.due_date = day; })} />}
       {d && !editing && <Review d={d} files={files} urlOf={urlOf} custName={data.customer ? data.customer.company || data.customer.name || "" : ""} job={d.reorderOf ? data.past.find((p) => p.ref === d.reorderOf)?.label || "" : ""} finishing={data.finishing} />}
+      {colorAsk && <ColorCheck rows={colorAsk.rows} onDone={(r) => colorAsk.done(r)} onCancel={() => colorAsk.done(null)} />}
       {d && !editing && <>
         <div className="eo-foot">
           <b>{total} pcs</b>
