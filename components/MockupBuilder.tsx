@@ -8,7 +8,7 @@ import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
 import { LOCATIONS, METHODS, designLabel, mergeSettings, newImprint, orderGroups, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel } from "@/lib/format";
 import { DESIGN_ACCEPT, previewUrls, setDesignPreview, uploadDesign } from "@/lib/designs";
-import { makePreview } from "@/lib/artPrep";
+import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import { mockupUploadUrls, myLogos, portalCatalog, saveMyMockup } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
@@ -1251,20 +1251,26 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (!Object.keys(fixes).length) return;
     setImprints((xs) => xs.map((x) => (fixes[x.id] ? { ...x, size: fixes[x.id].size, notes: [(x.notes || "").replace(/\s*\d+(\.\d+)?" wide: the largest that fits[^.]*\.[^.]*\.( Was [^.]*\.?)?/g, ""), fixes[x.id].note].filter((z) => z.trim()).join(" ").slice(0, 300) } : x)));
   }, [capBody?.size, ready, imprints.map((x) => `${x.id}:${x.size}:${x.design_id}`).join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* ---------- Design in Canva (staff, with the shop's Canva account connected: Settings → Canva) ----------
+  /* ---------- Design with Canva (staff, and customers in their portal) ----------
    * Canva opens in a new tab on a blank design the size of this side's print area (or one of our Canva-made designs,
-   * "Edit in Canva"). Return in Canva lands on /api/canva/return, which saves the design as the customer's logo and
-   * comes back here with ?canva=<trip>. The tab we started from waits (checks every few seconds and when it's looked
-   * at again) and puts the design on the shirt; the returned tab hands it over and closes. With no tab waiting (it
-   * was closed), the returned tab places it itself. */
-  const [canva, setCanva] = useState<{ connected: boolean; isOwner: boolean } | null>(null);
+   * "Edit in Canva"), in the person's OWN Canva account (Canva's editor links only work for the account that owns
+   * the design); staff without their own use the shop's. Return in Canva lands on /api/canva/return, which saves the
+   * design as the customer's logo and comes back here with ?canva=<trip>. The tab we started from waits (checks every
+   * few seconds and when it's looked at again) and puts the design on the shirt; the returned tab hands it over and
+   * closes. With no tab waiting (it was closed), the returned tab places it itself. Not connected yet: one line about
+   * signing in to Canva, then Canva's sign-in in a new tab, which tells this tab when it's done and closes. */
+  type CanvaSt = { configured: boolean; me: { connected: boolean; name: string }; isStaff: boolean; isOwner: boolean; connected?: boolean };
+  const [canva, setCanva] = useState<CanvaSt | null>(null);
   const [canvaWait, setCanvaWait] = useState<{ session: string; side: Side; imId: string; msg: string } | null>(null);
-  const [canvaPlace, setCanvaPlace] = useState<{ d: Design; side: Side; imId: string } | null>(null);
-  useEffect(() => {
-    if (portal) return;
-    fetch("/api/canva/status", { cache: "no-store" }).then((r) => r.json()).then((j: { connected?: boolean; isOwner?: boolean; error?: string }) => { if (!j.error) setCanva({ connected: !!j.connected, isOwner: !!j.isOwner }); }).catch(() => null);
-  }, [portal]);
-  type CanvaTrip = { session?: { id: string; status: string; error: string | null; side: string; im_id: string }; design?: Design | null; error?: string };
+  const [canvaPlace, setCanvaPlace] = useState<{ d: Design; side: Side; imId: string; session: string; fileUrl: string; previewUrl: string } | null>(null);
+  const [canvaAsk, setCanvaAsk] = useState(false);
+  const loadCanva = () => fetch("/api/canva/status", { cache: "no-store" }).then((r) => r.json()).then((j: CanvaSt & { error?: string }) => { if (!j.error && j.me) setCanva(j); }).catch(() => null);
+  useEffect(() => { void loadCanva(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** the Canva doorway shows for customers (their own login, not a staff preview) and for staff */
+  const showCanva = !!canva?.configured && (portal ? !canva.isStaff : canva.isStaff);
+  /** ready to open Canva now: their own Canva account, or (staff) the shop's */
+  const canvaReady = showCanva && !!canva && (canva.me.connected || (canva.isStaff && !!canva.connected));
+  type CanvaTrip = { session?: { id: string; status: string; error: string | null; side: string; im_id: string }; design?: Design | null; fileUrl?: string; previewUrl?: string; error?: string };
   const canvaTrip = (id: string): Promise<CanvaTrip> => fetch(`/api/canva/status?session=${encodeURIComponent(id)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ error: "Couldn't reach the portal." }));
   const asSide = (v: string): Side => (v === "back" || v === "sleeve" ? v : "front");
   /** check the trip we're waiting on; true when it's finished (saved or failed) */
@@ -1274,7 +1280,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (!s0) { if (!quiet) setMsg(r.error || "Couldn't find the Canva design."); return false; }
     if (s0.status === "saved" && r.design) {
       setCanvaWait(null);
-      setCanvaPlace({ d: r.design, side: asSide(s0.side), imId: s0.im_id });
+      setCanvaPlace({ d: r.design, side: asSide(s0.side), imId: s0.im_id, session: s0.id, fileUrl: r.fileUrl || "", previewUrl: r.previewUrl || "" });
       return true;
     }
     if (s0.status === "error") { setCanvaWait(null); setMsg(`Canva: ${s0.error || "the design didn't come back."}`); return true; }
@@ -1291,30 +1297,45 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     window.addEventListener("focus", tick);
     return () => { clearInterval(t); window.removeEventListener("focus", tick); };
   }, [canvaWait?.session]); // eslint-disable-line react-hooks/exhaustive-deps
-  // tabs talk: the returned tab asks "is anyone waiting for this trip?"; the waiting tab answers and takes it
+  // tabs talk: the returned tab asks "is anyone waiting for this trip?" and the waiting tab answers and takes it;
+  // a tab back from Canva's sign-in says "connected" and the tab that sent it there answers and carries on
   const canvaWaitRef = useRef(canvaWait); canvaWaitRef.current = canvaWait;
+  const canvaAskRef = useRef(canvaAsk); canvaAskRef.current = canvaAsk;
   useEffect(() => {
-    if (portal || typeof BroadcastChannel === "undefined") return;
+    if (typeof BroadcastChannel === "undefined") return;
     const ch = new BroadcastChannel("fbs-canva");
     ch.onmessage = (e: MessageEvent) => {
-      const m = e.data as { type?: string; session?: string };
+      const m = e.data as { type?: string; session?: string; name?: string };
       if (m?.type === "returned" && m.session && canvaWaitRef.current?.session === m.session) { ch.postMessage({ type: "mine", session: m.session }); void checkCanva(m.session, true); }
+      if (m?.type === "connected" && canvaAskRef.current) {
+        ch.postMessage({ type: "got-connected" });
+        setCanvaAsk(false); void loadCanva();
+        setMsg(`Your Canva account${m.name ? ` (${m.name})` : ""} is connected. Press Design with Canva.`);
+      }
     };
     return () => ch.close();
-  }, [portal]); // eslint-disable-line react-hooks/exhaustive-deps
-  // this page opened from Canva's Return (?canva=<trip>) or with a problem (?canva_error=…)
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // this page opened from Canva's Return (?canva=<trip>), Canva's sign-in (?canva_connected=<name>), or with a problem
   const canvaParam = useRef(sp.get("canva") || "");
   useEffect(() => {
-    if (portal) return;
-    const bad = sp.get("canva_error");
+    const bad = sp.get("canva_error"), joined = sp.get("canva_connected");
     if (bad) setMsg(`Canva: ${bad}`);
     const id = canvaParam.current;
-    if (!id && !bad) return;
+    if (!id && !bad && joined == null) return;
     canvaParam.current = "";
-    try { const u = new URL(window.location.href); u.searchParams.delete("canva"); u.searchParams.delete("canva_error"); window.history.replaceState(null, "", u.toString()); } catch { /* keep the address */ }
-    if (!id) return;
-    let taken = false;
+    try { const u = new URL(window.location.href); for (const k of ["canva", "canva_error", "canva_connected"]) u.searchParams.delete(k); window.history.replaceState(null, "", u.toString()); } catch { /* keep the address */ }
     const ch = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("fbs-canva") : null;
+    if (joined != null) {
+      // back from Canva's sign-in in its own tab: tell the tab that sent us, then close; else carry on here
+      let heard = false;
+      if (ch) ch.onmessage = (e: MessageEvent) => { if ((e.data as { type?: string })?.type === "got-connected") heard = true; };
+      ch?.postMessage({ type: "connected", name: joined });
+      setMsg(`Your Canva account${joined ? ` (${joined})` : ""} is connected. Press Design with Canva.`);
+      setTimeout(() => { ch?.close(); if (heard) { setMsg("Connected. Carry on in the Mockup Creator tab you started from."); setTimeout(() => { try { window.close(); } catch { /* a tab we didn't open */ } }, 1200); } }, 1200);
+      return;
+    }
+    if (!id) { ch?.close(); return; }
+    let taken = false;
     if (ch) ch.onmessage = (e: MessageEvent) => { const m = e.data as { type?: string; session?: string }; if (m?.type === "mine" && m.session === id) taken = true; };
     ch?.postMessage({ type: "returned", session: id });
     setMsg("Getting the design from Canva…");
@@ -1329,43 +1350,83 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setMsg("The design is still coming back from Canva. Reload in a minute.");
     }, 1500);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** a Canva design saved without a mockup picture (a Canva Free account can't export see-through PNGs): draw it from
+   *  the PDF with a clear page, crop it to the art, and keep it on the design (noting a solid background if there is one) */
+  async function canvaPreview(p: { d: Design; session: string; fileUrl: string }) {
+    madePv.current.add(p.d.id);
+    const blob = await fetch(p.fileUrl).then((r) => (r.ok ? r.blob() : null)).catch(() => null);
+    if (!blob) return;
+    const pv0 = await makePreview(new File([blob], p.d.file_name || "design.pdf", { type: "application/pdf" })).catch(() => null);
+    if (!pv0) return;
+    const pv = (await cropFileToArt(pv0).catch(() => null)) || pv0;
+    // corners still solid after cropping = the design has a background (white or a color)
+    const opaque = await new Promise<boolean>((res) => {
+      const url = URL.createObjectURL(pv), img = new Image();
+      img.onload = () => {
+        try {
+          const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+          const g = c.getContext("2d")!; g.drawImage(img, 0, 0);
+          const a = (x: number, y: number) => g.getImageData(x, y, 1, 1).data[3];
+          res([a(0, 0), a(c.width - 1, 0), a(0, c.height - 1), a(c.width - 1, c.height - 1)].every((v) => v > 240));
+        } catch { res(false); } finally { URL.revokeObjectURL(url); }
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); res(false); };
+      img.src = url;
+    });
+    const fd = new FormData(); fd.set("session", p.session); fd.set("file", pv, "preview.png"); if (opaque) fd.set("opaque", "1");
+    const r = await fetch("/api/canva/preview", { method: "POST", body: fd }).then((x) => x.json()).catch(() => null) as { design?: Design | null; url?: string } | null;
+    if (r?.design) { const nd = r.design; setDesigns((xs) => xs.map((x) => (x.id === nd.id ? nd : x))); if (r.url) setUrls((x) => ({ ...x, [nd.id]: r.url! })); }
+    if (opaque) setMsg("The Canva design has a background, so it shows as a box on the shirt. Remove the background in Canva (or tell us to) before printing.");
+  }
   // a design back from Canva goes on its side of the shirt (once the page has its order / garment loaded)
   useEffect(() => {
     if (!canvaPlace) return;
     const go = () => {
-      const { d, side, imId } = canvaPlace;
+      const p = canvaPlace, { d, side, imId } = p;
       setCanvaPlace(null);
       setDesigns((xs) => (xs.some((x) => x.id === d.id) ? xs : [d, ...xs]));
-      void previewUrls(sb, [d]).then((u) => setUrls((x) => ({ ...x, ...u })));
+      if (p.previewUrl) setUrls((x) => ({ ...x, [d.id]: p.previewUrl }));
+      else if (!d.preview_path && p.fileUrl) void canvaPreview(p);
       setImprints((xs) => {
         const t = xs.find((x) => x.id === imId) || xs.find((x) => sideOf(x.location) === side && !x.design_id && !qt[x.id]);
         if (t) return xs.map((x) => (x.id === t.id ? { ...x, design_id: d.id } : x));
         return [...xs, { ...newImprint(side === "back" ? "Full Back" : side === "sleeve" ? "Left Sleeve" : "Full Front"), design_id: d.id }];
       });
       setTab(side);
-      setMsg(`Saved ${designLabel(d)} from Canva to the customer's account.`);
+      setMsg(`Saved ${designLabel(d)} from Canva to ${portal ? "your logos" : "the customer's account"}.`);
     };
     if (ready) { go(); return; }
     const t = setTimeout(go, 6000);
     return () => clearTimeout(t);
   }, [canvaPlace, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Canva's sign-in for the person's own account, in a new tab (this tab keeps the mockup as it is) */
+  function connectCanva() {
+    const back = new URL(window.location.href);
+    window.open(`/api/canva/connect?for=me&return_to=${encodeURIComponent(back.pathname + back.search)}`, "_blank");
+  }
   /** Start a trip to Canva: a new design for this side's print area, or `from` (one of our Canva-made designs) again */
-  async function designInCanva(from?: Design, im?: Imprint) {
-    if (!customerId) return setMsg("Pick the customer first. The design is saved to their account.");
-    const side = im ? sideOf(im.location) : curTab;
+  async function designInCanva(from?: Design, im?: Imprint, onSide?: Side) {
+    if (!customerId) return setMsg(portal ? "Your account is still loading. Try again in a moment." : "Pick the customer first. The design is saved to their account.");
+    if (!canvaReady) { setCanvaAsk(true); return; }
+    const side = im ? sideOf(im.location) : onSide || curTab;
     const target = im || imprints.find((x) => sideOf(x.location) === side && !x.design_id && !qt[x.id]);
     const loc = target?.location || (side === "back" ? "Full Back" : side === "sleeve" ? "Left Sleeve" : "Full Front");
     const area = spotFor(loc);
     // the tab opens now, during the click (so it isn't blocked as a pop-up), and goes to Canva when the link is ready
     const win = window.open("about:blank", "_blank");
     const back = new URL(window.location.href);
-    if (customerId && !back.searchParams.get("customer") && !orderId) back.searchParams.set("customer", customerId);
+    if (!portal && customerId && !back.searchParams.get("customer") && !orderId) back.searchParams.set("customer", customerId);
     const r = await fetch("/api/canva/design", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ side, location: loc, w_in: area.maxW, h_in: area.maxH, customer_id: customerId, order_id: orderId || null, group_id: groupId, im_id: target?.id || "", return_to: back.pathname + back.search, from_design: from?.id }),
-    }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the portal." })) as { session?: string; edit_url?: string; error?: string };
-    if (!r.edit_url || !r.session) { win?.close(); return setMsg(r.error || "Couldn't open Canva."); }
+    }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the portal." })) as { session?: string; edit_url?: string; error?: string; needs_connect?: boolean };
+    if (!r.edit_url || !r.session) {
+      win?.close();
+      if (r.needs_connect) { setCanvaAsk(true); void loadCanva(); return; }
+      return setMsg(r.error || "Couldn't open Canva.");
+    }
     if (win) { win.opener = null; win.location.href = r.edit_url; } else window.open(r.edit_url, "_blank", "noopener");
+    setCanvaAsk(false);
     setCanvaWait({ session: r.session, side, imId: target?.id || "", msg: "Designing in Canva… click Return in Canva when you're done." });
   }
 
@@ -1549,7 +1610,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {designerFor && (
             <div className="sd-modal-back" role="dialog" aria-modal="true" aria-label="Idea Lab">
               <div className="sd-modal">
-                <ShirtDesigner key={designerFor.side + designerFor.imId} start={designerFor.start} shirt={designerFor.shirt} saveLabel={`Save & put on the ${designerFor.side === "sleeve" ? "sleeve" : designerFor.side}`} onClose={() => setDesignerFor(null)}
+                <ShirtDesigner key={designerFor.side + designerFor.imId} start={designerFor.start} onCanva={showCanva ? () => { const sd = designerFor.side; setDesignerFor(null); void designInCanva(undefined, undefined, sd); } : undefined} shirt={designerFor.shirt} saveLabel={`Save & put on the ${designerFor.side === "sleeve" ? "sleeve" : designerFor.side}`} onClose={() => setDesignerFor(null)}
                   logos={designs.filter((d) => urls[d.id] && !d.archived_at && !isQuick(d.id)).map((d) => ({ id: d.id, name: designLabel(d), url: urls[d.id] }))}
                   onSave={async (out) => {
                     try {
@@ -1713,7 +1774,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     </div>
                     {/* Upload logo right under the location (Oct 9, Nick: no Logo / Text switch; text comes from + Add Text) */}
                     <label className="btn sm mk-upload" style={{ cursor: "pointer" }}>Upload logo<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; if (qt[im.id]) textMode(im, false); uploadNew(im, f); }} /></label>
-                    {!portal && canva?.connected && (designOf(im) as (Design & { canva_design_id?: string | null }) | undefined)?.canva_design_id && <button type="button" className="btn sm ghost" disabled={!!canvaWait} title="Opens this design in Canva; press Return in Canva to bring the changes back (saved as a new design)" onClick={() => designInCanva(designOf(im), im)}>Edit in Canva</button>}
+                    {canvaReady && (designOf(im) as (Design & { canva_design_id?: string | null }) | undefined)?.canva_design_id && <button type="button" className="btn sm ghost" disabled={!!canvaWait} title="Opens this design in Canva; press Return in Canva to bring the changes back (saved as a new design)" onClick={() => designInCanva(designOf(im), im)}>Edit in Canva</button>}
                     {qt[im.id] ? (() => {
                       const q = qt[im.id];
                       const setQ = (patch: Partial<QuickText>) => setQt((all) => ({ ...all, [im.id]: { ...all[im.id], ...patch } }));
@@ -1792,14 +1853,29 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           <section className={"panel mk-more-box" + (ready ? "" : " mk-off")} inert={!ready || undefined}>
             <div className="panel-h"><h2>Need more than a logo?</h2></div>
             <div className="panel-b">
+              {/* Canva first (Oct 10, Nick: customers design in Canva, "powered by Canva"); our own tools stay below */}
+              {showCanva && <div className="mk-canva">
+                <button type="button" className="btn primary mk-canva-btn" disabled={!!canvaWait} onClick={() => designInCanva()}>Design with Canva</button>
+                <div className="mk-canva-txt">
+                  <span>{portal ? "Templates, fonts, photos and AI on a canvas the size of your print. Your design comes back onto this shirt." : `A Canva design the size of the ${curTab === "sleeve" ? "sleeve" : curTab} print area; Return in Canva puts it on the shirt.`}</span>
+                  <span className="mk-canva-pb">Powered by Canva</span>
+                </div>
+                {canvaAsk && !canvaWait && <div className="mk-canva-ask">
+                  <span>Sign in to your Canva account, or make a free one, to design here.</span>
+                  <span className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                    <button type="button" className="btn sm primary" onClick={connectCanva}>Continue to Canva</button>
+                    {!portal && canva?.isOwner && <a className="btn sm ghost" href="/shop/settings/canva">Or connect the shop&apos;s account</a>}
+                    <button type="button" className="btn sm ghost" onClick={() => setCanvaAsk(false)}>Not now</button>
+                  </span>
+                </div>}
+                {canvaWait && <div className="faint" style={{ fontSize: 12.5 }}>{canvaWait.msg} <a href="#" onClick={(e) => { e.preventDefault(); void checkCanva(canvaWait.session); }}>Check again</a>{" · "}<a href="#" onClick={(e) => { e.preventDefault(); setCanvaWait(null); }}>Stop waiting</a></div>}
+              </div>}
+              {showCanva && <div className="mk-more-or">Or use our simple designer</div>}
               <div className="mk-more-acts">
                 <button type="button" className="mk-more-btn" onClick={addText}><b>Add text</b><span>Type words right onto the {curTab === "sleeve" ? "sleeve" : curTab}</span></button>
                 <button type="button" className="mk-more-btn" onClick={() => openLab(curTab, undefined, "ideas")}><b>Use a preset design</b><span>60 design ideas to start from</span></button>
                 <button type="button" className="mk-more-btn" onClick={() => openLab(curTab, undefined, "art")}><b>Open the Idea Lab</b><span>Clip art, 1,800 fonts, names &amp; numbers</span></button>
-                {!portal && canva?.connected && <button type="button" className="mk-more-btn" disabled={!!canvaWait} onClick={() => designInCanva()}><b>Design in Canva</b><span>A blank Canva design the size of the {curTab === "sleeve" ? "sleeve" : curTab} print area</span></button>}
-                {!portal && canva && !canva.connected && canva.isOwner && <a className="mk-more-btn" href="/shop/settings/canva" style={{ textDecoration: "none" }}><b>Connect Canva in Settings</b><span>To design in Canva here and get designs from customers&apos; Canva links</span></a>}
               </div>
-              {canvaWait && <div className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>{canvaWait.msg} <a href="#" onClick={(e) => { e.preventDefault(); void checkCanva(canvaWait.session); }}>Check again</a>{" · "}<a href="#" onClick={(e) => { e.preventDefault(); setCanvaWait(null); }}>Stop waiting</a></div>}
             </div>
           </section>
         </div>

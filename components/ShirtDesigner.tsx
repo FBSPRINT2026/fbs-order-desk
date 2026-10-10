@@ -326,13 +326,15 @@ function TemplateCard({ t, onUse }: { t: Template; onUse: () => void }) {
  * The Idea Lab: text, clip art, pictures and design ideas on the shirt's print area.
  * Saving gives back an SVG (the art, fonts built in), a PNG (for mockups and previews), the editable layers and where it sits.
  */
-export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClose, saveLabel = "Save design" }: {
+export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClose, saveLabel = "Save design", onCanva }: {
   start?: { doc?: DesignDoc | null; imageUrl?: string; name?: string; /** where a picture sits now (artboard units: center + width) */ at?: { x: number; y: number; w: number }; /** the panel to open on ("" = none: just the shirt) */ tool?: Tool | "" };
   shirt?: LabShirt | null;
   logos?: { id: string; name: string; url: string }[];
   onSave: (out: DesignerOut) => Promise<string | void> | string | void;
   onClose?: () => void;
   saveLabel?: string;
+  /** "Design with Canva" instead (closes the Idea Lab; the Mockup Creator takes it from there) */
+  onCanva?: () => void;
 }) {
   const [layers, setLayersRaw] = useState<Layer[]>(() => start?.doc?.layers?.map((l) => ({ ...l })) || []);
   const [sel, setSel] = useState("");
@@ -841,6 +843,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
                 <button type="button" className="btn sm" onClick={() => setTool("art")}>Add clip art</button>
                 <button type="button" className="btn sm" onClick={() => setTool("upload")}>Upload a picture</button>
               </div>
+              {onCanva && <div className="il-canva"><button type="button" className="btn sm" onClick={onCanva}>Design with Canva</button><span className="mk-canva-pb">Powered by Canva</span></div>}
             </div>
           )}
           <svg ref={svgRef} className="sd-svg" viewBox={`${VB.x} ${VB.y} ${VB.w} ${VB.h}`} onPointerMove={onMoveEv} onPointerUp={onUpEv} onPointerCancel={onUpEv}
