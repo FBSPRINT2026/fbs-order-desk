@@ -98,7 +98,7 @@ async function saveOnBackdrop(admin: SupabaseClient, c: Canva, opts: { designId:
   const d = await c.getDesign(opts.designId);
   const pdf = await c.exportDesign(opts.designId, "pdf").catch((e) => (e instanceof CanvaError && e.noAccess ? Promise.reject(e) : c.exportDesign(opts.designId, "pdf", { quality: "regular" })));
   const { buf, removed } = await stripBackdrop(pdf.buf, opts.backdrop);
-  const name = fileTitle((d.title || "").replace(/^T-shirt · /, ""));
+  const name = fileTitle((d.title || "").replace(/^T-shirt · /, "").replace(/\s*\([^)]*\)\s*$/, ""));
   const key = crypto.randomUUID();
   const file_path = `designs/${key}/${safe(name)}.pdf`;
   const up = await admin.storage.from("proofs").upload(file_path, buf, { contentType: "application/pdf" });

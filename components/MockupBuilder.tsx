@@ -1477,7 +1477,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const ppiRef = PX_PER_IN * sc;
       z = autoSpot(start, v, (refL + pw / kf / 2 - CENTER_X) / ppiRef, (refT - COLLAR_Y[v]) / ppiRef, wIn, wIn * rr);
     }
+    // bigger than the print area allows: shrunk around its middle, so it stays centered where it was drawn
+    const drawn = wIn;
     wIn = Math.max(0.5, Math.min(sideMaxWidth(z, rr), wIn));
+    if (wIn < drawn) { const d0 = (drawn - wIn) * ppiPhoto; tl.x += d0 / 2; tl.y += (d0 * rr) / 2; }
     const nb = basePlacement(z, wIn, rr, null, sc, v, fit, bdy);
     const target = imprints.find((x) => x.id === imId) || imprints.find((x) => sideOf(x.location) === side && !x.design_id && !qt[x.id]);
     const id = target?.id || uid();
