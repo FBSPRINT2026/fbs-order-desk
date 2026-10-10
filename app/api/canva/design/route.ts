@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       const dpi = Math.floor(Math.min(300, 8000 / Math.max(wIn, hIn), Math.sqrt(25_000_000 / (wIn * hIn))));
       const { data: cu } = await admin.from("customers").select("company, name").eq("id", customerId).maybeSingle();
       const who = (cu?.company || cu?.name || "Customer") as string;
-      const title = `${who} · ${str("location", 60) || "Design"} (${wIn}" × ${hIn}")`;
+      const title = `T-shirt · ${who} · ${str("location", 60) || "Design"} (${wIn}" × ${hIn}")`;
       const cd = await c.createDesign(wIn * dpi, hIn * dpi, title);
       designId = cd.id; editUrl = cd.urls?.edit_url || "";
     }

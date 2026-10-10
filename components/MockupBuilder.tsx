@@ -1427,7 +1427,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     if (win) { win.opener = null; win.location.href = r.edit_url; } else window.open(r.edit_url, "_blank", "noopener");
     setCanvaAsk(false);
-    setCanvaWait({ session: r.session, side, imId: target?.id || "", msg: "Designing in Canva… click Return in Canva when you're done." });
+    setCanvaWait({ session: r.session, side, imId: target?.id || "", msg: from ? "Editing in Canva… click Return to FBS Print Portal (top right in Canva) when you're done." : "Designing in Canva. For shirt templates, click Templates in Canva and search \u201ct-shirt\u201d. Click Return to FBS Print Portal (top right) when you're done." });
   }
 
   // on a phone, opening a mockup asks about each print's size first: "Full Front: 9" wide · Keep / Change size"
@@ -1857,7 +1857,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               {showCanva && <div className="mk-canva">
                 <button type="button" className="btn primary mk-canva-btn" disabled={!!canvaWait} onClick={() => designInCanva()}>Design with Canva</button>
                 <div className="mk-canva-txt">
-                  <span>{portal ? "Templates, fonts, photos and AI on a canvas the size of your print. Your design comes back onto this shirt." : `A Canva design the size of the ${curTab === "sleeve" ? "sleeve" : curTab} print area; Return in Canva puts it on the shirt.`}</span>
+                  <span>{portal ? "Templates, fonts, photos and AI on a blank canvas the size of your print (search \u201ct-shirt\u201d in Templates). Your design comes back onto this shirt." : `A Canva design the size of the ${curTab === "sleeve" ? "sleeve" : curTab} print area; Return in Canva puts it on the shirt.`}</span>
                   <span className="mk-canva-pb">Powered by Canva</span>
                 </div>
                 {canvaAsk && !canvaWait && <div className="mk-canva-ask">
