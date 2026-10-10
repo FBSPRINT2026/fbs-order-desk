@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { staffOnly } from "../guard";
 import { orderFiles, type PvOrder } from "@/lib/archive";
+import { pvHandle } from "@/lib/printavoNames";
+import { namesFor } from "@/lib/printavoFileMeta";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -33,6 +35,10 @@ export async function GET() {
   for (const r of (data || []) as Row[]) for (const [url, v] of Object.entries(r.files || {})) {
     if (v === "failed" || v === "too-big") out.push({ kind: v, archivedId: r.id, visualId: r.visual_id, date: r.order_date, nickname: r.nickname, name: nameOf(r, url), url });
   }
+  // files Printavo gave no name (mockups): the name they were uploaded with (printavo_file_names)
+  const linkName = (u: string) => decodeURIComponent(u.split("?")[0].split("/").pop() || "file");
+  const orig = await namesFor(admin, out.filter((f) => f.name === linkName(f.url)).map((f) => pvHandle(f.url)));
+  for (const f of out) { const h = pvHandle(f.url); if (h && orig[h] && f.name === linkName(f.url)) f.name = orig[h]; }
   // sizes of the big ones (a HEAD request to the file host: nothing is downloaded)
   const big = out.filter((f) => f.kind === "too-big");
   for (let i = 0; i < big.length; i += 10) {
