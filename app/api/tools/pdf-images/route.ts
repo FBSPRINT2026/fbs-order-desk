@@ -37,6 +37,28 @@ export async function GET(req: Request) {
   if (!t.token || !t.expires_at || t.expires_at < new Date().toISOString() || q.get("t") !== t.token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   const { data: blob } = await admin.storage.from("proofs").download(q.get("path") || "");
   if (!blob) return NextResponse.json({ error: "No file" }, { status: 404 });
+  // a stored PNG: how its coverage (alpha) is spread, in buckets of 10%
+  if (q.get("alpha")) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const zlib = require("node:zlib") as typeof import("node:zlib");
+    const b = Buffer.from(await blob.arrayBuffer());
+    let off = 8, w = 0, h = 0, depth = 0, ctype = 0; const idat: Buffer[] = [];
+    while (off < b.length) { const len = b.readUInt32BE(off), type = b.toString("ascii", off + 4, off + 8), d = b.subarray(off + 8, off + 8 + len); if (type === "IHDR") { w = d.readUInt32BE(0); h = d.readUInt32BE(4); depth = d[8]; ctype = d[9]; } else if (type === "IDAT") idat.push(d); off += 12 + len; }
+    if (depth !== 8 || ctype !== 6) return NextResponse.json({ w, h, depth, ctype, note: "not 8-bit RGBA" });
+    const raw = zlib.inflateSync(Buffer.concat(idat)), bpp = 4, stride = w * bpp, out = Buffer.alloc(stride * h);
+    for (let y = 0; y < h; y++) {
+      const f = raw[y * (stride + 1)], src = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+      for (let x = 0; x < stride; x++) {
+        const a2 = x >= bpp ? out[y * stride + x - bpp] : 0, up = y ? out[(y - 1) * stride + x] : 0, ul = y && x >= bpp ? out[(y - 1) * stride + x - bpp] : 0;
+        const pa = Math.abs(up - ul), pb = Math.abs(a2 - ul), pc = Math.abs(a2 + up - 2 * ul);
+        const pred = f === 1 ? a2 : f === 2 ? up : f === 3 ? (a2 + up) >> 1 : f === 4 ? (pa <= pb && pa <= pc ? a2 : pb <= pc ? up : ul) : 0;
+        out[y * stride + x] = (src[x] + pred) & 255;
+      }
+    }
+    const buckets = new Array(11).fill(0); const colors = new Map<string, number>();
+    for (let i = 0; i < w * h; i++) { const al = out[i * 4 + 3]; buckets[Math.round(al / 25.5)]++; if (al > 200) { const k = `${out[i * 4] >> 4},${out[i * 4 + 1] >> 4},${out[i * 4 + 2] >> 4}`; colors.set(k, (colors.get(k) || 0) + 1); } }
+    return NextResponse.json({ w, h, alphaBuckets: buckets, topOpaqueColors: [...colors.entries()].sort((x, y) => y[1] - x[1]).slice(0, 6) });
+  }
   try {
     const lib = await pdfjs();
     const doc = await lib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false, disableFontFace: true, useSystemFonts: false }).promise;
