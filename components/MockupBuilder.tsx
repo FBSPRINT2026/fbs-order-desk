@@ -1426,8 +1426,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const hx = shirtHex(l).replace("#", ""), lum = (0.299 * parseInt(hx.slice(0, 2), 16) + 0.587 * parseInt(hx.slice(2, 4), 16) + 0.114 * parseInt(hx.slice(4, 6), 16)) / 255;
       const ink = lum < 0.55 ? "rgba(255,255,255,0.85)" : "rgba(40,48,60,0.7)";
       g.setLineDash([10 * BD_K, 7 * BD_K]); g.lineWidth = 1.6 * BD_K; g.strokeStyle = ink; g.strokeRect(ax, ay, aw, ah);
-      g.setLineDash([]); g.fillStyle = ink; g.font = `600 ${11 * BD_K}px Helvetica, Arial, sans-serif`;
-      g.fillText(`${loc} print area · ${sp.maxW}" × ${sp.maxH}"`, ax + 6 * BD_K, ay + 16 * BD_K);
+      g.setLineDash([]); g.fillStyle = ink; g.font = `600 ${15 * BD_K}px Helvetica, Arial, sans-serif`;
+      g.fillText(`${loc} print area · ${sp.maxW}" × ${sp.maxH}"`, ax + 8 * BD_K, ay - 8 * BD_K);
       let blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.9));
       if (blob && blob.size > 4_200_000) blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.78));
       if (!blob || blob.size > 4_300_000) return null;
@@ -1949,7 +1949,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               {showCanva && <div className="mk-canva">
                 <button type="button" className="btn primary mk-canva-btn" disabled={!!canvaWait} onClick={() => designInCanva()}>Design with Canva</button>
                 <div className="mk-canva-txt">
-                  <span>{portal ? "Templates, fonts, photos and AI on a blank canvas the size of your print (search \u201ct-shirt\u201d in Templates). Your design comes back onto this shirt." : `A Canva design the size of the ${curTab === "sleeve" ? "sleeve" : curTab} print area; Return in Canva puts it on the shirt.`}</span>
+                  <span>{portal ? (curTab === "sleeve" ? "Templates, fonts, photos and AI on a canvas the size of your sleeve print. Your design comes back onto this shirt." : "Canva opens on this shirt with the print area marked: templates, fonts, photos and AI. Your design comes back onto the shirt where you put it.") : curTab === "sleeve" ? "A Canva design the size of the sleeve print area; Return in Canva puts it on the shirt." : `Canva opens on this shirt with the ${curTab} print area marked; Return in Canva puts the design on it, the size and spot it was drawn.`}</span>
                   <span className="mk-canva-pb">Powered by Canva</span>
                 </div>
                 {canvaAsk && !canvaWait && <div className="mk-canva-ask">
