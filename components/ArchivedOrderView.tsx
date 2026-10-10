@@ -4,6 +4,7 @@ import { addressLines, plain, sizeLabel, sizeOrder, type PvFile, type PvGroup, t
 import { fmtDateLong, money } from "@/lib/format";
 import ProductionPanel from "@/components/ProductionPanel";
 import { useSeesMoney } from "@/components/RoleContext";
+import { downloadUrl, pvFileName } from "@/lib/printavoNames";
 
 const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "—");
 const stamp = (x?: string | null) => (x ? new Date(x).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
@@ -18,19 +19,25 @@ const inkOn = (hex: string) => { const m = hex.replace("#", "").match(/^([0-9a-f
  * header with status, customer and dates, line item groups with size columns and their imprints and mockups,
  * then totals, payments, notes, files, tasks and messages.
  */
-export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref, audience = "shop", actions }: { o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string; /** "customer": the portal view (no internal details) */ audience?: "shop" | "customer"; /** buttons next to Print (the shop's Reorder) */ actions?: ReactNode }) {
+export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref, audience = "shop", actions, names, paths }: { o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string; /** "customer": the portal view (no internal details) */ audience?: "shop" | "customer"; /** buttons next to Print (the shop's Reorder) */ actions?: ReactNode;
+  /** the files' original names (Filestack handle → name, printavo_file_names) and our copies' paths (Printavo link → path) */ names?: Record<string, string>; paths?: Record<string, string> }) {
   const [zoom, setZoom] = useState<PvFile | null>(null);
+  // a file's original name, and a link that saves it under that name
+  const nameOf = (f: { full: string; name?: string }) => pvFileName({ url: f.full, name: f.name, path: paths?.[f.full], names });
+  const dl = (u: string, name: string) => downloadUrl(fileUrl(u), name);
   // crew (production, receiving, shipping): the no-money view, quantities and what's ordered only
   const cash = useSeesMoney();
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(null); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, []);
 
-  const open = (f: PvFile) => { if (isImg(f)) setZoom(f); else window.open(fileUrl(f.full), "_blank", "noopener"); };
+  // a picture opens large; any other file (PDF, AI…) shows its preview with its name, Open and Download
+  const open = (f: PvFile) => setZoom(f);
   const thumb = (f: PvFile, cls = "pv-thumb") => {
     const full = fileUrl(f.full), src = (f.thumb && fileUrl(f.thumb)) || (isImg(f) ? full : "");
     if (!full && !src) return null;
+    const nm = nameOf(f);
     return (
-      <button key={f.id + f.full} type="button" className={cls} onClick={() => open(f)} title={f.name || "Open"}>
-        {src ? <img src={src} alt={f.name || "Mockup"} loading="lazy" /> : <span className="pv-doc">{(f.name || f.full).split("?")[0].split(".").pop()?.slice(0, 4).toUpperCase() || "FILE"}</span>}
+      <button key={f.id + f.full} type="button" className={cls} onClick={() => open(f)} title={nm || "Open"}>
+        {src ? <img src={src} alt={nm || "Mockup"} loading="lazy" /> : <span className="pv-doc">{nm.split("?")[0].split(".").pop()?.slice(0, 4).toUpperCase() || "FILE"}</span>}
       </button>
     );
   };
@@ -115,7 +122,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         <aside className="ed-aside pv-aside">
         {audience === "shop" && (
           <ProductionPanel compact note={plain(o.productionNote)}
-            files={o.files.map((f) => ({ id: f.id, name: f.name || (f.full.split("?")[0].split("/").pop() || "File"), url: fileUrl(f.full) || undefined, thumb: (f.thumb && fileUrl(f.thumb)) || undefined, mime: f.mime }))} />
+            files={o.files.map((f) => ({ id: f.id, name: nameOf(f), url: fileUrl(f.full) || undefined, thumb: (f.thumb && fileUrl(f.thumb)) || undefined, mime: f.mime }))} />
         )}
         {cash && o.transactions.length > 0 && (
           <section className="panel">
@@ -132,7 +139,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             </div>
           </section>
         )}
-        <History o={o} fileUrl={fileUrl} audience={audience} />
+        <History o={o} fileUrl={fileUrl} dl={dl} paths={paths} audience={audience} />
 
         {o.tasks.length > 0 && (
           <section className="panel"><div className="panel-h"><h2>Tasks</h2></div><div className="panel-b">
@@ -152,15 +159,20 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         </aside>
       </div>
 
-      {zoom && (
-        <div className="pv-zoom" role="dialog" aria-label="Mockup" onClick={() => setZoom(null)}>
-          <img src={fileUrl(zoom.full)} alt={zoom.name || "Mockup"} onClick={(e) => e.stopPropagation()} />
+      {zoom && (() => {
+        const nm = nameOf(zoom), pic = isImg(zoom) ? fileUrl(zoom.full) : (zoom.thumb && fileUrl(zoom.thumb)) || "";
+        return (
+        <div className="pv-zoom" role="dialog" aria-label={nm || "Mockup"} onClick={() => setZoom(null)}>
+          {pic ? <img src={pic} alt={nm || "Mockup"} onClick={(e) => e.stopPropagation()} /> : <span className="pv-doc" onClick={(e) => e.stopPropagation()}>{nm.split(".").pop()?.slice(0, 4).toUpperCase() || "FILE"}</span>}
           <div className="pv-zoom-bar" onClick={(e) => e.stopPropagation()}>
-            <a href={fileUrl(zoom.full)} target="_blank" rel="noreferrer">Open full size</a>
+            <span className="pv-zoom-name" title={nm}>{nm}</span>
+            <a href={fileUrl(zoom.full)} target="_blank" rel="noreferrer">{isImg(zoom) ? "Open full size" : "Open"}</a>
+            <a href={dl(zoom.full, nm)} target="_blank" rel="noreferrer" download={nm}>Download</a>
             <button type="button" className="btn" onClick={() => setZoom(null)}>Close</button>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 
@@ -232,7 +244,7 @@ type Ev = { at: string; key: string; kind: "msg" | "appr"; node: ReactNode };
  * Everything that was said and approved on this order, oldest first: emails and texts (with who sent them, whether they
  * were opened, and their attachments) and each approval request with its answer.
  */
-function History({ o, fileUrl, audience }: { o: PvOrder; fileUrl: (u: string) => string; audience: "shop" | "customer" }) {
+function History({ o, fileUrl, dl, paths, audience }: { o: PvOrder; fileUrl: (u: string) => string; dl: (u: string, name: string) => string; paths?: Record<string, string>; audience: "shop" | "customer" }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const evs: Ev[] = [];
   for (const a of o.approvals) {
@@ -273,8 +285,10 @@ function History({ o, fileUrl, audience }: { o: PvOrder; fileUrl: (u: string) =>
         {long && <button type="button" className="linkbtn" onClick={() => setOpen((x) => ({ ...x, [m.id]: !x[m.id] }))}>{shown ? "Show less" : "Show more"}</button>}
         {!!m.attachments?.length && (
           <div className="pvh-att">{m.attachments.map((f, i) => {
+            // saved under the attachment's own name (our copy's path has a stamp in front of it)
+            const nm = pvFileName({ url: f.url, name: f.name, path: paths?.[f.url] });
             const u = fileUrl(f.url);
-            return u ? <a key={i} href={u} target="_blank" rel="noreferrer">📎 {f.name || "Attachment"}</a> : <span key={i} className="faint">📎 {f.name || "Attachment"}</span>;
+            return u ? <a key={i} href={dl(f.url, nm)} target="_blank" rel="noreferrer" download={nm}>📎 {f.name || nm || "Attachment"}</a> : <span key={i} className="faint">📎 {f.name || "Attachment"}</span>;
           })}</div>
         )}
       </div>

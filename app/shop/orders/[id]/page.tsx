@@ -18,6 +18,7 @@ import OrderSeparations from "@/components/OrderSeparations";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
 import ProductionPanel from "@/components/ProductionPanel";
+import { labelFileName } from "@/lib/printavoNames";
 import ShopGoods from "@/components/ShopGoods";
 import ProjectPicker from "@/components/ProjectPicker";
 import { Pill } from "@/components/bits";
@@ -774,7 +775,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             </section>
           )}
           <ProductionPanel compact note={prodNotes} onNote={onProdNotes} uploading={artUploading}
-            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type }))}
+            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name) }))}
             onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }} />
 
           <ChecksPanel checks={checks} orderId={o.id} save={save} reorder={/Reorder of (Printavo )?#\d+/.test(o.notes || "")} />

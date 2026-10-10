@@ -5,6 +5,8 @@ import { METHODS, SIZES, STATUSES, sizeLabel, type Group } from "@/lib/pricing";
 import { isPicture, type EODraft } from "@/lib/emailOrderShared";
 import { trimPng } from "@/lib/pngTrim";
 import { SITE_URL } from "@/lib/config";
+import { namesForPaths } from "@/lib/printavoFileMeta";
+import { oldJobLabel } from "@/lib/printavoNames";
 
 /**
  * Make the order staff checked in the Inbox's "Create order" panel (lib/ai/emailOrder.ts suggested it):
@@ -94,6 +96,8 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     const id = madeFor.get(path);
     if (id) im.design_id = id;
   }
+  // files copied from Printavo keep their original names (Printavo's API didn't give mockups a name: looked up from Filestack)
+  const pvNames = await namesForPaths(admin, groups.flatMap((g) => [...(d.mockups?.[g.id] || []), ...(g.pvRef || []), ...(g.pvArt || [])].map((x) => (typeof x === "string" ? x : x.path)))).catch(() => ({} as Record<string, { name: string; visualId: string }>));
   // the customer's mockups: copied where the portal keeps a customer's own mockups
   for (const g of groups) {
     const paths = d.mockups?.[g.id] || [];
@@ -101,7 +105,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     for (const p of paths) {
       if (have.has(p)) continue;
       const f = d.files.find((x) => x.path === p);
-      if (p.startsWith("printavo/") || p.startsWith(`mockups/${custId}/`)) { g.customerMockups = [...(g.customerMockups || []), { path: p, name: f?.name || "Mockup" }]; continue; }
+      if (p.startsWith("printavo/") || p.startsWith(`mockups/${custId}/`)) { g.customerMockups = [...(g.customerMockups || []), { path: p, name: pvNames[p]?.name || f?.name || "Mockup" }]; continue; }
       const to = `mockups/${custId}/${Date.now().toString(36)}-${safe(f?.name || "mockup.png")}`;
       const cp = await admin.storage.from("proofs").copy(p, to);
       if (!cp.error) g.customerMockups = [...(g.customerMockups || []), { path: to, name: f?.name || "Mockup" }];
@@ -142,7 +146,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   }
   // a reorder of an old Printavo job: its mockups (ours) go in Production files for reference
   for (const g of groups) for (const f of [...(g.pvRef || []), ...(g.pvArt || [])]) {
-    await admin.from("art_files").insert({ order_id: oid, name: `From the old Printavo job: ${f.name.replace(/ mockup(?=\.\w+$)/i, "")}`, file_path: f.path, file_type: /\.pdf$/i.test(f.path) ? "application/pdf" : /\.png$/i.test(f.path) ? "image/png" : "image/jpeg" });
+    const orig = pvNames[f.path];
+    const label = orig ? oldJobLabel(orig.visualId || (f.name.match(/#(\d+)/)?.[1] || ""), orig.name) : `From the old Printavo job: ${f.name.replace(/ mockup(?=\.\w+$)/i, "")}`;
+    await admin.from("art_files").insert({ order_id: oid, name: label, file_path: f.path, file_type: /\.pdf$/i.test(f.path) ? "application/pdf" : /\.png$/i.test(f.path) ? "image/png" : "image/jpeg" });
   }
   // the customer's own documents (size sheet, spreadsheet, PDF order form) go in the order's Production notes & files
   // (art_files, the side panel), so the shop has them with the job; pictures are art / mockups, signatures left out

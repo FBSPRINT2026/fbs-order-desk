@@ -1,7 +1,9 @@
 "use client";
 import { useRef, useState } from "react";
+import { downloadUrl } from "@/lib/printavoNames";
 
-export type ProdFile = { id: string; name: string; url?: string; thumb?: string; mime?: string };
+/** `fileName`: what a download saves as (defaults to `name`) */
+export type ProdFile = { id: string; name: string; url?: string; thumb?: string; mime?: string; fileName?: string };
 
 const isImg = (f: ProdFile) => /^image\//.test(f.mime || "") || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
 const ext = (n: string) => (n.split("?")[0].split(".").pop() || "file").slice(0, 4).toUpperCase();
@@ -43,7 +45,7 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
                 </button>
                 <div className="prod-fname" title={f.name}>{f.name}</div>
                 <div className="prod-facts">
-                  {f.url && <a href={f.url} target="_blank" rel="noreferrer" download={f.name}>Download</a>}
+                  {f.url && <a href={downloadUrl(f.url, f.fileName || f.name)} target="_blank" rel="noreferrer" download={f.fileName || f.name}>Download</a>}
                   {onRemove && <button type="button" className={"linkish" + (armed === f.id ? " armed" : "")} onClick={() => { if (armed === f.id) { onRemove(f); setArmed(""); } else { setArmed(f.id); setTimeout(() => setArmed((a) => (a === f.id ? "" : a)), 3500); } }}>{armed === f.id ? "Confirm remove" : "Remove"}</button>}
                 </div>
               </div>
@@ -62,7 +64,7 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
       {zoom && (
         <div className="pv-zoom" role="dialog" aria-label={zoom.name} onClick={() => setZoom(null)}>
           <img src={zoom.url} alt={zoom.name} onClick={(e) => e.stopPropagation()} />
-          <div className="pv-zoom-bar" onClick={(e) => e.stopPropagation()}><a href={zoom.url} target="_blank" rel="noreferrer">Open full size</a><button type="button" className="btn" onClick={() => setZoom(null)}>Close</button></div>
+          <div className="pv-zoom-bar" onClick={(e) => e.stopPropagation()}><a href={zoom.url} target="_blank" rel="noreferrer">Open full size</a><a href={downloadUrl(zoom.url, zoom.fileName || zoom.name)} target="_blank" rel="noreferrer">Download</a><button type="button" className="btn" onClick={() => setZoom(null)}>Close</button></div>
         </div>
       )}
     </section>

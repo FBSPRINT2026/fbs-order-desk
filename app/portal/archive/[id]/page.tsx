@@ -4,6 +4,8 @@ import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fileUrls, forCustomer, type PvOrder } from "@/lib/archive";
 import ArchivedPortalView from "./view";
+import { pvHandle } from "@/lib/printavoNames";
+import { namesFor } from "@/lib/printavoFileMeta";
 
 /**
  * A past order in the customer's portal. The record is read on the server and trimmed to what a customer
@@ -21,17 +23,22 @@ export default async function PortalArchivedOrder({ params, searchParams }: { pa
   // signed links to our copies of the mockups this customer can see
   const files = (data.files || {}) as Record<string, string>;
   const wanted = fileUrls(o).filter((u) => files[u] && !["failed", "too-big"].includes(files[u]));
-  const urls: Record<string, string> = {};
+  let names: Record<string, string> = {};
+  const urls: Record<string, string> = {}, paths: Record<string, string> = {};
   if (wanted.length) {
-    const { data: s } = await admin.storage.from("proofs").createSignedUrls(wanted.map((u) => files[u]), 3600);
-    wanted.forEach((u, i) => { if (s?.[i]?.signedUrl) urls[u] = s[i].signedUrl!; });
+    const [{ data: s }, nm] = await Promise.all([
+      admin.storage.from("proofs").createSignedUrls(wanted.map((u) => files[u]), 3600),
+      namesFor(admin, wanted.map(pvHandle)),
+    ]);
+    wanted.forEach((u, i) => { paths[u] = files[u]; if (s?.[i]?.signedUrl) urls[u] = s[i].signedUrl!; });
+    names = nm;
   }
   return (
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s portal.</div>}
       <main className="p-main">
         <Link className="back" href={`/portal?area=orders${ctx.preview ? `&as=${ctx.preview.id}` : ""}`}>← Your orders</Link>
-        <ArchivedPortalView o={o} urls={urls} importedAt={data.imported_at} />
+        <ArchivedPortalView o={o} urls={urls} names={names} paths={paths} importedAt={data.imported_at} />
       </main>
     </>
   );

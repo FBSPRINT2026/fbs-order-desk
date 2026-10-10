@@ -1247,7 +1247,9 @@ a.as-ai{text-decoration:none}
 .pv-msg-s{font-weight:600;margin-bottom:4px}
 .pv-zoom{position:fixed;inset:0;z-index:80;background:rgba(10,14,20,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px}
 .pv-zoom img{max-width:min(1100px,94vw);max-height:80vh;object-fit:contain;background:#fff;border-radius:8px}
-.pv-zoom-bar{display:flex;gap:12px;align-items:center}
+.pv-zoom-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}
+.pv-zoom-name{color:#fff;font-weight:600;max-width:min(60vw,640px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pv-zoom>.pv-doc{background:#fff;border-radius:8px;padding:48px 64px;font-size:28px}
 .pv-zoom-bar a{color:#fff;font-weight:600}
 .pv-dot{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600}
 .pv-dot::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--sc)}

@@ -5,7 +5,8 @@ import JobFiles from "@/components/job/JobFiles";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { ArchivedRow } from "@/lib/archive";
+import { fileUrls, type ArchivedRow } from "@/lib/archive";
+import { pvHandle } from "@/lib/printavoNames";
 import ArchivedOrderView from "@/components/ArchivedOrderView";
 import ArchiveReorder from "@/components/ArchiveReorder";
 import { TRACK, trackWord, trackingUrl } from "@/lib/goods";
@@ -16,6 +17,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
   const [row, setRow] = useState<ArchivedRow | null>(null);
   const [company, setCompany] = useState("");
   const [signed, setSigned] = useState<Record<string, string>>({});
+  const [names, setNames] = useState<Record<string, string>>({});
   const [state, setState] = useState<"loading" | "missing" | "ok">("loading");
 
   useEffect(() => {
@@ -27,6 +29,12 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
       setRow(r); setState("ok");
       const { data: c } = await sb.from("customers").select("company, name").eq("id", r.customer_id).maybeSingle();
       setCompany(c?.company || c?.name || "Customer");
+      // the files' original names (looked up from Filestack; Printavo's API didn't give them)
+      const handles = [...new Set([...Object.keys(r.files || {}), ...fileUrls(r.data)].map(pvHandle).filter((h): h is string => !!h))];
+      for (let i = 0; i < handles.length; i += 150) {
+        sb.from("printavo_file_names").select("handle, filename").in("handle", handles.slice(i, i + 150)).not("filename", "is", null)
+          .then(({ data: nm }) => { if (nm?.length) setNames((x) => ({ ...x, ...Object.fromEntries((nm as { handle: string; filename: string }[]).map((n) => [n.handle, n.filename])) })); });
+      }
       const stored = Object.entries(r.files || {}).filter(([, p]) => p && !["failed", "too-big"].includes(p));
       if (stored.length) {
         const { data: s } = await sb.storage.from("proofs").createSignedUrls(stored.map(([, p]) => p), 3600);
@@ -49,7 +57,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
       <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
       <div style={{ marginTop: 10 }}><JobFiles job={{ kind: "a", id: row.id }} /></div>
       <div style={{ marginTop: 10 }}>
-        <ArchivedOrderView o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} actions={row.kind === "invoice" ? <ArchiveReorder archivedId={row.id} small /> : null} />
+        <ArchivedOrderView o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} names={names} paths={row.files || {}} actions={row.kind === "invoice" ? <ArchiveReorder archivedId={row.id} small /> : null} />
       </div>
     </>
   );
