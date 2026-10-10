@@ -6025,3 +6025,7 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .tx-send svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 .ibx2-ai{background:var(--surface)}
 @media (max-width:760px){.tx{min-height:60vh}.tx-in{position:sticky;bottom:0;background:var(--surface)}.tx-field textarea{font-size:16px}}
+/* an email without saved formatting: the whole text in the pane, like Outlook (no inner scroll box) */
+.ibx2-plain{white-space:pre-wrap;font:14px/1.5 Calibri,"Segoe UI",Arial,sans-serif;color:#222;overflow-wrap:anywhere}
+.ibx2-plain img{display:block;max-width:100%;height:auto;margin:8px 0;border-radius:4px}
+.ibx2-read .ibx-html{align-items:stretch}

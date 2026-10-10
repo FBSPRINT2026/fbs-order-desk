@@ -407,6 +407,44 @@ function NewSender({ x, busy, run }: { x: Act; busy: string; run: (key: string, 
  * links open in a new tab). Pictures sent inside the email come from our private copy; email stored before we kept
  * the formatting shows as plain text until the next mailbox check fills it in.
  */
+/**
+ * An email with no saved formatting, shown like Outlook would: the whole text (no box with its own scrollbar),
+ * Gmail's hard line breaks joined back into paragraphs, and "[image: name.png]" replaced by that picture.
+ */
+function PlainBody({ x }: { x: Act }) {
+  const [pics, setPics] = useState<Record<string, string>>({});
+  const imgs = (x.meta?.attachments || []).filter((f) => /^image\//.test(f.type));
+  useEffect(() => {
+    let live = true;
+    if (!imgs.length) return;
+    createClient().storage.from("proofs").createSignedUrls(imgs.map((f) => f.path), 3600).then(({ data }) => {
+      if (!live) return;
+      const m: Record<string, string> = {};
+      imgs.forEach((f) => { const u = data?.find((r) => r.path === f.path)?.signedUrl; if (u) m[f.name.toLowerCase()] = u; });
+      setPics(m);
+    });
+    return () => { live = false; };
+  }, [x.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // join lines a mail program wrapped at ~76 characters back into paragraphs
+  const lines = String(x.body || "").replace(/\r/g, "").split("\n"), out: string[] = [];
+  for (const l of lines) {
+    const prev = out[out.length - 1];
+    if (prev != null && prev.length >= 55 && prev.length <= 80 && l.trim() && !/^\s*([-*•>]|\d+[.)]|\[image:)/.test(l) && !/[:]$/.test(prev)) out[out.length - 1] = `${prev} ${l.trim()}`;
+    else out.push(l);
+  }
+  const text = out.join("\n");
+  const parts = text.split(/(\[image: [^\]]+\])/g);
+  return (
+    <div className="ibx2-plain">
+      {parts.map((p, i) => {
+        const m = p.match(/^\[image: ([^\]]+)\]$/);
+        if (m) { const u = pics[m[1].toLowerCase()]; return u ? <img key={i} src={u} alt={m[1]} /> : <span key={i} className="faint">[{m[1]}]</span>; }
+        return <span key={i}>{p}</span>;
+      })}
+    </div>
+  );
+}
+
 function EmailBody({ x }: { x: Act }) {
   const [doc, setDoc] = useState<string | null>(null), [plain, setPlain] = useState(false), [h, setH] = useState(240);
   const ref = useRef<HTMLIFrameElement | null>(null);
@@ -432,10 +470,11 @@ function EmailBody({ x }: { x: Act }) {
     })().catch(() => null);
     return () => { live = false; };
   }, [x.id, x.meta?.html, x.meta?.inline]);
-  const fit = () => { const d = ref.current?.contentDocument; if (d?.body) setH(Math.min(1600, Math.max(120, d.documentElement.scrollHeight + 4))); };
+  // the frame grows to the whole email (the pane scrolls, not a box inside it)
+  const fit = () => { const d = ref.current?.contentDocument; if (d?.body) setH(Math.min(20000, Math.max(120, d.documentElement.scrollHeight + 4))); };
   if (!x.meta?.html || plain || doc == null) return (
     <div>
-      <pre className="ibx-body">{x.body}</pre>
+      <PlainBody x={x} />
       {x.meta?.html && plain && <button type="button" className="btn sm ghost" onClick={() => setPlain(false)}>Show as in Outlook</button>}
     </div>
   );

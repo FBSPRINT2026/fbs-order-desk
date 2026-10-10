@@ -106,17 +106,34 @@ export async function saveAttachments(admin: SupabaseClient, m: MailMsg, folder:
  * part of the message (cid: images: logos, pasted screenshots) saved beside it so the Inbox can show them.
  */
 export async function saveBody(admin: SupabaseClient, m: Pick<MailMsg, "html" | "attachments">, folder: string): Promise<{ html?: string; inline?: Record<string, string> }> {
-  if (!m.html || m.html.length > 3_000_000) return {};
+  if (!m.html || m.html.length > 40_000_000) return {};
   const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   const inline: Record<string, string> = {};
+  // pictures pasted right into the email (src="data:image/png;base64,…", Gmail / Apple Mail forwards): each saved as
+  // its own file like the cid: pictures, so the HTML stays small and still shows them (Peticolas "Club logo 2026")
+  let html = m.html, k = 0;
+  const embedded: { key: string; type: string; data: string }[] = [];
+  html = html.replace(/src=(["'])data:(image\/[\w.+-]+);base64,([A-Za-z0-9+/=\s]+)\1/gi, (_all, q: string, type: string, data: string) => {
+    if (k >= 20) return `src=${q}${q}`;
+    const key = `embedded-${++k}`; embedded.push({ key, type, data }); return `src=${q}cid:${key}${q}`;
+  });
+  for (const e of embedded) {
+    const buf = Buffer.from(e.data.replace(/\s+/g, ""), "base64");
+    if (buf.length > 12 * 1024 * 1024) continue;
+    const path = `emails/${folder}/${stamp}/inline-${e.key}.${(e.type.split("/")[1] || "png").replace(/[^\w]+/g, "")}`;
+    const { error } = await admin.storage.from("proofs").upload(path, buf, { contentType: e.type, upsert: true });
+    if (!error) inline[e.key] = path;
+  }
+  if (html.length > 3_000_000) return {};
+  m = { ...m, html };
   for (const a of m.attachments) {
-    if (!a.cid || !/^image\//.test(a.contentType) || a.size > 8 * 1024 * 1024 || !m.html.includes(a.cid)) continue;
+    if (!a.cid || !/^image\//.test(a.contentType) || a.size > 8 * 1024 * 1024 || !html.includes(a.cid)) continue;
     const path = `emails/${folder}/${stamp}/inline-${a.cid.replace(/[^\w.\-]+/g, "_").slice(0, 80)}`;
     const { error } = await admin.storage.from("proofs").upload(path, a.content, { contentType: a.contentType, upsert: true });
     if (!error) inline[a.cid] = path;
   }
   const path = `emails/${folder}/${stamp}/body.html`;
-  const { error } = await admin.storage.from("proofs").upload(path, Buffer.from(m.html, "utf8"), { contentType: "text/html; charset=utf-8", upsert: true });
+  const { error } = await admin.storage.from("proofs").upload(path, Buffer.from(html, "utf8"), { contentType: "text/html; charset=utf-8", upsert: true });
   return error ? {} : { html: path, inline };
 }
 
