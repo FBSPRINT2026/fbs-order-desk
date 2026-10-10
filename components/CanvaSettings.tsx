@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
  *    as the customer's logo, on the shirt.
  * Never shows a key or token: only whether each setting is there.
  */
-type St = { configured: boolean; missing: string[]; connected: boolean; name: string; connectedBy: string; connectedAt: string; redirectUri: string; returnUrl: string };
+type St = { configured: boolean; missing: string[]; connected: boolean; name: string; connectedBy: string; connectedAt: string; redirectUri: string; returnUrl: string; customersConnected?: number };
 const when = (s?: string) => (s ? new Date(s).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
 
 function Check({ ok, children }: { ok: boolean; children: ReactNode }) {
@@ -39,7 +39,7 @@ export default function CanvaSettings() {
       {flash && <div className={flash.startsWith("Connected") || flash === "Disconnected." ? "faint" : "err"} style={{ fontSize: 14 }}>{flash}</div>}
       <p className="faint" style={{ margin: 0, maxWidth: 860 }}>
         With the shop&apos;s Canva account connected, the portal gets a customer&apos;s design straight from their Canva link (a print-quality PDF and a
-        see-through PNG, saved with the email), and staff can press <b>Design in Canva</b> in the Mockup Creator: Canva opens on a canvas the size of
+        see-through PNG, saved with the email), and staff can press <b>Design with Canva</b> in the Mockup Creator: Canva opens on a canvas the size of
         the print area, and pressing <b>Return</b> in Canva brings the design back as the customer&apos;s logo, on the shirt.
       </p>
 
@@ -78,13 +78,22 @@ export default function CanvaSettings() {
       </section>
 
       <section className="panel">
+        <div className="panel-h"><h2>Customers</h2><span className="faint" style={{ fontSize: 12 }}>{st.customersConnected || 0} customer{st.customersConnected === 1 ? "" : "s"} connected</span></div>
+        <div className="panel-b stack" style={{ gap: 6, maxWidth: 860 }}>
+          <div>Customers press <b>Design with Canva</b> in their portal&apos;s Mockup Creator and sign in to their own Canva account (or make a free one). Their design is made in their account and comes back onto their mockup.</div>
+          <div className="faint" style={{ fontSize: 12.5 }}>Customers can only sign in once Canva has approved the integration: until it&apos;s reviewed, it works only for accounts on the shop&apos;s own Canva team. Once it works for the team, submit it for review in the Canva Developer Portal (Your integrations → the integration → Submit for review).</div>
+          <div className="faint" style={{ fontSize: 12.5 }}>On a free Canva plan, Canva can&apos;t export a see-through PNG: the mockup picture is drawn from the design&apos;s PDF instead, and a design with a background is noted on it.</div>
+        </div>
+      </section>
+
+      <section className="panel">
         <div className="panel-h"><h2>Good to know</h2></div>
         <div className="panel-b">
           <ul className="stack" style={{ gap: 6, margin: 0, paddingLeft: 20, maxWidth: 860 }}>
             <li>Canva only exports designs the shop&apos;s account can open. A customer&apos;s &quot;collaborate&quot; link: open it once while signed in to Canva (it joins your account), then press <b>Get the design from Canva</b> on the email.</li>
             <li>Canva&apos;s API gives PDF and PNG, not SVG. The PDF is vector where the design is vector (text and shapes); photos stay pictures.</li>
             <li>Canva allows about 20 exports a minute per account; a busy minute just waits and tries again.</li>
-            <li>Designs made with Design in Canva keep their link to Canva: pick one on a print and press <b>Edit in Canva</b> to change it.</li>
+            <li>Designs made with Design with Canva keep their link to Canva: pick one on a print and press <b>Edit in Canva</b> to change it.</li>
           </ul>
         </div>
       </section>
