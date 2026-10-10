@@ -304,10 +304,31 @@ export class Canva {
     return r.design;
   }
 
+  /**
+   * Upload a picture to the account's Canva uploads (needs asset:write) and wait for Canva to finish with it (about a
+   * minute at most). Returns Canva's asset id, for createDesign's `assetId`.
+   */
+  async uploadAsset(buf: Buffer, name: string): Promise<string> {
+    const meta = JSON.stringify({ name_base64: Buffer.from(name.slice(0, 50) || "picture").toString("base64") });
+    let token = await accessToken(this.admin, this.account);
+    let r = await fetch(`${CANVA_API}/asset-uploads`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream", "Asset-Upload-Metadata": meta }, body: new Uint8Array(buf), cache: "no-store", signal: AbortSignal.timeout(60_000) });
+    if (r.status === 401) { token = await accessToken(this.admin, this.account, true); r = await fetch(`${CANVA_API}/asset-uploads`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream", "Asset-Upload-Metadata": meta }, body: new Uint8Array(buf), cache: "no-store", signal: AbortSignal.timeout(60_000) }); }
+    const j = (await r.json().catch(() => ({}))) as { job?: { id: string; status: string; asset?: { id: string }; error?: { message?: string } }; message?: string; code?: string };
+    if (!r.ok || !j.job) throw new CanvaError(`Canva: ${j.message || `HTTP ${r.status}`}${j.code ? ` (${j.code})` : ""}`, r.status, j.code || "");
+    let job = j.job;
+    const t0 = Date.now();
+    for (let i = 0; job.status === "in_progress" && Date.now() - t0 < 60_000; i++) {
+      await sleep(Math.min(3000, 600 + i * 400));
+      job = (await this.request<{ job: typeof job }>("GET", `/asset-uploads/${encodeURIComponent(job.id)}`)).job;
+    }
+    if (job.status !== "success" || !job.asset?.id) throw new CanvaError(`Canva didn't take the picture: ${job.error?.message || job.status}`);
+    return job.asset.id;
+  }
+
   /** A new blank design, `w` × `h` pixels (Canva: 40–8000 each, 25 million px² at most). Its edit link lasts 30 days. */
-  async createDesign(widthPx: number, heightPx: number, title: string): Promise<CanvaDesign> {
+  async createDesign(widthPx: number, heightPx: number, title: string, assetId?: string): Promise<CanvaDesign> {
     const clamp = (v: number) => Math.max(40, Math.min(8000, Math.round(v)));
-    const r = await this.request<{ design: CanvaDesign }>("POST", "/designs", { design_type: { type: "custom", width: clamp(widthPx), height: clamp(heightPx) }, title: title.slice(0, 255) || "Design" });
+    const r = await this.request<{ design: CanvaDesign }>("POST", "/designs", { design_type: { type: "custom", width: clamp(widthPx), height: clamp(heightPx) }, title: title.slice(0, 255) || "Design", ...(assetId ? { asset_id: assetId } : {}) });
     return r.design;
   }
 
