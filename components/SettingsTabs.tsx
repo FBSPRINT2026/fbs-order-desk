@@ -15,6 +15,7 @@ export const SETTINGS_TABS: [string, string][] = [
   ["/shop/settings/access", "User Access"],
   ["/shop/settings#connections", "Connections"],
   ["/shop/settings/quickbooks", "QuickBooks"],
+  ["/shop/settings/canva", "Canva"],
 ];
 
 export default function SettingsTabs() {
