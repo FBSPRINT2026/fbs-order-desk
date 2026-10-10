@@ -11,6 +11,9 @@ export const maxDuration = 60;
  * ?path=<proofs path>&t=…  (&img=N&part=P returns picture N as a PNG in base64 pieces)
  */
 async function pdfjs() {
+  // the worker loaded here (and handed to pdf.js) so Vercel packs it with the function
+  const w = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  (globalThis as unknown as { pdfjsWorker?: unknown }).pdfjsWorker = w;
   const m = await import("pdfjs-dist/legacy/build/pdf.mjs") as unknown as { getDocument: (o: Record<string, unknown>) => { promise: Promise<{ getPage: (n: number) => Promise<unknown> }> }; OPS: Record<string, number> };
   return m;
 }
