@@ -15,35 +15,7 @@ create table if not exists public.printavo_file_names (
   status text check (status in ('ok', 'missing', 'error', 'working')),  -- null = waiting to be looked up
   tries integer not null default 0,
   last_error text,
-  priority smallint not null default 0,    -- new orders already made from old Printavo jobs (reorders): their production files were labelled
--- "From the old Printavo job: Printavo #33729.pdf"; they get the file's real name ("From the old Printavo job #33729:
--- Peticolas Sit Down Forest.pdf"). Only art_files.name changes (orders.groups is left alone: changing it would resend
--- the invoice to QuickBooks). Safe to run again; returns how many were renamed.
-create or replace function public.printavo_file_names_apply() returns integer
-language plpgsql security definer set search_path = public as $$
-declare n integer;
-begin
-  with src as (
-    select distinct on (af.id) af.id, 'From the old Printavo job #' || ao.visual_id || ': ' || coalesce(nullif(pf.pname, ''), nm.filename) as label
-    from art_files af
-    join archived_orders ao on ao.id::text = split_part(af.file_path, '/', 2)
-    cross join lateral jsonb_each_text(ao.files) f
-    left join printavo_file_names nm on nm.handle = public.printavo_handle(f.key) and nm.status = 'ok'
-    left join lateral (
-      select x->>'name' as pname from jsonb_array_elements(coalesce(ao.data->'files', '[]'::jsonb)) x where x->>'full' = f.key limit 1
-    ) pf on true
-    where af.file_path like 'printavo/%' and f.value = af.file_path
-      and af.name ~* '^(From the old Printavo job|Old mockup)'
-      and coalesce(nullif(pf.pname, ''), nm.filename) is not null
-  )
-  update art_files af set name = left(src.label, 300)
-  from src where src.id = af.id and af.name is distinct from left(src.label, 300);
-  get diagnostics n = row_count;
-  return n;
-end $$;
-revoke execute on function public.printavo_file_names_apply() from public, anon, authenticated;
-
--- files already used on new orders go first
+  priority smallint not null default 0,    -- files already used on new orders go first
   queued_at timestamptz not null default now(),
   fetched_at timestamptz
 );
@@ -159,3 +131,31 @@ on conflict (handle) do update set priority = 1;
 -- (the full queue — public.printavo_file_names_queue() — and the schedule are started once by hand:)
 --   select public.printavo_file_names_queue();
 --   select cron.schedule('printavo-file-names', '* * * * *', $$select public.printavo_file_names_tick()$$);
+
+-- New orders already made from old Printavo jobs (reorders): their production files were labelled
+-- "From the old Printavo job: Printavo #33729.pdf"; they get the file's real name ("From the old Printavo job #33729:
+-- Peticolas Sit Down Forest.pdf"). Only art_files.name changes (orders.groups is left alone: changing it would resend
+-- the invoice to QuickBooks). Safe to run again; returns how many were renamed.
+create or replace function public.printavo_file_names_apply() returns integer
+language plpgsql security definer set search_path = public as $$
+declare n integer;
+begin
+  with src as (
+    select distinct on (af.id) af.id, 'From the old Printavo job #' || ao.visual_id || ': ' || coalesce(nullif(pf.pname, ''), nm.filename) as label
+    from art_files af
+    join archived_orders ao on ao.id::text = split_part(af.file_path, '/', 2)
+    cross join lateral jsonb_each_text(ao.files) f
+    left join printavo_file_names nm on nm.handle = public.printavo_handle(f.key) and nm.status = 'ok'
+    left join lateral (
+      select x->>'name' as pname from jsonb_array_elements(coalesce(ao.data->'files', '[]'::jsonb)) x where x->>'full' = f.key limit 1
+    ) pf on true
+    where af.file_path like 'printavo/%' and f.value = af.file_path
+      and af.name ~* '^(From the old Printavo job|Old mockup)'
+      and coalesce(nullif(pf.pname, ''), nm.filename) is not null
+  )
+  update art_files af set name = left(src.label, 300)
+  from src where src.id = af.id and af.name is distinct from left(src.label, 300);
+  get diagnostics n = row_count;
+  return n;
+end $$;
+revoke execute on function public.printavo_file_names_apply() from public, anon, authenticated;
