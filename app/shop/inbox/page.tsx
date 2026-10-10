@@ -220,6 +220,24 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const [side, setSide] = useState<"mail" | "ai">("mail");
   const [made, setMade] = useState<{ id: string; number: number } | null>(null), [bump, setBump] = useState(0);
   const [aiW, setAiW] = useSticky<number>("inbox.aiW", 330), [composeH, setComposeH] = useSticky<number>("inbox.composeH", 0);
+  // the Assistant's room (Oct 10, Nick: half screen, the chat took too much space): the email keeps at least EMAIL_MIN;
+  // when that leaves the chat under 280px it folds into a slim rail and slides out over the email when you click it.
+  // On a wide screen it stays open unless you hide it.
+  const workRef = useRef<HTMLDivElement | null>(null), [workW, setWorkW] = useState(0), [stacked, setStacked] = useState(false);
+  const [aiHidden, setAiHidden] = useSticky<boolean>("inbox.aiHidden", false), [peek, setPeek] = useState(false);
+  useEffect(() => {
+    const el = workRef.current; if (!el) return;
+    const mq = window.matchMedia("(max-width:1080px)");
+    const on = () => { setWorkW(el.clientWidth); setStacked(mq.matches); };
+    on(); const ro = new ResizeObserver(on); ro.observe(el); mq.addEventListener("change", on);
+    return () => { ro.disconnect(); mq.removeEventListener("change", on); };
+  }, []);
+  const EMAIL_MIN = 470, room = workW ? workW - EMAIL_MIN - 12 : aiW;
+  const narrow = !stacked && workW > 0 && room < 280;
+  const aiMode: "full" | "rail" | "drawer" = stacked ? "full" : narrow ? (peek ? "drawer" : "rail") : aiHidden ? "rail" : "full";
+  const aiShown = narrow ? aiW : Math.max(280, Math.min(aiW, room));
+  const openAi = () => { if (narrow) setPeek(true); else setAiHidden(false); };
+  const hideAi = stacked ? undefined : () => { if (narrow) setPeek(false); else setAiHidden(true); };
   useEffect(() => { setOrdering(false); setOrderStart(null); setMade(null); setView("mail"); }, [x.id]);
   const startOrder = (s?: { told?: string; job?: string }) => { if (s) setOrderStart((p) => ({ ...s, n: (p?.n || 0) + 1 })); setOrdering(true); setView("order"); setSide("mail"); };
   const write = (focusBox = true) => { setWriting(true); setView("mail"); setSide("mail"); if (focusBox) setTimeout(() => boxRef.current?.focus(), 40); };
@@ -268,8 +286,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   ];
 
   return (
-    <div className="ibx2-work" data-side={side} style={{ ["--ibx-ai" as string]: `${aiW}px` }}>
-      <Splitter dir="x" value={aiW} min={240} max={720} invert onChange={setAiW} className="ibx2-sv ibx2-sv-ai" style={{ right: aiW + 2 }} label="Drag to make the Assistant wider or narrower" />
+    <div className="ibx2-work" ref={workRef} data-side={side} data-ai={aiMode} style={{ ["--ibx-ai" as string]: `${aiShown}px` }}>
+      {aiMode === "full" && !stacked && <Splitter dir="x" value={aiShown} min={280} max={Math.max(280, Math.min(720, room))} invert onChange={setAiW} className="ibx2-sv ibx2-sv-ai" style={{ right: aiShown + 2 }} label="Drag to make the Assistant wider or narrower" />}
       <div className="ibx2-sw" role="tablist" aria-label="Show">
         <button type="button" className="ibx2-back" onClick={back} aria-label="Back to the emails">←</button>
         <button type="button" role="tab" aria-selected={side === "mail"} className={side === "mail" ? "on" : ""} onClick={() => setSide("mail")}>{view === "order" ? "Order" : "Email"}</button>
@@ -369,9 +387,14 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
       </section>
 
       {/* 3. the Assistant: stays open while answering or making the order */}
+      {aiMode !== "full" && (
+        <button type="button" className="ibx2-rail" aria-expanded={aiMode === "drawer"} onClick={() => (aiMode === "drawer" ? hideAi?.() : openAi())} title={aiMode === "drawer" ? "Hide the Assistant" : "Open the Assistant"}>
+          <span className="tx-av" aria-hidden>✦</span><span className="ibx2-rail-t">Assistant</span>
+        </button>
+      )}
       <aside className="ibx2-ai" aria-label="Assistant">
         {x.direction === "in"
-          ? <EmailChat activityId={x.id} onAction={act} busyOutside={!!busy} bump={bump} summary={x.meta?.triage?.summary} />
+          ? <EmailChat activityId={x.id} onAction={(a) => { if (narrow) setPeek(false); act(a); }} busyOutside={!!busy} bump={bump} summary={x.meta?.triage?.summary} onHide={hideAi} />
           : <div className="ibx2-none">Your sent email.</div>}
       </aside>
     </div>

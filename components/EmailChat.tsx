@@ -13,7 +13,7 @@ import { MicButton } from "@/components/SearchInput";
  */
 const when = (t: string) => new Date(t).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
 
-export default function EmailChat({ activityId, onAction, busyOutside, bump = 0, summary }: { activityId: string; onAction: (a: EmailAction) => void; busyOutside?: boolean; /** changes when something happened outside (an order made): reload */ bump?: number; /** the AI's one-line read of the email, its first message */ summary?: string }) {
+export default function EmailChat({ activityId, onAction, busyOutside, bump = 0, summary, onHide }: { activityId: string; /** fold the Assistant out of the way (Inbox) */ onHide?: () => void; onAction: (a: EmailAction) => void; busyOutside?: boolean; /** changes when something happened outside (an order made): reload */ bump?: number; /** the AI's one-line read of the email, its first message */ summary?: string }) {
   const [msgs, setMsgs] = useState<EmailChatMsg[]>([]);
   const [text, setText] = useState(""), [busy, setBusy] = useState(""), [note, setNote] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null), boxRef = useRef<HTMLTextAreaElement | null>(null);
@@ -35,7 +35,7 @@ export default function EmailChat({ activityId, onAction, busyOutside, bump = 0,
   const starters = ["What should I do with this?", "Is this a reorder?", "Can we make their date?", "What's missing to quote it?"];
   return (
     <div className="tx">
-      <div className="tx-h"><span className="tx-av" aria-hidden>✦</span><b>Assistant</b></div>
+      <div className="tx-h"><span className="tx-av" aria-hidden>✦</span><b>Assistant</b>{onHide && <button type="button" className="tx-hide" onClick={onHide} aria-label="Hide the Assistant" title="Hide the Assistant"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg></button>}</div>
       <div className="tx-list" ref={listRef} aria-live="polite">
         {summary && <div className="tx-row ai"><div className="tx-b ai">{summary}</div></div>}
         {msgs.map((m, i) => {

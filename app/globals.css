@@ -6045,3 +6045,16 @@ body.ibx2-dragx{cursor:col-resize;user-select:none}body.ibx2-dragy{cursor:row-re
 body.ibx2-dragx iframe,body.ibx2-dragy iframe{pointer-events:none}
 @media (max-width:1080px){.ibx2-sv-ai,.ibx2-sh{display:none}.ibx2-work{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:760px){.ibx2-sv{display:none}.ibx2{grid-template-columns:1fr}}
+
+/* the Assistant folds to a rail when the email needs the room (half-screen windows) and slides out over the email */
+.ibx2-rail{display:none}
+.ibx2-work[data-ai="rail"],.ibx2-work[data-ai="drawer"]{grid-template-columns:minmax(0,1fr) 44px}
+.ibx2-work[data-ai="rail"] .ibx2-ai{display:none}
+.ibx2-work[data-ai="rail"] .ibx2-rail,.ibx2-work[data-ai="drawer"] .ibx2-rail{display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;font:inherit;color:var(--ink-2)}
+.ibx2-rail:hover{border-color:#0A84FF;color:#0A84FF}
+.ibx2-rail:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ibx2-rail-t{writing-mode:vertical-rl;font-size:13px;font-weight:600;letter-spacing:.02em}
+.ibx2-work[data-ai="drawer"] .ibx2-ai{position:absolute;top:0;bottom:0;right:0;width:min(360px,calc(100% - 60px));z-index:8;box-shadow:-12px 0 32px rgba(15,23,42,.16)}
+.tx-hide{margin-left:auto;width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--ink-3);display:grid;place-items:center;cursor:pointer}
+.tx-hide:hover{background:var(--bg,#f1f3f6);color:var(--ink)}
+.tx-hide svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
