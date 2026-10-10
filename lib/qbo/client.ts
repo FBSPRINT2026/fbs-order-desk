@@ -24,9 +24,29 @@ const basic = () => "Basic " + Buffer.from(`${process.env.QBO_CLIENT_ID?.trim()}
 
 /* ---------------- sign-in ---------------- */
 
-export function authorizeUrl(state: string) {
+/**
+ * Intuit's sign-in addresses, read from its discovery document (as Intuit asks apps to), kept for a day per server.
+ * The built-in addresses are the fallback if the document can't be read.
+ */
+type Endpoints = { auth: string; token: string; revoke: string };
+let endpoints: { env: string; at: number; e: Endpoints } | null = null;
+export async function oauthEndpoints(): Promise<Endpoints> {
+  const env = qboEnv().env || "production";
+  if (endpoints && endpoints.env === env && Date.now() - endpoints.at < 86_400_000) return endpoints.e;
+  const fallback = { auth: QBO_AUTH_URL, token: QBO_TOKEN_URL, revoke: QBO_REVOKE_URL };
+  try {
+    const url = env === "sandbox" ? "https://developer.api.intuit.com/.well-known/openid_sandbox_configuration" : "https://developer.api.intuit.com/.well-known/openid_configuration";
+    const r = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(5000) });
+    const j = (await r.json()) as { authorization_endpoint?: string; token_endpoint?: string; revocation_endpoint?: string };
+    const e = { auth: j.authorization_endpoint || fallback.auth, token: j.token_endpoint || fallback.token, revoke: j.revocation_endpoint || fallback.revoke };
+    endpoints = { env, at: Date.now(), e };
+    return e;
+  } catch { return fallback; }
+}
+
+export async function authorizeUrl(state: string) {
   const env = qboEnv();
-  const u = new URL(QBO_AUTH_URL);
+  const u = new URL((await oauthEndpoints()).auth);
   u.searchParams.set("client_id", process.env.QBO_CLIENT_ID!.trim());
   u.searchParams.set("response_type", "code");
   u.searchParams.set("scope", QBO_SCOPE);
@@ -36,7 +56,7 @@ export function authorizeUrl(state: string) {
 }
 
 async function tokenCall(params: Record<string, string>) {
-  const r = await fetch(QBO_TOKEN_URL, { method: "POST", headers: { Authorization: basic(), Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(params), cache: "no-store" });
+  const r = await fetch((await oauthEndpoints()).token, { method: "POST", headers: { Authorization: basic(), Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(params), cache: "no-store" });
   const j = (await r.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number; x_refresh_token_expires_in?: number; error?: string; error_description?: string };
   if (!r.ok || !j.access_token || !j.refresh_token) throw new QboError(`QuickBooks sign-in: ${j.error_description || j.error || r.status}`, r.status, j.error || "", r.status >= 500);
   const now = Date.now();
@@ -79,7 +99,7 @@ export async function connectWithCode(admin: SupabaseClient, code: string, realm
 export async function disconnect(admin: SupabaseClient, by: string) {
   const t = await loadTokens(admin);
   if (t && qboEnv().configured) {
-    await fetch(QBO_REVOKE_URL, { method: "POST", headers: { Authorization: basic(), Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ token: t.refresh_token }), cache: "no-store" }).catch(() => null);
+    await fetch((await oauthEndpoints()).revoke, { method: "POST", headers: { Authorization: basic(), Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ token: t.refresh_token }), cache: "no-store" }).catch(() => null);
   }
   cache = null;
   await admin.from("integration_tokens").upsert({ name: "quickbooks", data: { disconnected_at: new Date().toISOString(), realm_id: "", previous_realm_id: t?.realm_id || "" }, updated_at: new Date().toISOString(), updated_by: by });

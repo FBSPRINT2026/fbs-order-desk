@@ -18,5 +18,5 @@ export async function GET() {
   if (!env.configured) return back(`Add ${[...env.missing, ...env.problems].join(", ")} in Vercel first, then redeploy.`);
   const { state, cookie } = newState();
   (await cookies()).set("qbo_state", cookie, { httpOnly: true, secure: true, sameSite: "lax", path: "/api/qbo", maxAge: 600 });
-  return NextResponse.redirect(authorizeUrl(state));
+  return NextResponse.redirect(await authorizeUrl(state));
 }
