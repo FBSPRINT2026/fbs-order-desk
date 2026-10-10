@@ -37,6 +37,31 @@ export function linksIn(text: string): string[] {
   return [...out].slice(0, 8);
 }
 
+/**
+ * The link as the customer typed it. Our mail filter (url.emailprotection.link) rewrites where a link POINTS, but the
+ * link's visible text in the saved email is still what the customer sent ("https://canva.link/qbpivk65175038y"), the
+ * same thing Nick sees on his phone. For known art sites only, that typed address is used directly: the scanner is
+ * never clicked through, and anything that isn't an art site still goes through the scanner.
+ */
+const ART_HOSTS = /(^|\.)(canva\.link|canva\.com|dropbox\.com|db\.tt|drive\.google\.com|docs\.google\.com|1drv\.ms|onedrive\.live\.com)$/i;
+export function typedArtLinks(html: string): string[] {
+  // only the customer's new message, not the quoted thread under it (Outlook's reply header, Gmail's quote)
+  const cut = html.search(/id=["']?divRplyFwdMsg|class=["']?gmail_quote|<b>From:<\/b>|<hr[^>]*>\s*<div[^>]*>\s*<font[^>]*><b>From/i);
+  const part = cut > 0 ? html.slice(0, cut) : html;
+  const out = new Set<string>();
+  for (const m of part.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)) {
+    const text = m[1].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\s+/g, "").trim();
+    const url = /^https?:\/\//i.test(text) ? text : /^www\./i.test(text) ? `https://${text}` : "";
+    if (!url) continue;
+    try { if (ART_HOSTS.test(new URL(url).hostname)) out.add(url.replace(/[.,;:!?]+$/, "")); } catch { /* not a link */ }
+  }
+  // links typed in plain text that the filter didn't wrap
+  for (const m of part.replace(/<[^>]+>/g, " ").matchAll(/https?:\/\/[^\s<>"')\]]+/gi)) {
+    try { if (ART_HOSTS.test(new URL(m[0]).hostname)) out.add(m[0].replace(/[.,;:!?]+$/, "")); } catch { /* skip */ }
+  }
+  return [...out].slice(0, 6);
+}
+
 /** a mail filter's wrapper, decoded without a request when the real address is inside it */
 function unwrap(u: string): string | null {
   try {
@@ -158,8 +183,15 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
   if (meta.link_art_at && !opts.force) return { ok: true, found: [] };
   const have = new Set((meta.attachments || []).map((f) => (f as LinkFile).from_link).filter(Boolean));
   const found: Found[] = [];
-  // resolved all at once (each wrapper can take a few seconds to "scan")
-  const urls = linksIn(newPart(String(a.body || "")));
+  // the art links as the customer typed them (from the saved email's link text), else the links in the plain text
+  // (resolved through their wrapper; each can take a few seconds to "scan")
+  let typed: string[] = [];
+  const htmlPath = (meta as { html?: string }).html;
+  if (htmlPath) {
+    const { data: blob } = await admin.storage.from("proofs").download(htmlPath);
+    if (blob) typed = typedArtLinks(await blob.text());
+  }
+  const urls = typed.length ? typed : linksIn(newPart(String(a.body || "")));
   const finals = await Promise.all(urls.map((u) => resolveLink(u).catch(() => u)));
   for (const [i, url] of urls.entries()) {
     const final = finals[i];
