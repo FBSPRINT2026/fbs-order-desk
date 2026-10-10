@@ -38,6 +38,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ assetId, w, h, ms: Date.now() - t0, design_id: d.id, edit_url: d.urls?.edit_url });
     }
     const b = (await req.json()) as { action?: string; design_id?: string };
+    if (b.action === "content" && b.design_id) {
+      // every content stream in the PDF (page and form drawings), decoded: how Canva draws the page
+      const pl = await import("pdf-lib");
+      const pdf = await c.exportDesign(b.design_id, "pdf");
+      const doc = await pl.PDFDocument.load(pdf.buf, { updateMetadata: false });
+      const out: { ref: string; kind: string; dict: string; text: string }[] = [];
+      for (const [ref, obj] of doc.context.enumerateIndirectObjects()) {
+        if (!(obj instanceof pl.PDFRawStream)) continue;
+        const st = obj.dict.get(pl.PDFName.of("Subtype"))?.toString() || "", ty = obj.dict.get(pl.PDFName.of("Type"))?.toString() || "";
+        if (st === "/Image" || /Font|Metadata|XRef|ObjStm/.test(ty) || obj.dict.get(pl.PDFName.of("Length1"))) continue;
+        let text = "";
+        try { text = Buffer.from(pl.decodePDFRawStream(obj).decode()).toString("latin1"); } catch (e) { text = "ERR " + String(e); }
+        if (/^\s*$/.test(text)) continue;
+        out.push({ ref: ref.toString(), kind: `${ty} ${st}`, dict: obj.dict.toString().slice(0, 300), text: text.slice(0, 2500) });
+      }
+      return NextResponse.json({ streams: out });
+    }
     if (b.action !== "inspect" || !b.design_id) return NextResponse.json({ error: "bad request" }, { status: 400 });
     const [pdf, png] = await Promise.all([c.exportDesign(b.design_id, "pdf"), c.exportDesign(b.design_id, "png")]);
     const key = `tmp/canva-lab/${Date.now()}`;
