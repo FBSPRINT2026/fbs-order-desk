@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Canva, CanvaError, accountFor, canvaEnv, samePath, withCorrelation } from "@/lib/canva/client";
+import { backdropOf, type Backdrop } from "@/lib/canva/backdrop";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +23,14 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const v = await getViewer();
   if (!v.user) return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
-  const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  // JSON, or (a design on the blank's photo) a form: `json` + `backdrop` (the photo the Mockup Creator drew, a JPEG/PNG)
+  let b: Record<string, unknown> = {}, picture: Buffer | null = null;
+  if ((req.headers.get("content-type") || "").includes("multipart/form-data")) {
+    const fd = await req.formData().catch(() => null);
+    try { b = JSON.parse(String(fd?.get("json") || "{}")); } catch { b = {}; }
+    const f = fd?.get("backdrop");
+    if (f instanceof Blob && f.size > 1000 && f.size < 4_400_000) picture = Buffer.from(await f.arrayBuffer());
+  } else b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const admin = createAdminClient();
   if (!canvaEnv().configured) return NextResponse.json({ error: "Canva isn't set up here yet." }, { status: 400 });
   const str = (k: string, n = 200) => String(b[k] ?? "").slice(0, n);
@@ -40,29 +48,37 @@ export async function POST(req: Request) {
   if (want.startsWith(area)) { const u = new URL(want, "https://x.invalid"); u.searchParams.delete("canva"); u.searchParams.delete("canva_connected"); u.searchParams.delete("canva_error"); returnTo = u.pathname + u.search; }
   const c = new Canva(admin, account);
   try {
-    let designId = "", editUrl = "", fromDesign: string | null = null;
+    let designId = "", editUrl = "", fromDesign: string | null = null, backdrop: Backdrop | null = null;
     const wIn = Math.max(1, Math.min(30, Number(b.w_in) || 12)), hIn = Math.max(1, Math.min(30, Number(b.h_in) || 14));
     if (uuid("from_design")) {
-      const { data: d } = await admin.from("designs").select("id, name, customer_id, canva_design_id").eq("id", uuid("from_design")!).maybeSingle();
+      const { data: d } = await admin.from("designs").select("id, name, customer_id, canva_design_id, canva_backdrop").eq("id", uuid("from_design")!).maybeSingle();
       if (!d || (!v.isStaff && d.customer_id !== customerId)) return NextResponse.json({ error: "We couldn't find that design." }, { status: 404 });
       if (!d.canva_design_id) return NextResponse.json({ error: "That design didn't come from Canva." }, { status: 400 });
       const cd = await c.getDesign(d.canva_design_id as string);
-      designId = cd.id; editUrl = cd.urls?.edit_url || ""; fromDesign = d.id as string;
+      designId = cd.id; editUrl = cd.urls?.edit_url || ""; fromDesign = d.id as string; backdrop = backdropOf(d.canva_backdrop);
     } else {
       // 300 px an inch, or less to stay within Canva's limits (8,000 px a side, 25 million px in all)
       const dpi = Math.floor(Math.min(300, 8000 / Math.max(wIn, hIn), Math.sqrt(25_000_000 / (wIn * hIn))));
       const { data: cu } = await admin.from("customers").select("company, name").eq("id", customerId).maybeSingle();
       const who = (cu?.company || cu?.name || "Customer") as string;
       const title = `T-shirt · ${who} · ${str("location", 60) || "Design"} (${wIn}" × ${hIn}")`;
-      const cd = await c.createDesign(wIn * dpi, hIn * dpi, title);
-      designId = cd.id; editUrl = cd.urls?.edit_url || "";
+      const bd = picture ? backdropOf(b.backdrop) : null;
+      if (bd && picture) {
+        // on the blank's photo: the photo is the design's picture, the whole canvas (Canva fills it, Oct 10 test)
+        const assetId = await c.uploadAsset(picture, `${who} blank`.slice(0, 50));
+        const cd = await c.createDesign(bd.w, bd.h, title, assetId);
+        designId = cd.id; editUrl = cd.urls?.edit_url || ""; backdrop = bd;
+      } else {
+        const cd = await c.createDesign(wIn * dpi, hIn * dpi, title);
+        designId = cd.id; editUrl = cd.urls?.edit_url || "";
+      }
     }
     if (!designId || !editUrl) return NextResponse.json({ error: "Canva didn't send an editor link. Try again." }, { status: 502 });
     const state = randomBytes(18).toString("base64url"); // 24 URL-safe characters (Canva allows 50)
     const { data: s, error } = await admin.from("canva_sessions").insert({
       correlation_state: state, design_id: designId, customer_id: customerId, order_id: v.isStaff ? uuid("order_id") : null, group_id: str("group_id", 80),
       side: str("side", 20), location: str("location", 60), im_id: str("im_id", 80), width_in: wIn, height_in: hIn,
-      return_to: returnTo, status: "editing", from_design: fromDesign, created_by: v.email, user_id: v.user.id, account: account.kind,
+      return_to: returnTo, status: "editing", from_design: fromDesign, created_by: v.email, user_id: v.user.id, account: account.kind, backdrop,
     }).select("id").single();
     if (error || !s) return NextResponse.json({ error: error?.message || "Couldn't start." }, { status: 500 });
     return NextResponse.json({ session: s.id, edit_url: withCorrelation(editUrl, state) });

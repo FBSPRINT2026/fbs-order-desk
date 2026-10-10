@@ -22,7 +22,7 @@ import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
-import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, measureBag, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, measureBag, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
@@ -1262,7 +1262,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   type CanvaSt = { configured: boolean; me: { connected: boolean; name: string }; isStaff: boolean; isOwner: boolean; connected?: boolean };
   const [canva, setCanva] = useState<CanvaSt | null>(null);
   const [canvaWait, setCanvaWait] = useState<{ session: string; side: Side; imId: string; msg: string } | null>(null);
-  const [canvaPlace, setCanvaPlace] = useState<{ d: Design; side: Side; imId: string; session: string; fileUrl: string; previewUrl: string } | null>(null);
+  type CanvaBackdrop = { w: number; h: number; k: number; view: View; z: number; tx: number; ty: number };
+  const [canvaPlace, setCanvaPlace] = useState<{ d: Design; side: Side; imId: string; session: string; fileUrl: string; previewUrl: string; backdrop?: CanvaBackdrop | null } | null>(null);
   const [canvaAsk, setCanvaAsk] = useState(false);
   const loadCanva = () => fetch("/api/canva/status", { cache: "no-store" }).then((r) => r.json()).then((j: CanvaSt & { error?: string }) => { if (!j.error && j.me) setCanva(j); }).catch(() => null);
   useEffect(() => { void loadCanva(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1270,7 +1271,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const showCanva = !!canva?.configured && (portal ? !canva.isStaff : canva.isStaff);
   /** ready to open Canva now: their own Canva account, or (staff) the shop's */
   const canvaReady = showCanva && !!canva && (canva.me.connected || (canva.isStaff && !!canva.connected));
-  type CanvaTrip = { session?: { id: string; status: string; error: string | null; side: string; im_id: string }; design?: Design | null; fileUrl?: string; previewUrl?: string; error?: string };
+  type CanvaTrip = { session?: { id: string; status: string; error: string | null; side: string; im_id: string; backdrop?: CanvaBackdrop | null }; design?: Design | null; fileUrl?: string; previewUrl?: string; error?: string };
   const canvaTrip = (id: string): Promise<CanvaTrip> => fetch(`/api/canva/status?session=${encodeURIComponent(id)}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ error: "Couldn't reach the portal." }));
   const asSide = (v: string): Side => (v === "back" || v === "sleeve" ? v : "front");
   /** check the trip we're waiting on; true when it's finished (saved or failed) */
@@ -1280,7 +1281,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (!s0) { if (!quiet) setMsg(r.error || "Couldn't find the Canva design."); return false; }
     if (s0.status === "saved" && r.design) {
       setCanvaWait(null);
-      setCanvaPlace({ d: r.design, side: asSide(s0.side), imId: s0.im_id, session: s0.id, fileUrl: r.fileUrl || "", previewUrl: r.previewUrl || "" });
+      setCanvaPlace({ d: r.design, side: asSide(s0.side), imId: s0.im_id, session: s0.id, fileUrl: r.fileUrl || "", previewUrl: r.previewUrl || "", backdrop: s0.backdrop || null });
       return true;
     }
     if (s0.status === "error") { setCanvaWait(null); setMsg(`Canva: ${s0.error || "the design didn't come back."}`); return true; }
@@ -1384,6 +1385,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const go = () => {
       const p = canvaPlace, { d, side, imId } = p;
       setCanvaPlace(null);
+      // made on the blank's photo: drawn from the PDF (the shirt already taken out) and put where it was drawn
+      if (p.backdrop && !d.preview_path && p.fileUrl) { void canvaOnShirt(p as typeof p & { backdrop: CanvaBackdrop }); return; }
       setDesigns((xs) => (xs.some((x) => x.id === d.id) ? xs : [d, ...xs]));
       if (p.previewUrl) setUrls((x) => ({ ...x, [d.id]: p.previewUrl }));
       else if (!d.preview_path && p.fileUrl) void canvaPreview(p);
@@ -1399,6 +1402,92 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const t = setTimeout(go, 6000);
     return () => clearTimeout(t);
   }, [canvaPlace, ready]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* ---------- Design with Canva on the blank (Oct 10, Nick: "drop the S&S or SanMar picture for the blank") ----------
+   * The garment photo for the side, drawn like the mockup (normalized to the reference frame) BD_K times its size with
+   * the print area dashed and labeled, becomes the Canva design's picture (the whole canvas). What comes back: the
+   * server takes the photo out of Canva's PDF (lib/canva/backdrop); here the PDF is drawn with a clear page, the art
+   * found on it, cropped for the mockup, and put on the shirt at the size and spot it was drawn. */
+  const BD_K = 3;
+  async function canvaBackdrop(l: Line, v: View, loc: string): Promise<{ blob: Blob; meta: CanvaBackdrop } | null> {
+    try {
+      const W = PHOTO_W * BD_K, H = PHOTO_H * BD_K;
+      const u = photo(l, v);
+      const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
+      const fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
+      const nm = normOf(fit, v);
+      const c = document.createElement("canvas"); c.width = W; c.height = H;
+      const g = c.getContext("2d")!;
+      g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, H);
+      g.drawImage(bg, nm.tx * BD_K, nm.ty * BD_K, W * nm.z, H * nm.z);
+      // the print area, dashed, with its name and size (light lines on a dark shirt, dark on a light one)
+      const bd = bodyFor(l), sp = spotFor(loc, bd);
+      const b = basePlacement(loc, sp.maxW, sp.maxH / sp.maxW, null, scaleOf(bd), v, fit, bd);
+      const ax = (nm.tx + nm.z * b.area.x) * BD_K, ay = (nm.ty + nm.z * b.area.y) * BD_K, aw = b.area.w * nm.z * BD_K, ah = b.area.h * nm.z * BD_K;
+      const hx = shirtHex(l).replace("#", ""), lum = (0.299 * parseInt(hx.slice(0, 2), 16) + 0.587 * parseInt(hx.slice(2, 4), 16) + 0.114 * parseInt(hx.slice(4, 6), 16)) / 255;
+      const ink = lum < 0.55 ? "rgba(255,255,255,0.85)" : "rgba(40,48,60,0.7)";
+      g.setLineDash([10 * BD_K, 7 * BD_K]); g.lineWidth = 1.6 * BD_K; g.strokeStyle = ink; g.strokeRect(ax, ay, aw, ah);
+      g.setLineDash([]); g.fillStyle = ink; g.font = `600 ${11 * BD_K}px Helvetica, Arial, sans-serif`;
+      g.fillText(`${loc} print area · ${sp.maxW}" × ${sp.maxH}"`, ax + 6 * BD_K, ay + 16 * BD_K);
+      let blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.9));
+      if (blob && blob.size > 4_200_000) blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.78));
+      if (!blob || blob.size > 4_300_000) return null;
+      return { blob, meta: { w: W, h: H, k: BD_K, view: v, z: nm.z, tx: nm.tx, ty: nm.ty } };
+    } catch { return null; }
+  }
+  /** A design back from Canva that was made on the blank: picture from the PDF, then onto the shirt where it was drawn */
+  async function canvaOnShirt(p: { d: Design; side: Side; imId: string; session: string; fileUrl: string; backdrop: CanvaBackdrop }) {
+    const { d, side, imId, backdrop: B } = p;
+    madePv.current.add(d.id);
+    setMsg("Bringing your Canva design onto the shirt…");
+    const blob = await fetch(p.fileUrl).then((r) => (r.ok ? r.blob() : null)).catch(() => null);
+    const page = blob ? await makePreview(new File([blob], d.file_name || "design.pdf", { type: "application/pdf" }), 3600).catch(() => null) : null;
+    if (!page) { setMsg("Couldn't draw the Canva design. Reload the page to try again."); return; }
+    // the art on the page: everything not see-through
+    const img = await loadImg(URL.createObjectURL(page)).catch(() => null);
+    if (!img) { setMsg("Couldn't draw the Canva design."); return; }
+    const Rw = img.naturalWidth, Rh = img.naturalHeight, cv = document.createElement("canvas");
+    cv.width = Rw; cv.height = Rh;
+    const g = cv.getContext("2d", { willReadFrequently: true })!; g.drawImage(img, 0, 0);
+    const px = g.getImageData(0, 0, Rw, Rh).data;
+    let x0 = Rw, y0 = Rh, x1 = -1, y1 = -1;
+    for (let y = 0; y < Rh; y++) for (let x = 0; x < Rw; x++) if (px[(y * Rw + x) * 4 + 3] > 12) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; y1 = y; }
+    if (x1 < 0) { setMsg("The Canva design came back empty: nothing was added on the shirt. Add your design in Canva, then click Return again."); return; }
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1, crop = document.createElement("canvas");
+    crop.width = bw; crop.height = bh; crop.getContext("2d")!.drawImage(cv, x0, y0, bw, bh, 0, 0, bw, bh);
+    const pv = await new Promise<Blob | null>((r) => crop.toBlob(r, "image/png"));
+    if (!pv) return;
+    const fd = new FormData(); fd.set("session", p.session); fd.set("file", pv, "preview.png");
+    const r = await fetch("/api/canva/preview", { method: "POST", body: fd }).then((x) => x.json()).catch(() => null) as { design?: Design | null; url?: string } | null;
+    const nd = r?.design || { ...d, width_px: bw, height_px: bh };
+    setDesigns((xs) => (xs.some((x) => x.id === nd.id) ? xs.map((x) => (x.id === nd.id ? nd : x)) : [nd, ...xs]));
+    if (r?.url) setUrls((x) => ({ ...x, [nd.id]: r.url! }));
+    // where it was drawn: page pixels → the picture we gave Canva → this photo's pixels
+    const f = B.w / Rw, v = B.view, l = line, bdy = body;
+    const toPhoto = (X: number, Y: number) => ({ x: (X / B.k - B.tx) / B.z, y: (Y / B.k - B.ty) / B.z });
+    const tl = toPhoto(x0 * f, y0 * f), br = toPhoto((x1 + 1) * f, (y1 + 1) * f);
+    const pw = br.x - tl.x, ph = br.y - tl.y, rr = ph / (pw || 1);
+    const fit = fitFor(l, v), sc = scaleOf(bdy);
+    const start = imprints.find((x) => x.id === imId)?.location || (v === "back" ? "Full Back" : "Full Front");
+    const ppiPhoto = basePlacement(start, 1, rr, null, sc, v, fit, bdy).w || PX_PER_IN * sc;
+    let wIn = Math.round((pw / ppiPhoto) * 100) / 100;
+    let z = start;
+    if (!fit?.flat) {
+      // the reference frame (where locations are judged): undo this photo's fit
+      const kf = fit?.s || 1, refL = fit ? CENTER_X + (tl.x - fit.cx) / kf : tl.x, refT = fit ? REF[v].top + (tl.y - fit.top) / kf : tl.y;
+      const ppiRef = PX_PER_IN * sc;
+      z = autoSpot(start, v, (refL + pw / kf / 2 - CENTER_X) / ppiRef, (refT - COLLAR_Y[v]) / ppiRef, wIn, wIn * rr);
+    }
+    wIn = Math.max(0.5, Math.min(sideMaxWidth(z, rr), wIn));
+    const nb = basePlacement(z, wIn, rr, null, sc, v, fit, bdy);
+    const target = imprints.find((x) => x.id === imId) || imprints.find((x) => sideOf(x.location) === side && !x.design_id && !qt[x.id]);
+    const id = target?.id || uid();
+    setImprints((xs) => target
+      ? xs.map((x) => (x.id === id ? { ...x, design_id: nd.id, location: z, size: `${wIn}" wide`, drop: "", keepLocation: false } : x))
+      : [...xs, { ...newImprint(z), id, design_id: nd.id, size: `${wIn}" wide` }]);
+    setOffsets((o) => ({ ...o, [id]: { dx: (tl.x - nb.x) / (nb.k || 1), dy: (tl.y - nb.y) / (nb.k || 1) } }));
+    setTab(side);
+    setMsg(`Saved ${designLabel(nd)} from Canva to ${portal ? "your logos" : "the customer's account"}: ${wIn}" wide, where it was drawn.`);
+  }
   /** Canva's sign-in for the person's own account, in a new tab (this tab keeps the mockup as it is) */
   function connectCanva() {
     const back = new URL(window.location.href);
@@ -1416,10 +1505,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const win = window.open("about:blank", "_blank");
     const back = new URL(window.location.href);
     if (!portal && customerId && !back.searchParams.get("customer") && !orderId) back.searchParams.set("customer", customerId);
-    const r = await fetch("/api/canva/design", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ side, location: loc, w_in: area.maxW, h_in: area.maxH, customer_id: customerId, order_id: orderId || null, group_id: groupId, im_id: target?.id || "", return_to: back.pathname + back.search, from_design: from?.id }),
-    }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the portal." })) as { session?: string; edit_url?: string; error?: string; needs_connect?: boolean };
+    const payload = { side, location: loc, w_in: area.maxW, h_in: area.maxH, customer_id: customerId, order_id: orderId || null, group_id: groupId, im_id: target?.id || "", return_to: back.pathname + back.search, from_design: from?.id };
+    // a new design for the front or back: on the blank's photo (sleeves: the plain print-area canvas)
+    const bd = !from && side !== "sleeve" && line ? await canvaBackdrop(line, side as View, loc) : null;
+    let body0: BodyInit, headers: Record<string, string> = {};
+    if (bd) { const fd = new FormData(); fd.set("json", JSON.stringify({ ...payload, backdrop: bd.meta })); fd.set("backdrop", bd.blob, "blank.jpg"); body0 = fd; }
+    else { body0 = JSON.stringify(payload); headers = { "Content-Type": "application/json" }; }
+    const r = await fetch("/api/canva/design", { method: "POST", headers, body: body0 }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the portal." })) as { session?: string; edit_url?: string; error?: string; needs_connect?: boolean };
     if (!r.edit_url || !r.session) {
       win?.close();
       if (r.needs_connect) { setCanvaAsk(true); void loadCanva(); return; }
@@ -1427,7 +1519,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     if (win) { win.opener = null; win.location.href = r.edit_url; } else window.open(r.edit_url, "_blank", "noopener");
     setCanvaAsk(false);
-    setCanvaWait({ session: r.session, side, imId: target?.id || "", msg: from ? "Editing in Canva… click Return to FBS Print Portal (top right in Canva) when you're done." : "Designing in Canva. For shirt templates, click Templates in Canva and search \u201ct-shirt\u201d. Click Return to FBS Print Portal (top right) when you're done." });
+    setCanvaWait({ session: r.session, side, imId: target?.id || "", msg: from ? "Editing in Canva… click Return to FBS Print Portal (top right in Canva) when you're done." : bd ? "Designing in Canva on the shirt: put your design inside the dashed print area, then click Return to FBS Print Portal (top right)." : "Designing in Canva. For shirt templates, click Templates in Canva and search \u201ct-shirt\u201d. Click Return to FBS Print Portal (top right) when you're done." });
   }
 
   // on a phone, opening a mockup asks about each print's size first: "Full Front: 9" wide · Keep / Change size"

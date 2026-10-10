@@ -51,7 +51,7 @@ export type Fit = { s: number; cx: number; top: number; /** PNG data URL: opaque
   flat?: { cx: number; top: number; w: number; h: number; ppi: number };
   /** a shirt: its side seams across the body (px) and the bottom of the hem, as found on this photo */
   body?: { l: number; r: number; hem: number } };
-const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
+export const REF = { front: { top: 106, bodyW: 517, h: 1036 }, back: { top: 93, bodyW: 476, h: 1063 } } as const;
 /** Center of the sleeve print area: this far (reference px) up the fold from the sleeve tip, i.e. area bottom ~0.5" above the hem. */
 const SLEEVE_UP = 76.5;
 

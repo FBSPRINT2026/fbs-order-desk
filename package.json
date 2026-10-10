@@ -29,7 +29,8 @@
     "mailparser": "^3.7.2",
     "nodemailer": "^6.9.16",
     "nodemailer-ntlm-auth": "^1.0.4",
-    "pdfjs-dist": "4.10.38"
+    "pdfjs-dist": "4.10.38",
+    "pdf-lib": "1.17.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

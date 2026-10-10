@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getViewer } from "@/lib/supabase/server";
 import { CanvaError, SHOP, verifyReturnJwt } from "@/lib/canva/client";
 import { saveCanvaAsDesign } from "@/lib/canva/save";
+import { backdropOf } from "@/lib/canva/backdrop";
 import { SITE_URL } from "@/lib/config";
 
 export const runtime = "nodejs";
@@ -40,6 +41,8 @@ export async function GET(req: Request) {
       designId: claims.design_id, customerId: (s.customer_id as string) || null, by: (s.created_by as string) || "canva",
       // the Canva account the trip was made with: the person's own, or the shop's
       account: s.account === "user" && s.user_id ? { kind: "user", user: s.user_id as string } : SHOP,
+      // made on the blank's photo: the photo comes out of the print file
+      backdrop: backdropOf(s.backdrop),
       note: `Made in Canva for the ${s.location || "print"}${s.width_in ? ` (${+s.width_in}" × ${+s.height_in}" canvas)` : ""}.`,
     });
     await admin.from("canva_sessions").update({ status: "saved", design_ref: d.id, updated_at: new Date().toISOString() }).eq("id", s.id);

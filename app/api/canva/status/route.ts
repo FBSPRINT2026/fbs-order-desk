@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   const sid = new URL(req.url).searchParams.get("session");
   if (sid) {
     if (!/^[0-9a-f-]{36}$/i.test(sid)) return NextResponse.json({ error: "No such session." }, { status: 404 });
-    const { data: s } = await admin.from("canva_sessions").select("id, status, error, side, location, im_id, customer_id, order_id, group_id, design_id, design_ref, from_design, user_id, updated_at").eq("id", sid).maybeSingle();
+    const { data: s } = await admin.from("canva_sessions").select("id, status, error, side, location, im_id, customer_id, order_id, group_id, design_id, design_ref, from_design, user_id, updated_at, backdrop").eq("id", sid).maybeSingle();
     if (!s || (!v.isStaff && s.user_id !== v.user.id)) return NextResponse.json({ error: "No such session." }, { status: 404 });
     const { data: d } = s.design_ref ? await admin.from("designs").select("*").eq("id", s.design_ref).maybeSingle() : { data: null };
     let fileUrl = "", previewUrl = "";
