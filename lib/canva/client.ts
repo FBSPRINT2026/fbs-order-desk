@@ -58,15 +58,27 @@ export function newPkce() {
   return { verifier, challenge, state };
 }
 
-/** The verifier and state ride in an httpOnly cookie, signed with the app secret so the callback knows it came from us. */
+/**
+ * What the callback needs, in an httpOnly cookie signed with the app secret (so it knows the cookie came from us):
+ * the OAuth state and PKCE verifier, whose connection it is ("shop", or "me" = the signed-in person, with their user
+ * id) and the page to go back to (a path on this site).
+ */
+export type OauthCookie = { state: string; verifier: string; for: "shop" | "me"; uid?: string; back?: string };
 const signCookie = (v: string) => createHmac("sha256", `canva-oauth:${process.env.CANVA_CLIENT_SECRET || ""}`).update(v).digest("base64url");
-export function oauthCookie(state: string, verifier: string) { const v = `${state}.${verifier}`; return `${v}.${signCookie(v)}`; }
-export function readOauthCookie(cookie: string | undefined, state: string | null): string | null {
+export function oauthCookie(c: OauthCookie) { const v = Buffer.from(JSON.stringify(c)).toString("base64url"); return `${v}.${signCookie(v)}`; }
+export function readOauthCookie(cookie: string | undefined, state: string | null): OauthCookie | null {
   if (!cookie || !state) return null;
-  const [s, verifier, sig] = cookie.split(".");
-  if (!s || !verifier || !sig || s !== state) return null;
-  const want = Buffer.from(signCookie(`${s}.${verifier}`)), got = Buffer.from(sig);
-  return want.length === got.length && timingSafeEqual(want, got) ? verifier : null;
+  const [v, sig] = cookie.split(".");
+  if (!v || !sig) return null;
+  const want = Buffer.from(signCookie(v)), got = Buffer.from(sig);
+  if (want.length !== got.length || !timingSafeEqual(want, got)) return null;
+  try { const c = JSON.parse(Buffer.from(v, "base64url").toString("utf8")) as OauthCookie; return c.state === state && c.verifier ? c : null; } catch { return null; }
+}
+/** a path on this site to go back to ("/portal/mockup?…"), or "" when it isn't one */
+export function samePath(p: string | null | undefined): string {
+  const s = String(p || "");
+  if (!s.startsWith("/") || s.startsWith("//") || s.startsWith("/\\")) return "";
+  try { const u = new URL(s, SITE_URL); return u.origin === new URL(SITE_URL).origin ? u.pathname + u.search : ""; } catch { return ""; }
 }
 
 export function authorizeUrl(state: string, challenge: string) {
@@ -92,85 +104,162 @@ async function tokenCall(params: Record<string, string>) {
   if (!r.ok || !j.access_token || !j.refresh_token) throw new CanvaError(`Canva sign-in: ${j.error_description || j.message || j.error || j.code || r.status}`, r.status, j.error || j.code || "", r.status === 429 || r.status >= 500);
   return { access_token: j.access_token, refresh_token: j.refresh_token, access_expires_at: new Date(Date.now() + (j.expires_in || 14400) * 1000).toISOString(), ...(j.scope ? { scope: j.scope } : {}) };
 }
+async function revoke(token: string) {
+  await fetch(`${CANVA_API}/oauth/revoke`, { method: "POST", headers: { Authorization: basic(), "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token }), cache: "no-store", signal: AbortSignal.timeout(15_000) }).catch(() => null);
+}
+
+/* ---------------- where a sign-in is kept: the shop's (integration_tokens 'canva') or one person's (canva_accounts) ---------------- */
+
+/** Whose Canva account a request uses: the shop's, or one signed-in person's own (`user` = auth user id). */
+export type CanvaAccount = { kind: "shop" } | { kind: "user"; user: string };
+export const SHOP: CanvaAccount = { kind: "shop" };
+const keyOf = (a: CanvaAccount) => (a.kind === "shop" ? "shop" : `user:${a.user}`);
+
+type Store = {
+  load(): Promise<CanvaTokens | null>;
+  lease(): Promise<boolean>;
+  swap(oldRefresh: string, next: CanvaTokens): Promise<boolean>;
+  unlease(t: CanvaTokens): Promise<void>;
+  notConnected: string;
+};
+function storeFor(admin: SupabaseClient, a: CanvaAccount): Store {
+  if (a.kind === "shop") return {
+    load: () => loadTokens(admin),
+    lease: async () => !!(await admin.rpc("integration_token_lease", { p_name: "canva", p_seconds: 30 })).data,
+    swap: async (old, next) => !!(await admin.rpc("integration_token_swap", { p_name: "canva", p_old_refresh: old, p_new: next })).data,
+    unlease: async (t) => { await admin.from("integration_tokens").update({ data: { ...t, refresh_lease_until: null } }).eq("name", "canva").eq("data->>refresh_token", t.refresh_token); },
+    notConnected: "The shop's Canva isn't connected (Settings → Canva → Connect).",
+  };
+  return {
+    load: () => loadUserTokens(admin, a.user),
+    lease: async () => !!(await admin.rpc("canva_account_lease", { p_user: a.user, p_seconds: 30 })).data,
+    swap: async (old, next) => !!(await admin.rpc("canva_account_swap", { p_user: a.user, p_old_refresh: old, p_new: next })).data,
+    unlease: async (t) => { await admin.from("canva_accounts").update({ tokens: { ...t, refresh_lease_until: null } }).eq("user_id", a.user).eq("tokens->>refresh_token", t.refresh_token); },
+    notConnected: "Your Canva account isn't connected. Press Design with Canva to sign in to Canva.",
+  };
+}
 
 export async function loadTokens(admin: SupabaseClient): Promise<CanvaTokens | null> {
   const { data } = await admin.from("integration_tokens").select("data").eq("name", "canva").maybeSingle();
   const d = (data?.data || {}) as Partial<CanvaTokens>;
   return d.refresh_token && d.access_token ? (d as CanvaTokens) : null;
 }
+export async function loadUserTokens(admin: SupabaseClient, userId: string): Promise<CanvaTokens | null> {
+  const { data } = await admin.from("canva_accounts").select("tokens").eq("user_id", userId).maybeSingle();
+  const d = (data?.tokens || {}) as Partial<CanvaTokens>;
+  return d.refresh_token && d.access_token ? (d as CanvaTokens) : null;
+}
+/** one person's own Canva connection (name only, never a token) */
+export async function userCanva(admin: SupabaseClient, userId: string): Promise<{ connected: boolean; name: string }> {
+  const { data } = await admin.from("canva_accounts").select("display_name, tokens").eq("user_id", userId).maybeSingle();
+  const t = (data?.tokens || {}) as Partial<CanvaTokens>;
+  return { connected: !!(t.refresh_token && t.access_token), name: (data?.display_name as string) || "" };
+}
 
-/** Back from Canva's sign-in: trade the code (with the PKCE verifier) for tokens, keep them, note whose account it is. */
+/** whose Canva account the signed-in person designs with: their own when connected, else the shop's for staff */
+export async function accountFor(admin: SupabaseClient, v: { userId: string; isStaff: boolean }): Promise<CanvaAccount | null> {
+  if (!canvaEnv().configured) return null;
+  if (await loadUserTokens(admin, v.userId)) return { kind: "user", user: v.userId };
+  if (v.isStaff && (await loadTokens(admin))) return SHOP;
+  return null;
+}
+
+/** whose Canva account it is (name, ids); best effort */
+async function profileOf(c: Canva) {
+  const [p, me] = await Promise.all([
+    c.request<{ profile?: { display_name?: string } }>("GET", "/users/me/profile").catch(() => null),
+    c.request<{ team_user?: { user_id?: string; team_id?: string } }>("GET", "/users/me").catch(() => null),
+  ]);
+  return { display_name: p?.profile?.display_name || "", user_id: me?.team_user?.user_id || "", team_id: me?.team_user?.team_id || "" };
+}
+
+/** Back from Canva's sign-in (the shop's connection): trade the code (with the PKCE verifier) for tokens and keep them. */
 export async function connectWithCode(admin: SupabaseClient, code: string, verifier: string, by: string) {
   const t = await tokenCall({ grant_type: "authorization_code", code, code_verifier: verifier, redirect_uri: canvaEnv().redirectUri });
   const tokens: CanvaTokens = { ...t, connected_by: by, connected_at: new Date().toISOString() };
   const { error } = await admin.from("integration_tokens").upsert({ name: "canva", data: tokens, updated_at: new Date().toISOString(), updated_by: by });
   if (error) throw new CanvaError(`Couldn't save the Canva sign-in: ${error.message}`);
-  cache = { token: t.access_token, until: new Date(t.access_expires_at).getTime() - 5 * 60000 };
-  // whose Canva account (shown in Settings); best effort
-  const c = new Canva(admin);
-  const [p, me] = await Promise.all([
-    c.request<{ profile?: { display_name?: string } }>("GET", "/users/me/profile").catch(() => null),
-    c.request<{ team_user?: { user_id?: string; team_id?: string } }>("GET", "/users/me").catch(() => null),
-  ]);
-  const extra = { display_name: p?.profile?.display_name || "", user_id: me?.team_user?.user_id || "", team_id: me?.team_user?.team_id || "" };
+  cache.set("shop", { token: t.access_token, until: new Date(t.access_expires_at).getTime() - 5 * 60000 });
+  const extra = await profileOf(new Canva(admin));
   const cur = await loadTokens(admin);
   if (cur) await admin.from("integration_tokens").update({ data: { ...cur, ...extra } }).eq("name", "canva").eq("data->>refresh_token", cur.refresh_token);
   return { name: extra.display_name };
 }
 
-/** Disconnect: revoke at Canva (best effort) and forget the tokens. Designs already saved stay. */
-export async function disconnect(admin: SupabaseClient, by: string) {
-  const t = await loadTokens(admin);
-  if (t && canvaEnv().configured) {
-    await fetch(`${CANVA_API}/oauth/revoke`, { method: "POST", headers: { Authorization: basic(), "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token: t.refresh_token }), cache: "no-store", signal: AbortSignal.timeout(15_000) }).catch(() => null);
-  }
-  cache = null;
-  await admin.from("integration_tokens").upsert({ name: "canva", data: { disconnected_at: new Date().toISOString(), previous_name: t?.display_name || "" }, updated_at: new Date().toISOString(), updated_by: by });
+/** Back from Canva's sign-in (one person's own account): keep it on their row (customer = their account, for customers). */
+export async function connectUserWithCode(admin: SupabaseClient, code: string, verifier: string, who: { userId: string; email: string; customerId: string | null }) {
+  const t = await tokenCall({ grant_type: "authorization_code", code, code_verifier: verifier, redirect_uri: canvaEnv().redirectUri });
+  const now = new Date().toISOString();
+  const tokens: CanvaTokens = { ...t, connected_by: who.email, connected_at: now };
+  const { error } = await admin.from("canva_accounts").upsert({ user_id: who.userId, customer_id: who.customerId, email: who.email, tokens, connected_at: now, disconnected_at: null, updated_at: now });
+  if (error) throw new CanvaError(`Couldn't save the Canva sign-in: ${error.message}`);
+  cache.set(`user:${who.userId}`, { token: t.access_token, until: new Date(t.access_expires_at).getTime() - 5 * 60000 });
+  const p = await profileOf(new Canva(admin, { kind: "user", user: who.userId }));
+  await admin.from("canva_accounts").update({ display_name: p.display_name, canva_user_id: p.user_id, canva_team_id: p.team_id }).eq("user_id", who.userId);
+  return { name: p.display_name };
 }
 
-/** Canva is set up in Vercel and connected (doesn't call Canva). */
+/** Disconnect the shop: revoke at Canva (best effort) and forget the tokens. Designs already saved stay. */
+export async function disconnect(admin: SupabaseClient, by: string) {
+  const t = await loadTokens(admin);
+  if (t && canvaEnv().configured) await revoke(t.refresh_token);
+  cache.delete("shop");
+  await admin.from("integration_tokens").upsert({ name: "canva", data: { disconnected_at: new Date().toISOString(), previous_name: t?.display_name || "" }, updated_at: new Date().toISOString(), updated_by: by });
+}
+/** Disconnect one person's own Canva account (their designs stay). */
+export async function disconnectUser(admin: SupabaseClient, userId: string) {
+  const t = await loadUserTokens(admin, userId);
+  if (t && canvaEnv().configured) await revoke(t.refresh_token);
+  cache.delete(`user:${userId}`);
+  await admin.from("canva_accounts").update({ tokens: {}, disconnected_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("user_id", userId);
+}
+
+/** The shop's Canva is set up in Vercel and connected (doesn't call Canva). */
 export async function canvaConnected(admin: SupabaseClient) { return canvaEnv().configured && !!(await loadTokens(admin)); }
 
-let cache: { token: string; until: number } | null = null;
-let refreshing: Promise<string> | null = null;
+const cache = new Map<string, { token: string; until: number }>();
+const refreshing = new Map<string, Promise<string>>();
 
 /**
- * A current access token (refreshed when it has under 5 minutes left, or when `force`). The token row is re-read first
- * (another instance may have refreshed already); one refresher at a time holds a 30-second lease; the new tokens are
- * saved only if the refresh token is still the one used. A refresh Canva refuses means connecting again.
+ * A current access token for one account (refreshed when it has under 5 minutes left, or when `force`). The token row
+ * is re-read first (another instance may have refreshed already); one refresher at a time holds a 30-second lease; the
+ * new tokens are saved only if the refresh token is still the one used. A refresh Canva refuses means connecting again.
  */
-async function accessToken(admin: SupabaseClient, force = false): Promise<string> {
-  if (!force && cache && cache.until > Date.now()) return cache.token;
-  if (refreshing) return refreshing;
-  refreshing = (async () => {
+async function accessToken(admin: SupabaseClient, account: CanvaAccount, force = false): Promise<string> {
+  const key = keyOf(account);
+  const c0 = cache.get(key);
+  if (!force && c0 && c0.until > Date.now()) return c0.token;
+  const running = refreshing.get(key);
+  if (running) return running;
+  const p = (async () => {
     const env = canvaEnv();
     if (!env.configured) throw new CanvaNotConnected(`Canva isn't set up: add ${env.missing.join(" and ")} in Vercel.`);
+    const store = storeFor(admin, account);
     const fresh = (t: CanvaTokens) => new Date(t.access_expires_at).getTime() - 5 * 60000 > Date.now();
     for (let attempt = 0; attempt < 8; attempt++) {
-      const t = await loadTokens(admin);
-      if (!t) throw new CanvaNotConnected("Canva isn't connected (Settings → Canva → Connect).");
+      const t = await store.load();
+      if (!t) throw new CanvaNotConnected(store.notConnected);
       if (fresh(t) && !(force && attempt === 0)) {
-        cache = { token: t.access_token, until: new Date(t.access_expires_at).getTime() - 5 * 60000 };
+        cache.set(key, { token: t.access_token, until: new Date(t.access_expires_at).getTime() - 5 * 60000 });
         return t.access_token;
       }
-      const { data: lease } = await admin.rpc("integration_token_lease", { p_name: "canva", p_seconds: 30 });
-      if (!lease) { await sleep(1500); force = false; continue; } // another instance is refreshing: use its result
+      if (!(await store.lease())) { await sleep(1500); force = false; continue; } // another instance is refreshing: use its result
       let n: Awaited<ReturnType<typeof tokenCall>>;
       try { n = await tokenCall({ grant_type: "refresh_token", refresh_token: t.refresh_token }); }
       catch (e) {
-        await admin.from("integration_tokens").update({ data: { ...t, refresh_lease_until: null } }).eq("name", "canva").eq("data->>refresh_token", t.refresh_token);
-        if (e instanceof CanvaError && !e.transient) throw new CanvaNotConnected(`Canva refused the sign-in refresh (${e.message}): connect again in Settings → Canva.`);
+        await store.unlease(t);
+        if (e instanceof CanvaError && !e.transient) throw new CanvaNotConnected(`Canva refused the sign-in refresh (${e.message}): connect Canva again.`);
         throw e;
       }
       const next: CanvaTokens = { ...t, ...n };
-      const { data: swapped } = await admin.rpc("integration_token_swap", { p_name: "canva", p_old_refresh: t.refresh_token, p_new: next });
-      if (!swapped) { force = false; continue; } // someone else saved a newer one meanwhile: re-read and use theirs
-      cache = { token: next.access_token, until: new Date(next.access_expires_at).getTime() - 5 * 60000 };
+      if (!(await store.swap(t.refresh_token, next))) { force = false; continue; } // someone else saved a newer one meanwhile
+      cache.set(key, { token: next.access_token, until: new Date(next.access_expires_at).getTime() - 5 * 60000 });
       return next.access_token;
     }
     throw new CanvaError("Couldn't get a Canva sign-in (another refresh kept it busy). Try again.", 0, "", true);
   })();
-  try { return await refreshing; } finally { refreshing = null; }
+  refreshing.set(key, p);
+  try { return await p; } finally { refreshing.delete(key); }
 }
 
 /* ---------------- requests ---------------- */
@@ -184,11 +273,12 @@ export function designIdFrom(url: string): string | null {
 }
 
 export class Canva {
-  constructor(private admin: SupabaseClient) {}
+  /** `account`: whose Canva account the calls use (the shop's unless given) */
+  constructor(private admin: SupabaseClient, private account: CanvaAccount = SHOP) {}
 
   /** One API call: refreshes once on 401; retries 429 / 5xx / network with backoff (Retry-After honored, capped at 10 s). */
   async request<T = Record<string, unknown>>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
-    let token = await accessToken(this.admin);
+    let token = await accessToken(this.admin, this.account);
     let refreshed = false;
     for (let attempt = 1; ; attempt++) {
       let r: Response | null = null, j: Record<string, unknown> = {}, netErr = "";
@@ -198,7 +288,7 @@ export class Canva {
       } catch (e) { netErr = e instanceof Error ? e.message : String(e); }
       if (r?.ok) return j as T;
       const status = r?.status || 0, code = String(j.code || ""), message = String(j.message || "") || netErr || `HTTP ${status}`;
-      if (status === 401 && !refreshed) { refreshed = true; token = await accessToken(this.admin, true); continue; }
+      if (status === 401 && !refreshed) { refreshed = true; token = await accessToken(this.admin, this.account, true); continue; }
       const transient = !!netErr || status === 429 || status >= 500 || status === 0;
       if (transient && attempt < 4) {
         const ra = Math.min(10, Number(r?.headers.get("retry-after")) || 0);
@@ -226,10 +316,12 @@ export class Canva {
    * background, lossless, first page only. Canva makes the file in the background: the job is checked until it's done
    * (about 2 minutes at most). Download links last 24 hours; the file is fetched right away.
    */
-  async exportDesign(designId: string, fmt: Fmt): Promise<{ buf: Buffer; type: string; pages: number }> {
+  async exportDesign(designId: string, fmt: Fmt, opts: { quality?: "pro" | "regular"; transparent?: boolean } = {}): Promise<{ buf: Buffer; type: string; pages: number }> {
+    // "pro" can fail on premium elements the account hasn't bought; a see-through PNG needs a paid plan (Free: fails)
+    const quality = opts.quality || "pro";
     const format = fmt === "pdf"
-      ? { type: "pdf", export_quality: "pro" }
-      : { type: "png", export_quality: "pro", transparent_background: true, lossless: true, pages: [1] };
+      ? { type: "pdf", export_quality: quality }
+      : { type: "png", export_quality: quality, transparent_background: opts.transparent !== false, lossless: true, pages: [1] };
     let job = (await this.request<{ job: { id: string; status: string; urls?: string[]; error?: { code?: string; message?: string } } }>("POST", "/exports", { design_id: designId, format })).job;
     const t0 = Date.now();
     for (let i = 0; job.status === "in_progress" && Date.now() - t0 < 110_000; i++) {

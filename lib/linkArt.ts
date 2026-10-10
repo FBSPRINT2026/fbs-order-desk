@@ -216,7 +216,7 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
         const x = await exportBoth(new Canva(admin), id);
         const name = fileTitle(x.title);
         const files = [x.pdf && { buf: x.pdf.buf, type: x.pdf.type, name: `${name}.pdf`, note: "The Canva design as a print-quality PDF (vector where the design is vector)." },
-          x.png && { buf: x.png.buf, type: x.png.type, name: `${name}.png`, note: x.pages > 1 ? `Page 1 of ${x.pages}, see-through background (for the mockup).` : "See-through background (for the mockup)." }].filter(Boolean) as { buf: Buffer; type: string; name: string; note: string }[];
+          x.png && { buf: x.png.buf, type: x.png.type, name: `${name}.png`, note: `${x.pages > 1 ? `Page 1 of ${x.pages}, ` : ""}${x.opaque ? "with the design's background (this Canva plan can't export see-through)" : "see-through background"} (for the mockup).` }].filter(Boolean) as { buf: Buffer; type: string; name: string; note: string }[];
         const saved: LinkFile[] = [];
         for (const g of files) {
           const path = `emails/${a.customer_id || "leads"}/${Date.now().toString(36)}-${g.name.replace(/[^\w.\- ()]+/g, "_").slice(-120)}`;
