@@ -115,6 +115,11 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art"): Promise<
   const photos = look.photos.sort((a, b) => a.x0 - b.x0);
   if (!photos.length) return [];
   const found = pieces(look.canvas, 0.12 * 72 * s1).filter((r) => (r.x1 - r.x0) * (r.y1 - r.y0) > 64);
+  // the page as it looks (photos in), to read the shirt's color around each print
+  const vpF = page.getViewport({ scale: s1 }), full = document.createElement("canvas");
+  full.width = Math.round(vpF.width); full.height = Math.round(vpF.height);
+  await page.render({ canvasContext: full.getContext("2d")!, viewport: vpF, background: "rgba(255,255,255,1)" }).promise;
+  const fullPx = full.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, full.width, full.height).data;
   const out: ArtPiece[] = [];
   for (const r of found) {
     // on a shirt photo (the FBS logo in the header isn't)
@@ -135,13 +140,33 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art"): Promise<
     const pad = 4 * (s2 / s1);
     const crop = { x0: (r.x0 * s2) / s1 - pad, y0: (r.y0 * s2) / s1 - pad, x1: (r.x1 * s2) / s1 + pad, y1: (r.y1 * s2) / s1 + pad };
     const hi = await drawWithoutPhotos(page, s2, crop, { photos: look.photos, scale: s1 });
+    // the shirt's color right around the print (a ring just outside it on the full page)
+    const ring: number[][] = [];
+    for (let d = 3; d <= 9; d += 3) for (let t = 0; t < 1; t += 0.02) {
+      const pts = [[r.x0 + (r.x1 - r.x0) * t, r.y0 - d], [r.x0 + (r.x1 - r.x0) * t, r.y1 + d], [r.x0 - d, r.y0 + (r.y1 - r.y0) * t], [r.x1 + d, r.y0 + (r.y1 - r.y0) * t]];
+      for (const [x, y] of pts) { const X = Math.round(x), Y = Math.round(y); if (X < 0 || Y < 0 || X >= full.width || Y >= full.height) continue; const o = (Y * full.width + X) * 4; ring.push([fullPx[o], fullPx[o + 1], fullPx[o + 2]]); }
+    }
+    const med = (k: number) => { const v = ring.map((c) => c[k]).sort((a, b) => a - b); return v[Math.floor(v.length / 2)] ?? 255; };
+    const shirt = [med(0), med(1), med(2)];
+    const spread = ring.length ? Math.sqrt(ring.reduce((a, c) => a + (c[0] - shirt[0]) ** 2 + (c[1] - shirt[1]) ** 2 + (c[2] - shirt[2]) ** 2, 0) / ring.length) : 0;
+    // knockouts faked with a piece of the shirt photo laid inside the logo (the heather texture shows through): the
+    // shirt's own color in the pulled art is a hole, not ink (Peticolas Sit Down's chair and lettering)
+    const isShirt = !(shirt[0] > 245 && shirt[1] > 245 && shirt[2] > 245) && spread < 40;
     // see-through bits become holes: a "distressed" texture laid over the whole logo at 15-50% (Illustrator
     // opacity masks, Peticolas Sit Down) leaves faint white over the knockouts, which the ink mapping then filled solid
     // cream. A screen can't print 20% white: under ~60% coverage is clear, the rest solid (edges stay smooth)
     {
       const cx2 = hi.canvas.getContext("2d", { willReadFrequently: true })!;
       const img = cx2.getImageData(0, 0, hi.canvas.width, hi.canvas.height), px = img.data;
-      for (let i = 3; i < px.length; i += 4) px[i] = px[i] < 140 ? 0 : px[i] < 175 ? Math.round(((px[i] - 140) / 35) * 255) : 255;
+      // shirt-colored (even lightened by the texture, ~40 away) is clear; edges fade out over the next stretch
+      const lim = Math.max(50, spread * 3);
+      for (let i = 3; i < px.length; i += 4) {
+        px[i] = px[i] < 140 ? 0 : px[i] < 175 ? Math.round(((px[i] - 140) / 35) * 255) : 255;
+        if (isShirt && px[i]) {
+          const dist = Math.hypot(px[i - 3] - shirt[0], px[i - 2] - shirt[1], px[i - 1] - shirt[2]);
+          if (dist < 2 * lim) px[i] = Math.round(px[i] * Math.max(0, (dist - lim) / lim));
+        }
+      }
       cx2.putImageData(img, 0, 0);
     }
     const blob = await new Promise<Blob | null>((res) => hi.canvas.toBlob(res, "image/png"));
