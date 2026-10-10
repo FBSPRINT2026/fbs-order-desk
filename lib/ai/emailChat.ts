@@ -21,6 +21,15 @@ export type EmailAction =
 export type EmailChatMsg = { role: "staff" | "ai" | "event"; text: string; at: string; by?: string; actions?: EmailAction[]; lookedUp?: LookedUp; /** event: where it leads (the order made) */ href?: string };
 type Att = { name: string; path: string; type: string; size: number };
 
+/** a text-message length answer: the first two sentences, at most ~280 characters */
+function brief(t: string) {
+  const s = t.replace(/\s+/g, " ").trim();
+  const parts = s.match(/[^.!?]+[.!?]+(\s|$)/g) || [s];
+  let out = parts.slice(0, 2).join("").trim();
+  if (out.length > 280) out = out.slice(0, 277).replace(/\s+\S*$/, "") + "…";
+  return out || s.slice(0, 280);
+}
+
 export async function emailChatThread(admin: SupabaseClient, activityId: string): Promise<EmailChatMsg[]> {
   const { data } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", `email_chat:${activityId}`).limit(1).maybeSingle();
   return ((data?.payload as { messages?: EmailChatMsg[] } | null)?.messages || []);
@@ -70,7 +79,7 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     task: "email_chat", model: s.assistant.ai.model, maxTokens: 2000, timeoutMs: 55_000, admin, images, documents,
     ctx: { activity_id: a.id as string, customer_id: cid, by },
     tool: { name: "answer", description: "Your reply to staff and the next steps they can take with a click.", input_schema: { type: "object", properties: {
-      reply: { type: "string", description: "1-2 short sentences, under 40 words: what you'd do and why." },
+      reply: { type: "string", description: "One short text-message sentence, 25 words at most." },
       actions: { type: "array", description: "1-3 next steps, best first.", items: { type: "object", properties: {
         kind: { type: "string", enum: ["create_order", "reply", "file_under", "no_reply", "order_goods"] },
         label: { type: "string", description: 'Button text, e.g. "Create the reorder of #31174", "Reply: we need more time", "Reply: we can\'t take this one"' },
@@ -83,7 +92,8 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     system: `${SHOP_CONTEXT(s)}
 
 You're helping staff handle a customer email, like an experienced shop manager reading over their shoulder. Read the email and its files, and use the customer's past jobs, open orders and how busy the shop is. Say plainly what it is and what you'd do: make a new order, make a reorder of a past job (name it), answer a question, ask for missing details, say we need more time (when the date they want is too soon for how busy we are), or turn the job down (when it's something the shop doesn't do or can't do in time). Offer the next steps as actions. When the garments are clear and the job is likely (a reorder, an approved quote, a tight date), you can offer order_goods: buying the blanks from S&S now, ahead of the order. Replies to the customer are written in the shop's voice (${s.assistant.ai.voice}), short, and never promise prices or exact dates unless staff gave them.
-Follow what staff tell you; it's fact. Be brief: your reply is 1-2 short sentences (under 40 words), no headings, no lists, no restating the email (staff can read it). Put the detail into the actions instead: 1-3 actions, best first.`,
+Follow what staff tell you; it's fact.
+Write like a quick text message from a coworker: ONE short sentence, 25 words at most. No greetings, headings, lists, prices or restating the email (staff can read it). Answer exactly what was asked. The detail goes into the actions: 1-3 actions, best first, with short button labels (2-5 words).`,
     prompt,
   });
   if (!r.ok) return { ok: false, error: r.error };
@@ -101,7 +111,7 @@ Follow what staff tell you; it's fact. Be brief: your reply is 1-2 short sentenc
   const now = new Date().toISOString();
   const messages: EmailChatMsg[] = [...thread,
     { role: "staff" as const, text: msg, at: now, by },
-    { role: "ai" as const, text: String(r.data.reply || "").slice(0, 4000), at: new Date().toISOString(), actions, ...(lookedUp?.text ? { lookedUp } : {}) },
+    { role: "ai" as const, text: brief(String(r.data.reply || "")), at: new Date().toISOString(), actions, ...(lookedUp?.text ? { lookedUp } : {}) },
   ].slice(-60);
   const row = { kind: "email_chat", dedupe_key: `email_chat:${activityId}`, source: "ai", status: "done", priority: 3, customer_id: cid, activity_id: a.id, title: `Email chat: ${String(a.subject || "").slice(0, 80)}`, body: msg.slice(0, 300), payload: { messages }, model: r.model, run_id: r.runId, updated_at: now };
   const { data: had } = await admin.from("ai_suggestions").select("id").eq("dedupe_key", row.dedupe_key).limit(1).maybeSingle();
