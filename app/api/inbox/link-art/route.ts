@@ -5,7 +5,7 @@ import { linkArtForEmail } from "@/lib/linkArt";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 300;
 
 /**
  * Art sent as a link (Canva, Dropbox, Google Drive) → saved with the email like an attachment (lib/linkArt.ts).

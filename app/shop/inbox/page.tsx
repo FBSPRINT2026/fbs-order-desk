@@ -21,7 +21,7 @@ import type { EmailAction } from "@/lib/ai/emailChat";
  *    time, while answering or making the order.
  * Vendors, newsletters and personal mail never get here (they're skipped, not stored).
  */
-type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; no_reply?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; urgent_reason?: string; needs_reply?: boolean }; reply_options?: { at: string; options: { label: string; subject: string; body: string }[] } } };
+type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; no_reply?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number; from_link?: string; source?: string }[]; links?: { url: string; kind: string; ok: boolean; error?: string }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; urgent_reason?: string; needs_reply?: boolean }; reply_options?: { at: string; options: { label: string; subject: string; body: string }[] } } };
 type Sug = { id: string; kind: string; status: string; activity_id: string | null; title: string; body: string; draft: { subject?: string; body?: string } | null; payload: { groups?: unknown[] } | null; order_id: string | null };
 type Cust = { id: string; company: string | null; name: string | null };
 type Ord = { id: string; number: number; nickname: string | null; customer_id: string | null; status: string };
@@ -304,6 +304,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {!x.customer_id && x.direction === "in" && <NewSender x={x} busy={busy} run={run} />}
             <EmailBody x={x} />
             {(x.meta?.attachments || []).length > 0 && <div className="ibx2-files">{x.meta!.attachments!.map((f) => <button key={f.path} type="button" onClick={() => urlFor(f.path)}>📎 {f.name}</button>)}</div>}
+            <CanvaGet x={x} busy={busy} run={run} />
             {thread.length > 0 && <details className="ibx2-thread">
               <summary>Earlier in this conversation ({thread.length})</summary>
               {[...thread].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)).map((t) => <div key={t.id} className={"ibx-t " + t.direction}><b>{t.direction === "out" ? "You" : t.meta?.from_name || t.from_email}</b> · {new Date(t.occurred_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}<div>{t.body.slice(0, 700)}</div></div>)}
@@ -350,6 +351,32 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
 }
 
 /** A sender who isn't a customer yet: make them one, or add them as a contact at a customer you have. */
+/** whether the shop's Canva account is connected (asked once per page load) */
+let canvaOnP: Promise<boolean> | null = null;
+const canvaOn = () => (canvaOnP ||= fetch("/api/canva/status", { cache: "no-store" }).then((r) => r.json()).then((j: { connected?: boolean }) => !!j.connected).catch(() => false));
+
+/** A Canva link in the email whose design isn't saved yet: export it through the shop's Canva account (lib/linkArt.ts) */
+function CanvaGet({ x, busy, run }: { x: Act; busy: string; run: (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => Promise<void> }) {
+  const got = new Set((x.meta?.attachments || []).filter((f) => f.source === "canva-export").map((f) => f.from_link));
+  const todo = (x.meta?.links || []).filter((l) => l.kind === "canva" && !got.has(l.url));
+  const [on, setOn] = useState(false);
+  useEffect(() => { if (todo.length) void canvaOn().then(setOn); }, [todo.length]);
+  if (!todo.length || !on) return null;
+  const err = todo.find((l) => l.error)?.error;
+  const get = async () => {
+    const r = await fetch("/api/inbox/link-art", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: x.id, force: true }) }).then((r) => r.json()).catch(() => null) as { ok?: boolean; error?: string; found?: { kind: string; saved?: unknown; error?: string }[] } | null;
+    if (!r?.ok) return { ok: false, error: r?.error || "Couldn't reach Canva." };
+    const bad = (r.found || []).find((f) => f.kind === "canva" && !f.saved);
+    return bad ? { ok: false, error: bad.error || "Canva didn't send the design." } : { ok: true };
+  };
+  return (
+    <div className="ibx2-files">
+      <button type="button" disabled={!!busy} onClick={() => run("canva", get, "Saved the design from Canva with this email.")}>{busy === "canva" ? "Getting the design from Canva…" : "Get the design from Canva"}</button>
+      {err && busy !== "canva" && <span className="faint" style={{ fontSize: 12.5, alignSelf: "center" }}>{err}</span>}
+    </div>
+  );
+}
+
 function NewSender({ x, busy, run }: { x: Act; busy: string; run: (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => Promise<void> }) {
   const [mode, setMode] = useState<"" | "new" | "contact">(""), [company, setCompany] = useState(""), [custQ, setCustQ] = useState(""), [hits, setHits] = useState<Cust[]>([]);
   async function find(q: string) { setCustQ(q); if (q.trim().length < 2) return setHits([]); const s = q.replace(/[,()]/g, ""); const { data } = await createClient().from("customers").select("id, company, name").or(`company.ilike.%${s}%,name.ilike.%${s}%,email.ilike.%${s}%`).limit(8); setHits((data || []) as Cust[]); }

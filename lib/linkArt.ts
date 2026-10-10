@@ -1,20 +1,25 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { Canva, CanvaError, NO_ACCESS_MSG, canvaConnected, designIdFrom } from "@/lib/canva/client";
+import { exportBoth, fileTitle } from "@/lib/canva/save";
 
 /**
  * Artwork sent as a LINK instead of an attachment (Oct 9, Nick: "she sent me a Canva link… learn to work with Canva").
  * Customers paste Canva, Dropbox and Google Drive links, and their company's mail filter wraps every link
  * (url.emailprotection.link, Outlook Safe Links, Proofpoint urldefense…). For each link in the customer's new text
  * (not the quoted thread under it) we follow the wrapper to the real address, then:
- *  - Canva design: Canva's own public preview of the shared design (oEmbed thumbnail, else the page's preview image).
- *    It's a picture of the design for mockups and quoting, NOT print-ready art: print art comes from the Canva
- *    connection (vector PDF) or the customer's download.
+ *  - Canva design: with the shop's Canva account connected (Settings → Canva), the design itself through Canva's API:
+ *    the print-quality PDF (vector where the design is vector) and a see-through PNG for the mockup. Canva only lets
+ *    the account export designs it can open: a customer's "collaborate" link has to be opened once while signed in to
+ *    Canva (it joins the account), then Get the design from Canva again. Not connected: Canva's own public preview of
+ *    the shared design (oEmbed thumbnail, else the page's preview image), a picture for mockups and quoting, NOT
+ *    print-ready art.
  *  - Dropbox / Google Drive / a direct file link: the file itself when it's art (picture, PDF, AI, EPS, SVG, ZIP).
  * What's found is saved with the email like an attachment ({ from_link, source }), so Create order, the Assistant and
  * the Mockup Creator use it the same way.
  */
-export type LinkFile = { name: string; path: string; type: string; size: number; from_link: string; source: "canva-preview" | "download"; note?: string };
-type Found = { url: string; final: string; kind: "canva" | "dropbox" | "drive" | "file" | "other"; saved?: LinkFile; error?: string };
+export type LinkFile = { name: string; path: string; type: string; size: number; from_link: string; source: "canva-preview" | "canva-export" | "download"; note?: string };
+type Found = { url: string; final: string; kind: "canva" | "dropbox" | "drive" | "file" | "other"; saved?: LinkFile; /** the Canva export's second file (PDF + PNG) */ also?: LinkFile; error?: string };
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 const ART_TYPE = /^(image\/|application\/(pdf|postscript|illustrator|zip|x-zip|octet-stream)|image\/svg)/i;
@@ -182,6 +187,9 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
   const meta = (a.meta || {}) as { attachments?: (LinkFile | { name: string; path: string; type: string; size: number })[]; link_art_at?: string };
   if (meta.link_art_at && !opts.force) return { ok: true, found: [] };
   const have = new Set((meta.attachments || []).map((f) => (f as LinkFile).from_link).filter(Boolean));
+  // Canva links already exported through the API (a preview saved earlier doesn't count: the export is still wanted)
+  const exported = new Set((meta.attachments || []).filter((f) => (f as LinkFile).source === "canva-export").map((f) => (f as LinkFile).from_link));
+  const canvaOn = await canvaConnected(admin).catch(() => false);
   const found: Found[] = [];
   // the art links as the customer typed them (from the saved email's link text), else the links in the plain text
   // (resolved through their wrapper; each can take a few seconds to "scan")
@@ -198,7 +206,33 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
     const kind = kindOf(final);
     const f: Found = { url, final, kind };
     found.push(f);
-    if (kind === "other" || have.has(final)) continue;
+    if (kind === "other") continue;
+    if (kind === "canva" && canvaOn) {
+      if (exported.has(final)) continue;
+      // the design itself, through the shop's Canva account: PDF (print) + see-through PNG (mockup)
+      try {
+        const id = designIdFrom(final);
+        if (!id) { f.error = "Couldn't read the Canva design from that link."; continue; }
+        const x = await exportBoth(new Canva(admin), id);
+        const name = fileTitle(x.title);
+        const files = [x.pdf && { buf: x.pdf.buf, type: x.pdf.type, name: `${name}.pdf`, note: "The Canva design as a print-quality PDF (vector where the design is vector)." },
+          x.png && { buf: x.png.buf, type: x.png.type, name: `${name}.png`, note: x.pages > 1 ? `Page 1 of ${x.pages}, see-through background (for the mockup).` : "See-through background (for the mockup)." }].filter(Boolean) as { buf: Buffer; type: string; name: string; note: string }[];
+        const saved: LinkFile[] = [];
+        for (const g of files) {
+          const path = `emails/${a.customer_id || "leads"}/${Date.now().toString(36)}-${g.name.replace(/[^\w.\- ()]+/g, "_").slice(-120)}`;
+          const { error } = await admin.storage.from("proofs").upload(path, g.buf, { contentType: g.type, upsert: false });
+          if (error) { f.error = error.message; continue; }
+          saved.push({ name: g.name, path, type: g.type, size: g.buf.length, from_link: final, source: "canva-export", note: g.note });
+        }
+        if (saved[0]) f.saved = saved[0];
+        if (saved[1]) f.also = saved[1];
+        if (!saved.length && !f.error) f.error = x.pdfError || x.pngError || "Canva didn't send a file.";
+      } catch (e) {
+        f.error = e instanceof CanvaError && e.noAccess ? NO_ACCESS_MSG : e instanceof Error ? e.message : String(e);
+      }
+      continue;
+    }
+    if (have.has(final)) { if (kind === "canva") f.error = "The preview picture is saved. Connect Canva (Settings → Canva) to get the design itself."; continue; }
     try {
       let got: { buf: Buffer; type: string; name: string } | null = null, source: LinkFile["source"] = "download", note: string | undefined;
       if (kind === "canva") {
@@ -218,7 +252,7 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
       f.saved = { name: got.name, path, type: got.type, size: got.buf.length, from_link: final, source, ...(note ? { note } : {}) };
     } catch (e) { f.error = e instanceof Error ? e.message : String(e); }
   }
-  const add = found.map((f) => f.saved).filter(Boolean) as LinkFile[];
+  const add = found.flatMap((f) => [f.saved, f.also]).filter(Boolean) as LinkFile[];
   const links = found.filter((f) => f.kind !== "other").map((f) => ({ url: f.final, kind: f.kind, ok: !!f.saved, error: f.error }));
   await admin.from("activities").update({ meta: { ...meta, attachments: [...(meta.attachments || []), ...add], link_art_at: new Date().toISOString(), ...(links.length ? { links } : {}) } }).eq("id", activityId);
   return { ok: true, found };
