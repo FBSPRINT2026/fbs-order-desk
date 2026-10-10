@@ -275,8 +275,8 @@ function Differences() {
 /* ---------------- matching ---------------- */
 
 function evidenceText(p: ProposalRow) {
-  const e = p.evidence as { invoices?: number; totalsMatched?: number; ofInvoices?: number; sample?: string[]; email?: string; name?: string; phone?: string; ambiguous?: string[]; split?: { localId: string; invoices: number }[] };
-  if (p.method === "invoices") return `${e.invoices} invoice number${e.invoices === 1 ? "" : "s"} match (${(e.sample || []).join(", ")}${(e.invoices || 0) > (e.sample?.length || 0) ? "…" : ""}), ${e.totalsMatched} with the same total; ${e.ofInvoices} invoices in QuickBooks${e.split ? `; also points to ${e.split.length - 1} other customer(s)` : ""}`;
+  const e = p.evidence as { invoices?: number; totalsMatched?: number; unconfirmed?: string; ofInvoices?: number; sample?: string[]; email?: string; name?: string; phone?: string; ambiguous?: string[]; split?: { localId: string; invoices: number }[] };
+  if (p.method === "invoices") return `${e.invoices} invoice number${e.invoices === 1 ? "" : "s"} match (${(e.sample || []).join(", ")}${(e.invoices || 0) > (e.sample?.length || 0) ? "…" : ""}), ${e.totalsMatched} with the same total; ${e.ofInvoices} invoices in QuickBooks${e.split ? `; also points to ${e.split.length - 1} other customer(s)` : ""}${e.unconfirmed ? `. Check it: ${e.unconfirmed}` : ""}`;
   if (p.method === "email") return `Same email: ${e.email}${e.ambiguous ? ` (also ${e.ambiguous.slice(1).join(", ")})` : ""}`;
   if (p.method === "name") return `Same name: ${e.name}${e.ambiguous ? ` (also ${e.ambiguous.slice(1).join(", ")})` : ""}`;
   if (p.method === "phone") return `Same phone: ${e.phone}`;

@@ -6058,3 +6058,10 @@ body.ibx2-dragx iframe,body.ibx2-dragy iframe{pointer-events:none}
 .tx-hide{margin-left:auto;width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--ink-3);display:grid;place-items:center;cursor:pointer}
 .tx-hide:hover{background:var(--bg,#f1f3f6);color:var(--ink)}
 .tx-hide svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+/* public terms / privacy pages */
+.legal{max-width:68ch;margin:0 auto;padding:48px 20px 72px;font-size:15.5px;line-height:1.6;color:var(--ink)}
+.legal h1{font-size:30px;margin:0 0 4px}
+.legal h2{font-size:18px;margin:28px 0 6px}
+.legal p,.legal ul{margin:0 0 12px}
+.legal ul{padding-left:20px}
+.legal-date{color:var(--ink-3);font-size:13.5px}

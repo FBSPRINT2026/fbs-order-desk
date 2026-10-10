@@ -31,7 +31,7 @@ export type OrderRef = { number: string; customer_id: string; total?: number | n
 export type Proposal = {
   qboId: string; qboName: string; qboActive: boolean; localId: string; localName: string;
   method: "invoices" | "email" | "name" | "phone"; confidence: number; isPrimary: boolean; lastInvoiceDate: string | null;
-  evidence: { invoices?: number; totalsMatched?: number; ofInvoices?: number; sample?: string[]; split?: { localId: string; invoices: number }[]; email?: string; name?: string; phone?: string; ambiguous?: string[] };
+  evidence: { invoices?: number; totalsMatched?: number; unconfirmed?: string; ofInvoices?: number; sample?: string[]; split?: { localId: string; invoices: number }[]; email?: string; name?: string; phone?: string; ambiguous?: string[] };
 };
 export type MatchResult = {
   proposals: Proposal[];
@@ -92,11 +92,20 @@ export function proposeMatches(inp: {
       const [localId, top] = ranked[0];
       const all = ranked.reduce((a, [, v]) => a + v.n, 0);
       const share = top.n / all;
-      // one shared invoice number is strong; three or more with the totals agreeing is as sure as it gets
+      // one shared invoice number is strong; three or more with the totals agreeing is as sure as it gets.
+      // A number alone can be chance (Oct 10: the sandbox's invoice #1007 "matched" an old Printavo #1007 for someone
+      // else, different total, different name), so with no total agreeing it needs the name, email or phone to agree
+      // too, or it stays low for a person to look at.
+      const sameName = [normName(q.CompanyName), normName(q.DisplayName), normName(q.FullyQualifiedName), normName([q.GivenName, q.FamilyName].filter(Boolean).join(" "))]
+        .some((n) => n && (companyIx.get(n)?.has(localId) || personIx.get(n)?.has(localId)));
+      const sameEmail = allEmails(q.PrimaryEmailAddr?.Address).some((e) => emailIx.get(e)?.has(localId));
+      const samePhone = [phoneDigits(q.PrimaryPhone?.FreeFormNumber), phoneDigits(q.Mobile?.FreeFormNumber)].some((ph) => ph.length === 10 && phoneIx.get(ph)?.has(localId));
+      const backed = sameName || sameEmail || samePhone;
       let conf = 0.84 + 0.05 * Math.min(top.n, 3) + (top.totals / top.n >= 0.8 ? 0.03 : 0);
+      if (!top.totals) conf = backed ? Math.min(conf, 0.8) : 0.4;
       if (share < 1) conf = Math.min(conf, 0.5 + 0.4 * share);
       proposals.push({ ...base, localId, localName: label(byId.get(localId)), method: "invoices", confidence: round2(Math.min(conf, 0.99)),
-        evidence: { invoices: top.n, totalsMatched: top.totals, ofInvoices: invCount.get(q.Id) || 0, sample: top.sample, ...(ranked.length > 1 ? { split: ranked.map(([id, v]) => ({ localId: id, invoices: v.n })) } : {}) } });
+        evidence: { invoices: top.n, totalsMatched: top.totals, ...(!top.totals ? { unconfirmed: backed ? "the totals differ but the name, email or phone agrees" : "only the number matches: the totals, name, email and phone don't" } : {}), ofInvoices: invCount.get(q.Id) || 0, sample: top.sample, ...(ranked.length > 1 ? { split: ranked.map(([id, v]) => ({ localId: id, invoices: v.n })) } : {}) } });
       continue;
     }
     const pick = (hits: Set<string> | undefined) => (hits ? [...hits] : []);

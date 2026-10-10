@@ -180,6 +180,18 @@ export function selfTest(inp: SelfTestInput): { checks: Check[]; samples: Record
     const dn = decoyNamed.map((d) => byQ.get(d.Id)).filter(Boolean);
     ok("match: an old QuickBooks duplicate with no invoices is proposed by name, below high confidence", dn.length >= 1 && dn.every((p) => p!.method === "name" && p!.confidence < HIGH_CONFIDENCE), `${dn.length} of ${decoyNamed.length}`);
     ok("match: QuickBooks-only customers stay unmatched", others.every((o) => !byQ.has(o.Id)));
+    {
+      // Oct 10, the sandbox: its invoice #1007 shared a number with an old Printavo order for someone else
+      const ours1 = [{ id: "L1", company: "4 Elements Brewing", name: "Sam Lee", email: "sam@4e.example" }];
+      const chance = proposeMatches({ ours: ours1, orders: [{ number: "1007", customer_id: "L1", total: 412.5 }],
+        qboCustomers: [{ Id: "13", DisplayName: "John Melton", GivenName: "John", FamilyName: "Melton", PrimaryEmailAddr: { Address: "john@melton.example" } }],
+        qboInvoices: [{ Id: "i1", DocNumber: "1007", CustomerRef: { value: "13" }, TotalAmt: 362.07, TxnDate: "2026-08-20" }] }).proposals[0];
+      ok("match: one invoice number by chance (other total, other name) stays low", !!chance && chance.confidence < 0.5, `${chance?.confidence}`);
+      const renamed = proposeMatches({ ours: ours1, orders: [{ number: "1007", customer_id: "L1", total: 412.5 }],
+        qboCustomers: [{ Id: "13", DisplayName: "Four Elements", PrimaryEmailAddr: { Address: "sam@4e.example" } }],
+        qboInvoices: [{ Id: "i1", DocNumber: "1007", CustomerRef: { value: "13" }, TotalAmt: 450, TxnDate: "2026-08-20" }] }).proposals[0];
+      ok("match: an edited total with the same email still matches, below high confidence", renamed?.localId === "L1" && renamed.confidence >= 0.7 && renamed.confidence < HIGH_CONFIDENCE, `${renamed?.confidence}`);
+    }
     // merged here (several Printavo customers -> one of ours): all proposed to it, exactly one primary, the latest invoice
     const merged = [...new Set(inp.archived.map((a) => a.customer_id))].filter((cid) => [...pidLocal.entries()].filter(([, s]) => s.has(cid) && s.size === 1).length > 1);
     let mergedOk = 0;
