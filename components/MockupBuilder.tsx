@@ -760,9 +760,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return { x: 300 + (leftIn + wIn / 2) * 50, y: (topIn + (wIn * r) / 2) * 50, w: wIn * 50 };
   };
   /** Open the Idea Lab on one side of the shirt: for one imprint (edit its art or typed text), or to make something new. */
-  async function openLab(side: Side, im?: Imprint, tool?: "ideas" | "art") {
+  async function openLab(side: Side, im?: Imprint, tool?: "ideas" | "art" | "ai") {
     if (!customerId) return setMsg("Pick the customer first. Designs are saved to their account.");
-    if (!line?.style) return setMsg("Pick a garment first so the Idea Lab can show the shirt.");
+    if (!line?.style) return setMsg("Pick a garment first so the Design Lab can show the shirt.");
     const shirt = labShirt(side);
     if (!im) return setDesignerFor({ imId: "", side, shirt, start: tool ? { tool } : {} });
     if (qt[im.id]?.text.trim()) return setDesignerFor({ imId: im.id, side, shirt, start: { doc: quickTextDoc(qt[im.id]), name: qt[im.id].text.split("\n")[0].slice(0, 40) } });
@@ -1712,9 +1712,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             </div>
           </div>
           {designerFor && (
-            <div className="sd-modal-back" role="dialog" aria-modal="true" aria-label="Idea Lab">
+            <div className="sd-modal-back" role="dialog" aria-modal="true" aria-label="Design Lab">
               <div className="sd-modal">
-                <ShirtDesigner key={designerFor.side + designerFor.imId} start={designerFor.start} onCanva={showCanva ? () => { const sd = designerFor.side; setDesignerFor(null); void designInCanva(undefined, undefined, sd); } : undefined} shirt={designerFor.shirt} saveLabel={`Save & put on the ${designerFor.side === "sleeve" ? "sleeve" : designerFor.side}`} onClose={() => setDesignerFor(null)}
+                <ShirtDesigner key={designerFor.side + designerFor.imId} start={designerFor.start} onCanva={showCanva ? () => { const sd = designerFor.side; setDesignerFor(null); void designInCanva(undefined, undefined, sd); } : undefined} shirt={designerFor.shirt} saveLabel={`Save & put on the ${designerFor.side === "sleeve" ? "sleeve" : designerFor.side} →`} onClose={() => setDesignerFor(null)}
+                  subtitle={[customers.find((c) => c.id === customerId)?.company || customers.find((c) => c.id === customerId)?.name || "", designerFor.side === "sleeve" ? "Sleeve" : designerFor.side === "back" ? "Back" : "Front"].filter(Boolean).join(" · ")}
                   logos={designs.filter((d) => urls[d.id] && !d.archived_at && !isQuick(d.id)).map((d) => ({ id: d.id, name: designLabel(d), url: urls[d.id] }))}
                   onSave={async (out) => {
                     try {
@@ -1896,7 +1897,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           <div className="mk-qt-row"><span className="sw" style={{ background: q.color.hex }} /><InkSelect value={q.color} onChange={(v) => v && v.name !== "none" && setQ({ color: { name: v.name, hex: v.hex || "#111111" } })} /></div>
                           <button type="button" className="mk-more" onClick={() => openDesigner(im)}>
                             <b>Want to do more with this design?</b>
-                            <span>Add clip art, more lines, outlines or a photo in the Idea Lab →</span>
+                            <span>Add art, more lines, outlines or a photo in the Design Lab →</span>
                           </button>
                         </div>
                       );
@@ -1977,8 +1978,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               {showCanva && <div className="mk-more-or">Or use our simple designer</div>}
               <div className="mk-more-acts">
                 <button type="button" className="mk-more-btn" onClick={addText}><b>Add text</b><span>Type words right onto the {curTab === "sleeve" ? "sleeve" : curTab}</span></button>
-                <button type="button" className="mk-more-btn" onClick={() => openLab(curTab, undefined, "ideas")}><b>Use a preset design</b><span>60 design ideas to start from</span></button>
-                <button type="button" className="mk-more-btn" onClick={() => openLab(curTab, undefined, "art")}><b>Open the Idea Lab</b><span>Clip art, 1,800 fonts, names &amp; numbers</span></button>
+                <button type="button" className="mk-more-btn" onClick={() => openLab(curTab, undefined, "ideas")}><b>Pick a ready-made design</b><span>School, sports, church, business and more</span></button>
+                <button type="button" className="mk-more-btn" onClick={() => openLab(curTab, undefined, "ai")}><b>Create with AI</b><span>Describe it and get print-ready art</span></button>
+                <button type="button" className="mk-more-btn" onClick={() => openLab(curTab, undefined, "art")}><b>Open the Design Lab</b><span>Art, fonts, names &amp; numbers, your logos</span></button>
               </div>
             </div>
           </section>

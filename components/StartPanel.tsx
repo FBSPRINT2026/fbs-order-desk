@@ -31,7 +31,7 @@ export default function StartPanel({ preview, mockupHref, compact = false }: { p
       </div>
       <div className="sp-card">
         <span className="sp-ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.7-2 3-4 3S8.5 4.7 8 3z" /></svg></span>
-        <div><b>Mockup Creator</b><span>Put your logo or your words on a shirt, try colors and sizes, or create something new in the Idea Lab.</span></div>
+        <div><b>Mockup Creator</b><span>Put your logo or your words on a shirt, try colors and sizes, or create something new in the Design Lab.</span></div>
         <Link className="btn" href={mockupHref}>Open Mockup Creator</Link>
       </div>
       {err && <div className="banner" role="alert" style={{ gridColumn: "1 / -1" }}>{err}</div>}

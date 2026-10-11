@@ -18,7 +18,7 @@ const inkName = (hex: string) => INKS.find(([, h]) => h.toLowerCase() === (hex |
 export type DesignerOut = { svg: File; png: File; doc: DesignDoc; name: string; colors: number; inks: string; box: { x: number; y: number; w: number; h: number }; roster?: RosterRow[] };
 /** The real shirt photo behind the artboard: area = the full front/back print area on that photo (photo pixels). */
 export type LabShirt = { src: string; hex: string; area: { x: number; y: number; w: number; h: number }; label: string };
-type Tool = "ideas" | "text" | "art" | "upload" | "names" | "ai";
+type Tool = "ideas" | "text" | "art" | "upload" | "names" | "ai" | "mine";
 
 /* ---------- text ---------- */
 const weightOf = (l: { font: string; weight?: number }) => l.weight ?? fontOf(l.font).weight;
@@ -131,13 +131,15 @@ async function embeddedFonts(list: { font: string; weight: number }[]) {
 }
 
 /* ---------- small pieces ---------- */
+// the Design Lab's tools, in the order of the Oct 11 layout (Nick picked it from the mockup: like RushOrderTees / Bluecotton)
 const RAIL: { k: Tool; label: string; icon: ReactNode }[] = [
-  { k: "ideas", label: "Design ideas", icon: <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z" /></svg> },
-  { k: "text", label: "Add text", icon: <svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6" /></svg> },
-  { k: "art", label: "Clip art", icon: <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z" /></svg> },
+  { k: "ideas", label: "Designs", icon: <svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></svg> },
+  { k: "art", label: "Add Art", icon: <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z" /></svg> },
+  { k: "ai", label: "AI Design", icon: <svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" /></svg> },
+  { k: "text", label: "Add Text", icon: <svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6" /></svg> },
   { k: "upload", label: "Upload", icon: <svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" /></svg> },
-  { k: "names", label: "Names & numbers", icon: <svg viewBox="0 0 24 24"><path d="M4 7h7M4 12h5M4 17h7M15 6l-1 12M19 6l-1 12M13 10h7M12.5 14h7" /></svg> },
-  { k: "ai", label: "AI art", icon: <svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" /></svg> },
+  { k: "names", label: "Names & Numbers", icon: <svg viewBox="0 0 24 24"><path d="M4 7h7M4 12h5M4 17h7M15 6l-1 12M19 6l-1 12M13 10h7M12.5 14h7" /></svg> },
+  { k: "mine", label: "My Designs", icon: <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg> },
 ];
 
 /** Clip art thumbnail (the icon drawn on its own). */
@@ -287,7 +289,7 @@ function FontRow({ f, on, text, onPick, onPeek }: { f: WebFont; on: boolean; tex
 }
 
 /** Template card: the layout drawn small, clip art filled in once it loads. */
-function TemplateCard({ t, onUse }: { t: Template; onUse: () => void }) {
+function TemplateCard({ t, onUse, label, sub }: { t: Template; onUse: () => void; /** a category tile: its name instead of the design's */ label?: string; sub?: string }) {
   const [art, setArt] = useState<Record<number, ClipIcon | null>>({});
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -317,7 +319,8 @@ function TemplateCard({ t, onUse }: { t: Template; onUse: () => void }) {
           return <g key={i} transform={place(L)}><Inner l={L} /></g>;
         })}
       </svg>
-      <span>{t.label}</span>
+      <span>{label || t.label}</span>
+      {sub && <span className="il-tpl-sub">{sub}</span>}
     </button>
   );
 }
@@ -326,22 +329,25 @@ function TemplateCard({ t, onUse }: { t: Template; onUse: () => void }) {
  * The Idea Lab: text, clip art, pictures and design ideas on the shirt's print area.
  * Saving gives back an SVG (the art, fonts built in), a PNG (for mockups and previews), the editable layers and where it sits.
  */
-export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClose, saveLabel = "Save design", onCanva }: {
+export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClose, saveLabel = "Save design", onCanva, subtitle }: {
   start?: { doc?: DesignDoc | null; imageUrl?: string; name?: string; /** where a picture sits now (artboard units: center + width) */ at?: { x: number; y: number; w: number }; /** the panel to open on ("" = none: just the shirt) */ tool?: Tool | "" };
   shirt?: LabShirt | null;
   logos?: { id: string; name: string; url: string }[];
   onSave: (out: DesignerOut) => Promise<string | void> | string | void;
   onClose?: () => void;
   saveLabel?: string;
-  /** "Design with Canva" instead (closes the Idea Lab; the Mockup Creator takes it from there) */
+  /** "Design with Canva" instead (closes the Design Lab; the Mockup Creator takes it from there) */
   onCanva?: () => void;
+  /** under the Design Lab's name: who it's for and where it prints ("for ABC Test Company · Front") */
+  subtitle?: string;
 }) {
   const [layers, setLayersRaw] = useState<Layer[]>(() => start?.doc?.layers?.map((l) => ({ ...l })) || []);
   const [sel, setSel] = useState("");
   const [name, setName] = useState(start?.name || "");
   const [bg, setBg] = useState(shirt?.hex || SHIRT_BG[0].hex);
   const [tool, setTool] = useState<Tool | "">(start?.tool !== undefined ? start.tool : start?.doc || start?.imageUrl ? "" : "ideas");
-  const [tplCat, setTplCat] = useState(TEMPLATE_CATS[0]);
+  // Designs: the category tiles first ("" ), then that category's designs
+  const [tplCat, setTplCat] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [guide, setGuide] = useState(false);
@@ -406,7 +412,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
         const s = await shrink(img);
         const at = start.at, fit = at ? at.w / s.w : Math.min(440 / s.w, 300 / s.h);
         setLayersRaw((ls) => [...ls, { id: uidOf(), kind: "img", src: s.url, w: s.w * fit, h: s.h * fit, x: at ? at.x : W / 2, y: at ? at.y : 230, rot: 0, s: 1, name: start.name || "Logo" }]);
-      } catch { setMsg("Couldn't load that logo into the Idea Lab."); }
+      } catch { setMsg("Couldn't load that logo into the Design Lab."); }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -604,7 +610,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     setMsg("");
     let file: File | null = f;
     if (!/^image\/(png|jpe?g|gif|webp|svg\+xml)$/i.test(f.type)) file = await makePreview(f);
-    if (!file) return setMsg("That file type can't go in the Idea Lab. Try a PNG, JPG, SVG or PDF.");
+    if (!file) return setMsg("That file type can't go in the Design Lab. Try a PNG, JPG, SVG or PDF.");
     await addPicture(await blobToDataUrl(file), f.name.replace(/\.[^.]+$/, ""), /jpe?g/i.test(file.type));
   };
   const addLogo = async (lg: { name: string; url: string }) => {
@@ -708,7 +714,16 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   };
   const hs = (l: Layer) => 9 / (vs * l.s); // handle size in the layer's own units, ~9 screen px
   const curFont = cur?.kind === "text" ? fonts.find((f) => f.f === cur.font) : undefined;
-  const panelTitle: Record<Tool, string> = { ideas: "Design ideas", text: "Add text", art: "Clip art", upload: "Upload a picture", names: "Names & numbers", ai: "AI art" };
+  const panelTitle: Record<Tool, string> = { ideas: "Designs", text: "Add Text", art: "Add Art", upload: "Upload", names: "Names & Numbers", ai: "AI Design", mine: "My Designs" };
+  const panelHint: Record<Tool, string> = {
+    ideas: "Ready-made designs by category. Pick one, then click the words to make them yours.",
+    art: "Mascots, sports, church, trades and more. One-color art prints best.",
+    ai: "Describe it and get print-ready art in seconds.",
+    text: "Words, arched or straight, in shirt-ready fonts.",
+    upload: "Your own logo or picture.",
+    names: "A different name and number on each shirt.",
+    mine: "Logos and designs saved to this account.",
+  };
   /** Add the name or number field (styled once, printed from the list for each shirt). */
   const addRosterField = (k: "name" | "number") => {
     const have = layers.find((l) => l.kind === "text" && l.roster === k);
@@ -720,10 +735,24 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const hasRoster = layers.some((l) => l.kind === "text" && !!l.roster);
   const sizeCounts = SIZES.map((z) => [z, roster.filter((r) => r.size === z).length] as [string, number]).filter(([, n]) => n);
   const [pasteText, setPasteText] = useState("");
+  // AI Design: four print-ready designs from a description (/api/ai/design-art, Recraft vector art)
+  const [aiText, setAiText] = useState(""), [aiStyle, setAiStyle] = useState<"one" | "full">("one");
+  const [aiBusy, setAiBusy] = useState(false), [aiErr, setAiErr] = useState(""), [aiArt, setAiArt] = useState<ClipIcon[]>([]);
+  async function runAi(idea = aiText) {
+    if (aiBusy || idea.trim().length < 3) return;
+    setAiBusy(true); setAiErr(""); setAiArt([]);
+    const r = await fetch("/api/ai/design-art", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: idea, style: aiStyle }) })
+      .then((x) => x.json()).catch(() => ({ error: "Couldn't reach the portal. Try again." })) as { art?: { body: string; vb: [number, number, number, number]; full: boolean }[]; error?: string };
+    setAiBusy(false);
+    if (!r.art?.length) { setAiErr(r.error || "The AI couldn't make that one. Try describing it another way."); return; }
+    const t = Date.now().toString(36);
+    setAiArt(r.art.map((a, i) => ({ id: `ai:${t}${i}`, body: a.body, left: a.vb[0], top: a.vb[1], w: a.vb[2], h: a.vb[3], full: a.full, label: "AI design" })));
+  }
 
   return (
     <div className="sd il">
-      <div className="sd-top">
+      <div className="sd-top il-top">
+        <div className="il-brand"><b>Design Lab</b>{subtitle && <span>{subtitle}</span>}</div>
         <input className="sd-name" type="text" placeholder="Name this design" value={name} onChange={(e) => setName(e.target.value)} aria-label="Design name" />
         <div className="row" style={{ gap: 4 }}>
           <button type="button" className="btn sm ghost" onClick={undo} disabled={!past.current.length} title="Undo (Ctrl+Z)">↶ Undo</button>
@@ -735,9 +764,6 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
         </div>}
         <label className="check il-vintage" title="A worn-in, vintage print look"><input type="checkbox" checked={distress} onChange={(e) => setDistress(e.target.checked)} /> Vintage look</label>
         <span className="il-inkchip" title="Screen printing prices by the number of ink colors">{used.hex.length ? `${used.hex.length} ink color${used.hex.length === 1 ? "" : "s"}` : "No ink colors yet"}{used.pictures ? " + full color" : ""}</span>
-        <span className="spacer" />
-        {onClose && <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>}
-        <button type="button" className="btn primary" disabled={busy} onClick={save}>{busy ? "Saving…" : saveLabel}</button>
       </div>
       {msg && <div className="banner" style={{ margin: "0 0 10px" }}>{msg}</div>}
       {draft && !layers.length && (
@@ -749,17 +775,25 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
       )}
 
       <div className={"il-body" + (tool ? " open" : "")}>
-        <nav className="il-rail" aria-label="Idea Lab tools">
+        <nav className="il-rail" aria-label="Design Lab tools">
           {RAIL.map((r) => <button key={r.k} type="button" className={"il-rail-b" + (tool === r.k ? " on" : "")} onClick={() => setTool(tool === r.k ? "" : r.k)} aria-pressed={tool === r.k}>{r.icon}<span>{r.label}</span></button>)}
         </nav>
         {tool && (
           <aside className="il-panel panel">
-            <div className="il-panel-h"><b>{panelTitle[tool]}</b><button type="button" className="btn icon ghost" aria-label="Close" onClick={() => setTool("")}>✕</button></div>
+            <div className="il-panel-h"><div><b>{panelTitle[tool]}</b><span className="il-panel-hint">{panelHint[tool]}</span></div><button type="button" className="btn icon ghost" aria-label="Close" onClick={() => setTool("")}>✕</button></div>
             {tool === "ideas" && (
               <div className="il-panel-b">
-                <div className="il-subs">{TEMPLATE_CATS.map((c) => <button key={c} type="button" className={"chip" + (tplCat === c ? " on" : "")} onClick={() => setTplCat(c)}>{c}</button>)}</div>
-                <div className="il-tpls">{TEMPLATES.filter((t) => t.cat === tplCat).map((t) => <TemplateCard key={t.key} t={t} onUse={() => applyTemplate(t)} />)}</div>
-                <p className="faint" style={{ fontSize: 12, margin: 0 }}>Pick an idea, then click any words or art to change them.</p>
+                {!tplCat ? (
+                  <div className="il-tpls il-tplcats">
+                    {TEMPLATE_CATS.map((c) => { const ts = TEMPLATES.filter((t) => t.cat === c); return ts.length ? <TemplateCard key={c} t={ts[0]} label={c} sub={`${ts.length} design${ts.length === 1 ? "" : "s"}`} onUse={() => setTplCat(c)} /> : null; })}
+                  </div>
+                ) : (
+                  <>
+                    <button type="button" className="il-back" onClick={() => setTplCat("")}>← All designs / {tplCat}</button>
+                    <div className="il-tpls">{TEMPLATES.filter((t) => t.cat === tplCat).map((t) => <TemplateCard key={t.key} t={t} onUse={() => applyTemplate(t)} />)}</div>
+                    <p className="faint" style={{ fontSize: 12, margin: 0 }}>Pick a design, then click any words or art to change them.</p>
+                  </>
+                )}
               </div>
             )}
             {tool === "text" && (
@@ -776,14 +810,16 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
               <div className="il-panel-b">
                 <label className="btn primary" style={{ cursor: "pointer", justifyContent: "center" }}>Choose a picture…<input type="file" hidden accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.heic,.heif,.tif,.tiff,.bmp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadFile(f); }} /></label>
                 <p className="faint" style={{ fontSize: 12, margin: 0 }}>PNG, JPG, SVG, PDF or AI. White backgrounds on JPGs are removed for you. For the sharpest print, use a large picture or vector art.</p>
-                {logos.length > 0 && (
-                  <>
-                    <div className="lbl">YOUR LOGOS</div>
-                    <div className="sd-logos">
-                      {logos.map((lg) => <button key={lg.id} type="button" className="sd-logo" title={lg.name} onClick={() => addLogo(lg)}><img src={lg.url} alt={lg.name} /><span>{lg.name}</span></button>)}
-                    </div>
-                  </>
-                )}
+                {logos.length > 0 && <button type="button" className="il-back" onClick={() => setTool("mine")}>Your saved logos are in My Designs →</button>}
+              </div>
+            )}
+            {tool === "mine" && (
+              <div className="il-panel-b">
+                {logos.length ? (
+                  <div className="sd-logos">
+                    {logos.map((lg) => <button key={lg.id} type="button" className="sd-logo" title={lg.name} onClick={() => addLogo(lg)}><img src={lg.url} alt={lg.name} /><span>{lg.name}</span></button>)}
+                  </div>
+                ) : <p className="faint" style={{ fontSize: 13, margin: 0 }}>Nothing saved yet. Logos you upload and designs you save show up here, ready to use again.</p>}
               </div>
             )}
             {tool === "names" && (
@@ -823,11 +859,24 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
             )}
             {tool === "ai" && (
               <div className="il-panel-b">
-                <div className="il-soon">
-                  <b>AI art is coming to the Idea Lab</b>
-                  <span>Describe an idea (“a wolf howling at the moon”) and get shirt-ready art in a few seconds. Words are added as real text so they&apos;re always spelled right.</span>
+                <label className="il-ai-l">Describe the design you want
+                  <textarea rows={4} value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder="A fierce bulldog mascot head, mouth open" onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void runAi(); }} />
+                </label>
+                <div className="il-presets" role="group" aria-label="Colors">
+                  {([["one", "One color"], ["full", "Full color"]] as ["one" | "full", string][]).map(([k, t]) => <button key={k} type="button" className={"chip" + (aiStyle === k ? " on" : "")} aria-pressed={aiStyle === k} onClick={() => setAiStyle(k)}>{t}</button>)}
                 </div>
-                <p className="faint" style={{ fontSize: 12, margin: 0 }}>Until then, try Clip art: search “wolf” or “moon”, then add your words with Add text.</p>
+                <p className="faint" style={{ fontSize: 12, margin: 0 }}>{aiStyle === "one" ? "One color screen prints best and costs least. You pick the ink color after." : "Full color prints with DTF (no screens)."} Add your words with Add Text so they&apos;re spelled exactly right.</p>
+                <button type="button" className="btn primary" disabled={aiBusy || aiText.trim().length < 3} onClick={() => void runAi()}>{aiBusy ? "Making 4 designs… (about 20 seconds)" : "Create 4 designs"}</button>
+                {aiErr && <div className="ink-warn" style={{ margin: 0 }}>{aiErr}</div>}
+                {aiArt.length > 0 && (<>
+                  <div className="lbl">PICK ONE FOR THE SHIRT</div>
+                  <div className="il-ai-grid">{aiArt.map((ic) => <button key={ic.id} type="button" className="il-clip il-ai-pick" style={{ color: ink }} title="Put this on the shirt" onClick={() => add(artLayer(ic, ink, 320, W / 2, nextY()))}><ClipThumb ic={ic} /></button>)}</div>
+                  <button type="button" className="btn sm ghost" disabled={aiBusy} onClick={() => void runAi()}>Make 4 more</button>
+                </>)}
+                {!aiArt.length && !aiBusy && (<>
+                  <div className="lbl">TRY ONE</div>
+                  {["Eagle mascot head, fierce, facing left", "Big oak tree with deep roots for a family reunion", "Cross with sunrise rays behind it", "Crossed wrenches with a gear behind them"].map((q) => <button key={q} type="button" className="il-ai-idea" onClick={() => setAiText(q)}>{q}</button>)}
+                </>)}
               </div>
             )}
           </aside>
@@ -837,11 +886,11 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
           {!layers.length && !tool && (
             <div className="il-empty">
               <b>What do you want to make?</b>
-              <div className="row" style={{ gap: 6, justifyContent: "center", flexWrap: "wrap" }}>
-                <button type="button" className="btn sm primary" onClick={() => setTool("ideas")}>Start from a design idea</button>
-                <button type="button" className="btn sm" onClick={() => setTool("text")}>Add text</button>
-                <button type="button" className="btn sm" onClick={() => setTool("art")}>Add clip art</button>
-                <button type="button" className="btn sm" onClick={() => setTool("upload")}>Upload a picture</button>
+              <div className="il-empty-acts">
+                <button type="button" className="btn primary" onClick={() => setTool("ideas")}>Pick a design</button>
+                <button type="button" className="btn" onClick={() => setTool("ai")}>Create with AI</button>
+                <button type="button" className="btn" onClick={() => setTool("upload")}>Upload a logo</button>
+                <button type="button" className="btn" onClick={() => setTool("text")}>Add text</button>
               </div>
               {onCanva && <div className="il-canva"><button type="button" className="btn sm" onClick={onCanva}>Design with Canva</button><span className="mk-canva-pb">Powered by Canva</span></div>}
             </div>
@@ -1036,6 +1085,12 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
             </div>
           )}
         </aside>
+      </div>
+      <div className="il-foot">
+        <span className="faint">{layers.length ? `${layers.length} thing${layers.length === 1 ? "" : "s"} on the design${shirt ? ` · ${shirt.label}` : ""}` : "Nothing on the design yet."}</span>
+        <span className="spacer" />
+        {onClose && <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>}
+        <button type="button" className="btn primary il-save" disabled={busy} onClick={save}>{busy ? "Saving…" : saveLabel}</button>
       </div>
     </div>
   );
