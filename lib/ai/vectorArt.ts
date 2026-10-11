@@ -106,20 +106,42 @@ export function cleanVector(svg: string, style: VectorStyle): VectorArt | null {
   const covers = (b: [number, number, number, number] | null) => !!b && b[0] <= vx + vw * 0.02 && b[1] <= vy + vh * 0.02 && b[2] >= vx + vw * 0.98 && b[3] >= vy + vh * 0.98;
   const SHAPE = /<(path|rect|circle|ellipse|polygon|polyline)\b[^>]*?\/?>/gi;
   let kept = 0;
+  if (style === "one") {
+    // One ink: the drawing becomes a mask, in its own order: dark shapes add ink (white in the mask), light shapes on
+    // top of them cut it away (black in the mask), so the details show as the shirt, like a one-screen print. The ink
+    // itself is one rectangle in currentColor through that mask (Oct 11 test: dropping the light shapes instead left
+    // solid silhouettes, the white details were drawn over black).
+    const tone = (c: [number, number, number] | null) => (c ? (lum(c) > 0.5 ? "#000" : "#fff") : "#fff");
+    const masked = body.replace(SHAPE, (tag) => {
+      const raw = fillOf(tag);
+      if (raw && raw.toLowerCase() === "none") { const st = rgbOf(tag.match(/\sstroke\s*=\s*"([^"]*)"/i)?.[1]); kept++; return tag.replace(/\sstroke\s*=\s*"[^"]*"/i, ` stroke="${tone(st)}"`); }
+      const c = rgbOf(raw);
+      if (c && lum(c) <= 0.5) kept++;
+      return setFill(tag, tone(c)).replace(/\sstroke\s*=\s*"(?!none)[^"]*"/i, ` stroke="${tone(c)}"`);
+    }).replace(/(<g\b[^>]*?)\sfill\s*=\s*"[^"]*"/gi, "$1");
+    if (!kept) return null;
+    // the frame trimmed to the inked shapes (when every one can be measured), so the size on the shirt is the art's
+    let fx = vx, fy = vy, fw = vw, fh = vh;
+    const boxes: ([number, number, number, number] | null)[] = [];
+    body.replace(SHAPE, (tag) => { const c = rgbOf(fillOf(tag)); if (c && lum(c) <= 0.5) boxes.push(roughBox(tag)); return tag; });
+    if (boxes.length && boxes.every(Boolean)) {
+      const bs = boxes as [number, number, number, number][];
+      const x0 = Math.max(vx, Math.min(...bs.map((b) => b[0]))), y0 = Math.max(vy, Math.min(...bs.map((b) => b[1])));
+      const x1 = Math.min(vx + vw, Math.max(...bs.map((b) => b[2]))), y1 = Math.min(vy + vh, Math.max(...bs.map((b) => b[3])));
+      const pad = Math.max(vw, vh) * 0.01;
+      if (x1 > x0 && y1 > y0 && (x1 - x0) * (y1 - y0) < vw * vh * 0.97) { fx = Math.max(vx, x0 - pad); fy = Math.max(vy, y0 - pad); fw = Math.min(vx + vw, x1 + pad) - fx; fh = Math.min(vy + vh, y1 + pad) - fy; }
+    }
+    body = `<defs><mask id="ink" maskUnits="userSpaceOnUse" x="${vx}" y="${vy}" width="${vw}" height="${vh}"><rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" fill="#000"/>${masked}</mask></defs><rect x="${fx}" y="${fy}" width="${fw}" height="${fh}" fill="currentColor" mask="url(#ink)"/>`;
+    return { body, vb: [fx, fy, fw, fh], full: false };
+  }
   body = body.replace(SHAPE, (tag) => {
     const c = rgbOf(fillOf(tag));
     const light = c ? lum(c) > 0.82 : false;
-    if (style === "one") {
-      if (!c) { if (/\sfill\s*=\s*"none"/i.test(tag)) { kept++; return tag.replace(/\sstroke\s*=\s*"[^"]*"/i, ' stroke="currentColor"'); } kept++; return setFill(tag, "currentColor"); }
-      if (lum(c) > 0.5) return ""; // light: the shirt shows through
-      kept++; return setFill(tag, "currentColor").replace(/\sstroke\s*=\s*"(?!none)[^"]*"/i, ' stroke="currentColor"');
-    }
     if (light && covers(roughBox(tag))) return ""; // the white background
     kept++; return tag;
   });
-  if (style === "one") body = body.replace(/(<g\b[^>]*?)\sfill\s*=\s*"[^"]*"/gi, "$1");
   if (!kept) return null;
-  return { body: body.trim(), vb: [vx, vy, vw, vh], full: style !== "one" };
+  return { body: body.trim(), vb: [vx, vy, vw, vh], full: true };
 }
 
 /** `n` designs for one idea, made side by side; each cleaned. Failed ones are left out (the first reason is kept). */
