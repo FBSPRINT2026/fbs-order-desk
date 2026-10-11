@@ -6099,3 +6099,8 @@ body.ibx2-dragx iframe,body.ibx2-dragy iframe{pointer-events:none}
 .il-ai-idea{border:1px solid var(--line);background:var(--surface-2);border-radius:9px;padding:8px 10px;text-align:left;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink)}
 .il-ai-idea:hover{border-color:var(--accent)}
 @media (max-width:760px){.sd-top.il-top{border-radius:10px}.il-top .il-brand{width:100%}.il-foot .il-save{flex:1;justify-content:center}}
+.il-ai-inks{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.il-ai-ink{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 10px 4px 5px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink)}
+.il-ai-ink i{width:16px;height:16px;border-radius:50%;border:1px solid rgba(0,0,0,.2);flex:none}
+.il-ai-ink span{color:var(--ink-3);font-size:11px}
+.il-ai-ink.on,.il-ai-ink:hover{border-color:var(--accent)}

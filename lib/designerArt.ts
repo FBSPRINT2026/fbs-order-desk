@@ -75,7 +75,8 @@ export type TextLayer = { kind: "text"; text: string; font: string; /** font wei
   /** line alignment for several lines of text */ align?: "left" | "center" | "right";
   /** a names & numbers field: filled from the roster for each shirt */ roster?: "name" | "number" };
 /** Clip art: built-in art by key, or library art ("set:name") with its drawing saved in the layer so designs never break. */
-export type ArtLayer = { kind: "art"; art: string; color: string; w: number; body?: string; /** viewBox: left, top, width, height */ vb?: [number, number, number, number]; /** full-color art can't be recolored */ full?: boolean; label?: string };
+export type ArtLayer = { kind: "art"; art: string; color: string; w: number; body?: string; /** viewBox: left, top, width, height */ vb?: [number, number, number, number]; /** full-color art can't be recolored */ full?: boolean; label?: string;
+  /** spot-color art (AI Design, 2–4 inks): its ink colors, counted as inks (not full color) and each one swappable */ spots?: string[] };
 export type ImgLayer = { kind: "img"; src: string; w: number; h: number; name?: string; /** the other version (with / without background) */ alt?: string; knocked?: boolean };
 export type Layer = { id: string; x: number; y: number; rot: number; s: number; hidden?: boolean; /** mirrored left-right */ flip?: boolean; /** can't be moved by accident */ lock?: boolean } & (TextLayer | ArtLayer | ImgLayer);
 /** A layer before it gets its id (keeps the text / clip art / picture fields apart). */

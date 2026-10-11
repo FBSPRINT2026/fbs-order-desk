@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { recraftConfigured, vectorDesigns, type VectorStyle } from "@/lib/ai/vectorArt";
+import { recraftConfigured, vectorDesigns, type Ink, type VectorStyle } from "@/lib/ai/vectorArt";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,17 +19,20 @@ export async function POST(req: Request) {
   const v = await getViewer();
   if (!v.user) return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
   if (!recraftConfigured()) return NextResponse.json({ error: "AI Design isn't connected yet. The shop is setting it up.", setup: true }, { status: 503 });
-  const b = (await req.json().catch(() => ({}))) as { prompt?: string; style?: string };
+  // style: one color, 2–4 spot colors ("spot" + colors), or full color; inks: colors the customer picked (school colors)
+  const b = (await req.json().catch(() => ({}))) as { prompt?: string; style?: string; colors?: number; inks?: Ink[] };
   const prompt = String(b.prompt || "").trim().slice(0, 600);
-  const style: VectorStyle = b.style === "full" ? "full" : "one";
+  const style: VectorStyle = b.style === "full" ? "full" : b.style === "spot" ? "spot" : "one";
+  const colors = style === "spot" ? Math.max(2, Math.min(4, Math.round(Number(b.colors) || 2))) : 1;
+  const inks: Ink[] = (Array.isArray(b.inks) ? b.inks : []).filter((k) => /^#[0-9a-f]{6}$/i.test(String(k?.hex || ""))).slice(0, 4).map((k) => ({ hex: String(k.hex), name: String(k.name || "").slice(0, 40) }));
   if (prompt.length < 3) return NextResponse.json({ error: "Describe the design you want first." }, { status: 400 });
   const admin = createAdminClient();
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
   const { data: used } = await admin.from("ai_art_log").select("images").eq("user_id", v.user.id).gte("created_at", since);
   const n = 4, made = (used || []).reduce((a, r) => a + (r.images || 0), 0), cap = v.isStaff ? DAILY.staff : DAILY.customer;
   if (made + n > cap) return NextResponse.json({ error: `That's the limit for today (${cap} AI designs). Try again tomorrow, or ask us and we'll design it for you.` }, { status: 429 });
-  const r = await vectorDesigns(prompt, style, n);
-  await admin.from("ai_art_log").insert({ user_id: v.user.id, is_staff: v.isStaff, prompt, style, images: n, ok: r.art.length > 0, error: r.error || null });
+  const r = await vectorDesigns(prompt, style, n, colors, inks);
+  await admin.from("ai_art_log").insert({ user_id: v.user.id, is_staff: v.isStaff, prompt, style: style === "spot" ? `${colors} colors${inks.length ? ` (${inks.map((k) => k.name || k.hex).join(", ")})` : ""}` : style, images: n, ok: r.art.length > 0, error: r.error || null });
   if (!r.art.length) return NextResponse.json({ error: `The AI couldn't make that one: ${r.error || "try describing it another way."}` }, { status: 502 });
   return NextResponse.json({ art: r.art, left: Math.max(0, cap - made - n) });
 }

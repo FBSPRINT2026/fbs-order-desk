@@ -639,7 +639,7 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
     const hex = new Set<string>(); let pictures = false;
     layers.filter((l) => !l.hidden).forEach((l) => {
       if (l.kind === "text") { hex.add(l.color.toUpperCase()); if (l.strokeW && l.stroke) hex.add(l.stroke.toUpperCase()); if (l.shadow) hex.add(l.shadow.toUpperCase()); }
-      else if (l.kind === "art") { if (l.full) pictures = true; else hex.add(l.color.toUpperCase()); }
+      else if (l.kind === "art") { if (l.full && l.spots?.length) l.spots.forEach((h) => hex.add(h.toUpperCase())); else if (l.full) pictures = true; else hex.add(l.color.toUpperCase()); }
       else pictures = true;
     });
     return { hex: [...hex], pictures };
@@ -735,18 +735,22 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
   const hasRoster = layers.some((l) => l.kind === "text" && !!l.roster);
   const sizeCounts = SIZES.map((z) => [z, roster.filter((r) => r.size === z).length] as [string, number]).filter(([, n]) => n);
   const [pasteText, setPasteText] = useState("");
+  const [spotEdit, setSpotEdit] = useState("");
   // AI Design: four print-ready designs from a description (/api/ai/design-art, Recraft vector art)
-  const [aiText, setAiText] = useState(""), [aiStyle, setAiStyle] = useState<"one" | "full">("one");
-  const [aiBusy, setAiBusy] = useState(false), [aiErr, setAiErr] = useState(""), [aiArt, setAiArt] = useState<ClipIcon[]>([]);
+  // how many ink colors (1–4, or 0 = full color) and, optionally, which ones (school colors: Red and Navy)
+  const [aiText, setAiText] = useState(""), [aiN, setAiN] = useState(1), [aiInks, setAiInks] = useState<string[]>([]), [aiPick, setAiPick] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false), [aiErr, setAiErr] = useState(""), [aiArt, setAiArt] = useState<(ClipIcon & { spots?: string[] })[]>([]);
   async function runAi(idea = aiText) {
     if (aiBusy || idea.trim().length < 3) return;
     setAiBusy(true); setAiErr(""); setAiArt([]);
-    const r = await fetch("/api/ai/design-art", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: idea, style: aiStyle }) })
-      .then((x) => x.json()).catch(() => ({ error: "Couldn't reach the portal. Try again." })) as { art?: { body: string; vb: [number, number, number, number]; full: boolean }[]; error?: string };
+    const style = aiN === 1 ? "one" : aiN === 0 ? "full" : "spot";
+    const inks = aiInks.map((h) => ({ hex: h, name: inkName(h) }));
+    const r = await fetch("/api/ai/design-art", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: idea, style, colors: aiN, inks }) })
+      .then((x) => x.json()).catch(() => ({ error: "Couldn't reach the portal. Try again." })) as { art?: { body: string; vb: [number, number, number, number]; full: boolean; spots?: string[] }[]; error?: string };
     setAiBusy(false);
     if (!r.art?.length) { setAiErr(r.error || "The AI couldn't make that one. Try describing it another way."); return; }
     const t = Date.now().toString(36);
-    setAiArt(r.art.map((a, i) => ({ id: `ai:${t}${i}`, body: a.body, left: a.vb[0], top: a.vb[1], w: a.vb[2], h: a.vb[3], full: a.full, label: "AI design" })));
+    setAiArt(r.art.map((a, i) => ({ id: `ai:${t}${i}`, body: a.body, left: a.vb[0], top: a.vb[1], w: a.vb[2], h: a.vb[3], full: a.full, label: "AI design", spots: a.spots })));
   }
 
   return (
@@ -862,15 +866,22 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
                 <label className="il-ai-l">Describe the design you want
                   <textarea rows={4} value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder="A fierce bulldog mascot head, mouth open" onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void runAi(); }} />
                 </label>
-                <div className="il-presets" role="group" aria-label="Colors">
-                  {([["one", "One color"], ["full", "Full color"]] as ["one" | "full", string][]).map(([k, t]) => <button key={k} type="button" className={"chip" + (aiStyle === k ? " on" : "")} aria-pressed={aiStyle === k} onClick={() => setAiStyle(k)}>{t}</button>)}
+                <div className="lbl">HOW MANY COLORS</div>
+                <div className="il-presets" role="group" aria-label="How many colors">
+                  {([[1, "1 color"], [2, "2 colors"], [3, "3 colors"], [4, "4 colors"], [0, "Full color"]] as [number, string][]).map(([k, t]) => <button key={k} type="button" className={"chip" + (aiN === k ? " on" : "")} aria-pressed={aiN === k} onClick={() => { setAiN(k); if (k) setAiInks((xs) => xs.slice(0, k)); }}>{t}</button>)}
                 </div>
-                <p className="faint" style={{ fontSize: 12, margin: 0 }}>{aiStyle === "one" ? "One color screen prints best and costs least. You pick the ink color after." : "Full color prints with DTF (no screens)."} Add your words with Add Text so they&apos;re spelled exactly right.</p>
+                <div className="lbl">YOUR COLORS <span className="faint" style={{ fontWeight: 400 }}>optional · school or team colors</span></div>
+                <div className="il-ai-inks">
+                  {aiInks.map((h) => <button key={h} type="button" className="il-ai-ink" title={`Remove ${inkName(h) || h}`} onClick={() => setAiInks((xs) => xs.filter((x) => x !== h))}><i style={{ background: h }} />{inkName(h) || h}<span aria-hidden>✕</span></button>)}
+                  {(aiN === 0 ? aiInks.length < 4 : aiInks.length < aiN) && <button type="button" className="btn sm" onClick={() => setAiPick(!aiPick)} aria-expanded={aiPick}>+ Pick a color</button>}
+                </div>
+                {aiPick && swatches("", (h) => { setAiInks((xs) => (xs.includes(h) ? xs : [...xs, h].slice(0, aiN || 4))); setAiPick(false); })}
+                <p className="faint" style={{ fontSize: 12, margin: 0 }}>{aiN === 1 ? "One color prints best and costs least." : aiN === 0 ? "Full color prints with DTF (no screens)." : `${aiN} ink colors, one screen each.`} {aiInks.length ? "The design is made in your colors." : aiN === 0 ? "" : "Pick your colors, or let the AI choose and change them after."} Add your words with Add Text so they&apos;re spelled exactly right.</p>
                 <button type="button" className="btn primary" disabled={aiBusy || aiText.trim().length < 3} onClick={() => void runAi()}>{aiBusy ? "Making 4 designs… (about 20 seconds)" : "Create 4 designs"}</button>
                 {aiErr && <div className="ink-warn" style={{ margin: 0 }}>{aiErr}</div>}
                 {aiArt.length > 0 && (<>
                   <div className="lbl">PICK ONE FOR THE SHIRT</div>
-                  <div className="il-ai-grid">{aiArt.map((ic) => <button key={ic.id} type="button" className="il-clip il-ai-pick" style={{ color: ink }} title="Put this on the shirt" onClick={() => add(artLayer(ic, ink, 320, W / 2, nextY()))}><ClipThumb ic={ic} /></button>)}</div>
+                  <div className="il-ai-grid">{aiArt.map((ic) => <button key={ic.id} type="button" className="il-clip il-ai-pick" style={{ color: ink }} title="Put this on the shirt" onClick={() => add({ ...artLayer(ic, aiN === 1 && aiInks[0] ? aiInks[0] : ink, 320, W / 2, nextY()), ...(ic.spots?.length ? { spots: ic.spots } : {}) } as LayerInit)}><ClipThumb ic={ic} /></button>)}</div>
                   <button type="button" className="btn sm ghost" disabled={aiBusy} onClick={() => void runAi()}>Make 4 more</button>
                 </>)}
                 {!aiArt.length && !aiBusy && (<>
@@ -1022,7 +1033,18 @@ export default function ShirtDesigner({ start, logos = [], shirt, onSave, onClos
                   {swatches(cur.color, (h) => edit(cur.id, { color: h }), true)}
                 </>
               )}
-              {cur.kind === "art" && cur.full && <div className="faint" style={{ fontSize: 12 }}>Full-color art prints digitally (DTF). For screen printing, pick a one-color version in Clip art.</div>}
+              {cur.kind === "art" && cur.full && cur.spots?.length ? (
+                <>
+                  <div className="lbl">INK COLORS <span className="faint" style={{ fontWeight: 400 }}>{cur.spots.length} · click one to change it</span></div>
+                  <div className="il-ai-inks">{cur.spots.map((h) => <button key={h} type="button" className={"il-ai-ink" + (spotEdit === h ? " on" : "")} onClick={() => setSpotEdit(spotEdit === h ? "" : h)}><i style={{ background: h }} />{inkName(h) || h}</button>)}</div>
+                  {spotEdit && cur.spots.includes(spotEdit) && swatches(spotEdit, (h) => {
+                    const to = h.toUpperCase(), from = spotEdit.toUpperCase();
+                    if (to === from || cur.spots!.some((x) => x.toUpperCase() === to)) { setSpotEdit(""); return; }
+                    edit(cur.id, { body: (cur.body || "").replace(new RegExp(from.replace("#", "#?"), "gi"), to), spots: cur.spots!.map((x) => (x.toUpperCase() === from ? to : x)) });
+                    setSpotEdit("");
+                  })}
+                </>
+              ) : cur.kind === "art" && cur.full ? <div className="faint" style={{ fontSize: 12 }}>Full-color art prints digitally (DTF). For screen printing, pick a one-color version in Add Art, or make 1–4 color art in AI Design.</div> : null}
               {cur.kind === "text" && (
                 <>
                   <label className="sd-range">Curve <input type="range" min={-350} max={350} step={5} value={cur.arc} onChange={(e) => edit(cur.id, { arc: +e.target.value }, "arc")} /><span>{cur.arc ? `${cur.arc > 0 ? "arch" : "smile"} ${Math.abs(cur.arc)}°` : "none"}</span></label>

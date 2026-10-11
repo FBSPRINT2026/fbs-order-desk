@@ -9,27 +9,34 @@ import "server-only";
  * Anything that isn't plain shapes (scripts, links, embedded pictures, styles) is taken out.
  */
 
-export type VectorStyle = "one" | "full";
-export type VectorArt = { body: string; vb: [number, number, number, number]; full: boolean };
+export type VectorStyle = "one" | "spot" | "full";
+/** spots: the ink colors in spot-color art (2–4 colors), so the Design Lab counts and swaps them */
+export type VectorArt = { body: string; vb: [number, number, number, number]; full: boolean; spots?: string[] };
+export type Ink = { hex: string; name?: string };
 
 const API = "https://external.api.recraft.ai/v1/images/generations";
 export const recraftConfigured = () => !!process.env.RECRAFT_API_TOKEN?.trim();
 
-function promptFor(idea: string, style: VectorStyle) {
+const inkWords = (inks: Ink[]) => inks.map((k) => (k.name ? `${k.name} (${k.hex.toUpperCase()})` : k.hex.toUpperCase())).join(", ");
+function promptFor(idea: string, style: VectorStyle, n: number, inks: Ink[]) {
   const base = idea.trim().replace(/\s+/g, " ").slice(0, 600);
-  return style === "one"
-    ? `${base}. Bold t-shirt screen print graphic in a single solid black ink only, no gradients, no gray tones, no shading, clean thick shapes, isolated on a plain white background.`
-    : `${base}. Bold colorful t-shirt graphic, flat vector illustration with a few solid colors, clean shapes, isolated on a plain white background.`;
+  if (style === "one") return `${base}. Bold t-shirt screen print graphic in a single solid black ink only, no gradients, no gray tones, no shading, clean thick shapes, isolated on a plain white background.`;
+  if (style === "spot") return `${base}. Bold t-shirt screen print graphic using exactly ${n} flat solid ink colors${inks.length ? `: ${inkWords(inks)}` : ""}, no gradients, no shading, no other colors, clean thick shapes, isolated on a plain white background.`;
+  return `${base}. Bold colorful t-shirt graphic, flat vector illustration with solid colors${inks.length ? ` built around ${inkWords(inks)}` : ""}, clean shapes, isolated on a plain white background.`;
 }
+const rgbArr = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 
-/** One picture from Recraft: the SVG text. */
-async function generateOne(prompt: string): Promise<string> {
-  const r = await fetch(API, {
+/** One picture from Recraft: the SVG text. Colors asked for go to Recraft as its palette too (and the prompt says them);
+ *  if Recraft won't take a palette for this model, it's asked again without one. */
+async function generateOne(prompt: string, inks: Ink[] = []): Promise<string> {
+  const call = (withColors: boolean) => fetch(API, {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.RECRAFT_API_TOKEN!.trim()}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, model: process.env.RECRAFT_MODEL?.trim() || "recraftv4_1_vector" }),
+    body: JSON.stringify({ prompt, model: process.env.RECRAFT_MODEL?.trim() || "recraftv4_1_vector", ...(withColors ? { controls: { colors: inks.map((k) => ({ rgb: rgbArr(k.hex) })) } } : {}) }),
     cache: "no-store", signal: AbortSignal.timeout(90_000),
   });
+  let r = await call(inks.length > 0);
+  if (!r.ok && inks.length && r.status >= 400 && r.status < 500) r = await call(false);
   const j = (await r.json().catch(() => ({}))) as { data?: { url?: string; b64_json?: string }[]; message?: string; code?: string; error?: { message?: string } };
   if (!r.ok) throw new Error(j.message || j.error?.message || `Recraft: HTTP ${r.status}`);
   const u = j.data?.[0]?.url;
@@ -85,7 +92,7 @@ function roughBox(tag: string): [number, number, number, number] | null {
 }
 
 /** Clean Recraft's SVG for the Design Lab (see the top of this file). */
-export function cleanVector(svg: string, style: VectorStyle): VectorArt | null {
+export function cleanVector(svg: string, style: VectorStyle, opts: { n?: number; inks?: Ink[] } = {}): VectorArt | null {
   const root = svg.match(/<svg\b[^>]*>/i)?.[0];
   if (!root) return null;
   let vb = root.match(/viewBox\s*=\s*"([^"]+)"/i)?.[1]?.trim().split(/[\s,]+/).map(Number) as number[] | undefined;
@@ -141,16 +148,65 @@ export function cleanVector(svg: string, style: VectorStyle): VectorArt | null {
     kept++; return tag;
   });
   if (!kept) return null;
-  return { body: body.trim(), vb: [vx, vy, vw, vh], full: true };
+  if (style !== "spot" || !opts.n) return { body: body.trim(), vb: [vx, vy, vw, vh], full: true };
+  return spotColors(body.trim(), [vx, vy, vw, vh], opts.n, opts.inks || []);
+}
+
+/* ---------- spot colors: exactly n inks ---------- */
+const hex2 = (c: [number, number, number]) => "#" + c.map((x) => Math.round(x).toString(16).padStart(2, "0")).join("").toUpperCase();
+function lab(c: [number, number, number]) {
+  const f = (v: number) => { v /= 255; return v > 0.04045 ? ((v + 0.055) / 1.055) ** 2.4 : v / 12.92; };
+  const [r, g, b] = c.map(f);
+  const x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047, y = r * 0.2126 + g * 0.7152 + b * 0.0722, z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
+  const t = (v: number) => (v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116);
+  return [116 * t(y) - 16, 500 * (t(x) - t(y)), 200 * (t(y) - t(z))];
+}
+const dE = (a: [number, number, number], b: [number, number, number]) => { const p = lab(a), q = lab(b); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); };
+
+/**
+ * Spot-color art (2–4 inks): every shape's color is snapped to one of exactly `n` inks, the customer's when they
+ * picked them (school colors), else the art's own most-used colors. Near-white shapes are knockouts (the shirt shows
+ * through, cut with a mask in drawing order) unless white is one of the inks.
+ */
+function spotColors(body: string, vb: [number, number, number, number], n: number, inks: Ink[]): VectorArt | null {
+  const SHAPE = /<(path|rect|circle|ellipse|polygon|polyline)\b[^>]*?\/?>/gi;
+  const counts = new Map<string, { c: [number, number, number]; k: number }>();
+  body.replace(SHAPE, (tag) => { const c = rgbOf(fillOf(tag)); if (c && lum(c) <= 0.9) { const h = hex2(c); const e = counts.get(h) || { c, k: 0 }; e.k++; counts.set(h, e); } return tag; });
+  const targets: [number, number, number][] = inks.slice(0, n).map((k) => rgbArr(k.hex) as [number, number, number]);
+  for (const e of [...counts.values()].sort((a, b) => b.k - a.k)) {
+    if (targets.length >= n) break;
+    if (targets.every((t) => dE(t, e.c) > 25)) targets.push(e.c);
+  }
+  if (!targets.length) return null;
+  const whiteInk = targets.some((t) => lum(t) > 0.9);
+  const near = (c: [number, number, number]) => targets.reduce((best, t) => (dE(t, c) < dE(best, c) ? t : best), targets[0]);
+  const used = new Set<string>();
+  let cut = false;
+  const mask: string[] = [], art: string[] = [];
+  body.replace(SHAPE, (tag) => {
+    const c = rgbOf(fillOf(tag));
+    if (c && lum(c) > 0.9 && !whiteInk) { cut = true; mask.push(setFill(tag, "#000")); return tag; } // a knockout
+    const t = c ? near(c) : targets[0];
+    const h = hex2(t); used.add(h);
+    mask.push(setFill(tag, "#fff"));
+    art.push(setFill(tag, h).replace(/\sstroke\s*=\s*"(?!none)[^"]*"/i, ` stroke="${h}"`));
+    return tag;
+  });
+  if (!art.length) return null;
+  const [vx, vy, vw, vh] = vb;
+  const out = cut
+    ? `<defs><mask id="cut" maskUnits="userSpaceOnUse" x="${vx}" y="${vy}" width="${vw}" height="${vh}"><rect x="${vx}" y="${vy}" width="${vw}" height="${vh}" fill="#000"/>${mask.join("")}</mask></defs><g mask="url(#cut)">${art.join("")}</g>`
+    : art.join("");
+  return { body: out, vb, full: true, spots: [...used] };
 }
 
 /** `n` designs for one idea, made side by side; each cleaned. Failed ones are left out (the first reason is kept). */
-export async function vectorDesigns(idea: string, style: VectorStyle, n = 4): Promise<{ art: VectorArt[]; error: string }> {
-  const prompt = promptFor(idea, style);
-  const got = await Promise.allSettled(Array.from({ length: n }, () => generateOne(prompt)));
+export async function vectorDesigns(idea: string, style: VectorStyle, n = 4, colors = 1, inks: Ink[] = []): Promise<{ art: VectorArt[]; error: string }> {
+  const prompt = promptFor(idea, style, colors, inks);
+  const got = await Promise.allSettled(Array.from({ length: n }, () => generateOne(prompt, style === "one" ? [] : inks)));
   const art: VectorArt[] = []; let error = "";
   for (const g of got) {
-    if (g.status === "fulfilled") { const a = cleanVector(g.value, style); if (a) art.push(a); else error ||= "One design came back empty after cleaning."; }
+    if (g.status === "fulfilled") { const a = cleanVector(g.value, style, { n: colors, inks }); if (a) art.push(a); else error ||= "One design came back empty after cleaning."; }
     else error ||= g.reason instanceof Error ? g.reason.message : String(g.reason);
   }
   return { art, error };
