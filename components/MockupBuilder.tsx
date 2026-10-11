@@ -59,6 +59,15 @@ const colorRows = (pt: Paint) => {
 const sharedInks = (pt?: Paint) => { if (!pt) return []; const n = pt.sources.map((x) => pt.map[x.hex]?.name).filter((x) => x && x !== "none") as string[]; return [...new Set(n.filter((x, i) => n.indexOf(x) !== i))]; };
 
 
+/**
+ * Design with Canva in the Mockup Creator and the Idea Lab: off (Oct 11, Nick: "just isn't working like I thought,
+ * put it on the back burner"). Everything behind it stays (the blank-photo canvas, taking the shirt and page
+ * background out of Canva's PDF, putting the art where it was drawn: lib/canva/*, app/api/canva/*). Set to true to
+ * bring the buttons back. Canva links in emails (Inbox, Get the design from Canva) and Settings → Canva are separate
+ * and still on.
+ */
+const CANVA_IN_MOCKUP = false;
+
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
     const im = new Image();
@@ -1266,9 +1275,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [canvaPlace, setCanvaPlace] = useState<{ d: Design; side: Side; imId: string; session: string; fileUrl: string; previewUrl: string; backdrop?: CanvaBackdrop | null } | null>(null);
   const [canvaAsk, setCanvaAsk] = useState(false);
   const loadCanva = () => fetch("/api/canva/status", { cache: "no-store" }).then((r) => r.json()).then((j: CanvaSt & { error?: string }) => { if (!j.error && j.me) setCanva(j); }).catch(() => null);
-  useEffect(() => { void loadCanva(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  /** the Canva doorway shows for customers (their own login, not a staff preview) and for staff */
-  const showCanva = !!canva?.configured && (portal ? !canva.isStaff : canva.isStaff);
+  useEffect(() => { if (CANVA_IN_MOCKUP) void loadCanva(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** the Canva doorway shows for customers (their own login, not a staff preview) and for staff; off for now (CANVA_IN_MOCKUP) */
+  const showCanva = CANVA_IN_MOCKUP && !!canva?.configured && (portal ? !canva.isStaff : canva.isStaff);
   /** ready to open Canva now: their own Canva account, or (staff) the shop's */
   const canvaReady = showCanva && !!canva && (canva.me.connected || (canva.isStaff && !!canva.connected));
   type CanvaTrip = { session?: { id: string; status: string; error: string | null; side: string; im_id: string; backdrop?: CanvaBackdrop | null }; design?: Design | null; fileUrl?: string; previewUrl?: string; error?: string };
