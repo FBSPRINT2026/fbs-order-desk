@@ -13,7 +13,7 @@ import { personName, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
-import { Attachments, box as mailBox, boxPost, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { Attachments, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -502,7 +502,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
     const html = m.html.replace(/<script[\s\S]*?<\/script>/gi, "");
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (x) => x + head) : head + html;
   }, [m?.html]);
-  const fit = () => { const d = ref.current?.contentDocument; if (d?.body) setH(Math.min(20000, Math.max(120, d.documentElement.scrollHeight + 4))); };
+  const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(120, d.documentElement.scrollHeight + 4))); };
   const move = async (to: string, label: string) => {
     setBusy("mv"); setErr("");
     try { await boxPost({ do: "move", path: "INBOX", uid: i.uid, to }); done(label); }
@@ -948,7 +948,7 @@ function EmailBody({ x }: { x: Act }) {
     return () => { live = false; };
   }, [x.id, x.meta?.html, x.meta?.inline]);
   // the frame grows to the whole email (the pane scrolls, not a box inside it)
-  const fit = () => { const d = ref.current?.contentDocument; if (d?.body) setH(Math.min(20000, Math.max(120, d.documentElement.scrollHeight + 4))); };
+  const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(120, d.documentElement.scrollHeight + 4))); };
   if (!x.meta?.html || plain || doc == null) return (
     <div>
       <PlainBody x={x} />

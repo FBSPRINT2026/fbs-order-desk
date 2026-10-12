@@ -252,6 +252,18 @@ export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | n
  * the left, organize in the middle), then the subject, then who it's from (to / cc fold away), the AI's one-line read
  * and small tags. On a phone the toolbar keeps its icons and drops the words for everything but Reply.
  */
+/**
+ * An email wider than its frame (a fixed-width newsletter or a big table on a phone) is scaled down to fit, like the
+ * iPhone's Mail app, instead of making you scroll sideways (Oct 12, Nick).
+ */
+export function fitWidth(f: HTMLIFrameElement, d: Document) {
+  const b = d.body;
+  if (!b) return;
+  b.style.zoom = "";
+  const w = f.clientWidth, sw = Math.max(d.documentElement.scrollWidth, b.scrollWidth);
+  if (w > 0 && sw > w + 2) b.style.zoom = String(Math.max(0.35, w / sw));
+}
+
 export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEmail, to, cc, date, summary, listOpen, toggleList, back }: {
   toolbar: React.ReactNode; /** phones: the bottom bar's actions */ phone?: PhoneActs; subject: string; /** the sender's company, beside their name */ org?: string; tags?: React.ReactNode; fromName: string; fromEmail: string; to?: string; cc?: string; date: string; summary?: string;
   listOpen: boolean; toggleList: () => void; back?: () => void;
@@ -304,7 +316,7 @@ export function MailFrame({ html, text }: { html: string; text: string }) {
     const x = html.replace(/<script[\s\S]*?<\/script>/gi, "");
     return /<head[^>]*>/i.test(x) ? x.replace(/<head[^>]*>/i, (m) => m + HEAD) : HEAD + x;
   }, [html]);
-  const fit = () => { const d = ref.current?.contentDocument; if (d?.body) setH(Math.min(20000, Math.max(80, d.documentElement.scrollHeight + 4))); };
+  const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(80, d.documentElement.scrollHeight + 4))); };
   if (!doc || plain) return <div className="lm-text">{text || "(no text)"}{doc && <div><button type="button" className="btn sm ghost" onClick={() => setPlain(false)}>Show as in Outlook</button></div>}</div>;
   return (
     <div className="ibx-html">
