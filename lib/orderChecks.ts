@@ -35,6 +35,8 @@ export function checkOrder(o: Order, c: OrderCalc, cust: Customer | undefined, p
       if (!l.color) add("medium", `${name}: ${l.style || "a garment"} has no color.`);
     });
     if (!g.imprints.length && g.lines.some((l) => Object.keys(l.sizes || {}).length)) add("medium", `${name}: no imprints.`);
+    const pdn = g.imprints.filter((d) => d.confirm && (d.confirm.size || d.confirm.ink)).length;
+    if (open && pdn) add("medium", `${name}: Reorder - Production Details Needed on ${pdn} print${pdn === 1 ? "" : "s"} (Production → Production Details).`);
     g.imprints.forEach((d) => {
       const where = `${name} ${d.location || "imprint"}`;
       if (!d.design_id && LATE_STAGE.includes(o.status)) add("medium", `${where}: no logo attached.`);

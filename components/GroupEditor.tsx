@@ -36,6 +36,8 @@ type Props = {
   hidePrices?: boolean;
   /** don't gray out imprints waiting on a mockup (customer requests come with their own details) */
   noLock?: boolean;
+  /** a reorder print waiting on production details: where production confirms it */
+  detailsHref?: string;
 };
 
 /** Screen prints: the inks listed must match the number of colors chosen. */
@@ -51,7 +53,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock }: Props) {
+export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   const [askSkip, setAskSkip] = useState(false);
   const [blockMsg, setBlockMsg] = useState("");
   const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
@@ -224,7 +226,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                       ? <select aria-label="Number of colors" value={d.method === "embroidery" ? Math.min(d.colors, 15) : d.colors} onChange={(e) => update((x) => { x.imprints[di].colors = +e.target.value; })}>{(d.method === "embroidery" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((n) => <option key={n} value={n}>{n}</option>)}{d.method === "screen" && <option value={FULL_COLOR}>Full color</option>}</select>
                       : <span className="faint" style={{ fontSize: 12 }}>Full color</span>}</td>
                     <td>
-                      <div className={"ink-combo" + (d.confirm?.ink ? " unconf" : "")} title={d.confirm?.ink ? "Not confirmed: production confirms the ink before printing" : undefined}>
+                      <div className={"ink-combo" + (d.confirm?.ink ? " unconf" : "")} title={d.confirm?.ink ? "Reorder - Production Details Needed: our best guess at the ink, production confirms it" : undefined}>
                         <InkField list={d.method === "embroidery" ? THREAD_COLORS : INK_COLORS} placeholder={d.method === "embroidery" ? "Type a thread color" : "Type a color or PMS"} value={d.inks} bad={!!inkMismatch(d)} title={inkMismatch(d) || ""} onChange={(v) => update((x) => { x.imprints[di].inks = v; })} />
                         <select aria-label={d.method === "embroidery" ? "Add a thread color" : "Add a Wilflex RFU ink"} tabIndex={-1} value="" onChange={(e) => { const v = e.target.value; if (v) update((x) => { const cur = x.imprints[di].inks.trim().replace(/,\s*$/, ""); x.imprints[di].inks = cur ? `${cur}, ${v}` : v; }); }}>
                           <option value="" hidden>▾</option>
@@ -233,7 +235,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                       </div>
                       {inkMismatch(d) && <div className="ink-warn">{inkMismatch(d)}</div>}
                     </td>
-                    <td><div className={d.confirm?.size ? "unconf" : undefined} title={d.confirm?.size ? "Not confirmed: production confirms size and placement before printing" : undefined}><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></div>
+                    <td><div className={d.confirm?.size ? "unconf" : undefined} title={d.confirm?.size ? "Reorder - Production Details Needed: our best guess at the size, production confirms it" : undefined}><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></div>
                       {d.size.trim() && <button type="button" className={"cs-tag" + (d.sizeFrom === "customer" ? " on" : "")} title={d.sizeFrom === "customer" ? "The customer asked for this size: the Mockup Creator asks before changing it. Click to unmark." : "Did the customer ask for this exact size? Mark it so it isn't changed by accident."} onClick={() => update((x) => { x.imprints[di].sizeFrom = x.imprints[di].sizeFrom === "customer" ? undefined : "customer"; })}>{d.sizeFrom === "customer" ? "🔒 Customer's size" : "Customer's size?"}</button>}
                     </td>
                     <td>
@@ -246,8 +248,8 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                     <td><button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button></td>
                   </tr>
                   {d.confirm && (d.confirm.size || d.confirm.ink) && <tr className="imp-unconf"><td colSpan={hidePrices ? 8 : 9}>
-                    <span>⚠ Production confirms {[d.confirm.size && "size and placement", d.confirm.ink && "ink"].filter(Boolean).join(" and ")} before printing. <span className="faint">{d.confirm.why}.</span></span>
-                    <button type="button" className="btn sm" title="Checked against the film / the last print: the size, placement and ink are right" onClick={() => update((x) => { const im = x.imprints[di]; im.notes = [im.notes, `Size, placement and ink confirmed ${new Date().toLocaleDateString()}`].filter(Boolean).join(". ").slice(0, 300); im.confirm = undefined; })}>Confirmed</button>
+                    <span><b>Reorder - Production Details Needed</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
+                    {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks we printed before">Production Details</a> : null}
                   </td></tr>}
                   <tr className="imp-design">
                     <td colSpan={hidePrices ? 8 : 9}>

@@ -14,6 +14,8 @@ import { useRole } from "@/components/RoleContext";
 import { useRouter } from "next/navigation";
 import { mailRows, type MailSug } from "@/lib/inbox";
 import { getMailStatus } from "./mail-actions";
+import { DETAILS_LABEL, detailsCount, ordersNeedingDetails } from "@/lib/productionDetails";
+import type { Group } from "@/lib/pricing";
 
 /**
  * The daily dashboard: the first thing every admin sees. Everything that needs someone today, in one place:
@@ -57,6 +59,9 @@ export default function Dashboard() {
   const [reorders, setReorders] = useState<Reorder[]>([]);
   const [goods, setGoods] = useState({ today: 0, arrived: 0 });
   const [owners, setOwners] = useState<Record<string, string>>({}); // customer → account owner (first name)
+  // reorders of old Printavo jobs waiting on production (Jose) to confirm the print details
+  const [pdn, setPdn] = useState<{ id: string; number: number; nickname: string; customer_id: string | null; due_date: string | null; groups: Group[] }[]>([]);
+  const [pdnCust, setPdnCust] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const sb = createClient();
@@ -76,6 +81,14 @@ export default function Dashboard() {
         sb.from("separations").select("id, number, order_id, location, garment_color, status, due_date, customer_id, channels, updated_at").not("status", "in", "(cancelled,films)").order("due_date", { ascending: true, nullsFirst: false }).limit(200),
         sb.from("customer_private").select("customer_id, account_owner").neq("account_owner", "").limit(5000),
       ]);
+      ordersNeedingDetails<{ id: string; number: number; nickname: string; customer_id: string | null; due_date: string | null; groups: Group[] }>(sb, "id, number, nickname, customer_id, due_date, groups")
+        .then(async (r) => {
+          setPdn(r.sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999") || a.number - b.number));
+          const ids = [...new Set(r.map((x) => x.customer_id).filter(Boolean))] as string[];
+          if (!ids.length) return;
+          const { data } = await sb.from("customers").select("id, company, name").in("id", ids);
+          setPdnCust(Object.fromEntries(((data || []) as Cust[]).map((c) => [c.id, c.company || c.name])));
+        }, () => null);
       const sp = sepQ.data;
       setSeps((sp || []) as SepLite[]);
       setOwed(((bal.data || []) as { id: string; visual_id: string; nickname: string; customer_id: string | null; balance: number; due_date: string | null }[]).map((b) => ({ id: b.id, number: b.visual_id, nickname: b.nickname, customer_id: b.customer_id, balance: +b.balance || 0, due: b.due_date })));
@@ -240,6 +253,26 @@ export default function Dashboard() {
             </section>
   );
 
+  const detailsCard = (
+    <section className="db-card db-orange db-pdn" id="dash-details">
+      <div className="db-card-h"><h2>Production Details Needed</h2><span className="db-n">{pdn.length}</span><span className="faint db-h-note">reorders of old Printavo jobs: confirm the print size and inks we used</span><span className="spacer" /><Link href="/shop/details" className="linkbtn">Production Details →</Link></div>
+      <div className="db-scroll sm">{list(pdn.length, (
+        <table className="rv-tbl pd-tbl">
+          <thead><tr><th>Order</th><th>Customer</th><th>Job</th><th>Prints</th><th className="r">Due</th></tr></thead>
+          <tbody>{pdn.slice(0, 40).map((o) => (
+            <tr key={o.id}>
+              <td className="pd-o"><Link href={`/shop/details?order=${o.id}`} className="db-num">#{o.number}</Link></td>
+              <td className="pd-c"><b>{pdnCust[o.customer_id || ""] || "—"}</b></td>
+              <td className="pd-n faint">{o.nickname || "Untitled Job"}</td>
+              <td className="pd-s"><Link href={`/shop/details?order=${o.id}`} className="pdn-tag" title={DETAILS_LABEL}>{detailsCount(o.groups)} to confirm</Link></td>
+              <td className={"r pd-due" + (o.due_date && o.due_date < t0 ? " bad" : "")}>{day(o.due_date)}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      ), "Nothing waiting. Reorders of old Printavo jobs land here until their print details are confirmed.")}</div>
+    </section>
+  );
+
   // crew (production, receiving, shipping): the production dashboard. No sales, balances or customer money anywhere.
   if (crew) {
     const sepN = (k: string) => (k === "working" ? seps.length : 0);
@@ -284,6 +317,7 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+            {detailsCard}
             {prodSection}
             <section className="db-card db-blue db-pipe">
               <div className="db-card-h"><h2>Order Pipeline</h2><span className="faint db-h-note">every job by stage · quantities only</span></div>
@@ -354,6 +388,8 @@ export default function Dashboard() {
             <div className="db-card-h"><h2>Sales Charts</h2><span className="faint db-h-note">invoices by order date · closed quotes, quotes and holders don&apos;t count</span></div>
             <SalesAnalytics part="charts" />
           </section>}
+
+          {pdn.length > 0 && detailsCard}
 
           {/* 3. the order pipeline: every job by stage (follows Everyone / Mine) */}
           <section className="db-card db-blue db-pipe">

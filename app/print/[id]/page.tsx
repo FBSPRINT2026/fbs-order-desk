@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calcOrder, imprintLabel, mergeSettings, orderGroups, sizeLabel, SIZES, type ArtFile, type Customer, type Design, type Group, type GroupCalc, type Order, type Payment } from "@/lib/pricing";
+import ImprintSpecs from "@/components/ImprintSpecs";
+import { calcOrder, mergeSettings, orderGroups, sizeLabel, SIZES, type ArtFile, type Customer, type Design, type Group, type GroupCalc, type Order, type Payment } from "@/lib/pricing";
 import { fmtDateLong, money, todayISO } from "@/lib/format";
 import PrintButton from "./PrintButton";
 import { code128Svg } from "@/lib/barcode";
@@ -92,7 +93,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
                 <thead><tr><th>Design</th><th>Imprint</th><th>Location</th><th className="c">Colors</th><th>Inks / PMS</th><th>Size</th><th>Drop</th><th>Notes</th></tr></thead>
                 <tbody>
                   {g.imprints.map((d) => (
-                    <tr key={d.id}><td>{d.design_id && dmap[d.design_id] ? <span className="wo-design">{dUrl[d.design_id] && <img src={dUrl[d.design_id]} alt="" />}<b>D-{dmap[d.design_id].number}</b></span> : ""}</td><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? (d.colors >= 11 ? "Full" : d.colors) : d.method === "embroidery" ? d.colors : "Full"}</td><td>{d.inks}{d.confirm?.ink && <div className="wo-unconf">CONFIRM INK</div>}</td><td>{d.size}{d.confirm?.size && <div className="wo-unconf">CONFIRM SIZE &amp; PLACEMENT BEFORE PRINTING</div>}</td><td>{d.drop ? `${d.drop}"` : "Standard"}</td><td>{d.notes}</td></tr>
+                    <tr key={d.id}><td>{d.design_id && dmap[d.design_id] ? <span className="wo-design">{dUrl[d.design_id] && <img src={dUrl[d.design_id]} alt="" />}<b>D-{dmap[d.design_id].number}</b></span> : ""}</td><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? (d.colors >= 11 ? "Full" : d.colors) : d.method === "embroidery" ? d.colors : "Full"}</td><td>{d.inks}{d.confirm?.ink && <div className="wo-unconf">REORDER: PRODUCTION DETAILS NEEDED (INK)</div>}</td><td>{d.size}{d.confirm?.size && <div className="wo-unconf">REORDER: PRODUCTION DETAILS NEEDED (SIZE &amp; PLACEMENT)</div>}</td><td>{d.drop ? `${d.drop}"` : "Standard"}</td><td>{d.notes}</td></tr>
                   ))}
                 </tbody>
               </table>
@@ -175,7 +176,7 @@ function GroupRows({ g, gc }: { g: Group; gc: GroupCalc }) {
           <td>
             <b>{[l.style, l.garment].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{gc?.wholesale ? " (customer supplied)" : ""}
             <div className="sub">{SIZES.filter((z) => l.sizes?.[z]).map((z) => `${sizeLabel(z)}: ${l.sizes[z]}`).join(", ")}</div>
-            {li === g.lines.length - 1 && g.imprints.length > 0 && <div className="sub">Imprints: {g.imprints.map(imprintLabel).join("; ")}</div>}
+            {li === g.lines.length - 1 && g.imprints.length > 0 && <div className="sub">Imprints: <ImprintSpecs list={g.imprints} sep="; " /></div>}
             {li === g.lines.length - 1 && gc?.finishing.length > 0 && <div className="sub">Finishing: {gc.finishing.map((f) => f.name).join(", ")}</div>}
           </td>
           <td className="r">{gc?.lines[li]?.qty}</td><td className="r">{money(gc?.lines[li]?.each)}</td><td className="r">{money(gc?.lines[li]?.sub)}</td>

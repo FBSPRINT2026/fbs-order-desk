@@ -24,6 +24,7 @@ import ProjectPicker from "@/components/ProjectPicker";
 import { Pill } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import { checkOrder } from "@/lib/orderChecks";
+import { DETAILS_LABEL, detailsCount, keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
 import { specialtyGarment } from "@/lib/fabric";
 import { withPrivate } from "@/lib/crm/private";
 import { ChecksPanel, FillFromText } from "@/components/OrderAssist";
@@ -33,6 +34,7 @@ import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/cr
 import { PAY_TERMS, SIZES } from "@/lib/pricing";
 
 const EVENT_LABEL: Record<string, string> = {
+  details: "Production details",
   created: "Created", sent: "Sent to customer", approved: "Customer approved quote", changes: "Customer asked for changes",
   proof_approved: "Proof approved", proof_changes: "Proof changes requested", proofs_requested: "Proof approval requested",
   art_approved: "Art marked approved by staff", seps_requested: "Separations requested",
@@ -202,8 +204,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const d = latest.current;
     if (!d) return;
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    const c = calcOrder(d, settings);
     setSaveState("Saving…");
+    // production may have confirmed a reorder's print details while this was open: keep what they confirmed
+    if (orderNeedsDetails(d.groups)) {
+      const { data: cur } = await sb.from("orders").select("groups").eq("id", d.id).maybeSingle();
+      const k = keepConfirmed(d.groups, (cur?.groups || null) as Group[] | null);
+      if (k.changed) { d.groups = k.groups; latest.current = d; setO((x) => (x && x.id === d.id ? { ...x, groups: k.groups } : x)); }
+    }
+    const c = calcOrder(d, settings);
     const { error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
       price_type: d.price_type || "retail", po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
@@ -413,7 +421,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (paths.length) await sb.storage.from("proofs").remove(paths);
     const { error } = await sb.from("orders").delete().eq("id", o.id);
     if (error) return say("Couldn't delete: " + error.message);
-    router.push("/shop");
+    // back to wherever it was opened from (the customer's page, the orders list…); opened on its own: the customer
+    if (window.history.length > 1) router.back();
+    else router.replace(o.customer_id ? `/shop/customers/${o.customer_id}` : "/shop/orders");
   }
 
   // payments
@@ -495,7 +505,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     <>
       {fromEmail
         ? <button type="button" className="back back-btn" title="Saves this order, then opens the customer's email to reply or send the quote" onClick={async () => { await save(); router.push(`/shop/inbox?open=${fromEmail}`); }}>← Save &amp; return to inbox</button>
-        : <Link className="back" href="/shop/orders">← Orders</Link>}
+        : <a className="back" href="/shop/orders" onClick={(e) => { if (window.history.length > 1) { e.preventDefault(); router.back(); } }} title="Back to where you were">← Back</a>}
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
           <div className="eyebrow">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
@@ -520,6 +530,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       </div>
       {(() => { const x = o as Order & { printavo_id?: string | null; printavo_visual_id?: string | null; printavo_state?: { url?: string; publicUrl?: string; status?: string } | null }; return x.printavo_id ? <PrintavoLink visualId={x.printavo_visual_id || ""} url={x.printavo_state?.url} publicUrl={x.printavo_state?.publicUrl} status={x.printavo_state?.status} number={o.number} orderId={o.id} onRenumbered={(v) => setO((y) => (y ? ({ ...y, printavo_visual_id: v } as Order) : y))} /> : null; })()}
       {(o as Order & { printavo_id?: string | null }).printavo_id && o.number >= 40000 && o.number < 50000 && calc && <PrintavoChanges o={o} calc={calc} patch={patch} prodNote={prodNotes} onProdNote={onProdNotes} />}
+      {orderNeedsDetails(o.groups) && <div className="pdn-banner" role="status"><b>{DETAILS_LABEL}</b><span>{detailsCount(o.groups)} print{detailsCount(o.groups) === 1 ? "" : "s"} carry our best guess at size and inks from the old job. Production confirms them; the customer sees the print specs greyed out as REORDER until then.</span><Link href={`/shop/details?order=${o.id}`} className="btn sm">Production Details</Link></div>}
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
       {o.status === "request" && (
         <div className="callout req-callout">
@@ -649,7 +660,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
             <GroupEditor finishingAt={finPerGroup ? "group" : "order"} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} onMockup={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}`); }}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />

@@ -1,4 +1,5 @@
 "use client";
+import { orderNeedsDetails } from "@/lib/productionDetails";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { matches, orderSearchText, words } from "@/lib/search";
@@ -174,7 +175,7 @@ export default function OrdersPage() {
                     <td><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{o.unread > 0 && <span className="unread" title="Unread customer message" />}</td>
                     <td><div>{o.nickname || "Untitled Job"}{o.rush && <span className="tag" style={{ marginLeft: 6, background: "var(--danger)", color: "#fff" }}>Rush</span>}</div><div className="sub">{summaryLine(o)}{o.po_number ? ` · PO ${o.po_number}` : ""}</div></td>
                     <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
-                    <td><Pill status={o.status} /></td>
+                    <td><Pill status={o.status} />{orderNeedsDetails(o.groups) && <div className="pdn-tag" title="Production confirms the print size and inks from the old job">Reorder - Production Details Needed</div>}</td>
                     <td><Due date={o.due_date} status={o.status} /></td>
                     <td className="r">{o.qty}</td>
                     <td className="r money-only">{money(o.total)}</td>
