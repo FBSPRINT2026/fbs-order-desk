@@ -8,7 +8,7 @@ import { mailRows } from "@/lib/inbox";
 import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
 import { inboxItemExtras, setEventStatus, setTaskDone, type CalEvent, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
-import { Attachments, box as mailBox, boxPost, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { Attachments, box as mailBox, boxPost, MailHead, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -56,7 +56,11 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [fRows, setFRows] = useState<MsgRow[] | null>(null), [fNext, setFNext] = useState(0), [fBusy, setFBusy] = useState(false), [fSel, setFSel] = useState<MsgRow | null>(null), [fErr, setFErr] = useState("");
   const [convos, setConvos] = useState<Convo[] | null>(null), [cSel, setCSel] = useState<Convo | null>(null), [sNote, setSNote] = useState("");
-  const loadFolders = useCallback(() => mailBox<{ folders: Folder[] }>({ do: "folders" }).then((r) => setFolders(r.folders), () => setFolders([])), []);
+  // the folder list shows at once from last time (this tab), then refreshes from the mailbox
+  const loadFolders = useCallback(() => {
+    try { const c = sessionStorage.getItem("fbs:mail.folders"); if (c) setFolders((f) => f || (JSON.parse(c) as Folder[])); } catch { /* none kept */ }
+    return mailBox<{ folders: Folder[] }>({ do: "folders" }).then((r) => { setFolders(r.folders); try { sessionStorage.setItem("fbs:mail.folders", JSON.stringify(r.folders)); } catch { /* fine */ } }, () => setFolders((f) => f || []));
+  }, []);
   useEffect(() => { if (mode === "mail") void loadFolders(); }, [mode, loadFolders]);
   const openFolder = async (path: string, before?: number) => {
     if (/^inbox$/i.test(path)) { setView({ kind: "inbox" }); setFSel(null); setCSel(null); return; }
@@ -324,28 +328,19 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
   return (
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Email">
-        <header className="ibx2-mh">
-          <div className="ibx2-sw"><button type="button" className="ibx2-back" onClick={back} aria-label="Back to the emails">←</button></div>
-          <div className="ibx2-mh-1">
-            <button type="button" className="ibx2-listbtn" onClick={toggleList} title={listOpen ? "Hide the list" : "Show the list"} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
-            <span className="ibx2-who" title={i.from_email}><b>{i.from_name || i.from_email}</b>{i.from_name && <span> · {i.from_email}</span>}</span>
-            <span className="ibx2-when">{when}</span>
-          </div>
-          <h2>{i.subject || "(no subject)"}</h2>
-          {i.summary && <div className="ibx2-sum">✦ {i.summary}</div>}
-          <div className="ibx2-meta">
-            {i.bucket === "todo" && <span className="ibx2-chip ol-todo">To-do</span>}
-            {i.bucket === "event" && <span className="ibx2-chip ol-event">Event</span>}
-            {(i.bucket === "fyi" || i.bucket === "ignore") && <span className="ibx2-chip">FYI</span>}
-            {i.cc_only && <span className="ibx2-chip" title="You were copied (Cc)">CC&apos;d</span>}
-            {older && <span className="ibx2-chip">Customer</span>}
-          </div>
-          <div className="ibx2-acts">
-            <button type="button" className="btn sm" onClick={() => setWriting(true)} disabled={!m}>Reply</button>
+        <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={i.subject} fromName={i.from_name} fromEmail={i.from_email} to={m?.to} cc={m?.cc} date={when} summary={i.summary}
+          tags={<>
+            {i.bucket === "todo" && <span className="mh-tag todo">To-do</span>}
+            {i.bucket === "event" && <span className="mh-tag event">Event</span>}
+            {(i.bucket === "fyi" || i.bucket === "ignore") && <span className="mh-tag">FYI</span>}
+            {i.cc_only && <span className="mh-tag" title="You were copied (Cc)">CC&apos;d</span>}
+            {older && <span className="mh-tag">Customer</span>}
+          </>}
+          toolbar={<Toolbar>
+            <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setWriting(true)} /></TbGroup>
             <MoveBar folders={folders} busy={!!busy} here="INBOX" onMove={(to, label) => move(to, label)} />
-          </div>
-          {err && <div className="pv-err">{err}</div>}
-        </header>
+          </Toolbar>} />
+        {err && <div className="pv-err mh-err">{err}</div>}
         <div className="ibx2-read">
           {(openTasks.length > 0 || sugg.length > 0 || added.length > 0) && <div className="lm-ai">
             <div className="lm-ai-h">✦ From this email</div>
@@ -510,50 +505,41 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
 
       {/* 2. the email (or the order being made from it) */}
       <section className="ibx2-mail" aria-label="The email">
-        <header className="ibx2-mh">
-          <div className="ibx2-mh-1">
-            <button type="button" className="ibx2-listbtn" onClick={toggleList} title={listOpen ? "Hide the list" : "Show the list"} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
-            <span className="ibx2-who" title={x.from_email}><b>{who}</b>{who !== fromName && <span> · {fromName}</span>}<span> · {x.from_email}</span></span>
-            <span className="ibx2-when">{when}</span>
-          </div>
-          <h2>{x.subject || "(no subject)"}</h2>
-          {x.meta?.triage?.summary && <div className="ibx2-sum">✦ {x.meta.triage.summary}</div>}
-          <div className="ibx2-meta">
-            {urgent && <span className="ibx2-urgent">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
-            {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="ibx2-chip">{INTENT[x.meta.triage.intent]}</span>}
-            {x.customer_id && <Link className="ibx2-chip link" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
-            {filed && <Link className="ibx2-chip link" href={`/shop/orders/${filed.id}`}>#{filed.number}</Link>}
-            {answered && <span className="ibx2-chip ok">Answered</span>}
-            {ccOnly && <span className="ibx2-chip" title="You were copied (Cc), not sent to: not on your Needs reply list">CC&apos;d</span>}
-          </div>
-          {/* the everyday buttons in one row; the rest under More */}
-          <div className="ibx2-acts">
-            {x.direction !== "in" ? null : view === "order"
-              ? <button type="button" className="btn sm" onClick={() => setView("mail")}>← Back to the email</button>
+        <MailHead listOpen={listOpen} toggleList={toggleList} subject={x.subject} fromName={who !== fromName ? `${who} · ${fromName}` : who} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
+          tags={<>
+            {urgent && <span className="mh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
+            {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="mh-tag">{INTENT[x.meta.triage.intent]}</span>}
+            {x.customer_id && <Link className="mh-tag link" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
+            {filed && <Link className="mh-tag link" href={`/shop/orders/${filed.id}`}>#{filed.number}</Link>}
+            {answered && <span className="mh-tag ok">Answered</span>}
+            {ccOnly && <span className="mh-tag" title="You were copied (Cc), not sent to: not on your Needs reply list">CC&apos;d</span>}
+          </>}
+          toolbar={<Toolbar>
+            {x.direction === "in" && <TbGroup>{view === "order"
+              ? <TbBtn icon={TbIcon.back} label="Back to the email" onClick={() => setView("mail")} />
               : <>
-                <button type="button" className={"btn sm" + (!orderish || x.order_id ? " primary" : "")} onClick={() => write()}>Reply</button>
-                <button type="button" className={"btn sm" + (orderish && !x.order_id ? " primary" : "")} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check">{ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"}</button>
-              </>}
-            {x.customer_id && <select className="ibx2-file" aria-label="File under an order" value={x.order_id || ""} disabled={!!busy} onChange={(e) => run("ord", () => setEmailOrder(x.id, e.target.value || null), e.target.value ? "Filed under the order." : "Not filed under an order now.")}>
-              <option value="">File under…</option>{orders.slice(0, 40).map((o) => <option key={o.id} value={o.id}>#{o.number} {o.nickname || ""} ({o.status})</option>)}
-            </select>}
-            {needs && <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id), "Off your Needs reply list.")}>No reply needed</button>}
-            {moveBar || (inOutlook && <button type="button" className="btn sm ghost" disabled={!!busy} title="Moves it to Archive in your Outlook, the same as Outlook's Archive button" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id }), "Archived in Outlook.")}>{busy === "arch" ? "Archiving…" : "Archive"}</button>)}
-            {x.direction === "in" ? 
-            <details className="ibx2-more" ref={moreRef}>
-              <summary className="btn sm ghost">More</summary>
-              <div className="ibx2-menu">
-                {x.direction === "in" && <a href={`/shop/order-goods?email=${x.id}`} target="_blank" rel="noreferrer" onClick={() => { if (moreRef.current) moreRef.current.open = false; }}>Order goods from S&amp;S</a>}
-                {!needs && x.meta?.no_reply && <button type="button" disabled={!!busy} onClick={() => run("nr-undo", () => markNoReply(x.id, false), "Back on Needs reply.")}>Needs a reply after all</button>}
-                {!needs && !x.meta?.no_reply && answered && <button type="button" disabled={!!busy} onClick={() => run("back", () => putBackInInbox(x.id), "Back in the Inbox.")}>Back to Needs reply</button>}
-                {inOutlook && <button type="button" disabled={!!busy} onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "later" }), "Moved to Later (SaneBox).")}>Move to Later (@SaneLater)</button>}
-                <button type="button" disabled={!!busy} onClick={() => run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`)}>Not a customer (stop reading their email)</button>
-              </div>
-            </details> : null}
-          </div>
-          {made && <div className="ibx2-made">Order <b>#{made.number}</b> created. <a href={`/shop/orders/${made.id}`} target="_blank" rel="noreferrer">Open it</a></div>}
-          {err && <div className="pv-err">{err}</div>}
-        </header>
+                <TbBtn icon={TbIcon.reply} label="Reply" kind={!orderish || x.order_id ? "primary" : undefined} onClick={() => write()} />
+                <TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check" />
+              </>}</TbGroup>}
+            {moveBar || (inOutlook && <TbGroup><TbBtn icon={TbIcon.archive} label={busy === "arch" ? "Archiving…" : "Archive"} kind="strong" disabled={!!busy} title="Moves it to Archive in your Outlook" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id }), "Archived in Outlook.")} /></TbGroup>)}
+            {x.direction === "in" && <TbGroup>
+              {x.customer_id && <TbMenu icon={TbIcon.file} label={filed ? `#${filed.number}` : "File under"}>{(close) => <>
+                {orders.slice(0, 40).map((o) => <button key={o.id} type="button" role="menuitem" className={o.id === x.order_id ? "on" : ""} disabled={!!busy} onClick={() => { close(); void run("ord", () => setEmailOrder(x.id, o.id), "Filed under the order."); }}>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></button>)}
+                {x.order_id && <button type="button" role="menuitem" onClick={() => { close(); void run("ord", () => setEmailOrder(x.id, null), "Not filed under an order now."); }}>Not filed under an order</button>}
+                {!orders.length && <span className="faint" style={{ padding: 8 }}>No orders for this customer yet.</span>}
+              </>}</TbMenu>}
+              {needs && <TbBtn icon={TbIcon.check} label="No reply needed" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id), "Off your Needs reply list.")} />}
+              <TbMenu icon={TbIcon.more} label="More">{(close) => <>
+                <a href={`/shop/order-goods?email=${x.id}`} target="_blank" rel="noreferrer" role="menuitem" onClick={close}>Order goods from S&amp;S</a>
+                {!needs && x.meta?.no_reply && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr-undo", () => markNoReply(x.id, false), "Back on Needs reply."); }}>Needs a reply after all</button>}
+                {!needs && !x.meta?.no_reply && answered && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("back", () => putBackInInbox(x.id), "Back in the Inbox."); }}>Back to Needs reply</button>}
+                {!moveBar && inOutlook && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "later" }), "Moved to Later (SaneBox)."); }}>Move to Later (@SaneLater)</button>}
+                <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>Not a customer (stop reading their email)</button>
+              </>}</TbMenu>
+            </TbGroup>}
+          </Toolbar>} />
+        {made && <div className="ibx2-made mh-err">Order <b>#{made.number}</b> created. <a href={`/shop/orders/${made.id}`} target="_blank" rel="noreferrer">Open it</a></div>}
+        {err && <div className="pv-err mh-err">{err}</div>}
 
         {ordering && <div className="ibx2-order" hidden={view !== "order"}>
           <EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={x.id} start={orderStart || undefined}

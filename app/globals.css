@@ -6423,3 +6423,56 @@ a.pdn-tag:hover{text-decoration:underline}
 .mf-ddm button.on{color:var(--accent);font-weight:700}
 .mf-ddm button b{margin-left:auto;font-size:11px;color:var(--accent)}
 .mf-load{padding:6px 2px;font-size:13px}
+
+/* ───────── the top of an open email (components/MailFolders.tsx MailHead + Toolbar) ───────── */
+.mh{flex:none;border-bottom:1px solid var(--line)}
+.mh-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border-bottom:1px solid var(--line-2);min-width:0}
+.mh-list,.mh-back{flex:none;width:32px;height:34px;border:1px solid var(--line);background:var(--surface);border-radius:8px;cursor:pointer;color:var(--ink-2);font:inherit;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
+.mh-back{display:none}
+.mh-back svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.mh-b{padding:14px 18px 12px;display:flex;flex-direction:column;gap:10px}
+.mh-subj{margin:0;font-family:var(--display);font-size:20px;line-height:1.25;letter-spacing:-.005em;color:var(--ink)}
+.mh-from{display:flex;align-items:flex-start;gap:10px;min-width:0}
+.mh-av{flex:none;width:36px;height:36px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
+.mh-who{flex:1;min-width:0;font-size:14px;line-height:1.35}
+.mh-who b{color:var(--ink)}
+.mh-addr{color:var(--ink-3);font-size:12.5px;margin-left:8px}
+.mh-to{border:0;background:none;padding:0;font:inherit;font-size:12.5px;color:var(--ink-3);cursor:pointer}
+.mh-to:hover{color:var(--accent)}
+.mh-full{margin-top:4px;font-size:12.5px;color:var(--ink-2);display:flex;flex-direction:column;gap:2px;word-break:break-word}
+.mh-full span{display:inline-block;width:28px;color:var(--ink-3);font-weight:700}
+.mh-date{flex:none;font-size:12.5px;color:var(--ink-3);white-space:nowrap;padding-top:2px}
+.mh-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.mh-sum{flex-basis:100%;font-size:13.5px;color:var(--ink-2);background:color-mix(in srgb,var(--accent) 6%,var(--surface));border-left:3px solid var(--accent);border-radius:6px;padding:7px 10px}
+.mh-tag{font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;background:var(--surface-2);color:var(--ink-2);text-decoration:none}
+.mh-tag.todo{background:color-mix(in srgb,var(--fbs-blue,#0E9BD8) 14%,var(--surface));color:var(--fbs-blue,#0E9BD8)}
+.mh-tag.event{background:color-mix(in srgb,var(--fbs-orange,#FCB122) 20%,var(--surface));color:#9A6A00}
+.mh-tag.hot{background:var(--danger-soft);color:var(--danger)}
+.mh-tag.ok{background:var(--ok-soft);color:var(--ok)}
+.mh-tag.link:hover{text-decoration:underline}
+.mh-err{margin:8px 18px 0}
+/* the toolbar: groups of big buttons, icon + word */
+.tb{display:flex;align-items:center;gap:6px;flex:1;min-width:0;flex-wrap:wrap;container-type:inline-size}
+.tb-g{display:flex;align-items:center;gap:2px;padding:2px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.tb-b{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 11px;border:0;border-radius:8px;background:transparent;font:inherit;font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer;white-space:nowrap;list-style:none}
+.tb-b::-webkit-details-marker{display:none}
+.tb-b svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.tb-b:hover:not(:disabled){background:var(--surface-2)}
+.tb-b:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.tb-b:disabled{opacity:.45;cursor:default}
+.tb-b.primary{background:var(--accent);color:#fff}
+.tb-b.primary:hover:not(:disabled){background:var(--accent-hover)}
+.tb-b.strong{color:var(--ink)}
+.tb-b.strong svg{color:var(--accent)}
+.tb-b.danger{color:var(--danger)}
+.tb-b.danger:hover:not(:disabled){background:var(--danger-soft)}
+.tb-caret{font-size:10px;color:var(--ink-3);margin-left:-2px}
+.tb-m{position:relative}
+.tb-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:40;min-width:220px;max-height:360px;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 34px rgba(20,29,43,.2);padding:6px;display:flex;flex-direction:column}
+.tb-menu button,.tb-menu a{display:block;border:0;background:none;text-align:left;font:inherit;font-size:13.5px;padding:7px 12px;border-radius:7px;cursor:pointer;color:var(--ink);text-decoration:none;white-space:nowrap}
+.tb-menu button:hover,.tb-menu a:hover{background:var(--surface-2)}
+.tb-menu button.on{color:var(--accent);font-weight:700}
+.tb .mf-hint{margin-left:4px}
+@container (max-width:620px){ .tb-b:not(.primary) .tb-l{display:none} .tb-b{padding:0 9px} }
+.mf-msg-a.tb{margin-top:10px}
+@media (max-width:760px){ .mh-back{display:inline-flex} .mh-list{display:none} .mh-bar{position:sticky;top:0;z-index:5} .mh-b{padding:12px 12px 10px} .mh-subj{font-size:18px} }

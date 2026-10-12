@@ -26,8 +26,18 @@ export async function withBox<T>(acct: MailAccount, fn: (c: ImapFlow) => Promise
   try { return await fn(client); } finally { await client.logout().catch(() => null); }
 }
 
-export async function listFolders(c: ImapFlow): Promise<Folder[]> {
-  const list = await c.list({ statusQuery: { messages: true, unseen: true } });
+export async function listFolders(c: ImapFlow, counts = true): Promise<Folder[]> {
+  const list = await c.list();
+  // counts: how many in each, and unread for the folders that aren't huge (unread on a million-email archive is slow)
+  if (counts) for (const f of list) {
+    if (f.flags?.has("\\Noselect") || SKIP.test(f.path)) continue;
+    try {
+      const st = await c.status(f.path, { messages: true });
+      const n = st.messages || 0;
+      const un = n && n <= 20000 ? (await c.status(f.path, { unseen: true })).unseen || 0 : 0;
+      f.status = { path: f.path, messages: n, unseen: un } as typeof f.status;
+    } catch { /* leave it uncounted */ }
+  }
   return list
     .filter((f) => !f.flags?.has("\\Noselect") && !SKIP.test(f.path))
     .map((f) => {
@@ -143,7 +153,7 @@ const normSubj = (s: string) => s.replace(/^\s*((re|fw|fwd|aw|sv)\s*(\[\d+\])?\s
  * Search the mailbox and group what's found into conversations (received and sent, oldest first inside each).
  * A customer's name finds their email addresses (customers, contacts) so "Dear Heart" finds fisher@dearheartdesigns.com.
  */
-export async function searchConversations(admin: SupabaseClient, c: ImapFlow, me: string, q: string, deadline: number) {
+export async function searchConversations(admin: SupabaseClient, acct: MailAccount, me: string, q: string, deadline: number) {
   const term = q.trim();
   if (term.length < 2) return { convos: [] as Convo[], folders: 0, partial: false };
   // a customer's addresses and domain, by name
@@ -158,22 +168,38 @@ export async function searchConversations(admin: SupabaseClient, c: ImapFlow, me
   const domains = new Set([...addrs].filter((a) => !FREE.test(a)).map((a) => a.split("@")[1]).filter(Boolean));
   const keys = [term, ...domains, ...[...addrs].filter((a) => FREE.test(a))].slice(0, 12);
   const crit = { or: keys.flatMap((k) => [{ from: k }, { to: k }, { cc: k }, ...(k === term ? [{ subject: k }] : [])]) };
-  const folders = (await listFolders(c)).filter((f) => !/\\(Junk|Trash|Drafts)/.test(f.special) && f.messages > 0 && !/^@saneblackhole$/i.test(f.name));
+  const folders = (await withBox(acct, (c) => listFolders(c, false))).filter((f) => !/\\(Junk|Trash|Drafts)/.test(f.special) && !/^@saneblackhole$/i.test(f.name));
   // Inbox, Sent and Archive first: they hold almost every conversation
   const rank = (f: Folder) => (/\\Inbox/.test(f.special) ? 0 : /\\Sent/.test(f.special) ? 1 : /\\Archive/.test(f.special) ? 2 : 3);
   folders.sort((a, b) => rank(a) - rank(b));
+  // each folder on its own connection, a few at a time; a folder that takes too long is left out (partial)
   const found: MsgRow[] = [];
   let looked = 0, partial = false;
-  for (const f of folders) {
-    if (Date.now() > deadline) { partial = true; break; }
-    const lock = await c.getMailboxLock(f.path);
-    try {
-      const hit = await c.search(crit, { uid: true }).catch(() => [] as number[]);
-      const uids = (Array.isArray(hit) ? hit : []).sort((a, b) => a - b).slice(-120);
-      if (uids.length) for await (const m of c.fetch(uids.join(","), { uid: true, flags: true, envelope: true, size: true, internalDate: true }, { uid: true })) found.push(toRow(f.path, me, m as never));
-      looked++;
-    } finally { lock.release(); }
-  }
+  const one = async (f: Folder) => {
+    const left = deadline - Date.now();
+    if (left < 2000) { partial = true; return; }
+    const client = imapClient(cfgOf(acct));
+    let done = false;
+    const work = (async () => {
+      await client.connect();
+      const lock = await client.getMailboxLock(f.path);
+      try {
+        const hit = await client.search(crit, { uid: true }).catch(() => [] as number[]);
+        const uids = (Array.isArray(hit) ? hit : []).sort((a, b) => a - b).slice(-120);
+        const rows: MsgRow[] = [];
+        if (uids.length) for await (const m of client.fetch(uids.join(","), { uid: true, flags: true, envelope: true, size: true, internalDate: true }, { uid: true })) rows.push(toRow(f.path, me, m as never));
+        return rows;
+      } finally { lock.release(); }
+    })();
+    const timer = new Promise<null>((res) => setTimeout(() => res(null), left));
+    const rows = await Promise.race([work.catch(() => [] as MsgRow[]), timer]);
+    done = true; void done;
+    if (rows === null) { partial = true; client.close(); return; }
+    looked++; found.push(...rows);
+    await client.logout().catch(() => null);
+  };
+  const queue = [...folders];
+  await Promise.all(Array.from({ length: 4 }, async () => { while (queue.length) await one(queue.shift()!); }));
   // the same email in two folders (Inbox + Archive copy): once
   const seen = new Map<string, MsgRow>();
   for (const m of found) { const k = m.messageId || `${m.folder}:${m.uid}`; if (!seen.has(k)) seen.set(k, m); }

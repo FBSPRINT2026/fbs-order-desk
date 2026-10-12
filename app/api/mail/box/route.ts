@@ -43,7 +43,7 @@ export async function GET(req: Request) {
       if (!a) return NextResponse.json({ error: "Not found." }, { status: 404 });
       return new Response(new Uint8Array(a.content), { headers: { "Content-Type": a.type, "Content-Disposition": `${/^(image\/|application\/pdf)/.test(a.type) ? "inline" : "attachment"}; filename="${a.name.replace(/["\\\r\n]/g, "_")}"`, "Cache-Control": "private, no-store" } });
     }
-    if (what === "search") return NextResponse.json(await withBox(acct, (c) => searchConversations(admin, c, me, q.get("q") || "", Date.now() + 40000)));
+    if (what === "search") return NextResponse.json(await searchConversations(admin, acct, me, q.get("q") || "", Date.now() + 25000));
     return NextResponse.json({ error: "Unknown request." }, { status: 400 });
   } catch (e) { return bad(e); }
 }

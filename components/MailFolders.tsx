@@ -79,24 +79,90 @@ export function FolderBar({ folders, current, onPick }: { folders: Folder[] | nu
   );
 }
 
-/** Archive, Black Hole and Move to any folder: the same on every email */
-export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | null; busy?: boolean; onMove: (to: string, label: string) => void; here?: string }) {
+/* ───────── the toolbar on top of an email: big, clear buttons in groups (Reply · organize · work) ───────── */
+const P = (d: string) => <svg viewBox="0 0 24 24" aria-hidden><path d={d} /></svg>;
+export const TbIcon = {
+  reply: P("M10 8V4L3 11l7 7v-4c5 0 8 1.5 11 6-1-6-4-11-11-12z"),
+  replyAll: P("M8 8V4L1 11l7 7v-4M14 8V4l-7 7 7 7v-4c4 0 7 1.4 9 5-1-5-3.5-9.6-9-11"),
+  archive: P("M3 4h18v4H3zM5 8v12h14V8M10 12h4"),
+  later: P("M12 7v5l3 2M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"),
+  ban: P("M5.6 5.6l12.8 12.8M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"),
+  move: P("M3 6h6l2 2h10v11H3zM12 13h6M15 10l3 3-3 3"),
+  order: P("M6 3h9l3 3v15H6zM9 12h6M12 9v6"),
+  file: P("M4 5h7l2 2h7v12H4zM8 13h8"),
+  check: P("M4 12l5 5L20 6"),
+  more: P("M5 12h.01M12 12h.01M19 12h.01"),
+  back: P("M15 5l-7 7 7 7"),
+};
+export function Toolbar({ children }: { children: React.ReactNode }) { return <div className="tb" role="toolbar" aria-label="Email actions">{children}</div>; }
+export function TbGroup({ children }: { children: React.ReactNode }) { return <div className="tb-g">{children}</div>; }
+export function TbBtn({ icon, label, onClick, kind, disabled, title }: { icon: React.ReactNode; label: string; onClick?: () => void; kind?: "primary" | "danger" | "strong"; disabled?: boolean; title?: string }) {
+  return <button type="button" className={"tb-b" + (kind ? " " + kind : "")} onClick={onClick} disabled={disabled} title={title || label}>{icon}<span className="tb-l">{label}</span></button>;
+}
+/** a toolbar button that opens a menu */
+export function TbMenu({ icon, label, children, kind }: { icon: React.ReactNode; label: string; children: (close: () => void) => React.ReactNode; kind?: "strong" }) {
   const ref = useRef<HTMLDetailsElement | null>(null);
-  const pick = (to: string, label: string) => { if (ref.current) ref.current.open = false; onMove(to, label); };
+  useEffect(() => { const h = (e: MouseEvent) => { if (ref.current?.open && !ref.current.contains(e.target as Node)) ref.current.open = false; }; document.addEventListener("click", h); return () => document.removeEventListener("click", h); }, []);
+  return (
+    <details className="tb-m" ref={ref}>
+      <summary className={"tb-b" + (kind ? " " + kind : "")} title={label}>{icon}<span className="tb-l">{label}</span><span className="tb-caret" aria-hidden>▾</span></summary>
+      <div className="tb-menu" role="menu">{children(() => { if (ref.current) ref.current.open = false; })}</div>
+    </details>
+  );
+}
+
+/** Archive, Later, Black Hole and Move to any folder: the same group on every email */
+export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | null; busy?: boolean; onMove: (to: string, label: string) => void; here?: string }) {
   const others = (folders || []).filter((f) => f.path !== here && !/\\(Drafts|Junk)/.test(f.special));
   return (
-    <>
-      <button type="button" className="btn sm primary" disabled={busy} onClick={() => onMove("archive", "Archived.")} title="Moves it to Archive, like Outlook's Archive button">Archive</button>
-      <button type="button" className="btn sm ghost mf-bh" disabled={busy} onClick={() => onMove("blackhole", "Black Hole: SaneBox won't show you this sender again.")} title="SaneBox Black Hole: junk, and this sender is blocked from now on">Black Hole</button>
-      <button type="button" className="btn sm ghost" disabled={busy} onClick={() => onMove("later", "Moved to Later.")} title="SaneBox Later: this sender's mail goes to Later from now on">Later</button>
-      <details className="ibx2-more mf-move" ref={ref}>
-        <summary className="btn sm ghost">Move to…</summary>
-        <div className="ibx2-menu mf-menu">
-          {others.map((f) => <button key={f.path} type="button" disabled={busy} onClick={() => pick(f.path, `Moved to ${folderLabel(f)}.`)} style={{ paddingLeft: 10 + Math.min(3, f.depth) * 10 }}>{folderLabel(f)}</button>)}
-          {!others.length && <span className="faint" style={{ padding: 8 }}>Loading folders…</span>}
+    <TbGroup>
+      <TbBtn icon={TbIcon.archive} label="Archive" kind="strong" disabled={busy} onClick={() => onMove("archive", "Archived.")} title="Move it to Archive, like Outlook's Archive button" />
+      <TbBtn icon={TbIcon.later} label="Later" disabled={busy} onClick={() => onMove("later", "Moved to Later.")} title="SaneBox Later: this sender's mail goes to Later from now on" />
+      <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={busy} onClick={() => onMove("blackhole", "Black Hole: SaneBox won't show you this sender again.")} title="SaneBox Black Hole: junk, and this sender is blocked from now on" />
+      <TbMenu icon={TbIcon.move} label="Move">{(close) => <>
+        {others.map((f) => <button key={f.path} type="button" role="menuitem" disabled={busy} onClick={() => { close(); onMove(f.path, `Moved to ${folderLabel(f)}.`); }} style={{ paddingLeft: 12 + Math.min(3, f.depth) * 10 }}>{folderLabel(f)}</button>)}
+        {!others.length && <span className="faint" style={{ padding: 8 }}>Loading folders…</span>}
+      </>}</TbMenu>
+    </TbGroup>
+  );
+}
+
+/**
+ * The top of an open email, one layout everywhere (Oct 12, Nick: "clean up this area"): the toolbar first (Reply on
+ * the left, organize in the middle), then the subject, then who it's from (to / cc fold away), the AI's one-line read
+ * and small tags. On a phone the toolbar keeps its icons and drops the words for everything but Reply.
+ */
+export function MailHead({ toolbar, subject, tags, fromName, fromEmail, to, cc, date, summary, listOpen, toggleList, back }: {
+  toolbar: React.ReactNode; subject: string; tags?: React.ReactNode; fromName: string; fromEmail: string; to?: string; cc?: string; date: string; summary?: string;
+  listOpen: boolean; toggleList: () => void; back?: () => void;
+}) {
+  const [full, setFull] = useState(false);
+  const name = fromName || fromEmail;
+  const ini = name.replace(/[^A-Za-z ]/g, " ").trim().split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || "").join("") || "?";
+  const names = (v?: string) => (v || "").split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map((x) => x.replace(/<[^>]+>/, "").replace(/"/g, "").trim()).filter(Boolean);
+  const toN = names(to), ccN = names(cc);
+  const short = [...toN, ...ccN].slice(0, 2).map((x) => x.split(/[\s@]/)[0]).join(", ") + (toN.length + ccN.length > 2 ? ` +${toN.length + ccN.length - 2}` : "");
+  return (
+    <header className="mh">
+      <div className="mh-bar">
+        {back && <button type="button" className="mh-back" onClick={back} aria-label="Back to the list">{TbIcon.back}</button>}
+        <button type="button" className="mh-list" onClick={toggleList} title={listOpen ? "Hide the list" : "Show the list"} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
+        {toolbar}
+      </div>
+      <div className="mh-b">
+        <h2 className="mh-subj">{subject || "(no subject)"}</h2>
+        <div className="mh-from">
+          <span className="mh-av" aria-hidden>{ini}</span>
+          <div className="mh-who">
+            <div><b>{name}</b>{fromName && fromEmail && <span className="mh-addr">{fromEmail}</span>}</div>
+            {short && <button type="button" className="mh-to" onClick={() => setFull(!full)} aria-expanded={full}>to {short} <span aria-hidden>{full ? "▴" : "▾"}</span></button>}
+            {full && <div className="mh-full">{to && <div><span>To</span>{to}</div>}{cc && <div><span>Cc</span>{cc}</div>}</div>}
+          </div>
+          <time className="mh-date">{date}</time>
         </div>
-      </details>
-    </>
+        {(summary || tags) && <div className="mh-meta">{summary && <span className="mh-sum">✦ {summary}</span>}{tags}</div>}
+      </div>
+    </header>
   );
 }
 
@@ -175,24 +241,18 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
   return (
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Email">
-        <header className="ibx2-mh">
-          <div className="ibx2-sw"><button type="button" className="ibx2-back" onClick={back} aria-label="Back to the emails">←</button></div>
-          <div className="ibx2-mh-1">
-            <button type="button" className="ibx2-listbtn" onClick={toggleList} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
-            <span className="ibx2-who"><b>{row.fromName || row.from}</b>{row.fromName && <span> · {row.from}</span>}</span>
-            <span className="ibx2-when">{new Date(row.date).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
-          </div>
-          <h2>{row.subject || "(no subject)"}</h2>
-          <div className="ibx2-acts">
-            <button type="button" className="btn sm" disabled={!m} onClick={() => setRep("one")}>Reply</button>
-            <button type="button" className="btn sm ghost" disabled={!m} onClick={() => setRep("all")}>Reply all</button>
+        <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={row.subject} fromName={row.fromName} fromEmail={row.from} to={m?.to} cc={m?.cc}
+          date={new Date(row.date).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+          toolbar={<Toolbar>
+            <TbGroup>
+              <TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setRep("one")} />
+              <TbBtn icon={TbIcon.replyAll} label="Reply all" disabled={!m} onClick={() => setRep("all")} />
+            </TbGroup>
             <MoveBar folders={folders} busy={busy} onMove={move} here={row.folder} />
-          </div>
-          {err && <div className="pv-err">{err}</div>}
-        </header>
+          </Toolbar>} />
+        {err && <div className="pv-err mh-err">{err}</div>}
         <div className="ibx2-read">
           {!m ? <div className="ibx2-none">{err ? "" : "Opening the email…"}</div> : <>
-            <div className="lm-to faint">To {m.to}{m.cc ? ` · Cc ${m.cc}` : ""}</div>
             <MailFrame html={m.html} text={m.text} />
             <Attachments m={m} />
           </>}
@@ -232,19 +292,11 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
   return (
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Conversation">
-        <header className="ibx2-mh">
-          <div className="ibx2-sw"><button type="button" className="ibx2-back" onClick={back} aria-label="Back to the results">←</button></div>
-          <div className="ibx2-mh-1">
-            <button type="button" className="ibx2-listbtn" onClick={toggleList} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
-            <span className="ibx2-who"><b>{c.people.join(", ")}</b></span>
-            <span className="ibx2-when">{c.count} email{c.count === 1 ? "" : "s"}</span>
-          </div>
-          <h2>{c.subject}</h2>
-          <div className="ibx2-acts">
-            <button type="button" className="btn sm primary" onClick={() => { const k = `${lastIn.folder}:${lastIn.uid}`; const f = full[k]; if (f && f !== "err") setRep(f); else { load(lastIn); box<FullMsg>({ do: "message", path: lastIn.folder, uid: lastIn.uid }).then(setRep); } }}>Reply</button>
+        <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={c.subject} fromName={c.people.join(", ")} fromEmail="" date={`${c.count} email${c.count === 1 ? "" : "s"}`}
+          toolbar={<Toolbar>
+            <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={() => { const k = `${lastIn.folder}:${lastIn.uid}`; const f = full[k]; if (f && f !== "err") setRep(f); else { load(lastIn); box<FullMsg>({ do: "message", path: lastIn.folder, uid: lastIn.uid }).then(setRep); } }} /></TbGroup>
             <span className="faint mf-hint">Oldest at the top. Click an email to open or fold it.</span>
-          </div>
-        </header>
+          </Toolbar>} />
         <div className="ibx2-read mf-thread">
           {c.msgs.map((m) => {
             const k = `${m.folder}:${m.uid}`, f = full[k], isOpen = !!open[k];
@@ -261,8 +313,8 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
                   {!f ? <div className="faint">Opening…</div> : f === "err" ? <div className="pv-err">Couldn&apos;t open this one.</div> : <>
                     <MailFrame html={f.html} text={f.text} />
                     <Attachments m={f} />
-                    <div className="mf-msg-a">
-                      <button type="button" className="btn sm" onClick={() => setRep(f)}>Reply</button>
+                    <div className="mf-msg-a tb">
+                      <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" onClick={() => setRep(f)} /></TbGroup>
                       <MoveBar folders={folders} here={m.folder} onMove={async (to, label) => { try { await boxPost({ do: "move", path: m.folder, uid: m.uid, to }); flash(label); onMoved(m); } catch (e) { flash(e instanceof Error ? e.message : String(e)); } }} />
                     </div>
                   </>}
