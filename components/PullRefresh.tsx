@@ -38,7 +38,7 @@ export default function PullRefresh({ children }: { children?: React.ReactNode }
   });
   useEffect(() => {
     void checkVersion.current();
-    const back = () => { if (document.visibilityState === "visible") void checkVersion.current().then((n) => { if (n && ![...document.querySelectorAll("textarea, input[type=text]")].some((t) => (t as HTMLInputElement).value.trim())) window.location.reload(); }); // not while something's being written };
+    const back = () => { if (document.visibilityState === "visible") void checkVersion.current().then((n) => { if (n && ![...document.querySelectorAll("textarea, input[type=text]")].some((t) => (t as HTMLInputElement).value.trim())) window.location.reload(); }); /* not while something's being written */ };
     document.addEventListener("visibilitychange", back);
     const t = setInterval(() => void checkVersion.current(), 10 * 60000);
     return () => { document.removeEventListener("visibilitychange", back); clearInterval(t); };
