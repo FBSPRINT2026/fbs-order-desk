@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import type { Convo, Folder, FullMsg, MsgRow } from "@/lib/mail/folders";
+import VoiceDraft, { startListening, type Draft } from "@/components/VoiceDraft";
 
 /**
  * Email beyond the Inbox (Oct 12): the folder list, a folder's emails, reading / replying / moving any email, and
@@ -186,14 +187,18 @@ export function TbMenu({ icon, label, children, kind }: { icon: React.ReactNode;
 }
 
 /** what an open email can do, for the phone's bottom bar */
-export type PhoneActs = { reply?: () => void; move?: (to: string, label: string) => void; here?: string; folders?: Folder[] | null; busy?: boolean; more?: (close: () => void) => React.ReactNode };
+export type PhoneActs = { reply?: () => void; move?: (to: string, label: string) => void; here?: string; folders?: Folder[] | null; busy?: boolean; more?: (close: () => void) => React.ReactNode;
+  /** the Assistant: say what to tell them, it writes the reply (id: a customer email's id, "inbox:<id>" or "box:<uid>:<folder>") */
+  ask?: { id: string; who?: string; onDraft: (d: Draft) => void; openChat?: () => void } };
 /**
  * Phones: the same five buttons in the same places on every email (Oct 12, Nick: "it changes every time, it should be
- * more of a static thing"): Archive, Move, Black Hole, Reply, More. Move and More open a sheet from the bottom.
+ * more of a static thing"): Archive, Move, Black Hole, Assistant, Reply, More. Move and More open a sheet from the
+ * bottom; the Assistant listens and writes the reply (components/VoiceDraft.tsx).
  * A button an email can't use stays in its place, greyed out.
  */
 function PhoneBar({ a }: { a: PhoneActs }) {
   const [sheet, setSheet] = useState<"" | "move" | "more">("");
+  const [voice, setVoice] = useState<{ l: ReturnType<typeof startListening> } | null>(null);
   const others = (a.folders || []).filter((f) => f.path !== a.here && !/\\(Drafts|Junk)/.test(f.special));
   const mv = (to: string, label: string) => { setSheet(""); a.move?.(to, label); };
   const off = !a.move || !!a.busy;
@@ -203,9 +208,11 @@ function PhoneBar({ a }: { a: PhoneActs }) {
         <button type="button" className="pbar-b" disabled={off} onClick={() => mv("archive", "Archived.")}>{TbIcon.archive}<span>Archive</span></button>
         <button type="button" className="pbar-b" disabled={off} onClick={() => setSheet("move")}>{TbIcon.move}<span>Move</span></button>
         <button type="button" className="pbar-b danger" disabled={off} onClick={() => mv("blackhole", "Black Hole: SaneBox won't show you this sender again.")}>{TbIcon.ban}<span>Black Hole</span></button>
+        <button type="button" className="pbar-b pbar-ai" disabled={!a.ask} onClick={() => setVoice({ l: startListening() })} aria-label="Assistant: say what to tell them and it writes the reply"><i aria-hidden>✦</i><span>Assistant</span></button>
         <button type="button" className="pbar-b" disabled={!a.reply} onClick={() => a.reply?.()}>{TbIcon.reply}<span>Reply</span></button>
         <button type="button" className="pbar-b" disabled={!a.more} onClick={() => setSheet("more")}>{TbIcon.more}<span>More</span></button>
       </nav>
+      {voice && a.ask && <VoiceDraft chatId={a.ask.id} who={a.ask.who} listener={voice.l} onDraft={a.ask.onDraft} openChat={a.ask.openChat} onClose={() => setVoice(null)} />}
       {sheet && <div className="pbar-bg" onClick={() => setSheet("")}>
         <div className="pbar-sheet" role="menu" onClick={(e) => e.stopPropagation()}>
           {sheet === "move" ? <>
@@ -313,8 +320,8 @@ export function Attachments({ m }: { m: FullMsg }) {
 }
 
 /** reply / reply all box (to any email in any folder) */
-export function ReplyBox({ m, all, onClose, onSent }: { m: FullMsg; all?: boolean; onClose: () => void; onSent: (to: string) => void }) {
-  const [body, setBody] = useState(""), [busy, setBusy] = useState(false), [err, setErr] = useState(""), [toAll, setToAll] = useState(!!all);
+export function ReplyBox({ m, all, start, onClose, onSent }: { m: FullMsg; all?: boolean; /** a draft to start from (the Assistant's) */ start?: string; onClose: () => void; onSent: (to: string) => void }) {
+  const [body, setBody] = useState(start || ""), [busy, setBusy] = useState(false), [err, setErr] = useState(""), [toAll, setToAll] = useState(!!all);
   return (
     <div className="ibx2-compose open mf-reply">
       <div className="ibx2-to"><span>{toAll ? "Reply all" : "Reply"} to {m.fromName || m.fromAddress}</span><label className="check" style={{ marginLeft: "auto" }}><input type="checkbox" checked={toAll} onChange={(e) => setToAll(e.target.checked)} />Everyone on it</label></div>
@@ -355,14 +362,16 @@ export function FolderList({ rows, sel, onPick, onSwipe, sentBox, more, onMore, 
 
 /** one email from any folder: read it, reply, move it */
 export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, flash }: { row: MsgRow; folders: Folder[] | null; onGone: () => void; toggleList: () => void; listOpen: boolean; back: () => void; flash: (t: string) => void }) {
-  const [m, setM] = useState<FullMsg | null>(null), [err, setErr] = useState(""), [busy, setBusy] = useState(false), [rep, setRep] = useState<"" | "one" | "all">("");
+  const [m, setM] = useState<FullMsg | null>(null), [err, setErr] = useState(""), [busy, setBusy] = useState(false), [rep, setRep] = useState<"" | "one" | "all">(""), [draft, setDraft] = useState<{ body: string; n: number } | null>(null);
   useEffect(() => { let live = true; setM(null); setErr(""); box<FullMsg>({ do: "message", path: row.folder, uid: row.uid }).then((x) => live && setM(x), (e) => live && setErr(e.message)); return () => { live = false; }; }, [row.folder, row.uid]);
   const move = async (to: string, label: string) => { setBusy(true); try { await boxPost({ do: "move", path: row.folder, uid: row.uid, to }); flash(label); onGone(); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); };
   return (
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Email">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={row.subject} fromName={row.fromName} fromEmail={row.from} to={m?.to} cc={m?.cc}
-          phone={{ reply: m ? () => setRep("one") : undefined, move, here: row.folder, folders, busy, more: m ? (close) => <button type="button" role="menuitem" onClick={() => { close(); setRep("all"); }}>{TbIcon.replyAll} Reply all</button> : undefined }}
+          phone={{ reply: m ? () => setRep("one") : undefined, move, here: row.folder, folders, busy,
+            ask: { id: `box:${row.uid}:${row.folder}`, who: row.fromName || row.from, onDraft: (d) => { setDraft((x) => ({ body: d.body, n: (x?.n || 0) + 1 })); setRep("one"); } },
+            more: m ? (close) => <button type="button" role="menuitem" onClick={() => { close(); setRep("all"); }}>{TbIcon.replyAll} Reply all</button> : undefined }}
           date={new Date(row.date).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
           toolbar={<Toolbar>
             <TbGroup>
@@ -378,7 +387,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
             <Attachments m={m} />
           </>}
         </div>
-        {rep && m && <ReplyBox m={m} all={rep === "all"} onClose={() => setRep("")} onSent={(to) => { setRep(""); flash(`Sent to ${to}.`); }} />}
+        {rep && m && <ReplyBox key={draft?.n || 0} m={m} all={rep === "all"} start={draft?.body} onClose={() => { setRep(""); setDraft(null); }} onSent={(to) => { setRep(""); setDraft(null); flash(`Sent to ${to}.`); }} />}
       </section>
     </div>
   );
@@ -404,7 +413,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
   const last = c.msgs[c.msgs.length - 1];
   const [open, setOpen] = useState<Record<string, boolean>>({ [`${last.folder}:${last.uid}`]: true });
   const [full, setFull] = useState<Record<string, FullMsg | "err">>({});
-  const [rep, setRep] = useState<FullMsg | null>(null);
+  const [rep, setRep] = useState<FullMsg | null>(null), [repStart, setRepStart] = useState("");
   const endRef = useRef<HTMLDivElement | null>(null);
   const load = (m: MsgRow) => { const k = `${m.folder}:${m.uid}`; if (full[k]) return; box<FullMsg>({ do: "message", path: m.folder, uid: m.uid }).then((x) => setFull((f) => ({ ...f, [k]: x })), () => setFull((f) => ({ ...f, [k]: "err" }))); };
   useEffect(() => { load(last); setTimeout(() => endRef.current?.scrollIntoView({ block: "end" }), 300); }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -415,7 +424,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Conversation">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={c.subject} fromName={c.people.join(", ")} fromEmail="" date={`${c.count} email${c.count === 1 ? "" : "s"}`}
-          phone={{ reply: replyLast }}
+          phone={{ reply: replyLast, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); replyLast(); } } }}
           toolbar={<Toolbar>
             <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
             <span className="faint mf-hint">Oldest at the top. Click an email to open or fold it.</span>
@@ -447,7 +456,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
           })}
           <div ref={endRef} />
         </div>
-        {rep && <ReplyBox m={rep} onClose={() => setRep(null)} onSent={(to) => { setRep(null); flash(`Sent to ${to}. It shows in the conversation next time you search.`); }} />}
+        {rep && <ReplyBox key={repStart} m={rep} start={repStart} onClose={() => { setRep(null); setRepStart(""); }} onSent={(to) => { setRep(null); setRepStart(""); flash(`Sent to ${to}. It shows in the conversation next time you search.`); }} />}
       </section>
     </div>
   );

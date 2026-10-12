@@ -498,7 +498,8 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Email">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={i.subject} fromName={i.from_name} fromEmail={i.from_email} to={m?.to} cc={m?.cc} date={when} summary={i.summary}
-          phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: !!busy }}
+          phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: !!busy,
+            ask: { id: "inbox:" + i.id, who: i.from_name || i.from_email, onDraft: (d) => { setBody(d.body); setWriting(true); } } }}
           tags={<>
             {i.bucket === "todo" && <span className="eh-tag todo">To-do</span>}
             {i.bucket === "event" && <span className="eh-tag event">Event</span>}
@@ -598,7 +599,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const [side, setSide] = useState<"mail" | "ai">("mail");
   // phones: "✦ Assistant" sits in the email's top bar and opens the chat full screen
   const pnav = useContext(PhoneNav);
-  const myNav = pnav && x.direction === "in" ? { ...pnav, extra: <button type="button" className="eh-pn-ai" onClick={() => setSide("ai")}><span aria-hidden>✦</span> Assistant</button> } : pnav;
+  const myNav = pnav; // the Assistant is in the bottom bar (PhoneBar)
   const [made, setMade] = useState<{ id: string; number: number } | null>(null), [bump, setBump] = useState(0);
   const [aiW, setAiW] = useSticky<number>("inbox.aiW", 330), [composeH, setComposeH] = useSticky<number>("inbox.composeH", 0);
   // the Assistant's room (Oct 10, Nick: half screen, the chat took too much space): the email keeps at least EMAIL_MIN;
@@ -681,11 +682,12 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
         <MailHead listOpen={listOpen} toggleList={toggleList} subject={x.subject}
           phone={{
             reply: x.direction === "in" ? () => write() : undefined, busy: !!busy, folders, here: "INBOX",
+            ask: x.direction === "in" ? { id: x.id, who, onDraft: (d) => act({ kind: "reply", label: "", subject: d.subject, body: d.body }), openChat: () => setSide("ai") } : undefined,
             move: onMove || (inOutlook ? (to, label) => { const k = (["archive", "later", "news", "receipts", "cc", "blackhole"].includes(to) ? to : "archive") as "archive"; void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: k }), label); } : undefined),
             more: x.direction === "in" ? (close) => <>
               {view === "order" ? <button type="button" role="menuitem" onClick={() => { close(); setView("mail"); }}>{TbIcon.back} Back to the email</button>
                 : <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); startOrder(); }}>{TbIcon.order} {ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"}</button>}
-              <button type="button" role="menuitem" onClick={() => { close(); setSide("ai"); }}><span className="pbar-ic" aria-hidden>✦</span> Ask the Assistant</button>
+              <button type="button" role="menuitem" onClick={() => { close(); setSide("ai"); }}><span className="pbar-ic" aria-hidden>✦</span> Assistant chat</button>
               {needs && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr", () => markNoReply(x.id), "Off your Needs reply list."); }}>{TbIcon.check} No reply needed</button>}
               {!needs && x.meta?.no_reply && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr-undo", () => markNoReply(x.id, false), "Back on Needs reply."); }}>{TbIcon.reply} Needs a reply after all</button>}
               {x.customer_id && <a href={`/shop/customers/${x.customer_id}`} role="menuitem" onClick={close}>{TbIcon.file} Open the customer</a>}

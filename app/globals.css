@@ -6641,8 +6641,8 @@ a.pdn-tag:hover{text-decoration:underline}
   .eh-pn-pos{font-size:12px;color:var(--ink-3);margin-right:4px}
   .eh-pn-ai{height:34px;padding:0 12px!important;margin-right:4px;border-radius:999px!important;background:var(--accent-soft)!important;font-size:14px!important;font-weight:700;gap:5px}
   /* the bottom: always Archive, Move, Black Hole, Reply, More, in the same places */
-  .pbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:35;background:var(--surface);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
-  .pbar-b{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:50px;border:0;background:none;font:inherit;font-size:10.5px;font-weight:600;color:var(--accent);border-radius:10px;cursor:pointer}
+  .pbar{display:grid;grid-template-columns:repeat(6,1fr);position:fixed;left:0;right:0;bottom:0;z-index:35;background:var(--surface);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+  .pbar-b{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:50px;border:0;background:none;font:inherit;font-size:10px;white-space:nowrap;font-weight:600;color:var(--accent);border-radius:10px;cursor:pointer}
   .pbar-b svg,.pbar-sheet svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
   .pbar-b.danger{color:var(--danger)}
   .pbar-b:disabled{color:var(--ink-3);opacity:.4}
@@ -6679,3 +6679,37 @@ a.pdn-tag:hover{text-decoration:underline}
 .ptr.busy svg{animation:ptr-spin .8s linear infinite}
 @keyframes ptr-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.ptr.busy svg{animation-duration:2s}}
+
+/* the Assistant button in the phone's bottom bar, and the listening screen (components/VoiceDraft.tsx): the email stays
+   behind a glowing edge in the shop's colors, like the iPhone's AI; what you say shows as you say it */
+.pbar-ai i{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:15px;color:#fff;background:conic-gradient(from 200deg,#0E9BD8,#7C5CE0,#F26660,#FCB122,#0E9BD8);box-shadow:0 2px 10px rgba(124,92,224,.35)}
+.pbar-ai:disabled i{filter:grayscale(1)}
+.vd{position:fixed;inset:0;z-index:3000;display:flex;flex-direction:column;justify-content:flex-end;padding:0 10px calc(14px + env(safe-area-inset-bottom))}
+.vd-shade{position:absolute;inset:0;border:0;background:rgba(14,20,32,.18);-webkit-backdrop-filter:saturate(1.2);backdrop-filter:saturate(1.2);cursor:default}
+.vd-glow{position:absolute;inset:0;pointer-events:none;padding:7px;border-radius:44px;background:conic-gradient(from 0deg,#0E9BD8,#7C5CE0,#F26660,#FCB122,#0E9BD8);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);filter:blur(6px);animation:vd-hue 4s linear infinite,vd-in .35s ease-out}
+.vd-glow2{padding:22px;filter:blur(26px);opacity:.75;animation:vd-hue 4s linear infinite reverse,vd-breathe 2.4s ease-in-out infinite}
+.vd.think .vd-glow{animation-duration:1.4s,.35s}
+.vd.think .vd-glow2{animation-duration:1.4s,1.2s}
+@keyframes vd-hue{to{filter:blur(6px) hue-rotate(360deg)}}
+.vd-glow2{animation-name:vd-hue2,vd-breathe}
+@keyframes vd-hue2{to{filter:blur(26px) hue-rotate(-360deg)}}
+@keyframes vd-breathe{50%{opacity:.4}}
+@keyframes vd-in{from{opacity:0}}
+.vd-card{position:relative;z-index:1;background:color-mix(in srgb,var(--surface) 90%,transparent);-webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);border-radius:24px;padding:16px 16px 12px;box-shadow:0 18px 50px rgba(14,20,32,.28);display:flex;flex-direction:column;gap:10px;animation:vd-up .3s cubic-bezier(.2,.8,.2,1)}
+@keyframes vd-up{from{transform:translateY(24px);opacity:0}}
+.vd-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.vd-h b{font-size:15.5px}
+.vd-who{flex-basis:100%;font-size:12.5px;color:var(--ink-3);margin-top:-6px;padding-left:36px}
+.vd-orb{width:26px;height:26px;border-radius:50%;flex:none;background:conic-gradient(from 0deg,#0E9BD8,#7C5CE0,#F26660,#FCB122,#0E9BD8);animation:vd-spin 3s linear infinite;box-shadow:0 0 14px rgba(124,92,224,.5)}
+.vd.think .vd-orb{animation-duration:.9s}
+@keyframes vd-spin{to{transform:rotate(360deg)}}
+.vd-said{margin:0;font-family:var(--display);font-size:21px;line-height:1.3;color:var(--ink);min-height:56px}
+.vd-said.empty{font-family:inherit;font-size:15px;color:var(--ink-3);line-height:1.45}
+.vd-ans{margin:0;font-size:16px;line-height:1.45}
+.vd-in{width:100%;font:inherit;font-size:16px;line-height:1.4;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--surface);resize:none}
+.vd-err{font-size:13px;color:var(--danger)}
+.vd-acts{display:flex;gap:8px;justify-content:flex-end}
+.vd-b{height:42px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font:inherit;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer}
+.vd-b.go{border:0;color:#fff;background:linear-gradient(100deg,#0E9BD8,#7C5CE0)}
+.vd-b:disabled{opacity:.45}
+@media (prefers-reduced-motion:reduce){.vd-glow,.vd-glow2,.vd-orb,.vd-card{animation:none}}

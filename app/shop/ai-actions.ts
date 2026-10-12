@@ -11,7 +11,8 @@ import { storeInboundEmail } from "@/lib/crm/inbound";
 import { LOCATIONS, orderGroups, type Group, type Imprint, type Order } from "@/lib/pricing";
 import { reorderCheck, type ReorderCheck, type ReorderFix } from "@/lib/ai/reorderCheck";
 import { chatThread, orderChat } from "@/lib/ai/orderChat";
-import { emailChat, emailChatThread, noteEmail } from "@/lib/ai/emailChat";
+import { emailChat, emailChatThread, noteEmail, type ActRow } from "@/lib/ai/emailChat";
+import { accountForUser } from "@/lib/mail/config";
 
 // Staff-only server actions for the Assistant, the CRM timeline and the AI helpers.
 // AI helpers return { ok:false, off:true } until AI is turned on, so the UI can say how to turn it on.
@@ -290,21 +291,71 @@ export async function aiOrderChat(orderId: string, message: string, lookedUp?: L
 }
 
 /** Inbox chat: the conversation so far about this email. */
+/**
+ * Which email a chat is about: a customer email's id, "inbox:<mail_inbox id>" for anything in your Inbox, or
+ * "box:<uid>:<folder>" for an email in another of your folders. Only your own mailbox's emails.
+ */
+async function chatEmail(admin: ReturnType<typeof createAdminClient>, userId: string, id: string): Promise<{ key: string; given?: ActRow } | { error: string }> {
+  if (!id.startsWith("inbox:") && !id.startsWith("box:")) return { key: id };
+  const acct = await accountForUser(admin, userId);
+  if (!acct) return { error: "Connect your email first." };
+  if (id.startsWith("inbox:")) {
+    const { data: r } = await admin.from("mail_inbox").select("account_id").eq("id", id.slice(6)).maybeSingle();
+    return r && r.account_id === acct.id ? { key: id } : { error: "That email isn't in your Inbox." };
+  }
+  const m = /^box:(\d+):(.+)$/.exec(id);
+  if (!m) return { error: "Email not found." };
+  const uid = Number(m[1]), folder = m[2], key = `box:${acct.id}:${uid}:${folder}`;
+  const { data: c } = await admin.from("mail_cache").select("subject, from_email, body_text, sent_at").eq("account_id", acct.id).eq("folder", folder).eq("uid", uid).is("gone_at", null).limit(1).maybeSingle();
+  let row = c ? { subject: c.subject as string, from: c.from_email as string, text: (c.body_text as string) || "", date: (c.sent_at as string) || "" } : null;
+  if (!row || !row.text) {
+    const { withBox, getMessage } = await import("@/lib/mail/folders");
+    const f = await withBox(acct, (cl) => getMessage(cl, folder, uid)).catch(() => null);
+    if (f) row = { subject: f.subject, from: f.fromAddress, text: f.text || (f.html || "").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " "), date: f.date };
+  }
+  if (!row) return { error: "Email not found." };
+  const { data: cu } = await admin.from("customers").select("id").ilike("email", row.from || "-").limit(1).maybeSingle();
+  return { key, given: { id: null, customer_id: (cu?.id as string) || null, order_id: null, subject: row.subject, body: row.text, from_email: row.from, occurred_at: row.date || new Date().toISOString(), meta: {}, direction: "in" } };
+}
+
 export async function emailChatHistory(activityId: string) {
   try {
-    const { admin } = await staff();
-    return { ok: true as const, messages: await emailChatThread(admin, activityId) };
+    const { admin, user } = await staff();
+    const c = await chatEmail(admin, user!.id, activityId);
+    if ("error" in c) return { ok: false as const, error: c.error };
+    return { ok: true as const, messages: await emailChatThread(admin, c.key) };
   } catch (e) { return fail(e); }
 }
 
 /** Inbox chat: ask the AI about this email ("what should I do with it?"). */
 export async function aiEmailChat(activityId: string, message: string, lookedUp?: LookedUp | null) {
   try {
-    const { admin, email } = await staff();
+    const { admin, email, user } = await staff();
     const st = await aiState(admin);
     if (!st.ready) return { ok: false as const, off: true, error: st.reason };
-    const r = await emailChat(admin, st.settings, activityId, email, message, lookedUp);
+    const c = await chatEmail(admin, user!.id, activityId);
+    if ("error" in c) return { ok: false as const, error: c.error };
+    const r = await emailChat(admin, st.settings, c.key, email, message, lookedUp, { given: c.given });
     return r.ok ? { ok: true as const, messages: r.messages } : { ok: false as const, error: r.error };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * Phones: tap the Assistant, say what you want to tell them ("yes we do all of it, I'd love to set up a time to come
+ * by"), and it writes the reply as a draft. Nothing is sent: the draft goes in the reply box to check and send.
+ */
+export async function aiDraftReply(activityId: string, said: string) {
+  try {
+    const { admin, email, user } = await staff();
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false as const, off: true, error: st.reason };
+    const c = await chatEmail(admin, user!.id, activityId);
+    if ("error" in c) return { ok: false as const, error: c.error };
+    const r = await emailChat(admin, st.settings, c.key, email, `Draft my reply. What I want to say: "${said.trim().slice(0, 1800)}"`, null, { given: c.given, draft: true });
+    if (!r.ok) return { ok: false as const, error: r.error };
+    const last = r.messages[r.messages.length - 1];
+    const reply = (last?.actions || []).find((x) => x.kind === "reply") as { subject?: string; body: string } | undefined;
+    return { ok: true as const, said: last?.text || "", draft: reply ? { subject: reply.subject || "", body: reply.body } : null, actions: last?.actions || [] };
   } catch (e) { return fail(e); }
 }
 

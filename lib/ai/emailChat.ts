@@ -35,10 +35,34 @@ export async function emailChatThread(admin: SupabaseClient, activityId: string)
   return ((data?.payload as { messages?: EmailChatMsg[] } | null)?.messages || []);
 }
 
-export async function emailChat(admin: SupabaseClient, s: Settings, activityId: string, by: string, message: string, lookedUp?: LookedUp | null): Promise<{ ok: true; messages: EmailChatMsg[] } | { ok: false; error: string }> {
+/**
+ * Any email in the Inbox, not only customers' (Oct 12, Nick: "some emails don't have the Assistant"): "inbox:<mail_inbox
+ * id>" reads it from the 45-day cache (or the mailbox) and finds the sender among the customers when they're one.
+ */
+export type ActRow = { id: string | null; customer_id: string | null; order_id: string | null; subject: string | null; body: string | null; from_email: string | null; occurred_at: string; meta: unknown; direction: string };
+async function inboxAsActivity(admin: SupabaseClient, inboxId: string): Promise<ActRow | null> {
+  const { data: r } = await admin.from("mail_inbox").select("id, account_id, uid, uidvalidity, message_id, from_email, subject, received_at").eq("id", inboxId).maybeSingle();
+  if (!r) return null;
+  const { data: c } = await admin.from("mail_cache").select("body_text").eq("account_id", r.account_id).eq("message_id", r.message_id).is("gone_at", null).limit(1).maybeSingle();
+  let body = (c?.body_text as string) || "";
+  if (!body) {
+    const { data: acct } = await admin.from("mail_accounts").select("*").eq("id", r.account_id).maybeSingle();
+    if (acct) {
+      const { readLive } = await import("@/lib/mail/read");
+      const m = await readLive(acct as never, r as { uid: number; uidvalidity: number; message_id: string }).catch(() => null);
+      body = m?.text || (m?.html ? m.html.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ") : "");
+    }
+  }
+  const { data: cu } = await admin.from("customers").select("id").ilike("email", String(r.from_email || "")).limit(1).maybeSingle();
+  return { id: null, customer_id: (cu?.id as string) || null, order_id: null, subject: r.subject as string, body, from_email: r.from_email as string, occurred_at: (r.received_at as string) || new Date().toISOString(), meta: {}, direction: "in" };
+}
+
+export async function emailChat(admin: SupabaseClient, s: Settings, activityId: string, by: string, message: string, lookedUp?: LookedUp | null, opts: { given?: ActRow; draft?: boolean } = {}): Promise<{ ok: true; messages: EmailChatMsg[] } | { ok: false; error: string }> {
   const msg = message.trim().slice(0, 2000);
   if (!msg) return { ok: false, error: "Type a question first." };
-  const { data: a } = await admin.from("activities").select("id, customer_id, order_id, subject, body, from_email, occurred_at, meta, direction").eq("id", activityId).maybeSingle();
+  const inbox = !!opts.given || activityId.startsWith("inbox:");
+  const a: ActRow | null = opts.given ? opts.given : activityId.startsWith("inbox:") ? await inboxAsActivity(admin, activityId.slice(6))
+    : ((await admin.from("activities").select("id, customer_id, order_id, subject, body, from_email, occurred_at, meta, direction").eq("id", activityId).maybeSingle()).data as ActRow | null);
   if (!a) return { ok: false, error: "Email not found." };
   const cid = (a.customer_id as string) || null;
   const atts = ((a.meta as { attachments?: Att[] })?.attachments || []);
@@ -50,8 +74,8 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     pastJobs(admin, cid).catch(() => []),
     cid ? admin.from("orders").select("number, nickname, status, due_date").eq("customer_id", cid).not("status", "in", "(completed,request)").order("number", { ascending: false }).limit(10) : Promise.resolve({ data: [] as { number: number; nickname: string | null; status: string; due_date: string | null }[] }),
     admin.from("orders").select("due_date, status, groups").not("status", "in", "(completed,request,quote,quote_sent,ready)").gte("due_date", today).lte("due_date", in21).limit(300),
-    cid ? admin.from("activities").select("direction, subject, body, occurred_at").eq("customer_id", cid).neq("id", activityId).lt("occurred_at", a.occurred_at as string).order("occurred_at", { ascending: false }).limit(6) : Promise.resolve({ data: [] as { direction: string; subject: string | null; body: string | null; occurred_at: string }[] }),
-    signaturePaths(admin, { id: a.id as string, from_email: (a.from_email as string) || null }, atts).catch(() => new Set<string>()),
+    cid ? admin.from("activities").select("direction, subject, body, occurred_at").eq("customer_id", cid).neq("id", a.id || "00000000-0000-0000-0000-000000000000").lt("occurred_at", a.occurred_at as string).order("occurred_at", { ascending: false }).limit(6) : Promise.resolve({ data: [] as { direction: string; subject: string | null; body: string | null; occurred_at: string }[] }),
+    a.id ? signaturePaths(admin, { id: a.id, from_email: (a.from_email as string) || null }, atts).catch(() => new Set<string>()) : Promise.resolve(new Set<string>()),
   ]);
   // how busy the shop is: jobs and pieces due each of the next three weeks
   const weeks = [0, 1, 2].map((w) => ({ w, jobs: 0, pcs: 0 }));
@@ -77,7 +101,7 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
 
   const r = await askClaude<{ reply: string; actions?: { kind: string; label: string; told?: string; job?: number; subject?: string; body?: string; order_number?: number }[] }>({
     task: "email_chat", model: s.assistant.ai.model, maxTokens: 2000, timeoutMs: 55_000, admin, images, documents,
-    ctx: { activity_id: a.id as string, customer_id: cid, by },
+    ctx: { activity_id: a.id, customer_id: cid, by },
     tool: { name: "answer", description: "Your reply to staff and the next steps they can take with a click.", input_schema: { type: "object", properties: {
       reply: { type: "string", description: "One short text-message sentence, 25 words at most." },
       actions: { type: "array", description: "1-3 next steps, best first.", items: { type: "object", properties: {
@@ -91,8 +115,9 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     }, required: ["reply"] } },
     system: `${SHOP_CONTEXT(s)}
 
-You're helping staff handle a customer email, like an experienced shop manager reading over their shoulder. Read the email and its files, and use the customer's past jobs, open orders and how busy the shop is. Say plainly what it is and what you'd do: make a new order, make a reorder of a past job (name it), answer a question, ask for missing details, say we need more time (when the date they want is too soon for how busy we are), or turn the job down (when it's something the shop doesn't do or can't do in time). Offer the next steps as actions. When the garments are clear and the job is likely (a reorder, an approved quote, a tight date), you can offer order_goods: buying the blanks from S&S now, ahead of the order. Replies to the customer are written in the shop's voice (${s.assistant.ai.voice}), short, and never promise prices or exact dates unless staff gave them.
-Follow what staff tell you; it's fact.
+You're helping staff handle ${inbox && !cid ? "an email from their Inbox (it may be a possible new customer, a vendor or partner, or anything else: say what it is)" : "a customer email"}, like an experienced shop manager reading over their shoulder. Read the email and its files, and use the customer's past jobs, open orders and how busy the shop is. Say plainly what it is and what you'd do: make a new order, make a reorder of a past job (name it), answer a question, ask for missing details, say we need more time (when the date they want is too soon for how busy we are), or turn the job down (when it's something the shop doesn't do or can't do in time). Offer the next steps as actions. When the garments are clear and the job is likely (a reorder, an approved quote, a tight date), you can offer order_goods: buying the blanks from S&S now, ahead of the order. Replies to the customer are written in the shop's voice (${s.assistant.ai.voice}), short, and never promise prices or exact dates unless staff gave them.
+Follow what staff tell you; it's fact.${opts.draft ? `
+Staff just told you (spoken, so it may be loose) what they want to say back. Your FIRST action must be kind "reply": the complete email to send, written from what they said, in their words where it works, warm and short, with nothing they didn't say (no prices, dates or promises they didn't give). The reply sentence just says it's drafted.` : ""}
 Write like a quick text message from a coworker: ONE short sentence, 25 words at most. No greetings, headings, lists, prices or restating the email (staff can read it). Answer exactly what was asked. The detail goes into the actions: 1-3 actions, best first, with short button labels (2-5 words).`,
     prompt,
   });
@@ -113,7 +138,7 @@ Write like a quick text message from a coworker: ONE short sentence, 25 words at
     { role: "staff" as const, text: msg, at: now, by },
     { role: "ai" as const, text: brief(String(r.data.reply || "")), at: new Date().toISOString(), actions, ...(lookedUp?.text ? { lookedUp } : {}) },
   ].slice(-60);
-  const row = { kind: "email_chat", dedupe_key: `email_chat:${activityId}`, source: "ai", status: "done", priority: 3, customer_id: cid, activity_id: a.id, title: `Email chat: ${String(a.subject || "").slice(0, 80)}`, body: msg.slice(0, 300), payload: { messages }, model: r.model, run_id: r.runId, updated_at: now };
+  const row = { kind: "email_chat", dedupe_key: `email_chat:${activityId}`, source: "ai", status: "done", priority: 3, customer_id: cid, activity_id: a.id || null, title: `Email chat: ${String(a.subject || "").slice(0, 80)}`, body: msg.slice(0, 300), payload: { messages }, model: r.model, run_id: r.runId, updated_at: now };
   const { data: had } = await admin.from("ai_suggestions").select("id").eq("dedupe_key", row.dedupe_key).limit(1).maybeSingle();
   if (had) await admin.from("ai_suggestions").update(row).eq("id", had.id);
   else await admin.from("ai_suggestions").insert(row);
@@ -127,7 +152,8 @@ export async function noteEmail(admin: SupabaseClient, activityId: string, text:
   const { data: had } = await admin.from("ai_suggestions").select("id").eq("dedupe_key", `email_chat:${activityId}`).limit(1).maybeSingle();
   if (had) await admin.from("ai_suggestions").update({ payload: { messages }, updated_at: new Date().toISOString() }).eq("id", had.id);
   else {
-    const { data: a } = await admin.from("activities").select("customer_id, subject").eq("id", activityId).maybeSingle();
-    await admin.from("ai_suggestions").insert({ kind: "email_chat", dedupe_key: `email_chat:${activityId}`, source: "ai", status: "done", priority: 3, customer_id: a?.customer_id || null, activity_id: activityId, title: `Email chat: ${String(a?.subject || "").slice(0, 80)}`, body: text.slice(0, 300), payload: { messages } });
+    const inbox = activityId.startsWith("inbox:");
+    const { data: a } = inbox ? { data: null } : await admin.from("activities").select("customer_id, subject").eq("id", activityId).maybeSingle();
+    await admin.from("ai_suggestions").insert({ kind: "email_chat", dedupe_key: `email_chat:${activityId}`, source: "ai", status: "done", priority: 3, customer_id: a?.customer_id || null, activity_id: inbox ? null : activityId, title: `Email chat: ${String(a?.subject || "").slice(0, 80)}`, body: text.slice(0, 300), payload: { messages } });
   }
 }

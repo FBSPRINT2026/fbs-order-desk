@@ -25,7 +25,7 @@ export default function EmailChat({ activityId, onAction, busyOutside, bump = 0,
     setNote(""); setText("");
     setMsgs((m) => [...m, { role: "staff", text: q, at: new Date().toISOString() }]);
     let found = null;
-    if (wantsLookup(q)) { setBusy("look"); const lu = await aiLookUp(q, { activityId }).catch(() => null); found = lu?.ok ? lu.lookedUp : null; }
+    if (wantsLookup(q)) { setBusy("look"); const lu = await aiLookUp(q, activityId.startsWith("inbox:") ? {} : { activityId }).catch(() => null); found = lu?.ok ? lu.lookedUp : null; }
     setBusy("read");
     const r = await aiEmailChat(activityId, q, found);
     setBusy("");
