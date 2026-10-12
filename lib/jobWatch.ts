@@ -176,7 +176,7 @@ type PvData = { groups?: PvGroup[]; approvals?: { status?: string; name?: string
 async function watchPrintavoJobs(admin: SupabaseClient, today: string, lead: number, opts: { live?: boolean; deadline?: number; cut?: boolean }): Promise<JobAction[]> {
   const [{ data: rows }, { data: st }] = await Promise.all([
     admin.from("archived_orders").select("id, visual_id, kind, nickname, status_name, due_date, customer_id, data, customers(company, name, is_test)")
-      .not("due_date", "is", null).gte("due_date", bizAdd(today, 10)).lte("due_date", bizAdd(today, -30)).not("status_name", "ilike", "%complete%").not("status_name", "ilike", "%cancel%").limit(400),
+      .not("due_date", "is", null).gte("due_date", today).lte("due_date", bizAdd(today, -30)).not("status_name", "ilike", "%complete%").not("status_name", "ilike", "%cancel%").limit(400),
     admin.from("staff").select("email, name"),
   ]);
   const staff = ((st || []) as { email: string; name: string | null }[]).filter((x) => x.name);
@@ -223,8 +223,9 @@ async function watchPrintavoJobs(admin: SupabaseClient, today: string, lead: num
       const pcs = notOrdered.reduce((n, l) => n + (l.items || 0), 0);
       add("goods", orderBy, `Order goods for ${job}${late(orderBy)}`, `${pcs} pcs (${notOrdered.map((l) => `${l.brand || ""} ${l.itemNumber || ""} ${l.color || ""}`.trim()).slice(0, 3).join("; ")}) aren't marked ordered in Printavo. They need to be here by ${nice(goodsHere)} for ${nice(due)}.${from}`, url, 2);
     }
-    if (ordered.length && today > goodsHere) out.push({ orderId: r.id, number: +r.visual_id || 0, step: "goods_late", title: `Goods for ${job} aren't all in`, notes: `${ordered.length} line${ordered.length === 1 ? " is" : "s are"} still "ordered" in Printavo; they were needed by ${nice(goodsHere)} for ${nice(due)}. Check the tracking.`, by: goodsHere, today: true, url, ref: `pv:${r.id}:goods_late`, owner, archived: true });
-    if (/ready to ship/i.test(stName) && shipBy <= today) add("ship", shipBy, `${shipped ? "Ship" : "Deliver or set out"} ${job}${late(shipBy)}`, `It's ready (${stName}). In hands ${nice(due)}.`, url, 0);
+    const inProd = /press|production|printing|ship|deliver|embroider|ready/i.test(stName) && !/pre production|ready for production|scheduling/i.test(stName);
+    if (ordered.length && today > goodsHere && !inProd && (/receiving/i.test(stName) || bizBetween(today, due) <= 2)) out.push({ orderId: r.id, number: +r.visual_id || 0, step: "goods_late", title: `Goods for ${job} aren't all in`, notes: `${ordered.length} line${ordered.length === 1 ? " is" : "s are"} still "ordered" in Printavo; they were needed by ${nice(goodsHere)} for ${nice(due)}. Check the tracking.`, by: goodsHere, today: true, url, ref: `pv:${r.id}:goods_late`, owner, archived: true });
+    if (false && /ready to ship/i.test(stName) && shipBy <= today) add("ship", shipBy, `${shipped ? "Ship" : "Deliver or set out"} ${job}${late(shipBy)}`, `It's ready (${stName}). In hands ${nice(due)}.`, url, 0);
   }
   return out;
 }
