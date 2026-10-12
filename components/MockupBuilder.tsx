@@ -392,7 +392,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const rgb = (h: string) => { const v = h.replace("#", ""); return [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0); };
           const dist = (a: string, b: string) => { const x = rgb(a), y = rgb(b); return (x[0] - y[0]) ** 2 + (x[1] - y[1]) ** 2 + (x[2] - y[2]) ** 2; };
           const nearestAsked = (hex: string) => asked.slice().sort((a, b) => dist(hex, colorHex(a)!) - dist(hex, colorHex(b)!))[0];
-          const useAsked = asked.length > 0 && asked.length >= Math.min(plan.inks.length, asked.length);
+          // only when they name enough inks for every color in the logo: one ink named for a 3-color logo (a guess
+          // from an old job, Oct 12 Peticolas) painted the whole logo that one ink, a solid circle on the mockup
+          const useAsked = asked.length > 0 && asked.length >= plan.inks.length;
           for (const k of plan.inks) {
             const name = useAsked ? nearestAsked(k.hex) : k.name;
             for (const hex of [k.hex, ...(k.also || [])]) map[hex] = { name, hex: colorHex(name) || k.hex };
