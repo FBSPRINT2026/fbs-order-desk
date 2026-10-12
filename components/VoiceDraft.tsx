@@ -10,7 +10,7 @@ import { aiDraftReply } from "@/app/shop/ai-actions";
  * the draft goes into the reply box to check and send.
  */
 export type Draft = { subject: string; body: string };
-type Listener = { text: string; on: boolean; err: string; heard: boolean; sub: (() => void) | null; stop: () => void; abort: () => void };
+type Listener = { text: string; on: boolean; err: string; heard: boolean; /** when the microphone actually opened (after you allowed it) */ liveAt: number; sub: (() => void) | null; stop: () => void; abort: () => void };
 /** iPhones and iPads: listening "continuously" there often never hands back the words; one sentence at a time does */
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
@@ -35,21 +35,23 @@ export function startListening(): Listener | null {
   const r = new S();
   r.lang = "en-US"; r.interimResults = true; r.continuous = !isIOS(); r.maxAlternatives = 1;
   let final = "";
-  const l: Listener = { text: "", on: true, err: "", heard: false, sub: null, stop: () => { try { r.stop(); } catch { /* stopped */ } }, abort: () => { try { r.abort(); } catch { /* stopped */ } } };
+  const l: Listener = { text: "", on: true, err: "", heard: false, liveAt: 0, sub: null, stop: () => { try { r.stop(); } catch { /* stopped */ } }, abort: () => { try { r.abort(); } catch { /* stopped */ } } };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   r.onresult = (e: any) => {
     let interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) final += t + " "; else interim += t; }
     l.text = (final + interim).replace(/\s+/g, " ").trim(); l.heard = true; l.sub?.();
   };
+  r.onaudiostart = () => { l.liveAt = Date.now(); l.sub?.(); };
   r.onend = () => { l.on = false; l.sub?.(); };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  r.onerror = (e: any) => { l.on = false; l.err = e?.error === "not-allowed" ? "The microphone isn't allowed for the portal. Type it instead, or allow it in Settings → Safari → Microphone." : e?.error === "no-speech" ? "" : "Couldn't hear that. Try again, or type it."; l.sub?.(); };
+  r.onerror = (e: any) => { l.on = false; l.err = e?.error === "not-allowed" ? "The microphone isn't allowed. Type it here, or tap Assistant again and choose Allow." : e?.error === "no-speech" ? "" : "Couldn't hear that. Try again, or type it."; l.sub?.(); };
   try { r.start(); } catch { keyboard(); return null; }
   return l;
 }
 
-export default function VoiceDraft({ chatId, who, listener, onDraft, onClose, openChat }: { chatId: string; who?: string; listener: Listener | null; onDraft: (d: Draft) => void; onClose: () => void; openChat?: () => void }) {
+export default function VoiceDraft({ chatId, who, listener: first, onDraft, onClose, openChat }: { chatId: string; who?: string; listener: Listener | null; onDraft: (d: Draft) => void; onClose: () => void; openChat?: () => void }) {
+  const [listener, setListener] = useState(first);
   const [text, setText] = useState(listener?.text || ""), [on, setOn] = useState(!!listener?.on);
   // typing instead: the keyboard (with its own mic) when listening isn't working or you'd rather type
   const typeInstead = (why = "") => { listener?.abort(); setOn(false); if (why) setErr(why); setTimeout(() => boxRef.current?.focus(), 30); };
@@ -72,11 +74,13 @@ export default function VoiceDraft({ chatId, who, listener, onDraft, onClose, op
       if (quiet.current) clearTimeout(quiet.current);
       if (listener.text && listener.on) quiet.current = setTimeout(() => void writeRef.current(listener.text), 2200);
       if (!listener.on && listener.text) void writeRef.current(listener.text);
-      if (!listener.on && !listener.text && !listener.err) setErr("Didn't catch anything. Type it here, or tap the mic on your keyboard.");
+      // it stopped without words: only say so when it was really listening (not while the phone asked about the mic)
+      if (!listener.on && !listener.text && !listener.err && listener.liveAt) setErr("Didn't catch anything. Tap Talk to try again, or type it.");
     };
     // nothing heard after a few seconds (some phones open the microphone but never pass the words on): type it instead
-    const dead = setTimeout(() => { if (!listener.heard && listener.on && !sent.current) { markDead(); typeInstead("Listening isn't working here. Type it, or tap the mic on your keyboard and talk."); } }, 7000);
-    return () => { clearTimeout(dead); listener.sub = null; listener.abort(); if (quiet.current) clearTimeout(quiet.current); };
+    // (counted from when the microphone opened, so the phone's "allow the microphone?" question doesn't count)
+    const dead = setInterval(() => { if (listener.liveAt && !listener.heard && listener.on && !sent.current && Date.now() - listener.liveAt > 7000) { clearInterval(dead); markDead(); typeInstead("Listening isn't working here. Type it, or tap the mic on your keyboard and talk."); } }, 500);
+    return () => { clearInterval(dead); listener.sub = null; listener.abort(); if (quiet.current) clearTimeout(quiet.current); };
   }, [listener]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
 
@@ -97,6 +101,7 @@ export default function VoiceDraft({ chatId, who, listener, onDraft, onClose, op
         <div className="vd-acts">
           <button type="button" className="vd-b" onClick={onClose}>Cancel</button>
           {phase === "listen" && listener && on && <button type="button" className="vd-b" onClick={() => typeInstead()}>Type</button>}
+          {phase === "listen" && !on && !text.trim() && <button type="button" className="vd-b" onClick={() => { setErr(""); try { localStorage.removeItem("fbs:voice.dead"); } catch { /* fine */ } const l = startListening(); setListener(l); setOn(!!l?.on); }}>Talk</button>}
           {phase === "answer" && openChat && <button type="button" className="vd-b" onClick={() => { onClose(); openChat(); }}>Open the chat</button>}
           {phase === "listen" && listener && on
             ? <button type="button" className="vd-b go" onClick={() => { if (text.trim()) void write(text); else typeInstead("Didn't catch anything yet. Type it here, or tap the mic on your keyboard."); }}>Done</button>
