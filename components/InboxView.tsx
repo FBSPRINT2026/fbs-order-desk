@@ -729,6 +729,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           tags={<>
             {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
             {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="eh-tag">{INTENT[x.meta.triage.intent]}</span>}
+            {x.direction === "in" && (orderish || reorder || ordering) && view !== "order" && <button type="button" className="eh-tag make" disabled={!!busy && busy !== "opts"} onClick={() => startOrder()}>{ordering ? "Back to the order" : reorder ? "＋ Create reorder" : "＋ Create order"}</button>}
             {x.direction === "in" && goodsPcs > 0 && <Link className="eh-tag goods" href={orderGoodsHref(x.id)} title="Order the goods for this, or email our S&S rep (Tiffany) for a custom quote">🧺 Order goods · {goodsPcs} pcs</Link>}
             {x.customer_id && <Link className="eh-tag link" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
             {filed && <Link className="eh-tag link" href={`/shop/orders/${filed.id}`}>#{filed.number}</Link>}

@@ -6829,3 +6829,9 @@ a.pdn-tag:hover{text-decoration:underline}
   .ibx2-files>*{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left}
   .ibx2-read pre,.ibx2-read .lm-text{white-space:pre-wrap;overflow-wrap:anywhere}
 }
+/* phones: Create order / reorder right on the email (the toolbar that has it on a computer is the bottom bar there) */
+.eh-tag.make{display:none}
+@media (max-width:760px) and (pointer:coarse){
+  .eh-tag.make{display:inline-flex;align-items:center;border:0;cursor:pointer;font:inherit;font-weight:700;background:var(--accent);color:#fff}
+  .eh-tag.make:disabled{opacity:.5}
+}
