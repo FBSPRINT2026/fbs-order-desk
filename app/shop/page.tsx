@@ -48,7 +48,7 @@ export default function Dashboard() {
   const viewing = !!role.viewAs && role.viewAs.includes("@");
   const myEmail = viewing ? role.viewAs : role.email || "", staffName = viewing ? role.viewName || "" : role.staffName || "";
   // who "Mine" means: the signed-in person's first name (from the layout, no extra round trip before the data loads)
-  const me = myEmail ? (staffName || myEmail.split("@")[0]).split(/[\s._-]+/)[0].toLowerCase() : "";
+  const me = myEmail ? (staffName || myEmail.split("@")[0]).split(/[\s._@-]+/)[0].toLowerCase() : "";
   const router = useRouter();
   const boss = perms.money; // owners / admins see the sales numbers; crew (production, receiving, shipping) get the production dashboard
   const crew = !boss;
@@ -174,9 +174,10 @@ export default function Dashboard() {
       issues: js.filter((j) => j.status === "issue"),
     };
   }, [jobs, mine, me, owners]); // eslint-disable-line react-hooks/exhaustive-deps
-  const myMsgs = msgs.filter((x) => isMine(x.customer_id));
+  const myMsgs = msgs.filter((x) => (viewing ? !!me && owners[x.customer_id || ""] === me : isMine(x.customer_id)));
   // an email is mine when it came to my mailbox (or it's one of my customers')
-  const mailMine = (x: Mail) => !mine || (!!myBox && x.meta?.account_id === myBox) || (!!x.customer_id && isMine(x.customer_id));
+  // (viewing as someone: just theirs, whatever Mine / Everyone is set to)
+  const mailMine = (x: Mail) => (viewing ? false : !mine) || (!!myBox && x.meta?.account_id === myBox) || (!!x.customer_id && (viewing ? !!me && owners[x.customer_id] === me : isMine(x.customer_id)));
   const myNeeds = mailNeeds.filter(mailMine);
   const myUrgent = mailUrgent.filter(mailMine).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)); // longest waiting first
   // one list of everything waiting on a reply: urgent emails first (longest waiting first), then the rest, newest first
@@ -336,7 +337,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <MyDay name={(staffName || myEmail.split("@")[0]).split(/[\s._-]+/)[0].replace(/^./, (c) => c.toUpperCase())} replyCount={replyItems.length} urgentCount={myUrgent.length} replies={
+      <MyDay name={(staffName || myEmail.split("@")[0]).split(/[\s._@-]+/)[0].replace(/^./, (c) => c.toUpperCase())} replyCount={replyItems.length} urgentCount={myUrgent.length} replies={
               <div className="md-scroll">
                 {!v ? <div className="md-empty">Loading…</div> : list(replyItems.length, (
                   <ul className="db-list db-replies">{replyItems.map(({ msg: x, mail: e }) => x ? (
