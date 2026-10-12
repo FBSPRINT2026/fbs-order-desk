@@ -118,7 +118,8 @@ export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct
   const [off, setOff] = useState(0), [drag, setDrag] = useState(false), [gone, setGone] = useState(false);
   const OPEN = 222; // three buttons
   const width = () => ref.current?.offsetWidth || 360;
-  const full = off < -width() * 0.6;
+  const far = () => -Math.max(OPEN + 70, width() * 0.7); // past here, letting go archives it
+  const full = off < far();
   const [shut] = useState(() => () => setOff(0)); // the same function every render: what's open is remembered by it
   const close = () => { shut(); if (closeOpenRow === shut) closeOpenRow = null; };
   useEffect(() => () => { if (closeOpenRow === shut) closeOpenRow = null; }, [shut]);
@@ -156,7 +157,7 @@ export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct
           const s = g.current; g.current = null; setDrag(false);
           if (!s?.on) { if (s && !s.off && s.base) { swallow.current = true; close(); } return; }
           swallow.current = true;
-          if (off < -width() * 0.6) void fire("archive");
+          if (off < far()) void fire("archive");
           else if (off < -OPEN / 2) { setOff(-OPEN); closeOpenRow = shut; }
           else close();
         }}
