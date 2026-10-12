@@ -6455,20 +6455,7 @@ a.pdn-tag:hover{text-decoration:underline}
   .side.auto .nav a{position:relative}
 }
 @media (min-width:821px) and (prefers-reduced-motion:reduce){ .side.auto{transition:none} }
-/* Email: the folders across the top */
-.mf-bar{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow-x:auto;margin:-4px 0 10px;padding:2px 0 4px;scrollbar-width:thin}
-.mf-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font:inherit;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer;white-space:nowrap;list-style:none}
-.mf-chip::-webkit-details-marker{display:none}
-.mf-chip b{font-size:11px;color:#fff;background:var(--accent);border-radius:8px;padding:0 6px}
-.mf-chip:hover{border-color:var(--ink-3)}
-.mf-chip.on,.mf-dd.on>.mf-chip{background:var(--ink);border-color:var(--ink);color:var(--surface)}
-.mf-dd{position:relative}
-.mf-ddm{position:fixed;z-index:70;margin-top:6px;min-width:220px;max-height:60vh;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(20,29,43,.18);padding:6px;display:flex;flex-direction:column}
-.mf-ddm button{display:flex;align-items:center;gap:8px;border:0;background:none;text-align:left;font:inherit;font-size:13.5px;padding:7px 12px;border-radius:7px;cursor:pointer;color:var(--ink)}
-.mf-ddm button:hover{background:var(--surface-2)}
-.mf-ddm button.on{color:var(--accent);font-weight:700}
-.mf-ddm button b{margin-left:auto;font-size:11px;color:var(--accent)}
-.mf-load{padding:6px 2px;font-size:13px}
+
 
 /* ───────── the top of an open email (components/MailFolders.tsx MailHead + Toolbar) ───────── */
 .eh{flex:none;border-bottom:1px solid var(--line)}

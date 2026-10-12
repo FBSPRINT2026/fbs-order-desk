@@ -237,7 +237,10 @@ export async function inboxBrief() {
     });
     if (!res.ok) return { ok: false as const, error: res.error };
     const ids = new Set(items.map((r) => r.id));
-    const brief: Brief = { ...res.data, sections: (res.data.sections || []).map((s) => ({ title: s.title, items: (s.items || []).map((i) => ({ text: i.text, ref: ids.has((i.ref || "").replace(/[[\]]/g, "")) ? (i.ref || "").replace(/[[\]]/g, "") : "" })) })), at: new Date().toISOString() };
+    // the model sometimes hands nested lists back as JSON text: read them either way
+    const arr = <T,>(v: unknown): T[] => { if (Array.isArray(v)) return v as T[]; if (typeof v === "string") { try { const j = JSON.parse(v); return Array.isArray(j) ? (j as T[]) : []; } catch { return []; } } return []; };
+    const secs = arr<{ title: string; items: unknown }>(res.data.sections).map((x) => ({ title: x.title, items: arr<{ text: string; ref: string }>(x.items) }));
+    const brief: Brief = { ...res.data, sections: secs.map((s) => ({ title: s.title, items: (s.items || []).map((i) => ({ text: i.text, ref: ids.has((i.ref || "").replace(/[[\]]/g, "")) ? (i.ref || "").replace(/[[\]]/g, "") : "" })) })), at: new Date().toISOString() };
     return { ok: true as const, brief };
   } catch (e) { return fail(e); }
 }
