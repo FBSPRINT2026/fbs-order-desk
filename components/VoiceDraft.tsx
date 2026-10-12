@@ -14,9 +14,9 @@ type Listener = { text: string; on: boolean; err: string; heard: boolean; /** wh
 /** iPhones and iPads: listening "continuously" there often never hands back the words; one sentence at a time does */
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-const DEAD = "fbs:voice.dead"; // listening didn't work on this phone lately (the Home Screen app often can't): type instead
-const voiceDead = () => { try { return Date.now() - Number(localStorage.getItem(DEAD) || 0) < 864e5; } catch { return false; } };
-const markDead = () => { try { localStorage.setItem(DEAD, String(Date.now())); } catch { /* fine */ } };
+// (Oct 12: no more "skip listening for a day" after a miss: it misfired while the phone was asking about the mic. Clear
+// what that left behind.)
+if (typeof window !== "undefined") { try { localStorage.removeItem("fbs:voice.dead"); } catch { /* fine */ } }
 
 /**
  * Start listening right away (it has to start inside the tap, or the phone won't allow the microphone). When it can't
@@ -31,7 +31,7 @@ export function startListening(): Listener | null {
     t.setAttribute("aria-hidden", "true"); t.style.cssText = "position:fixed;bottom:0;left:0;width:1px;height:1px;opacity:0;font-size:16px";
     document.body.appendChild(t); t.focus(); setTimeout(() => t.remove(), 800);
   };
-  if (!S || voiceDead()) { keyboard(); return null; }
+  if (!S) { keyboard(); return null; }
   const r = new S();
   r.lang = "en-US"; r.interimResults = true; r.continuous = !isIOS(); r.maxAlternatives = 1;
   let final = "";
@@ -79,7 +79,7 @@ export default function VoiceDraft({ chatId, who, listener: first, onDraft, onCl
     };
     // nothing heard after a few seconds (some phones open the microphone but never pass the words on): type it instead
     // (counted from when the microphone opened, so the phone's "allow the microphone?" question doesn't count)
-    const dead = setInterval(() => { if (listener.liveAt && !listener.heard && listener.on && !sent.current && Date.now() - listener.liveAt > 7000) { clearInterval(dead); markDead(); typeInstead("Listening isn't working here. Type it, or tap the mic on your keyboard and talk."); } }, 500);
+    const dead = setInterval(() => { if (listener.liveAt && !listener.heard && listener.on && !sent.current && Date.now() - listener.liveAt > 7000) { clearInterval(dead); typeInstead("Listening isn't working here. Type it, or tap the mic on your keyboard and talk."); } }, 500);
     return () => { clearInterval(dead); listener.sub = null; listener.abort(); if (quiet.current) clearTimeout(quiet.current); };
   }, [listener]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
@@ -101,7 +101,7 @@ export default function VoiceDraft({ chatId, who, listener: first, onDraft, onCl
         <div className="vd-acts">
           <button type="button" className="vd-b" onClick={onClose}>Cancel</button>
           {phase === "listen" && listener && on && <button type="button" className="vd-b" onClick={() => typeInstead()}>Type</button>}
-          {phase === "listen" && !on && !text.trim() && <button type="button" className="vd-b" onClick={() => { setErr(""); try { localStorage.removeItem("fbs:voice.dead"); } catch { /* fine */ } const l = startListening(); setListener(l); setOn(!!l?.on); }}>Talk</button>}
+          {phase === "listen" && !on && !text.trim() && <button type="button" className="vd-b" onClick={() => { setErr(""); const l = startListening(); setListener(l); setOn(!!l?.on); }}>Talk</button>}
           {phase === "answer" && openChat && <button type="button" className="vd-b" onClick={() => { onClose(); openChat(); }}>Open the chat</button>}
           {phase === "listen" && listener && on
             ? <button type="button" className="vd-b go" onClick={() => { if (text.trim()) void write(text); else typeInstead("Didn't catch anything yet. Type it here, or tap the mic on your keyboard."); }}>Done</button>
