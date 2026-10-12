@@ -8,7 +8,7 @@ import { mailRows } from "@/lib/inbox";
 import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
 import { inboxItemExtras, setEventStatus, setTaskDone, type CalEvent, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
-import { Attachments, box as mailBox, boxPost, ConvoList, FolderList, FolderMail, folderLabel, FolderRail, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { Attachments, box as mailBox, boxPost, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -192,16 +192,12 @@ export default function InboxView({ mode }: { mode: Mode }) {
       {box?.enabled && box.last_error && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
 
-      <div className={"ibx2" + (mode === "mail" ? " mf" : "") + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
-        {mode === "mail" && <FolderRail folders={folders} current={view.kind === "folder" ? view.path : view.kind === "inbox" ? (folders?.find((f) => f.special === "\\Inbox")?.path || "INBOX") : ""} onPick={(p) => { setQ(""); void openFolder(p); }} />}
-        {(listOpen || !hasSel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: (mode === "mail" ? 202 : 0) + listW + 2 }} label="Drag to make the email list wider or narrower" />}
+      {mode === "mail" && <FolderBar folders={folders} current={view.kind === "folder" ? view.path : view.kind === "inbox" ? (folders?.find((f) => f.special === "\\Inbox")?.path || "INBOX") : ""} onPick={(p) => { setQ(""); void openFolder(p); }} />}
+      <div className={"ibx2" + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
+        {(listOpen || !hasSel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
         {/* 1. the list */}
         <section className="ibx2-list" aria-label="Emails">
           <div className="ibx2-list-h">
-            {mode === "mail" && <select className="mf-pick" aria-label="Folder" value={view.kind === "folder" ? view.path : "INBOX"} onChange={(e) => { setQ(""); void openFolder(e.target.value); }}>
-              <option value="INBOX">Inbox</option>
-              {(folders || []).filter((f) => f.special !== "\\Inbox").map((f) => <option key={f.path} value={f.path}>{"\u00a0".repeat(Math.min(3, f.depth) * 2)}{folderLabel(f)}{f.unseen ? ` (${f.unseen})` : ""}</option>)}
-            </select>}
             {mode === "mail" && view.kind !== "inbox" ? <div className="mf-lh">
               {view.kind === "folder" ? <><b>{folderLabel(folders?.find((f) => f.path === view.path) || { name: view.path.split("/").pop() || view.path, special: "" })}</b><span className="faint">{folders?.find((f) => f.path === view.path)?.messages ?? ""} emails</span></>
                 : <><b>“{view.q}”</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link" onClick={() => { setQ(""); setView({ kind: "inbox" }); }}>Clear</button></>}

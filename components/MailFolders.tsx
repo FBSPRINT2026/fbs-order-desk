@@ -49,6 +49,36 @@ export function FolderRail({ folders, current, onPick, onSearch }: { folders: Fo
   );
 }
 
+/** the folders across the top (no extra width): Inbox, Sent, Archive, Drafts, Deleted, then SaneBox and your own folders in menus */
+export function FolderBar({ folders, current, onPick }: { folders: Folder[] | null; current: string; onPick: (path: string) => void }) {
+  const sRef = useRef<HTMLDetailsElement | null>(null), fRef = useRef<HTMLDetailsElement | null>(null);
+  const list = folders || [];
+  const main = ["\\Inbox", "\\Sent", "\\Archive", "\\Drafts", "\\Trash", "\\Junk"].map((s) => list.find((f) => f.special === s)).filter(Boolean) as Folder[];
+  const sane = list.filter((f) => f.sane), rest = list.filter((f) => !main.includes(f) && !f.sane);
+  const inSane = sane.find((f) => f.path === current), inRest = rest.find((f) => f.path === current);
+  const pick = (p: string) => { if (sRef.current) sRef.current.open = false; if (fRef.current) fRef.current.open = false; onPick(p); };
+  const chip = (f: Folder) => (
+    <button key={f.path} type="button" role="tab" aria-selected={current === f.path} className={"mf-chip" + (current === f.path ? " on" : "")} onClick={() => pick(f.path)}>
+      {f.special === "\\Inbox" ? "Inbox" : folderLabel(f)}{f.unseen > 0 && f.special !== "\\Sent" && <b>{f.unseen}</b>}
+    </button>
+  );
+  return (
+    <div className="mf-bar" role="tablist" aria-label="Folders">
+      {!folders ? <span className="faint mf-load">Loading folders…</span> : <>
+        {main.length ? main.map(chip) : <button type="button" className={"mf-chip" + (/^inbox$/i.test(current) ? " on" : "")} onClick={() => pick("INBOX")}>Inbox</button>}
+        {sane.length > 0 && <details className={"mf-dd" + (inSane ? " on" : "")} ref={sRef}>
+          <summary className="mf-chip">{inSane ? folderLabel(inSane) : "SaneBox"} ▾{sane.reduce((n, f) => n + f.unseen, 0) > 0 && !inSane && <b>{sane.reduce((n, f) => n + f.unseen, 0)}</b>}</summary>
+          <div className="mf-ddm">{sane.map((f) => <button key={f.path} type="button" className={current === f.path ? "on" : ""} onClick={() => pick(f.path)}>{folderLabel(f)}{f.unseen > 0 && <b>{f.unseen}</b>}</button>)}</div>
+        </details>}
+        {rest.length > 0 && <details className={"mf-dd" + (inRest ? " on" : "")} ref={fRef}>
+          <summary className="mf-chip">{inRest ? folderLabel(inRest) : "More folders"} ▾</summary>
+          <div className="mf-ddm">{rest.map((f) => <button key={f.path} type="button" className={current === f.path ? "on" : ""} style={{ paddingLeft: 12 + Math.min(3, f.depth) * 12 }} onClick={() => pick(f.path)}>{folderLabel(f)}{f.unseen > 0 && <b>{f.unseen}</b>}</button>)}</div>
+        </details>}
+      </>}
+    </div>
+  );
+}
+
 /** Archive, Black Hole and Move to any folder: the same on every email */
 export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | null; busy?: boolean; onMove: (to: string, label: string) => void; here?: string }) {
   const ref = useRef<HTMLDetailsElement | null>(null);

@@ -14,6 +14,7 @@ import { ordersNeedingDetails } from "@/lib/productionDetails";
 import { getOutlookInbox } from "@/app/shop/mail-actions";
 import { setViewAs } from "@/app/shop/view-as-actions";
 import SupportButton from "@/components/SupportButton";
+import { useSticky } from "@/lib/useSticky";
 
 const ICONS: Record<string, React.ReactNode> = {
   home: <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>,
@@ -62,6 +63,8 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   const [pvWaiting, setPvWaiting] = useState(0);
   const [details, setDetails] = useState(0); // reorders waiting on production details
   const [mailNew, setMailNew] = useState(0); // unread email in my Inbox
+  // the menu hides to a strip of icons and slides out when you point at it (like QuickBooks); the pin keeps it open
+  const [pinned, setPinned] = useSticky<boolean>("nav.pinned", false);
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
   const [hello, setHello] = useState("Hello");
   // the owner: how many support reports are waiting (the Support link's badge)
@@ -181,7 +184,11 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   );
 
   return (
-    <aside className="side" ref={sideRef}>
+    <aside className={"side" + (pinned ? " pinned" : " auto")} ref={sideRef}>
+      <button type="button" className={"side-pin" + (pinned ? " on" : "")} aria-pressed={pinned} onClick={() => setPinned(!pinned)}
+        title={pinned ? "Unpin: the menu hides to icons and slides out when you point at it" : "Pin the menu open"} aria-label={pinned ? "Unpin the menu" : "Pin the menu open"}>
+        <svg viewBox="0 0 24 24" aria-hidden><path d="M9 3h6l-1 6 4 4H6l4-4z" /><path d="M12 13v8" /></svg>
+      </button>
       <div className={sdClass(fit.l)} ref={inRef} style={fit.h ? { zoom: fit.z, minHeight: fit.h / fit.z } : undefined}>
       <Link href="/shop" className="brand brand-logo" title="Home">
         {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}

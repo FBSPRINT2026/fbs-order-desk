@@ -6387,3 +6387,39 @@ a.pdn-tag:hover{text-decoration:underline}
 @media (max-width:1180px){ .ibx2.mf{grid-template-columns:var(--ibx-list,300px) minmax(0,1fr)} .ibx2.mf .mf-rail{display:none} .mf-pick{display:block} .ibx2.mf .ibx2-sv-list{display:none} }
 @media (max-width:760px){ .ibx2.mf{grid-template-columns:1fr} .mf-msg{max-width:100%} }
 @media (max-width:1180px){ .ibx2.mf.nolist{grid-template-columns:minmax(0,1fr)} }
+
+/* the left menu: hidden to icons until you point at it (QuickBooks style); the pin keeps it open (ShopNav) */
+.side-pin{display:none}
+@media (min-width:821px){
+  .side{position:sticky}
+  .side-pin{display:inline-flex;position:absolute;top:10px;right:8px;z-index:3;width:26px;height:26px;align-items:center;justify-content:center;border:0;border-radius:7px;background:transparent;color:var(--side-ink);cursor:pointer;opacity:.55}
+  .side-pin svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;transform:rotate(35deg);transition:transform .15s}
+  .side-pin.on svg{transform:none;fill:currentColor}
+  .side-pin:hover,.side-pin.on{opacity:1;background:rgba(255,255,255,.08)}
+  .app:has(.side.auto){grid-template-columns:64px minmax(0,1fr)}
+  .side.auto{width:64px;z-index:60;overflow-x:hidden;transition:width .16s ease .12s,box-shadow .16s ease .12s}
+  .side.auto:hover,.side.auto:has(:focus-visible){width:232px;box-shadow:10px 0 34px rgba(5,10,20,.35)}
+  .side.auto:not(:hover):not(:has(:focus-visible)){padding-left:8px;padding-right:8px}
+  .side.auto:not(:hover):not(:has(:focus-visible)) :is(.lbl-t,.lbl-s,.nav-h,.side-hello,.side-search,.nav-mine,.side-user,.nav-add-sc,.nav-add-btns,.side-pin,.brand span){display:none!important}
+  .side.auto:not(:hover):not(:has(:focus-visible)) .nav-g{display:flex!important;flex-direction:column;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.08)}
+  .side.auto:not(:hover):not(:has(:focus-visible)) .nav a,.side.auto:not(:hover):not(:has(:focus-visible)) .nav button{justify-content:center;padding:8px 0!important;position:relative}
+  .side.auto:not(:hover):not(:has(:focus-visible)) .nav a svg{width:19px;height:19px}
+  .side.auto:not(:hover):not(:has(:focus-visible)) .nav .badge{position:absolute;top:1px;right:4px;margin:0;font-size:9.5px;padding:0 4px}
+  .side.auto:not(:hover):not(:has(:focus-visible)) .brand.brand-logo img{width:40px!important}
+  .side.auto .nav a .lbl-t,.side.auto .nav a .lbl-s{white-space:nowrap}
+}
+@media (min-width:821px) and (prefers-reduced-motion:reduce){ .side.auto{transition:none} }
+/* Email: the folders across the top */
+.mf-bar{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow-x:auto;margin:-4px 0 10px;padding:2px 0 4px;scrollbar-width:thin}
+.mf-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font:inherit;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer;white-space:nowrap;list-style:none}
+.mf-chip::-webkit-details-marker{display:none}
+.mf-chip b{font-size:11px;color:#fff;background:var(--accent);border-radius:8px;padding:0 6px}
+.mf-chip:hover{border-color:var(--ink-3)}
+.mf-chip.on,.mf-dd.on>.mf-chip{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.mf-dd{position:relative}
+.mf-ddm{position:fixed;z-index:70;margin-top:6px;min-width:220px;max-height:60vh;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(20,29,43,.18);padding:6px;display:flex;flex-direction:column}
+.mf-ddm button{display:flex;align-items:center;gap:8px;border:0;background:none;text-align:left;font:inherit;font-size:13.5px;padding:7px 12px;border-radius:7px;cursor:pointer;color:var(--ink)}
+.mf-ddm button:hover{background:var(--surface-2)}
+.mf-ddm button.on{color:var(--accent);font-weight:700}
+.mf-ddm button b{margin-left:auto;font-size:11px;color:var(--accent)}
+.mf-load{padding:6px 2px;font-size:13px}
