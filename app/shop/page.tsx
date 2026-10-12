@@ -43,7 +43,10 @@ const PV_DONE = /job completed|quote - closed|cancel/i;
 const pvKind = (s: string) => /ship|delivery/i.test(s) ? "ship" : /^quote/i.test(s) ? "quote" : /ready for production|scheduling|pre production|holder|waiting on details/i.test(s) ? "queue" : /issue/i.test(s) ? "issue" : "production";
 
 export default function Dashboard() {
-  const { perms, email: myEmail = "", staffName = "" } = useRole();
+  const role = useRole(), { perms } = role;
+  // "View as" a person (owners): the dashboard is theirs (their replies, their name)
+  const viewing = !!role.viewAs && role.viewAs.includes("@");
+  const myEmail = viewing ? role.viewAs : role.email || "", staffName = viewing ? role.viewName || "" : role.staffName || "";
   // who "Mine" means: the signed-in person's first name (from the layout, no extra round trip before the data loads)
   const me = myEmail ? (staffName || myEmail.split("@")[0]).split(/[\s._-]+/)[0].toLowerCase() : "";
   const router = useRouter();
@@ -119,7 +122,7 @@ export default function Dashboard() {
         setMailNeeds(mr.filter((r) => r.needs).map((r) => r.x));
         setMailUrgent(mr.filter((r) => r.urgent).map((r) => r.x));
       })().catch(() => null);
-      getMailStatus().then((r) => { if (r.ok && r.mine?.enabled) setMyBox(r.mine.id); }).catch(() => null);
+      getMailStatus().then((r) => { if (!r.ok) return; const b = viewing ? (r.all || []).find((x) => x.email.toLowerCase() === myEmail.toLowerCase()) : r.mine; setMyBox(b?.enabled ? b.id : viewing ? "none" : null); }).catch(() => null);
       // reorder reminders: ordered around this time last year, nothing since (in the last 60 days)
       const recentBuyers = new Set(((recent.data || []) as { customer_id: string | null; order_date: string | null }[]).filter((r) => r.order_date && r.order_date >= addDays(-60)).map((r) => r.customer_id));
       for (const x of js) if (!x.printavo && x.customer_id) recentBuyers.add(x.customer_id);

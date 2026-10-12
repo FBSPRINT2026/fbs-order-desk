@@ -1,5 +1,6 @@
 "use server";
 import { randomBytes } from "node:crypto";
+import { cookies } from "next/headers";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accountForUser } from "@/lib/mail/config";
@@ -16,7 +17,16 @@ export type { Brief };
 async function me() {
   const v = await getViewer(", name");
   if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");
-  return { ...v, admin: createAdminClient(), owner: v.email.toLowerCase(), name: String(v.staff?.name || "") || v.email.split("@")[0] };
+  const admin = createAdminClient();
+  // "View as" a person (owners): My Day is theirs (Oct 12, Nick: "View as Amanda shows my dashboard")
+  if (v.role === "owner") {
+    const want = ((await cookies()).get("fbs_view_as")?.value || "").toLowerCase();
+    if (want.includes("@") && want !== v.email.toLowerCase()) {
+      const { data: p } = await admin.from("staff").select("email, name").ilike("email", want).maybeSingle();
+      if (p) return { ...v, admin, owner: want, name: String(p.name || "") || want.split("@")[0], viewing: true };
+    }
+  }
+  return { ...v, admin, owner: v.email.toLowerCase(), name: String(v.staff?.name || "") || v.email.split("@")[0], viewing: false };
 }
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." });
 const ymd = (d: unknown) => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
