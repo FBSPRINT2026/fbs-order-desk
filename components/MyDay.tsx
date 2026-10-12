@@ -31,7 +31,7 @@ export function useMyDay() {
 }
 
 export default function MyDay({ name, replies, replyCount, urgentCount }: { name: string; replies: React.ReactNode; replyCount: number; urgentCount: number }) {
-  const { d, setD, load } = useMyDay();
+  const { d, setD, load, err } = useMyDay();
   const [tab, setTab] = useState<"replies" | "todo" | "cal">("todo");
   const [shop, setShop] = useState<{ id: string; number: number; nickname: string; day: string; status: string; customer: string }[]>([]);
   const today = d?.today || todayStr();
@@ -62,7 +62,7 @@ export default function MyDay({ name, replies, replyCount, urgentCount }: { name
           {replies}
         </div>
         <div className="md-col md-todo">
-          <Todos d={d} setD={setD} load={load} />
+          <Todos d={d} setD={setD} load={load} err={err} />
         </div>
         <div className="md-col md-cal">
           <CalendarPanel d={d} setD={setD} shop={shop} />
@@ -74,7 +74,7 @@ export default function MyDay({ name, replies, replyCount, urgentCount }: { name
 
 /* ───────────────────────── to-dos ───────────────────────── */
 
-export function Todos({ d, setD, load, compact }: { d: Day | null; setD: (f: (x: Day | null) => Day | null) => void; load: () => Promise<void>; compact?: boolean }) {
+export function Todos({ d, setD, load, compact, err }: { d: Day | null; setD: (f: (x: Day | null) => Day | null) => void; load: () => Promise<void>; compact?: boolean; err?: string }) {
   const today = d?.today || todayStr();
   const [area, setArea] = useState<string>("all");
   const [text, setText] = useState(""), [newDue, setNewDue] = useState<string>(""), [newArea, setNewArea] = useState("shop");
@@ -140,7 +140,7 @@ export function Todos({ d, setD, load, compact }: { d: Day | null; setD: (f: (x:
         ))}
       </div>}
       <div className="md-scroll">
-        {!d ? <div className="md-empty">Loading…</div> : !shown.length ? (
+        {!d ? <div className="md-empty">{err ? <><b>Couldn&apos;t load your to-dos</b><span>{err}</span></> : "Loading…"}</div> : !shown.length ? (
           <div className="md-empty"><b>{area === "all" ? "All clear" : `Nothing for ${AREAS[area]?.label || area}`}</b><span>To-dos from your email show up here on their own. Add your own above.</span></div>
         ) : groups.map((g) => (
           <div key={g.k} className={"md-grp" + (g.tone ? " " + g.tone : "")}>

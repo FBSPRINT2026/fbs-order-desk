@@ -15,7 +15,7 @@ const clip = (s: unknown, n: number) => String(s ?? "").trim().slice(0, n);
 
 export async function confirmDetails(orderId: string, prints: DetailsInput[]): Promise<{ ok: true; left: number } | { ok: false; error: string }> {
   try {
-    const v = await getViewer("name");
+    const v = await getViewer(", name");
     if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");
     if (!CAN.includes(v.role)) throw new Error("Production confirms these (production, owner or admin).");
     const by = String(v.staff?.name || "") || v.email.split("@")[0];

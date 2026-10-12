@@ -12,7 +12,7 @@ import { archiveInbox, chicago } from "@/lib/mail/mirror";
  * person's private calendar link puts the added ones (and the shop's in-hands dates) on their phone.
  */
 async function me() {
-  const v = await getViewer("name");
+  const v = await getViewer(", name");
   if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");
   return { ...v, admin: createAdminClient(), owner: v.email.toLowerCase(), name: String(v.staff?.name || "") || v.email.split("@")[0] };
 }
