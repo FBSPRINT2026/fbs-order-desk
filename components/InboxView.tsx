@@ -9,6 +9,7 @@ import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, 
 import { addEvent, addTask, inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, suggestFollowUps, type Brief, type CalEvent, type FollowUp, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
 import { onPullRefresh } from "@/components/PullRefresh";
+import { personName, senderLabel } from "@/lib/mail/sender";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
 import { Attachments, box as mailBox, boxPost, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
@@ -33,7 +34,7 @@ import type { EmailAction } from "@/lib/ai/emailChat";
  */
 type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; no_reply?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number; from_link?: string; source?: string }[]; links?: { url: string; kind: string; ok: boolean; error?: string }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; urgent_reason?: string; needs_reply?: boolean }; reply_options?: { at: string; options: { label: string; subject: string; body: string }[] } } };
 type Sug = { id: string; kind: string; status: string; activity_id: string | null; title: string; body: string; draft: { subject?: string; body?: string } | null; payload: { groups?: unknown[] } | null; order_id: string | null };
-type Cust = { id: string; company: string | null; name: string | null };
+type Cust = { id: string; company: string | null; name: string | null; email?: string | null };
 type Ord = { id: string; number: number; nickname: string | null; customer_id: string | null; status: string };
 type Box = { id: string; email: string; name: string; imap_host: string; enabled: boolean; last_ok_at: string | null; last_error: string | null; last_run_at: string | null; stats: Record<string, Record<string, number>> };
 type Status = { mine: Box | null; all: Box[]; defaultHost: string; myEmail: string; /** viewing as this person (read only) */ viewing?: string | null };
@@ -106,7 +107,6 @@ export default function InboxView({ mode }: { mode: Mode }) {
     setOlderBusy(false);
   };
   const [ol, setOl] = useState<InboxItem[] | null>(null); // my Outlook Inbox, mirrored
-  const [whose, setWhose] = useSticky<"mine" | "everyone">("inbox.whose", "mine");
   const [settings, setSettings] = useState(false);
   // the list can be hidden to give the email more room (remembered)
   const [listOpen, setListOpen] = useSticky<boolean>("inbox.list", true);
@@ -124,13 +124,16 @@ export default function InboxView({ mode }: { mode: Mode }) {
       getOutlookInbox().then((r) => { if (r.ok) setOl(r.connected ? r.items : []); }, () => null),
     ]);
     if (s.ok) setSt(s as unknown as Status);
-    const list = ((a || []) as Act[]).filter((x) => !x.meta?.ignored);
+    // an email that came to someone's mailbox is theirs alone (Oct 12, Nick): only yours (or, viewing as someone,
+    // theirs); one that came in another way (no mailbox) shows to everyone
+    const myAcct = s.ok ? s.mine?.id || null : null;
+    const list = ((a || []) as Act[]).filter((x) => !x.meta?.ignored && (!x.meta?.account_id || x.meta.account_id === myAcct));
     setActs(list);
     const ids = list.filter((x) => x.direction === "in").map((x) => x.id);
     const cIds = [...new Set(list.map((x) => x.customer_id).filter(Boolean))] as string[];
     const [{ data: sg }, { data: cs }, { data: os }] = await Promise.all([
       ids.length ? sb.from("ai_suggestions").select("id, kind, status, activity_id, title, body, draft, payload, order_id").in("activity_id", ids) : Promise.resolve({ data: [] }),
-      cIds.length ? sb.from("customers").select("id, company, name").in("id", cIds) : Promise.resolve({ data: [] }),
+      cIds.length ? sb.from("customers").select("id, company, name, email").in("id", cIds) : Promise.resolve({ data: [] }),
       cIds.length ? sb.from("orders").select("id, number, nickname, customer_id, status").in("customer_id", cIds).order("number", { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
     ]);
     setSugs((sg || []) as Sug[]);
@@ -171,12 +174,11 @@ export default function InboxView({ mode }: { mode: Mode }) {
     const r = rows.find((y) => y.x.id === id);
     if (r) {
       if (!(tab === "outlook" && ol?.some((i) => i.activity_id === id)) && !(r.needs && tab === "reply")) setTab(r.needs ? "reply" : "all");
-      if (whose === "mine" && r.x.meta?.account_id !== mineId) setWhose("everyone");
       setOpen(id); setFocus(id); setPicked(true);
     }
     window.history.replaceState(null, "", window.location.pathname);
   }, [acts, st, ol]); // eslint-disable-line react-hooks/exhaustive-deps
-  const scoped = whose === "mine" && mineId ? rows.filter((r) => r.x.meta?.account_id === mineId) : rows;
+  const scoped = rows; // only your mailbox's email is loaded (see load)
   const shown = scoped.filter((r) => (tab === "reply" ? r.needs : tab === "leads" ? r.x.meta?.lead && !r.x.customer_id : true))
     .sort((a, b) => (tab === "reply" ? Number(b.urgent) - Number(a.urgent) : 0) || b.x.occurred_at.localeCompare(a.x.occurred_at)); // urgent ones first on Needs reply
   const counts = { urgent: scoped.filter((r) => r.urgent).length, reply: scoped.filter((r) => r.needs).length, leads: scoped.filter((r) => r.x.meta?.lead && !r.x.customer_id).length, all: scoped.length };
@@ -184,7 +186,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   // My Inbox: the Outlook Inbox, mirrored. A customer email opens as usual (by its email id); anything else is "ol:<row>".
   const rowByAct = useMemo(() => new Map(rows.map((r) => [r.x.id, r])), [rows]);
   const olKey = (i: InboxItem) => (i.activity_id && rowByAct.has(i.activity_id) ? i.activity_id : "ol:" + i.id);
-  const who = (x: Act) => { const c = x.customer_id ? custs.get(x.customer_id) : null; return c ? c.company || c.name || x.from_email : `${x.meta?.from_name || x.from_email}`; };
+  const who = (x: Act) => senderLabel(x.meta?.from_name, x.from_email, x.customer_id ? custs.get(x.customer_id) : null);
   const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(""), 5000); };
 
   // the email showing: the one picked, else the first in the list (after sending, the next one)
@@ -302,7 +304,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
             </div>}
             <div className="ibx2-find">
               <input type="search" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (mode === "mail" && e.key === "Enter") { e.preventDefault(); void runSearch(q); } }} placeholder={mode === "mail" ? "Search all mail, then Enter" : "Search"} aria-label="Search email" title={mode === "mail" ? "Type a name, company, email or subject and press Enter: results show as conversations, what they sent and what you sent, in order" : undefined} />
-              {mineId && mode === "crm" && <select value={whose} onChange={(e) => setWhose(e.target.value as "mine" | "everyone")} aria-label="Whose email"><option value="mine">Mine</option><option value="everyone">Everyone</option></select>}
+              
             </div>
           </div>
           {/* the Inbox brief: always first, stays put while the list scrolls */}
@@ -320,7 +322,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
               { !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
               : olShown.map((i) => {
                 const k = olKey(i), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
-                const name = r ? who(r.x) : i.from_name || i.from_email || "(unknown sender)";
+                const name = r ? who(r.x) : personName(i.from_name) || i.from_email || "(unknown sender)";
                 return (
                   <SwipeRow key={i.id} onAct={(to) => quickMove("INBOX", i.uid, to, () => { setOl((l) => (l || []).filter((y) => y.id !== i.id)); if (open === k) setOpen(null); })}>
                   <button data-id={k} type="button" className={"ibx2-item ol" + (olCur?.id === i.id ? " on" : "") + (r?.needs ? " needs" : "") + (r?.urgent ? " urgent" : "") + (i.unread ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => pickRow(k)} onDoubleClick={() => r && pickRow(k, true)}>

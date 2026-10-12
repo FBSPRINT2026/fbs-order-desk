@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { mailRows, type MailSug } from "@/lib/inbox";
 import { getMailStatus } from "./mail-actions";
 import MyDay, { CrewTodos } from "@/components/MyDay";
+import { senderLabel } from "@/lib/mail/sender";
 import { DETAILS_LABEL, detailsCount, ordersNeedingDetails } from "@/lib/productionDetails";
 import type { Group } from "@/lib/pricing";
 
@@ -25,7 +26,7 @@ import type { Group } from "@/lib/pricing";
  * last year. "My accounts" narrows it to the customers you own (from Printavo's order owner until go-live).
  */
 
-type Cust = { id: string; company: string; name: string };
+type Cust = { id: string; company: string; name: string; email?: string | null };
 
 type Job = { id: string; href: string; number: number; nickname: string; customer_id: string | null; due: string | null; status: string; statusLabel: string; printavo: boolean; total: number; owner: string; ship: boolean };
 type Msg = { id: string; order_id: string | null; customer_id: string | null; author_name: string; author_email: string; body: string; created_at: string; topic: string | null };
@@ -150,7 +151,7 @@ export default function Dashboard() {
       const chunks: string[][] = [];
       for (let i = 0; i < ids.length; i += 300) chunks.push(ids.slice(i, i + 300));
       // the batches go out together instead of one after another
-      for (const { data } of await Promise.all(chunks.map((c) => sb.from("customers").select("id, company, name").in("id", c))))
+      for (const { data } of await Promise.all(chunks.map((c) => sb.from("customers").select("id, company, name, email").in("id", c))))
         for (const c of (data || []) as Cust[]) out[c.id] = c;
       setCusts(out);
     })();
@@ -176,8 +177,9 @@ export default function Dashboard() {
   }, [jobs, mine, me, owners]); // eslint-disable-line react-hooks/exhaustive-deps
   const myMsgs = msgs.filter((x) => (viewing ? !!me && owners[x.customer_id || ""] === me : isMine(x.customer_id)));
   // an email is mine when it came to my mailbox (or it's one of my customers')
-  // (viewing as someone: just theirs, whatever Mine / Everyone is set to)
-  const mailMine = (x: Mail) => (viewing ? false : !mine) || (!!myBox && x.meta?.account_id === myBox) || (!!x.customer_id && (viewing ? !!me && owners[x.customer_id] === me : isMine(x.customer_id)));
+  // an email that came to someone's mailbox is theirs alone (Oct 12, Nick: "none of my email in any part of her login,
+  // and none of hers in mine"): yours show, someone else's never do; one with no mailbox (a web form) shows to all
+  const mailMine = (x: Mail) => (x.meta?.account_id ? !!myBox && x.meta.account_id === myBox : true);
   const myNeeds = mailNeeds.filter(mailMine);
   const myUrgent = mailUrgent.filter(mailMine).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)); // longest waiting first
   // one list of everything waiting on a reply: urgent emails first (longest waiting first), then the rest, newest first
@@ -347,7 +349,7 @@ export default function Dashboard() {
                     </li>
                   ) : e ? (
                     <li key={e.id} className={"db-row db-reply db-click" + (urgentIds.has(e.id) ? " hot" : "")} onClick={() => openMail(e.id)} title="Open it in the Inbox, ready to answer">
-                      <span className="db-main"><b>{who(e.customer_id) || e.meta?.from_name || e.from_email}</b><span className="db-one">{urgentIds.has(e.id) && e.meta?.triage?.urgent_reason ? <em>{e.meta.triage.urgent_reason} · </em> : null}{e.meta?.triage?.summary || e.subject || "(no subject)"}</span></span>
+                      <span className="db-main"><b>{senderLabel(e.meta?.from_name, e.from_email, e.customer_id ? custs[e.customer_id] : null)}</b><span className="db-one">{urgentIds.has(e.id) && e.meta?.triage?.urgent_reason ? <em>{e.meta.triage.urgent_reason} · </em> : null}{e.meta?.triage?.summary || e.subject || "(no subject)"}</span></span>
                       <span className="db-side"><span className={urgentIds.has(e.id) && (Date.now() - Date.parse(e.occurred_at)) / 36e5 > 4 ? "db-late" : "faint"}>{ago(e.occurred_at)}</span><Link href={`/shop/conversations?open=${e.id}`} className={"btn sm" + (urgentIds.has(e.id) ? " primary" : "")} onClick={(ev) => ev.stopPropagation()}>Reply</Link></span>
                     </li>
                   ) : null)}</ul>

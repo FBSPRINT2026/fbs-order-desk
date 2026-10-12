@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MailAccount } from "./config";
 import { aiState, askClaude } from "@/lib/ai/claude";
+import { senderLabel } from "./sender";
 
 /**
  * Email → Inbox summary, written ahead of time (Oct 12, Nick: "it pops up very slow"): the mailbox job rewrites it
@@ -27,11 +28,11 @@ export async function makeBrief(admin: SupabaseClient, acct: Pick<MailAccount, "
     ]);
     const items = (rows || []) as { id: string; from_name: string; from_email: string; subject: string; summary: string; bucket: string | null; activity_id: string | null; cc_only: boolean; unread: boolean; received_at: string | null }[];
     const actIds = items.map((r) => r.activity_id).filter(Boolean) as string[];
-    const { data: acts } = actIds.length ? await admin.from("activities").select("id, customer_id, meta, customers(company, name)").in("id", actIds) : { data: [] };
-    const am = new Map(((acts || []) as unknown as { id: string; meta: { triage?: { intent?: string; urgency?: string; urgent_reason?: string; needs_reply?: boolean; summary?: string }; no_reply?: boolean } | null; customers: { company: string | null; name: string | null } | null }[]).map((a) => [a.id, a]));
+    const { data: acts } = actIds.length ? await admin.from("activities").select("id, customer_id, meta, customers(company, name, email)").in("id", actIds) : { data: [] };
+    const am = new Map(((acts || []) as unknown as { id: string; meta: { triage?: { intent?: string; urgency?: string; urgent_reason?: string; needs_reply?: boolean; summary?: string }; no_reply?: boolean } | null; customers: { company: string | null; name: string | null; email: string | null } | null }[]).map((a) => [a.id, a]));
     const lines = items.map((r) => {
       const a = r.activity_id ? am.get(r.activity_id) : undefined, tr = a?.meta?.triage;
-      const who = a?.customers?.company || a?.customers?.name || r.from_name || r.from_email;
+      const who = senderLabel(r.from_name, r.from_email, a?.customers);
       return `[${r.id}] ${a ? `CUSTOMER ${who}` : r.from_name || r.from_email}${r.cc_only ? " (cc'd)" : ""}${r.unread ? " (unread)" : ""} · ${r.subject} · ${tr?.summary || r.summary || ""}${tr?.intent ? ` · intent ${tr.intent}` : r.bucket ? ` · ${r.bucket}` : ""}${tr?.urgency === "high" ? ` · URGENT ${tr.urgent_reason || ""}` : ""}${a && tr?.needs_reply && !a.meta?.no_reply ? " · needs a reply" : ""} · ${r.received_at ? new Date(r.received_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Chicago" }) : ""}`;
     });
     const st = await aiState(admin);
