@@ -5,6 +5,11 @@ import { ssAllocate, ssConfigured } from "@/lib/ss";
 import { matchToSS, type GoodsRow } from "@/lib/ssMatch";
 
 /**
+ * Only what's at risk (Oct 12, Nick, after the first run: "a bunch of jobs just naturally flow through… there shouldn't
+ * be a task for them… the only time I need them is on my dashboard when it's getting close: if I don't order the heart
+ * transplant shirts today we'll miss the deadline"): a step only comes up on the day it has to happen, or once it's
+ * late. No to-dos; the dashboard's "Needs you today" and a phone alert.
+ *
  * The Job watcher (Oct 12, Nick: "every job has a due date, so you can work off that… remind to ask for sizes, haven't
  * seen art yet in two days, the goods are coming from S&S and they take two days to ship so we have to order today").
  *
@@ -22,6 +27,8 @@ import { matchToSS, type GoodsRow } from "@/lib/ssMatch";
  * late is "today": those are what the phone alerts are about.
  */
 
+/** one "Needs you today" item, kept for the dashboard (app_keys "jobwatch") */
+export type AtRisk = { key: string; title: string; notes: string; url: string; by: string; owner: string | null; step: string };
 export type JobStep = "approve" | "sizes" | "art" | "proof" | "goods" | "goods_late" | "print" | "ship";
 export type JobAction = { orderId: string; number: number; step: JobStep; title: string; notes: string; by: string; today: boolean; url: string; ref: string;
   /** the job's owner (a staff email): only they get it; none = the owners both */ owner?: string; /** a Printavo job (orderId is the archived order) */ archived?: boolean };
@@ -128,7 +135,7 @@ export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; d
     const url = `/shop/orders/${o.id}`;
     const add = (step: JobStep, by: string, title: string, notes: string, link = url, startDays = 2) => {
       // shows from a couple of business days before its date
-      if (bizBetween(today, by) > startDays) return;
+      if (by > today || startDays < -99) return; // only what's due today or late (Oct 12, Nick: jobs flow on their own; tell me when it has to happen today)
       out.push({ orderId: o.id, number: o.number, step, title, notes, by, today: by <= today, url: link, ref: `job:${o.id}:${step}` });
     };
     const late = (by: string) => (by < today ? ` (was due ${nice(by)})` : by === today ? " today" : ` by ${nice(by)}`);
@@ -146,7 +153,7 @@ export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; d
     if (noArt && !proofOk && !started) {
       // art not in two days after the job was made, or it's getting close
       const waited = bizBetween(o.created_at.slice(0, 10), today) >= 2;
-      if (waited || bizBetween(today, artBy) <= 2) out.push({ orderId: o.id, number: o.number, step: "art", title: `Art for ${job} isn't in yet: ask ${who}${artBy <= today ? late(artBy) : ""}`, notes: `No art on the order${waited ? ` ${bizBetween(o.created_at.slice(0, 10), today)} business days after it was made` : ""}. We need it by ${nice(artBy)} to proof and print for ${nice(due)}.`, by: waited && artBy > today ? today : artBy, today: artBy <= today || waited, url, ref: `job:${o.id}:art` });
+      if (artBy <= today && waited !== undefined) out.push({ orderId: o.id, number: o.number, step: "art", title: `Art for ${job} isn't in yet: ask ${who}${artBy <= today ? late(artBy) : ""}`, notes: `No art on the order${waited ? ` ${bizBetween(o.created_at.slice(0, 10), today)} business days after it was made` : ""}. We need it by ${nice(artBy)} to proof and print for ${nice(due)}.`, by: artBy, today: true, url, ref: `job:${o.id}:art` });
     }
     if (!noArt && !proofOk && proofWaiting && !started) add("proof", proofBy, `Get the proof for ${job} approved${late(proofBy)}`, `${who} hasn't approved the proof. It has to be approved by ${nice(proofBy)} to print by ${nice(printBy)}.`);
     if (!wholesale && !ordered && !quote && pieces > 0) {
@@ -179,8 +186,8 @@ async function watchPrintavoJobs(admin: SupabaseClient, today: string, lead: num
       .not("due_date", "is", null).gte("due_date", today).lte("due_date", bizAdd(today, -30)).not("status_name", "ilike", "%complete%").not("status_name", "ilike", "%cancel%").limit(400),
     admin.from("staff").select("email, name"),
   ]);
-  const staff = ((st || []) as { email: string; name: string | null }[]).filter((x) => x.name);
-  const ownerEmail = (n?: string) => { const t = (n || "").trim().toLowerCase(); if (!t) return undefined; const m = staff.find((x) => x.name!.toLowerCase() === t) || staff.find((x) => x.name!.toLowerCase().split(/\s+/)[0] === t.split(/\s+/)[0]); return m?.email.toLowerCase(); };
+  const staff = (st || []) as { email: string; name: string | null }[];
+  const ownerEmail = (n?: string) => { const t = (n || "").trim().toLowerCase(); if (!t) return undefined; const first = t.split(/\s+/)[0]; const m = staff.find((x) => (x.name || "").toLowerCase() === t) || staff.find((x) => (x.name || "").toLowerCase().split(/\s+/)[0] === first) || staff.find((x) => x.email.toLowerCase().split("@")[0] === first); return m?.email.toLowerCase(); };
   const out: JobAction[] = [];
   for (const r of (rows || []) as unknown as { id: string; visual_id: string; kind: string; nickname: string | null; status_name: string | null; due_date: string; customer_id: string | null; data: PvData; customers: { company: string | null; name: string | null; is_test: boolean | null } | null }[]) {
     if (opts.deadline && Date.now() > opts.deadline) { opts.cut = true; break; }
@@ -200,7 +207,7 @@ async function watchPrintavoJobs(admin: SupabaseClient, today: string, lead: num
     const art = (d.groups || []).some((g) => (g.imprints || []).some((im) => (im.mockups || []).length) || (g.lines || []).some((l) => (l.mockups || []).length));
     const apprs = d.approvals || [], approved = apprs.some((a) => a.status === "approved"), waiting = apprs.some((a) => a.status && a.status !== "approved" && !/declin|retract|revok/i.test(a.status));
     const add = (step: JobStep, by: string, title: string, notes: string, link = url, startDays = 2, today2?: boolean) => {
-      if (bizBetween(today, by) > startDays) return;
+      if (by > today || startDays < -99) return; // only what's due today or late (Oct 12, Nick: jobs flow on their own; tell me when it has to happen today)
       out.push({ orderId: r.id, number: +r.visual_id || 0, step, title, notes, by, today: today2 ?? by <= today, url: link, ref: `pv:${r.id}:${step}`, owner, archived: true });
     };
     const late = (by: string) => (by < today ? ` (was due ${nice(by)})` : by === today ? " today" : ` by ${nice(by)}`);
@@ -211,7 +218,7 @@ async function watchPrintavoJobs(admin: SupabaseClient, today: string, lead: num
     if (waiting && !approved) add("proof", bizAdd(goodsHere, 0), `Get ${who}'s approval on ${job}${late(goodsHere)}`, `The approval in Printavo is still waiting. In hands ${nice(due)}.`, url, 2);
     if (!art && garments.length && !approved) {
       const made = (d.createdAt || "").slice(0, 10), waited = made ? bizBetween(made, today) >= 2 : false, artBy = bizAdd(shipBy, 3);
-      if (waited || bizBetween(today, artBy) <= 2) out.push({ orderId: r.id, number: +r.visual_id || 0, step: "art", title: `No art or mockup on ${job} yet: ask ${who}`, notes: `Nothing on the job${waited ? ` ${bizBetween(made, today)} business days after it was made` : ""}. We need it by ${nice(artBy)} to proof and print for ${nice(due)}.`, by: waited && artBy > today ? today : artBy, today: artBy <= today || waited, url, ref: `pv:${r.id}:art`, owner, archived: true });
+      if (artBy <= today && waited !== undefined) out.push({ orderId: r.id, number: +r.visual_id || 0, step: "art", title: `No art or mockup on ${job} yet: ask ${who}`, notes: `Nothing on the job${waited ? ` ${bizBetween(made, today)} business days after it was made` : ""}. We need it by ${nice(artBy)} to proof and print for ${nice(due)}.`, by: artBy, today: true, url, ref: `pv:${r.id}:art`, owner, archived: true });
     }
     if (notOrdered.length && !noSizes.length) {
       let orderBy = needBy, from = "";

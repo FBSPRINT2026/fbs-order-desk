@@ -4,6 +4,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushTo, vapidKeys } from "@/lib/push";
 import { organizerFor } from "@/lib/mail/mirror";
+import type { AtRisk } from "@/lib/jobWatch";
 
 /**
  * Alerts & Away mode (Oct 12): Away mode on/off, phone alerts on this device, which alerts a person gets, and what
@@ -103,5 +104,25 @@ export async function markAlertsSeen() {
     const { admin, email, viewing } = await me();
     if (!viewing) await admin.from("alerts").update({ seen_at: new Date().toISOString() }).eq("owner", email).is("seen_at", null);
     return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * The dashboard's "Needs you today" (Oct 12): what has to happen today or is late, from the last check (every 30 min).
+ * The owner sees everything (with whose it is); anyone else their own and the unassigned ones.
+ */
+export async function getAtRisk() {
+  try {
+    const { admin, email, v } = await me();
+    const { data } = await admin.from("app_keys").select("value").eq("name", "jobwatch").maybeSingle();
+    const val = (data?.value || {}) as { at?: string; today?: string; items?: AtRisk[] };
+    const { data: s } = await admin.from("staff").select("role, alerts").ilike("email", email).maybeSingle();
+    const role = String(s?.role || v.role || "");
+    if (!organizerFor(email, role)) return { ok: true as const, items: [] as (AtRisk & { whose: string })[], at: null, on: false };
+    const on = (s?.alerts as { jobs?: boolean } | null)?.jobs !== false;
+    const { data: st } = await admin.from("staff").select("email, name");
+    const nameOf = (e: string) => { const r = (st || []).find((x) => x.email.toLowerCase() === e); return String(r?.name || "").split(/\s+/)[0] || e.split("@")[0].replace(/^./, (c) => c.toUpperCase()); };
+    const items = (val.items || []).filter((x) => role === "owner" || !x.owner || x.owner === email).map((x) => ({ ...x, whose: x.owner && x.owner !== email ? nameOf(x.owner) : "" }));
+    return { ok: true as const, items, at: val.at || null, on };
   } catch (e) { return fail(e); }
 }

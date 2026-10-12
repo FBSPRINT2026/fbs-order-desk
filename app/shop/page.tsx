@@ -1,4 +1,5 @@
 "use client";
+import NeedsToday from "@/components/NeedsToday";
 import OrderBoard from "@/components/OrderBoard";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -357,6 +358,9 @@ export default function Dashboard() {
                 ), <MsgEmpty title="You're all caught up" text="No customer emails or portal messages waiting on a reply. They land here the moment a customer writes." />)}
               </div>
       } />
+
+      {/* what has to happen today or a date is missed (Job watcher + orders still in email) */}
+      <NeedsToday />
 
       {/* the shop: everyone's numbers (Everyone / Mine narrows to my accounts) */}
       <div className="md-shop-h">

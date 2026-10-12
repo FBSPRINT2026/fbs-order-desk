@@ -112,23 +112,20 @@ export default function AlertsView() {
       {st.jobsFor && <section className="al-card">
         <div className="al-row">
           <div className="al-t">
-            <h2>Job reminders</h2>
-            <p>Every job is planned backward from its in-hands date. Its next steps show up on My Day a couple of days ahead, and your phone gets an alert on the day one has to happen:</p>
+            <h2>Needs you today</h2>
+            <p>Jobs flow on their own; nothing shows up for them until a date is at risk. Then it&apos;s on your dashboard under <b>Needs you today</b>, and your phone gets one alert, for things like:</p>
           </div>
           <button type="button" role="switch" aria-checked={st.jobs} className={"al-sw" + (st.jobs ? " on" : "")} disabled={ro || busy === "jobs"} onClick={async () => { setBusy("jobs"); const r = await setAlertPref("jobs", !st.jobs); setBusy(""); if (!r.ok) setErr(r.error); else await load(); }}>
             <span className="al-knob" aria-hidden /><span className="al-swl">{st.jobs ? "On" : "Off"}</span>
           </button>
         </div>
         <ul className="al-list">
-          <li><b>Get it approved</b> while it&apos;s still a quote and the goods date is close</li>
-          <li><b>Ask for sizes</b> when there are none and goods have to be ordered soon</li>
-          <li><b>Ask for art</b> when it isn&apos;t in two business days after the job was made</li>
-          <li><b>Get the proof approved</b> in time to print</li>
-          <li><b>Order goods today</b>, using where S&amp;S really has them (Fort Worth 1 day, Kansas 2, farther 3–4)</li>
-          <li><b>Goods aren&apos;t in</b> when they should be, then <b>print</b> and <b>ship</b> on their days</li>
+          <li><b>Order goods today</b> or the in-hands date is missed, using where S&amp;S really has them (Fort Worth 1 day, Kansas 2, farther 3–4), including orders still in email with no order made yet</li>
+          <li><b>Sizes, approval, art or the proof</b> are still missing on the day they&apos;re needed</li>
+          <li><b>Goods aren&apos;t in</b> when they should be</li>
         </ul>
-        <p className="faint al-sub">They close themselves when the step is done. Tick one off and it stays off for two business days, then comes back as &quot;Still: …&quot; if nothing changed.</p>
-        {st.jobs && <button type="button" className="btn sm" disabled={!!busy || ro} onClick={async () => { setBusy("check"); const r = await fetch("/api/away/tick?jobs=1").then((x) => x.json()).catch(() => null); setBusy(""); flash(r?.ok ? `Checked ${r.jobs ?? 0} next steps across the open jobs. They're on My Day.` : "Couldn't check right now."); await load(); }}>{busy === "check" ? "Checking every job…" : "Check the jobs now"}</button>}
+        <p className="faint al-sub">Each job&apos;s alert goes to whoever owns it in Printavo; the dashboard shows you everything. Checked every 30 minutes; alerts on weekdays 7 am to 7 pm.</p>
+        {st.jobs && <button type="button" className="btn sm" disabled={!!busy || ro} onClick={async () => { setBusy("check"); const r = await fetch("/api/away/tick?jobs=1").then((x) => x.json()).catch(() => null); setBusy(""); flash(r?.ok ? (r.jobs ? `${r.jobs} thing${r.jobs === 1 ? "" : "s"} need${r.jobs === 1 ? "s" : ""} someone today. They're on the dashboard.` : "Nothing is at risk today.") : "Couldn't check right now."); await load(); }}>{busy === "check" ? "Checking every job…" : "Check the jobs now"}</button>}
       </section>}
 
       {/* history */}

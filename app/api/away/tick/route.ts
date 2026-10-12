@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getViewer } from "@/lib/supabase/server";
 import { watchInbox } from "@/lib/away";
-import { bizBetween, ctToday, watchJobs, type JobAction } from "@/lib/jobWatch";
+import { ctToday, watchJobs, type AtRisk } from "@/lib/jobWatch";
+import { watchEmailOrders } from "@/lib/emailDeadlines";
 import { pushTo } from "@/lib/push";
 import { organizerFor } from "@/lib/mail/mirror";
 
@@ -13,8 +14,8 @@ export const maxDuration = 60;
 /**
  * Away mode + the Job watcher, every 5 minutes (away_tick, migration 133, with the sync token):
  *  1. Away mode: new email in an away person's Inbox is read for "does something have to happen today?" (lib/away).
- *  2. The Job watcher (every 30 minutes): every open job's next steps from its in-hands date (lib/jobWatch) become
- *     to-dos on My Day for the owners, closing themselves when done; steps due today become alerts.
+ *  2. Needs you today (every 30 minutes): job steps due today or late (lib/jobWatch) and orders still in email whose
+ *     goods have to be ordered today (lib/emailDeadlines), for the dashboard and as alerts. No to-dos.
  *  3. Alerts go to the person's phone: email alerts 6 am–10 pm, job alerts weekdays 7 am–7 pm (any day while away);
  *     outside those hours they wait for the morning. Several at once go as one notification.
  */
@@ -39,18 +40,31 @@ export async function GET(req: Request) {
     catch (e) { out[`away ${p.email}`] = e instanceof Error ? e.message : String(e); }
   }
 
-  // 2. the Job watcher: every 30 minutes (and on demand from Settings)
+  // 2. "Needs you today": every 30 minutes (and on demand), what has to happen today or is late on the jobs
+  //    (lib/jobWatch) and on orders still in email (lib/emailDeadlines). No to-dos (Oct 12, Nick: jobs flow on their
+  //    own); kept as one list for the dashboard, and each new one is an alert for its owner (none: the owners).
   const who = staff.filter((p) => organizerFor(p.email, String(p.role || "")) && p.alerts?.jobs !== false);
   const { data: last } = await admin.from("app_keys").select("value").eq("name", "jobwatch").maybeSingle();
-  const lastAt = Date.parse(String((last?.value as { at?: string } | null)?.at || "")) || 0;
+  const prev = (last?.value || {}) as { at?: string; items?: AtRisk[] };
+  const lastAt = Date.parse(String(prev.at || "")) || 0;
   const force = new URL(req.url).searchParams.get("jobs") === "1";
   if (who.length && (force || Date.now() - lastAt > 29 * 60000) && Date.now() < deadline - 20000) {
-    await admin.from("app_keys").upsert({ name: "jobwatch", value: { at: new Date().toISOString() } }, { onConflict: "name" });
+    await admin.from("app_keys").upsert({ name: "jobwatch", value: { ...prev, at: new Date().toISOString() } }, { onConflict: "name" });
     try {
-      const o = { deadline: deadline - 12000, cut: false };
-      const acts = await watchJobs(admin, o);
-      out.jobs = acts.length; if (o.cut) out.jobsCut = true;
-      for (const p of who) out[`jobs ${p.email}`] = await syncTasks(admin, p.email, acts, !o.cut);
+      const o = { deadline: deadline - 14000, cut: false };
+      const acts = [...await watchJobs(admin, o), ...await watchEmailOrders(admin, o)];
+      const today = ctToday();
+      const items: AtRisk[] = acts.map((a) => ({ key: a.ref, title: a.title, notes: a.notes, url: a.url, by: a.by, owner: a.owner || null, step: a.step }));
+      // a cut-short run keeps what it didn't get to from last time
+      const keep = o.cut ? (prev.items || []).filter((x) => !items.some((y) => y.key === x.key)) : [];
+      await admin.from("app_keys").upsert({ name: "jobwatch", value: { at: new Date().toISOString(), today, items: [...items, ...keep] } }, { onConflict: "name" });
+      out.jobs = items.length; if (o.cut) out.jobsCut = true;
+      let alerted = 0;
+      for (const a of acts) for (const p of who.filter((x) => !a.owner || a.owner === x.email)) {
+        const { error } = await admin.from("alerts").insert({ owner: p.email, kind: "job", title: a.title.slice(0, 120), body: a.notes.slice(0, 400), url: a.url, dedupe_key: `${a.ref}:${today}:${p.email}`, order_id: a.archived ? null : a.orderId });
+        if (!error) alerted++;
+      }
+      out.alerted = alerted;
     } catch (e) { out.jobs = e instanceof Error ? e.message : String(e); }
   }
 
@@ -68,43 +82,4 @@ export async function GET(req: Request) {
     out[`pushed ${p.email}`] = `${ready.length} → ${r.sent}/${r.devices}`;
   }
   return NextResponse.json({ ok: true, ...out });
-}
-
-/**
- * One person's Job watcher to-dos: new steps added (due the step's date), changed ones updated, finished ones closed.
- * A step the person ticked off isn't added back for 2 business days; after that it comes back as "Still: …".
- * Steps due today also become an alert (once a day).
- */
-async function syncTasks(admin: ReturnType<typeof createAdminClient>, owner: string, acts: JobAction[], complete: boolean) {
-  const today = ctToday();
-  const { data: mine } = await admin.from("tasks").select("id, ref, title, notes, due, status, done_at, done_by").eq("owner", owner).eq("source", "jobs").or(`status.eq.open,status.eq.dismissed,done_at.gte.${new Date(Date.now() - 6 * 864e5).toISOString()}`);
-  const rows = (mine || []) as { id: string; ref: string | null; title: string; notes: string; due: string | null; status: string; done_at: string | null; done_by: string | null }[];
-  // a job with an owner: only theirs
-  acts = acts.filter((a) => !a.owner || a.owner === owner);
-  const want = new Map(acts.map((a) => [a.ref, a]));
-  // "Not a to-do" on one: never again for that job + step
-  const dismissed = new Set(rows.filter((t) => t.status === "dismissed" && t.ref).map((t) => t.ref!));
-  let added = 0, closed = 0, alerted = 0;
-  // done by itself (the step isn't needed any more)
-  const gone = complete ? rows.filter((t) => t.status === "open" && t.ref && !want.has(t.ref)) : [];
-  if (gone.length) { await admin.from("tasks").update({ status: "done", done_at: new Date().toISOString(), done_by: "Job watcher: done" }).in("id", gone.map((t) => t.id)); closed = gone.length; }
-  for (const a of acts) {
-    if (dismissed.has(a.ref)) continue;
-    const open = rows.find((t) => t.ref === a.ref && t.status === "open");
-    const ticked = rows.filter((t) => t.ref === a.ref && t.status === "done" && t.done_by && !t.done_by.startsWith("Job watcher")).sort((x, y) => String(y.done_at).localeCompare(String(x.done_at)))[0];
-    const title = ticked && !open ? `Still: ${a.title.charAt(0).toLowerCase()}${a.title.slice(1)}` : a.title;
-    // ticked off in the last 2 business days: left alone (no to-do, no alert)
-    if (!open && ticked && bizBetween(String(ticked.done_at).slice(0, 10), today) < 2) continue;
-    if (open) {
-      if ((open.title !== a.title && !open.title.startsWith("Still:")) || open.notes !== a.notes || open.due !== a.by) await admin.from("tasks").update({ title: open.title.startsWith("Still:") ? open.title : a.title, notes: a.notes, due: a.by, url: a.url }).eq("id", open.id);
-    } else {
-      const { error } = await admin.from("tasks").insert({ owner, title: title.slice(0, 200), notes: a.notes.slice(0, 1000), area: "shop", due: a.by, source: "jobs", order_id: a.archived ? null : a.orderId, url: a.url, ref: a.ref, created_by: "ai" });
-      if (!error) added++;
-    }
-    if (a.today) {
-      const { error } = await admin.from("alerts").insert({ owner, kind: "job", title: a.title.slice(0, 120), body: a.notes.slice(0, 400), url: a.url, dedupe_key: `${a.ref}:${today}:${owner}`, order_id: a.archived ? null : a.orderId });
-      if (!error) alerted++;
-    }
-  }
-  return { added, closed, alerted };
 }
