@@ -1,4 +1,6 @@
 "use server";
+import { ccFromWords } from "@/lib/mail/ccWords";
+import { ccTeam } from "@/app/shop/mail-actions";
 import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -368,7 +370,11 @@ export async function aiDraftReply(activityId: string, said: string) {
     if (!r.ok) return { ok: false as const, error: r.error };
     const last = r.messages[r.messages.length - 1];
     const reply = (last?.actions || []).find((x) => x.kind === "reply") as { subject?: string; body: string } | undefined;
-    return { ok: true as const, said: last?.text || "", draft: reply ? { subject: reply.subject || "", body: fixSignOff(reply.body, w.signOff) } : null, actions: last?.actions || [] };
+    // "copy Amanda on this": who to Cc, from what you said and what it wrote (Oct 12)
+    const team = await ccTeam().then((t) => (t.ok ? t.team : []));
+    const body = reply ? fixSignOff(reply.body, w.signOff) : "";
+    const cc = reply ? [...new Set([...ccFromWords(said, team), ...ccFromWords(body, team)])] : [];
+    return { ok: true as const, said: last?.text || "", draft: reply ? { subject: reply.subject || "", body, cc } : null, actions: last?.actions || [] };
   } catch (e) { return fail(e); }
 }
 

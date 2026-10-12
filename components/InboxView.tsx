@@ -1,4 +1,5 @@
 "use client";
+import CcField from "@/components/CcField";
 import Link from "next/link";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
@@ -558,7 +559,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
   const [full, setFull] = useState<FullMsg | null>(null);
   const [err, setErr] = useState(""), [loadErr, setLoadErr] = useState("");
   const [ex, setEx] = useState<{ tasks: Task[]; events: CalEvent[] } | null>(null);
-  const [writing, setWriting] = useState(false), [body, setBody] = useState("");
+  const [writing, setWriting] = useState(false), [body, setBody] = useState(""), [cc, setCc] = useState<string[]>([]);
   const [h, setH] = useState(240), ref = useRef<HTMLIFrameElement | null>(null), [plain, setPlain] = useState(false);
   useEffect(() => {
     let live = true;
@@ -593,7 +594,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
       <section className="ibx2-mail" aria-label="Email">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={i.subject} fromName={i.from_name} fromEmail={i.from_email} to={m?.to} cc={m?.cc} date={when} summary={i.summary}
           phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: busy === "mv",
-            ask: { id: "inbox:" + i.id, who: i.from_name || i.from_email, onDraft: (d) => { setBody(d.body); setWriting(true); } },
+            ask: { id: "inbox:" + i.id, who: i.from_name || i.from_email, onDraft: (d) => { setBody(d.body); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); setWriting(true); } },
             more: (close) => <>
               <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("later", "Moved to Later."); }}>{TbIcon.later} Later (SaneBox)</button>
               <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("news", "Moved to News."); }}>{TbIcon.file} News (SaneBox)</button>
@@ -643,10 +644,11 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
         </div>
         {writing && <div className="ibx2-compose open">
           <div className="ibx2-to"><span>To {i.from_email}</span></div>
+          <CcField value={cc} onChange={setCc} text={body} />
           <textarea rows={7} autoFocus value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your reply" aria-label="Reply" />
-          <SayButton chatId={"inbox:" + i.id} who={i.from_name || i.from_email} onDraft={(d) => setBody(d.body)} />
+          <SayButton chatId={"inbox:" + i.id} who={i.from_name || i.from_email} onDraft={(d) => { setBody(d.body); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); }} />
           <div className="ibx2-send">
-            <button type="button" className="btn primary" disabled={!!busy || !body.trim()} onClick={async () => { setBusy("send"); setErr(""); const r = await replyInboxEmail({ id: i.id, body }); setBusy(""); if (!r.ok) setErr(r.error); else { setWriting(false); setBody(""); if (onSent) onSent(`Sent to ${r.to}.`, { to: r.to, subject: i.subject, body, theirs: m?.text || "" }); else done(`Sent to ${r.to}.`, false); } }}>{busy === "send" ? "Sending…" : "Send"}</button>
+            <button type="button" className="btn primary" disabled={!!busy || !body.trim()} onClick={async () => { setBusy("send"); setErr(""); const r = await replyInboxEmail({ id: i.id, body, cc }); setBusy(""); if (!r.ok) setErr(r.error); else { setWriting(false); setBody(""); setCc([]); if (onSent) onSent(`Sent to ${r.to}.`, { to: r.to, subject: i.subject, body, theirs: m?.text || "" }); else done(`Sent to ${r.to}.`, false); } }}>{busy === "send" ? "Sending…" : "Send"}</button>
             <span className="faint">Your signature and their email go underneath.</span>
             <span className="spacer" />
             <button type="button" className="btn sm ghost" onClick={() => setWriting(false)}>Close</button>
@@ -692,6 +694,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const [body, setBody] = useState(confirm?.body || reply?.draft?.body || "");
   const [err, setErr] = useState("");
   const [opts, setOpts] = useState<Opt[] | null>(x.meta?.reply_options?.options || null), [picked, setPicked] = useState(confirm ? 0 : reply?.draft?.body ? -2 : -1), [ask, setAsk] = useState("");
+  // Cc (Oct 12): who's copied, and what you told the AI ("copy Amanda") so they're added
+  const [cc, setCc] = useState<string[]>([]), [told, setTold] = useState("");
   const boxRef = useRef<HTMLTextAreaElement | null>(null), moreRef = useRef<HTMLDetailsElement | null>(null);
   // the answer box: a slim bar until you start answering (an email opened to answer starts open)
   const [writing, setWriting] = useState(focus || !!confirm);
@@ -792,7 +796,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
         <MailHead listOpen={listOpen} toggleList={toggleList} subject={x.subject}
           phone={{
             reply: x.direction === "in" ? () => write() : undefined, busy: busy === "mv" || busy === "arch", folders, here: "INBOX",
-            ask: x.direction === "in" ? { id: x.id, who, onDraft: (d) => act({ kind: "reply", label: "", subject: d.subject, body: d.body }), openChat: () => setSide("ai") } : undefined,
+            ask: x.direction === "in" ? { id: x.id, who, onDraft: (d) => { act({ kind: "reply", label: "", subject: d.subject, body: d.body }); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); }, openChat: () => setSide("ai") } : undefined,
             move: onMove || (inOutlook ? (to, label) => { const k = (["archive", "later", "news", "receipts", "cc", "blackhole"].includes(to) ? to : "archive") as "archive"; void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: k }), label); } : undefined),
             more: orderFrom ? (close) => <>
               {view === "order" ? <button type="button" role="menuitem" onClick={() => { close(); setView("mail"); }}>{TbIcon.back} Back to the email</button>
@@ -875,14 +879,15 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               <button type="button" className="ibx2-replybar" onClick={() => write()}>Reply to {fromName.split(/[\s@]/)[0]}…</button>
             ) : <>
               <div className="ibx2-to"><span>To {x.from_email}</span><input value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject" /></div>
+              <CcField value={cc} onChange={setCc} text={`${told}\n${body}`} />
               <textarea ref={boxRef} rows={7} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your answer, pick one above, or tell the AI what to say below" aria-label="Reply" />
-              <SayButton chatId={x.id} who={who} onDraft={(d) => act({ kind: "reply", label: "", subject: d.subject, body: d.body })} />
-              <form className="ibx2-tell" onSubmit={async (e) => { e.preventDefault(); if (!ask.trim()) return; setBusy("ai"); setErr(""); const r = await aiWriteReply({ activityId: x.id, instruction: ask, subject }); setBusy(""); if (!r.ok) setErr(r.error || "The AI couldn't write that."); else { setSubject(r.subject || subject); setBody(r.body); setPicked(-1); setAsk(""); boxRef.current?.focus(); } }}>
+              <SayButton chatId={x.id} who={who} onDraft={(d) => { act({ kind: "reply", label: "", subject: d.subject, body: d.body }); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); }} />
+              <form className="ibx2-tell" onSubmit={async (e) => { e.preventDefault(); if (!ask.trim()) return; setBusy("ai"); setErr(""); setTold((t) => `${t}\n${ask}`); const r = await aiWriteReply({ activityId: x.id, instruction: ask, subject }); setBusy(""); if (!r.ok) setErr(r.error || "The AI couldn't write that."); else { setSubject(r.subject || subject); setBody(r.body); setPicked(-1); setAsk(""); boxRef.current?.focus(); } }}>
                 <input value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Tell the AI what to say, e.g. “yes, if we get the order by Saturday”" aria-label="Tell the AI what to say" />
                 <button type="submit" className="btn sm" disabled={!!busy || !ask.trim()}>{busy === "ai" ? "Writing…" : "✦ Write it"}</button>
               </form>
               <div className="ibx2-send">
-                <button type="button" className="btn primary" disabled={!!busy || !body.trim()} onClick={() => run("send", () => sendEmailReply({ activityId: x.id, subject, body, suggestionId: reply?.id }), `Sent to ${x.from_email}.`)}>{busy === "send" ? "Sending…" : "Send"}</button>
+                <button type="button" className="btn primary" disabled={!!busy || !body.trim()} onClick={() => run("send", () => sendEmailReply({ activityId: x.id, subject, body, suggestionId: reply?.id, cc }), `Sent to ${x.from_email}.`)}>{busy === "send" ? "Sending…" : "Send"}</button>
                 {body.trim() && <button type="button" className="btn sm ghost" disabled={!!busy} onClick={async () => { setBusy("polish"); setErr(""); const r = await aiWriteReply({ activityId: x.id, subject, body }); setBusy(""); if (!r.ok) setErr(r.error || "The AI couldn't rewrite that."); else setBody(r.body); }}>{busy === "polish" ? "Polishing…" : "✦ Polish"}</button>}
                 <span className="faint">Your signature and their email go underneath.</span>
                 <span className="spacer" />

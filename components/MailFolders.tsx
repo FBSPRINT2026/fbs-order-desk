@@ -1,4 +1,5 @@
 "use client";
+import CcField from "@/components/CcField";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import type { Convo, Folder, FullMsg, MsgRow } from "@/lib/mail/folders";
@@ -336,16 +337,18 @@ export function Attachments({ m }: { m: FullMsg }) {
 }
 
 /** reply / reply all box (to any email in any folder) */
-export function ReplyBox({ m, all, start, onClose, onSent }: { m: FullMsg; all?: boolean; /** a draft to start from (the Assistant's) */ start?: string; onClose: () => void; onSent: (to: string) => void }) {
+export function ReplyBox({ m, all, start, startCc, onClose, onSent }: { m: FullMsg; all?: boolean; /** a draft to start from (the Assistant's) */ start?: string; /** who the Assistant was told to copy */ startCc?: string[]; onClose: () => void; onSent: (to: string) => void }) {
   const [body, setBody] = useState(start || ""), [busy, setBusy] = useState(false), [err, setErr] = useState(""), [toAll, setToAll] = useState(!!all);
+  const [cc, setCc] = useState<string[]>(startCc || []);
   return (
     <div className="ibx2-compose open mf-reply">
       <div className="ibx2-to"><span>{toAll ? "Reply all" : "Reply"} to {m.fromName || m.fromAddress}</span><label className="check" style={{ marginLeft: "auto" }}><input type="checkbox" checked={toAll} onChange={(e) => setToAll(e.target.checked)} />Everyone on it</label></div>
+      <CcField value={cc} onChange={setCc} text={body} />
       <textarea rows={7} autoFocus value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your reply" aria-label="Reply" />
-      <SayButton chatId={`box:${m.uid}:${m.folder}`} who={m.fromName || m.fromAddress} onDraft={(d) => setBody(d.body)} />
+      <SayButton chatId={`box:${m.uid}:${m.folder}`} who={m.fromName || m.fromAddress} onDraft={(d) => { setBody(d.body); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); }} />
       {err && <div className="pv-err">{err}</div>}
       <div className="ibx2-send">
-        <button type="button" className="btn primary" disabled={busy || !body.trim()} onClick={async () => { setBusy(true); setErr(""); try { const r = await boxPost<{ to: string }>({ do: "reply", path: m.folder, uid: m.uid, body, all: toAll }); onSent(r.to);
+        <button type="button" className="btn primary" disabled={busy || !body.trim()} onClick={async () => { setBusy(true); setErr(""); try { const r = await boxPost<{ to: string }>({ do: "reply", path: m.folder, uid: m.uid, body, all: toAll, cc }); onSent(r.to);
             // the Email page offers the follow-ups this reply promises (a to-do or event on My Day)
             window.dispatchEvent(new CustomEvent("fbs:sent", { detail: { msg: `Sent to ${r.to}.`, sent: { to: r.to, subject: m.subject, body, theirs: m.text || "" } } })); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); }}>{busy ? "Sending…" : "Send"}</button>
         <span className="faint">Your signature and their email go underneath.</span>
@@ -381,7 +384,7 @@ export function FolderList({ rows, sel, onPick, onSwipe, sentBox, more, onMore, 
 
 /** one email from any folder: read it, reply, move it */
 export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, flash }: { row: MsgRow; folders: Folder[] | null; onGone: () => void; toggleList: () => void; listOpen: boolean; back: () => void; flash: (t: string) => void }) {
-  const [m, setM] = useState<FullMsg | null>(null), [err, setErr] = useState(""), [busy, setBusy] = useState(false), [rep, setRep] = useState<"" | "one" | "all">(""), [draft, setDraft] = useState<{ body: string; n: number } | null>(null);
+  const [m, setM] = useState<FullMsg | null>(null), [err, setErr] = useState(""), [busy, setBusy] = useState(false), [rep, setRep] = useState<"" | "one" | "all">(""), [draft, setDraft] = useState<{ body: string; cc?: string[]; n: number } | null>(null);
   useEffect(() => { let live = true; setM(null); setErr(""); box<FullMsg>({ do: "message", path: row.folder, uid: row.uid }).then((x) => live && setM(x), (e) => live && setErr(e.message)); return () => { live = false; }; }, [row.folder, row.uid]);
   const move = async (to: string, label: string) => { setBusy(true); try { await boxPost({ do: "move", path: row.folder, uid: row.uid, to }); flash(label); onGone(); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); };
   return (
@@ -389,7 +392,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
       <section className="ibx2-mail" aria-label="Email">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={row.subject} fromName={row.fromName} fromEmail={row.from} to={m?.to} cc={m?.cc}
           phone={{ reply: m ? () => setRep("one") : undefined, move, here: row.folder, folders, busy,
-            ask: { id: `box:${row.uid}:${row.folder}`, who: row.fromName || row.from, onDraft: (d) => { setDraft((x) => ({ body: d.body, n: (x?.n || 0) + 1 })); setRep("one"); } },
+            ask: { id: `box:${row.uid}:${row.folder}`, who: row.fromName || row.from, onDraft: (d) => { setDraft((x) => ({ body: d.body, cc: d.cc || [], n: (x?.n || 0) + 1 })); setRep("one"); } },
             more: m ? (close) => <button type="button" role="menuitem" onClick={() => { close(); setRep("all"); }}>{TbIcon.replyAll} Reply all</button> : undefined }}
           date={new Date(row.date).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
           toolbar={<Toolbar>
@@ -406,7 +409,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
             <Attachments m={m} />
           </>}
         </div>
-        {rep && m && <ReplyBox key={draft?.n || 0} m={m} all={rep === "all"} start={draft?.body} onClose={() => { setRep(""); setDraft(null); }} onSent={(to) => { setRep(""); setDraft(null); flash(`Sent to ${to}.`); }} />}
+        {rep && m && <ReplyBox key={draft?.n || 0} m={m} all={rep === "all"} start={draft?.body} startCc={draft?.cc} onClose={() => { setRep(""); setDraft(null); }} onSent={(to) => { setRep(""); setDraft(null); flash(`Sent to ${to}.`); }} />}
       </section>
     </div>
   );
@@ -432,7 +435,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
   const last = c.msgs[c.msgs.length - 1];
   const [open, setOpen] = useState<Record<string, boolean>>({ [`${last.folder}:${last.uid}`]: true });
   const [full, setFull] = useState<Record<string, FullMsg | "err">>({});
-  const [rep, setRep] = useState<FullMsg | null>(null), [repStart, setRepStart] = useState("");
+  const [rep, setRep] = useState<FullMsg | null>(null), [repStart, setRepStart] = useState(""), [repCc, setRepCc] = useState<string[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
   const load = (m: MsgRow) => { const k = `${m.folder}:${m.uid}`; if (full[k]) return; box<FullMsg>({ do: "message", path: m.folder, uid: m.uid }).then((x) => setFull((f) => ({ ...f, [k]: x })), () => setFull((f) => ({ ...f, [k]: "err" }))); };
   useEffect(() => { load(last); setTimeout(() => endRef.current?.scrollIntoView({ block: "end" }), 300); }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -465,7 +468,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
           phone={{ reply: replyLast, more: (close) => <>
             {orderAct && <a href={orderHref} role="menuitem" onClick={close}>{TbIcon.order} {orderLabel}</a>}
             <button type="button" role="menuitem" onClick={() => { close(); replyLast(); }}>{TbIcon.reply} Reply to the last email</button>
-          </>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); replyLast(); } } }}
+          </>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); setRepCc(d.cc || []); replyLast(); } } }}
           toolbar={<Toolbar>
             <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
             <span className="faint mf-hint">Oldest at the top. Click an email to open or fold it.</span>
@@ -497,7 +500,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
           })}
           <div ref={endRef} />
         </div>
-        {rep && <ReplyBox key={repStart} m={rep} start={repStart} onClose={() => { setRep(null); setRepStart(""); }} onSent={(to) => { setRep(null); setRepStart(""); flash(`Sent to ${to}. It shows in the conversation next time you search.`); }} />}
+        {rep && <ReplyBox key={repStart} m={rep} start={repStart} startCc={repCc} onClose={() => { setRep(null); setRepStart(""); }} onSent={(to) => { setRep(null); setRepStart(""); flash(`Sent to ${to}. It shows in the conversation next time you search.`); }} />}
       </section>
     </div>
   );

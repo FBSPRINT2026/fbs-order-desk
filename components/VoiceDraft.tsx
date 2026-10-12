@@ -13,7 +13,7 @@ import { aiDraftReply } from "@/app/shop/ai-actions";
  * thinking"): it keeps listening through pauses until you tap the mic off, you can type into what it heard, and it only
  * writes the reply when you tap Write the reply.
  */
-export type Draft = { subject: string; body: string };
+export type Draft = { subject: string; body: string; /** who to Cc, from what you said ("copy Amanda") */ cc?: string[] };
 type Listener = { text: string; on: boolean; err: string; sub: (() => void) | null; stop: () => void };
 /** iPhones and iPads hand the words back more reliably one stretch at a time (it starts again after each pause) */
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);

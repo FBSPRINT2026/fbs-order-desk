@@ -100,7 +100,9 @@ export async function POST(req: Request) {
       const fromMe = msg.fromAddress === me;
       const split = (s: string) => (s.match(/[^\s<>,;"]+@[^\s<>,;"]+/g) || []).map((x) => x.toLowerCase());
       const toList = fromMe ? split(msg.to) : [msg.fromAddress];
-      const ccList = b.all ? [...new Set([...split(msg.to), ...split(msg.cc)])].filter((x) => x !== me && !toList.includes(x)) : [];
+      // reply all: everyone on it; plus anyone added in Cc (Oct 12)
+      const added = (Array.isArray(b.cc) ? b.cc : []).map((x: unknown) => String(x || "").trim().toLowerCase()).filter((x: string) => /^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$/.test(x));
+      const ccList = [...new Set([...(b.all ? [...split(msg.to), ...split(msg.cc)] : []), ...added])].filter((x) => x !== me && !toList.includes(x)).slice(0, 20);
       const subject = /^re:/i.test(msg.subject) ? msg.subject : `Re: ${msg.subject}`;
       const sent = msg.date ? new Date(msg.date).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" at ", " ") : "";
       const quote = { from: msg.from, sent, to: msg.to, cc: msg.cc, subject: msg.subject, html: msg.html.length < 1_500_000 ? msg.html : "", text: msg.text };

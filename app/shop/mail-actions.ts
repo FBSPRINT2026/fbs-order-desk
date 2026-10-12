@@ -10,6 +10,7 @@ import { detectSignature } from "@/lib/mail/signature";
 import { mailboxToRead, viewedEmail, VIEWING_NO } from "@/lib/mail/viewing";
 import { runAccount } from "@/lib/mail/run";
 import { archiveInbox, MOVES, type MoveTo } from "@/lib/mail/mirror";
+import { cleanCc, type TeamMember } from "@/lib/mail/ccWords";
 
 // Staff actions for the mailboxes: connect your own, reply from the mailbox an email came to, sort a sender, check now.
 
@@ -84,7 +85,7 @@ export async function disconnectMailbox() {
  * (logo and all), then their email quoted under From/Sent/To/Subject. Same thread; a copy lands in Sent Items and
  * on the timeline.
  */
-export async function sendEmailReply(input: { activityId: string; subject: string; body: string; suggestionId?: string }) {
+export async function sendEmailReply(input: { activityId: string; subject: string; body: string; suggestionId?: string; cc?: string[] }) {
   try {
     const v = await staff(), { admin, email, user } = v;
     if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
@@ -108,12 +109,14 @@ export async function sendEmailReply(input: { activityId: string; subject: strin
     const page = replyHtml({ body: input.body, signature, css: signature ? from.signature_css : "", quote });
     const { html, attachments } = inlineImages(page);
     const text = replyText({ body: input.body, signature, quote });
-    const { messageId } = await sendFromMailbox(cfgOf(from), { to: a.from_email as string, subject, text, html, attachments, inReplyTo: (a.external_id as string) || undefined, references: refs });
+    // Cc (Oct 12): who you added, never the customer or yourself again
+    const cc = cleanCc(input.cc, [String(a.from_email || ""), from.email]);
+    const { messageId } = await sendFromMailbox(cfgOf(from), { to: a.from_email as string, cc: cc.join(", ") || undefined, subject, text, html, attachments, inReplyTo: (a.external_id as string) || undefined, references: refs });
     const body = await saveBody(admin, { html: page, attachments: [] }, (a.customer_id as string) || "leads").catch(() => ({}));
     await admin.from("activities").insert({
       customer_id: a.customer_id, order_id: a.order_id, kind: "email", direction: "out", subject: subject.slice(0, 500), body: input.body.trim(),
       from_email: from.email, to_email: a.from_email, external_id: messageId, thread_id: a.thread_id || a.external_id, occurred_at: new Date().toISOString(),
-      created_by: email || "staff", ai_processed_at: new Date().toISOString(), meta: { references: refs.slice(-20), mailbox: "sent", via: "portal", account_id: from.id, account: from.email, ...body, html_checked: true },
+      created_by: email || "staff", ai_processed_at: new Date().toISOString(), meta: { references: refs.slice(-20), mailbox: "sent", via: "portal", account_id: from.id, account: from.email, ...(cc.length ? { cc } : {}), ...body, html_checked: true },
     });
     await closeAnswered(admin, { inReplyTo: (a.external_id as string) || "", references: refs }, email || "staff");
     await closeWrittenTo(admin, [String(a.from_email || "")], new Date().toISOString(), email || "staff");
@@ -298,7 +301,7 @@ export async function readInboxEmail(id: string) {
 }
 
 /** reply to any email in your Inbox (not only customers'): sent from your mailbox, threaded, with your signature */
-export async function replyInboxEmail(input: { id: string; body: string; subject?: string }) {
+export async function replyInboxEmail(input: { id: string; body: string; subject?: string; cc?: string[] }) {
   try {
     const v = await staff(), { admin, user } = v;
     if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
@@ -318,7 +321,29 @@ export async function replyInboxEmail(input: { id: string; body: string; subject
     const { html, attachments } = inlineImages(page);
     const text = replyText({ body: input.body, signature, quote });
     const refs = [...m.references, m.messageId].filter(Boolean).slice(-20);
-    await sendFromMailbox(cfgOf(a), { to: m.fromAddress, subject, text, html, attachments, inReplyTo: m.messageId || undefined, references: refs });
+    const cc = cleanCc(input.cc, [m.fromAddress, a.email]);
+    await sendFromMailbox(cfgOf(a), { to: m.fromAddress, cc: cc.join(", ") || undefined, subject, text, html, attachments, inReplyTo: m.messageId || undefined, references: refs });
     return { ok: true as const, to: m.fromAddress };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * Cc suggestions (Oct 12): the team. Everyone on staff, plus the shop addresses that have written to you lately
+ * (Claudia isn't on the portal yet). Not you.
+ */
+export async function ccTeam() {
+  try {
+    const { admin, email } = await staff();
+    const me = (email || "").toLowerCase();
+    const [{ data: st }, { data: seen }] = await Promise.all([
+      admin.from("staff").select("email, name"),
+      admin.from("mail_inbox").select("from_email, from_name").ilike("from_email", "%@fbsprint.com").gte("received_at", new Date(Date.now() - 120 * 864e5).toISOString()).limit(400),
+    ]);
+    const out = new Map<string, TeamMember>();
+    const nameOf = (n: string, e: string) => { const t = String(n || "").replace(/["']/g, "").trim(); const flip = /^([^,]+),\s*(.+)$/.exec(t); return (flip ? `${flip[2]} ${flip[1]}` : t) || e.split("@")[0].replace(/^./, (c) => c.toUpperCase()); };
+    for (const x of (st || []) as { email: string; name: string | null }[]) out.set(x.email.toLowerCase(), { email: x.email.toLowerCase(), name: nameOf(x.name || "", x.email) });
+    for (const x of (seen || []) as { from_email: string; from_name: string | null }[]) { const e = x.from_email.toLowerCase(); if (!out.has(e) || !out.get(e)!.name.includes(" ")) out.set(e, { email: e, name: nameOf(x.from_name || "", e) }); }
+    out.delete(me);
+    return { ok: true as const, team: [...out.values()].filter((x) => !/^(no-?reply|notifications?|info|orders?|sales)@/.test(x.email)).sort((a, b) => a.name.localeCompare(b.name)) };
   } catch (e) { return fail(e); }
 }
