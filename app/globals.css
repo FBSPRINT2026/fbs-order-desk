@@ -6782,3 +6782,17 @@ a.pdn-tag:hover{text-decoration:underline}
 .as-b{align-items:center;justify-content:flex-end}
 .as-b .as-q{margin-right:auto}
 @media (max-width:760px){.as-b{flex-direction:row}.as-f{flex-wrap:wrap}}
+/* Cheer mode (components/Cheer.tsx): fireworks in the shop's colors and a kind note when you finish something */
+.ch-fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:3500}
+.ch-note{position:fixed;left:50%;top:calc(16% + env(safe-area-inset-top));transform:translate(-50%,-10px) scale(.92);opacity:0;z-index:3600;width:min(360px,calc(100vw - 32px));text-align:center;border-radius:22px;padding:18px 18px 16px;box-shadow:0 22px 60px rgba(20,29,43,.28);border:2px solid transparent;background-image:linear-gradient(var(--surface),var(--surface)),conic-gradient(from 0deg,#0E9BD8,#7C5CE0,#F26660,#FCB122,#0E9BD8);background-origin:border-box;background-clip:padding-box,border-box;transition:opacity .25s,transform .35s cubic-bezier(.2,1.4,.4,1);pointer-events:none}
+.ch-note.show{opacity:1;transform:translate(-50%,0) scale(1)}
+.ch-big{font-family:var(--display);font-weight:800;font-size:24px;line-height:1.15;letter-spacing:-.01em;text-wrap:balance;margin:0 0 6px;color:var(--ink)}
+.ch-small{font-size:14px;color:var(--ink-2);margin:0}
+.ch-n{display:inline-block;margin-top:10px;font-size:12.5px;font-weight:700;color:#6847c9;background:color-mix(in srgb,#7C5CE0 12%,var(--surface));border-radius:999px;padding:3px 10px}
+@media (prefers-reduced-motion:reduce){.ch-note{transition:opacity .2s}}
+.md-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.md-head>div:first-child{flex:1;min-width:0}
+.md-cheer{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:var(--surface);cursor:pointer;user-select:none}
+.md-cheer input{position:absolute;opacity:0;pointer-events:none}
+.md-cheer.on{border-color:transparent;color:#fff;background:linear-gradient(135deg,#F26660,#7C5CE0)}
+.md-cheer:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}

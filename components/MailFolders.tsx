@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type React from "react";
 import type { Convo, Folder, FullMsg, MsgRow } from "@/lib/mail/folders";
 import VoiceDraft, { SayButton, startListening, type Draft } from "@/components/VoiceDraft";
+import { cheerWin } from "@/components/Cheer";
 
 /**
  * Email beyond the Inbox (Oct 12): the folder list, a folder's emails, reading / replying / moving any email, and
@@ -14,6 +15,8 @@ export async function box<T>(params: Record<string, string | number>): Promise<T
   const r = await fetch(`/api/mail/box?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`, { cache: "no-store" });
   const j = await r.json().catch(() => ({ error: "The mail server didn't answer." }));
   if (!r.ok) throw new Error(j.error || "Something went wrong.");
+  // Cheer mode: an email archived (or blackholed) counts as a win
+  if (body.do === "move" && (body.to === "archive" || body.to === "blackhole")) cheerWin("archived");
   return j as T;
 }
 export async function boxPost<T>(body: Record<string, unknown>): Promise<T> {

@@ -251,3 +251,11 @@ export async function suggestFollowUps(input: { to: string; subject: string; bod
     return { ok: true as const, items };
   } catch (e) { return fail(e); }
 }
+
+/** Cheer mode: fireworks and a kind note when you finish something (My Day's switch) */
+export async function getCheer() {
+  try { const { admin, owner } = await me(); const { data } = await admin.from("staff").select("cheer").ilike("email", owner).maybeSingle(); return { ok: true as const, on: !!data?.cheer }; } catch (e) { return fail(e); }
+}
+export async function setCheer(on: boolean) {
+  try { const { admin, owner } = await me(); await admin.from("staff").update({ cheer: on }).ilike("email", owner); return { ok: true as const }; } catch (e) { return fail(e); }
+}

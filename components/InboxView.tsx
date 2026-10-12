@@ -9,6 +9,7 @@ import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, 
 import { addEvent, addTask, inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, suggestFollowUps, type Brief, type CalEvent, type FollowUp, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
 import { onPullRefresh } from "@/components/PullRefresh";
+import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
 import { Attachments, box as mailBox, boxPost, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
@@ -232,12 +233,14 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [afterSend, setAfterSend] = useState<{ it?: InboxItem; msg: string; sent?: Sent } | null>(null);
   // a reply sent from any folder or conversation says so too (MailFolders ReplyBox)
   useEffect(() => { const h = (e: Event) => setAfterSend((e as CustomEvent<{ msg: string; sent: Sent }>).detail); window.addEventListener("fbs:sent", h); return () => window.removeEventListener("fbs:sent", h); }, []);
+  // Cheer mode: a reply sent counts as a win
+  useEffect(() => { if (afterSend) cheerWin("sent"); }, [afterSend?.msg, afterSend?.sent?.body]); // eslint-disable-line react-hooks/exhaustive-deps
   const afterArchive = async () => {
     const a = afterSend; if (!a?.it) return; const it = a.it;
     setAfterSend(null);
     const drop = () => { setOl((l) => (l || []).filter((y) => y.id !== it.id)); setOpen(null); };
     try { await boxPost({ do: "move", path: "INBOX", uid: it.uid, to: "archive" }); drop(); flash("Archived."); }
-    catch { const r = await archiveOutlookEmail({ id: it.id }); if (r.ok) { drop(); flash("Archived."); } else flash(r.error); }
+    catch { const r = await archiveOutlookEmail({ id: it.id }); if (r.ok) { drop(); flash("Archived."); cheerWin("archived"); } else flash(r.error); }
     void load();
   };
   // a customer email that's in my Inbox: Archive / Later / Black Hole / Move it there
@@ -672,7 +675,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   useEffect(() => { if ((needs || focus) && !opts && !busy) loadOpts(); }, [x.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (focus) setTimeout(() => boxRef.current?.focus(), 60); }, [focus]);
   async function urlFor(path: string) { const { data } = await createClient().storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
-  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else if (key === "send" && onSent) { setWriting(false); onSent(ok, { to: x.from_email || "", subject, body, theirs: x.body || "" }); done("", false); } else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
+  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (r.ok && key === "arch") cheerWin("archived"); if (!r.ok) setErr(r.error || "Something went wrong."); else if (key === "send" && onSent) { setWriting(false); onSent(ok, { to: x.from_email || "", subject, body, theirs: x.body || "" }); done("", false); } else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
   // the order confirmation arrives after the order is made: into the empty answer box, never over what's typed
   const confirmAt = x.meta?.reply_options?.at;
   useEffect(() => { if (confirm && !body.trim()) { setSubject(confirm.subject); setBody(confirm.body); setPicked(0); setWriting(true); } }, [confirmAt]); // eslint-disable-line react-hooks/exhaustive-deps

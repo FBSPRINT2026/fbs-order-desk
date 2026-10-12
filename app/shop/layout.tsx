@@ -5,6 +5,7 @@ import { mergeSettings } from "@/lib/pricing";
 import { accessOf, permsFor, ROLES } from "@/lib/roles";
 import ShopNav from "@/components/ShopNav";
 import PullRefresh from "@/components/PullRefresh";
+import Cheer from "@/components/Cheer";
 import MobileTables from "@/components/MobileTables";
 import Translate from "@/components/Translate";
 import { RoleProvider } from "@/components/RoleContext";
@@ -17,7 +18,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   // (this layout runs on every page load, so each round trip saved here is felt everywhere)
   const settingsQ = createClient().then((sb) => sb.from("settings").select("data").eq("id", 1).maybeSingle());
   settingsQ.catch(() => null); // a redirect below must not leave an unhandled rejection behind
-  const { user, isStaff, email, supabase, role: realRole, staff: me } = await getViewer(", name, shortcuts");
+  const { user, isStaff, email, supabase, role: realRole, staff: me } = await getViewer(", name, shortcuts, cheer");
   if (!user) redirect("/login?next=/shop");
   if (!isStaff) redirect("/portal");
   const [{ data: st }, { data: team }] = await Promise.all([
@@ -47,6 +48,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <div className="app">
         <ShopNav email={email} firstName={firstName} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} people={people} />
         <main className="main"><div className="top-r"><Translate /></div><CrewGuard /><PullRefresh>{children}</PullRefresh></main>
+        <Cheer on={!viewAs && !!me?.cheer} name={firstName} />
         <MobileTables />
       </div>
     </RoleProvider>

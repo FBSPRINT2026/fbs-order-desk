@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { addEvent, addTask, calendarLink, deleteTask, getMyDay, handTask, setCalendarShop, setEventStatus, setTaskDone, shopDates, updateTask, type CalEvent, type Task } from "@/app/shop/myday-actions";
+import { cheerWin, setCheerOn } from "@/components/Cheer";
+import { addEvent, addTask, calendarLink, getCheer, setCheer, deleteTask, getMyDay, handTask, setCalendarShop, setEventStatus, setTaskDone, shopDates, updateTask, type CalEvent, type Task } from "@/app/shop/myday-actions";
 
 /**
  * My Day (the dashboard's top, Oct 12): one place for the day. Three columns: replies owed (customers: email and portal
@@ -50,6 +51,7 @@ export default function MyDay({ name, replies, replyCount, urgentCount }: { name
           <h1>{hello}{name ? `, ${name}` : ""}</h1>
           <p className="md-line">{line.length ? line.join(" · ") : "Nothing waiting on you. Enjoy it."}</p>
         </div>
+        <CheerSwitch />
       </header>
       <div className="md-tabs" role="tablist" aria-label="My Day">
         <button type="button" role="tab" aria-selected={tab === "replies"} className={tab === "replies" ? "on" : ""} onClick={() => setTab("replies")}>Replies<b className={urgentCount ? "hot" : ""}>{replyCount}</b></button>
@@ -111,6 +113,7 @@ export function Todos({ d, setD, load, compact, err }: { d: Day | null; setD: (f
     patchTask(t.id, { status: "done", done_at: new Date().toISOString() });
     const r = await setTaskDone(t.id, true);
     if (!r.ok) { patchTask(t.id, { status: "open" }); say(r.error); return; }
+    cheerWin("todo", { allDone: open.filter((x) => x.id !== t.id).length === 0 });
     say(r.archived ? "Done. The email is archived in Outlook." : "Done.", async () => { patchTask(t.id, { status: "open", done_at: null }); await setTaskDone(t.id, false); setToast(null); });
   }
   async function reopen(t: Task) { patchTask(t.id, { status: "open", done_at: null }); await setTaskDone(t.id, false); }
@@ -302,4 +305,17 @@ export function PhoneLink({ onClose }: { onClose: () => void }) {
 export function CrewTodos() {
   const { d, setD, load } = useMyDay();
   return <section className="db-card db-blue md-crew"><Todos d={d} setD={setD} load={load} compact /></section>;
+}
+
+/** Cheer mode's switch on My Day: fireworks and a kind note when you finish something */
+function CheerSwitch() {
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => { void getCheer().then((r) => setOn(r.ok ? r.on : false)); }, []);
+  if (on === null) return null;
+  return (
+    <label className={"md-cheer" + (on ? " on" : "")} title="Fireworks and a kind note when you finish something">
+      <input type="checkbox" checked={on} onChange={(e) => { const v = e.target.checked; setOn(v); setCheerOn(v); void setCheer(v); if (v) setTimeout(() => cheerWin("todo"), 50); }} />
+      <span aria-hidden>✨</span> Cheer mode
+    </label>
+  );
 }
