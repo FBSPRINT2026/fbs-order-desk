@@ -166,7 +166,7 @@ export default function Inbox() {
                 const k = olKey(i), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
                 const name = r ? who(r.x) : i.from_name || i.from_email || "(unknown sender)";
                 return (
-                  <button key={i.id} data-id={k} type="button" className={"ibx2-item ol" + (olCur?.id === i.id ? " on" : "") + (r?.needs ? " needs" : "") + (r?.urgent ? " urgent" : "") + (i.unread ? " unread" : "") + (!r ? " plain" : "")} onClick={() => pickRow(k)} onDoubleClick={() => r && pickRow(k, true)}>
+                  <button key={i.id} data-id={k} type="button" className={"ibx2-item ol" + (olCur?.id === i.id ? " on" : "") + (r?.needs ? " needs" : "") + (r?.urgent ? " urgent" : "") + (i.unread ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => pickRow(k)} onDoubleClick={() => r && pickRow(k, true)}>
                     <span className="ibx2-item-1">
                       <b>{name}</b>
                       {r?.urgent && <em>Urgent</em>}

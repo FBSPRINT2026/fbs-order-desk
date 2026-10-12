@@ -6153,10 +6153,10 @@ a.pdn-tag:hover{text-decoration:underline}
 }
 
 /* Inbox → My Inbox: the Outlook Inbox, mirrored (lib/mail/mirror.ts) */
-.ibx2-item.ol.unread .ibx2-item-1 b{color:var(--accent)}
-.ibx2-item.ol.unread{border-left-color:var(--accent)}
-.ibx2-item.ol.plain .ibx2-item-1 b{font-weight:500;color:var(--ink-2)}
-.ibx2-item.ol.plain .ibx2-item-2{color:var(--ink-3)}
+.ibx2-item.ol.ol-unread .ibx2-item-1 b{color:var(--accent)}
+.ibx2-item.ol.ol-unread{border-left-color:var(--accent)}
+.ibx2-item.ol.ol-plain .ibx2-item-1 b{font-weight:500;color:var(--ink-2)}
+.ibx2-item.ol.ol-plain .ibx2-item-2{color:var(--ink-3)}
 .ibx2-item .ol-needs{color:var(--warn);font-weight:700}
 .ibx2-flag{color:var(--danger);font-size:12px;margin-left:2px}
 .ibx2-plain{position:relative;gap:8px}
