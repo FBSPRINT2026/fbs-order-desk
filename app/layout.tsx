@@ -2,7 +2,9 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = { title: "FBS Order Desk", description: "Quotes, invoices, production and customer portal" };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
+// maximumScale 1: iPhones don't zoom the page in when you tap into a search or reply box (pinch-zoom still works,
+// iOS ignores it for that) (Oct 12: Amanda's page stayed zoomed in after searching her email)
+export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
