@@ -7,6 +7,7 @@ import { imapClient } from "@/lib/mail/imap";
 import { addContact, closeAnswered, closeWrittenTo, saveBody } from "@/lib/mail/process";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 import { detectSignature } from "@/lib/mail/signature";
+import { mailboxToRead, viewedEmail, VIEWING_NO } from "@/lib/mail/viewing";
 import { runAccount } from "@/lib/mail/run";
 import { archiveInbox, MOVES, type MoveTo } from "@/lib/mail/mirror";
 
@@ -22,18 +23,19 @@ const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? 
 /** your mailbox (and, for owners and admins, everyone's connection status) */
 export async function getMailStatus() {
   try {
-    const { admin, user, role } = await staff();
-    const mine = await accountForUser(admin, user!.id);
+    const v = await staff(), { admin, user, role } = v;
+    const { acct: mine, viewing } = await mailboxToRead(admin, v);
     let all: ReturnType<typeof publicAccount>[] = [];
     if (role === "owner" || role === "admin") { const { data } = await admin.from("mail_accounts").select("*").order("email"); all = ((data || []) as MailAccount[]).map(publicAccount); }
-    return { ok: true as const, mine: mine ? publicAccount(mine) : null, all, defaultHost: DEFAULT_MAIL_HOST, myEmail: user!.email || "" };
+    return { ok: true as const, mine: mine ? publicAccount(mine) : null, all, defaultHost: DEFAULT_MAIL_HOST, myEmail: viewing || user!.email || "", viewing };
   } catch (e) { return fail(e); }
 }
 
 /** connect (or reconnect) your own mailbox: the sign-in is tested first, then the password is stored encrypted */
 export async function connectMailbox(input: { email: string; password: string; name: string; host: string }) {
   try {
-    const { admin, user } = await staff();
+    const v = await staff(), { admin, user } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
     const email = input.email.trim().toLowerCase(), host = (input.host || DEFAULT_MAIL_HOST).trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false as const, error: "Enter your full email address." };
     if (!input.password) return { ok: false as const, error: "Enter your email password." };
@@ -55,7 +57,8 @@ export async function connectMailbox(input: { email: string; password: string; n
 /** stop reading your mailbox (the connection and stored password are removed; email already on file stays) */
 export async function disconnectMailbox() {
   try {
-    const { admin, user } = await staff();
+    const v = await staff(), { admin, user } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
     const a = await accountForUser(admin, user!.id);
     if (a) await admin.from("mail_accounts").update({ enabled: false, enc_password: encryptSecret(""), updated_at: new Date().toISOString() }).eq("id", a.id);
     return { ok: true as const };
@@ -69,7 +72,8 @@ export async function disconnectMailbox() {
  */
 export async function sendEmailReply(input: { activityId: string; subject: string; body: string; suggestionId?: string }) {
   try {
-    const { admin, email, user } = await staff();
+    const v = await staff(), { admin, email, user } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
     if (!input.body.trim()) return { ok: false as const, error: "Write the reply first." };
     const { data: a } = await admin.from("activities").select("*").eq("id", input.activityId).maybeSingle();
     if (!a?.from_email) return { ok: false as const, error: "That email isn't on file." };
@@ -115,7 +119,8 @@ export async function getSignature() {
 /** read your signature again from the emails you've sent from Outlook */
 export async function refreshSignature() {
   try {
-    const { admin, user } = await staff();
+    const v = await staff(), { admin, user } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
     const a = await accountForUser(admin, user!.id);
     if (!a?.enabled) return { ok: false as const, error: "Connect your email first." };
     const r = await detectSignature(admin, a.id);
@@ -129,7 +134,8 @@ export async function refreshSignature() {
 /** signature on replies sent from the portal: on or off */
 export async function setSignatureOn(on: boolean) {
   try {
-    const { admin, user } = await staff();
+    const v = await staff(), { admin, user } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
     const a = await accountForUser(admin, user!.id);
     if (a) await admin.from("mail_accounts").update({ signature_on: on }).eq("id", a.id);
     return { ok: true as const };
@@ -146,7 +152,8 @@ export async function getMailPrefs() {
 }
 export async function setMailPrefs(input: { signOff?: string; writeAs?: "me" | "shop" }) {
   try {
-    const { admin, user } = await staff();
+    const v = await staff(), { admin, user } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
     const a = await accountForUser(admin, user!.id);
     if (!a) return { ok: false as const, error: "Connect your email first." };
     const row: Record<string, string> = {};
@@ -190,7 +197,8 @@ export async function setEmailCustomer(activityId: string, customerId: string) {
 /** read your mailbox now instead of waiting for the next 2-minute check */
 export async function checkMailNow() {
   try {
-    const { admin, user } = await staff();
+    const v = await staff(), { admin, user } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
     const a = await accountForUser(admin, user!.id);
     if (!a?.enabled) return { ok: false as const, error: "Connect your email first." };
     const r = await runAccount(admin, a, Date.now() + 35000);
@@ -230,8 +238,8 @@ export type InboxItem = { id: string; uid: number; from_email: string; from_name
 /** your Outlook Inbox as it is right now (the mirror, refreshed every mailbox check): your to-do list */
 export async function getOutlookInbox() {
   try {
-    const { admin, user } = await staff();
-    const a = await accountForUser(admin, user!.id);
+    const v = await staff(), { admin } = v;
+    const { acct: a } = await mailboxToRead(admin, v);
     if (!a || !a.enabled) return { ok: true as const, items: [] as InboxItem[], connected: false };
     const { data } = await admin.from("mail_inbox").select("id, uid, from_email, from_name, subject, received_at, cc_only, unread, flagged, activity_id, bucket, summary")
       .eq("account_id", a.id).is("gone_at", null).order("received_at", { ascending: false, nullsFirst: false }).limit(500);
@@ -242,7 +250,8 @@ export async function getOutlookInbox() {
 /** Archive: moves the email to Archive in your Outlook, the same as Outlook's Archive button (by row, or by the customer email on file) */
 export async function archiveOutlookEmail(input: { id?: string; activityId?: string; to?: MoveTo }) {
   try {
-    const { admin, user, email } = await staff();
+    const v = await staff(), { admin, user, email } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
     const a = await accountForUser(admin, user!.id);
     if (!a || !a.enabled) return { ok: false as const, error: "Connect your email first." };
     let id = input.id || "";
@@ -260,8 +269,8 @@ export async function archiveOutlookEmail(input: { id?: string; activityId?: str
 /** read any email in your Inbox, live from the mailbox (the portal doesn't keep non-customer mail) */
 export async function readInboxEmail(id: string) {
   try {
-    const { admin, user } = await staff();
-    const a = await accountForUser(admin, user!.id);
+    const v = await staff(), { admin } = v;
+    const { acct: a } = await mailboxToRead(admin, v);
     if (!a || !a.enabled) return { ok: false as const, error: "Connect your email first." };
     const { data: r } = await admin.from("mail_inbox").select("id, account_id, uid, uidvalidity, message_id").eq("id", id).maybeSingle();
     if (!r || r.account_id !== a.id) return { ok: false as const, error: "That email isn't in your Inbox." };
@@ -275,7 +284,8 @@ export async function readInboxEmail(id: string) {
 /** reply to any email in your Inbox (not only customers'): sent from your mailbox, threaded, with your signature */
 export async function replyInboxEmail(input: { id: string; body: string; subject?: string }) {
   try {
-    const { admin, user } = await staff();
+    const v = await staff(), { admin, user } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
     if (!input.body.trim()) return { ok: false as const, error: "Write the reply first." };
     const a = await accountForUser(admin, user!.id);
     if (!a || !a.enabled) return { ok: false as const, error: "Connect your email first." };

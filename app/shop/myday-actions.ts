@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accountForUser } from "@/lib/mail/config";
+import { mailboxToRead } from "@/lib/mail/viewing";
 import { archiveInbox, chicago } from "@/lib/mail/mirror";
 import { inboxSig, writeBrief, type Brief } from "@/lib/mail/brief";
 export type { Brief };
@@ -211,8 +212,8 @@ export async function inboxItemExtras(mailInboxId: string) {
 /** the Inbox summary: the one written ahead of time (instant), else written now; `fresh` writes it again */
 export async function inboxBrief(fresh = false) {
   try {
-    const { admin, owner, name, user } = await me();
-    const acct = await accountForUser(admin, user!.id);
+    const v = await me(), { admin, owner, name } = v;
+    const { acct } = await mailboxToRead(admin, v);
     if (!acct || !acct.enabled) return { ok: false as const, error: "Connect your email first." };
     if (!fresh) {
       const { data: kept } = await admin.from("mail_brief").select("sig, brief").eq("account_id", acct.id).maybeSingle();

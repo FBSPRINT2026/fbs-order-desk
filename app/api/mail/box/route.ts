@@ -1,7 +1,8 @@
 import { after, NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { accountForUser, cfgOf } from "@/lib/mail/config";
+import { cfgOf } from "@/lib/mail/config";
+import { mailboxToRead, VIEWING_NO } from "@/lib/mail/viewing";
 import { customerAddrs, getAttachment, getMessage, groupConvos, listFolders, listMessages, listOlder, markSeen, moveMessage, searchConversations, withBox } from "@/lib/mail/folders";
 import { cachedList, cachedMessage, cachedSearch, folderCached } from "@/lib/mail/cache";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
@@ -24,9 +25,10 @@ async function mine() {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return { err: NextResponse.json({ error: "Staff only." }, { status: 403 }) };
   const admin = createAdminClient();
-  const acct = await accountForUser(admin, v.user.id);
-  if (!acct || !acct.enabled) return { err: NextResponse.json({ error: "Connect your email first (Email → Email settings)." }, { status: 400 }) };
-  return { v, admin, acct };
+  // View as a person: their mailbox, read only (POST refuses)
+  const { acct, viewing } = await mailboxToRead(admin, v);
+  if (!acct || !acct.enabled) return { err: NextResponse.json({ error: viewing ? `${viewing} hasn't connected their email yet.` : "Connect your email first (Email → Email settings)." }, { status: 400 }) };
+  return { v, admin, acct, viewing };
 }
 const bad = (e: unknown) => NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
 
@@ -52,7 +54,7 @@ export async function GET(req: Request) {
       const hit = await cachedMessage(admin, acct.id, path, uid);
       if (hit) {
         // mark it read in Outlook too, after answering
-        after(async () => { try { await withBox(acct, (c) => markSeen(c, path, uid)); await admin.from("mail_cache").update({ seen: true }).eq("account_id", acct.id).eq("folder", path).eq("uid", uid); } catch { /* fine */ } });
+        if (!m.viewing) after(async () => { try { await withBox(acct, (c) => markSeen(c, path, uid)); await admin.from("mail_cache").update({ seen: true }).eq("account_id", acct.id).eq("folder", path).eq("uid", uid); } catch { /* fine */ } });
         return NextResponse.json({ ...hit, cached: true });
       }
       const r = await withBox(acct, (c) => getMessage(c, path, uid));
@@ -80,6 +82,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const m = await mine(); if ("err" in m) return m.err;
   const { admin, acct, v } = m;
+  if (m.viewing) return NextResponse.json({ error: VIEWING_NO }, { status: 403 });
   const b = await req.json().catch(() => ({})) as { do?: string; path?: string; uid?: number; to?: string; body?: string; all?: boolean };
   const path = String(b.path || "INBOX"), uid = Number(b.uid || 0);
   if (!uid) return NextResponse.json({ error: "Which email?" }, { status: 400 });

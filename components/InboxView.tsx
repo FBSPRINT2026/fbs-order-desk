@@ -36,7 +36,7 @@ type Sug = { id: string; kind: string; status: string; activity_id: string | nul
 type Cust = { id: string; company: string | null; name: string | null };
 type Ord = { id: string; number: number; nickname: string | null; customer_id: string | null; status: string };
 type Box = { id: string; email: string; name: string; imap_host: string; enabled: boolean; last_ok_at: string | null; last_error: string | null; last_run_at: string | null; stats: Record<string, Record<string, number>> };
-type Status = { mine: Box | null; all: Box[]; defaultHost: string; myEmail: string };
+type Status = { mine: Box | null; all: Box[]; defaultHost: string; myEmail: string; /** viewing as this person (read only) */ viewing?: string | null };
 
 const ago = (t: string) => { const m = (Date.now() - new Date(t).getTime()) / 60000; return m < 60 ? `${Math.max(1, Math.round(m))}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
 const INTENT: Record<string, string> = { new_order: "New order", reorder: "Reorder", change_to_order: "Order change", artwork: "Artwork", payment: "Payment", question: "Question", other: "Other" };
@@ -273,10 +273,11 @@ export default function InboxView({ mode }: { mode: Mode }) {
             <i aria-hidden />{box.last_error ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}
           </span>}
           {box?.enabled && <button type="button" className="btn sm" disabled={!!busy} onClick={async () => { setBusy("check"); const r = await checkMailNow(); setBusy(""); if (!r.ok) flash(r.error); else { flash("Checked."); load(); } }}>{busy === "check" ? "Checking…" : "Check now"}</button>}
-          {st && <button type="button" className="btn sm ghost" onClick={() => setSettings(!settings)}>{box?.enabled ? (settings ? "Close settings" : "⚙ Email settings") : "Connect my email"}</button>}
+          {st && !st.viewing && <button type="button" className="btn sm ghost" onClick={() => setSettings(!settings)}>{box?.enabled ? (settings ? "Close settings" : "⚙ Email settings") : "Connect my email"}</button>}
         </div>
       </div>
-      {st && !box?.enabled && <Connect st={st} onDone={(t) => { setSettings(false); flash(t); load(); }} />}
+      {st && !box?.enabled && (st.viewing ? <div className="panel panel-b ibx-viewing"><b>{st.viewing} hasn&apos;t connected their email yet.</b> <span className="faint">When they connect it (Email → Connect my email, signed in as themselves), their Inbox shows here.</span></div>
+        : <Connect st={st} onDone={(t) => { setSettings(false); flash(t); load(); }} />)}
       {st && box?.enabled && settings && <EmailSettings st={st} onClose={() => setSettings(false)} onDone={(t) => { flash(t); load(); }} />}
       {box?.enabled && box.last_error && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
