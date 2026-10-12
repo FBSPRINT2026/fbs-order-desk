@@ -46,7 +46,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
     <RoleProvider value={{ role, realRole, viewAs, viewName, perms, email, staffName: (me?.name as string) || "" }}>
       <div className="app">
         <ShopNav email={email} firstName={firstName} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} people={people} />
-        <main className="main"><PullRefresh /><div className="top-r"><Translate /></div><CrewGuard />{children}</main>
+        <main className="main"><div className="top-r"><Translate /></div><CrewGuard /><PullRefresh>{children}</PullRefresh></main>
         <MobileTables />
       </div>
     </RoleProvider>

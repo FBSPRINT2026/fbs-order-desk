@@ -136,13 +136,14 @@ export default function InboxView({ mode }: { mode: Mode }) {
     setOrders((os || []) as Ord[]);
   }, []);
   useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
-  // phones: pull down to refresh, like the Mail app: the lists now, then a mailbox check (which can take a while) and again
+  // phones: pull down to refresh, like the Mail app: just the list showing, quickly. (No mailbox check here: the
+  // portal checks the mailbox by itself every couple of minutes, and a check holds up everything else for up to 35 s.)
   const viewRef = useRef(view); viewRef.current = view;
   useEffect(() => onPullRefresh(async () => {
     const v = viewRef.current;
-    void checkMailNow().then((r) => { if (r.ok) void load(); }, () => null);
-    await Promise.all([load(), v.kind === "folder" ? mailBox<ListResp>({ do: "list", path: v.path }).then((r) => setFRows((x) => [...r.rows, ...(x || []).filter((y) => !r.rows.some((z) => z.uid === y.uid && z.folder === y.folder) && r.rows.length && y.date < r.rows[r.rows.length - 1].date)]), () => null) : Promise.resolve(), mode === "mail" ? loadFolders() : Promise.resolve()]);
-  }), [load, loadFolders, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (mode === "mail" && v.kind === "inbox") { await getOutlookInbox().then((r) => { if (r.ok) setOl(r.connected ? r.items : []); }, () => null); void load(); return; }
+    await Promise.all([load(), v.kind === "folder" ? mailBox<ListResp>({ do: "list", path: v.path }).then((r) => setFRows((x) => [...r.rows, ...(x || []).filter((y) => !r.rows.some((z) => z.uid === y.uid && z.folder === y.folder) && r.rows.length && y.date < r.rows[r.rows.length - 1].date)]), () => null) : Promise.resolve()]);
+  }), [load, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = useMemo(() => mailRows(acts || [], sugs), [acts, sugs]);
   const mineId = st?.mine?.enabled ? st.mine.id : null;

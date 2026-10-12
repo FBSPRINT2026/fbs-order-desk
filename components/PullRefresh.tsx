@@ -1,11 +1,15 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, useTransition } from "react";
+import type React from "react";
+import { useRouter } from "next/navigation";
 
 /**
  * Pull down to refresh on phones and tablets (Oct 12, Nick: "if you drag down it refreshes the page, sort of like the
  * Mail app does"). Drag down from the very top of the page: a round arrow follows the finger, let go past the line and
  * it refreshes. A page can do its own refresh (Email checks for new mail instead of reloading): it listens for
- * "fbs:refresh" and calls e.detail.wait(promise). Anything else reloads the page.
+ * "fbs:refresh" and calls e.detail.wait(promise). Anything else refreshes just this page in place (Oct 12, Nick: "very
+ * slow, like it's refreshing the whole website"): the page's data is asked for again and the page redrawn, without
+ * reloading the whole portal.
  */
 export type RefreshDetail = { wait: (p: Promise<unknown>) => void };
 export function onPullRefresh(fn: () => Promise<unknown>) {
@@ -16,8 +20,13 @@ export function onPullRefresh(fn: () => Promise<unknown>) {
 
 const LINE = 70; // how far to pull before letting go refreshes
 
-export default function PullRefresh() {
-  const [pull, setPull] = useState(0), [busy, setBusy] = useState(false);
+export default function PullRefresh({ children }: { children?: React.ReactNode }) {
+  const [pull, setPull] = useState(0), [busy, setBusy] = useState(false), [gen, setGen] = useState(0);
+  const router = useRouter(), [pending, startT] = useTransition(), doneRef = useRef<(() => void) | null>(null);
+  useEffect(() => { if (!pending && doneRef.current) { doneRef.current(); doneRef.current = null; } }, [pending]);
+  // this page only: the server part asked for again, then the page drawn fresh (its own lists load again)
+  const refreshPage = useRef<() => Promise<void>>(async () => {});
+  refreshPage.current = () => new Promise<void>((res) => { doneRef.current = () => { setGen((g) => g + 1); res(); }; startT(() => router.refresh()); });
   const s = useRef<{ y: number; x: number; on: boolean; off: boolean } | null>(null);
   const pullRef = useRef(0), busyRef = useRef(false);
   useEffect(() => {
@@ -55,7 +64,7 @@ export default function PullRefresh() {
       busyRef.current = true; setBusy(true); set(LINE * 0.8);
       const waits: Promise<unknown>[] = [];
       window.dispatchEvent(new CustomEvent<RefreshDetail>("fbs:refresh", { detail: { wait: (p) => waits.push(p) } }));
-      if (!waits.length) { window.location.reload(); return; }
+      if (!waits.length) waits.push(refreshPage.current());
       await Promise.race([Promise.allSettled(waits), new Promise((r) => setTimeout(r, 15000))]);
       busyRef.current = false; setBusy(false); set(0);
     };
@@ -71,13 +80,15 @@ export default function PullRefresh() {
       document.removeEventListener("touchcancel", up);
     };
   }, []);
-  if (!pull && !busy) return null;
   const ready = pull >= LINE;
   return (
-    <div className={"ptr" + (busy ? " busy" : "") + (s.current ? " drag" : "")} style={{ transform: `translate(-50%, ${pull - 44}px)` }} role="status" aria-label={busy ? "Refreshing" : ready ? "Let go to refresh" : "Pull to refresh"}>
+    <>
+    {(pull > 0 || busy) && <div className={"ptr" + (busy ? " busy" : "") + (s.current ? " drag" : "")} style={{ transform: `translate(-50%, ${pull - 44}px)` }} role="status" aria-label={busy ? "Refreshing" : ready ? "Let go to refresh" : "Pull to refresh"}>
       <svg viewBox="0 0 24 24" aria-hidden style={{ transform: busy ? undefined : `rotate(${Math.min(1, pull / LINE) * 300}deg)`, opacity: busy ? 1 : 0.35 + Math.min(1, pull / LINE) * 0.65 }}>
         <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" />
       </svg>
-    </div>
+    </div>}
+    <Fragment key={gen}>{children}</Fragment>
+    </>
   );
 }
