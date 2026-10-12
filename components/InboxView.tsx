@@ -428,7 +428,6 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
             {added.map((e) => <div key={e.id} className="lm-row ev on"><span className="lm-cal" aria-hidden>✓</span><div><b>{e.title}</b><span className="faint">On your calendar</span></div></div>)}
           </div>}
           {!m ? <div className="ibx2-none">{loadErr || "Opening the email…"}</div> : <>
-            {(m.to || m.cc) && <div className="lm-to faint">To {m.to}{m.cc ? ` · Cc ${m.cc}` : ""}</div>}
             {full ? <><MailFrame html={full.html} text={full.text} /><Attachments m={full} /></> : doc && !plain ? <div className="ibx-html">
               <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
               <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>
