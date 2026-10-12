@@ -6405,7 +6405,7 @@ a.pdn-tag:hover{text-decoration:underline}
   .side.mini .nav .badge{position:absolute;top:1px;right:4px;margin:0;font-size:9.5px;padding:0 4px}
   .side.mini .brand.brand-logo{padding:0;justify-content:center}
   .side.mini .brand.brand-logo img{width:40px!important}
-  .side-tip{display:block;position:fixed;z-index:200;transform:translateY(-50%);background:#0b1220;color:#fff;font-size:12.5px;font-weight:600;padding:5px 10px;border-radius:7px;white-space:nowrap;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+  .side-tip{display:block;position:fixed;z-index:10000;transform:translateY(-50%);background:#0b1220;color:#fff;font-size:12.5px;font-weight:600;padding:5px 10px;border-radius:7px;white-space:nowrap;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.25)}
   .side-tip::before{content:"";position:absolute;left:-5px;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:#0b1220;border-left:0}
 }
 /* Email: the folders across the top, one bar like the Customers / To-dos / Events tabs (the chosen one lit) */

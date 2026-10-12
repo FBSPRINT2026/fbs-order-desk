@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { calcOrder, mergeSettings, type Order } from "@/lib/pricing";
 import { cardFix, printavoChanges, snapOf } from "@/lib/printavoChanges";
@@ -199,7 +200,8 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         title={mini ? undefined : "Fold the menu to icons"} aria-label={mini ? "Show the full menu" : "Fold the menu to icons"} aria-expanded={!mini}>
         <svg viewBox="0 0 24 24" aria-hidden>{mini ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}</svg>
       </button>
-      {mini && tip && tip.text && <div className="side-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.text}</div>}
+      {/* drawn on the page itself (not inside the menu), so nothing on the page can cover it */}
+      {mini && tip && tip.text && typeof document !== "undefined" && createPortal(<div className="side-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.text}</div>, document.body)}
       <div className={sdClass(fit.l)} ref={inRef} style={fit.h ? { zoom: fit.z, minHeight: fit.h / fit.z } : undefined}>
       <Link href="/shop" className="brand brand-logo" title="Home">
         {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}
