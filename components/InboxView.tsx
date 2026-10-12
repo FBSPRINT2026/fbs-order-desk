@@ -499,7 +499,13 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
       <section className="ibx2-mail" aria-label="Email">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={i.subject} fromName={i.from_name} fromEmail={i.from_email} to={m?.to} cc={m?.cc} date={when} summary={i.summary}
           phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: !!busy,
-            ask: { id: "inbox:" + i.id, who: i.from_name || i.from_email, onDraft: (d) => { setBody(d.body); setWriting(true); } } }}
+            ask: { id: "inbox:" + i.id, who: i.from_name || i.from_email, onDraft: (d) => { setBody(d.body); setWriting(true); } },
+            more: (close) => <>
+              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("later", "Moved to Later."); }}>{TbIcon.later} Later (SaneBox)</button>
+              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("news", "Moved to News."); }}>{TbIcon.file} News (SaneBox)</button>
+              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("receipts", "Moved to Receipts."); }}>{TbIcon.file} Receipts (SaneBox)</button>
+              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("cc", "Moved to CC."); }}>{TbIcon.file} CC (SaneBox)</button>
+            </> }}
           tags={<>
             {i.bucket === "todo" && <span className="eh-tag todo">To-do</span>}
             {i.bucket === "event" && <span className="eh-tag event">Event</span>}

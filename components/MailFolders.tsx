@@ -424,7 +424,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Conversation">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={c.subject} fromName={c.people.join(", ")} fromEmail="" date={`${c.count} email${c.count === 1 ? "" : "s"}`}
-          phone={{ reply: replyLast, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); replyLast(); } } }}
+          phone={{ reply: replyLast, more: (close) => <button type="button" role="menuitem" onClick={() => { close(); replyLast(); }}>{TbIcon.reply} Reply to the last email</button>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); replyLast(); } } }}
           toolbar={<Toolbar>
             <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
             <span className="faint mf-hint">Oldest at the top. Click an email to open or fold it.</span>
