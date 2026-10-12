@@ -185,6 +185,42 @@ export function TbMenu({ icon, label, children, kind }: { icon: React.ReactNode;
   );
 }
 
+/** what an open email can do, for the phone's bottom bar */
+export type PhoneActs = { reply?: () => void; move?: (to: string, label: string) => void; here?: string; folders?: Folder[] | null; busy?: boolean; more?: (close: () => void) => React.ReactNode };
+/**
+ * Phones: the same five buttons in the same places on every email (Oct 12, Nick: "it changes every time, it should be
+ * more of a static thing"): Archive, Move, Black Hole, Reply, More. Move and More open a sheet from the bottom.
+ * A button an email can't use stays in its place, greyed out.
+ */
+function PhoneBar({ a }: { a: PhoneActs }) {
+  const [sheet, setSheet] = useState<"" | "move" | "more">("");
+  const others = (a.folders || []).filter((f) => f.path !== a.here && !/\\(Drafts|Junk)/.test(f.special));
+  const mv = (to: string, label: string) => { setSheet(""); a.move?.(to, label); };
+  const off = !a.move || !!a.busy;
+  return (
+    <>
+      <nav className="pbar" aria-label="Email actions">
+        <button type="button" className="pbar-b" disabled={off} onClick={() => mv("archive", "Archived.")}>{TbIcon.archive}<span>Archive</span></button>
+        <button type="button" className="pbar-b" disabled={off} onClick={() => setSheet("move")}>{TbIcon.move}<span>Move</span></button>
+        <button type="button" className="pbar-b danger" disabled={off} onClick={() => mv("blackhole", "Black Hole: SaneBox won't show you this sender again.")}>{TbIcon.ban}<span>Black Hole</span></button>
+        <button type="button" className="pbar-b" disabled={!a.reply} onClick={() => a.reply?.()}>{TbIcon.reply}<span>Reply</span></button>
+        <button type="button" className="pbar-b" disabled={!a.more} onClick={() => setSheet("more")}>{TbIcon.more}<span>More</span></button>
+      </nav>
+      {sheet && <div className="pbar-bg" onClick={() => setSheet("")}>
+        <div className="pbar-sheet" role="menu" onClick={(e) => e.stopPropagation()}>
+          {sheet === "move" ? <>
+            <div className="pbar-t">Move to</div>
+            <button type="button" role="menuitem" onClick={() => mv("later", "Moved to Later.")}>{TbIcon.later} Later <span>SaneBox: this sender goes to Later from now on</span></button>
+            {others.map((f) => <button key={f.path} type="button" role="menuitem" onClick={() => mv(f.path, `Moved to ${folderLabel(f)}.`)} style={{ paddingLeft: 16 + Math.min(3, f.depth) * 12 }}>{TbIcon.file} {folderLabel(f)}</button>)}
+            {!others.length && <span className="faint" style={{ padding: 12 }}>Loading folders…</span>}
+          </> : a.more?.(() => setSheet(""))}
+          <button type="button" className="pbar-cancel" onClick={() => setSheet("")}>Cancel</button>
+        </div>
+      </div>}
+    </>
+  );
+}
+
 /** Archive, Later, Black Hole and Move to any folder: the same group on every email */
 export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | null; busy?: boolean; onMove: (to: string, label: string) => void; here?: string }) {
   const others = (folders || []).filter((f) => f.path !== here && !/\\(Drafts|Junk)/.test(f.special));
@@ -206,8 +242,8 @@ export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | n
  * the left, organize in the middle), then the subject, then who it's from (to / cc fold away), the AI's one-line read
  * and small tags. On a phone the toolbar keeps its icons and drops the words for everything but Reply.
  */
-export function MailHead({ toolbar, subject, tags, fromName, fromEmail, to, cc, date, summary, listOpen, toggleList, back }: {
-  toolbar: React.ReactNode; subject: string; tags?: React.ReactNode; fromName: string; fromEmail: string; to?: string; cc?: string; date: string; summary?: string;
+export function MailHead({ toolbar, phone, subject, tags, fromName, fromEmail, to, cc, date, summary, listOpen, toggleList, back }: {
+  toolbar: React.ReactNode; /** phones: the bottom bar's actions */ phone?: PhoneActs; subject: string; tags?: React.ReactNode; fromName: string; fromEmail: string; to?: string; cc?: string; date: string; summary?: string;
   listOpen: boolean; toggleList: () => void; back?: () => void;
 }) {
   const [full, setFull] = useState(false);
@@ -226,9 +262,11 @@ export function MailHead({ toolbar, subject, tags, fromName, fromEmail, to, cc, 
           {nav.extra}
           <button type="button" className="eh-pn-ud" disabled={!nav.up} onClick={nav.up} aria-label="Previous email">{TbIcon.up}</button>
           <button type="button" className="eh-pn-ud" disabled={!nav.down} onClick={nav.down} aria-label="Next email">{TbIcon.down}</button>
-        </div> : back && <button type="button" className="eh-back" onClick={back} aria-label="Back to the list">{TbIcon.back}</button>}
+        </div> : null}
+        {(nav || back) && <button type="button" className="eh-back" onClick={nav?.back || back} aria-label="Back to the list">{TbIcon.back}</button>}
         <button type="button" className="eh-list" onClick={toggleList} title={listOpen ? "Hide the list" : "Show the list"} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
         {toolbar}
+        {nav && <PhoneBar a={phone || {}} />}
       </div>
       <div className="eh-b">
         <h2 className="eh-subj">{subject || "(no subject)"}</h2>
@@ -324,6 +362,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Email">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={row.subject} fromName={row.fromName} fromEmail={row.from} to={m?.to} cc={m?.cc}
+          phone={{ reply: m ? () => setRep("one") : undefined, move, here: row.folder, folders, busy, more: m ? (close) => <button type="button" role="menuitem" onClick={() => { close(); setRep("all"); }}>{TbIcon.replyAll} Reply all</button> : undefined }}
           date={new Date(row.date).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
           toolbar={<Toolbar>
             <TbGroup>
@@ -371,12 +410,14 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
   useEffect(() => { load(last); setTimeout(() => endRef.current?.scrollIntoView({ block: "end" }), 300); }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (m: MsgRow) => { const k = `${m.folder}:${m.uid}`; setOpen((o) => ({ ...o, [k]: !o[k] })); load(m); };
   const lastIn = [...c.msgs].reverse().find((m) => !m.sent) || last;
+  const replyLast = () => { const k = `${lastIn.folder}:${lastIn.uid}`; const f = full[k]; if (f && f !== "err") setRep(f); else { load(lastIn); box<FullMsg>({ do: "message", path: lastIn.folder, uid: lastIn.uid }).then(setRep); } };
   return (
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Conversation">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={c.subject} fromName={c.people.join(", ")} fromEmail="" date={`${c.count} email${c.count === 1 ? "" : "s"}`}
+          phone={{ reply: replyLast }}
           toolbar={<Toolbar>
-            <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={() => { const k = `${lastIn.folder}:${lastIn.uid}`; const f = full[k]; if (f && f !== "err") setRep(f); else { load(lastIn); box<FullMsg>({ do: "message", path: lastIn.folder, uid: lastIn.uid }).then(setRep); } }} /></TbGroup>
+            <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
             <span className="faint mf-hint">Oldest at the top. Click an email to open or fold it.</span>
           </Toolbar>} />
         <div className="ibx2-read mf-thread">

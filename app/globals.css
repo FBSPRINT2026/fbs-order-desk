@@ -6603,8 +6603,9 @@ a.pdn-tag:hover{text-decoration:underline}
 @media (prefers-reduced-motion:reduce){.sm2-start button{transition:none}.sm2-start button:hover:not(:disabled){transform:none}}
 @media (max-width:760px){.sm2-in{padding:18px 14px 30px}.sm2-grp li button,.sm2-grp li>div{flex-direction:column;gap:2px;align-items:stretch}.sm2-grp li b{max-width:none}.sm2-chev{display:none}}
 
-/* Email on phones, like the iPhone Mail app (components/MailFolders.tsx PhoneNav, SwipeRow) */
-.eh-pn{display:none}
+/* Email on a phone (a touch screen, not just a narrow window), like the iPhone Mail app
+   (components/MailFolders.tsx PhoneNav, PhoneBar, SwipeRow; EmailChat full screen) */
+.eh-pn,.pbar{display:none}
 .sw{position:relative;overflow:hidden;max-height:240px}
 .sw-row{position:relative;z-index:1;background:var(--surface);transition:transform .22s cubic-bezier(.2,.8,.2,1);touch-action:pan-y}
 .sw-acts{position:absolute;top:0;right:0;bottom:0;display:flex;overflow:hidden}
@@ -6616,13 +6617,21 @@ a.pdn-tag:hover{text-decoration:underline}
 .sw-acts.full .sw-later,.sw-acts.full .sw-bh{flex-grow:0;padding:0}
 .sw-acts.full .sw-arch{flex-grow:1}
 .sw.gone{max-height:0;transition:max-height .22s ease .14s}
+.tx-back{display:none}
+.tx-ht{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.tx-ht small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media (prefers-reduced-motion:reduce){.sw-row,.sw.gone,.sw-acts button{transition:none}}
-@media (max-width:760px){
-  /* the portal's top bar scrolls away while reading; the email's own bar stays at the top */
-  body:has(.ibx2.picked .eh-bar.has-pn) .side{position:relative}
-  /* no blur on this bar: it would hold the fixed bottom buttons inside it */
-  .eh-bar.has-pn{position:sticky;top:0;z-index:30;flex-wrap:wrap;padding:4px 4px;background:var(--surface);border-bottom:1px solid var(--line-2)}
-  .eh-bar.has-pn .eh-back,.eh-bar.has-pn .eh-list{display:none}
+@media (max-width:760px) and (pointer:coarse){
+  /* reading an email: just the email, like an app: no menu bar, page title, folder strip (‹ Inbox brings them back) */
+  body:has(.ibx2.picked .eh-bar.has-pn) .side,
+  body:has(.ibx2.picked .eh-bar.has-pn) .ibx2-head,
+  body:has(.ibx2.picked .eh-bar.has-pn) .top-r,
+  body:has(.ibx2.picked .eh-bar.has-pn) .mf-bar,
+  .ibx2-work[data-side="mail"]:has(.eh-bar.has-pn) .ibx2-sw{display:none!important}
+  body:has(.ibx2.picked .eh-bar.has-pn) .main{padding-top:0!important}
+  /* the top: ‹ Inbox, (✦ Assistant), ∧ ∨ */
+  .eh-bar.has-pn{position:sticky;top:0;z-index:30;flex-wrap:wrap;padding:calc(4px + env(safe-area-inset-top)) 4px 4px;background:var(--surface);border-bottom:1px solid var(--line-2)}
+  .eh-bar.has-pn .eh-back,.eh-bar.has-pn .eh-list,.eh-bar.has-pn .tb{display:none}
   .eh-pn{display:flex;align-items:center;gap:2px;width:100%}
   .eh-pn button{display:inline-flex;align-items:center;justify-content:center;border:0;background:none;font:inherit;color:var(--accent);cursor:pointer;border-radius:8px}
   .eh-pn button:disabled{opacity:.28;cursor:default}
@@ -6630,22 +6639,37 @@ a.pdn-tag:hover{text-decoration:underline}
   .eh-pn-back{margin-right:auto;gap:0;height:40px;padding:0 8px 0 0;font-size:16.5px!important;font-weight:600}
   .eh-pn-ud{width:44px;height:40px}
   .eh-pn-pos{font-size:12px;color:var(--ink-3);margin-right:4px}
-  /* the buttons along the bottom of the screen, icons only */
-  .eh-bar.has-pn .tb{position:fixed;left:0;right:0;bottom:0;z-index:35;display:flex;flex-wrap:nowrap;justify-content:space-around;gap:0;container-type:normal;background:color-mix(in srgb,var(--surface) 94%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
-  .eh-bar.has-pn .tb-g{display:contents}
-  .eh-bar.has-pn .tb-m{position:static}
-  .eh-bar.has-pn .tb-b{flex:1 1 0;min-width:0;justify-content:center;height:46px;padding:0 4px;background:none;color:var(--accent);border-radius:10px}
-  .eh-bar.has-pn .tb-b.primary,.eh-bar.has-pn .tb-b.primary:hover:not(:disabled){background:none;color:var(--accent)}
-  .eh-bar.has-pn .tb-b.strong svg{color:inherit}
-  .eh-bar.has-pn .tb-b.danger{color:var(--danger)}
-  .eh-bar.has-pn .tb-b svg{width:25px;height:25px}
-  .eh-bar.has-pn .tb-l,.eh-bar.has-pn .tb-caret,.eh-bar.has-pn .mf-hint{display:none}
-  .eh-bar.has-pn .tb-menu{top:auto;bottom:calc(100% + 6px);left:8px;right:8px;min-width:0;max-height:60vh}
-  .eh-bar.has-pn .tb-menu button,.eh-bar.has-pn .tb-menu a{font-size:15px;padding:11px 12px}
-  .ibx2-mail:has(.eh-bar.has-pn),.ibx2-work:has(.eh-bar.has-pn) .ibx2-mail{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
-  /* writing a reply: the reply's own Send is at the bottom instead */
-  .ibx2-work:has(.ibx2-compose.open) .eh-bar.has-pn .tb{display:none}
-  .ibx2-work[data-side="mail"]:has(.eh-bar.has-pn) .ibx2-sw .ibx2-back{display:none}
+  .eh-pn-ai{height:34px;padding:0 12px!important;margin-right:4px;border-radius:999px!important;background:var(--accent-soft)!important;font-size:14px!important;font-weight:700;gap:5px}
+  /* the bottom: always Archive, Move, Black Hole, Reply, More, in the same places */
+  .pbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:35;background:var(--surface);border-top:1px solid var(--line);padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+  .pbar-b{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:50px;border:0;background:none;font:inherit;font-size:10.5px;font-weight:600;color:var(--accent);border-radius:10px;cursor:pointer}
+  .pbar-b svg,.pbar-sheet svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .pbar-b.danger{color:var(--danger)}
+  .pbar-b:disabled{color:var(--ink-3);opacity:.4}
+  .pbar-b:active:not(:disabled){background:var(--surface-2)}
+  .pbar-bg{position:fixed;inset:0;z-index:2600;background:rgba(20,29,43,.35);display:flex;align-items:flex-end}
+  .pbar-sheet{width:100%;max-height:75vh;overflow-y:auto;background:var(--surface);border-radius:16px 16px 0 0;padding:8px 8px calc(10px + env(safe-area-inset-bottom));display:flex;flex-direction:column;box-shadow:0 -10px 30px rgba(20,29,43,.2)}
+  .pbar-t{font-size:13px;font-weight:700;color:var(--ink-3);padding:8px 14px 4px}
+  .pbar-sheet>button,.pbar-sheet>a{display:flex;align-items:center;gap:12px;border:0;background:none;font:inherit;font-size:16px;color:var(--ink);text-align:left;text-decoration:none;padding:13px 16px;border-radius:10px;cursor:pointer}
+  .pbar-sheet>button span:not(.pbar-ic){font-size:12px;color:var(--ink-3);margin-left:auto}
+  .pbar-sheet>button:active,.pbar-sheet>a:active{background:var(--surface-2)}
+  .pbar-sheet>button:disabled{opacity:.45}
+  .pbar-sheet svg{color:var(--accent);width:22px;height:22px}
+  .pbar-ic{width:22px;text-align:center;color:var(--accent);font-size:17px}
+  .pbar-cancel{justify-content:center;font-weight:700!important;color:var(--accent)!important;margin-top:6px;border-top:1px solid var(--line-2)!important;border-radius:0!important}
+  .ibx2-mail:has(.eh-bar.has-pn){padding-bottom:calc(66px + env(safe-area-inset-bottom))}
+  /* writing a reply: its own Send is at the bottom instead */
+  .ibx2-work:has(.ibx2-compose.open) .pbar{display:none}
+  /* the Assistant: a full-screen chat, like a text conversation */
+  .ibx2-work[data-side="ai"] .ibx2-ai{position:fixed;inset:0;z-index:2500;display:flex;flex-direction:column;height:100vh;height:100dvh;min-height:0!important;border-radius:0!important;background:var(--surface)}
+  .ibx2-work[data-side="ai"] .ibx2-ai .tx{flex:1;min-height:0}
+  .ibx2-work[data-side="ai"] .ibx2-ai .tx-h{padding:calc(6px + env(safe-area-inset-top)) 10px 8px 4px;gap:8px}
+  .ibx2-work[data-side="ai"] .ibx2-ai .tx-hide{display:none}
+  .ibx2-work[data-side="ai"] .ibx2-ai .tx-in{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .ibx2-work[data-side="ai"] .ibx2-ai .tx-in textarea{font-size:16px}
+  body:has(.ibx2-work[data-side="ai"]){overflow:hidden}
+  .tx-back{display:inline-flex;align-items:center;gap:0;border:0;background:none;font:inherit;font-size:16px;font-weight:600;color:var(--accent);padding:6px 6px 6px 0;cursor:pointer}
+  .tx-back svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 }
 
 /* pull down to refresh on phones (components/PullRefresh.tsx) */
@@ -6655,29 +6679,3 @@ a.pdn-tag:hover{text-decoration:underline}
 .ptr.busy svg{animation:ptr-spin .8s linear infinite}
 @keyframes ptr-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.ptr.busy svg{animation-duration:2s}}
-
-/* phones, reading an email: no page header, menu bar or folder strip, just the email (like an app); the Assistant
-   opens as a full-screen chat, like a text conversation */
-@media (max-width:760px){
-  body:has(.ibx2.picked .eh-bar.has-pn) .side,
-  body:has(.ibx2.picked .eh-bar.has-pn) .ibx2-head,
-  body:has(.ibx2.picked .eh-bar.has-pn) .top-r,
-  body:has(.ibx2.picked .eh-bar.has-pn) .mf-bar,
-  .ibx2-work[data-side="mail"]:has(.eh-bar.has-pn) .ibx2-sw{display:none!important}
-  body:has(.ibx2.picked .eh-bar.has-pn) .main{padding-top:0!important}
-  .eh-pn-ai{height:34px;padding:0 12px!important;margin-right:4px;border-radius:999px!important;background:var(--accent-soft)!important;font-size:14px!important;font-weight:700;gap:5px}
-  .ibx2-work[data-side="ai"] .ibx2-ai{position:fixed;inset:0;z-index:2500;display:flex;flex-direction:column;height:100vh;height:100dvh;min-height:0!important;border-radius:0!important;background:var(--surface)}
-  .ibx2-work[data-side="ai"] .ibx2-ai .tx{flex:1;min-height:0}
-  .ibx2-work[data-side="ai"] .ibx2-ai .tx-h{padding:calc(6px + env(safe-area-inset-top)) 10px 8px 4px;gap:8px}
-  .ibx2-work[data-side="ai"] .ibx2-ai .tx-hide{display:none}
-  .ibx2-work[data-side="ai"] .ibx2-ai .tx-in{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
-  .ibx2-work[data-side="ai"] .ibx2-ai .tx-in textarea{font-size:16px}
-  body:has(.ibx2-work[data-side="ai"]) {overflow:hidden}
-}
-.tx-back{display:none}
-.tx-ht{display:flex;flex-direction:column;line-height:1.2;min-width:0}
-.tx-ht small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@media (max-width:760px){
-  .tx-back{display:inline-flex;align-items:center;gap:0;border:0;background:none;font:inherit;font-size:16px;font-weight:600;color:var(--accent);padding:6px 6px 6px 0;cursor:pointer}
-  .tx-back svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-}
