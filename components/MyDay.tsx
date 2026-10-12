@@ -282,7 +282,7 @@ export function PhoneLink({ onClose }: { onClose: () => void }) {
         <p>Events you add here show up in your phone&apos;s calendar, with a reminder an hour before. Set it up once.</p>
         {err && <div className="err">{err}</div>}
         {!l ? !err && <p className="faint">Making your link…</p> : <>
-          <a className="btn primary md-modal-go" href={l.webcal}>On this iPhone: tap to add it</a>
+          <a className="btn primary md-modal-go" href={l.webcal}>Tap to add it to this phone</a>
           <ol className="md-steps">
             <li>On your iPhone, open this page and tap the blue button, then <b>Subscribe</b>.</li>
             <li>Or: Settings → Calendar → Accounts → Add Account → Other → <b>Add Subscribed Calendar</b>, and paste the link below.</li>
