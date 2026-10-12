@@ -185,13 +185,15 @@ export default function InboxView({ mode }: { mode: Mode }) {
     return !t || `${i.from_name} ${i.from_email} ${i.subject} ${r ? who(r.x) + " " + (r.x.meta?.triage?.summary || "") : ""}`.toLowerCase().includes(t);
   });
   // Email opens on the brief (the AI's read of the whole Inbox) until an email is picked
-  const briefOn = mode === "mail" && view.kind === "inbox" && (open === "brief" || (!open && !q.trim() && bk === "all"));
+  // the summary opens by itself only when Email first opens; after that only when it's clicked
+  const [autoBrief, setAutoBrief] = useState(true);
+  const briefOn = mode === "mail" && view.kind === "inbox" && (open === "brief" || (autoBrief && !open && !q.trim() && bk === "all"));
   const olCur = tab === "outlook" && !briefOn ? olShown.find((i) => olKey(i) === open) || olShown[0] : undefined;
   const sel = tab === "outlook" ? (olCur?.activity_id ? rowByAct.get(olCur.activity_id) : undefined)
     : listed.find((r) => r.x.id === open) || (open ? rows.find((r) => r.x.id === open) : undefined) || listed[0];
   const [picked, setPicked] = useState(false); // phones: the list until an email is picked, then the email
   const hasSel = mode === "mail" && view.kind === "folder" ? !!fSel : mode === "mail" && view.kind === "search" ? !!cSel : briefOn || !!(sel || olCur);
-  const pickRow = (id: string, answer = false) => { setOpen(id); setPicked(true); if (answer) setFocus(id); };
+  const pickRow = (id: string, answer = false) => { setAutoBrief(false); setOpen(id); setPicked(true); if (answer) setFocus(id); };
   // the email showing stays put: a new email arriving at the top of the list never swaps it out from under you
   useEffect(() => { if (briefOn) return; if (!open && sel) setOpen(sel.x.id); else if (!open && olCur) setOpen(olKey(olCur)); }, [open, sel?.x.id, olCur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -311,7 +313,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
           : briefOn ? <BriefPane name={(st?.mine?.name || "").split(/\s+/)[0]} items={ol || []}
             stats={{ needs: (ol || []).filter((i) => i.activity_id && rowByAct.get(i.activity_id)?.needs).length, customers: bkN("customer"), todos: bkN("todo"), events: bkN("event"), unread: (ol || []).filter((i) => i.unread).length }}
             onFilter={(k) => { setBk(k); setOpen(null); }} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
-            openItem={(id) => { const it = (ol || []).find((x) => x.id === id); if (it) { setOpen(olKey(it)); setPicked(true); } }} />
+            openItem={(id) => { const it = (ol || []).find((x) => x.id === id); if (it) { setAutoBrief(false); setOpen(olKey(it)); setPicked(true); } }} />
           : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
           : !sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
@@ -377,14 +379,14 @@ function BriefPane({ name, items, stats, onFilter, listOpen, toggleList, back, o
             {b ? <p className="br-head">{b.headline}</p> : <p className="br-head br-wait">{err ? <>Couldn&apos;t write the summary: {err}</> : <><span className="br-dots" aria-hidden><i /><i /><i /></span>Reading your Inbox…</>}</p>}
           </header>
           <div className="br-tiles">{tiles.map((t, k) => (
-            <button key={k} type="button" className={"br-tile " + t.tone} disabled={!t.k} onClick={() => t.k && onFilter(t.k as Bk)} title={t.k ? "Show them in the list" : undefined}>
+            <button key={k} type="button" className={"br-tile br-tone-" + t.tone} disabled={!t.k} onClick={() => t.k && onFilter(t.k as Bk)} title={t.k ? "Show them in the list" : undefined}>
               <b>{t.n}</b><span>{t.label}</span>
             </button>
           ))}</div>
           {b && <div className="br-grid">{b.sections.map((sec, k) => {
             const tone = toneOf(sec.title);
             return (
-              <section key={k} className={"br-card " + tone} style={{ ["--i" as string]: k }}>
+              <section key={k} className={"br-card br-tone-" + tone} style={{ ["--i" as string]: k }}>
                 <h3><span className="br-mark" aria-hidden>{TONE_MARK[tone]}</span>{sec.title}<span className="br-n">{sec.items.length}</span></h3>
                 <ul>{sec.items.map((it, j) => {
                   const r = it.ref ? byId.get(it.ref) : undefined;

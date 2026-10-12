@@ -6530,7 +6530,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .br-tile:disabled{cursor:default}
 .br-tile b{font-family:var(--display);font-size:26px;line-height:1;color:var(--t)}
 .br-tile span{font-size:12px;color:var(--ink-2);font-weight:600}
-.br-tile.hot,.br-card.hot{--t:#E5484D}.br-tile.ord,.br-card.ord{--t:#0E9BD8}.br-tile.todo,.br-card.todo{--t:#7C5CE0}.br-tile.cal,.br-card.cal{--t:#D99A00}.br-tile.fyi,.br-card.fyi{--t:#7A8599}
+.br-tile.br-tone-hot,.br-card.br-tone-hot{--t:#E5484D}.br-tile.br-tone-ord,.br-card.br-tone-ord{--t:#0E9BD8}.br-tile.br-tone-todo,.br-card.br-tone-todo{--t:#7C5CE0}.br-tile.br-tone-cal,.br-card.br-tone-cal{--t:#D99A00}.br-tile.br-tone-fyi,.br-card.br-tone-fyi{--t:#7A8599}
 .br-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;padding:14px 28px 0;align-items:start}
 .br-card{--t:#7A8599;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(20,29,43,.05);animation:brin .35s ease both;animation-delay:calc(var(--i,0) * 70ms)}
 @keyframes brin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
