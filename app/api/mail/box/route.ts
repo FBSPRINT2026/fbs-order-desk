@@ -35,7 +35,8 @@ export async function GET(req: Request) {
   const u = new URL(req.url), q = u.searchParams, what = q.get("do"), path = q.get("path") || "INBOX", uid = Number(q.get("uid") || 0);
   const me = acct.email.toLowerCase();
   try {
-    if (what === "folders") return NextResponse.json({ folders: await withBox(acct, (c) => listFolders(c)) });
+    // the folder list alone is quick; counts (how many, unread) come in a second call in the background
+    if (what === "folders") return NextResponse.json({ folders: await withBox(acct, (c) => listFolders(c, q.get("counts") === "1")) });
     if (what === "list") return NextResponse.json(await withBox(acct, (c) => listMessages(c, me, path, Number(q.get("before") || 0) || undefined)));
     if (what === "message") { const r = await withBox(acct, (c) => getMessage(c, path, uid)); return r ? NextResponse.json(r) : NextResponse.json({ error: "That email isn't there any more." }, { status: 404 }); }
     if (what === "attachment") {

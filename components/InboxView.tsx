@@ -56,10 +56,16 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [fRows, setFRows] = useState<MsgRow[] | null>(null), [fNext, setFNext] = useState(0), [fBusy, setFBusy] = useState(false), [fSel, setFSel] = useState<MsgRow | null>(null), [fErr, setFErr] = useState("");
   const [convos, setConvos] = useState<Convo[] | null>(null), [cSel, setCSel] = useState<Convo | null>(null), [sNote, setSNote] = useState("");
-  // the folder list shows at once from last time (this tab), then refreshes from the mailbox
-  const loadFolders = useCallback(() => {
-    try { const c = sessionStorage.getItem("fbs:mail.folders"); if (c) setFolders((f) => f || (JSON.parse(c) as Folder[])); } catch { /* none kept */ }
-    return mailBox<{ folders: Folder[] }>({ do: "folders" }).then((r) => { setFolders(r.folders); try { sessionStorage.setItem("fbs:mail.folders", JSON.stringify(r.folders)); } catch { /* fine */ } }, () => setFolders((f) => f || []));
+  // the folder list shows at once from last time (kept on this computer: folders hardly ever change), then refreshes
+  // quietly: first the list, then the unread counts
+  const loadFolders = useCallback(async () => {
+    const key = "fbs:mail.folders";
+    try { const c = localStorage.getItem(key); if (c) setFolders((f) => f || (JSON.parse(c) as Folder[])); } catch { /* none kept */ }
+    const keep = (list: Folder[]) => { setFolders(list); try { localStorage.setItem(key, JSON.stringify(list)); } catch { /* fine */ } };
+    let have: Folder[] | null = null;
+    try { const c = localStorage.getItem(key); have = c ? (JSON.parse(c) as Folder[]) : null; } catch { /* none */ }
+    if (!have) { try { const r = await mailBox<{ folders: Folder[] }>({ do: "folders" }); keep(r.folders); have = r.folders; } catch { setFolders((f) => f || []); } }
+    try { const r = await mailBox<{ folders: Folder[] }>({ do: "folders", counts: 1 }); keep(r.folders); } catch { /* the list without counts is fine */ }
   }, []);
   useEffect(() => { if (mode === "mail") void loadFolders(); }, [mode, loadFolders]);
   const openFolder = async (path: string, before?: number) => {
@@ -275,7 +281,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
 
         {/* 2 + 3. the email and the Assistant */}
         {mode === "mail" && view.kind === "folder" ? (fSel ? <FolderMail key={`${fSel.folder}:${fSel.uid}`} row={fSel} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
-            onGone={() => { setFRows((x) => (x || []).filter((y) => !(y.uid === fSel.uid && y.folder === fSel.folder))); setFSel(null); void loadFolders(); }} /> : <section className="ibx2-empty"><b>{fRows ? "Pick an email" : "Loading…"}</b></section>)
+            onGone={() => { setFRows((x) => (x || []).filter((y) => !(y.uid === fSel.uid && y.folder === fSel.folder))); setFSel(null); }} /> : <section className="ibx2-empty"><b>{fRows ? "Pick an email" : "Loading…"}</b></section>)
           : mode === "mail" && view.kind === "search" ? (cSel ? <ThreadView key={cSel.key} c={cSel} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
             onMoved={(m) => setCSel((c) => (c ? { ...c, msgs: c.msgs.map((y) => (y.uid === m.uid && y.folder === m.folder ? { ...y, folder: "(moved)" } : y)) } : c))} /> : <section className="ibx2-empty"><b>{convos ? "Pick a conversation" : "Searching…"}</b><span>Each one shows what they sent and what you sent, oldest first.</span></section>)
           : briefOn ? <BriefPane name={(st?.mine?.name || "").split(/\s+/)[0]} items={ol || []} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
