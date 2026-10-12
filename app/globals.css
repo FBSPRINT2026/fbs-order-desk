@@ -6845,3 +6845,5 @@ a.pdn-tag:hover{text-decoration:underline}
 @media (max-width:820px) and (pointer:coarse){
   input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea{font-size:16px!important}
 }
+.eop{max-width:980px}
+.eop .page-head h1{margin-top:4px}

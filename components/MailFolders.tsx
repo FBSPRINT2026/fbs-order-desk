@@ -454,7 +454,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
     });
     return () => { live = false; };
   }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
-  const orderHref = orderAct ? `/shop/conversations?open=${orderAct.id}&order=1` : "";
+  const orderHref = orderAct ? `/shop/email-order/${orderAct.id}` : "";
   const orderLabel = orderAct?.reorder ? "Create reorder" : "Create order";
   const replyLast = () => { const k = `${lastIn.folder}:${lastIn.uid}`; const f = full[k]; if (f && f !== "err") setRep(f); else { load(lastIn); box<FullMsg>({ do: "message", path: lastIn.folder, uid: lastIn.uid }).then(setRep); } };
   return (
