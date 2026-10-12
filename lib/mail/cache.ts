@@ -99,8 +99,8 @@ export async function folderCached(admin: SupabaseClient, accountId: string, fol
 }
 
 type CacheRow = { folder: string; uid: number; message_id: string; in_reply_to: string; refs: string[]; subject: string; from_email: string; from_name: string; to_list: string[]; cc_list: string[]; to_text: string; cc_text: string; reply_to: string; sent_at: string; seen: boolean; flagged: boolean; size: number; body_text: string; body_html: string | null; attachments: { i: number; name: string; size: number; type: string }[] };
-const ROW_COLS = "folder, uid, message_id, in_reply_to, subject, from_email, from_name, to_list, cc_list, sent_at, seen, flagged, size";
-export const rowOf = (r: CacheRow, me: string): MsgRow => ({ folder: r.folder, uid: Number(r.uid), messageId: r.message_id, inReplyTo: r.in_reply_to, subject: r.subject, from: r.from_email, fromName: r.from_name, to: r.to_list || [], cc: r.cc_list || [], date: r.sent_at, seen: r.seen, flagged: r.flagged, sent: r.from_email === me, size: r.size });
+const ROW_COLS = "folder, uid, message_id, in_reply_to, subject, from_email, from_name, to_list, cc_list, to_text, sent_at, seen, flagged, size";
+export const rowOf = (r: CacheRow, me: string): MsgRow => ({ folder: r.folder, uid: Number(r.uid), messageId: r.message_id, inReplyTo: r.in_reply_to, subject: r.subject, from: r.from_email, fromName: r.from_name, to: r.to_list || [], toNames: (r.to_text || "").split(/,\s*/).map((x) => x.replace(/\s*\S+@\S+$/, "").trim() || x.trim()).filter(Boolean), cc: r.cc_list || [], date: r.sent_at, seen: r.seen, flagged: r.flagged, sent: r.from_email === me, size: r.size });
 
 /** a folder's newest 50 from the cache (`beforeDate`: page back) */
 export async function cachedList(admin: SupabaseClient, accountId: string, me: string, folder: string, beforeDate?: string) {

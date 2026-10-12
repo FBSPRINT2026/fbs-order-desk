@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getViewer } from "@/lib/supabase/server";
 import type { MailAccount } from "@/lib/mail/config";
 import { cacheAccount } from "@/lib/mail/cache";
+import { inboxSig, writeBrief } from "@/lib/mail/brief";
+import { organizerFor } from "@/lib/mail/mirror";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +27,17 @@ export async function GET(req: Request) {
   const accts = (data || []) as MailAccount[];
   for (const a of accts) {
     if (Date.now() > deadline - 5000) break;
+    // the Inbox summary, rewritten ahead of time when the Inbox changed (at most every 5 minutes), for the owners
+    try {
+      const { data: who } = await admin.from("staff").select("name, role").eq("email", a.email.toLowerCase()).maybeSingle();
+      if (organizerFor(a.email, String(who?.role || ""))) {
+        const [sig, { data: kept }] = await Promise.all([inboxSig(admin, a.id), admin.from("mail_brief").select("sig, at").eq("account_id", a.id).maybeSingle()]);
+        if (!kept || (kept.sig !== sig && Date.parse(kept.at as string) < Date.now() - 5 * 60000)) {
+          const r = await writeBrief(admin, a, a.email.toLowerCase(), String(who?.name || "").split(/\s+/)[0] || a.name.split(/\s+/)[0] || "");
+          out[`${a.email} summary`] = r.ok ? "written" : r.error;
+        }
+      }
+    } catch (e) { out[`${a.email} summary`] = e instanceof Error ? e.message : String(e); }
     try { out[a.email] = await cacheAccount(admin, a, Math.min(deadline, Date.now() + Math.max(15000, (deadline - Date.now()) / accts.length))); }
     catch (e) { out[a.email] = { error: e instanceof Error ? e.message : String(e) }; }
   }

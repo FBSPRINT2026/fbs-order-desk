@@ -223,7 +223,7 @@ export function FolderList({ rows, sel, onPick, sentBox, more, onMore, loading }
         const k = `${r.folder}:${r.uid}`;
         return (
           <button key={k} data-id={k} type="button" className={"ibx2-item ol" + (sel === k ? " on" : "") + (!r.seen && !r.sent ? " ol-unread" : "")} onClick={() => onPick(r)}>
-            <span className="ibx2-item-1"><b>{sentBox || r.sent ? `To ${r.to[0] || ""}${r.to.length > 1 ? ` +${r.to.length - 1}` : ""}` : r.fromName || r.from}</b>{r.flagged && <span className="ibx2-flag">⚑</span>}<time>{when(r.date)}</time></span>
+            <span className="ibx2-item-1"><b>{sentBox || r.sent ? `${(r.toNames?.length ? r.toNames : r.to)[0] || ""}${r.to.length > 1 ? ` +${r.to.length - 1}` : ""}` : r.fromName || r.from}</b>{r.flagged && <span className="ibx2-flag">⚑</span>}<time>{when(r.date)}</time></span>
             <span className="ibx2-item-2">{r.subject || "(no subject)"}</span>
           </button>
         );

@@ -311,8 +311,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
             onMoved={(m) => setCSel((c) => (c ? { ...c, msgs: c.msgs.map((y) => (y.uid === m.uid && y.folder === m.folder ? { ...y, folder: "(moved)" } : y)) } : c))} /> : <section className="ibx2-empty"><b>{convos ? "Pick a conversation" : "Searching…"}</b><span>Each one shows what they sent and what you sent, oldest first.</span></section>)
           : briefOn && ol === null ? <section className="ibx2-empty"><b>Loading…</b></section>
           : briefOn ? <BriefPane name={(st?.mine?.name || "").split(/\s+/)[0]} items={ol || []}
-            stats={{ needs: (ol || []).filter((i) => i.activity_id && rowByAct.get(i.activity_id)?.needs).length, customers: bkN("customer"), todos: bkN("todo"), events: bkN("event"), unread: (ol || []).filter((i) => i.unread).length }}
-            onFilter={(k) => { setBk(k); setOpen(null); }} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
+ listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
             openItem={(id) => { const it = (ol || []).find((x) => x.id === id); if (it) { setAutoBrief(false); setOpen(olKey(it)); setPicked(true); } }} />
           : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
@@ -333,74 +332,81 @@ type Opt = { label: string; subject: string; body: string };
  * Email → Inbox brief (Oct 12, Nick: "AI summarize the inbox… good morning, you've got these things to do, some recent
  * reorders came in"). Written by the AI when the Inbox changes (kept for this tab until it does); each line opens its email.
  */
-type BriefStats = { needs: number; customers: number; todos: number; events: number; unread: number };
-/** each group of the summary gets its own color and mark, from its name */
+/** each group of the summary gets its own color, from its name */
 const toneOf = (t: string) => (/just so you know|fyi|heads up/i.test(t) ? "fyi" : /need|urgent|right now|reply/i.test(t) ? "hot" : /order|reorder|quote|customer/i.test(t) ? "ord" : /to-?do|task/i.test(t) ? "todo" : /coming|calendar|due|week|today/i.test(t) ? "cal" : "fyi");
-const TONE_MARK: Record<string, string> = { hot: "!", ord: "◆", todo: "✓", cal: "◷", fyi: "i" };
+// the last summary, kept while the page is open, so opening it again is instant
+let briefMem: Brief | null = null;
 
-function BriefPane({ name, items, stats, onFilter, listOpen, toggleList, back, openItem }: { name: string; items: InboxItem[]; stats: BriefStats; onFilter: (k: Bk) => void; listOpen: boolean; toggleList: () => void; back: () => void; openItem: (id: string) => void }) {
-  const sig = items.map((i) => i.id).sort().join(",");
-  const [b, setB] = useState<Brief | null>(null), [busy, setBusy] = useState(false), [err, setErr] = useState("");
-  const run = useCallback(async (force = false) => {
-    const key = "fbs:mail.brief3";
-    if (!force) { try { const c = JSON.parse(sessionStorage.getItem(key) || "null") as { sig: string; b: Brief } | null; if (c && c.sig === sig) { setB(c.b); return; } } catch { /* none */ } }
-    setBusy(true); setErr("");
-    const r = await inboxBrief();
-    setBusy(false);
-    if (!r.ok) { setErr(r.error); return; }
-    setB(r.brief);
-    try { sessionStorage.setItem(key, JSON.stringify({ sig, b: r.brief })); } catch { /* fine */ }
-  }, [sig]);
-  useEffect(() => { if (items.length || sig === "") void run(); }, [sig]); // eslint-disable-line react-hooks/exhaustive-deps
+/**
+ * Email → Inbox summary (third try, Oct 12, Nick: "not doing much… reads very slow"). Written ahead of time by the
+ * mailbox job, so it opens at once; refreshed quietly when the Inbox has changed. One column to read top to bottom:
+ * the greeting and the AI's read, "Start here" (the few things to do first, numbered, biggest), then everything else
+ * as a short list with small colored group labels. Each line opens its email.
+ */
+function BriefPane({ name, items, listOpen, toggleList, back, openItem }: { name: string; items: InboxItem[]; listOpen: boolean; toggleList: () => void; back: () => void; openItem: (id: string) => void }) {
+  const [b, setB] = useState<Brief | null>(briefMem), [updating, setUpdating] = useState(false), [err, setErr] = useState("");
+  const load = useCallback(async (fresh = false) => {
+    setErr("");
+    if (fresh) setUpdating(true);
+    const r = await inboxBrief(fresh);
+    if (!r.ok) { setUpdating(false); if (!briefMem) setErr(r.error); return; }
+    briefMem = r.brief; setB(r.brief);
+    if (!fresh && r.stale) { setUpdating(true); const f = await inboxBrief(true); if (f.ok) { briefMem = f.brief; setB(f.brief); } }
+    setUpdating(false);
+  }, []);
+  useEffect(() => { void load(); }, [load]);
   const byId = new Map(items.map((i) => [i.id, i]));
-  const ini = (s: string) => s.replace(/[^A-Za-z ]/g, " ").trim().split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || "").join("") || "•";
-  const tiles: { k: Bk | ""; n: number; label: string; tone: string }[] = [
-    { k: "customer", n: stats.needs, label: stats.needs === 1 ? "reply to send" : "replies to send", tone: "hot" },
-    { k: "customer", n: stats.customers, label: "from customers", tone: "ord" },
-    { k: "todo", n: stats.todos, label: stats.todos === 1 ? "to-do" : "to-dos", tone: "todo" },
-    { k: "event", n: stats.events, label: stats.events === 1 ? "event" : "events", tone: "cal" },
-    { k: "", n: stats.unread, label: "unread", tone: "fyi" },
-  ];
+  const live = (ref: string) => (ref ? byId.get(ref) : undefined);
+  // Start here: the first few of "Needs you now" (else of whatever comes first)
+  const secs = (b?.sections || []).map((s0) => ({ ...s0, items: s0.items.filter((it) => !it.ref || byId.has(it.ref)) })).filter((s0) => s0.items.length);
+  const first = secs.find((s0) => toneOf(s0.title) === "hot") || secs[0];
+  const start = first ? first.items.slice(0, 3) : [];
+  const rest = secs.map((s0) => ({ ...s0, items: s0 === first ? s0.items.slice(3) : s0.items })).filter((s0) => s0.items.length);
+  const hour = new Date().getHours();
   return (
     <div className="ibx2-work ibx2-solo">
-      <section className="ibx2-mail br" aria-label="Inbox summary">
+      <section className="ibx2-mail sm2" aria-label="Inbox summary">
         <div className="eh-bar">
           <button type="button" className="eh-back" onClick={back} aria-label="Back to the list"><svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg></button>
           <button type="button" className="eh-list" onClick={toggleList} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
-          <span className="br-k">✦ Inbox summary</span>
+          <span className="sm2-k">✦ Inbox summary</span>
           <span className="spacer" />
-          {b && <span className="faint br-at">Updated {new Date(b.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
-          <button type="button" className="btn sm ghost" disabled={busy} onClick={() => run(true)}>{busy ? "Reading…" : "Refresh"}</button>
+          {updating ? <span className="faint sm2-at"><span className="br-dots" aria-hidden><i /><i /><i /></span> Updating</span> : b && <span className="faint sm2-at">Updated {new Date(b.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
+          <button type="button" className="btn sm ghost" disabled={updating} onClick={() => load(true)}>Refresh</button>
         </div>
-        <div className="ibx2-read br-b">
-          <header className="br-hero">
-            <div className="br-date">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</div>
-            <h2 className="br-hi">{b ? b.greeting : `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}${name ? `, ${name}` : ""}`}</h2>
-            {b ? <p className="br-head">{b.headline}</p> : <p className="br-head br-wait">{err ? <>Couldn&apos;t write the summary: {err}</> : <><span className="br-dots" aria-hidden><i /><i /><i /></span>Reading your Inbox…</>}</p>}
-          </header>
-          <div className="br-tiles">{tiles.map((t, k) => (
-            <button key={k} type="button" className={"br-tile br-tone-" + t.tone} disabled={!t.k} onClick={() => t.k && onFilter(t.k as Bk)} title={t.k ? "Show them in the list" : undefined}>
-              <b>{t.n}</b><span>{t.label}</span>
-            </button>
-          ))}</div>
-          {b && <div className="br-grid">{b.sections.map((sec, k) => {
-            const tone = toneOf(sec.title);
-            return (
-              <section key={k} className={"br-card br-tone-" + tone} style={{ ["--i" as string]: k }}>
-                <h3><span className="br-mark" aria-hidden>{TONE_MARK[tone]}</span>{sec.title}<span className="br-n">{sec.items.length}</span></h3>
+        <div className="ibx2-read sm2-b">
+          <div className="sm2-in">
+            <div className="sm2-date">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</div>
+            <h2 className="sm2-hi">{b ? b.greeting : `Good ${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}${name ? `, ${name}` : ""}`}</h2>
+            {b ? <p className="sm2-head">{b.headline}</p> : <p className="sm2-head faint">{err ? `Couldn't write the summary: ${err}` : <><span className="br-dots" aria-hidden><i /><i /><i /></span> Reading your Inbox…</>}</p>}
+
+            {start.length > 0 && <>
+              <h3 className="sm2-h">Start here</h3>
+              <ol className="sm2-start">{start.map((it, k) => {
+                const r = live(it.ref);
+                return (
+                  <li key={k} className={k === 0 ? "top" : ""}>
+                    <button type="button" disabled={!r} onClick={() => r && openItem(r.id)}>
+                      <span className="sm2-num" aria-hidden>{k + 1}</span>
+                      <span className="sm2-tx"><b>{it.who || r?.from_name || r?.from_email || ""}</b><span>{it.text}</span>{it.why && <em>{it.why}</em>}</span>
+                      {r && <span className="sm2-go">Open<span aria-hidden> ›</span></span>}
+                    </button>
+                  </li>
+                );
+              })}</ol>
+            </>}
+
+            {rest.map((sec, k) => (
+              <div key={k} className={"sm2-grp sm2-t-" + toneOf(sec.title)}>
+                <h3 className="sm2-h"><i aria-hidden />{sec.title}<span>{sec.items.length}</span></h3>
                 <ul>{sec.items.map((it, j) => {
-                  const r = it.ref ? byId.get(it.ref) : undefined;
-                  const who = r ? r.from_name || r.from_email : "";
-                  const body = <>
-                    <span className="br-av" aria-hidden>{who ? ini(who) : TONE_MARK[tone]}</span>
-                    <span className="br-tx">{it.text}</span>
-                    {r && <span className="br-go" aria-hidden>›</span>}
-                  </>;
-                  return <li key={j}>{r ? <button type="button" onClick={() => openItem(r.id)} title={`Open: ${r.subject}`}>{body}</button> : <div className="br-row">{body}</div>}</li>;
+                  const r = live(it.ref);
+                  const inner = <><b>{it.who || r?.from_name || r?.from_email || ""}</b><span>{it.text}</span>{r && <span className="sm2-chev" aria-hidden>›</span>}</>;
+                  return <li key={j}>{r ? <button type="button" onClick={() => openItem(r.id)}>{inner}</button> : <div>{inner}</div>}</li>;
                 })}</ul>
-              </section>
-            );
-          })}</div>}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </div>

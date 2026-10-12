@@ -13,7 +13,7 @@ import { ARCHIVED } from "./mirror";
  * found, received and sent, into conversations in order.
  */
 export type Folder = { path: string; name: string; parent: string; depth: number; special: string; messages: number; unseen: number; sane: boolean };
-export type MsgRow = { folder: string; uid: number; messageId: string; inReplyTo: string; subject: string; from: string; fromName: string; to: string[]; cc: string[]; date: string; seen: boolean; flagged: boolean; sent: boolean; size: number };
+export type MsgRow = { folder: string; uid: number; messageId: string; inReplyTo: string; subject: string; from: string; fromName: string; to: string[]; /** who it went to, by name where there is one */ toNames?: string[]; cc: string[]; date: string; seen: boolean; flagged: boolean; sent: boolean; size: number };
 
 const lc = (s?: string | null) => (s || "").trim().toLowerCase();
 const mid = (s?: string | null) => (s || "").trim().replace(/^<|>$/g, "");
@@ -53,7 +53,7 @@ const toRow = (folder: string, me: string, m: { uid: number; flags?: Set<string>
   const from = lc(e.from?.[0]?.address);
   return {
     folder, uid: m.uid, messageId: mid(e.messageId), inReplyTo: mid(e.inReplyTo), subject: e.subject || "", from, fromName: e.from?.[0]?.name || "",
-    to: (e.to || []).map((x) => lc(x.address)).filter(Boolean), cc: (e.cc || []).map((x) => lc(x.address)).filter(Boolean),
+    to: (e.to || []).map((x) => lc(x.address)).filter(Boolean), toNames: (e.to || []).map((x) => (x as { name?: string }).name || lc(x.address)).filter(Boolean), cc: (e.cc || []).map((x) => lc(x.address)).filter(Boolean),
     date: new Date(e.date || m.internalDate || Date.now()).toISOString(), seen: !!m.flags?.has("\\Seen"), flagged: !!m.flags?.has("\\Flagged"), sent: from === me, size: m.size || 0,
   };
 };
