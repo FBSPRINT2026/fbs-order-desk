@@ -147,6 +147,14 @@ export async function detectSignature(admin: SupabaseClient, accountId: string) 
     if (blob) htmls.push(await blob.text());
     if (htmls.length >= 8) break;
   }
+  // not enough customer emails on file yet (a mailbox just connected): read her own Sent Items from the 45-day cache
+  // (Oct 12, Nick: "set up her signature the same as her outgoing messages have been")
+  if (htmls.length < 4) {
+    const { data: acct } = await admin.from("mail_accounts").select("sent_folder").eq("id", accountId).maybeSingle();
+    const { data: sent } = await admin.from("mail_cache").select("body_html").eq("account_id", accountId).eq("folder", (acct?.sent_folder as string) || "Sent Items")
+      .not("body_html", "is", null).is("gone_at", null).order("sent_at", { ascending: false }).limit(10);
+    for (const r of sent || []) if (r.body_html && htmls.length < 10) htmls.push(r.body_html as string);
+  }
   const sig = findSignature(htmls);
   await admin.from("mail_accounts").update(sig ? { signature_html: sig.html, signature_css: sig.css, signature_at: now, signature_checked_at: now } : { signature_checked_at: now }).eq("id", accountId);
   return { sig, looked: htmls.length };
