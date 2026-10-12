@@ -312,7 +312,7 @@ function BriefPane({ name, items, listOpen, toggleList, back, openItem }: { name
   const sig = items.map((i) => i.id).sort().join(",");
   const [b, setB] = useState<Brief | null>(null), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const run = useCallback(async (force = false) => {
-    const key = "fbs:mail.brief2";
+    const key = "fbs:mail.brief3";
     if (!force) { try { const c = JSON.parse(sessionStorage.getItem(key) || "null") as { sig: string; b: Brief } | null; if (c && c.sig === sig) { setB(c.b); return; } } catch { /* none */ } }
     setBusy(true); setErr("");
     const r = await inboxBrief();

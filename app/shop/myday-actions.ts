@@ -223,11 +223,11 @@ export async function inboxBrief() {
     if (!st.ready) return { ok: false as const, error: st.reason };
     const hour = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Chicago" }));
     const res = await askClaude<{ greeting: string; headline: string; lines: unknown }>({
-      task: "inbox_brief", model: st.settings.assistant.ai.fastModel || st.settings.assistant.ai.model, maxTokens: 1100, admin, ctx: { by: owner }, timeoutMs: 40000,
+      task: "inbox_brief", model: st.settings.assistant.ai.fastModel || st.settings.assistant.ai.model, maxTokens: 3000, admin, ctx: { by: owner }, timeoutMs: 40000,
       tool: { name: "brief", description: "A short morning-style brief of the inbox.", input_schema: { type: "object", properties: {
         greeting: { type: "string", description: `A warm one-line greeting using the name ${name} and the time of day (${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}).` },
         headline: { type: "string", description: "One or two sentences: how the inbox looks overall and the most important thing to do first. Plain and encouraging, no fluff." },
-        lines: { type: "array", maxItems: 20, description: "The brief, one line per item, in order. Group them with `group` (use these names, skip empty ones, most important first): \"Needs you now\" (urgent, waiting on a reply), \"Orders & reorders\", \"To-dos\", \"Coming up\" (calendar, due dates), \"Just so you know\".", items: { type: "object", properties: {
+        lines: { type: "array", maxItems: 14, description: "The brief, at most 14 short lines (under 15 words each), one per item, in order. Group them with `group` (use these names, skip empty ones, most important first): \"Needs you now\" (urgent, waiting on a reply), \"Orders & reorders\", \"To-dos\", \"Coming up\" (calendar, due dates), \"Just so you know\".", items: { type: "object", properties: {
           group: { type: "string" },
           text: { type: "string", description: "One short line: who and what, e.g. \"Dear Heart Designs: new .ai files for 2 orders, pickup week of Oct 19\"" },
           ref: { type: "string", description: "The [id] of the email this is about, or empty" },
