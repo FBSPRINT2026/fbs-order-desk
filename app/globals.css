@@ -6561,3 +6561,4 @@ a.pdn-tag:hover{text-decoration:underline}
 .ibx2-brieft span{font-size:12.5px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ibx2-briefgo{flex:none;font-size:22px;line-height:1;opacity:.85}
 @media (prefers-reduced-motion:reduce){.ibx2-briefbtn{transition:none}.ibx2-briefbtn:hover{transform:none}}
+.mf-older-s{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px;font-size:12.5px;text-align:center}

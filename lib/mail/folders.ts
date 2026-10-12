@@ -74,6 +74,26 @@ export async function listMessages(c: ImapFlow, me: string, path: string, before
   } finally { lock.release(); }
 }
 
+/** 50 emails older than a date, live (paging past the 45 days the cache holds) */
+export async function listOlder(c: ImapFlow, me: string, path: string, beforeIso: string) {
+  const lock = await c.getMailboxLock(path);
+  try {
+    const d = new Date(beforeIso);
+    const hit = await c.search({ before: d }, { uid: true }).catch(() => [] as number[]);
+    const uids = (Array.isArray(hit) ? hit : []).sort((a, b) => a - b).slice(-50);
+    const rows: MsgRow[] = [];
+    if (uids.length) for await (const m of c.fetch(uids.join(","), { uid: true, flags: true, envelope: true, size: true, internalDate: true }, { uid: true })) rows.push(toRow(path, me, m as never));
+    rows.sort((a, b) => b.date.localeCompare(a.date));
+    return { rows, more: (Array.isArray(hit) ? hit.length : 0) > 50 };
+  } finally { lock.release(); }
+}
+
+/** mark an email read on the server (opening it from the cache) */
+export async function markSeen(c: ImapFlow, path: string, uid: number) {
+  const lock = await c.getMailboxLock(path);
+  try { await c.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true }); } finally { lock.release(); }
+}
+
 export type FullMsg = { folder: string; uid: number; messageId: string; references: string[]; fromAddress: string; fromName: string; from: string; to: string; cc: string; subject: string; date: string; html: string; text: string; attachments: { i: number; name: string; size: number; type: string }[] };
 
 async function parsed(c: ImapFlow, path: string, uid: number): Promise<ParsedMail | null> {
@@ -153,10 +173,8 @@ const normSubj = (s: string) => s.replace(/^\s*((re|fw|fwd|aw|sv)\s*(\[\d+\])?\s
  * Search the mailbox and group what's found into conversations (received and sent, oldest first inside each).
  * A customer's name finds their email addresses (customers, contacts) so "Dear Heart" finds fisher@dearheartdesigns.com.
  */
-export async function searchConversations(admin: SupabaseClient, acct: MailAccount, me: string, q: string, deadline: number) {
-  const term = q.trim();
-  if (term.length < 2) return { convos: [] as Convo[], folders: 0, partial: false };
-  // a customer's addresses and domain, by name
+/** a customer's addresses (customers, contacts) when the search is their name */
+export async function customerAddrs(admin: SupabaseClient, term: string) {
   const addrs = new Set<string>();
   if (!term.includes("@")) {
     const { data: cs } = await admin.from("customers").select("id, email, contact2_email").or(`company.ilike.%${term.replace(/[%,()]/g, " ")}%,name.ilike.%${term.replace(/[%,()]/g, " ")}%`).limit(5);
@@ -164,10 +182,19 @@ export async function searchConversations(admin: SupabaseClient, acct: MailAccou
     for (const x of cs || []) for (const e of [x.email, x.contact2_email]) if (e) addrs.add(lc(e as string));
     if (ids.length) { const { data: ks } = await admin.from("customer_contacts").select("email").in("customer_id", ids).limit(30); for (const k of ks || []) if (k.email) addrs.add(lc(k.email as string)); }
   }
+  return addrs;
+}
+
+export async function searchConversations(admin: SupabaseClient, acct: MailAccount, me: string, q: string, deadline: number, olderOnly = false) {
+  const term = q.trim();
+  if (term.length < 2) return { convos: [] as Convo[], folders: 0, partial: false };
+  const addrs = await customerAddrs(admin, term);
   const FREE = /@(gmail|yahoo|hotmail|outlook|aol|icloud|live|msn|comcast|att|sbcglobal)\./i;
   const domains = new Set([...addrs].filter((a) => !FREE.test(a)).map((a) => a.split("@")[1]).filter(Boolean));
   const keys = [term, ...domains, ...[...addrs].filter((a) => FREE.test(a))].slice(0, 12);
-  const crit = { or: keys.flatMap((k) => [{ from: k }, { to: k }, { cc: k }, ...(k === term ? [{ subject: k }] : [])]) };
+  const crit: Record<string, unknown> = { or: keys.flatMap((k) => [{ from: k }, { to: k }, { cc: k }, ...(k === term ? [{ subject: k }] : [])]) };
+  // older than the cached 45 days only (the cache answers the rest instantly)
+  if (olderOnly) crit.before = new Date(Date.now() - 45 * 864e5);
   const folders = (await withBox(acct, (c) => listFolders(c, false))).filter((f) => !/\\(Junk|Trash|Drafts)/.test(f.special) && !/^@saneblackhole$/i.test(f.name));
   // Inbox, Sent and Archive first: they hold almost every conversation
   const rank = (f: Folder) => (/\\Inbox/.test(f.special) ? 0 : /\\Sent/.test(f.special) ? 1 : /\\Archive/.test(f.special) ? 2 : 3);
@@ -203,6 +230,11 @@ export async function searchConversations(admin: SupabaseClient, acct: MailAccou
   };
   const queue = [...folders];
   await Promise.all(Array.from({ length: 4 }, async () => { while (queue.length) await one(queue.shift()!); }));
+  return { convos: groupConvos(found, me), folders: looked, partial, timing };
+}
+
+/** group emails into conversations: replies by Message-ID, else by the subject without Re:/Fwd:; oldest first inside */
+export function groupConvos(found: MsgRow[], me: string): Convo[] {
   // the same email in two folders (Inbox + Archive copy): once
   const seen = new Map<string, MsgRow>();
   for (const m of found) { const k = m.messageId || `${m.folder}:${m.uid}`; if (!seen.has(k)) seen.set(k, m); }
@@ -227,5 +259,5 @@ export async function searchConversations(admin: SupabaseClient, acct: MailAccou
     const people = [...new Set(ms.flatMap((m) => (m.sent ? m.to : [m.fromName || m.from])).filter((x) => x && x !== me))].slice(0, 4);
     return { key, subject: ms[0].subject.replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, "") || "(no subject)", people, last: ms[ms.length - 1].date, count: ms.length, unread: ms.filter((m) => !m.seen && !m.sent).length, msgs: ms };
   }).sort((a, b) => b.last.localeCompare(a.last)).slice(0, 60);
-  return { convos, folders: looked, partial, timing };
+  return convos;
 }

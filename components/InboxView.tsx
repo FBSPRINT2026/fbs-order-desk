@@ -54,7 +54,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   // Email: the folder list, another folder's emails, and search as conversations (all live from the mailbox)
   const [view, setView] = useState<MailView>({ kind: "inbox" });
   const [folders, setFolders] = useState<Folder[] | null>(null);
-  const [fRows, setFRows] = useState<MsgRow[] | null>(null), [fNext, setFNext] = useState(0), [fBusy, setFBusy] = useState(false), [fSel, setFSel] = useState<MsgRow | null>(null), [fErr, setFErr] = useState("");
+  const [fRows, setFRows] = useState<MsgRow[] | null>(null), [fMore, setFMore] = useState<{ k: "seq"; n: number } | { k: "cache" | "live"; before: string } | null>(null), [fBusy, setFBusy] = useState(false), [fSel, setFSel] = useState<MsgRow | null>(null), [fErr, setFErr] = useState("");
   const [convos, setConvos] = useState<Convo[] | null>(null), [cSel, setCSel] = useState<Convo | null>(null), [sNote, setSNote] = useState("");
   // the folder list shows at once from last time (kept on this computer: folders hardly ever change), then refreshes
   // quietly: first the list, then the unread counts
@@ -68,19 +68,39 @@ export default function InboxView({ mode }: { mode: Mode }) {
     try { const r = await mailBox<{ folders: Folder[] }>({ do: "folders", counts: 1 }); keep(r.folders); } catch { /* the list without counts is fine */ }
   }, []);
   useEffect(() => { if (mode === "mail") void loadFolders(); }, [mode, loadFolders]);
-  const openFolder = async (path: string, before?: number) => {
+  // a folder's emails: the cached 45 days first (instant), then older ones live, 50 at a time
+  type ListResp = { rows: MsgRow[]; next?: number; cached?: boolean; live?: boolean; more?: boolean };
+  const openFolder = async (path: string, page?: { k: "seq"; n: number } | { k: "cache" | "live"; before: string }) => {
     if (/^inbox$/i.test(path)) { setView({ kind: "inbox" }); setFSel(null); setCSel(null); return; }
-    if (!before) { setView({ kind: "folder", path }); setFRows(null); setFSel(null); setFErr(""); setPicked(false); }
+    if (!page) { setView({ kind: "folder", path }); setFRows(null); setFSel(null); setFErr(""); setPicked(false); setFMore(null); }
     setFBusy(true);
-    try { const r = await mailBox<{ rows: MsgRow[]; next: number }>({ do: "list", path, ...(before ? { before } : {}) }); setFRows((x) => (before ? [...(x || []), ...r.rows] : r.rows)); setFNext(r.next); }
-    catch (e) { setFErr(e instanceof Error ? e.message : String(e)); setFRows([]); }
+    try {
+      const params: Record<string, string | number> = { do: "list", path };
+      if (page?.k === "seq") params.before = page.n; else if (page?.k === "cache") params.beforeDate = page.before; else if (page?.k === "live") params.older = page.before;
+      const r = await mailBox<ListResp>(params);
+      setFRows((x) => (page ? [...(x || []), ...r.rows] : r.rows));
+      const oldest = r.rows.length ? r.rows[r.rows.length - 1].date : page && page.k !== "seq" ? page.before : new Date().toISOString();
+      setFMore(r.cached ? (r.rows.length >= 50 ? { k: "cache", before: oldest } : { k: "live", before: oldest }) : r.live ? (r.more ? { k: "live", before: oldest } : null) : r.next && r.next > 1 ? { k: "seq", n: r.next } : null);
+    }
+    catch (e) { setFErr(e instanceof Error ? e.message : String(e)); setFRows((x) => x || []); }
     setFBusy(false);
   };
+  const [olderBusy, setOlderBusy] = useState(false);
   const runSearch = async (term: string) => {
     if (term.trim().length < 2) return;
     setView({ kind: "search", q: term.trim() }); setConvos(null); setCSel(null); setSNote(""); setPicked(false);
-    try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean }>({ do: "search", q: term.trim() }); setConvos(r.convos); setSNote(r.partial ? `Searched ${r.folders} folders (the rest took too long).` : ""); }
+    try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean }>({ do: "search", q: term.trim() }); setConvos(r.convos); }
     catch (e) { setConvos([]); setSNote(e instanceof Error ? e.message : String(e)); }
+  };
+  // past the 45 days: searched live on request, added to the list
+  const searchOlder = async (term: string) => {
+    setOlderBusy(true); setSNote("");
+    try {
+      const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean }>({ do: "search", q: term.trim(), older: 1 });
+      setConvos((cur) => { const have = new Set((cur || []).map((c) => c.key)); return [...(cur || []), ...r.convos.filter((c) => !have.has(c.key))]; });
+      setSNote(r.convos.length ? (r.partial ? "Older mail: some big folders took too long and were skipped." : "Older mail added below.") : r.partial ? "Nothing older found (some big folders took too long)." : "Nothing older found.");
+    } catch (e) { setSNote(e instanceof Error ? e.message : String(e)); }
+    setOlderBusy(false);
   };
   const [ol, setOl] = useState<InboxItem[] | null>(null); // my Outlook Inbox, mirrored
   const [whose, setWhose] = useSticky<"mine" | "everyone">("inbox.whose", "mine");
@@ -234,8 +254,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
             <span className="ibx2-briefgo" aria-hidden>›</span>
           </button>}
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
-            {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={(r) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid ? { ...y, seen: true } : y))); }} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={fNext > 1} loading={fBusy} onMore={() => void openFolder(view.path, fNext)} /></>
-            : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? <div className="ibx2-none">Nothing found for “{view.q}”.{sNote ? ` ${sNote}` : ""}</div> : <>{sNote && <div className="faint mf-note">{sNote}</div>}<ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} /></>)
+            {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={(r) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid ? { ...y, seen: true } : y))); }} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={!!fMore} loading={fBusy} onMore={() => fMore && void openFolder(view.path, fMore)} /></>
+            : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? <div className="ibx2-none">Nothing in the last 45 days for “{view.q}”.{sNote ? ` ${sNote}` : ""}<div style={{ marginTop: 10 }}><button type="button" className="btn sm" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail…" : "Search older mail"}</button></div></div> : <><div className="faint mf-note">Last 45 days.</div><ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} />
+              <div className="mf-older-s">{sNote && <div className="faint">{sNote}</div>}<button type="button" className="btn sm ghost" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail… (up to a minute)" : "Search older mail too"}</button></div></>)
             : tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : <>
               { !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
               : olShown.map((i) => {

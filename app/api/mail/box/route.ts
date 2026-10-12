@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accountForUser, cfgOf } from "@/lib/mail/config";
-import { getAttachment, getMessage, listFolders, listMessages, moveMessage, searchConversations, withBox } from "@/lib/mail/folders";
+import { customerAddrs, getAttachment, getMessage, groupConvos, listFolders, listMessages, listOlder, markSeen, moveMessage, searchConversations, withBox } from "@/lib/mail/folders";
+import { cachedList, cachedMessage, cachedSearch, folderCached } from "@/lib/mail/cache";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 import { sendFromMailbox } from "@/lib/mail/send";
 
@@ -37,14 +38,41 @@ export async function GET(req: Request) {
   try {
     // the folder list alone is quick; counts (how many, unread) come in a second call in the background
     if (what === "folders") return NextResponse.json({ folders: await withBox(acct, (c) => listFolders(c, q.get("counts") === "1")) });
-    if (what === "list") return NextResponse.json(await withBox(acct, (c) => listMessages(c, me, path, Number(q.get("before") || 0) || undefined)));
-    if (what === "message") { const r = await withBox(acct, (c) => getMessage(c, path, uid)); return r ? NextResponse.json(r) : NextResponse.json({ error: "That email isn't there any more." }, { status: 404 }); }
+    // a folder: from the 45-day cache when it's complete (instant), paging back past it live; else live
+    if (what === "list") {
+      const older = q.get("older");
+      if (older) { const r = await withBox(acct, (c) => listOlder(c, me, path, older)); return NextResponse.json({ rows: r.rows, more: r.more, live: true }); }
+      if (await folderCached(admin, acct.id, path)) {
+        const rows = await cachedList(admin, acct.id, me, path, q.get("beforeDate") || undefined);
+        return NextResponse.json({ rows, cached: true, more: true });
+      }
+      return NextResponse.json(await withBox(acct, (c) => listMessages(c, me, path, Number(q.get("before") || 0) || undefined)));
+    }
+    if (what === "message") {
+      const hit = await cachedMessage(admin, acct.id, path, uid);
+      if (hit) {
+        // mark it read in Outlook too, after answering
+        after(async () => { try { await withBox(acct, (c) => markSeen(c, path, uid)); await admin.from("mail_cache").update({ seen: true }).eq("account_id", acct.id).eq("folder", path).eq("uid", uid); } catch { /* fine */ } });
+        return NextResponse.json({ ...hit, cached: true });
+      }
+      const r = await withBox(acct, (c) => getMessage(c, path, uid));
+      return r ? NextResponse.json(r) : NextResponse.json({ error: "That email isn't there any more." }, { status: 404 });
+    }
     if (what === "attachment") {
       const a = await withBox(acct, (c) => getAttachment(c, path, uid, Number(q.get("i") || 0)));
       if (!a) return NextResponse.json({ error: "Not found." }, { status: 404 });
       return new Response(new Uint8Array(a.content), { headers: { "Content-Type": a.type, "Content-Disposition": `${/^(image\/|application\/pdf)/.test(a.type) ? "inline" : "attachment"}; filename="${a.name.replace(/["\\\r\n]/g, "_")}"`, "Cache-Control": "private, no-store" } });
     }
-    if (what === "search") return NextResponse.json(await searchConversations(admin, acct, me, q.get("q") || "", Date.now() + 25000));
+    // search: the last 45 days from the cache (instant); older mail on request, live
+    if (what === "search") {
+      const term = q.get("q") || "";
+      if (q.get("older") === "1") return NextResponse.json({ ...(await searchConversations(admin, acct, me, term, Date.now() + 40000, true)), scope: "older" });
+      const addrs = [...(await customerAddrs(admin, term.trim()))];
+      const FREE = /@(gmail|yahoo|hotmail|outlook|aol|icloud|live|msn|comcast|att|sbcglobal)\./i;
+      const extra = [...new Set([...addrs.filter((a) => FREE.test(a)), ...addrs.filter((a) => !FREE.test(a)).map((a) => "@" + a.split("@")[1])])];
+      const rows = await cachedSearch(admin, acct.id, me, term, extra);
+      return NextResponse.json({ convos: groupConvos(rows, me), folders: 0, partial: false, scope: "45d" });
+    }
     return NextResponse.json({ error: "Unknown request." }, { status: 400 });
   } catch (e) { return bad(e); }
 }
