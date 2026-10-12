@@ -175,7 +175,9 @@ export async function searchConversations(admin: SupabaseClient, acct: MailAccou
   // each folder on its own connection, a few at a time; a folder that takes too long is left out (partial)
   const found: MsgRow[] = [];
   let looked = 0, partial = false;
+  const timing: Record<string, number | string> = {};
   const one = async (f: Folder) => {
+    const t0 = Date.now();
     const left = deadline - Date.now();
     if (left < 2000) { partial = true; return; }
     const client = imapClient(cfgOf(acct));
@@ -194,7 +196,8 @@ export async function searchConversations(admin: SupabaseClient, acct: MailAccou
     const timer = new Promise<null>((res) => setTimeout(() => res(null), left));
     const rows = await Promise.race([work.catch(() => [] as MsgRow[]), timer]);
     done = true; void done;
-    if (rows === null) { partial = true; client.close(); return; }
+    if (rows === null) { partial = true; timing[f.path] = "timed out"; client.close(); return; }
+    timing[f.path] = Date.now() - t0;
     looked++; found.push(...rows);
     await client.logout().catch(() => null);
   };
@@ -224,5 +227,5 @@ export async function searchConversations(admin: SupabaseClient, acct: MailAccou
     const people = [...new Set(ms.flatMap((m) => (m.sent ? m.to : [m.fromName || m.from])).filter((x) => x && x !== me))].slice(0, 4);
     return { key, subject: ms[0].subject.replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, "") || "(no subject)", people, last: ms[ms.length - 1].date, count: ms.length, unread: ms.filter((m) => !m.seen && !m.sent).length, msgs: ms };
   }).sort((a, b) => b.last.localeCompare(a.last)).slice(0, 60);
-  return { convos, folders: looked, partial };
+  return { convos, folders: looked, partial, timing };
 }
