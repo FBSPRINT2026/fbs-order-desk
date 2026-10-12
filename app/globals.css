@@ -6840,3 +6840,8 @@ a.pdn-tag:hover{text-decoration:underline}
   .eh-tag.make:disabled{opacity:.5}
 }
 .eh-tag.order{background:var(--accent);color:#fff;font-weight:700;text-decoration:none}
+/* phones: an iPhone zooms the whole page in when you tap into a box with text under 16px, and stays zoomed (Oct 12:
+   Amanda searched "Edu" and the page sat zoomed in, the right edge and the menu button off screen). Every box 16px+ */
+@media (max-width:820px) and (pointer:coarse){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea{font-size:16px!important}
+}
