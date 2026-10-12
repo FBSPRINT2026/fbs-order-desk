@@ -6800,3 +6800,16 @@ a.pdn-tag:hover{text-decoration:underline}
 .eh-tag.goods{background:color-mix(in srgb,#1F9D57 14%,var(--surface));color:#17783f;font-weight:700;text-decoration:none}
 .eh-tag.goods:hover{background:color-mix(in srgb,#1F9D57 22%,var(--surface))}
 .db-goods{margin-right:4px}
+/* the sender, beside their name: their company */
+.eh-org{color:var(--ink-2);font-size:13px;margin-left:6px}
+.eh-org::before{content:"· ";color:var(--ink-3)}
+/* phones: the sender in three clean lines: name · company / address / to … and the date (Oct 12, Nick: "looks jumbled") */
+@media (max-width:760px){
+  .eh-from{display:grid;grid-template-columns:36px minmax(0,1fr);column-gap:10px;row-gap:2px;align-items:start}
+  .eh-av{grid-row:1 / span 2}
+  .eh-n{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:6px;row-gap:0}
+  .eh-n b{font-size:15px}
+  .eh-org{margin-left:0}
+  .eh-addr{flex-basis:100%;margin-left:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .eh-date{grid-column:2;padding-top:0}
+}

@@ -252,8 +252,8 @@ export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | n
  * the left, organize in the middle), then the subject, then who it's from (to / cc fold away), the AI's one-line read
  * and small tags. On a phone the toolbar keeps its icons and drops the words for everything but Reply.
  */
-export function MailHead({ toolbar, phone, subject, tags, fromName, fromEmail, to, cc, date, summary, listOpen, toggleList, back }: {
-  toolbar: React.ReactNode; /** phones: the bottom bar's actions */ phone?: PhoneActs; subject: string; tags?: React.ReactNode; fromName: string; fromEmail: string; to?: string; cc?: string; date: string; summary?: string;
+export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEmail, to, cc, date, summary, listOpen, toggleList, back }: {
+  toolbar: React.ReactNode; /** phones: the bottom bar's actions */ phone?: PhoneActs; subject: string; /** the sender's company, beside their name */ org?: string; tags?: React.ReactNode; fromName: string; fromEmail: string; to?: string; cc?: string; date: string; summary?: string;
   listOpen: boolean; toggleList: () => void; back?: () => void;
 }) {
   const [full, setFull] = useState(false);
@@ -283,7 +283,7 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, fromEmail, t
         <div className="eh-from">
           <span className="eh-av" aria-hidden>{ini}</span>
           <div className="eh-who">
-            <div><b>{name}</b>{fromName && fromEmail && <span className="eh-addr">{fromEmail}</span>}</div>
+            <div className="eh-n"><b>{name}</b>{org && <span className="eh-org">{org}</span>}{fromName && fromEmail && <span className="eh-addr">{fromEmail}</span>}</div>
             {short && <button type="button" className="eh-to" onClick={() => setFull(!full)} aria-expanded={full}>to {short} <span aria-hidden>{full ? "▴" : "▾"}</span></button>}
             {full && <div className="eh-full">{to && <div><span>To</span>{to}</div>}{cc && <div><span>Cc</span>{cc}</div>}</div>}
           </div>

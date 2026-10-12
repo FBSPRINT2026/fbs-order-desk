@@ -725,7 +725,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               <a href={`/shop/order-goods?email=${x.id}`} target="_blank" rel="noreferrer" role="menuitem" onClick={close}>{TbIcon.move} Order goods from S&amp;S</a>
               <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>{TbIcon.ban} Not a customer</button>
             </> : undefined,
-          }} fromName={who !== fromName ? `${who} · ${fromName}` : who} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
+          }} fromName={personName(fromName) || who} org={who !== personName(fromName) && who !== fromName ? who : undefined} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
           tags={<>
             {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
             {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="eh-tag">{INTENT[x.meta.triage.intent]}</span>}
