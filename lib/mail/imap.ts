@@ -18,7 +18,7 @@ export async function sentFolder(client: ImapFlow) {
 }
 
 const addrs = (a?: AddressObject | AddressObject[]) => (Array.isArray(a) ? a : a ? [a] : []).flatMap((x) => x.value || []).map((v) => ({ address: (v.address || "").toLowerCase(), name: v.name || "" })).filter((v) => v.address);
-function toMsg(p: ParsedMail): MailMsg {
+export function toMsg(p: ParsedMail): MailMsg {
   const headers: Record<string, string> = {};
   p.headers.forEach((v, k) => { headers[k.toLowerCase()] = typeof v === "string" ? v : JSON.stringify(v); });
   const refs = Array.isArray(p.references) ? p.references : p.references ? String(p.references).split(/\s+/) : [];
@@ -73,7 +73,7 @@ export async function syncAccount(admin: SupabaseClient, acct: MailAccount, dead
         }
         // the Outlook Inbox as it is right now (what's left in it is the person's to-do list)
         if (kind === "inbox") {
-          try { const r = await mirrorInbox(admin, client, acct, validity); if (r.gone) tally.inbox_archived = r.gone; }
+          try { const r = await mirrorInbox(admin, client, acct, validity, deadline); if (r.gone) tally.inbox_archived = r.gone; if (r.sorted) tally.inbox_sorted = r.sorted; }
           catch (e) { tally.inbox_mirror_error = 1; console.error("mirrorInbox", acct.email, e instanceof Error ? e.message : e); }
         }
         if (Date.now() < deadline - 8000) { const f = await backfillHtml(admin, client, acct.id, kind, deadline - 5000); if (f) tally[`${kind}_formatted`] = f; }

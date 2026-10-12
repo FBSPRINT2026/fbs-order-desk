@@ -504,7 +504,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   return (
     <>
       {fromEmail
-        ? <button type="button" className="back back-btn" title="Saves this order, then opens the customer's email to reply or send the quote" onClick={async () => { await save(); router.push(`/shop/inbox?open=${fromEmail}`); }}>← Save &amp; return to inbox</button>
+        ? <button type="button" className="back back-btn" title="Saves this order, then opens the customer's email to reply or send the quote" onClick={async () => { await save(); router.push(`/shop/conversations?open=${fromEmail}`); }}>← Save &amp; return to the email</button>
         : <a className="back" href="/shop/orders" onClick={(e) => { if (window.history.length > 1) { e.preventDefault(); router.back(); } }} title="Back to where you were">← Back</a>}
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">

@@ -14,6 +14,7 @@ import { useRole } from "@/components/RoleContext";
 import { useRouter } from "next/navigation";
 import { mailRows, type MailSug } from "@/lib/inbox";
 import { getMailStatus } from "./mail-actions";
+import MyDay, { CrewTodos } from "@/components/MyDay";
 import { DETAILS_LABEL, detailsCount, ordersNeedingDetails } from "@/lib/productionDetails";
 import type { Group } from "@/lib/pricing";
 
@@ -179,7 +180,7 @@ export default function Dashboard() {
   const urgentIds = new Set(myUrgent.map((x) => x.id));
   const replyItems = [...myMsgs.map((x) => ({ at: x.created_at, msg: x, mail: null as Mail | null })), ...myNeeds.map((x) => ({ at: x.occurred_at, msg: null as Msg | null, mail: x }))]
     .sort((a, b) => Number(!!b.mail && urgentIds.has(b.mail.id)) - Number(!!a.mail && urgentIds.has(a.mail.id)) || (a.mail && b.mail && urgentIds.has(a.mail.id) && urgentIds.has(b.mail.id) ? a.at.localeCompare(b.at) : b.at.localeCompare(a.at)));
-  const openMail = (id: string) => router.push(`/shop/inbox?open=${id}`);
+  const openMail = (id: string) => router.push(`/shop/conversations?open=${id}`);
   const myReorders = reorders.filter((x) => isMine(x.customer_id, x.owner));
 
   const jobRow = (j: Job) => (
@@ -317,6 +318,7 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+            <CrewTodos />
             {detailsCard}
             {prodSection}
             <section className="db-card db-blue db-pipe">
@@ -331,34 +333,9 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="page-head">
-        <div><div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div><h1>Dashboard</h1></div>
-      </div>
-
-      {/* ask AI / search everything, with whose accounts the page shows beside it */}
-      <div className="dash-top">
-        <AiSearch />
-        <div className="rv-seg dash-who" role="group" aria-label="Whose accounts to show">
-          <button type="button" className={!mine ? "on" : ""} onClick={() => setMine(false)} title="Show every account">Everyone</button>
-          <button type="button" className={mine ? "on" : ""} onClick={() => setMine(true)} title="Only the customers you own">Mine</button>
-        </div>
-      </div>
-
-      {!v ? <div className="empty">Loading your day…</div> : (
-        <div className="dash">
-          {/* 1. the assistant: what needs doing */}
-          {panel("Assistant", "fade", null, <AssistantStrip />, ["/shop/assistant", "All follow-ups"], <span className="faint db-h-note">follow-ups, approvals and suggestions for today</span>)}
-
-          {/* 2. messages (2/3) · sales (1/3), same height */}
-          <div className="dash-row dash-2-1 dash-fill">
-            <section className="db-card db-blue db-msgs">
-              <div className="db-card-h">
-                <h2>Needs a reply</h2><span className="db-n">{replyItems.length}</span>
-                {myUrgent.length > 0 && <span className="db-urgent-tag">{myUrgent.length} urgent</span>}
-                <span className="spacer" /><Link href="/shop/inbox" className="linkbtn">Inbox →</Link>
-              </div>
-              <div className="db-scroll">
-                {list(replyItems.length, (
+      <MyDay name={(staffName || myEmail.split("@")[0]).split(/[\s._-]+/)[0].replace(/^./, (c) => c.toUpperCase())} replyCount={replyItems.length} urgentCount={myUrgent.length} replies={
+              <div className="md-scroll">
+                {!v ? <div className="md-empty">Loading…</div> : list(replyItems.length, (
                   <ul className="db-list db-replies">{replyItems.map(({ msg: x, mail: e }) => x ? (
                     <li key={x.id} className="db-row db-reply">
                       <span className="db-main"><b>{who(x.customer_id) || x.author_name || x.author_email}</b><span className="db-one">{x.body.replace(/\s+/g, " ").slice(0, 160)}</span></span>
@@ -367,27 +344,35 @@ export default function Dashboard() {
                   ) : e ? (
                     <li key={e.id} className={"db-row db-reply db-click" + (urgentIds.has(e.id) ? " hot" : "")} onClick={() => openMail(e.id)} title="Open it in the Inbox, ready to answer">
                       <span className="db-main"><b>{who(e.customer_id) || e.meta?.from_name || e.from_email}</b><span className="db-one">{urgentIds.has(e.id) && e.meta?.triage?.urgent_reason ? <em>{e.meta.triage.urgent_reason} · </em> : null}{e.meta?.triage?.summary || e.subject || "(no subject)"}</span></span>
-                      <span className="db-side"><span className={urgentIds.has(e.id) && (Date.now() - Date.parse(e.occurred_at)) / 36e5 > 4 ? "db-late" : "faint"}>{ago(e.occurred_at)}</span><Link href={`/shop/inbox?open=${e.id}`} className={"btn sm" + (urgentIds.has(e.id) ? " primary" : "")} onClick={(ev) => ev.stopPropagation()}>Reply</Link></span>
+                      <span className="db-side"><span className={urgentIds.has(e.id) && (Date.now() - Date.parse(e.occurred_at)) / 36e5 > 4 ? "db-late" : "faint"}>{ago(e.occurred_at)}</span><Link href={`/shop/conversations?open=${e.id}`} className={"btn sm" + (urgentIds.has(e.id) ? " primary" : "")} onClick={(ev) => ev.stopPropagation()}>Reply</Link></span>
                     </li>
                   ) : null)}</ul>
                 ), <MsgEmpty title="You're all caught up" text="No customer emails or portal messages waiting on a reply. They land here the moment a customer writes." />)}
               </div>
-            </section>
-            {boss ? panel("Sales", "orange", null, <SalesAnalytics part="side" />) : panel("Today", "orange", null, (
-              <div className="db-kpis db-kpis-2">
-                <a href="#dash-prod"><span>Due today · late</span><b>{v.today.length}<small> · {v.late.length}</small></b></a>
-                <Link href="/shop/shipping"><span>Ready to ship</span><b>{v.ship.length}</b></Link>
-                <Link href="/shop/receiving"><span>Goods arriving</span><b>{goods.today}</b></Link>
-                <Link href="/shop/receiving"><span>Goods arrived</span><b>{goods.arrived}</b></Link>
-              </div>
-            ))}
-          </div>
+      } />
 
-          {/* sales charts (owners / admins) */}
-          {boss && <section className="db-card db-orange db-sales">
-            <div className="db-card-h"><h2>Sales Charts</h2><span className="faint db-h-note">invoices by order date · closed quotes, quotes and holders don&apos;t count</span></div>
-            <SalesAnalytics part="charts" />
-          </section>}
+      {/* the shop: everyone's numbers (Everyone / Mine narrows to my accounts) */}
+      <div className="md-shop-h">
+        <h2>The shop</h2>
+        <div className="rv-seg dash-who" role="group" aria-label="Whose accounts to show">
+          <button type="button" className={!mine ? "on" : ""} onClick={() => setMine(false)} title="Show every account">Everyone</button>
+          <button type="button" className={mine ? "on" : ""} onClick={() => setMine(true)} title="Only the customers you own">Mine</button>
+        </div>
+      </div>
+      {!v ? <div className="empty">Loading your day…</div> : (
+        <div className="dash">
+          {/* follow-ups the Assistant found (quotes to chase, approvals…) */}
+          {panel("Follow-ups", "fade", null, <AssistantStrip />, ["/shop/assistant", "All follow-ups"], <span className="faint db-h-note">quotes to chase, approvals and suggestions</span>)}
+
+          {/* sales: the numbers (1/3) beside the charts (2/3) */}
+          {boss && <div className="dash-row dash-2-1">
+            <section className="db-card db-orange db-sales">
+              <div className="db-card-h"><h2>Sales Charts</h2><span className="faint db-h-note">invoices by order date · closed quotes, quotes and holders don&apos;t count</span></div>
+              <SalesAnalytics part="charts" />
+            </section>
+            {panel("Sales", "orange", null, <SalesAnalytics part="side" />)}
+          </div>}
+
 
           {pdn.length > 0 && detailsCard}
 

@@ -8,7 +8,7 @@ import { addContact, closeAnswered, closeWrittenTo, saveBody } from "@/lib/mail/
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 import { detectSignature } from "@/lib/mail/signature";
 import { runAccount } from "@/lib/mail/run";
-import { archiveInbox } from "@/lib/mail/mirror";
+import { archiveInbox, MOVES, type MoveTo } from "@/lib/mail/mirror";
 
 // Staff actions for the mailboxes: connect your own, reply from the mailbox an email came to, sort a sender, check now.
 
@@ -204,7 +204,7 @@ export async function setEmailOrder(activityId: string, orderId: string | null) 
 }
 
 
-export type InboxItem = { id: string; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean; unread: boolean; flagged: boolean; activity_id: string | null };
+export type InboxItem = { id: string; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean; unread: boolean; flagged: boolean; activity_id: string | null; bucket: string | null; summary: string };
 
 /** your Outlook Inbox as it is right now (the mirror, refreshed every mailbox check): your to-do list */
 export async function getOutlookInbox() {
@@ -212,14 +212,14 @@ export async function getOutlookInbox() {
     const { admin, user } = await staff();
     const a = await accountForUser(admin, user!.id);
     if (!a || !a.enabled) return { ok: true as const, items: [] as InboxItem[], connected: false };
-    const { data } = await admin.from("mail_inbox").select("id, from_email, from_name, subject, received_at, cc_only, unread, flagged, activity_id")
+    const { data } = await admin.from("mail_inbox").select("id, from_email, from_name, subject, received_at, cc_only, unread, flagged, activity_id, bucket, summary")
       .eq("account_id", a.id).is("gone_at", null).order("received_at", { ascending: false, nullsFirst: false }).limit(500);
     return { ok: true as const, items: (data || []) as InboxItem[], connected: true, checked: a.last_ok_at };
   } catch (e) { return fail(e); }
 }
 
 /** Archive: moves the email to Archive in your Outlook, the same as Outlook's Archive button (by row, or by the customer email on file) */
-export async function archiveOutlookEmail(input: { id?: string; activityId?: string }) {
+export async function archiveOutlookEmail(input: { id?: string; activityId?: string; to?: MoveTo }) {
   try {
     const { admin, user, email } = await staff();
     const a = await accountForUser(admin, user!.id);
@@ -230,7 +230,48 @@ export async function archiveOutlookEmail(input: { id?: string; activityId?: str
       id = (data?.id as string) || "";
     }
     if (!id) return { ok: false as const, error: "That email isn't in your Outlook Inbox." };
-    await archiveInbox(admin, a, id, email || "portal");
+    const to: MoveTo = input.to && input.to in MOVES ? input.to : "archive";
+    await archiveInbox(admin, a, id, email || "portal", to);
     return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** read any email in your Inbox, live from the mailbox (the portal doesn't keep non-customer mail) */
+export async function readInboxEmail(id: string) {
+  try {
+    const { admin, user } = await staff();
+    const a = await accountForUser(admin, user!.id);
+    if (!a || !a.enabled) return { ok: false as const, error: "Connect your email first." };
+    const { data: r } = await admin.from("mail_inbox").select("id, account_id, uid, uidvalidity, message_id").eq("id", id).maybeSingle();
+    if (!r || r.account_id !== a.id) return { ok: false as const, error: "That email isn't in your Inbox." };
+    const { readLive } = await import("@/lib/mail/read");
+    const m = await readLive(a, r as { uid: number; uidvalidity: number; message_id: string });
+    if (!m) return { ok: false as const, error: "It's not in your Inbox any more (archived or moved in Outlook?)." };
+    return { ok: true as const, ...m };
+  } catch (e) { return fail(e); }
+}
+
+/** reply to any email in your Inbox (not only customers'): sent from your mailbox, threaded, with your signature */
+export async function replyInboxEmail(input: { id: string; body: string; subject?: string }) {
+  try {
+    const { admin, user } = await staff();
+    if (!input.body.trim()) return { ok: false as const, error: "Write the reply first." };
+    const a = await accountForUser(admin, user!.id);
+    if (!a || !a.enabled) return { ok: false as const, error: "Connect your email first." };
+    const { data: r } = await admin.from("mail_inbox").select("id, account_id, uid, uidvalidity, message_id").eq("id", input.id).maybeSingle();
+    if (!r || r.account_id !== a.id) return { ok: false as const, error: "That email isn't in your Inbox." };
+    const { readLive } = await import("@/lib/mail/read");
+    const m = await readLive(a, r as { uid: number; uidvalidity: number; message_id: string });
+    if (!m || !m.fromAddress) return { ok: false as const, error: "Couldn't open that email to reply to it." };
+    const subject = input.subject || (/^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`);
+    const sent = m.date ? new Date(m.date).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" at ", " ") : "";
+    const quote = { from: m.from, sent, to: m.to || a.email, cc: m.cc, subject: m.subject, html: m.html.length < 1_500_000 ? m.html : "", text: m.text };
+    const signature = a.signature_on !== false ? a.signature_html || "" : "";
+    const page = replyHtml({ body: input.body, signature, css: signature ? a.signature_css : "", quote });
+    const { html, attachments } = inlineImages(page);
+    const text = replyText({ body: input.body, signature, quote });
+    const refs = [...m.references, m.messageId].filter(Boolean).slice(-20);
+    await sendFromMailbox(cfgOf(a), { to: m.fromAddress, subject, text, html, attachments, inReplyTo: m.messageId || undefined, references: refs });
+    return { ok: true as const, to: m.fromAddress };
   } catch (e) { return fail(e); }
 }

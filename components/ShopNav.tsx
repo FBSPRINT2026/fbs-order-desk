@@ -11,6 +11,7 @@ import SearchInput from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
 import { canOpen, ROLES } from "@/lib/roles";
 import { ordersNeedingDetails } from "@/lib/productionDetails";
+import { getOutlookInbox } from "@/app/shop/mail-actions";
 import { setViewAs } from "@/app/shop/view-as-actions";
 import SupportButton from "@/components/SupportButton";
 
@@ -36,6 +37,8 @@ const ICONS: Record<string, React.ReactNode> = {
   shipping: <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z" /><path d="M3 7l9 4 9-4M12 11v10" /></svg>,
   artwork: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-8 9" /></svg>,
   ink: <svg viewBox="0 0 24 24"><path d="M12 3c3.5 4.2 6 7.6 6 10.6A6 6 0 0 1 6 13.6C6 10.6 8.5 7.2 12 3z" /><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.5" /></svg>,
+  chat: <svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" /></svg>,
+  cal: <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>,
   details: <svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4V3h6v1" /><path d="M8.5 12.5l2.3 2.3 4.7-4.8" /></svg>,
   seps: <svg viewBox="0 0 24 24"><rect x="3" y="3" width="12" height="12" rx="2" /><rect x="6" y="6" width="12" height="12" rx="2" /><rect x="9" y="9" width="12" height="12" rx="2" /></svg>,
   support: <svg viewBox="0 0 24 24"><path d="M4 13v-1a8 8 0 0 1 16 0v1" /><rect x="3" y="13" width="4" height="6" rx="1.5" /><rect x="17" y="13" width="4" height="6" rx="1.5" /><path d="M19 19c0 1.5-2 2.5-5 2.5" /></svg>,
@@ -58,6 +61,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   const [incoming, setIncoming] = useState(0);
   const [pvWaiting, setPvWaiting] = useState(0);
   const [details, setDetails] = useState(0); // reorders waiting on production details
+  const [mailNew, setMailNew] = useState(0); // unread email in my Inbox
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
   const [hello, setHello] = useState("Hello");
   // the owner: how many support reports are waiting (the Support link's badge)
@@ -140,6 +144,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
     sb.from("orders").select("id", { count: "exact", head: true }).eq("status", "request").not("submitted_at", "is", null)
       .then(({ count }) => setIncoming(count || 0));
     ordersNeedingDetails(sb, "id").then((r) => setDetails(r.length), () => null);
+    getOutlookInbox().then((r) => { if (r.ok) setMailNew(r.items.filter((i) => i.unread).length); }, () => null);
     // 40,000-series orders with Printavo changes waiting to be accepted (the owner's view only)
     if (realRole === "owner") Promise.all([sb.from("orders").select("*").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000), sb.from("settings").select("data").eq("id", 1).maybeSingle()])
       .then(async ([{ data }, { data: st }]) => {
@@ -153,7 +158,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
 
   // the menu, in groups — each group's items are kept in alphabetical order
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
-    { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/inbox", "inbox", "Inbox"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
+    { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/conversations", "chat", "Conversations"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
     { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Production Details"], ["/shop/separations", "seps", "Separations"]] },
     { title: "Shop Tools", items: [["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
@@ -167,6 +172,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
       {href === "/shop/printavo-sync" && pvWaiting > 0 && <span className="badge" title={`${pvWaiting} order${pvWaiting === 1 ? "" : "s"} changed in Printavo, waiting to be accepted`}>{pvWaiting}</span>}
+      {href === "/shop/inbox" && mailNew > 0 && <span className="badge soft" title={`${mailNew} unread`}>{mailNew}</span>}
       {href === "/shop/details" && details > 0 && <span className="badge" title={`${details} reorder${details === 1 ? "" : "s"} waiting on production details`}>{details}</span>}
       {href === "/shop/incoming" && incoming > 0 && <span className="badge" title={`${incoming} order request${incoming === 1 ? "" : "s"} to review`}>{incoming}</span>}
       {href === "/shop/support" && support > 0 && <span className="badge" title={`${support} open support report${support === 1 ? "" : "s"}`}>{support}</span>}
@@ -192,7 +198,9 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
           onDictated={(t) => { const x = t.trim(); if (x) router.push(`/shop/search?q=${encodeURIComponent(x)}`); }} />
       </form>
       <nav className="nav">
-        {link(["/shop", "home", "Dashboard"])}
+        {link(["/shop", "home", "My Day"])}
+        {link(["/shop/inbox", "inbox", "Inbox"])}
+        {link(["/shop/my-calendar", "cal", "Calendar"])}
         {(crew ? [GROUPS[1], GROUPS[2], GROUPS[0]] : GROUPS).map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>

@@ -2,7 +2,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ImapFlow } from "imapflow";
 import { cfgOf, type MailAccount } from "./config";
-import { imapClient } from "./imap";
+import { imapClient, toMsg } from "./imap";
+import { simpleParser } from "mailparser";
+import { aiState } from "@/lib/ai/claude";
+import { organizeEmail } from "@/lib/ai/organize";
 
 /**
  * The Outlook Inbox, mirrored (Oct 12, Nick: "I leave in there just the stuff I need to work on for the day… I archive
@@ -22,7 +25,7 @@ type Row = { id: string; uid: number; uidvalidity: number; message_id: string; a
 const lc = (s?: string | null) => (s || "").trim().toLowerCase();
 const mid = (s?: string | null) => (s || "").trim().replace(/^<|>$/g, "");
 
-export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct: Pick<MailAccount, "id" | "email">, validity: number) {
+export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct: Pick<MailAccount, "id" | "email" | "name">, validity: number, deadline = Date.now() + 20000) {
   const me = lc(acct.email);
   const found = await client.search({ all: true }, { uid: true });
   const all = (Array.isArray(found) ? found : []).sort((a, b) => a - b);
@@ -67,6 +70,15 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
       if (Object.keys(patch).length) await admin.from("mail_inbox").update(patch).eq("id", r.id);
     } else {
       const cc_only = !e.to.includes(me) && e.cc.includes(me);
+      // moved back into the Inbox: the same row comes back, and the to-dos archiving closed are open again
+      const { data: was } = e.messageId ? await admin.from("mail_inbox").select("id").eq("account_id", acct.id).eq("message_id", e.messageId).not("gone_at", "is", null).order("gone_at", { ascending: false }).limit(1).maybeSingle() : { data: null };
+      if (was) {
+        await admin.from("mail_inbox").update({ gone_at: null, done_by: null, uid: e.uid, uidvalidity: validity, unread, flagged, ...(act ? { activity_id: act.id } : {}) }).eq("id", was.id);
+        await admin.from("tasks").update({ status: "open", done_at: null, done_by: null }).eq("mail_inbox_id", was.id).eq("status", "done").eq("done_by", ARCHIVED);
+        keep.add(was.id as string);
+        if (act && act.meta.outlook_archived) { const { outlook_archived: _d, ...rest } = act.meta; void _d; await admin.from("activities").update({ meta: { ...rest, back_in_inbox_at: now } }).eq("id", act.id); }
+        continue;
+      }
       const { error } = await admin.from("mail_inbox").insert({
         account_id: acct.id, uid: e.uid, uidvalidity: validity, message_id: e.messageId, from_email: e.from.address, from_name: e.from.name,
         subject: e.subject, received_at: e.date && !isNaN(+e.date) ? e.date.toISOString() : null, cc_only, unread, flagged, activity_id: act?.id || null,
@@ -85,6 +97,8 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
   if (gone.length) {
     await admin.from("mail_inbox").update({ gone_at: now }).in("id", gone.map((r) => r.id));
     await archiveActs(admin, gone.map((r) => r.activity_id).filter(Boolean) as string[], now);
+    // archiving the email in Outlook = done with it: its to-dos close (moving it back reopens them)
+    await admin.from("tasks").update({ status: "done", done_at: now, done_by: ARCHIVED }).in("mail_inbox_id", gone.map((r) => r.id)).eq("status", "open");
   }
   // customer email from this mailbox that isn't in the Inbox any more (archived before the mirror started, or never
   // linked): stops needing a reply. Only as far back as the Inbox was read.
@@ -95,7 +109,79 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
     .eq("meta->>account_id", acct.id).eq("meta->>mailbox", "inbox").is("meta->>outlook_archived", null).gte("occurred_at", since).limit(800);
   const out = ((mine || []) as { id: string; external_id: string | null }[]).filter((a) => a.external_id && !inbox.has(mid(a.external_id))).map((a) => a.id);
   if (out.length) await archiveActs(admin, out, now);
-  return { inbox: envs.length, added, gone: gone.length, archived: out.length };
+  const sorted = await sortPending(admin, client, acct, deadline).catch((e) => { console.error("sortPending", e instanceof Error ? e.message : e); return 0; });
+  return { inbox: envs.length, added, gone: gone.length, archived: out.length, sorted };
+}
+
+export const ARCHIVED = "Archived in Outlook";
+
+/** who gets the personal organizer (AI reading all their mail into to-dos and events): the two owners only, Oct 12 */
+export const ORGANIZER_EMAILS = ["amanda@fbsprint.com"];
+export const organizerFor = (email: string, role: string) => role === "owner" || ORGANIZER_EMAILS.includes(lc(email));
+
+/**
+ * My Day: what each email in the Inbox means for the person. Customer email is "customer" (its own flow); everything
+ * else is read by the AI once: to-do / event / just so you know / ignore, with its to-dos and suggested events.
+ * SaneBox already moves receipts and newsletters out of the Inbox, so what's left is mostly real email.
+ * A few per mailbox check (newest first), so a run never runs long.
+ */
+async function sortPending(admin: SupabaseClient, client: ImapFlow, acct: Pick<MailAccount, "id" | "email" | "name">, deadline: number) {
+  const { data } = await admin.from("mail_inbox").select("id, uid, message_id, activity_id, from_email, from_name, subject, received_at, cc_only")
+    .eq("account_id", acct.id).is("gone_at", null).is("sorted_at", null).order("received_at", { ascending: false, nullsFirst: false }).limit(12);
+  const rows = (data || []) as { id: string; uid: number; message_id: string; activity_id: string | null; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean }[];
+  if (!rows.length) return 0;
+  const now = new Date().toISOString();
+  // customer email: its own flow (Needs reply, orders); the summary is the one on file
+  for (const r of rows.filter((x) => x.activity_id)) {
+    const { data: a } = await admin.from("activities").select("meta").eq("id", r.activity_id!).maybeSingle();
+    const sum = String(((a?.meta || {}) as { triage?: { summary?: string } }).triage?.summary || "");
+    await admin.from("mail_inbox").update({ bucket: "customer", summary: sum.slice(0, 300), sorted_at: now }).eq("id", r.id);
+  }
+  const rest = rows.filter((x) => !x.activity_id);
+  if (!rest.length) return 0;
+  // the personal organizer is for the owners (Nick, Amanda) only; everyone else's mail just mirrors
+  const { data: who } = await admin.from("staff").select("role").eq("email", lc(acct.email)).maybeSingle();
+  if (!organizerFor(acct.email, String(who?.role || ""))) return 0;
+  const st = await aiState(admin);
+  if (!st.ready) return 0;
+  const owner = lc(acct.email);
+  let n = 0;
+  for (const r of rest.slice(0, 5)) {
+    if (Date.now() > deadline - 12000) break;
+    // a customer email still being read in (the next check links it): leave it for then
+    if (Date.parse(r.received_at || now) > Date.now() - 4 * 60000) continue;
+    let body = "", to = "", cc = "";
+    try {
+      const msg = await client.fetchOne(String(r.uid), { source: true, size: true }, { uid: true });
+      if (msg && msg.source && (msg.size || 0) < 25 * 1024 * 1024) { const m = toMsg(await simpleParser(msg.source)); body = m.text; to = m.to.map((x) => x.address).join(", "); cc = m.cc.map((x) => x.address).join(", "); }
+    } catch { /* read what we have: sender and subject */ }
+    const res = await organizeEmail(st.settings, { owner, ownerName: acct.name || "", from: `${r.from_name} <${r.from_email}>`, to, cc, subject: r.subject, date: r.received_at || "", body: body || "(no text)" }, { admin, by: "mail" });
+    if (!res.ok) { await admin.from("mail_inbox").update({ sorted_at: now, bucket: "fyi", summary: "" }).eq("id", r.id); continue; }
+    const o = res.data, ymd = /^\d{4}-\d{2}-\d{2}$/;
+    await admin.from("mail_inbox").update({ bucket: o.bucket, summary: (o.summary || "").slice(0, 300), sorted_at: now }).eq("id", r.id);
+    const todos = (o.bucket === "ignore" ? [] : o.todos || []).filter((t) => t.title?.trim()).slice(0, 3);
+    if (todos.length) await admin.from("tasks").insert(todos.map((t) => ({
+      owner, title: t.title.trim().slice(0, 200), notes: (t.notes || "").slice(0, 1000), area: ["personal", "money", "shop"].includes(t.area) ? t.area : "shop",
+      due: t.due && ymd.test(t.due) ? t.due : null, source: "email", mail_inbox_id: r.id, message_id: r.message_id, created_by: "ai",
+    })));
+    const evs = (o.bucket === "ignore" ? [] : o.events || []).filter((e) => e.title?.trim() && ymd.test(e.date || "")).slice(0, 3);
+    if (evs.length) await admin.from("events").insert(evs.map((e) => {
+      const hm = /^\d{1,2}:\d{2}$/;
+      const at = (t: string | null) => (t && hm.test(t) ? chicago(e.date, t) : null);
+      return { owner, title: e.title.trim().slice(0, 200), notes: (e.notes || "").slice(0, 1000), place: (e.place || "").slice(0, 200), day: e.date, all_day: !at(e.start), starts_at: at(e.start), ends_at: at(e.end), status: "suggested", source: "email", mail_inbox_id: r.id, message_id: r.message_id, created_by: "ai" };
+    }));
+    n++;
+  }
+  return n;
+}
+
+/** a Central-time date and HH:MM as an ISO timestamp (daylight saving handled by asking Intl for the offset) */
+export function chicago(day: string, hm: string) {
+  const [h, m] = hm.split(":").map(Number);
+  const guess = new Date(`${day}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`);
+  const tz = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", timeZoneName: "shortOffset" }).formatToParts(guess).find((p) => p.type === "timeZoneName")?.value || "GMT-5";
+  const off = Number((tz.match(/GMT([+-]\d+)/) || [, "-5"])[1]);
+  return new Date(+guess - off * 3600e3).toISOString();
 }
 
 async function archiveActs(admin: SupabaseClient, ids: string[], at: string) {
@@ -107,14 +193,29 @@ async function archiveActs(admin: SupabaseClient, ids: string[], at: string) {
   }
 }
 
-/** the folder Outlook's Archive button uses: special-use \Archive, else the top-level "Archive" */
-async function archiveFolder(client: ImapFlow) {
+/**
+ * Where an email can be moved from the portal: Archive (Outlook's Archive button) or a SaneBox folder. SaneBox
+ * learns from moves, the same as dragging in Outlook: Black Hole blocks the sender, Later / News / Receipts / CC
+ * send that sender's mail there from now on.
+ */
+export const MOVES = {
+  archive: { label: "Archive", sane: "" },
+  later: { label: "Later", sane: "@SaneLater" },
+  news: { label: "News", sane: "@SaneNews" },
+  receipts: { label: "Receipts", sane: "@SaneReceipts" },
+  cc: { label: "CC", sane: "@SaneCC" },
+  blackhole: { label: "Black Hole", sane: "@SaneBlackHole" },
+} as const;
+export type MoveTo = keyof typeof MOVES;
+
+async function folderFor(client: ImapFlow, to: MoveTo) {
   const list = await client.list();
-  return (list.find((f) => f.specialUse === "\\Archive") || list.find((f) => /^archive$/i.test(f.path)) || list.find((f) => /^archive$/i.test(f.name)))?.path || null;
+  if (to === "archive") return (list.find((f) => f.specialUse === "\\Archive") || list.find((f) => /^archive$/i.test(f.path)) || list.find((f) => /^archive$/i.test(f.name)))?.path || null;
+  const want = MOVES[to].sane.toLowerCase();
+  return list.find((f) => f.name.toLowerCase() === want)?.path || null;
 }
 
-/** Archive in the portal: moves the email to Archive in the person's Outlook (their own mailbox only) */
-export async function archiveInbox(admin: SupabaseClient, acct: MailAccount, rowId: string, by: string) {
+export async function archiveInbox(admin: SupabaseClient, acct: MailAccount, rowId: string, by: string, to: MoveTo = "archive") {
   const { data: r } = await admin.from("mail_inbox").select("id, account_id, uid, uidvalidity, message_id, activity_id, gone_at").eq("id", rowId).maybeSingle();
   if (!r || r.account_id !== acct.id) throw new Error("That email isn't in your Inbox.");
   const now = new Date().toISOString();
@@ -122,8 +223,8 @@ export async function archiveInbox(admin: SupabaseClient, acct: MailAccount, row
     const client = imapClient(cfgOf(acct));
     await client.connect();
     try {
-      const dest = await archiveFolder(client);
-      if (!dest) throw new Error("Couldn't find your Archive folder in Outlook.");
+      const dest = await folderFor(client, to);
+      if (!dest) throw new Error(to === "archive" ? "Couldn't find your Archive folder in Outlook." : `Couldn't find the ${MOVES[to].sane} folder (SaneBox) in your mailbox.`);
       const lock = await client.getMailboxLock("INBOX");
       try {
         const mb = client.mailbox && typeof client.mailbox === "object" ? client.mailbox : null;
@@ -138,6 +239,7 @@ export async function archiveInbox(admin: SupabaseClient, acct: MailAccount, row
       } finally { lock.release(); }
     } finally { await client.logout().catch(() => null); }
   }
-  await admin.from("mail_inbox").update({ gone_at: r.gone_at || now, done_by: by.slice(0, 80) }).eq("id", r.id);
+  await admin.from("mail_inbox").update({ gone_at: r.gone_at || now, done_by: `${by} → ${MOVES[to].label}`.slice(0, 80) }).eq("id", r.id);
+  await admin.from("tasks").update({ status: "done", done_at: now, done_by: ARCHIVED }).eq("mail_inbox_id", r.id).eq("status", "open");
   if (r.activity_id) await archiveActs(admin, [r.activity_id], now);
 }
