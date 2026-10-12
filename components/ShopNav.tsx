@@ -63,8 +63,10 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   const [pvWaiting, setPvWaiting] = useState(0);
   const [details, setDetails] = useState(0); // reorders waiting on production details
   const [mailNew, setMailNew] = useState(0); // unread email in my Inbox
-  // the menu hides to a strip of icons and slides out when you point at it (like QuickBooks); the pin keeps it open
-  const [pinned, setPinned] = useSticky<boolean>("nav.pinned", false);
+  // the menu folds to a strip of icons (a label pops up beside the one you point at); the arrow at the top opens it
+  // back up to the full menu and folds it again
+  const [mini, setMini] = useSticky<boolean>("nav.mini", true);
+  const [tip, setTip] = useState<{ text: string; top: number; left: number } | null>(null);
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
   const [hello, setHello] = useState("Hello");
   // the owner: how many support reports are waiting (the Support link's badge)
@@ -169,9 +171,9 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
 
 
   const link = ([href, icon, label]: [string, string, string]) => !canOpen(href, perms) ? (
-    <a key={href} className="nav-off" title={`${label}: not on for you (Settings → User Access)`} aria-disabled="true">{ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}</a>
+    <a key={href} className="nav-off" title={`${label}: not on for you (Settings → User Access)`} data-tip={`${label} (not on for you)`} aria-disabled="true">{ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}</a>
   ) : (
-    <Link key={href} href={href} className={active(href) ? "on" : ""} title={label}>
+    <Link key={href} href={href} className={active(href) ? "on" : ""} title={mini ? undefined : label} data-tip={label} aria-label={label}>
       {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
       {href === "/shop/printavo-sync" && pvWaiting > 0 && <span className="badge" title={`${pvWaiting} order${pvWaiting === 1 ? "" : "s"} changed in Printavo, waiting to be accepted`}>{pvWaiting}</span>}
@@ -184,11 +186,20 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   );
 
   return (
-    <aside className={"side" + (pinned ? " pinned" : " auto")} ref={sideRef}>
-      <button type="button" className={"side-pin" + (pinned ? " on" : "")} aria-pressed={pinned} onClick={() => setPinned(!pinned)}
-        title={pinned ? "Unpin: the menu hides to icons and slides out when you point at it" : "Pin the menu open"} aria-label={pinned ? "Unpin the menu" : "Pin the menu open"}>
-        <svg viewBox="0 0 24 24" aria-hidden><path d="M9 3h6l-1 6 4 4H6l4-4z" /><path d="M12 13v8" /></svg>
+    <aside className={"side" + (mini ? " mini" : "")} ref={sideRef}
+      onMouseOver={(e) => {
+        if (!mini) return;
+        const el = (e.target as HTMLElement).closest?.("[data-tip]") as HTMLElement | null;
+        if (!el) { setTip(null); return; }
+        const r = el.getBoundingClientRect();
+        setTip({ text: el.dataset.tip || "", top: r.top + r.height / 2, left: r.right + 10 });
+      }}
+      onMouseLeave={() => setTip(null)}>
+      <button type="button" className="side-fold" onClick={() => { setMini(!mini); setTip(null); }} data-tip={mini ? "Show the full menu" : undefined}
+        title={mini ? undefined : "Fold the menu to icons"} aria-label={mini ? "Show the full menu" : "Fold the menu to icons"} aria-expanded={!mini}>
+        <svg viewBox="0 0 24 24" aria-hidden>{mini ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}</svg>
       </button>
+      {mini && tip && tip.text && <div className="side-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.text}</div>}
       <div className={sdClass(fit.l)} ref={inRef} style={fit.h ? { zoom: fit.z, minHeight: fit.h / fit.z } : undefined}>
       <Link href="/shop" className="brand brand-logo" title="Home">
         {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}

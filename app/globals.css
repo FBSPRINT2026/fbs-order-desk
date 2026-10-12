@@ -6388,31 +6388,26 @@ a.pdn-tag:hover{text-decoration:underline}
 @media (max-width:760px){ .ibx2.mf{grid-template-columns:1fr} .mf-msg{max-width:100%} }
 @media (max-width:1180px){ .ibx2.mf.nolist{grid-template-columns:minmax(0,1fr)} }
 
-/* the left menu: hidden to icons until you point at it (QuickBooks style); the pin keeps it open (ShopNav).
-   Folded or open, every row stays exactly where it is (one column, same spacing; words are only hidden), so the
-   thing under the pointer when it slides out is the thing you click. */
-.side-pin{display:none}
+/* the left menu folded to icons (ShopNav "mini"): compact, a label pops up beside the icon you point at, and the
+   arrow at the top opens the full menu (and folds it again). Desktop only; phones keep their own menu. */
+.side-fold,.side-tip{display:none}
 @media (min-width:821px){
-  .side-pin{display:inline-flex;position:absolute;top:10px;right:8px;z-index:3;width:26px;height:26px;align-items:center;justify-content:center;border:0;border-radius:7px;background:transparent;color:var(--side-ink);cursor:pointer;opacity:.55}
-  .side-pin svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;transform:rotate(35deg);transition:transform .15s}
-  .side-pin.on svg{transform:none;fill:currentColor}
-  .side-pin:hover,.side-pin.on{opacity:1;background:rgba(255,255,255,.08)}
-  .app:has(.side.auto){grid-template-columns:64px minmax(0,1fr)}
-  .side.auto{width:64px;z-index:60;overflow-x:hidden;transition:width .16s ease .12s,box-shadow .16s ease .12s}
-  .side.auto:hover,.side.auto:has(:focus-visible){width:232px;box-shadow:10px 0 34px rgba(5,10,20,.35)}
-  /* one column always, in both states */
-  .side.auto .nav-g{display:flex!important;flex-direction:column}
-  .side.auto .nav a{white-space:nowrap}
-  .side.auto .nav a .lbl-t{display:inline!important}
-  .side.auto .nav a .lbl-s{display:none!important}
-  .side.auto .nav a svg{flex:none}
-  /* folded: the words are there but invisible (they keep their space) */
-  .side.auto:not(:hover):not(:has(:focus-visible)) :is(.lbl-t,.nav-h,.side-hello,.side-search,.nav-mine,.side-user,.nav-add-sc,.nav-add-btns,.brand span){visibility:hidden}
-  .side.auto:not(:hover):not(:has(:focus-visible)) .side-pin{visibility:hidden}
-  .side.auto:not(:hover):not(:has(:focus-visible)) .nav .badge{position:absolute;top:1px;left:30px;margin:0;font-size:9.5px;padding:0 4px}
-  .side.auto .nav a{position:relative}
+  .side-fold{display:inline-flex;position:absolute;top:12px;right:8px;z-index:3;width:26px;height:26px;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.14);border-radius:7px;background:transparent;color:var(--side-ink);cursor:pointer}
+  .side-fold:hover{background:rgba(255,255,255,.1);color:#fff}
+  .side-fold svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+  .app:has(.side.mini){grid-template-columns:64px minmax(0,1fr)}
+  .side.mini{padding:12px 8px;overflow-x:hidden}
+  .side.mini .side-fold{position:static;margin:0 auto 4px;flex:none}
+  .side.mini :is(.lbl-t,.lbl-s,.nav-h,.side-hello,.side-search,.nav-mine,.side-user,.nav-add-sc,.nav-add-btns,.brand span){display:none!important}
+  .side.mini .nav-g{display:flex!important;flex-direction:column;margin-top:6px!important;padding-top:6px;border-top:1px solid rgba(255,255,255,.08)}
+  .side.mini .nav a{justify-content:center;padding:8px 0!important;position:relative}
+  .side.mini .nav a svg{width:19px;height:19px}
+  .side.mini .nav .badge{position:absolute;top:1px;right:4px;margin:0;font-size:9.5px;padding:0 4px}
+  .side.mini .brand.brand-logo{padding:0;justify-content:center}
+  .side.mini .brand.brand-logo img{width:40px!important}
+  .side-tip{display:block;position:fixed;z-index:200;transform:translateY(-50%);background:#0b1220;color:#fff;font-size:12.5px;font-weight:600;padding:5px 10px;border-radius:7px;white-space:nowrap;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+  .side-tip::before{content:"";position:absolute;left:-5px;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:#0b1220;border-left:0}
 }
-@media (min-width:821px) and (prefers-reduced-motion:reduce){ .side.auto{transition:none} }
 /* Email: the folders across the top, one bar like the Customers / To-dos / Events tabs (the chosen one lit) */
 .mf-bar{display:flex;align-items:center;gap:2px;background:var(--bg,#f1f3f6);border:1px solid var(--line-2);border-radius:9px;padding:3px;margin:-4px 0 10px;overflow-x:auto;scrollbar-width:none}
 .mf-bar::-webkit-scrollbar{display:none}
