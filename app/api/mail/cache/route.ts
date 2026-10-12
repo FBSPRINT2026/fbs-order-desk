@@ -24,22 +24,30 @@ export async function GET(req: Request) {
   const deadline = Date.now() + 50000, cutoff = new Date(Date.now() - 15 * 60000).toISOString();
   const { data } = await admin.from("mail_accounts").select("*").eq("enabled", true).or(`last_error_at.is.null,last_error_at.lt.${cutoff}`).order("last_run_at", { ascending: true, nullsFirst: true });
   const out: Record<string, unknown> = {};
-  const accts = (data || []) as MailAccount[];
-  for (const a of accts) {
-    if (Date.now() > deadline - 5000) break;
-    // the Inbox summary, rewritten ahead of time when the Inbox changed (at most every 5 minutes), for the owners
+  const all = (data || []) as MailAccount[];
+  // take turns on who goes first (Oct 12: one mailbox used the whole minute and a newly connected one never got a turn)
+  const k = all.length ? Math.floor(Date.now() / 120000) % all.length : 0;
+  const accts = [...all.slice(k), ...all.slice(0, k)];
+  // the Inbox summaries (AI, no mailbox connection) run alongside the caching instead of before it
+  const summaries = Promise.all(accts.map(async (a) => {
     try {
       const { data: who } = await admin.from("staff").select("name, role").eq("email", a.email.toLowerCase()).maybeSingle();
-      if (organizerFor(a.email, String(who?.role || ""))) {
-        const [sig, { data: kept }] = await Promise.all([inboxSig(admin, a.id), admin.from("mail_brief").select("sig, at").eq("account_id", a.id).maybeSingle()]);
-        if (!kept || (kept.sig !== sig && Date.parse(kept.at as string) < Date.now() - 5 * 60000)) {
-          const r = await writeBrief(admin, a, a.email.toLowerCase(), String(who?.name || "").split(/\s+/)[0] || a.name.split(/\s+/)[0] || "");
-          out[`${a.email} summary`] = r.ok ? "written" : r.error;
-        }
+      if (!organizerFor(a.email, String(who?.role || ""))) return;
+      const [sig, { data: kept }] = await Promise.all([inboxSig(admin, a.id), admin.from("mail_brief").select("sig, at").eq("account_id", a.id).maybeSingle()]);
+      if (!kept || (kept.sig !== sig && Date.parse(kept.at as string) < Date.now() - 5 * 60000)) {
+        const r = await writeBrief(admin, a, a.email.toLowerCase(), String(who?.name || "").split(/\s+/)[0] || a.name.split(/\s+/)[0] || "");
+        out[`${a.email} summary`] = r.ok ? "written" : r.error;
       }
     } catch (e) { out[`${a.email} summary`] = e instanceof Error ? e.message : String(e); }
-    try { out[a.email] = await cacheAccount(admin, a, Math.min(deadline, Date.now() + Math.max(15000, (deadline - Date.now()) / accts.length))); }
+  }));
+  for (let i = 0; i < accts.length; i++) {
+    const a = accts[i];
+    if (Date.now() > deadline - 5000) { out[a.email] = "next time"; continue; }
+    // an equal share of what's left for each mailbox still to go
+    const share = Math.max(12000, (deadline - Date.now()) / (accts.length - i));
+    try { out[a.email] = await cacheAccount(admin, a, Math.min(deadline, Date.now() + share)); }
     catch (e) { out[a.email] = { error: e instanceof Error ? e.message : String(e) }; }
   }
+  await Promise.race([summaries, new Promise((r) => setTimeout(r, Math.max(0, deadline + 4000 - Date.now())))]);
   return NextResponse.json({ ok: true, mailboxes: out });
 }
