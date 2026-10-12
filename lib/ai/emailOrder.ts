@@ -5,6 +5,7 @@ import { aiState, askClaude, type LookedUp } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { normSize, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
 import { refetchAttachments } from "@/lib/mail/imap";
+import { convoKeys, groupConvos, senderKey } from "@/lib/mail/convo";
 import { officeText } from "@/lib/officeText";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
 import { LOCATIONS, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
@@ -280,27 +281,70 @@ function tool(finishingIds: string[]) {
 
 const supplierKey = (s: string) => (/san\s*mar/i.test(s) ? "sanmar" : /s\s*&\s*s|ss\s*active/i.test(s) ? "ss" : s.trim().slice(0, 60));
 
+type ConvoRow = { id: string; customer_id: string | null; subject: string | null; body: string | null; from_email: string | null; to_email: string | null; occurred_at: string; thread_id: string | null; external_id: string | null; direction: string; meta: { attachments?: Att[]; references?: string[]; ignored?: boolean } | null };
+type Row = ConvoRow;
+/**
+ * The conversation an email is in (lib/mail/convo): the emails in its thread, or with its subject from the same
+ * customer / company, before and after it, both ways (our replies too), newest first. `near` is every email with the
+ * customer looked at (for "other topics").
+ */
+export async function emailConversation(admin: SupabaseClient, activityId: string): Promise<{ clicked: ConvoRow; convo: ConvoRow[]; near: ConvoRow[] } | null> {
+  const cols = "id, customer_id, subject, body, from_email, to_email, occurred_at, thread_id, external_id, direction, meta";
+  const { data: clicked } = await admin.from("activities").select(cols).eq("id", activityId).maybeSingle();
+  if (!clicked) return null;
+  const C = clicked as ConvoRow;
+  const since = new Date(new Date(C.occurred_at).getTime() - 120 * 864e5).toISOString();
+  const firstTo = (e: ConvoRow) => (e.to_email || "").split(/[,;]/)[0].replace(/.*</, "").replace(/>.*/, "").trim();
+  const dom = senderKey(C.direction === "out" ? firstTo(C) : C.from_email);
+  const ors = [C.customer_id ? `customer_id.eq.${C.customer_id}` : "", C.thread_id ? `thread_id.eq.${C.thread_id}` : "", C.external_id ? `thread_id.eq.${C.external_id}` : "",
+    dom && /^[\w.+@-]+$/.test(dom) ? (dom.includes("@") ? `from_email.eq.${dom}` : `from_email.ilike.*@${dom}`) : ""].filter(Boolean);
+  const { data: near } = ors.length ? await admin.from("activities").select(cols)
+    .eq("kind", "email").gte("occurred_at", since).or(ors.join(",")).order("occurred_at", { ascending: false }).limit(60) : { data: [] };
+  const rows = ((near || []) as ConvoRow[]).filter((e) => e.id !== C.id && !e.meta?.ignored);
+  // our replies are keyed by who they went to, so they join the customer's side of the conversation
+  const keyOf = (e: ConvoRow) => convoKeys({ subject: e.subject, from_email: e.direction === "out" ? firstTo(e) : e.from_email, customer_id: e.customer_id, thread_id: e.thread_id, external_id: e.external_id, references: e.meta?.references || [] });
+  const convo = groupConvos([C, ...rows], keyOf, (e) => e.occurred_at).find((g) => g.includes(C)) || [C];
+  return { clicked: C, convo, near: rows };
+}
+
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; reorderOk?: boolean; lookedUp?: LookedUp | null } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
   const { settings, ready, reason } = await aiState(admin);
   if (!ready) return { ok: false, error: reason };
-  const { data: a } = await admin.from("activities").select("id, customer_id, subject, body, from_email, occurred_at, thread_id, meta").eq("id", activityId).maybeSingle();
-  if (!a) return { ok: false, error: "Email not found." };
-  // the whole conversation, not just this email (Oct 9, Nick: "we've been back and forth for a month… read all the
-  // emails"): every email with this customer (or in this thread) in the 90 days before it, both ways, oldest first,
-  // just the new text of each (not the quoted thread under it)
-  const since = new Date(new Date(a.occurred_at as string).getTime() - 90 * 864e5).toISOString();
-  const { data: conv } = await admin.from("activities").select("direction, occurred_at, from_email, subject, body")
-    .eq("kind", "email").neq("id", a.id).lt("occurred_at", a.occurred_at as string).gte("occurred_at", since)
-    .or(a.customer_id ? `customer_id.eq.${a.customer_id}${a.thread_id ? `,thread_id.eq.${a.thread_id}` : ""}` : `thread_id.eq.${a.thread_id || "none"}`)
-    .order("occurred_at", { ascending: false }).limit(14);
-  let convLeft = 14000;
-  const convText = [...(conv || [])].reverse().map((e) => {
-    const t = newPart(String(e.body || "")).replace(/\n{3,}/g, "\n\n").trim().slice(0, 2200);
-    const line = `- ${String(e.occurred_at).slice(0, 10)} ${e.direction === "out" ? "WE wrote" : `${e.from_email} wrote`}${e.subject ? ` ("${String(e.subject).slice(0, 90)}")` : ""}:\n${t}`;
-    if (convLeft <= 0) return ""; convLeft -= line.length; return line;
+  const cv = await emailConversation(admin, activityId);
+  if (!cv) return { ok: false, error: "Email not found." };
+  // the whole conversation, whichever email it's started from (Oct 12, Nick: "if you do a task it starts from the
+  // last email forward… he gave me the sizes, then updated sizes… I should create the order from my response or any
+  // point in the conversation and it still gathers all the details"). The newest email from the customer is the one
+  // read in full; what was decided along the way counts, and the latest decision wins. Other recent emails with the
+  // customer (other subjects) come after, marked as other topics.
+  const { clicked: C, convo, near } = cv;
+  const inConvo = new Set(convo.map((e) => e.id));
+  // the newest email from the customer is the one read in full (else the one clicked)
+  const a0 = convo.find((e) => e.direction === "in") || C;
+  const a: Row = a0.customer_id ? a0 : { ...a0, customer_id: C.customer_id };
+  const lineOf = (e: Row) => {
+    const t = newPart(String(e.body || "")).replace(/\n{3,}/g, "\n\n").trim().slice(0, 2400);
+    return `- ${String(e.occurred_at).slice(0, 16).replace("T", " ")} ${e.direction === "out" ? "WE wrote" : `${e.from_email} wrote`}${e.subject ? ` ("${String(e.subject).slice(0, 90)}")` : ""}:\n${t}`;
+  };
+  let convLeft = 16000;
+  const convText = [...convo].filter((e) => e.id !== a.id).reverse().slice(-16).map((e) => {
+    const line = lineOf(e); if (convLeft <= 0) return ""; convLeft -= line.length; return line;
   }).filter(Boolean).join("\n\n");
-  const atts = (await refetchAttachments(admin, activityId).catch(() => null)) || ((a.meta as { attachments?: Att[] })?.attachments || []);
+  const after = convo.filter((e) => e.id !== a.id && e.occurred_at > a.occurred_at);
+  let otherLeft = 5000;
+  const otherText = near.filter((e) => !inConvo.has(e.id) && C.customer_id && e.customer_id === C.customer_id && e.occurred_at <= convo[0].occurred_at).slice(0, 6).reverse().map((e) => {
+    const line = lineOf(e).slice(0, 900); if (otherLeft <= 0) return ""; otherLeft -= line.length; return line;
+  }).filter(Boolean).join("\n\n");
+  // the files from every email in the conversation, newest first (a size sheet sent later counts); the same file
+  // sent twice is read once
+  const attsOf = async (e: Row) => (e.id === a.id || e.id === C.id ? (await refetchAttachments(admin, e.id).catch(() => null)) : null) || e.meta?.attachments || [];
+  const atts: Att[] = [];
+  for (const e of convo) {
+    if (e.direction !== "in" && e.id !== C.id) continue;
+    for (const f of await attsOf(e)) if (!atts.some((x) => x.path === f.path || (x.name === f.name && x.size === f.size))) atts.push(f);
+    if (atts.length >= 12) break;
+  }
   const told = (o.told || "").trim().slice(0, 1500);
   const [{ data: cust }, recent] = await Promise.all([
     a.customer_id ? admin.from("customers").select("id, company, name, email, price_type, notes").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -347,10 +391,13 @@ ${past.length ? `This customer's past jobs (newest first):\n${jobsText(past)}` :
 Attached files:
 ${listing.join("\n") || "(none)"}
 
-${convText ? `THE CONVERSATION BEFORE THIS EMAIL (oldest first; what was decided along the way counts):
+${otherText ? `OTHER RECENT EMAILS WITH THIS CUSTOMER (other subjects: use them only where they're clearly about this same order):
+${otherText}
+
+` : ""}${convText ? `THE CONVERSATION (every email in it but the one below, oldest first; what was decided along the way counts, the latest decision wins${after.length ? "; the emails dated after the one below are newer and override it" : ""}):
 ${convText}
 
-` : ""}The email (${String(a.occurred_at).slice(0, 10)}):
+` : ""}The newest email from the customer in this conversation (${String(a.occurred_at).slice(0, 10)}):
 Subject: ${a.subject || ""}
 """
 ${String(a.body || "").slice(0, 12000)}
@@ -360,7 +407,7 @@ WHAT STAFF TOLD YOU ABOUT THIS EMAIL (facts, follow them; put looked-up ink colo
 ${staffSays}` : ""}`;
   const r = await askClaude<AiOrder>({
     task: "order_from_email", model: settings.assistant.ai.model, maxTokens: 4000, timeoutMs: 55_000,
-    ctx: { activity_id: a.id as string, customer_id: (a.customer_id as string) || null, by }, admin,
+    ctx: { activity_id: C.id, customer_id: (a.customer_id as string) || null, by }, admin,
     tool: tool((settings.finishing || []).map((f) => f.id)), system, prompt, images, documents,
   });
   if (!r.ok) return { ok: false, error: r.error };
@@ -465,11 +512,11 @@ ${staffSays}` : ""}`;
     ...(lookedUp ? { lookedUp } : {}), ...(o.reorderOk && job ? { reorderOk: true } : {}),
   };
   const row = {
-    kind: "draft_order", dedupe_key: `email:${a.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
-    customer_id: a.customer_id, order_id: null, activity_id: a.id,
+    kind: "draft_order", dedupe_key: `email:${C.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
+    customer_id: a.customer_id, order_id: null, activity_id: C.id,
     title: `${draft.kind === "reorder" ? "Reorder" : "New order"} in ${cust?.company || cust?.name || a.from_email}'s email`,
     body: `${draft.summary}${draft.questions.length ? `\nStill need: ${draft.questions.join("; ")}` : ""}`,
-    payload: { v: 2, draft, groups: draft.groups, proposal: p, qty: r2(qtyOf(groups)) },
+    payload: { v: 2, draft, groups: draft.groups, proposal: p, qty: r2(qtyOf(groups)), seen: convo[0].occurred_at, emails: convo.length },
   };
   const { error } = await admin.from("ai_suggestions").upsert(row, { onConflict: "dedupe_key" });
   if (error) return { ok: false, error: error.message };

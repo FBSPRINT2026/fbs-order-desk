@@ -6847,3 +6847,32 @@ a.pdn-tag:hover{text-decoration:underline}
 }
 .eop{max-width:980px}
 .eop .page-head h1{margin-top:4px}
+
+/* Email as conversations (Oct 12): one row per conversation, its emails listed under it when it's open */
+.ibx2-cvn{flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--line);color:var(--ink-2);font-size:11px;font-weight:700;line-height:18px;text-align:center}
+.ibx2-cv.open .ibx2-cvn{background:var(--accent);color:#fff}
+.ibx2-cvl{display:flex;flex-direction:column;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
+.ibx2-cvi{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 8px;width:100%;text-align:left;border:0;border-left:3px solid transparent;background:none;padding:6px 12px 6px 26px;font:inherit;color:inherit;cursor:pointer;position:relative}
+.ibx2-cvi::before{content:"";position:absolute;left:15px;top:0;bottom:0;border-left:1.5px solid var(--line)}
+.ibx2-cvi:hover{background:var(--bg,#f6f7f9)}
+.ibx2-cvi.on{background:var(--accent-soft);border-left-color:var(--accent)}
+.ibx2-cvi b{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ibx2-cvi.ol-unread b{color:var(--accent)}
+.ibx2-cvi time{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.ibx2-cvi span{grid-column:1/-1;font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ibx2-cvi:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* the conversation at the top of the open email: phones (no list beside it), or with the list hidden */
+.cv-strip{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 12px;background:var(--surface)}
+.cv-h{font-size:12px;font-weight:700;color:var(--ink-2);padding:7px 12px;background:var(--bg,#f6f7f9);border-bottom:1px solid var(--line)}
+.cv-i{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 8px;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:8px 12px;font:inherit;color:inherit;cursor:pointer}
+.cv-i:last-child{border-bottom:0}
+.cv-i.on{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent);cursor:default}
+.cv-i b{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cv-i.ol-unread b{color:var(--accent)}
+.cv-i time{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.cv-i span{grid-column:1/-1;font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cv-i.on span{color:var(--accent);font-weight:600}
+.ibx2:not(.nolist) .cv-strip{display:none}
+@media (max-width:760px) and (pointer:coarse){.ibx2:not(.nolist) .cv-strip{display:flex}.cv-i{padding:10px 12px}}
+.ibx-t.newer{border-left-color:var(--accent)}
+.ibx-newer{margin-left:6px;font-size:10.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 6px}

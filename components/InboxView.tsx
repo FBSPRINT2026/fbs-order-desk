@@ -5,6 +5,7 @@ import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
+import { convoKeys, groupConvos } from "@/lib/mail/convo";
 import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
 import { addEvent, addTask, inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, suggestFollowUps, type Brief, type CalEvent, type FollowUp, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
@@ -41,6 +42,8 @@ type Box = { id: string; email: string; name: string; imap_host: string; enabled
 type Status = { mine: Box | null; all: Box[]; defaultHost: string; myEmail: string; /** viewing as this person (read only) */ viewing?: string | null };
 
 const ago = (t: string) => { const m = (Date.now() - new Date(t).getTime()) / 60000; return m < 60 ? `${Math.max(1, Math.round(m))}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
+/** the new part of an email (the quoted thread under it cut off), for the conversation underneath */
+const plainNew = (b: string) => { const t = String(b || ""); const m = t.search(/\n\s*(?:On .{6,120}wrote:|-{3,}\s*Original Message|From:\s.+\n\s*(?:Sent|Date):)/i); return (m > 0 ? t.slice(0, m) : t).replace(/\n{3,}/g, "\n\n").trim().slice(0, 1600); };
 const INTENT: Record<string, string> = { new_order: "New order", reorder: "Reorder", change_to_order: "Order change", artwork: "Artwork", payment: "Payment", question: "Question", other: "Other" };
 
 type Mode = "mail" | "crm";
@@ -200,6 +203,22 @@ export default function InboxView({ mode }: { mode: Mode }) {
     const t = q.trim().toLowerCase(), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
     return !t || `${i.from_name} ${i.from_email} ${i.subject} ${r ? who(r.x) + " " + (r.x.meta?.triage?.summary || "") : ""}`.toLowerCase().includes(t);
   });
+  // conversations (Oct 12, Nick: "three emails from Methodist… should just be one email with the conversation
+  // underneath it"): the Inbox grouped by conversation (lib/mail/convo), newest first; a conversation's row opens its
+  // newest email, with the rest listed under it
+  const inboxKeys = (i: InboxItem) => { const r = i.activity_id ? rowByAct.get(i.activity_id) : undefined; return convoKeys({ subject: i.subject, from_email: i.from_email, customer_id: r?.x.customer_id, thread_id: r?.x.thread_id, external_id: r?.x.external_id, references: r?.x.meta?.references }); };
+  const olGroups = groupConvos(olShown, inboxKeys, (i) => i.received_at || "");
+  const groupOf = new Map<string, InboxItem[]>(); for (const g of olGroups) for (const i of g) groupOf.set(i.id, g);
+  // the whole Inbox's conversations too (a move takes the whole conversation, whatever tab it's on)
+  const allGroupOf = useMemo(() => { const m = new Map<string, InboxItem[]>(); for (const g of groupConvos(ol || [], inboxKeys, (i) => i.received_at || "")) for (const i of g) m.set(i.id, g); return m; }, [ol, rowByAct]); // eslint-disable-line react-hooks/exhaustive-deps
+  // customer email as conversations too (with our replies, keyed by who they went to): the rest of the conversation
+  // under the email that's open
+  const actConvo = useMemo(() => {
+    const m = new Map<string, Act[]>();
+    const keyOf = (x: Act) => convoKeys({ subject: x.subject, from_email: x.direction === "out" ? (x.to_email || "").split(/[,;]/)[0].replace(/.*</, "").replace(/>.*/, "").trim() : x.from_email, customer_id: x.customer_id, thread_id: x.thread_id, external_id: x.external_id, references: x.meta?.references });
+    for (const g of groupConvos(acts || [], keyOf, (x) => x.occurred_at)) for (const x of g) m.set(x.id, g);
+    return m;
+  }, [acts]);
   // Email opens on the brief (the AI's read of the whole Inbox) until an email is picked
   // the summary opens by itself only when Email first opens; after that only when it's clicked
   const [autoBrief, setAutoBrief] = useState(true);
@@ -218,7 +237,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
     if (tab === "outlook") {
-      const keys = olShown.map(olKey), i = olCur ? keys.indexOf(olKey(olCur)) : -1, k = keys[Math.max(0, Math.min(keys.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
+      const keys = olGroups.map((g) => olKey(g[0])), curG = olCur ? groupOf.get(olCur.id) : undefined, i = curG ? keys.indexOf(olKey(curG[0])) : -1, k = keys[Math.max(0, Math.min(keys.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
       if (k) { setOpen(k); listRef.current?.querySelector<HTMLElement>(`[data-id="${k}"]`)?.focus(); }
       return;
     }
@@ -233,6 +252,23 @@ export default function InboxView({ mode }: { mode: Mode }) {
     try { await boxPost({ do: "move", path, uid, to }); drop(); flash(MOVED[to] || "Moved."); return true; }
     catch (e) { flash(e instanceof Error ? e.message : String(e)); return false; }
   };
+  /** the rest of an Inbox email's conversation, moved the same way (Archive takes the whole conversation, like Outlook) */
+  const moveRest = async (it: InboxItem, to: string) => {
+    const rest = (allGroupOf.get(it.id) || []).filter((y) => y.id !== it.id);
+    const k = (["archive", "later", "news", "receipts", "cc", "blackhole"].includes(to) ? to : null) as "archive" | null;
+    const gone: string[] = [];
+    for (const y of rest) {
+      try { await boxPost({ do: "move", path: "INBOX", uid: y.uid, to }); gone.push(y.id); }
+      catch { if (k) { const r = await archiveOutlookEmail({ id: y.id, to: k }).catch(() => null); if (r?.ok) gone.push(y.id); } }
+    }
+    if (gone.length) setOl((l) => (l || []).filter((y) => !gone.includes(y.id)));
+    return gone.length;
+  };
+  const moveGroup = async (g: InboxItem[], to: string) => {
+    const head = g[0], ok = await quickMove("INBOX", head.uid, to, () => { setOl((l) => (l || []).filter((y) => y.id !== head.id)); if (g.some((y) => open === olKey(y))) setOpen(null); });
+    if (ok && g.length > 1) await moveRest(head, to);
+    return ok;
+  };
   const pickFolderRow = (r: MsgRow) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid && y.folder === r.folder ? { ...y, seen: true } : y))); };
   // after sending a reply to an email in my Inbox (Oct 12, Nick): archive it, or keep it in the Inbox?
   type Sent = { to: string; subject: string; body: string; theirs?: string };
@@ -246,14 +282,15 @@ export default function InboxView({ mode }: { mode: Mode }) {
     setAfterSend(null);
     const drop = () => { setOl((l) => (l || []).filter((y) => y.id !== it.id)); setOpen(null); };
     try { await boxPost({ do: "move", path: "INBOX", uid: it.uid, to: "archive" }); drop(); flash("Archived."); }
-    catch { const r = await archiveOutlookEmail({ id: it.id }); if (r.ok) { drop(); flash("Archived."); cheerWin("archived"); } else flash(r.error); }
+    catch { const r = await archiveOutlookEmail({ id: it.id }); if (r.ok) { drop(); flash("Archived."); cheerWin("archived"); } else { flash(r.error); return; } }
+    await moveRest(it, "archive");
     void load();
   };
   // a customer email that's in my Inbox: Archive / Later / Black Hole / Move it there
   const inboxMove = (actId: string) => {
     const it = ol?.find((i) => i.activity_id === actId);
     if (!it || mode !== "mail") return undefined;
-    return async (to: string, label: string) => { setBusy("mv"); try { await boxPost({ do: "move", path: "INBOX", uid: it.uid, to }); flash(label); setOl((l) => (l || []).filter((y) => y.id !== it.id)); setOpen(null); void load(); } catch (e) { flash(e instanceof Error ? e.message : String(e)); } setBusy(""); };
+    return async (to: string, label: string) => { setBusy("mv"); try { await boxPost({ do: "move", path: "INBOX", uid: it.uid, to }); setOl((l) => (l || []).filter((y) => y.id !== it.id)); const n = await moveRest(it, to); flash(n ? `${label.replace(/\.$/, "")} (the whole conversation, ${n + 1} emails).` : label); setOpen(null); void load(); } catch (e) { flash(e instanceof Error ? e.message : String(e)); } setBusy(""); };
   };
   // phones: "‹ Inbox" and ∧ ∨ on an open email, like the iPhone Mail app
   const nav: PhoneNavT | null = (() => {
@@ -266,9 +303,21 @@ export default function InboxView({ mode }: { mode: Mode }) {
       return step(rs.map((r) => `${r.folder}:${r.uid}`), fSel ? `${fSel.folder}:${fSel.uid}` : "", (k) => { const r = rs.find((y) => `${y.folder}:${y.uid}` === k); if (r) pickFolderRow(r); }, f ? folderLabel(f) : "Back");
     }
     if (mode === "mail" && view.kind === "search") { const cs = convos || []; return step(cs.map((c) => c.key), cSel?.key || "", (k) => setCSel(cs.find((c) => c.key === k) || null), "Search"); }
-    if (tab === "outlook") return step(olShown.map(olKey), briefOn || !olCur ? "" : olKey(olCur), (k) => pickRow(k), "Inbox");
+    if (tab === "outlook") { const g = olCur ? groupOf.get(olCur.id) : undefined; return step(olGroups.map((x) => olKey(x[0])), briefOn || !g ? "" : olKey(g[0]), (k) => pickRow(k), "Inbox"); }
     return step(listed.map((r) => r.x.id), sel?.x.id || "", (k) => pickRow(k), tab === "reply" ? "Needs reply" : tab === "leads" ? "Leads" : "All");
   })();
+
+  // the open email's conversation, at the top of the email (phones, or with the list hidden): tap one to read it
+  const curGroup = tab === "outlook" && olCur ? groupOf.get(olCur.id) || allGroupOf.get(olCur.id) : undefined;
+  const convoStrip = curGroup && curGroup.length > 1 && olCur ? <div className="cv-strip" role="group" aria-label="This conversation">
+    <div className="cv-h">This conversation · {curGroup.length} emails</div>
+    {curGroup.map((y) => { const ry = y.activity_id ? rowByAct.get(y.activity_id) : undefined; return (
+      <button key={y.id} type="button" className={"cv-i" + (y.id === olCur.id ? " on" : "") + (y.unread ? " ol-unread" : "")} aria-current={y.id === olCur.id ? "true" : undefined} onClick={() => { if (y.id !== olCur.id) { pickRow(olKey(y)); window.scrollTo({ top: 0 }); } }}>
+        <b>{ry ? who(ry.x) : personName(y.from_name) || y.from_email}</b><time>{y.received_at ? new Date(y.received_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}</time>
+        <span>{y.id === olCur.id ? "Showing" : ry?.x.meta?.triage?.summary || y.summary || y.subject}</span>
+      </button>
+    ); })}
+  </div> : null;
 
   return (
     <>
@@ -324,26 +373,45 @@ export default function InboxView({ mode }: { mode: Mode }) {
               <div className="mf-older-s">{sNote && <div className="faint">{sNote}</div>}<button type="button" className="btn sm ghost" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail… (up to a minute)" : "Search older mail too"}</button></div></>)
             : tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : <>
               { !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
-              : olShown.map((i) => {
-                const k = olKey(i), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
-                const name = r ? who(r.x) : personName(i.from_name) || i.from_email || "(unknown sender)";
+              : olGroups.map((g) => {
+                const i = g[0], k = olKey(i), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
+                const nameOf = (y: InboxItem) => { const ry = y.activity_id ? rowByAct.get(y.activity_id) : undefined; return ry ? who(ry.x) : personName(y.from_name) || y.from_email || "(unknown sender)"; };
+                // a conversation: everyone in it, newest first (like Outlook)
+                const names = [...new Set(g.map(nameOf))];
+                const name = names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2}` : names.join(", ");
+                const rs = g.map((y) => (y.activity_id ? rowByAct.get(y.activity_id) : undefined));
+                const needsG = rs.some((y) => y?.needs), urgentG = rs.some((y) => y?.urgent), unreadG = g.some((y) => y.unread), flagG = g.some((y) => y.flagged);
+                const openG = !!olCur && g.some((y) => y.id === olCur.id);
+                const ordG = rs.map((y) => y?.x.order_id && orders.find((o) => o.id === y.x.order_id)).find(Boolean);
                 return (
-                  <SwipeRow key={i.id} onAct={(to) => quickMove("INBOX", i.uid, to, () => { setOl((l) => (l || []).filter((y) => y.id !== i.id)); if (open === k) setOpen(null); })}>
-                  <button data-id={k} type="button" className={"ibx2-item ol" + (olCur?.id === i.id ? " on" : "") + (r?.needs ? " needs" : "") + (r?.urgent ? " urgent" : "") + (i.unread ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => pickRow(k)} onDoubleClick={() => r && pickRow(k, true)}>
+                  <div key={i.id} className={"ibx2-cv" + (g.length > 1 ? " multi" : "") + (openG && g.length > 1 ? " open" : "")}>
+                  <SwipeRow onAct={(to) => moveGroup(g, to)}>
+                  <button data-id={k} type="button" className={"ibx2-item ol" + (openG ? " on" : "") + (needsG ? " needs" : "") + (urgentG ? " urgent" : "") + (unreadG ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => pickRow(openG && olCur ? olKey(olCur) : k)} onDoubleClick={() => r && pickRow(k, true)} aria-expanded={g.length > 1 ? openG : undefined}>
                     <span className="ibx2-item-1">
                       <b>{name}</b>
-                      {r?.urgent && <em>Urgent</em>}
-                      {i.flagged && <span className="ibx2-flag" title="Flagged in Outlook" aria-label="Flagged">⚑</span>}
+                      {g.length > 1 && <span className="ibx2-cvn" title={`${g.length} emails in this conversation`}>{g.length}</span>}
+                      {urgentG && <em>Urgent</em>}
+                      {flagG && <span className="ibx2-flag" title="Flagged in Outlook" aria-label="Flagged">⚑</span>}
                       <time>{i.received_at ? ago(i.received_at) : ""}</time>
                     </span>
                     <span className="ibx2-item-2">{r?.x.meta?.triage?.summary || i.summary || i.subject || "(no subject)"}</span>
                     <span className="ibx2-item-3">
-                      {r ? (r.needs ? <span className="ol-needs">Needs reply</span> : r.answered ? <span>Answered</span> : <span>Customer</span>) : i.bucket === "todo" ? <span className="ol-todo">To-do</span> : i.bucket === "event" ? <span className="ol-event">Event</span> : i.bucket ? <span>FYI</span> : <span>Sorting…</span>}
+                      {r ? (needsG ? <span className="ol-needs">Needs reply</span> : r.answered ? <span>Answered</span> : <span>Customer</span>) : i.bucket === "todo" ? <span className="ol-todo">To-do</span> : i.bucket === "event" ? <span className="ol-event">Event</span> : i.bucket ? <span>FYI</span> : <span>Sorting…</span>}
                       {i.cc_only && <span title="You were copied (Cc), not sent to">CC&apos;d</span>}
-                      {r?.x.order_id && orders.find((o) => o.id === r.x.order_id) && <span>#{orders.find((o) => o.id === r.x.order_id)!.number}</span>}
+                      {ordG && <span>#{ordG.number}</span>}
                     </span>
                   </button>
                   </SwipeRow>
+                  {/* the conversation, under it: each email in it, newest first */}
+                  {g.length > 1 && openG && <div className="ibx2-cvl" role="group" aria-label="Emails in this conversation">
+                    {g.map((y) => { const ky = olKey(y), ry = y.activity_id ? rowByAct.get(y.activity_id) : undefined; return (
+                      <button key={y.id} type="button" className={"ibx2-cvi" + (olCur?.id === y.id ? " on" : "") + (y.unread ? " ol-unread" : "")} onClick={() => pickRow(ky)} onDoubleClick={() => ry && pickRow(ky, true)}>
+                        <b>{nameOf(y)}</b><time>{y.received_at ? ago(y.received_at) : ""}</time>
+                        <span>{ry?.x.meta?.triage?.summary || y.summary || y.subject || "(no subject)"}</span>
+                      </button>
+                    ); })}
+                  </div>}
+                  </div>
                 );
               })}</>) : !acts ? <div className="ibx2-none">Loading…</div> : !listed.length ? <div className="ibx2-none">{q ? "Nothing matches." : tab === "reply" ? "Nothing waiting on you." : tab === "leads" ? "No new leads." : "No customer email in the last 30 days."}</div>
               : listed.map(({ x, answered, needs, urgent }) => {
@@ -379,13 +447,14 @@ export default function InboxView({ mode }: { mode: Mode }) {
           : briefOn ? <BriefPane name={(st?.mine?.name || "").split(/\s+/)[0]} items={ol || []}
  listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
             openItem={(id) => { const it = (ol || []).find((x) => x.id === id); if (it) { setAutoBrief(false); setOpen(olKey(it)); setPicked(true); } }} />
-          : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} onSent={(m, sent) => setAfterSend({ it: olCur, msg: m, sent })} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
+          : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} convo={convoStrip} onMoved={(to) => void moveRest(olCur, to)} onSent={(m, sent) => setAfterSend({ it: olCur, msg: m, sent })} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
           : !sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
           : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} autoOrder={autoOrder === sel.x.id} onAutoOrdered={() => setAutoOrder(null)} onSent={(m, sent) => setAfterSend({ it: mode === "mail" ? ol?.find((i) => i.activity_id === sel.x.id) : undefined, msg: m, sent })} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)}
               moveBar={inboxMove(sel.x.id) ? <MoveBar folders={folders} busy={busy === "mv"} here="INBOX" onMove={inboxMove(sel.x.id)!} /> : null} onMove={inboxMove(sel.x.id)} folders={folders} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
               orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
-              thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
+              thread={(acts || []).filter((o) => o.id !== sel.x.id && ((actConvo.get(sel.x.id) || []).includes(o) || (o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
+              convo={convoStrip}
               back={() => setPicked(false)} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} busy={busy} setBusy={setBusy} done={(t, next) => { flash(t); void load().then(() => { if (next) setOpen(null); }); }} />}
         </PhoneNav.Provider>
       </div>
@@ -484,7 +553,7 @@ function BriefPane({ name, items, listOpen, toggleList, back, openItem }: { name
  * Inbox: an email that isn't a customer's. Read live from the mailbox (the portal doesn't keep it), with what the AI
  * made of it (to-dos, suggested events), Reply, Archive and the SaneBox moves.
  */
-function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy, done, onSent }: { /** sent a reply: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; i: InboxItem; older: boolean; folders: Folder[] | null; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string, gone?: boolean) => void }) {
+function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy, done, onSent, convo, onMoved }: { /** the rest of its conversation, shown at the top */ convo?: React.ReactNode; /** moved: the rest of the conversation goes the same way */ onMoved?: (to: string) => void; /** sent a reply: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; i: InboxItem; older: boolean; folders: Folder[] | null; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string, gone?: boolean) => void }) {
   const [m, setM] = useState<{ html: string; text: string; from: string; to: string; cc: string; date: string; attachments: { name: string; size: number }[] } | null>(null);
   const [full, setFull] = useState<FullMsg | null>(null);
   const [err, setErr] = useState(""), [loadErr, setLoadErr] = useState("");
@@ -508,12 +577,12 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
   const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(120, d.documentElement.scrollHeight + 4))); };
   const move = async (to: string, label: string) => {
     setBusy("mv"); setErr("");
-    try { await boxPost({ do: "move", path: "INBOX", uid: i.uid, to }); done(label); }
+    try { await boxPost({ do: "move", path: "INBOX", uid: i.uid, to }); onMoved?.(to); done(label); }
     catch (e) {
       // the uid changed (Outlook moved things around): the Message-ID route for the usual moves
       const k = ["archive", "later", "news", "receipts", "cc", "blackhole"].includes(to) ? (to as "archive") : null;
       const r = k ? await archiveOutlookEmail({ id: i.id, to: k }) : { ok: false as const, error: e instanceof Error ? e.message : String(e) };
-      if (!r.ok) setErr(r.error); else done(label);
+      if (!r.ok) setErr(r.error); else { onMoved?.(to); done(label); }
     }
     setBusy("");
   };
@@ -544,6 +613,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
           </Toolbar>} />
         {err && <div className="pv-err eh-err">{err}</div>}
         <div className="ibx2-read">
+          {convo}
           {(openTasks.length > 0 || sugg.length > 0 || added.length > 0) && <div className="lm-ai">
             <div className="lm-ai-h">✦ From this email</div>
             {openTasks.map((t) => (
@@ -613,7 +683,7 @@ function Splitter({ dir, value, min, max, onChange, invert, className, style, la
  * The email column and the Assistant column for one email. The email column is either the email (with the answer box
  * docked at the bottom) or, after Create order, the order being made from it; the Assistant stays beside it.
  */
-function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders, onSent, autoOrder, onAutoOrdered }: { /** opened to make the order (from a searched conversation) */ autoOrder?: boolean; onAutoOrdered?: () => void; /** sent a reply to an email in my Inbox: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
+function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders, onSent, autoOrder, onAutoOrdered, convo }: { /** the Inbox emails in its conversation, shown at the top */ convo?: React.ReactNode; /** opened to make the order (from a searched conversation) */ autoOrder?: boolean; onAutoOrdered?: () => void; /** sent a reply to an email in my Inbox: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
@@ -780,13 +850,15 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
 
         {view === "mail" && <>
           <div className="ibx2-read">
+            {convo}
             {!x.customer_id && x.direction === "in" && <NewSender x={x} busy={busy} run={run} />}
             <EmailBody x={x} />
             {(x.meta?.attachments || []).length > 0 && <div className="ibx2-files">{x.meta!.attachments!.map((f) => <button key={f.path} type="button" onClick={() => urlFor(f.path)}>📎 {f.name}</button>)}</div>}
             <CanvaGet x={x} busy={busy} run={run} />
-            {thread.length > 0 && <details className="ibx2-thread">
-              <summary>Earlier in this conversation ({thread.length})</summary>
-              {[...thread].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)).map((t) => <div key={t.id} className={"ibx-t " + t.direction}><b>{t.direction === "out" ? "You" : t.meta?.from_name || t.from_email}</b> · {new Date(t.occurred_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}<div>{t.body.slice(0, 700)}</div></div>)}
+            {/* the whole conversation underneath, newest first, our replies too (Oct 12, Nick) */}
+            {thread.length > 0 && <details className="ibx2-thread" open>
+              <summary>The rest of this conversation ({thread.length})</summary>
+              {[...thread].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)).map((t) => <div key={t.id} className={"ibx-t " + t.direction + (t.occurred_at > x.occurred_at ? " newer" : "")}><b>{t.direction === "out" ? "You" : personName(t.meta?.from_name) || t.from_email}</b> · {new Date(t.occurred_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}{t.occurred_at > x.occurred_at && <span className="ibx-newer">Newer</span>}<div>{plainNew(t.body)}</div></div>)}
             </details>}
           </div>
 

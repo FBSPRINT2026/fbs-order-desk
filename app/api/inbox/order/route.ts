@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState } from "@/lib/ai/claude";
-import { pastJobs, suggestEmailOrder } from "@/lib/ai/emailOrder";
+import { emailConversation, pastJobs, suggestEmailOrder } from "@/lib/ai/emailOrder";
 import { createOrderFromDraft } from "@/lib/emailOrderCreate";
 import type { EODraft, EOFile } from "@/lib/emailOrderShared";
 
@@ -32,17 +32,27 @@ export async function GET(req: Request) {
   const admin = createAdminClient();
   const { data: a } = await admin.from("activities").select("id, customer_id, meta").eq("id", id).maybeSingle();
   if (!a) return NextResponse.json({ error: "Email not found." }, { status: 404 });
-  const [{ data: sg }, past, st, { data: cust }] = await Promise.all([
+  const [{ data: sg }, past, st, { data: cust }, cv] = await Promise.all([
     admin.from("ai_suggestions").select("id, status, order_id, payload").eq("dedupe_key", `email:${id}:order`).maybeSingle(),
     pastJobs(admin, a.customer_id as string | null),
     aiState(admin),
     a.customer_id ? admin.from("customers").select("*").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
+    emailConversation(admin, id).catch(() => null),
   ]);
-  const draft = (sg?.payload as { v?: number; draft?: EODraft } | null)?.v === 2 ? (sg!.payload as { draft: EODraft }).draft : null;
-  const atts = ((a.meta as { attachments?: { name: string; path: string; type: string; size: number }[] })?.attachments || []).map((f) => ({ ...f, role: "other" as const }));
+  // a draft read before the conversation's newest email (new sizes came in, Oct 12) is read again, the whole
+  // conversation this time
+  const pl = sg?.payload as { v?: number; draft?: EODraft; seen?: string } | null;
+  const newest = cv?.convo[0]?.occurred_at || "";
+  const stale = !!pl && sg?.status !== "done" && st.ready && (pl.seen ? newest > pl.seen : (cv?.convo.length || 1) > 1);
+  const draft = pl?.v === 2 && !stale ? (pl as { draft: EODraft }).draft : null;
+  // the files from the whole conversation, newest first
+  type F = { name: string; path: string; type: string; size: number };
+  const all: F[] = [];
+  for (const e of cv?.convo || [a]) for (const f of ((e.meta as { attachments?: F[] } | null)?.attachments || [])) if (!all.some((x) => x.path === f.path)) all.push(f);
+  const atts = all.slice(0, 12).map((f) => ({ ...f, role: "other" as const }));
   const files = await signed(admin, draft?.files || atts);
   return NextResponse.json({
-    draft: draft ? { ...draft, files } : null, files, past, created: sg?.status === "done" ? sg.order_id : null,
+    draft: draft ? { ...draft, files } : null, files, past, emails: cv?.convo.length || 1, created: sg?.status === "done" ? sg.order_id : null,
     finishing: st.settings.finishing || [], ai: st.ready, aiReason: st.reason, customer: cust,
   });
 }
