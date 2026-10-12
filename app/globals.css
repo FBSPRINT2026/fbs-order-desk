@@ -6339,3 +6339,6 @@ a.pdn-tag:hover{text-decoration:underline}
 .mc-x{border:0;background:none;color:var(--ink-3);font:inherit;font-size:11.5px;padding:0;margin-left:8px;cursor:pointer}
 .mc-x:hover{color:var(--danger)}
 @media (max-width:900px){ .mc{grid-template-columns:1fr} .mc-side{position:static} .mc-day{min-height:58px} .mc-ev{display:none} .mc-day:has(.mc-ev)::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--fbs-orange,#FCB122)} }
+.md-task-n{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.md-task-n.open{display:block;-webkit-line-clamp:unset}
+.ibx2-solo .ibx2-sum{display:block}

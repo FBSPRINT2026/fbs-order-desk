@@ -158,7 +158,7 @@ export function Todos({ d, setD, load, compact, err }: { d: Day | null; setD: (f
                     {t.from && <Link href={t.mail_inbox_id ? `/shop/inbox?item=${t.mail_inbox_id}` : "/shop/inbox"} className="md-from" title={t.subject || ""}>✉ {t.from}</Link>}
                     {t.handed_by && <span className="md-handed">from {t.handed_by}</span>}
                   </div>
-                  {t.notes && <div className="md-task-n">{t.notes}</div>}
+                  {t.notes && <div className="md-task-n" title="Click to see all" onClick={(e) => (e.currentTarget as HTMLElement).classList.toggle("open")}>{t.notes}</div>}
                 </div>
                 <button type="button" className="md-more" aria-label="More" aria-expanded={menu === t.id} onClick={(e) => { e.stopPropagation(); setMenu(menu === t.id ? null : t.id); }}>⋯</button>
                 {menu === t.id && <div className="md-menu" role="menu">
