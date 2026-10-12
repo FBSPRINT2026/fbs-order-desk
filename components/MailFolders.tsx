@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import type { Convo, Folder, FullMsg, MsgRow } from "@/lib/mail/folders";
-import VoiceDraft, { startListening, type Draft } from "@/components/VoiceDraft";
+import VoiceDraft, { SayButton, startListening, type Draft } from "@/components/VoiceDraft";
 
 /**
  * Email beyond the Inbox (Oct 12): the folder list, a folder's emails, reading / replying / moving any email, and
@@ -326,6 +326,7 @@ export function ReplyBox({ m, all, start, onClose, onSent }: { m: FullMsg; all?:
     <div className="ibx2-compose open mf-reply">
       <div className="ibx2-to"><span>{toAll ? "Reply all" : "Reply"} to {m.fromName || m.fromAddress}</span><label className="check" style={{ marginLeft: "auto" }}><input type="checkbox" checked={toAll} onChange={(e) => setToAll(e.target.checked)} />Everyone on it</label></div>
       <textarea rows={7} autoFocus value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your reply" aria-label="Reply" />
+      <SayButton chatId={`box:${m.uid}:${m.folder}`} who={m.fromName || m.fromAddress} onDraft={(d) => setBody(d.body)} />
       {err && <div className="pv-err">{err}</div>}
       <div className="ibx2-send">
         <button type="button" className="btn primary" disabled={busy || !body.trim()} onClick={async () => { setBusy(true); setErr(""); try { const r = await boxPost<{ to: string }>({ do: "reply", path: m.folder, uid: m.uid, body, all: toAll }); onSent(r.to); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); }}>{busy ? "Sending…" : "Send"}</button>

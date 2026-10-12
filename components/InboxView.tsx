@@ -9,6 +9,7 @@ import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, 
 import { inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, type Brief, type CalEvent, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
 import { onPullRefresh } from "@/components/PullRefresh";
+import { SayButton } from "@/components/VoiceDraft";
 import { Attachments, box as mailBox, boxPost, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
@@ -549,6 +550,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
         {writing && <div className="ibx2-compose open">
           <div className="ibx2-to"><span>To {i.from_email}</span></div>
           <textarea rows={7} autoFocus value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your reply" aria-label="Reply" />
+          <SayButton chatId={"inbox:" + i.id} who={i.from_name || i.from_email} onDraft={(d) => setBody(d.body)} />
           <div className="ibx2-send">
             <button type="button" className="btn primary" disabled={!!busy || !body.trim()} onClick={async () => { setBusy("send"); setErr(""); const r = await replyInboxEmail({ id: i.id, body }); setBusy(""); if (!r.ok) setErr(r.error); else { setWriting(false); setBody(""); done(`Sent to ${r.to}.`, false); } }}>{busy === "send" ? "Sending…" : "Send"}</button>
             <span className="faint">Your signature and their email go underneath.</span>
@@ -768,6 +770,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             ) : <>
               <div className="ibx2-to"><span>To {x.from_email}</span><input value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject" /></div>
               <textarea ref={boxRef} rows={7} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your answer, pick one above, or tell the AI what to say below" aria-label="Reply" />
+              <SayButton chatId={x.id} who={who} onDraft={(d) => act({ kind: "reply", label: "", subject: d.subject, body: d.body })} />
               <form className="ibx2-tell" onSubmit={async (e) => { e.preventDefault(); if (!ask.trim()) return; setBusy("ai"); setErr(""); const r = await aiWriteReply({ activityId: x.id, instruction: ask, subject }); setBusy(""); if (!r.ok) setErr(r.error || "The AI couldn't write that."); else { setSubject(r.subject || subject); setBody(r.body); setPicked(-1); setAsk(""); boxRef.current?.focus(); } }}>
                 <input value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Tell the AI what to say, e.g. “yes, if we get the order by Saturday”" aria-label="Tell the AI what to say" />
                 <button type="submit" className="btn sm" disabled={!!busy || !ask.trim()}>{busy === "ai" ? "Writing…" : "✦ Write it"}</button>

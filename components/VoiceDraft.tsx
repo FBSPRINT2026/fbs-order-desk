@@ -119,3 +119,21 @@ export default function VoiceDraft({ chatId, who, listener: first, onDraft, onCl
     </div>
   );
 }
+
+/**
+ * Phones: "Tell the AI what to say" as a mic button in every reply box (Oct 12, Nick: "make this an automatic mic button
+ * when you click, like the Assistant"). Tap it, it listens, and the reply it writes goes into the reply box.
+ */
+export function SayButton({ chatId, who, onDraft }: { chatId: string; who?: string; onDraft: (d: Draft) => void }) {
+  const [v, setV] = useState<{ l: Listener | null } | null>(null);
+  return (
+    <>
+      <button type="button" className="vd-say" onClick={() => setV({ l: startListening() })}>
+        <span className="vd-say-mic" aria-hidden><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg></span>
+        <span className="vd-say-t">Tell the AI what to say</span>
+        <span className="vd-say-ai" aria-hidden>✦</span>
+      </button>
+      {v && <VoiceDraft chatId={chatId} who={who} listener={v.l} onDraft={onDraft} onClose={() => setV(null)} />}
+    </>
+  );
+}
