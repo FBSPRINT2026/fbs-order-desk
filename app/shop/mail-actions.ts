@@ -204,7 +204,7 @@ export async function setEmailOrder(activityId: string, orderId: string | null) 
 }
 
 
-export type InboxItem = { id: string; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean; unread: boolean; flagged: boolean; activity_id: string | null; bucket: string | null; summary: string };
+export type InboxItem = { id: string; uid: number; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean; unread: boolean; flagged: boolean; activity_id: string | null; bucket: string | null; summary: string };
 
 /** your Outlook Inbox as it is right now (the mirror, refreshed every mailbox check): your to-do list */
 export async function getOutlookInbox() {
@@ -212,7 +212,7 @@ export async function getOutlookInbox() {
     const { admin, user } = await staff();
     const a = await accountForUser(admin, user!.id);
     if (!a || !a.enabled) return { ok: true as const, items: [] as InboxItem[], connected: false };
-    const { data } = await admin.from("mail_inbox").select("id, from_email, from_name, subject, received_at, cc_only, unread, flagged, activity_id, bucket, summary")
+    const { data } = await admin.from("mail_inbox").select("id, uid, from_email, from_name, subject, received_at, cc_only, unread, flagged, activity_id, bucket, summary")
       .eq("account_id", a.id).is("gone_at", null).order("received_at", { ascending: false, nullsFirst: false }).limit(500);
     return { ok: true as const, items: (data || []) as InboxItem[], connected: true, checked: a.last_ok_at };
   } catch (e) { return fail(e); }

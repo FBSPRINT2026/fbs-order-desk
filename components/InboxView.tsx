@@ -8,6 +8,7 @@ import { mailRows } from "@/lib/inbox";
 import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
 import { inboxItemExtras, setEventStatus, setTaskDone, type CalEvent, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
+import { Attachments, box as mailBox, boxPost, ConvoList, FolderList, FolderMail, folderLabel, FolderRail, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -50,6 +51,27 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const tab: "outlook" | "reply" | "leads" | "all" = mode === "mail" ? "outlook" : crmTab;
   const setTab = (t: "outlook" | "reply" | "leads" | "all") => { if (t !== "outlook") setCrmTab(t); };
   const [bk, setBk] = useSticky<Bk>("inbox.bucket", "all");
+  // Email: the folder list, another folder's emails, and search as conversations (all live from the mailbox)
+  const [view, setView] = useState<MailView>({ kind: "inbox" });
+  const [folders, setFolders] = useState<Folder[] | null>(null);
+  const [fRows, setFRows] = useState<MsgRow[] | null>(null), [fNext, setFNext] = useState(0), [fBusy, setFBusy] = useState(false), [fSel, setFSel] = useState<MsgRow | null>(null), [fErr, setFErr] = useState("");
+  const [convos, setConvos] = useState<Convo[] | null>(null), [cSel, setCSel] = useState<Convo | null>(null), [sNote, setSNote] = useState("");
+  const loadFolders = useCallback(() => mailBox<{ folders: Folder[] }>({ do: "folders" }).then((r) => setFolders(r.folders), () => setFolders([])), []);
+  useEffect(() => { if (mode === "mail") void loadFolders(); }, [mode, loadFolders]);
+  const openFolder = async (path: string, before?: number) => {
+    if (/^inbox$/i.test(path)) { setView({ kind: "inbox" }); setFSel(null); setCSel(null); return; }
+    if (!before) { setView({ kind: "folder", path }); setFRows(null); setFSel(null); setFErr(""); setPicked(false); }
+    setFBusy(true);
+    try { const r = await mailBox<{ rows: MsgRow[]; next: number }>({ do: "list", path, ...(before ? { before } : {}) }); setFRows((x) => (before ? [...(x || []), ...r.rows] : r.rows)); setFNext(r.next); }
+    catch (e) { setFErr(e instanceof Error ? e.message : String(e)); setFRows([]); }
+    setFBusy(false);
+  };
+  const runSearch = async (term: string) => {
+    if (term.trim().length < 2) return;
+    setView({ kind: "search", q: term.trim() }); setConvos(null); setCSel(null); setSNote(""); setPicked(false);
+    try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean }>({ do: "search", q: term.trim() }); setConvos(r.convos); setSNote(r.partial ? `Searched ${r.folders} folders (the rest took too long).` : ""); }
+    catch (e) { setConvos([]); setSNote(e instanceof Error ? e.message : String(e)); }
+  };
   const [ol, setOl] = useState<InboxItem[] | null>(null); // my Outlook Inbox, mirrored
   const [whose, setWhose] = useSticky<"mine" | "everyone">("inbox.whose", "mine");
   const [settings, setSettings] = useState(false);
@@ -136,6 +158,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const sel = tab === "outlook" ? (olCur?.activity_id ? rowByAct.get(olCur.activity_id) : undefined)
     : listed.find((r) => r.x.id === open) || (open ? rows.find((r) => r.x.id === open) : undefined) || listed[0];
   const [picked, setPicked] = useState(false); // phones: the list until an email is picked, then the email
+  const hasSel = mode === "mail" && view.kind === "folder" ? !!fSel : mode === "mail" && view.kind === "search" ? !!cSel : !!(sel || olCur);
   const pickRow = (id: string, answer = false) => { setOpen(id); setPicked(true); if (answer) setFocus(id); };
   // the email showing stays put: a new email arriving at the top of the list never swaps it out from under you
   useEffect(() => { if (!open && sel) setOpen(sel.x.id); else if (!open && olCur) setOpen(olKey(olCur)); }, [open, sel?.x.id, olCur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -156,7 +179,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   return (
     <>
       <div className="page-head ibx2-head">
-        <div><div className="eyebrow">{mode === "mail" ? "Mail" : "Sales"}</div><h1>{mode === "mail" ? "Inbox" : "Conversations"}</h1></div>
+        <div><div className="eyebrow">{mode === "mail" ? "Your mailbox" : "Sales"}</div><h1>{mode === "mail" ? "Email" : "Conversations"}</h1></div>
         <div className="ibx2-status">
           {box?.enabled && <span className={"ibx2-box" + (box.last_error ? " bad" : "")} title={box.last_error || `${box.email}${st && st.all.length > 1 ? ` · also connected: ${st.all.filter((b) => b.id !== box.id).map((b) => b.email).join(", ")}` : ""}`}>
             <i aria-hidden />{box.last_error ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}
@@ -169,12 +192,20 @@ export default function InboxView({ mode }: { mode: Mode }) {
       {box?.enabled && box.last_error && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
 
-      <div className={"ibx2" + (picked && (sel || olCur) ? " picked" : "") + (!listOpen && (sel || olCur) ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
-        {(listOpen || !(sel || olCur)) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
+      <div className={"ibx2" + (mode === "mail" ? " mf" : "") + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
+        {mode === "mail" && <FolderRail folders={folders} current={view.kind === "folder" ? view.path : view.kind === "inbox" ? (folders?.find((f) => f.special === "\\Inbox")?.path || "INBOX") : ""} onPick={(p) => { setQ(""); void openFolder(p); }} />}
+        {(listOpen || !hasSel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: (mode === "mail" ? 202 : 0) + listW + 2 }} label="Drag to make the email list wider or narrower" />}
         {/* 1. the list */}
         <section className="ibx2-list" aria-label="Emails">
           <div className="ibx2-list-h">
-            <div className="ibx2-tabs" role="tablist">
+            {mode === "mail" && <select className="mf-pick" aria-label="Folder" value={view.kind === "folder" ? view.path : "INBOX"} onChange={(e) => { setQ(""); void openFolder(e.target.value); }}>
+              <option value="INBOX">Inbox</option>
+              {(folders || []).filter((f) => f.special !== "\\Inbox").map((f) => <option key={f.path} value={f.path}>{"\u00a0".repeat(Math.min(3, f.depth) * 2)}{folderLabel(f)}{f.unseen ? ` (${f.unseen})` : ""}</option>)}
+            </select>}
+            {mode === "mail" && view.kind !== "inbox" ? <div className="mf-lh">
+              {view.kind === "folder" ? <><b>{folderLabel(folders?.find((f) => f.path === view.path) || { name: view.path.split("/").pop() || view.path, special: "" })}</b><span className="faint">{folders?.find((f) => f.path === view.path)?.messages ?? ""} emails</span></>
+                : <><b>“{view.q}”</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link" onClick={() => { setQ(""); setView({ kind: "inbox" }); }}>Clear</button></>}
+            </div> : <div className="ibx2-tabs" role="tablist">
               {mode === "mail" ? BK.map((b) => (
                 <button key={b.k} type="button" role="tab" aria-selected={bk === b.k} className={bk === b.k ? "on" : ""} onClick={() => { setBk(b.k); setOpen(null); }}>{b.label} <span>{ol ? bkN(b.k) : ""}</span></button>
               )) : <>
@@ -182,14 +213,16 @@ export default function InboxView({ mode }: { mode: Mode }) {
               <button type="button" role="tab" aria-selected={tab === "leads"} className={tab === "leads" ? "on" : ""} onClick={() => setTab("leads")}>Leads <span>{counts.leads}</span></button>
               <button type="button" role="tab" aria-selected={tab === "all"} className={tab === "all" ? "on" : ""} onClick={() => setTab("all")}>All</button>
               </>}
-            </div>
+            </div>}
             <div className="ibx2-find">
-              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search email" />
+              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (mode === "mail" && e.key === "Enter") { e.preventDefault(); void runSearch(q); } }} placeholder={mode === "mail" ? "Search all mail, then Enter" : "Search"} aria-label="Search email" title={mode === "mail" ? "Type a name, company, email or subject and press Enter: results show as conversations, what they sent and what you sent, in order" : undefined} />
               {mineId && mode === "crm" && <select value={whose} onChange={(e) => setWhose(e.target.value as "mine" | "everyone")} aria-label="Whose email"><option value="mine">Mine</option><option value="everyone">Everyone</option></select>}
             </div>
           </div>
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
-            {tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
+            {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={(r) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid ? { ...y, seen: true } : y))); }} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={fNext > 1} loading={fBusy} onMore={() => void openFolder(view.path, fNext)} /></>
+            : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? <div className="ibx2-none">Nothing found for “{view.q}”.{sNote ? ` ${sNote}` : ""}</div> : <>{sNote && <div className="faint mf-note">{sNote}</div>}<ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} /></>)
+            : tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
               : olShown.map((i) => {
                 const k = olKey(i), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
                 const name = r ? who(r.x) : i.from_name || i.from_email || "(unknown sender)";
@@ -234,10 +267,15 @@ export default function InboxView({ mode }: { mode: Mode }) {
         </section>
 
         {/* 2 + 3. the email and the Assistant */}
-        {!sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} i={olCur} older={!!olCur.activity_id} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
+        {mode === "mail" && view.kind === "folder" ? (fSel ? <FolderMail key={`${fSel.folder}:${fSel.uid}`} row={fSel} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
+            onGone={() => { setFRows((x) => (x || []).filter((y) => !(y.uid === fSel.uid && y.folder === fSel.folder))); setFSel(null); void loadFolders(); }} /> : <section className="ibx2-empty"><b>{fRows ? "Pick an email" : "Loading…"}</b></section>)
+          : mode === "mail" && view.kind === "search" ? (cSel ? <ThreadView key={cSel.key} c={cSel} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
+            onMoved={(m) => setCSel((c) => (c ? { ...c, msgs: c.msgs.map((y) => (y.uid === m.uid && y.folder === m.folder ? { ...y, folder: "(moved)" } : y)) } : c))} /> : <section className="ibx2-empty"><b>{convos ? "Pick a conversation" : "Searching…"}</b><span>Each one shows what they sent and what you sent, oldest first.</span></section>)
+          : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
           : !sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
-          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
+          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)}
+              moveBar={(() => { const it = ol?.find((i) => i.activity_id === sel.x.id); return it && mode === "mail" ? <MoveBar folders={folders} busy={!!busy} here="INBOX" onMove={async (to, label) => { setBusy("mv"); try { await boxPost({ do: "move", path: "INBOX", uid: it.uid, to }); flash(label); setOl((l) => (l || []).filter((y) => y.id !== it.id)); setOpen(null); void load(); } catch (e) { flash(e instanceof Error ? e.message : String(e)); } setBusy(""); }} /> : null; })()} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
               orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
               thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
               back={() => setPicked(false)} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} busy={busy} setBusy={setBusy} done={(t, next) => { flash(t); void load().then(() => { if (next) setOpen(null); }); }} />}
@@ -252,15 +290,18 @@ type Opt = { label: string; subject: string; body: string };
  * Inbox: an email that isn't a customer's. Read live from the mailbox (the portal doesn't keep it), with what the AI
  * made of it (to-dos, suggested events), Reply, Archive and the SaneBox moves.
  */
-function LiveMail({ i, older, listOpen, toggleList, back, busy, setBusy, done }: { i: InboxItem; older: boolean; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string, gone?: boolean) => void }) {
+function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy, done }: { i: InboxItem; older: boolean; folders: Folder[] | null; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string, gone?: boolean) => void }) {
   const [m, setM] = useState<{ html: string; text: string; from: string; to: string; cc: string; date: string; attachments: { name: string; size: number }[] } | null>(null);
+  const [full, setFull] = useState<FullMsg | null>(null);
   const [err, setErr] = useState(""), [loadErr, setLoadErr] = useState("");
   const [ex, setEx] = useState<{ tasks: Task[]; events: CalEvent[] } | null>(null);
   const [writing, setWriting] = useState(false), [body, setBody] = useState("");
   const [h, setH] = useState(240), ref = useRef<HTMLIFrameElement | null>(null), [plain, setPlain] = useState(false);
   useEffect(() => {
     let live = true;
-    readInboxEmail(i.id).then((r) => { if (!live) return; if (r.ok) setM(r); else setLoadErr(r.error); });
+    // straight from the Inbox by its uid (with attachments to open); the Message-ID lookup if the uid moved
+    mailBox<FullMsg>({ do: "message", path: "INBOX", uid: i.uid }).then((r) => { if (!live) return; setFull(r); setM(r); })
+      .catch(() => readInboxEmail(i.id).then((r) => { if (!live) return; if (r.ok) setM(r); else setLoadErr(r.error); }));
     inboxItemExtras(i.id).then((r) => { if (live && r.ok) setEx({ tasks: r.tasks, events: r.events }); });
     return () => { live = false; };
   }, [i.id]);
@@ -271,11 +312,16 @@ function LiveMail({ i, older, listOpen, toggleList, back, busy, setBusy, done }:
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (x) => x + head) : head + html;
   }, [m?.html]);
   const fit = () => { const d = ref.current?.contentDocument; if (d?.body) setH(Math.min(20000, Math.max(120, d.documentElement.scrollHeight + 4))); };
-  const move = async (to: "archive" | "later" | "blackhole" | "news" | "receipts" | "cc", label: string) => {
+  const move = async (to: string, label: string) => {
     setBusy("mv"); setErr("");
-    const r = await archiveOutlookEmail({ id: i.id, to });
+    try { await boxPost({ do: "move", path: "INBOX", uid: i.uid, to }); done(label); }
+    catch (e) {
+      // the uid changed (Outlook moved things around): the Message-ID route for the usual moves
+      const k = ["archive", "later", "news", "receipts", "cc", "blackhole"].includes(to) ? (to as "archive") : null;
+      const r = k ? await archiveOutlookEmail({ id: i.id, to: k }) : { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+      if (!r.ok) setErr(r.error); else done(label);
+    }
     setBusy("");
-    if (!r.ok) setErr(r.error); else done(label);
   };
   const when = i.received_at ? new Date(i.received_at).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
   const openTasks = (ex?.tasks || []).filter((t) => t.status === "open"), sugg = (ex?.events || []).filter((e) => e.status === "suggested"), added = (ex?.events || []).filter((e) => e.status === "added");
@@ -300,17 +346,7 @@ function LiveMail({ i, older, listOpen, toggleList, back, busy, setBusy, done }:
           </div>
           <div className="ibx2-acts">
             <button type="button" className="btn sm" onClick={() => setWriting(true)} disabled={!m}>Reply</button>
-            <button type="button" className="btn sm primary" disabled={!!busy} onClick={() => move("archive", "Archived.")} title="Moves it to Archive, the same as Outlook's Archive button">{busy === "mv" ? "Moving…" : "Archive"}</button>
-            <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => move("later", "Moved to Later. SaneBox will send this sender there from now on.")} title="SaneBox: @SaneLater (this sender's mail goes there from now on)">Later</button>
-            <details className="ibx2-more">
-              <summary className="btn sm ghost">Move</summary>
-              <div className="ibx2-menu">
-                <button type="button" disabled={!!busy} onClick={() => move("news", "Moved to News.")}>News (@SaneNews)</button>
-                <button type="button" disabled={!!busy} onClick={() => move("receipts", "Moved to Receipts.")}>Receipts (@SaneReceipts)</button>
-                <button type="button" disabled={!!busy} onClick={() => move("cc", "Moved to CC.")}>CC (@SaneCC)</button>
-                <button type="button" className="danger" disabled={!!busy} onClick={() => move("blackhole", `Black Hole: SaneBox won't show you ${i.from_email} again.`)}>Black Hole: block this sender</button>
-              </div>
-            </details>
+            <MoveBar folders={folders} busy={!!busy} here="INBOX" onMove={(to, label) => move(to, label)} />
           </div>
           {err && <div className="pv-err">{err}</div>}
         </header>
@@ -336,11 +372,11 @@ function LiveMail({ i, older, listOpen, toggleList, back, busy, setBusy, done }:
           </div>}
           {!m ? <div className="ibx2-none">{loadErr || "Opening the email…"}</div> : <>
             {(m.to || m.cc) && <div className="lm-to faint">To {m.to}{m.cc ? ` · Cc ${m.cc}` : ""}</div>}
-            {doc && !plain ? <div className="ibx-html">
+            {full ? <><MailFrame html={full.html} text={full.text} /><Attachments m={full} /></> : doc && !plain ? <div className="ibx-html">
               <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
               <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>
             </div> : <div className="lm-text">{m.text || "(no text)"}</div>}
-            {m.attachments.length > 0 && <div className="ibx2-files">{m.attachments.map((f, k) => <span key={k} className="lm-att">📎 {f.name}</span>)}<span className="faint"> Open attachments in Outlook for now.</span></div>}
+            {!full && m.attachments.length > 0 && <div className="ibx2-files">{m.attachments.map((f, k) => <span key={k} className="lm-att">📎 {f.name}</span>)}<span className="faint"> Open attachments in Outlook for now.</span></div>}
           </>}
         </div>
         {writing && <div className="ibx2-compose open">
@@ -384,7 +420,7 @@ function Splitter({ dir, value, min, max, onChange, invert, className, style, la
  * The email column and the Assistant column for one email. The email column is either the email (with the answer box
  * docked at the bottom) or, after Create order, the order being made from it; the Assistant stays beside it.
  */
-function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly }: { /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
+function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar }: { /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
@@ -506,7 +542,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               <option value="">File under…</option>{orders.slice(0, 40).map((o) => <option key={o.id} value={o.id}>#{o.number} {o.nickname || ""} ({o.status})</option>)}
             </select>}
             {needs && <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id), "Off your Needs reply list.")}>No reply needed</button>}
-            {inOutlook && <button type="button" className="btn sm ghost" disabled={!!busy} title="Moves it to Archive in your Outlook, the same as Outlook's Archive button" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id }), "Archived in Outlook.")}>{busy === "arch" ? "Archiving…" : "Archive"}</button>}
+            {moveBar || (inOutlook && <button type="button" className="btn sm ghost" disabled={!!busy} title="Moves it to Archive in your Outlook, the same as Outlook's Archive button" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id }), "Archived in Outlook.")}>{busy === "arch" ? "Archiving…" : "Archive"}</button>)}
             {x.direction === "in" ? 
             <details className="ibx2-more" ref={moreRef}>
               <summary className="btn sm ghost">More</summary>
