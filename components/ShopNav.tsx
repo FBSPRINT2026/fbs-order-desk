@@ -196,9 +196,10 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         setTip({ text: el.dataset.tip || "", top: r.top + r.height / 2, left: r.right + 10 });
       }}
       onMouseLeave={() => setTip(null)}>
-      <button type="button" className="side-fold" onClick={() => { setMini(!mini); setTip(null); }} data-tip={mini ? "Show the full menu" : undefined}
-        title={mini ? undefined : "Fold the menu to icons"} aria-label={mini ? "Show the full menu" : "Fold the menu to icons"} aria-expanded={!mini}>
-        <svg viewBox="0 0 24 24" aria-hidden>{mini ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}</svg>
+      {/* the menu's right edge is the switch: click it to open the full menu or fold it to icons */}
+      <button type="button" className="side-edge" onClick={() => { setMini(!mini); setTip(null); }}
+        title={mini ? "Show the full menu" : "Fold the menu to icons"} aria-label={mini ? "Show the full menu" : "Fold the menu to icons"} aria-expanded={!mini}>
+        <span className="side-edge-k" aria-hidden><svg viewBox="0 0 24 24">{mini ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}</svg></span>
       </button>
       {/* drawn on the page itself (not inside the menu), so nothing on the page can cover it */}
       {mini && tip && tip.text && typeof document !== "undefined" && createPortal(<div className="side-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.text}</div>, document.body)}

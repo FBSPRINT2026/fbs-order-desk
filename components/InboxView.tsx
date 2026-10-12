@@ -230,7 +230,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
           {/* the Inbox brief: always first, stays put while the list scrolls */}
           {mode === "mail" && view.kind === "inbox" && <button type="button" className={"ibx2-briefbtn" + (briefOn ? " on" : "")} onClick={() => { setQ(""); setBk("all"); setOpen("brief"); setPicked(true); }} aria-pressed={briefOn}>
             <span className="ibx2-briefic" aria-hidden>✦</span>
-            <span className="ibx2-brieft"><b>Inbox brief</b><span>What&apos;s in your Inbox and what to do first</span></span>
+            <span className="ibx2-brieft"><b>Inbox summary</b><span>What&apos;s in your Inbox and what to do first</span></span>
             <span className="ibx2-briefgo" aria-hidden>›</span>
           </button>}
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
@@ -287,7 +287,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
           : mode === "mail" && view.kind === "search" ? (cSel ? <ThreadView key={cSel.key} c={cSel} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
             onMoved={(m) => setCSel((c) => (c ? { ...c, msgs: c.msgs.map((y) => (y.uid === m.uid && y.folder === m.folder ? { ...y, folder: "(moved)" } : y)) } : c))} /> : <section className="ibx2-empty"><b>{convos ? "Pick a conversation" : "Searching…"}</b><span>Each one shows what they sent and what you sent, oldest first.</span></section>)
           : briefOn && ol === null ? <section className="ibx2-empty"><b>Loading…</b></section>
-          : briefOn ? <BriefPane name={(st?.mine?.name || "").split(/\s+/)[0]} items={ol || []} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
+          : briefOn ? <BriefPane name={(st?.mine?.name || "").split(/\s+/)[0]} items={ol || []}
+            stats={{ needs: (ol || []).filter((i) => i.activity_id && rowByAct.get(i.activity_id)?.needs).length, customers: bkN("customer"), todos: bkN("todo"), events: bkN("event"), unread: (ol || []).filter((i) => i.unread).length }}
+            onFilter={(k) => { setBk(k); setOpen(null); }} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
             openItem={(id) => { const it = (ol || []).find((x) => x.id === id); if (it) { setOpen(olKey(it)); setPicked(true); } }} />
           : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
@@ -308,7 +310,12 @@ type Opt = { label: string; subject: string; body: string };
  * Email → Inbox brief (Oct 12, Nick: "AI summarize the inbox… good morning, you've got these things to do, some recent
  * reorders came in"). Written by the AI when the Inbox changes (kept for this tab until it does); each line opens its email.
  */
-function BriefPane({ name, items, listOpen, toggleList, back, openItem }: { name: string; items: InboxItem[]; listOpen: boolean; toggleList: () => void; back: () => void; openItem: (id: string) => void }) {
+type BriefStats = { needs: number; customers: number; todos: number; events: number; unread: number };
+/** each group of the summary gets its own color and mark, from its name */
+const toneOf = (t: string) => (/need|urgent|now|reply/i.test(t) ? "hot" : /order|reorder|quote|customer/i.test(t) ? "ord" : /to-?do|task/i.test(t) ? "todo" : /coming|calendar|due|week|today/i.test(t) ? "cal" : "fyi");
+const TONE_MARK: Record<string, string> = { hot: "!", ord: "◆", todo: "✓", cal: "◷", fyi: "i" };
+
+function BriefPane({ name, items, stats, onFilter, listOpen, toggleList, back, openItem }: { name: string; items: InboxItem[]; stats: BriefStats; onFilter: (k: Bk) => void; listOpen: boolean; toggleList: () => void; back: () => void; openItem: (id: string) => void }) {
   const sig = items.map((i) => i.id).sort().join(",");
   const [b, setB] = useState<Brief | null>(null), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const run = useCallback(async (force = false) => {
@@ -323,31 +330,54 @@ function BriefPane({ name, items, listOpen, toggleList, back, openItem }: { name
   }, [sig]);
   useEffect(() => { if (items.length || sig === "") void run(); }, [sig]); // eslint-disable-line react-hooks/exhaustive-deps
   const byId = new Map(items.map((i) => [i.id, i]));
+  const ini = (s: string) => s.replace(/[^A-Za-z ]/g, " ").trim().split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || "").join("") || "•";
+  const tiles: { k: Bk | ""; n: number; label: string; tone: string }[] = [
+    { k: "customer", n: stats.needs, label: stats.needs === 1 ? "reply to send" : "replies to send", tone: "hot" },
+    { k: "customer", n: stats.customers, label: "from customers", tone: "ord" },
+    { k: "todo", n: stats.todos, label: stats.todos === 1 ? "to-do" : "to-dos", tone: "todo" },
+    { k: "event", n: stats.events, label: stats.events === 1 ? "event" : "events", tone: "cal" },
+    { k: "", n: stats.unread, label: "unread", tone: "fyi" },
+  ];
   return (
     <div className="ibx2-work ibx2-solo">
-      <section className="ibx2-mail br" aria-label="Inbox brief">
+      <section className="ibx2-mail br" aria-label="Inbox summary">
         <div className="eh-bar">
           <button type="button" className="eh-back" onClick={back} aria-label="Back to the list"><svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg></button>
           <button type="button" className="eh-list" onClick={toggleList} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
-          <span className="br-k">✦ Inbox brief</span>
+          <span className="br-k">✦ Inbox summary</span>
           <span className="spacer" />
-          {b && <span className="faint br-at">Written {new Date(b.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
+          {b && <span className="faint br-at">Updated {new Date(b.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
           <button type="button" className="btn sm ghost" disabled={busy} onClick={() => run(true)}>{busy ? "Reading…" : "Refresh"}</button>
         </div>
         <div className="ibx2-read br-b">
-          {!b ? <div className="br-wait">{err ? <><b>Couldn&apos;t write the brief</b><span>{err}</span></> : <><span className="br-dots" aria-hidden><i /><i /><i /></span><span>Reading your Inbox{name ? `, ${name}` : ""}…</span></>}</div> : <>
-            <h2 className="br-hi">{b.greeting}</h2>
-            <p className="br-head">{b.headline}</p>
-            {b.sections.map((s, k) => (
-              <section key={k} className="br-sec">
-                <h3>{s.title}</h3>
-                <ul>{s.items.map((it, j) => {
+          <header className="br-hero">
+            <div className="br-date">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</div>
+            <h2 className="br-hi">{b ? b.greeting : `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}${name ? `, ${name}` : ""}`}</h2>
+            {b ? <p className="br-head">{b.headline}</p> : <p className="br-head br-wait">{err ? <>Couldn&apos;t write the summary: {err}</> : <><span className="br-dots" aria-hidden><i /><i /><i /></span>Reading your Inbox…</>}</p>}
+          </header>
+          <div className="br-tiles">{tiles.map((t, k) => (
+            <button key={k} type="button" className={"br-tile " + t.tone} disabled={!t.k} onClick={() => t.k && onFilter(t.k as Bk)} title={t.k ? "Show them in the list" : undefined}>
+              <b>{t.n}</b><span>{t.label}</span>
+            </button>
+          ))}</div>
+          {b && <div className="br-grid">{b.sections.map((sec, k) => {
+            const tone = toneOf(sec.title);
+            return (
+              <section key={k} className={"br-card " + tone} style={{ ["--i" as string]: k }}>
+                <h3><span className="br-mark" aria-hidden>{TONE_MARK[tone]}</span>{sec.title}<span className="br-n">{sec.items.length}</span></h3>
+                <ul>{sec.items.map((it, j) => {
                   const r = it.ref ? byId.get(it.ref) : undefined;
-                  return <li key={j}>{r ? <button type="button" onClick={() => openItem(r.id)}><span>{it.text}</span><em>Open</em></button> : <span className="br-plain">{it.text}</span>}</li>;
+                  const who = r ? r.from_name || r.from_email : "";
+                  const body = <>
+                    <span className="br-av" aria-hidden>{who ? ini(who) : TONE_MARK[tone]}</span>
+                    <span className="br-tx">{it.text}</span>
+                    {r && <span className="br-go" aria-hidden>›</span>}
+                  </>;
+                  return <li key={j}>{r ? <button type="button" onClick={() => openItem(r.id)} title={`Open: ${r.subject}`}>{body}</button> : <div className="br-row">{body}</div>}</li>;
                 })}</ul>
               </section>
-            ))}
-          </>}
+            );
+          })}</div>}
         </div>
       </section>
     </div>
