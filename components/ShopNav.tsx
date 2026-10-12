@@ -78,6 +78,8 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   }, [realRole, path]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false); // phones: the menu slides open from the top bar
+  // Report an issue closes the menu before it takes the screenshot
+  useEffect(() => { const c = () => setOpen(false); window.addEventListener("fbs:close-menu", c); return () => window.removeEventListener("fbs:close-menu", c); }, []);
   useEffect(() => { setOpen(false); }, [path]);
   const [mine, setMine] = useState<Shortcut[]>(shortcuts || []);
   const [editing, setEditing] = useState(false);

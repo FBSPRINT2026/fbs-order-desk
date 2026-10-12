@@ -25,6 +25,31 @@ async function grabTab(): Promise<Blob | null> {
   } catch { return null; } finally { stream?.getTracks().forEach((t) => t.stop()); }
 }
 
+/**
+ * Phones and Safari (no tab capture, Oct 12: Amanda's report came in with no screenshot): the menu closes, then the page
+ * is drawn into a picture right in the browser (html-to-image, loaded on first use). Emails shown inside a frame come
+ * out blank; a screenshot from Photos can be attached instead.
+ */
+async function drawPage(): Promise<Blob | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  const load = (src: string) => new Promise<void>((res, rej) => { const sc = document.createElement("script"); sc.src = src; sc.onload = () => res(); sc.onerror = () => rej(new Error(src)); document.head.appendChild(sc); });
+  const x = window.scrollX, y = window.scrollY, W = window.innerWidth, Ht = window.innerHeight;
+  const bg = getComputedStyle(document.body).backgroundColor || "#fff";
+  const skip = (n: HTMLElement) => !(n.classList && (n.classList.contains("sup-back") || n.classList.contains("ch-fx")));
+  const style = { transform: `translate(${-x}px, ${-y}px)`, transformOrigin: "top left" };
+  // html-to-image first, dom-to-image-more if that one can't load
+  try {
+    if (!w.htmlToImage) await load("https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js");
+    if (w.htmlToImage?.toBlob) return await w.htmlToImage.toBlob(document.body, { width: W, height: Ht, pixelRatio: Math.min(2, window.devicePixelRatio || 1), backgroundColor: bg, style, filter: skip });
+  } catch { /* try the other */ }
+  try {
+    if (!w.domtoimage) await load("https://cdn.jsdelivr.net/npm/dom-to-image-more@3.4.0/dist/dom-to-image-more.min.js");
+    if (w.domtoimage?.toBlob) return await w.domtoimage.toBlob(document.body, { width: W, height: Ht, bgcolor: bg, style, filter: skip });
+  } catch { /* no picture */ }
+  return null;
+}
+
 export default function SupportButton({ email }: { email: string }) {
   const sb = useMemo(() => createClient(), []);
   const { role, viewAs } = useRole();
@@ -37,8 +62,12 @@ export default function SupportButton({ email }: { email: string }) {
   async function start() {
     page.current = { href: location.href, title: document.title };
     setErr(""); setDone(false); setText(""); setShot(null); setBusy("Taking a screenshot…");
-    // the screenshot first (the box isn't open yet, so it shows the page as it is)
-    const b = await grabTab();
+    // the screenshot first (the box isn't open yet, so it shows the page as it is). Phones: the menu closes first,
+    // then the page is drawn into a picture
+    const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: unknown };
+    let b: Blob | null = null;
+    if (md?.getDisplayMedia && !window.matchMedia("(pointer: coarse)").matches) b = await grabTab();
+    else { window.dispatchEvent(new Event("fbs:close-menu")); await new Promise((r) => setTimeout(r, 450)); b = await drawPage(); }
     setShot(b); setBusy(""); setOpen(true);
   }
   // a picture pasted in (Win+Shift+S, then Ctrl+V) instead
@@ -77,7 +106,8 @@ export default function SupportButton({ email }: { email: string }) {
           <div className="sup-box">
             <h3>Report an issue</h3>
             {done ? <p className="sep-ok">Sent. Nick will see it on the Support page. Thanks!</p> : <>
-              {url ? <img className="sup-shot" src={url} alt="Screenshot of the page" /> : <div className="sup-noshot faint">No screenshot. Paste one here (Windows: Win+Shift+S, then Ctrl+V), or <label className="linkbtn">attach one<input type="file" accept="image/*" hidden onChange={(e) => setShot(e.target.files?.[0] || null)} /></label>, or <button type="button" className="linkbtn" onClick={async () => { setOpen(false); const b = await grabTab(); setShot(b); setOpen(true); }}>try again</button>.</div>}
+              {url ? <img className="sup-shot" src={url} alt="Screenshot of the page" /> : <div className="sup-noshot faint">No screenshot. <label className="linkbtn">Attach one from your Photos<input type="file" accept="image/*" hidden onChange={(e) => setShot(e.target.files?.[0] || null)} /></label>, paste one here (Windows: Win+Shift+S, then Ctrl+V), or <button type="button" className="linkbtn" onClick={async () => { setOpen(false); await new Promise((r) => setTimeout(r, 300)); const b = (await drawPage()) || (await grabTab()); setShot(b); setOpen(true); }}>try again</button>.</div>}
+              {url && <label className="linkbtn" style={{ fontSize: 12 }}>Use a screenshot from Photos instead<input type="file" accept="image/*" hidden onChange={(e) => setShot(e.target.files?.[0] || null)} /></label>}
               {url && <div className="faint" style={{ fontSize: 12 }}>Wrong picture? <button type="button" className="linkbtn" onClick={() => setShot(null)}>Remove it</button></div>}
               <div className="sc-in">
                 <textarea ref={ta} value={text} onChange={(e) => setText(e.target.value)} rows={4} autoFocus placeholder="What happened? What did you expect? (click the mic to talk)" aria-label="What happened" />
