@@ -209,10 +209,10 @@ function PhoneBar({ a }: { a: PhoneActs }) {
         <button type="button" className="pbar-b" disabled={off} onClick={() => setSheet("move")}>{TbIcon.move}<span>Move</span></button>
         <button type="button" className="pbar-b danger" disabled={off} onClick={() => mv("blackhole", "Black Hole: SaneBox won't show you this sender again.")}>{TbIcon.ban}<span>Black Hole</span></button>
         <button type="button" className="pbar-b pbar-ai" disabled={!a.ask} onClick={() => setVoice({ l: startListening() })} aria-label="Assistant: say what to tell them and it writes the reply"><i aria-hidden>✦</i><span>Assistant</span></button>
-        <button type="button" className="pbar-b" disabled={!a.reply} onClick={() => a.reply?.()}>{TbIcon.reply}<span>Reply</span></button>
+        <button type="button" className="pbar-b" disabled={!a.reply} onClick={() => { a.reply?.(); window.scrollTo({ top: 0 }); }}>{TbIcon.reply}<span>Reply</span></button>
         <button type="button" className="pbar-b" disabled={!a.more} onClick={() => setSheet("more")}>{TbIcon.more}<span>More</span></button>
       </nav>
-      {voice && a.ask && <VoiceDraft chatId={a.ask.id} who={a.ask.who} listener={voice.l} onDraft={a.ask.onDraft} openChat={a.ask.openChat} onClose={() => setVoice(null)} />}
+      {voice && a.ask && <VoiceDraft chatId={a.ask.id} who={a.ask.who} listener={voice.l} onDraft={(d) => { a.ask?.onDraft(d); window.scrollTo({ top: 0 }); }} openChat={a.ask.openChat} onClose={() => setVoice(null)} />}
       {sheet && <div className="pbar-bg" onClick={() => setSheet("")}>
         <div className="pbar-sheet" role="menu" onClick={(e) => e.stopPropagation()}>
           {sheet === "move" ? <>
