@@ -4,6 +4,7 @@ import type React from "react";
 import type { Convo, Folder, FullMsg, MsgRow } from "@/lib/mail/folders";
 import VoiceDraft, { SayButton, startListening, type Draft } from "@/components/VoiceDraft";
 import { cheerWin } from "@/components/Cheer";
+import { createClient } from "@/lib/supabase/client";
 
 /**
  * Email beyond the Inbox (Oct 12): the folder list, a folder's emails, reading / replying / moving any email, and
@@ -437,12 +438,34 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
   useEffect(() => { load(last); setTimeout(() => endRef.current?.scrollIntoView({ block: "end" }), 300); }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (m: MsgRow) => { const k = `${m.folder}:${m.uid}`; setOpen((o) => ({ ...o, [k]: !o[k] })); load(m); };
   const lastIn = [...c.msgs].reverse().find((m) => !m.sent) || last;
+  // a customer's email in this conversation (stored when it came in): Create order / reorder from it, from here too
+  // (Oct 12, Nick: replied "got it, thanks" and couldn't make the order from the conversation)
+  const [orderAct, setOrderAct] = useState<{ id: string; reorder: boolean } | null>(null);
+  useEffect(() => {
+    const ids = [...new Set(c.msgs.map((m) => m.messageId).filter(Boolean))];
+    if (!ids.length) return;
+    const variants = [...new Set(ids.flatMap((m) => { const b = m.replace(/^<|>$/g, ""); return [b, `<${b}>`]; }))];
+    let live = true;
+    void createClient().from("activities").select("id, direction, customer_id, occurred_at, meta").eq("kind", "email").in("external_id", variants).order("occurred_at", { ascending: false }).then(({ data }) => {
+      if (!live) return;
+      const rows = (data || []) as { id: string; direction: string; customer_id: string | null; meta: { triage?: { intent?: string } } | null }[];
+      const hit = rows.find((r) => r.direction === "in" && r.customer_id);
+      setOrderAct(hit ? { id: hit.id, reorder: rows.some((r) => r.meta?.triage?.intent === "reorder") } : null);
+    });
+    return () => { live = false; };
+  }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const orderHref = orderAct ? `/shop/conversations?open=${orderAct.id}&order=1` : "";
+  const orderLabel = orderAct?.reorder ? "Create reorder" : "Create order";
   const replyLast = () => { const k = `${lastIn.folder}:${lastIn.uid}`; const f = full[k]; if (f && f !== "err") setRep(f); else { load(lastIn); box<FullMsg>({ do: "message", path: lastIn.folder, uid: lastIn.uid }).then(setRep); } };
   return (
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Conversation">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={c.subject} fromName={c.people.join(", ")} fromEmail="" date={`${c.count} email${c.count === 1 ? "" : "s"}`}
-          phone={{ reply: replyLast, more: (close) => <button type="button" role="menuitem" onClick={() => { close(); replyLast(); }}>{TbIcon.reply} Reply to the last email</button>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); replyLast(); } } }}
+          tags={orderAct ? <a className="eh-tag order" href={orderHref}>＋ {orderLabel}</a> : undefined}
+          phone={{ reply: replyLast, more: (close) => <>
+            {orderAct && <a href={orderHref} role="menuitem" onClick={close}>{TbIcon.order} {orderLabel}</a>}
+            <button type="button" role="menuitem" onClick={() => { close(); replyLast(); }}>{TbIcon.reply} Reply to the last email</button>
+          </>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); replyLast(); } } }}
           toolbar={<Toolbar>
             <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
             <span className="faint mf-hint">Oldest at the top. Click an email to open or fold it.</span>

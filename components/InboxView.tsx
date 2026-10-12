@@ -164,6 +164,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
       return;
     }
     if (!id) return;
+    // ?order=1: open it with Create order already started (from a searched conversation)
+    if (sp.get("order")) setAutoOrder(id);
     // a customer email that isn't in the Inbox (any more): it's in Conversations
     if (mode === "mail") {
       if (ol === null) return;
@@ -201,6 +203,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   // Email opens on the brief (the AI's read of the whole Inbox) until an email is picked
   // the summary opens by itself only when Email first opens; after that only when it's clicked
   const [autoBrief, setAutoBrief] = useState(true);
+  const [autoOrder, setAutoOrder] = useState<string | null>(null);
   const briefOn = mode === "mail" && view.kind === "inbox" && (open === "brief" || (autoBrief && !open && !q.trim() && bk === "all"));
   const olCur = tab === "outlook" && !briefOn ? olShown.find((i) => olKey(i) === open) || olShown[0] : undefined;
   const sel = tab === "outlook" ? (olCur?.activity_id ? rowByAct.get(olCur.activity_id) : undefined)
@@ -379,7 +382,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
           : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} onSent={(m, sent) => setAfterSend({ it: olCur, msg: m, sent })} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
           : !sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
-          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} onSent={(m, sent) => setAfterSend({ it: mode === "mail" ? ol?.find((i) => i.activity_id === sel.x.id) : undefined, msg: m, sent })} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)}
+          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} autoOrder={autoOrder === sel.x.id} onAutoOrdered={() => setAutoOrder(null)} onSent={(m, sent) => setAfterSend({ it: mode === "mail" ? ol?.find((i) => i.activity_id === sel.x.id) : undefined, msg: m, sent })} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)}
               moveBar={inboxMove(sel.x.id) ? <MoveBar folders={folders} busy={busy === "mv"} here="INBOX" onMove={inboxMove(sel.x.id)!} /> : null} onMove={inboxMove(sel.x.id)} folders={folders} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
               orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
               thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
@@ -610,7 +613,7 @@ function Splitter({ dir, value, min, max, onChange, invert, className, style, la
  * The email column and the Assistant column for one email. The email column is either the email (with the answer box
  * docked at the bottom) or, after Create order, the order being made from it; the Assistant stays beside it.
  */
-function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders, onSent }: { /** sent a reply to an email in my Inbox: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
+function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders, onSent, autoOrder, onAutoOrdered }: { /** opened to make the order (from a searched conversation) */ autoOrder?: boolean; onAutoOrdered?: () => void; /** sent a reply to an email in my Inbox: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
@@ -651,6 +654,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const hideAi = stacked ? undefined : () => { if (narrow) setPeek(false); else setAiHidden(true); };
   useEffect(() => { setOrdering(false); setOrderStart(null); setMade(null); setView("mail"); }, [x.id]);
   const startOrder = (s?: { told?: string; job?: string }) => { if (s) setOrderStart((p) => ({ ...s, n: (p?.n || 0) + 1 })); setOrdering(true); setView("order"); setSide("mail"); };
+  useEffect(() => { if (autoOrder) { startOrder(); onAutoOrdered?.(); } }, [autoOrder]); // eslint-disable-line react-hooks/exhaustive-deps
   const write = (focusBox = true) => { setWriting(true); setView("mail"); setSide("mail"); if (focusBox) setTimeout(() => boxRef.current?.focus(), 40); };
   // a step the Assistant suggested: open Create order with what to know, put a reply in the box, file it, no reply
   function act(a: EmailAction) {
