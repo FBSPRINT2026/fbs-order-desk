@@ -312,7 +312,7 @@ type Opt = { label: string; subject: string; body: string };
  */
 type BriefStats = { needs: number; customers: number; todos: number; events: number; unread: number };
 /** each group of the summary gets its own color and mark, from its name */
-const toneOf = (t: string) => (/need|urgent|now|reply/i.test(t) ? "hot" : /order|reorder|quote|customer/i.test(t) ? "ord" : /to-?do|task/i.test(t) ? "todo" : /coming|calendar|due|week|today/i.test(t) ? "cal" : "fyi");
+const toneOf = (t: string) => (/just so you know|fyi|heads up/i.test(t) ? "fyi" : /need|urgent|right now|reply/i.test(t) ? "hot" : /order|reorder|quote|customer/i.test(t) ? "ord" : /to-?do|task/i.test(t) ? "todo" : /coming|calendar|due|week|today/i.test(t) ? "cal" : "fyi");
 const TONE_MARK: Record<string, string> = { hot: "!", ord: "◆", todo: "✓", cal: "◷", fyi: "i" };
 
 function BriefPane({ name, items, stats, onFilter, listOpen, toggleList, back, openItem }: { name: string; items: InboxItem[]; stats: BriefStats; onFilter: (k: Bk) => void; listOpen: boolean; toggleList: () => void; back: () => void; openItem: (id: string) => void }) {
