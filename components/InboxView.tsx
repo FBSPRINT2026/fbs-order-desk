@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
 import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
-import { inboxItemExtras, setEventStatus, setTaskDone, type CalEvent, type Task } from "@/app/shop/myday-actions";
+import { inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, type Brief, type CalEvent, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
 import { Attachments, box as mailBox, boxPost, MailHead, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
@@ -158,14 +158,16 @@ export default function InboxView({ mode }: { mode: Mode }) {
     const t = q.trim().toLowerCase(), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
     return !t || `${i.from_name} ${i.from_email} ${i.subject} ${r ? who(r.x) + " " + (r.x.meta?.triage?.summary || "") : ""}`.toLowerCase().includes(t);
   });
-  const olCur = tab === "outlook" ? olShown.find((i) => olKey(i) === open) || olShown[0] : undefined;
+  // Email opens on the brief (the AI's read of the whole Inbox) until an email is picked
+  const briefOn = mode === "mail" && view.kind === "inbox" && (open === "brief" || (!open && !q.trim() && bk === "all"));
+  const olCur = tab === "outlook" && !briefOn ? olShown.find((i) => olKey(i) === open) || olShown[0] : undefined;
   const sel = tab === "outlook" ? (olCur?.activity_id ? rowByAct.get(olCur.activity_id) : undefined)
     : listed.find((r) => r.x.id === open) || (open ? rows.find((r) => r.x.id === open) : undefined) || listed[0];
   const [picked, setPicked] = useState(false); // phones: the list until an email is picked, then the email
-  const hasSel = mode === "mail" && view.kind === "folder" ? !!fSel : mode === "mail" && view.kind === "search" ? !!cSel : !!(sel || olCur);
+  const hasSel = mode === "mail" && view.kind === "folder" ? !!fSel : mode === "mail" && view.kind === "search" ? !!cSel : briefOn || !!(sel || olCur);
   const pickRow = (id: string, answer = false) => { setOpen(id); setPicked(true); if (answer) setFocus(id); };
   // the email showing stays put: a new email arriving at the top of the list never swaps it out from under you
-  useEffect(() => { if (!open && sel) setOpen(sel.x.id); else if (!open && olCur) setOpen(olKey(olCur)); }, [open, sel?.x.id, olCur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (briefOn) return; if (!open && sel) setOpen(sel.x.id); else if (!open && olCur) setOpen(olKey(olCur)); }, [open, sel?.x.id, olCur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const listRef = useRef<HTMLDivElement | null>(null);
   const onKeys = (e: React.KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -222,7 +224,12 @@ export default function InboxView({ mode }: { mode: Mode }) {
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
             {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={(r) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid ? { ...y, seen: true } : y))); }} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={fNext > 1} loading={fBusy} onMore={() => void openFolder(view.path, fNext)} /></>
             : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? <div className="ibx2-none">Nothing found for “{view.q}”.{sNote ? ` ${sNote}` : ""}</div> : <>{sNote && <div className="faint mf-note">{sNote}</div>}<ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} /></>)
-            : tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
+            : tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : <>
+              {!q.trim() && bk === "all" && <button type="button" data-id="brief" className={"ibx2-item ol ibx2-brief" + (briefOn ? " on" : "")} onClick={() => { setOpen("brief"); setPicked(true); }}>
+                <span className="ibx2-item-1"><b>✦ Inbox brief</b><time>now</time></span>
+                <span className="ibx2-item-2">What&apos;s in your Inbox and what to do first, read by the AI.</span>
+              </button>}
+              { !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
               : olShown.map((i) => {
                 const k = olKey(i), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
                 const name = r ? who(r.x) : i.from_name || i.from_email || "(unknown sender)";
@@ -242,7 +249,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
                     </span>
                   </button>
                 );
-              })) : !acts ? <div className="ibx2-none">Loading…</div> : !listed.length ? <div className="ibx2-none">{q ? "Nothing matches." : tab === "reply" ? "Nothing waiting on you." : tab === "leads" ? "No new leads." : "No customer email in the last 30 days."}</div>
+              })}</>) : !acts ? <div className="ibx2-none">Loading…</div> : !listed.length ? <div className="ibx2-none">{q ? "Nothing matches." : tab === "reply" ? "Nothing waiting on you." : tab === "leads" ? "No new leads." : "No customer email in the last 30 days."}</div>
               : listed.map(({ x, answered, needs, urgent }) => {
                 const late = needs && (Date.now() - new Date(x.occurred_at).getTime()) / 36e5 > 24;
                 const ord = orders.find((o) => o.id === x.order_id);
@@ -271,6 +278,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
             onGone={() => { setFRows((x) => (x || []).filter((y) => !(y.uid === fSel.uid && y.folder === fSel.folder))); setFSel(null); void loadFolders(); }} /> : <section className="ibx2-empty"><b>{fRows ? "Pick an email" : "Loading…"}</b></section>)
           : mode === "mail" && view.kind === "search" ? (cSel ? <ThreadView key={cSel.key} c={cSel} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
             onMoved={(m) => setCSel((c) => (c ? { ...c, msgs: c.msgs.map((y) => (y.uid === m.uid && y.folder === m.folder ? { ...y, folder: "(moved)" } : y)) } : c))} /> : <section className="ibx2-empty"><b>{convos ? "Pick a conversation" : "Searching…"}</b><span>Each one shows what they sent and what you sent, oldest first.</span></section>)
+          : briefOn ? <BriefPane name={(st?.mine?.name || "").split(/\s+/)[0]} items={ol || []} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
+            openItem={(id) => { const it = (ol || []).find((x) => x.id === id); if (it) { setOpen(olKey(it)); setPicked(true); } }} />
           : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
           : !sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
@@ -285,6 +294,56 @@ export default function InboxView({ mode }: { mode: Mode }) {
 }
 
 type Opt = { label: string; subject: string; body: string };
+
+/**
+ * Email → Inbox brief (Oct 12, Nick: "AI summarize the inbox… good morning, you've got these things to do, some recent
+ * reorders came in"). Written by the AI when the Inbox changes (kept for this tab until it does); each line opens its email.
+ */
+function BriefPane({ name, items, listOpen, toggleList, back, openItem }: { name: string; items: InboxItem[]; listOpen: boolean; toggleList: () => void; back: () => void; openItem: (id: string) => void }) {
+  const sig = items.map((i) => i.id).sort().join(",");
+  const [b, setB] = useState<Brief | null>(null), [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const run = useCallback(async (force = false) => {
+    const key = "fbs:mail.brief";
+    if (!force) { try { const c = JSON.parse(sessionStorage.getItem(key) || "null") as { sig: string; b: Brief } | null; if (c && c.sig === sig) { setB(c.b); return; } } catch { /* none */ } }
+    setBusy(true); setErr("");
+    const r = await inboxBrief();
+    setBusy(false);
+    if (!r.ok) { setErr(r.error); return; }
+    setB(r.brief);
+    try { sessionStorage.setItem(key, JSON.stringify({ sig, b: r.brief })); } catch { /* fine */ }
+  }, [sig]);
+  useEffect(() => { if (items.length || sig === "") void run(); }, [sig]); // eslint-disable-line react-hooks/exhaustive-deps
+  const byId = new Map(items.map((i) => [i.id, i]));
+  return (
+    <div className="ibx2-work ibx2-solo">
+      <section className="ibx2-mail br" aria-label="Inbox brief">
+        <div className="eh-bar">
+          <button type="button" className="eh-back" onClick={back} aria-label="Back to the list"><svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg></button>
+          <button type="button" className="eh-list" onClick={toggleList} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
+          <span className="br-k">✦ Inbox brief</span>
+          <span className="spacer" />
+          {b && <span className="faint br-at">Written {new Date(b.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>}
+          <button type="button" className="btn sm ghost" disabled={busy} onClick={() => run(true)}>{busy ? "Reading…" : "Refresh"}</button>
+        </div>
+        <div className="ibx2-read br-b">
+          {!b ? <div className="br-wait">{err ? <><b>Couldn&apos;t write the brief</b><span>{err}</span></> : <><span className="br-dots" aria-hidden><i /><i /><i /></span><span>Reading your Inbox{name ? `, ${name}` : ""}…</span></>}</div> : <>
+            <h2 className="br-hi">{b.greeting}</h2>
+            <p className="br-head">{b.headline}</p>
+            {b.sections.map((s, k) => (
+              <section key={k} className="br-sec">
+                <h3>{s.title}</h3>
+                <ul>{s.items.map((it, j) => {
+                  const r = it.ref ? byId.get(it.ref) : undefined;
+                  return <li key={j}>{r ? <button type="button" onClick={() => openItem(r.id)}><span>{it.text}</span><em>Open</em></button> : <span className="br-plain">{it.text}</span>}</li>;
+                })}</ul>
+              </section>
+            ))}
+          </>}
+        </div>
+      </section>
+    </div>
+  );
+}
 
 /**
  * Inbox: an email that isn't a customer's. Read live from the mailbox (the portal doesn't keep it), with what the AI
@@ -330,17 +389,17 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
       <section className="ibx2-mail" aria-label="Email">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={i.subject} fromName={i.from_name} fromEmail={i.from_email} to={m?.to} cc={m?.cc} date={when} summary={i.summary}
           tags={<>
-            {i.bucket === "todo" && <span className="mh-tag todo">To-do</span>}
-            {i.bucket === "event" && <span className="mh-tag event">Event</span>}
-            {(i.bucket === "fyi" || i.bucket === "ignore") && <span className="mh-tag">FYI</span>}
-            {i.cc_only && <span className="mh-tag" title="You were copied (Cc)">CC&apos;d</span>}
-            {older && <span className="mh-tag">Customer</span>}
+            {i.bucket === "todo" && <span className="eh-tag todo">To-do</span>}
+            {i.bucket === "event" && <span className="eh-tag event">Event</span>}
+            {(i.bucket === "fyi" || i.bucket === "ignore") && <span className="eh-tag">FYI</span>}
+            {i.cc_only && <span className="eh-tag" title="You were copied (Cc)">CC&apos;d</span>}
+            {older && <span className="eh-tag">Customer</span>}
           </>}
           toolbar={<Toolbar>
             <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setWriting(true)} /></TbGroup>
             <MoveBar folders={folders} busy={!!busy} here="INBOX" onMove={(to, label) => move(to, label)} />
           </Toolbar>} />
-        {err && <div className="pv-err mh-err">{err}</div>}
+        {err && <div className="pv-err eh-err">{err}</div>}
         <div className="ibx2-read">
           {(openTasks.length > 0 || sugg.length > 0 || added.length > 0) && <div className="lm-ai">
             <div className="lm-ai-h">✦ From this email</div>
@@ -507,12 +566,12 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
       <section className="ibx2-mail" aria-label="The email">
         <MailHead listOpen={listOpen} toggleList={toggleList} subject={x.subject} fromName={who !== fromName ? `${who} · ${fromName}` : who} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
           tags={<>
-            {urgent && <span className="mh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
-            {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="mh-tag">{INTENT[x.meta.triage.intent]}</span>}
-            {x.customer_id && <Link className="mh-tag link" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
-            {filed && <Link className="mh-tag link" href={`/shop/orders/${filed.id}`}>#{filed.number}</Link>}
-            {answered && <span className="mh-tag ok">Answered</span>}
-            {ccOnly && <span className="mh-tag" title="You were copied (Cc), not sent to: not on your Needs reply list">CC&apos;d</span>}
+            {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
+            {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="eh-tag">{INTENT[x.meta.triage.intent]}</span>}
+            {x.customer_id && <Link className="eh-tag link" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
+            {filed && <Link className="eh-tag link" href={`/shop/orders/${filed.id}`}>#{filed.number}</Link>}
+            {answered && <span className="eh-tag ok">Answered</span>}
+            {ccOnly && <span className="eh-tag" title="You were copied (Cc), not sent to: not on your Needs reply list">CC&apos;d</span>}
           </>}
           toolbar={<Toolbar>
             {x.direction === "in" && <TbGroup>{view === "order"
@@ -538,8 +597,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               </>}</TbMenu>
             </TbGroup>}
           </Toolbar>} />
-        {made && <div className="ibx2-made mh-err">Order <b>#{made.number}</b> created. <a href={`/shop/orders/${made.id}`} target="_blank" rel="noreferrer">Open it</a></div>}
-        {err && <div className="pv-err mh-err">{err}</div>}
+        {made && <div className="ibx2-made eh-err">Order <b>#{made.number}</b> created. <a href={`/shop/orders/${made.id}`} target="_blank" rel="noreferrer">Open it</a></div>}
+        {err && <div className="pv-err eh-err">{err}</div>}
 
         {ordering && <div className="ibx2-order" hidden={view !== "order"}>
           <EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={x.id} start={orderStart || undefined}

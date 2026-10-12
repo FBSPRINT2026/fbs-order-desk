@@ -4,6 +4,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accountForUser } from "@/lib/mail/config";
 import { archiveInbox, chicago } from "@/lib/mail/mirror";
+import { aiState, askClaude } from "@/lib/ai/claude";
 
 /**
  * My Day: each person's to-dos and calendar. To-dos come from email (the AI reads the Inbox), from the shop, or are
@@ -191,5 +192,52 @@ export async function inboxItemExtras(mailInboxId: string) {
       admin.from("events").select("*").eq("owner", owner).eq("mail_inbox_id", mailInboxId).order("day"),
     ]);
     return { ok: true as const, tasks: (t || []) as Task[], events: (e || []) as CalEvent[] };
+  } catch (e) { return fail(e); }
+}
+
+export type Brief = { greeting: string; headline: string; sections: { title: string; items: { text: string; ref: string }[] }[]; at: string };
+
+/** Email → Inbox brief: the AI reads what's in your Inbox right now (plus to-dos due and today's calendar) and sums it up */
+export async function inboxBrief() {
+  try {
+    const { admin, owner, name, user } = await me();
+    const acct = await accountForUser(admin, user!.id);
+    if (!acct || !acct.enabled) return { ok: false as const, error: "Connect your email first." };
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    const soon = new Date(Date.now() + 2 * 864e5).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    const [{ data: rows }, { data: t }, { data: ev }] = await Promise.all([
+      admin.from("mail_inbox").select("id, from_name, from_email, subject, summary, bucket, activity_id, cc_only, unread, received_at").eq("account_id", acct.id).is("gone_at", null).order("received_at", { ascending: false }).limit(80),
+      admin.from("tasks").select("title, area, due").eq("owner", owner).eq("status", "open").or(`due.lte.${soon},due.is.null`).limit(40),
+      admin.from("events").select("title, day, starts_at, place, status").eq("owner", owner).eq("status", "added").gte("day", today).lte("day", soon).limit(20),
+    ]);
+    const items = (rows || []) as { id: string; from_name: string; from_email: string; subject: string; summary: string; bucket: string | null; activity_id: string | null; cc_only: boolean; unread: boolean; received_at: string | null }[];
+    const actIds = items.map((r) => r.activity_id).filter(Boolean) as string[];
+    const { data: acts } = actIds.length ? await admin.from("activities").select("id, customer_id, meta, customers(company, name)").in("id", actIds) : { data: [] };
+    const am = new Map(((acts || []) as unknown as { id: string; meta: { triage?: { intent?: string; urgency?: string; urgent_reason?: string; needs_reply?: boolean; summary?: string }; no_reply?: boolean } | null; customers: { company: string | null; name: string | null } | null }[]).map((a) => [a.id, a]));
+    const lines = items.map((r) => {
+      const a = r.activity_id ? am.get(r.activity_id) : undefined, tr = a?.meta?.triage;
+      const who = a?.customers?.company || a?.customers?.name || r.from_name || r.from_email;
+      return `[${r.id}] ${a ? `CUSTOMER ${who}` : r.from_name || r.from_email}${r.cc_only ? " (cc'd)" : ""}${r.unread ? " (unread)" : ""} · ${r.subject} · ${tr?.summary || r.summary || ""}${tr?.intent ? ` · intent ${tr.intent}` : r.bucket ? ` · ${r.bucket}` : ""}${tr?.urgency === "high" ? ` · URGENT ${tr.urgent_reason || ""}` : ""}${a && tr?.needs_reply && !a.meta?.no_reply ? " · needs a reply" : ""} · ${r.received_at ? new Date(r.received_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/Chicago" }) : ""}`;
+    });
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false as const, error: st.reason };
+    const hour = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Chicago" }));
+    const res = await askClaude<Omit<Brief, "at">>({
+      task: "inbox_brief", model: st.settings.assistant.ai.fastModel || st.settings.assistant.ai.model, maxTokens: 1100, admin, ctx: { by: owner }, timeoutMs: 40000,
+      tool: { name: "brief", description: "A short morning-style brief of the inbox.", input_schema: { type: "object", properties: {
+        greeting: { type: "string", description: `A warm one-line greeting using the name ${name} and the time of day (${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}).` },
+        headline: { type: "string", description: "One or two sentences: how the inbox looks overall and the most important thing to do first. Plain and encouraging, no fluff." },
+        sections: { type: "array", maxItems: 5, description: "Groups such as: Needs you now (urgent / waiting on a reply), Orders & reorders, To-dos from email, Coming up (calendar, due dates), Just so you know. Skip empty groups.", items: { type: "object", properties: {
+          title: { type: "string" },
+          items: { type: "array", maxItems: 6, items: { type: "object", properties: { text: { type: "string", description: "One short line: who and what, e.g. \"Dear Heart Designs: new .ai files for 2 orders, pickup week of Oct 19\"" }, ref: { type: "string", description: "The [id] of the email this is about, or empty" } }, required: ["text", "ref"] } },
+        }, required: ["title", "items"] } },
+      }, required: ["greeting", "headline", "sections"] } },
+      system: `You are ${name}'s assistant at ${st.settings.shop.name} (a screen printing shop). Summarize their email inbox the way a sharp office manager would at the start of the day: what matters, in order. Customer emails about orders, reorders, artwork and payments come first. Use only what's listed. Today is ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Chicago" })}.`,
+      prompt: `INBOX (${items.length} emails):\n${lines.join("\n") || "(empty)"}\n\nTO-DOS DUE SOON OR UNDATED:\n${((t || []) as { title: string; area: string; due: string | null }[]).map((x) => `- ${x.title} (${x.area}${x.due ? `, due ${x.due}` : ""})`).join("\n") || "(none)"}\n\nCALENDAR (next 2 days):\n${((ev || []) as { title: string; day: string; starts_at: string | null; place: string }[]).map((e) => `- ${e.day} ${e.starts_at ? new Date(e.starts_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) : ""} ${e.title}${e.place ? ` @ ${e.place}` : ""}`).join("\n") || "(nothing)"}`,
+    });
+    if (!res.ok) return { ok: false as const, error: res.error };
+    const ids = new Set(items.map((r) => r.id));
+    const brief: Brief = { ...res.data, sections: (res.data.sections || []).map((s) => ({ title: s.title, items: (s.items || []).map((i) => ({ text: i.text, ref: ids.has((i.ref || "").replace(/[[\]]/g, "")) ? (i.ref || "").replace(/[[\]]/g, "") : "" })) })), at: new Date().toISOString() };
+    return { ok: true as const, brief };
   } catch (e) { return fail(e); }
 }

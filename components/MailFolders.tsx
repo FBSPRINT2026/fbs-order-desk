@@ -143,24 +143,24 @@ export function MailHead({ toolbar, subject, tags, fromName, fromEmail, to, cc, 
   const toN = names(to), ccN = names(cc);
   const short = [...toN, ...ccN].slice(0, 2).map((x) => x.split(/[\s@]/)[0]).join(", ") + (toN.length + ccN.length > 2 ? ` +${toN.length + ccN.length - 2}` : "");
   return (
-    <header className="mh">
-      <div className="mh-bar">
-        {back && <button type="button" className="mh-back" onClick={back} aria-label="Back to the list">{TbIcon.back}</button>}
-        <button type="button" className="mh-list" onClick={toggleList} title={listOpen ? "Hide the list" : "Show the list"} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
+    <header className="eh">
+      <div className="eh-bar">
+        {back && <button type="button" className="eh-back" onClick={back} aria-label="Back to the list">{TbIcon.back}</button>}
+        <button type="button" className="eh-list" onClick={toggleList} title={listOpen ? "Hide the list" : "Show the list"} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
         {toolbar}
       </div>
-      <div className="mh-b">
-        <h2 className="mh-subj">{subject || "(no subject)"}</h2>
-        <div className="mh-from">
-          <span className="mh-av" aria-hidden>{ini}</span>
-          <div className="mh-who">
-            <div><b>{name}</b>{fromName && fromEmail && <span className="mh-addr">{fromEmail}</span>}</div>
-            {short && <button type="button" className="mh-to" onClick={() => setFull(!full)} aria-expanded={full}>to {short} <span aria-hidden>{full ? "▴" : "▾"}</span></button>}
-            {full && <div className="mh-full">{to && <div><span>To</span>{to}</div>}{cc && <div><span>Cc</span>{cc}</div>}</div>}
+      <div className="eh-b">
+        <h2 className="eh-subj">{subject || "(no subject)"}</h2>
+        <div className="eh-from">
+          <span className="eh-av" aria-hidden>{ini}</span>
+          <div className="eh-who">
+            <div><b>{name}</b>{fromName && fromEmail && <span className="eh-addr">{fromEmail}</span>}</div>
+            {short && <button type="button" className="eh-to" onClick={() => setFull(!full)} aria-expanded={full}>to {short} <span aria-hidden>{full ? "▴" : "▾"}</span></button>}
+            {full && <div className="eh-full">{to && <div><span>To</span>{to}</div>}{cc && <div><span>Cc</span>{cc}</div>}</div>}
           </div>
-          <time className="mh-date">{date}</time>
+          <time className="eh-date">{date}</time>
         </div>
-        {(summary || tags) && <div className="mh-meta">{summary && <span className="mh-sum">✦ {summary}</span>}{tags}</div>}
+        {(summary || tags) && <div className="eh-meta">{summary && <span className="eh-sum">✦ {summary}</span>}{tags}</div>}
       </div>
     </header>
   );
@@ -250,7 +250,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
             </TbGroup>
             <MoveBar folders={folders} busy={busy} onMove={move} here={row.folder} />
           </Toolbar>} />
-        {err && <div className="pv-err mh-err">{err}</div>}
+        {err && <div className="pv-err eh-err">{err}</div>}
         <div className="ibx2-read">
           {!m ? <div className="ibx2-none">{err ? "" : "Opening the email…"}</div> : <>
             <MailFrame html={m.html} text={m.text} />
