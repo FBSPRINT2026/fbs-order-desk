@@ -8,6 +8,7 @@ import { mailRows } from "@/lib/inbox";
 import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
 import { inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, type Brief, type CalEvent, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
+import { onPullRefresh } from "@/components/PullRefresh";
 import { Attachments, box as mailBox, boxPost, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
@@ -135,6 +136,13 @@ export default function InboxView({ mode }: { mode: Mode }) {
     setOrders((os || []) as Ord[]);
   }, []);
   useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
+  // phones: pull down to refresh, like the Mail app: the lists now, then a mailbox check (which can take a while) and again
+  const viewRef = useRef(view); viewRef.current = view;
+  useEffect(() => onPullRefresh(async () => {
+    const v = viewRef.current;
+    void checkMailNow().then((r) => { if (r.ok) void load(); }, () => null);
+    await Promise.all([load(), v.kind === "folder" ? mailBox<ListResp>({ do: "list", path: v.path }).then((r) => setFRows((x) => [...r.rows, ...(x || []).filter((y) => !r.rows.some((z) => z.uid === y.uid && z.folder === y.folder) && r.rows.length && y.date < r.rows[r.rows.length - 1].date)]), () => null) : Promise.resolve(), mode === "mail" ? loadFolders() : Promise.resolve()]);
+  }), [load, loadFolders, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = useMemo(() => mailRows(acts || [], sugs), [acts, sugs]);
   const mineId = st?.mine?.enabled ? st.mine.id : null;

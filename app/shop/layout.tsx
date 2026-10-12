@@ -4,6 +4,7 @@ import { createClient, getViewer } from "@/lib/supabase/server";
 import { mergeSettings } from "@/lib/pricing";
 import { accessOf, permsFor, ROLES } from "@/lib/roles";
 import ShopNav from "@/components/ShopNav";
+import PullRefresh from "@/components/PullRefresh";
 import MobileTables from "@/components/MobileTables";
 import Translate from "@/components/Translate";
 import { RoleProvider } from "@/components/RoleContext";
@@ -45,7 +46,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
     <RoleProvider value={{ role, realRole, viewAs, viewName, perms, email, staffName: (me?.name as string) || "" }}>
       <div className="app">
         <ShopNav email={email} firstName={firstName} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} people={people} />
-        <main className="main"><div className="top-r"><Translate /></div><CrewGuard />{children}</main>
+        <main className="main"><PullRefresh /><div className="top-r"><Translate /></div><CrewGuard />{children}</main>
         <MobileTables />
       </div>
     </RoleProvider>

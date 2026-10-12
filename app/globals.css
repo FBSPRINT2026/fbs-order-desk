@@ -6647,3 +6647,11 @@ a.pdn-tag:hover{text-decoration:underline}
   .ibx2-work:has(.ibx2-compose.open) .eh-bar.has-pn .tb{display:none}
   .ibx2-work[data-side="mail"]:has(.eh-bar.has-pn) .ibx2-sw .ibx2-back{display:none}
 }
+
+/* pull down to refresh on phones (components/PullRefresh.tsx) */
+.ptr{position:fixed;top:0;left:50%;z-index:2000;width:40px;height:40px;border-radius:50%;background:var(--surface);box-shadow:0 4px 16px rgba(20,29,43,.22);display:flex;align-items:center;justify-content:center;transition:transform .2s ease;pointer-events:none;margin-top:env(safe-area-inset-top)}
+.ptr.drag{transition:none}
+.ptr svg{width:22px;height:22px;fill:none;stroke:var(--accent);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.ptr.busy svg{animation:ptr-spin .8s linear infinite}
+@keyframes ptr-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ptr.busy svg{animation-duration:2s}}
