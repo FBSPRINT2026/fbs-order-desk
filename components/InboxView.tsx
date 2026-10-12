@@ -10,6 +10,7 @@ import { addEvent, addTask, inboxBrief, inboxItemExtras, setEventStatus, setTask
 import { AREAS } from "@/components/MyDay";
 import { onPullRefresh } from "@/components/PullRefresh";
 import { personName, senderLabel } from "@/lib/mail/sender";
+import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
 import { Attachments, box as mailBox, boxPost, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
@@ -379,7 +380,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
           : !sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
           : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} onSent={(m, sent) => setAfterSend({ it: mode === "mail" ? ol?.find((i) => i.activity_id === sel.x.id) : undefined, msg: m, sent })} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)}
-              moveBar={inboxMove(sel.x.id) ? <MoveBar folders={folders} busy={!!busy} here="INBOX" onMove={inboxMove(sel.x.id)!} /> : null} onMove={inboxMove(sel.x.id)} folders={folders} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
+              moveBar={inboxMove(sel.x.id) ? <MoveBar folders={folders} busy={busy === "mv"} here="INBOX" onMove={inboxMove(sel.x.id)!} /> : null} onMove={inboxMove(sel.x.id)} folders={folders} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
               orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
               thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
               back={() => setPicked(false)} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} busy={busy} setBusy={setBusy} done={(t, next) => { flash(t); void load().then(() => { if (next) setOpen(null); }); }} />}
@@ -519,7 +520,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Email">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={i.subject} fromName={i.from_name} fromEmail={i.from_email} to={m?.to} cc={m?.cc} date={when} summary={i.summary}
-          phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: !!busy,
+          phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: busy === "mv",
             ask: { id: "inbox:" + i.id, who: i.from_name || i.from_email, onDraft: (d) => { setBody(d.body); setWriting(true); } },
             more: (close) => <>
               <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("later", "Moved to Later."); }}>{TbIcon.later} Later (SaneBox)</button>
@@ -536,7 +537,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
           </>}
           toolbar={<Toolbar>
             <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setWriting(true)} /></TbGroup>
-            <MoveBar folders={folders} busy={!!busy} here="INBOX" onMove={(to, label) => move(to, label)} />
+            <MoveBar folders={folders} busy={busy === "mv"} here="INBOX" onMove={(to, label) => move(to, label)} />
           </Toolbar>} />
         {err && <div className="pv-err eh-err">{err}</div>}
         <div className="ibx2-read">
@@ -661,6 +662,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   }
   const orderish = ["new_order", "reorder"].includes(x.meta?.triage?.intent || "") || !!quote;
   const reorder = x.meta?.triage?.intent === "reorder";
+  // a piece count in the email ("700 shirts"): an Order goods button right on it (Oct 12, Nick)
+  const goodsPcs = pieceCount(x.meta?.triage?.summary, x.subject, (x.body || "").slice(0, 4000));
   async function loadOpts(fresh = false) {
     setBusy("opts"); setErr("");
     const r = await aiReplyOptions(x.id, fresh);
@@ -709,7 +712,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
       <section className="ibx2-mail" aria-label="The email">
         <MailHead listOpen={listOpen} toggleList={toggleList} subject={x.subject}
           phone={{
-            reply: x.direction === "in" ? () => write() : undefined, busy: !!busy, folders, here: "INBOX",
+            reply: x.direction === "in" ? () => write() : undefined, busy: busy === "mv" || busy === "arch", folders, here: "INBOX",
             ask: x.direction === "in" ? { id: x.id, who, onDraft: (d) => act({ kind: "reply", label: "", subject: d.subject, body: d.body }), openChat: () => setSide("ai") } : undefined,
             move: onMove || (inOutlook ? (to, label) => { const k = (["archive", "later", "news", "receipts", "cc", "blackhole"].includes(to) ? to : "archive") as "archive"; void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: k }), label); } : undefined),
             more: x.direction === "in" ? (close) => <>
@@ -726,6 +729,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           tags={<>
             {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
             {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="eh-tag">{INTENT[x.meta.triage.intent]}</span>}
+            {x.direction === "in" && goodsPcs > 0 && <Link className="eh-tag goods" href={orderGoodsHref(x.id)} title="Order the goods for this, or email our S&S rep (Tiffany) for a custom quote">🧺 Order goods · {goodsPcs} pcs</Link>}
             {x.customer_id && <Link className="eh-tag link" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
             {filed && <Link className="eh-tag link" href={`/shop/orders/${filed.id}`}>#{filed.number}</Link>}
             {answered && <span className="eh-tag ok">Answered</span>}

@@ -16,6 +16,7 @@ import { mailRows, type MailSug } from "@/lib/inbox";
 import { getMailStatus } from "./mail-actions";
 import MyDay, { CrewTodos } from "@/components/MyDay";
 import { senderLabel } from "@/lib/mail/sender";
+import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { DETAILS_LABEL, detailsCount, ordersNeedingDetails } from "@/lib/productionDetails";
 import type { Group } from "@/lib/pricing";
 
@@ -350,7 +351,7 @@ export default function Dashboard() {
                   ) : e ? (
                     <li key={e.id} className={"db-row db-reply db-click" + (urgentIds.has(e.id) ? " hot" : "")} onClick={() => openMail(e.id)} title="Open it in the Inbox, ready to answer">
                       <span className="db-main"><b>{senderLabel(e.meta?.from_name, e.from_email, e.customer_id ? custs[e.customer_id] : null)}</b><span className="db-one">{urgentIds.has(e.id) && e.meta?.triage?.urgent_reason ? <em>{e.meta.triage.urgent_reason} · </em> : null}{e.meta?.triage?.summary || e.subject || "(no subject)"}</span></span>
-                      <span className="db-side"><span className={urgentIds.has(e.id) && (Date.now() - Date.parse(e.occurred_at)) / 36e5 > 4 ? "db-late" : "faint"}>{ago(e.occurred_at)}</span><Link href={`/shop/conversations?open=${e.id}`} className={"btn sm" + (urgentIds.has(e.id) ? " primary" : "")} onClick={(ev) => ev.stopPropagation()}>Reply</Link></span>
+                      <span className="db-side"><span className={urgentIds.has(e.id) && (Date.now() - Date.parse(e.occurred_at)) / 36e5 > 4 ? "db-late" : "faint"}>{ago(e.occurred_at)}</span>{pieceCount(e.meta?.triage?.summary, e.subject) > 0 && <Link href={orderGoodsHref(e.id)} className="btn sm ghost db-goods" onClick={(ev) => ev.stopPropagation()} title={`Order the goods for this (${pieceCount(e.meta?.triage?.summary, e.subject)} pcs), or email our S&S rep for a custom quote`}>Order goods</Link>}<Link href={`/shop/conversations?open=${e.id}`} className={"btn sm" + (urgentIds.has(e.id) ? " primary" : "")} onClick={(ev) => ev.stopPropagation()}>Reply</Link></span>
                     </li>
                   ) : null)}</ul>
                 ), <MsgEmpty title="You're all caught up" text="No customer emails or portal messages waiting on a reply. They land here the moment a customer writes." />)}

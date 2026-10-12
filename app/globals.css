@@ -6796,3 +6796,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .md-cheer input{position:absolute;opacity:0;pointer-events:none}
 .md-cheer.on{border-color:transparent;color:#fff;background:linear-gradient(135deg,#F26660,#7C5CE0)}
 .md-cheer:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+/* an email that mentions a piece count: Order goods right on it (lib/pieces.ts) */
+.eh-tag.goods{background:color-mix(in srgb,#1F9D57 14%,var(--surface));color:#17783f;font-weight:700;text-decoration:none}
+.eh-tag.goods:hover{background:color-mix(in srgb,#1F9D57 22%,var(--surface))}
+.db-goods{margin-right:4px}
