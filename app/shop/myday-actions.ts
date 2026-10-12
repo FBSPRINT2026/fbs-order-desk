@@ -222,25 +222,33 @@ export async function inboxBrief() {
     const st = await aiState(admin);
     if (!st.ready) return { ok: false as const, error: st.reason };
     const hour = Number(new Date().toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Chicago" }));
-    const res = await askClaude<Omit<Brief, "at">>({
+    const res = await askClaude<{ greeting: string; headline: string; lines: unknown }>({
       task: "inbox_brief", model: st.settings.assistant.ai.fastModel || st.settings.assistant.ai.model, maxTokens: 1100, admin, ctx: { by: owner }, timeoutMs: 40000,
       tool: { name: "brief", description: "A short morning-style brief of the inbox.", input_schema: { type: "object", properties: {
         greeting: { type: "string", description: `A warm one-line greeting using the name ${name} and the time of day (${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}).` },
         headline: { type: "string", description: "One or two sentences: how the inbox looks overall and the most important thing to do first. Plain and encouraging, no fluff." },
-        sections: { type: "array", maxItems: 5, description: "Groups such as: Needs you now (urgent / waiting on a reply), Orders & reorders, To-dos from email, Coming up (calendar, due dates), Just so you know. Skip empty groups.", items: { type: "object", properties: {
-          title: { type: "string" },
-          items: { type: "array", maxItems: 6, items: { type: "object", properties: { text: { type: "string", description: "One short line: who and what, e.g. \"Dear Heart Designs: new .ai files for 2 orders, pickup week of Oct 19\"" }, ref: { type: "string", description: "The [id] of the email this is about, or empty" } }, required: ["text", "ref"] } },
-        }, required: ["title", "items"] } },
-      }, required: ["greeting", "headline", "sections"] } },
+        lines: { type: "array", maxItems: 20, description: "The brief, one line per item, in order. Group them with `group` (use these names, skip empty ones, most important first): \"Needs you now\" (urgent, waiting on a reply), \"Orders & reorders\", \"To-dos\", \"Coming up\" (calendar, due dates), \"Just so you know\".", items: { type: "object", properties: {
+          group: { type: "string" },
+          text: { type: "string", description: "One short line: who and what, e.g. \"Dear Heart Designs: new .ai files for 2 orders, pickup week of Oct 19\"" },
+          ref: { type: "string", description: "The [id] of the email this is about, or empty" },
+        }, required: ["group", "text", "ref"] } },
+      }, required: ["greeting", "headline", "lines"] } },
       system: `You are ${name}'s assistant at ${st.settings.shop.name} (a screen printing shop). Summarize their email inbox the way a sharp office manager would at the start of the day: what matters, in order. Customer emails about orders, reorders, artwork and payments come first. Use only what's listed. Today is ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Chicago" })}.`,
       prompt: `INBOX (${items.length} emails):\n${lines.join("\n") || "(empty)"}\n\nTO-DOS DUE SOON OR UNDATED:\n${((t || []) as { title: string; area: string; due: string | null }[]).map((x) => `- ${x.title} (${x.area}${x.due ? `, due ${x.due}` : ""})`).join("\n") || "(none)"}\n\nCALENDAR (next 2 days):\n${((ev || []) as { title: string; day: string; starts_at: string | null; place: string }[]).map((e) => `- ${e.day} ${e.starts_at ? new Date(e.starts_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) : ""} ${e.title}${e.place ? ` @ ${e.place}` : ""}`).join("\n") || "(nothing)"}`,
     });
     if (!res.ok) return { ok: false as const, error: res.error };
     const ids = new Set(items.map((r) => r.id));
-    // the model sometimes hands nested lists back as JSON text: read them either way
+    // the model sometimes hands a list back as JSON text: read it either way
     const arr = <T,>(v: unknown): T[] => { if (Array.isArray(v)) return v as T[]; if (typeof v === "string") { try { const j = JSON.parse(v); return Array.isArray(j) ? (j as T[]) : []; } catch { return []; } } return []; };
-    const secs = arr<{ title: string; items: unknown }>(res.data.sections).map((x) => ({ title: x.title, items: arr<{ text: string; ref: string }>(x.items) }));
-    const brief: Brief = { ...res.data, sections: secs.map((s) => ({ title: s.title, items: (s.items || []).map((i) => ({ text: i.text, ref: ids.has((i.ref || "").replace(/[[\]]/g, "")) ? (i.ref || "").replace(/[[\]]/g, "") : "" })) })), at: new Date().toISOString() };
+    const sections: Brief["sections"] = [];
+    for (const l of arr<{ group?: string; text?: string; ref?: string }>(res.data.lines)) {
+      if (!l?.text) continue;
+      const title = (l.group || "Today").trim(), ref = (l.ref || "").replace(/[[\]]/g, "").trim();
+      let sec = sections.find((x) => x.title === title);
+      if (!sec) { sec = { title, items: [] }; sections.push(sec); }
+      sec.items.push({ text: l.text, ref: ids.has(ref) ? ref : "" });
+    }
+    const brief: Brief = { greeting: res.data.greeting, headline: res.data.headline, sections, at: new Date().toISOString() };
     return { ok: true as const, brief };
   } catch (e) { return fail(e); }
 }
