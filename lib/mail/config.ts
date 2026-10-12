@@ -33,6 +33,8 @@ export type MailAccount = {
   inbox_validity: number | null; inbox_uid: number | null; sent_folder: string | null; sent_validity: number | null; sent_uid: number | null;
   last_run_at: string | null; last_ok_at: string | null; last_error: string | null; last_error_at: string | null; stats: Record<string, Record<string, number>>;
   signature_html?: string | null; signature_css?: string | null; signature_on?: boolean; signature_at?: string | null; signature_checked_at?: string | null;
+  /** Email settings: the line replies end with (signature under it), and the AI writing as "me" or "shop" */
+  sign_off?: string; write_as?: string;
 };
 export type MailCfg = { user: string; pass: string; imapHost: string; smtpHost: string; imapPort: number; smtpPort: number; fromName: string };
 

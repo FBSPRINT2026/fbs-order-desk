@@ -57,7 +57,7 @@ async function inboxAsActivity(admin: SupabaseClient, inboxId: string): Promise<
   return { id: null, customer_id: (cu?.id as string) || null, order_id: null, subject: r.subject as string, body, from_email: r.from_email as string, occurred_at: (r.received_at as string) || new Date().toISOString(), meta: {}, direction: "in" };
 }
 
-export async function emailChat(admin: SupabaseClient, s: Settings, activityId: string, by: string, message: string, lookedUp?: LookedUp | null, opts: { given?: ActRow; draft?: boolean } = {}): Promise<{ ok: true; messages: EmailChatMsg[] } | { ok: false; error: string }> {
+export async function emailChat(admin: SupabaseClient, s: Settings, activityId: string, by: string, message: string, lookedUp?: LookedUp | null, opts: { given?: ActRow; draft?: boolean; /** who is writing and how replies end (Email settings) */ writer?: string } = {}): Promise<{ ok: true; messages: EmailChatMsg[] } | { ok: false; error: string }> {
   const msg = message.trim().slice(0, 2000);
   if (!msg) return { ok: false, error: "Type a question first." };
   const inbox = !!opts.given || activityId.startsWith("inbox:");
@@ -116,7 +116,7 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     system: `${SHOP_CONTEXT(s)}
 
 You're helping staff handle ${inbox && !cid ? "an email from their Inbox (it may be a possible new customer, a vendor or partner, or anything else: say what it is)" : "a customer email"}, like an experienced shop manager reading over their shoulder. Read the email and its files, and use the customer's past jobs, open orders and how busy the shop is. Say plainly what it is and what you'd do: make a new order, make a reorder of a past job (name it), answer a question, ask for missing details, say we need more time (when the date they want is too soon for how busy we are), or turn the job down (when it's something the shop doesn't do or can't do in time). Offer the next steps as actions. When the garments are clear and the job is likely (a reorder, an approved quote, a tight date), you can offer order_goods: buying the blanks from S&S now, ahead of the order. Replies to the customer are written in the shop's voice (${s.assistant.ai.voice}), short, and never promise prices or exact dates unless staff gave them.
-Follow what staff tell you; it's fact.${opts.draft ? `
+Follow what staff tell you; it's fact.${opts.writer ? `\nReplies: ${opts.writer}` : ""}${opts.draft ? `
 Staff just told you (spoken, so it may be loose) what they want to say back. Your FIRST action must be kind "reply": the complete email to send, written from what they said, in their words where it works, warm and short, with nothing they didn't say (no prices, dates or promises they didn't give). The reply sentence just says it's drafted.` : ""}
 Write like a quick text message from a coworker: ONE short sentence, 25 words at most. No greetings, headings, lists, prices or restating the email (staff can read it). Answer exactly what was asked. The detail goes into the actions: 1-3 actions, best first, with short button labels (2-5 words).`,
     prompt,

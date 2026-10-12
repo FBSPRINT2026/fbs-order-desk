@@ -313,7 +313,7 @@ export const DEFAULT_SETTINGS: Settings = {
       fastModel: "claude-haiku-4-5-20251001",
       readEmails: false,
       customerAssist: false,
-      voice: "Friendly, short and plain-spoken, like a local print shop owner. Sign off as the FBS Print team.",
+      voice: "Friendly, short and plain-spoken, like a local print shop owner.",
     },
   },
   ship: {

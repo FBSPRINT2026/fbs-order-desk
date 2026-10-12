@@ -11,7 +11,7 @@ import { AREAS } from "@/components/MyDay";
 import { onPullRefresh } from "@/components/PullRefresh";
 import { SayButton } from "@/components/VoiceDraft";
 import { Attachments, box as mailBox, boxPost, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
-import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
+import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
 import EmailChat from "@/components/EmailChat";
@@ -227,6 +227,16 @@ export default function InboxView({ mode }: { mode: Mode }) {
     catch (e) { flash(e instanceof Error ? e.message : String(e)); return false; }
   };
   const pickFolderRow = (r: MsgRow) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid && y.folder === r.folder ? { ...y, seen: true } : y))); };
+  // after sending a reply to an email in my Inbox (Oct 12, Nick): archive it, or keep it in the Inbox?
+  const [afterSend, setAfterSend] = useState<{ it: InboxItem; msg: string } | null>(null);
+  const afterArchive = async () => {
+    const a = afterSend; if (!a) return;
+    setAfterSend(null);
+    const drop = () => { setOl((l) => (l || []).filter((y) => y.id !== a.it.id)); setOpen(null); };
+    try { await boxPost({ do: "move", path: "INBOX", uid: a.it.uid, to: "archive" }); drop(); flash("Archived."); }
+    catch { const r = await archiveOutlookEmail({ id: a.it.id }); if (r.ok) { drop(); flash("Archived."); } else flash(r.error); }
+    void load();
+  };
   // a customer email that's in my Inbox: Archive / Later / Black Hole / Move it there
   const inboxMove = (actId: string) => {
     const it = ol?.find((i) => i.activity_id === actId);
@@ -257,12 +267,20 @@ export default function InboxView({ mode }: { mode: Mode }) {
             <i aria-hidden />{box.last_error ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}
           </span>}
           {box?.enabled && <button type="button" className="btn sm" disabled={!!busy} onClick={async () => { setBusy("check"); const r = await checkMailNow(); setBusy(""); if (!r.ok) flash(r.error); else { flash("Checked."); load(); } }}>{busy === "check" ? "Checking…" : "Check now"}</button>}
-          {st && <button type="button" className="btn sm ghost" onClick={() => setSettings(!settings)}>{box?.enabled ? "Email settings" : "Connect my email"}</button>}
+          {st && <button type="button" className="btn sm ghost" onClick={() => setSettings(!settings)}>{box?.enabled ? (settings ? "Close settings" : "⚙ Email settings") : "Connect my email"}</button>}
         </div>
       </div>
-      {st && (settings || !box?.enabled) && <Connect st={st} onDone={(t) => { setSettings(false); flash(t); load(); }} />}
+      {st && !box?.enabled && <Connect st={st} onDone={(t) => { setSettings(false); flash(t); load(); }} />}
+      {st && box?.enabled && settings && <EmailSettings st={st} onClose={() => setSettings(false)} onDone={(t) => { flash(t); load(); }} />}
       {box?.enabled && box.last_error && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
+      {afterSend && <div className="as-card" role="dialog" aria-label="After sending">
+        <div className="as-t"><b>{afterSend.msg}</b><span>Archive this email, or keep it in your Inbox?</span></div>
+        <div className="as-b">
+          <button type="button" className="btn sm ghost" onClick={() => setAfterSend(null)}>Keep in Inbox</button>
+          <button type="button" className="btn sm primary" onClick={() => void afterArchive()}>Archive</button>
+        </div>
+      </div>}
 
       {mode === "mail" && <FolderBar folders={folders} current={view.kind === "folder" ? view.path : view.kind === "inbox" ? (folders?.find((f) => f.special === "\\Inbox")?.path || "INBOX") : ""} onPick={(p) => { setQ(""); void openFolder(p); }} />}
       <div className={"ibx2" + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
@@ -355,10 +373,10 @@ export default function InboxView({ mode }: { mode: Mode }) {
           : briefOn ? <BriefPane name={(st?.mine?.name || "").split(/\s+/)[0]} items={ol || []}
  listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
             openItem={(id) => { const it = (ol || []).find((x) => x.id === id); if (it) { setAutoBrief(false); setOpen(olKey(it)); setPicked(true); } }} />
-          : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
+          : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} onSent={(m) => setAfterSend({ it: olCur, msg: m })} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
           : !sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
-          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)}
+          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} onSent={(() => { const it = mode === "mail" ? ol?.find((i) => i.activity_id === sel.x.id) : undefined; return it ? (m: string) => setAfterSend({ it, msg: m }) : undefined; })()} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)}
               moveBar={inboxMove(sel.x.id) ? <MoveBar folders={folders} busy={!!busy} here="INBOX" onMove={inboxMove(sel.x.id)!} /> : null} onMove={inboxMove(sel.x.id)} folders={folders} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
               orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
               thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
@@ -460,7 +478,7 @@ function BriefPane({ name, items, listOpen, toggleList, back, openItem }: { name
  * Inbox: an email that isn't a customer's. Read live from the mailbox (the portal doesn't keep it), with what the AI
  * made of it (to-dos, suggested events), Reply, Archive and the SaneBox moves.
  */
-function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy, done }: { i: InboxItem; older: boolean; folders: Folder[] | null; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string, gone?: boolean) => void }) {
+function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy, done, onSent }: { /** sent a reply: ask archive or keep */ onSent?: (msg: string) => void; i: InboxItem; older: boolean; folders: Folder[] | null; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string, gone?: boolean) => void }) {
   const [m, setM] = useState<{ html: string; text: string; from: string; to: string; cc: string; date: string; attachments: { name: string; size: number }[] } | null>(null);
   const [full, setFull] = useState<FullMsg | null>(null);
   const [err, setErr] = useState(""), [loadErr, setLoadErr] = useState("");
@@ -552,7 +570,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
           <textarea rows={7} autoFocus value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your reply" aria-label="Reply" />
           <SayButton chatId={"inbox:" + i.id} who={i.from_name || i.from_email} onDraft={(d) => setBody(d.body)} />
           <div className="ibx2-send">
-            <button type="button" className="btn primary" disabled={!!busy || !body.trim()} onClick={async () => { setBusy("send"); setErr(""); const r = await replyInboxEmail({ id: i.id, body }); setBusy(""); if (!r.ok) setErr(r.error); else { setWriting(false); setBody(""); done(`Sent to ${r.to}.`, false); } }}>{busy === "send" ? "Sending…" : "Send"}</button>
+            <button type="button" className="btn primary" disabled={!!busy || !body.trim()} onClick={async () => { setBusy("send"); setErr(""); const r = await replyInboxEmail({ id: i.id, body }); setBusy(""); if (!r.ok) setErr(r.error); else { setWriting(false); setBody(""); if (onSent) onSent(`Sent to ${r.to}.`); else done(`Sent to ${r.to}.`, false); } }}>{busy === "send" ? "Sending…" : "Send"}</button>
             <span className="faint">Your signature and their email go underneath.</span>
             <span className="spacer" />
             <button type="button" className="btn sm ghost" onClick={() => setWriting(false)}>Close</button>
@@ -589,7 +607,7 @@ function Splitter({ dir, value, min, max, onChange, invert, className, style, la
  * The email column and the Assistant column for one email. The email column is either the email (with the answer box
  * docked at the bottom) or, after Create order, the order being made from it; the Assistant stays beside it.
  */
-function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders }: { /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
+function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders, onSent }: { /** sent a reply to an email in my Inbox: ask archive or keep */ onSent?: (msg: string) => void; /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
@@ -657,7 +675,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   useEffect(() => { if ((needs || focus) && !opts && !busy) loadOpts(); }, [x.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (focus) setTimeout(() => boxRef.current?.focus(), 60); }, [focus]);
   async function urlFor(path: string) { const { data } = await createClient().storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
-  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
+  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else if (key === "send" && onSent) { setWriting(false); onSent(ok); done("", false); } else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
   // the order confirmation arrives after the order is made: into the empty answer box, never over what's typed
   const confirmAt = x.meta?.reply_options?.at;
   useEffect(() => { if (confirm && !body.trim()) { setSubject(confirm.subject); setBody(confirm.body); setPicked(0); setWriting(true); } }, [confirmAt]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -957,11 +975,63 @@ function Connect({ st, onDone }: { st: Status; onDone: (msg: string) => void }) 
         <button type="submit" className="btn primary" disabled={busy}>{busy ? "Checking the sign-in…" : st.mine?.enabled ? "Save" : "Connect"}</button>
         {st.mine?.enabled && <button type="button" className="btn ghost" disabled={busy} onClick={async () => { setBusy(true); await disconnectMailbox(); setBusy(false); onDone("Your email is disconnected. Email already on file stays."); }}>Disconnect</button>}
       </div>
-    </form>{st.mine?.enabled && <Signature />}</section>
+    </form></section>
   );
 }
 
 /** your Outlook signature, read from the emails you've sent, as it'll appear on replies sent from here */
+/**
+ * Email settings (Oct 12, Nick: "an email settings tab… signature and all those things… I don't want my emails to say
+ * 'Thanks, FBS Team' and then have my signature"): how replies end (your sign-off line, then your signature) and who
+ * the AI writes as; your signature; your mailbox connection.
+ */
+const SIGN_OFFS = ["Thanks,", "Thank you,", "Thanks!", "Best,", "Talk soon,", "Appreciate it,"];
+function EmailSettings({ st, onClose, onDone }: { st: Status; onClose: () => void; onDone: (msg: string) => void }) {
+  const [tab, setTab] = useSticky<"replies" | "signature" | "mailbox">("mail.settingsTab", "replies");
+  const [p, setP] = useState<{ signOff: string; writeAs: "me" | "shop"; name: string } | null>(null), [custom, setCustom] = useState(false), [saved, setSaved] = useState("");
+  useEffect(() => { void getMailPrefs().then((r) => { if (r.ok) { setP(r); setCustom(!!r.signOff && !SIGN_OFFS.includes(r.signOff)); } }); }, []);
+  const save = async (x: Partial<{ signOff: string; writeAs: "me" | "shop" }>) => { if (!p) return; setP({ ...p, ...x }); const r = await setMailPrefs(x); setSaved(r.ok ? "Saved." : r.error); setTimeout(() => setSaved(""), 2500); };
+  const first = (p?.name || st.mine?.name || "").split(/\s+/)[0];
+  return (
+    <section className="panel es" aria-label="Email settings">
+      <div className="es-h">
+        <b>Email settings</b>
+        <div className="ibx2-tabs es-tabs" role="tablist">
+          {([["replies", "Replies"], ["signature", "Signature"], ["mailbox", "Mailbox"]] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
+        </div>
+        {saved && <span className="faint es-saved">{saved}</span>}
+        <button type="button" className="btn sm ghost" onClick={onClose}>Done</button>
+      </div>
+      {tab === "replies" && <div className="panel-b es-b">
+        {!p ? <div className="faint">Loading…</div> : <>
+          <div className="es-row">
+            <div className="es-l"><b>End my replies with</b><span className="faint">Your signature goes right under it. The AI won&apos;t add its own sign-off, a name or &quot;FBS Team&quot;.</span></div>
+            <div className="es-chips">
+              {SIGN_OFFS.map((x) => <button key={x} type="button" className={"mf-chip" + (!custom && p.signOff === x ? " on" : "")} onClick={() => { setCustom(false); void save({ signOff: x }); }}>{x}</button>)}
+              <button type="button" className={"mf-chip" + (!custom && !p.signOff ? " on" : "")} onClick={() => { setCustom(false); void save({ signOff: "" }); }}>Nothing (just my signature)</button>
+              <button type="button" className={"mf-chip" + (custom ? " on" : "")} onClick={() => setCustom(true)}>My own…</button>
+            </div>
+            {custom && <input className="es-own" defaultValue={SIGN_OFFS.includes(p.signOff) ? "" : p.signOff} placeholder="e.g. Thanks so much," onBlur={(e) => void save({ signOff: e.target.value })} aria-label="Your own sign-off" />}
+          </div>
+          <div className="es-row">
+            <div className="es-l"><b>The AI writes as</b><span className="faint">For replies it drafts for you (Write it, the Assistant, suggested answers).</span></div>
+            <div className="es-chips">
+              <button type="button" className={"mf-chip" + (p.writeAs === "me" ? " on" : "")} onClick={() => void save({ writeAs: "me" })}>Me{first ? ` (${first})` : ""}: &quot;I&quot;</button>
+              <button type="button" className={"mf-chip" + (p.writeAs === "shop" ? " on" : "")} onClick={() => void save({ writeAs: "shop" })}>The shop: &quot;we&quot;</button>
+            </div>
+          </div>
+          <div className="es-prev" aria-label="How a reply ends">
+            <span className="faint">How a reply ends</span>
+            <div>Hi Ryan,<br /><br />{p.writeAs === "shop" ? "Yes, we do both embroidery and printing. We'd love to set up a time to talk." : "Yes, we do both embroidery and printing. I'd love to set up a time to talk."}<br /><br />{p.signOff && <>{p.signOff}<br /></>}<i>— your signature —</i></div>
+          </div>
+        </>}
+      </div>}
+      {tab === "signature" && <Signature />}
+      {tab === "mailbox" && <Connect st={st} onDone={(t) => { onDone(t); }} />}
+    </section>
+  );
+}
+
 function Signature() {
   const [sig, setSig] = useState<{ html: string; css: string; on: boolean; at: string | null } | null>(null);
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState(""), [h, setH] = useState(120);

@@ -136,6 +136,27 @@ export async function setSignatureOn(on: boolean) {
   } catch (e) { return fail(e); }
 }
 
+/** Email settings: how your replies end, and whether the AI writes as you or as the shop */
+export async function getMailPrefs() {
+  try {
+    const { admin, user } = await staff();
+    const a = await accountForUser(admin, user!.id);
+    return { ok: true as const, connected: !!a, signOff: a?.sign_off ?? "Thanks,", writeAs: (a?.write_as === "shop" ? "shop" : "me") as "me" | "shop", name: a?.name || "" };
+  } catch (e) { return fail(e); }
+}
+export async function setMailPrefs(input: { signOff?: string; writeAs?: "me" | "shop" }) {
+  try {
+    const { admin, user } = await staff();
+    const a = await accountForUser(admin, user!.id);
+    if (!a) return { ok: false as const, error: "Connect your email first." };
+    const row: Record<string, string> = {};
+    if (input.signOff !== undefined) row.sign_off = input.signOff.replace(/\s+$/, "").slice(0, 120);
+    if (input.writeAs) row.write_as = input.writeAs === "shop" ? "shop" : "me";
+    await admin.from("mail_accounts").update(row).eq("id", a.id);
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
 /** "Not a customer": never read this sender again, and take their email off the lists */
 export async function markNotCustomer(activityId: string) {
   try {

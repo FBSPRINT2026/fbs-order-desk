@@ -6745,3 +6745,27 @@ a.pdn-tag:hover{text-decoration:underline}
   .vd-say-ai{color:#7C5CE0;font-size:17px}
   .vd-say:active{transform:scale(.98)}
 }
+/* Email settings (components/InboxView.tsx EmailSettings) */
+.es{margin-bottom:12px}
+.es-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line-2)}
+.es-h>b{font-size:15px}
+.es-tabs{flex:1;min-width:0}
+.es-saved{font-size:12.5px}
+.es-b{display:flex;flex-direction:column;gap:18px}
+.es-row{display:flex;flex-direction:column;gap:8px}
+.es-l{display:flex;flex-direction:column;gap:2px}
+.es-l .faint{font-size:13px}
+.es-chips{display:flex;flex-wrap:wrap;gap:6px}
+.es-own{max-width:320px;font:inherit;font-size:15px;padding:7px 10px;border:1px solid var(--line);border-radius:8px}
+.es-prev{display:flex;flex-direction:column;gap:6px;max-width:520px}
+.es-prev>.faint{font-size:12.5px;font-weight:700}
+.es-prev>div{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface);font-size:14px;line-height:1.5}
+.es-prev i{color:var(--ink-3);font-style:normal;font-size:13px}
+.es .ibx-sig,.es .ibx-connect{border:0;box-shadow:none;margin:0}
+/* after sending a reply to an Inbox email: archive it or keep it? */
+.as-card{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2700;width:min(460px,calc(100vw - 24px));display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px rgba(20,29,43,.25);animation:vd-up .25s cubic-bezier(.2,.8,.2,1)}
+.as-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13.5px}
+.as-t b{font-size:14px}
+.as-t span{color:var(--ink-2)}
+.as-b{display:flex;gap:6px;flex:none}
+@media (max-width:760px){.as-card{flex-direction:column;align-items:stretch;bottom:calc(76px + env(safe-area-inset-bottom))}.as-b .btn{flex:1;justify-content:center;height:42px;font-size:15px}}

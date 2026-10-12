@@ -13,6 +13,7 @@ import { reorderCheck, type ReorderCheck, type ReorderFix } from "@/lib/ai/reord
 import { chatThread, orderChat } from "@/lib/ai/orderChat";
 import { emailChat, emailChatThread, noteEmail, type ActRow } from "@/lib/ai/emailChat";
 import { accountForUser } from "@/lib/mail/config";
+import { fixSignOff, writerNote } from "@/lib/mail/signoff";
 
 // Staff-only server actions for the Assistant, the CRM timeline and the AI helpers.
 // AI helpers return { ok:false, off:true } until AI is turned on, so the UI can say how to turn it on.
@@ -23,6 +24,12 @@ async function staff() {
   return { ...v, admin: createAdminClient() };
 }
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." });
+
+/** your Email settings for drafts: the sign-off line and who's writing */
+async function writer(admin: ReturnType<typeof createAdminClient>, userId: string | undefined) {
+  const a = userId ? await accountForUser(admin, userId).catch(() => null) : null;
+  return { signOff: a?.sign_off ?? "Thanks,", note: writerNote(a?.write_as || "me", (a?.name || "").split(/\s+/)[0]) };
+}
 
 /** Is AI available, and which parts are switched on? */
 export async function getAiStatus() {
@@ -51,25 +58,26 @@ export async function aiRewriteDraft(input: { purpose: string; orderId?: string 
  */
 export async function aiReplyOptions(activityId: string, fresh = false) {
   try {
-    const { admin, email } = await staff();
+    const { admin, email, user } = await staff();
     const st = await aiState(admin);
-    const r = await writeReplyOptions(admin, activityId, st, email || "staff", fresh);
-    return r.ok ? { ok: true as const, options: r.options } : { ok: false as const, off: r.off, error: r.error };
+    const [r, w] = await Promise.all([writeReplyOptions(admin, activityId, st, email || "staff", fresh), writer(admin, user?.id)]);
+    return r.ok ? { ok: true as const, options: r.options.map((o) => ({ ...o, body: fixSignOff(o.body, w.signOff) })) } : { ok: false as const, off: r.off, error: r.error };
   } catch (e) { return fail(e); }
 }
 
 /** write (or rewrite) the reply to an email the way you say: "tell her yes if the art is approved by Friday" */
 export async function aiWriteReply(input: { activityId: string; instruction?: string; subject?: string; body?: string }) {
   try {
-    const { admin, email } = await staff();
+    const { admin, email, user } = await staff();
     const st = await aiState(admin);
     if (!st.ready) return { ok: false as const, off: true, error: st.reason };
     const c = await emailContext(admin, input.activityId);
     if (!c) return { ok: false as const, error: "That email isn't on file." };
+    const w = await writer(admin, user?.id);
     const what = input.instruction?.trim();
-    const purpose = what ? `Reply to the customer's email. What the shop wants to say: ${what.slice(0, 600)}` : input.body?.trim() ? "Polish this reply to the customer's email: keep what it says, make it clear and friendly." : "Reply to the customer's email.";
+    const purpose = (what ? `Reply to the customer's email. What the shop wants to say: ${what.slice(0, 600)}` : input.body?.trim() ? "Polish this reply to the customer's email: keep what it says, make it clear and friendly." : "Reply to the customer's email.") + ` ${w.note}`;
     const r = await draftMessage(st.settings, { purpose, facts: `${c.facts}\nToday is ${c.today}.\n\nThe customer's email:\n"""\n${c.email}\n"""`, history: c.history, starting: what ? undefined : { subject: input.subject, body: input.body?.slice(0, 4000) } }, { admin, order_id: c.a.order_id as string | null, customer_id: c.a.customer_id as string | null, by: email });
-    return r.ok ? { ok: true as const, subject: input.subject || r.data.subject, body: r.data.body } : { ok: false as const, error: r.error };
+    return r.ok ? { ok: true as const, subject: input.subject || r.data.subject, body: fixSignOff(r.data.body, w.signOff) } : { ok: false as const, error: r.error };
   } catch (e) { return fail(e); }
 }
 
@@ -335,8 +343,12 @@ export async function aiEmailChat(activityId: string, message: string, lookedUp?
     if (!st.ready) return { ok: false as const, off: true, error: st.reason };
     const c = await chatEmail(admin, user!.id, activityId);
     if ("error" in c) return { ok: false as const, error: c.error };
-    const r = await emailChat(admin, st.settings, c.key, email, message, lookedUp, { given: c.given });
-    return r.ok ? { ok: true as const, messages: r.messages } : { ok: false as const, error: r.error };
+    const w = await writer(admin, user!.id);
+    const r = await emailChat(admin, st.settings, c.key, email, message, lookedUp, { given: c.given, writer: w.note });
+    if (!r.ok) return { ok: false as const, error: r.error };
+    const last = r.messages[r.messages.length - 1];
+    if (last?.actions) last.actions = last.actions.map((x) => (x.kind === "reply" ? { ...x, body: fixSignOff(x.body, w.signOff) } : x));
+    return { ok: true as const, messages: r.messages };
   } catch (e) { return fail(e); }
 }
 
@@ -351,11 +363,12 @@ export async function aiDraftReply(activityId: string, said: string) {
     if (!st.ready) return { ok: false as const, off: true, error: st.reason };
     const c = await chatEmail(admin, user!.id, activityId);
     if ("error" in c) return { ok: false as const, error: c.error };
-    const r = await emailChat(admin, st.settings, c.key, email, `Draft my reply. What I want to say: "${said.trim().slice(0, 1800)}"`, null, { given: c.given, draft: true });
+    const w = await writer(admin, user!.id);
+    const r = await emailChat(admin, st.settings, c.key, email, `Draft my reply. What I want to say: "${said.trim().slice(0, 1800)}"`, null, { given: c.given, draft: true, writer: w.note });
     if (!r.ok) return { ok: false as const, error: r.error };
     const last = r.messages[r.messages.length - 1];
     const reply = (last?.actions || []).find((x) => x.kind === "reply") as { subject?: string; body: string } | undefined;
-    return { ok: true as const, said: last?.text || "", draft: reply ? { subject: reply.subject || "", body: reply.body } : null, actions: last?.actions || [] };
+    return { ok: true as const, said: last?.text || "", draft: reply ? { subject: reply.subject || "", body: fixSignOff(reply.body, w.signOff) } : null, actions: last?.actions || [] };
   } catch (e) { return fail(e); }
 }
 
