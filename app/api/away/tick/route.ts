@@ -47,9 +47,10 @@ export async function GET(req: Request) {
   if (who.length && (force || Date.now() - lastAt > 29 * 60000) && Date.now() < deadline - 20000) {
     await admin.from("app_keys").upsert({ name: "jobwatch", value: { at: new Date().toISOString() } }, { onConflict: "name" });
     try {
-      const acts = await watchJobs(admin, { deadline: deadline - 12000 });
-      out.jobs = acts.length;
-      for (const p of who) out[`jobs ${p.email}`] = await syncTasks(admin, p.email, acts);
+      const o = { deadline: deadline - 12000, cut: false };
+      const acts = await watchJobs(admin, o);
+      out.jobs = acts.length; if (o.cut) out.jobsCut = true;
+      for (const p of who) out[`jobs ${p.email}`] = await syncTasks(admin, p.email, acts, !o.cut);
     } catch (e) { out.jobs = e instanceof Error ? e.message : String(e); }
   }
 
@@ -74,29 +75,34 @@ export async function GET(req: Request) {
  * A step the person ticked off isn't added back for 2 business days; after that it comes back as "Still: …".
  * Steps due today also become an alert (once a day).
  */
-async function syncTasks(admin: ReturnType<typeof createAdminClient>, owner: string, acts: JobAction[]) {
+async function syncTasks(admin: ReturnType<typeof createAdminClient>, owner: string, acts: JobAction[], complete: boolean) {
   const today = ctToday();
-  const { data: mine } = await admin.from("tasks").select("id, ref, title, notes, due, status, done_at, done_by").eq("owner", owner).eq("source", "jobs").or(`status.eq.open,done_at.gte.${new Date(Date.now() - 6 * 864e5).toISOString()}`);
+  const { data: mine } = await admin.from("tasks").select("id, ref, title, notes, due, status, done_at, done_by").eq("owner", owner).eq("source", "jobs").or(`status.eq.open,status.eq.dismissed,done_at.gte.${new Date(Date.now() - 6 * 864e5).toISOString()}`);
   const rows = (mine || []) as { id: string; ref: string | null; title: string; notes: string; due: string | null; status: string; done_at: string | null; done_by: string | null }[];
+  // a job with an owner: only theirs
+  acts = acts.filter((a) => !a.owner || a.owner === owner);
   const want = new Map(acts.map((a) => [a.ref, a]));
+  // "Not a to-do" on one: never again for that job + step
+  const dismissed = new Set(rows.filter((t) => t.status === "dismissed" && t.ref).map((t) => t.ref!));
   let added = 0, closed = 0, alerted = 0;
   // done by itself (the step isn't needed any more)
-  const gone = rows.filter((t) => t.status === "open" && t.ref && !want.has(t.ref));
+  const gone = complete ? rows.filter((t) => t.status === "open" && t.ref && !want.has(t.ref)) : [];
   if (gone.length) { await admin.from("tasks").update({ status: "done", done_at: new Date().toISOString(), done_by: "Job watcher: done" }).in("id", gone.map((t) => t.id)); closed = gone.length; }
   for (const a of acts) {
+    if (dismissed.has(a.ref)) continue;
     const open = rows.find((t) => t.ref === a.ref && t.status === "open");
     const ticked = rows.filter((t) => t.ref === a.ref && t.status === "done" && t.done_by && !t.done_by.startsWith("Job watcher")).sort((x, y) => String(y.done_at).localeCompare(String(x.done_at)))[0];
     const title = ticked && !open ? `Still: ${a.title.charAt(0).toLowerCase()}${a.title.slice(1)}` : a.title;
     // ticked off in the last 2 business days: left alone (no to-do, no alert)
     if (!open && ticked && bizBetween(String(ticked.done_at).slice(0, 10), today) < 2) continue;
     if (open) {
-      if ((open.title !== a.title && !open.title.startsWith("Still:")) || open.notes !== a.notes || open.due !== a.by) await admin.from("tasks").update({ title: open.title.startsWith("Still:") ? open.title : a.title, notes: a.notes, due: a.by }).eq("id", open.id);
+      if ((open.title !== a.title && !open.title.startsWith("Still:")) || open.notes !== a.notes || open.due !== a.by) await admin.from("tasks").update({ title: open.title.startsWith("Still:") ? open.title : a.title, notes: a.notes, due: a.by, url: a.url }).eq("id", open.id);
     } else {
-      const { error } = await admin.from("tasks").insert({ owner, title: title.slice(0, 200), notes: a.notes.slice(0, 1000), area: "shop", due: a.by, source: "jobs", order_id: a.orderId, ref: a.ref, created_by: "ai" });
+      const { error } = await admin.from("tasks").insert({ owner, title: title.slice(0, 200), notes: a.notes.slice(0, 1000), area: "shop", due: a.by, source: "jobs", order_id: a.archived ? null : a.orderId, url: a.url, ref: a.ref, created_by: "ai" });
       if (!error) added++;
     }
     if (a.today) {
-      const { error } = await admin.from("alerts").insert({ owner, kind: "job", title: a.title.slice(0, 120), body: a.notes.slice(0, 400), url: a.url, dedupe_key: `${a.ref}:${today}:${owner}`, order_id: a.orderId });
+      const { error } = await admin.from("alerts").insert({ owner, kind: "job", title: a.title.slice(0, 120), body: a.notes.slice(0, 400), url: a.url, dedupe_key: `${a.ref}:${today}:${owner}`, order_id: a.archived ? null : a.orderId });
       if (!error) alerted++;
     }
   }

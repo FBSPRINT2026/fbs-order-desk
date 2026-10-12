@@ -159,6 +159,7 @@ export function Todos({ d, setD, load, compact, err }: { d: Day | null; setD: (f
                     <span className="md-area"><i />{AREAS[t.area]?.label || t.area}</span>
                     {t.due && <span className={t.due < today ? "late" : ""}>{dayName(t.due, today)}</span>}
                     {t.from && <Link href={t.mail_inbox_id ? `/shop/inbox?item=${t.mail_inbox_id}` : "/shop/inbox"} className="md-from" title={t.subject || ""}>✉ {t.from}</Link>}
+                    {t.url && <Link href={t.url} className="md-from md-job">{t.source === "jobs" ? (/order-goods/.test(t.url) ? "Order goods ›" : /receiving/.test(t.url) ? "Receiving ›" : "Open the job ›") : "Open ›"}</Link>}
                     {t.handed_by && <span className="md-handed">from {t.handed_by}</span>}
                   </div>
                   {t.notes && <div className="md-task-n" title="Click to see all" onClick={(e) => (e.currentTarget as HTMLElement).classList.toggle("open")}>{t.notes}</div>}

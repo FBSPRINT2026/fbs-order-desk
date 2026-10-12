@@ -33,7 +33,7 @@ const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? 
 const ymd = (d: unknown) => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
 const AREAS = ["personal", "money", "shop", "customer"];
 
-export type Task = { id: string; owner: string; title: string; notes: string; area: string; due: string | null; status: string; snooze_until: string | null; source: string; mail_inbox_id: string | null; activity_id: string | null; order_id: string | null; created_by: string; handed_by: string | null; created_at: string; done_at: string | null; done_by: string | null; from?: string; subject?: string };
+export type Task = { id: string; owner: string; title: string; notes: string; area: string; due: string | null; status: string; snooze_until: string | null; source: string; mail_inbox_id: string | null; activity_id: string | null; order_id: string | null; created_by: string; handed_by: string | null; created_at: string; done_at: string | null; done_by: string | null; from?: string; subject?: string; /** what it's about (the Job watcher: the job) */ url?: string | null; ref?: string | null };
 export type CalEvent = { id: string; title: string; notes: string; place: string; starts_at: string | null; ends_at: string | null; day: string | null; all_day: boolean; status: string; source: string; mail_inbox_id: string | null; from?: string };
 
 export async function getMyDay() {

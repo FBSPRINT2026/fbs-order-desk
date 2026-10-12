@@ -23,7 +23,8 @@ import { matchToSS, type GoodsRow } from "@/lib/ssMatch";
  */
 
 export type JobStep = "approve" | "sizes" | "art" | "proof" | "goods" | "goods_late" | "print" | "ship";
-export type JobAction = { orderId: string; number: number; step: JobStep; title: string; notes: string; by: string; today: boolean; url: string; ref: string };
+export type JobAction = { orderId: string; number: number; step: JobStep; title: string; notes: string; by: string; today: boolean; url: string; ref: string;
+  /** the job's owner (a staff email): only they get it; none = the owners both */ owner?: string; /** a Printavo job (orderId is the archived order) */ archived?: boolean };
 
 /** S&S warehouse → business days by UPS Ground to the shop (Richardson, TX) */
 export const TRANSIT: Record<string, number> = { TX: 1, KS: 2, IL: 2, OK: 1, GA: 3, OH: 3, KY: 3, NV: 3, FL: 3, PA: 4, NJ: 4, CA: 4, MA: 4, DS: 5 };
@@ -81,7 +82,8 @@ async function goodsTransit(admin: SupabaseClient, groups: Group[]): Promise<{ d
 const custName = (c?: { company: string | null; name: string | null } | null) => c?.company || c?.name || "the customer";
 
 /** every open job's next steps, today first */
-export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; deadline?: number } = {}): Promise<JobAction[]> {
+/** opts.cut is set when it ran out of time before every job was looked at (then nothing is closed as done) */
+export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; deadline?: number; cut?: boolean } = {}): Promise<JobAction[]> {
   const today = ctToday();
   const [{ data: s }, { data: os }] = await Promise.all([
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
@@ -92,7 +94,7 @@ export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; d
   const settings = mergeSettings(s?.data);
   const lead = Math.max(1, settings.ship?.goodsLeadDays ?? 3);
   const orders = ((os || []) as unknown as Row[]).filter((o) => !/^test/i.test(o.nickname || ""));
-  if (!orders.length) return [];
+  if (!orders.length) return watchPrintavoJobs(admin, today, lead, opts).catch(() => { opts.cut = true; return [] as JobAction[]; });
   const ids = orders.map((o) => o.id), cids = [...new Set(orders.map((o) => o.customer_id).filter(Boolean))] as string[];
   const [{ data: cs }, { data: pf }, { data: bo }, { data: gc }] = await Promise.all([
     cids.length ? admin.from("customers").select("id, company, name, price_type, is_test").in("id", cids) : Promise.resolve({ data: [] }),
@@ -103,7 +105,7 @@ export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; d
   const cust = new Map(((cs || []) as { id: string; company: string | null; name: string | null; price_type: string | null; is_test: boolean | null }[]).map((c) => [c.id, c]));
   const out: JobAction[] = [];
   for (const o of orders) {
-    if (opts.deadline && Date.now() > opts.deadline) break;
+    if (opts.deadline && Date.now() > opts.deadline) { opts.cut = true; break; }
     const c = o.customer_id ? cust.get(o.customer_id) : undefined;
     if (c?.is_test) continue;
     const due = o.due_date!, who = custName(c), job = `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}`;
@@ -158,5 +160,71 @@ export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; d
     if (!quote && o.status !== "production" && printBy <= bizAdd(today, -1)) add("print", printBy, `Print ${job}${late(printBy)}`, `Still at "${o.status}". In hands ${nice(due)}${shipped ? `, ships ${nice(shipBy)}` : ""}.`, url, 1);
     if (shipped && o.status === "production" && shipBy <= today) add("ship", shipBy, `Ship ${job}${late(shipBy)}`, `UPS Ground to be there ${nice(due)}.`, url, 0);
   }
+  if (opts.deadline && Date.now() > opts.deadline - 8000) opts.cut = true;
+  else out.push(...await watchPrintavoJobs(admin, today, lead, opts).catch((e) => { console.error("watchPrintavoJobs", e); opts.cut = true; return [] as JobAction[]; }));
   return out.sort((a, b) => Number(b.today) - Number(a.today) || a.by.localeCompare(b.by));
+}
+
+/**
+ * The jobs still run in Printavo until the switch (Nov 1): read from the Printavo mirror (archived_orders, kept current
+ * every 5 minutes). Each garment line says whether its goods are ordered / received; sizes, mockups and approvals are
+ * there too, and the job's owner (Nick or Amanda) gets its reminders.
+ */
+type PvLine = { brand?: string; color?: string; items?: number; sizes?: Record<string, number>; status?: string; mockups?: unknown[]; itemNumber?: string; description?: string; category?: string };
+type PvGroup = { lines?: PvLine[]; imprints?: { mockups?: unknown[] }[] };
+type PvData = { groups?: PvGroup[]; approvals?: { status?: string; name?: string }[]; deliveryMethod?: string; owner?: string; createdAt?: string; files?: unknown[] };
+async function watchPrintavoJobs(admin: SupabaseClient, today: string, lead: number, opts: { live?: boolean; deadline?: number; cut?: boolean }): Promise<JobAction[]> {
+  const [{ data: rows }, { data: st }] = await Promise.all([
+    admin.from("archived_orders").select("id, visual_id, kind, nickname, status_name, due_date, customer_id, data, customers(company, name, is_test)")
+      .not("due_date", "is", null).gte("due_date", bizAdd(today, 10)).lte("due_date", bizAdd(today, -30)).not("status_name", "ilike", "%complete%").not("status_name", "ilike", "%cancel%").limit(400),
+    admin.from("staff").select("email, name"),
+  ]);
+  const staff = ((st || []) as { email: string; name: string | null }[]).filter((x) => x.name);
+  const ownerEmail = (n?: string) => { const t = (n || "").trim().toLowerCase(); if (!t) return undefined; const m = staff.find((x) => x.name!.toLowerCase() === t) || staff.find((x) => x.name!.toLowerCase().split(/\s+/)[0] === t.split(/\s+/)[0]); return m?.email.toLowerCase(); };
+  const out: JobAction[] = [];
+  for (const r of (rows || []) as unknown as { id: string; visual_id: string; kind: string; nickname: string | null; status_name: string | null; due_date: string; customer_id: string | null; data: PvData; customers: { company: string | null; name: string | null; is_test: boolean | null } | null }[]) {
+    if (opts.deadline && Date.now() > opts.deadline) { opts.cut = true; break; }
+    if (r.customers?.is_test) continue;
+    const d = r.data || {}, due = r.due_date, who = custName(r.customers), job = `#${r.visual_id}${r.nickname ? ` ${r.nickname}` : ""}`, stName = r.status_name || "";
+    const owner = ownerEmail(d.owner), url = `/shop/archive/${r.id}`;
+    const shipped = /ship/i.test(d.deliveryMethod || "");
+    const shipBy = shipped ? bizAdd(due, 2) : due, goodsHere = bizAdd(due, lead), needBy = bizAdd(goodsHere, 1);
+    const quote = r.kind === "quote" || /quote/i.test(stName);
+    const lines = (d.groups || []).flatMap((g) => g.lines || []);
+    // garment lines (a style or brand, not "EXTRAS" / fees), and the ones the customer brings
+    const garments = lines.filter((l) => (l.itemNumber || l.brand) && (l.items || 0) > 0);
+    const theirs = (l: PvLine) => /customer (supplied|provided|goods)|cust(omer)?'?s? (own )?goods|supplied by (the )?customer/i.test(l.description || "");
+    const ours = garments.filter((l) => !theirs(l));
+    const notOrdered = ours.filter((l) => !l.status), ordered = ours.filter((l) => l.status === "ordered" || l.status === "partially_received");
+    const noSizes = garments.filter((l) => !Object.values(l.sizes || {}).some((q) => +q > 0));
+    const art = (d.groups || []).some((g) => (g.imprints || []).some((im) => (im.mockups || []).length) || (g.lines || []).some((l) => (l.mockups || []).length));
+    const apprs = d.approvals || [], approved = apprs.some((a) => a.status === "approved"), waiting = apprs.some((a) => a.status && a.status !== "approved" && !/declin|retract|revok/i.test(a.status));
+    const add = (step: JobStep, by: string, title: string, notes: string, link = url, startDays = 2, today2?: boolean) => {
+      if (bizBetween(today, by) > startDays) return;
+      out.push({ orderId: r.id, number: +r.visual_id || 0, step, title, notes, by, today: today2 ?? by <= today, url: link, ref: `pv:${r.id}:${step}`, owner, archived: true });
+    };
+    const late = (by: string) => (by < today ? ` (was due ${nice(by)})` : by === today ? " today" : ` by ${nice(by)}`);
+    const held = /waiting on details|on hold/i.test(stName);
+
+    if (quote) { add("approve", needBy, `Get ${job} approved${late(needBy)}`, `${who} hasn't approved it yet. In hands ${nice(due)}; goods have to be ordered by ${nice(needBy)}.`, url, 3); continue; }
+    if (noSizes.length || held) add("sizes", needBy, `${noSizes.length ? `Get sizes from ${who}` : `Get the missing details from ${who}`} for ${job}${late(needBy)}`, `${noSizes.length ? `${noSizes.length} garment line${noSizes.length === 1 ? " has" : "s have"} no sizes` : `Printavo says "${stName}"`}. Goods have to be ordered by ${nice(needBy)} for the ${nice(due)} in-hands date.`, url, 3);
+    if (waiting && !approved) add("proof", bizAdd(goodsHere, 0), `Get ${who}'s approval on ${job}${late(goodsHere)}`, `The approval in Printavo is still waiting. In hands ${nice(due)}.`, url, 2);
+    if (!art && garments.length && !approved) {
+      const made = (d.createdAt || "").slice(0, 10), waited = made ? bizBetween(made, today) >= 2 : false, artBy = bizAdd(shipBy, 3);
+      if (waited || bizBetween(today, artBy) <= 2) out.push({ orderId: r.id, number: +r.visual_id || 0, step: "art", title: `No art or mockup on ${job} yet: ask ${who}`, notes: `Nothing on the job${waited ? ` ${bizBetween(made, today)} business days after it was made` : ""}. We need it by ${nice(artBy)} to proof and print for ${nice(due)}.`, by: waited && artBy > today ? today : artBy, today: artBy <= today || waited, url, ref: `pv:${r.id}:art`, owner, archived: true });
+    }
+    if (notOrdered.length && !noSizes.length) {
+      let orderBy = needBy, from = "";
+      if (opts.live !== false && bizBetween(today, needBy) <= 3) {
+        const groups = [{ lines: notOrdered.map((l) => ({ brand: l.brand || "", style: l.itemNumber || "", color: l.color || "", sizes: Object.fromEntries(Object.entries(l.sizes || {}).map(([k, q]) => [k.replace(/^size_/, "").toUpperCase(), q])) })) }] as unknown as Group[];
+        const t = await goodsTransit(admin, groups).catch(() => null);
+        if (t) { orderBy = bizAdd(goodsHere, t.days); from = ` S&S ships them from ${t.from} (${bizBetween(orderBy, goodsHere)} business day${bizBetween(orderBy, goodsHere) === 1 ? "" : "s"}).${t.short.length ? ` Short: ${t.short.slice(0, 3).join(", ")}.` : ""}`; }
+      }
+      const pcs = notOrdered.reduce((n, l) => n + (l.items || 0), 0);
+      add("goods", orderBy, `Order goods for ${job}${late(orderBy)}`, `${pcs} pcs (${notOrdered.map((l) => `${l.brand || ""} ${l.itemNumber || ""} ${l.color || ""}`.trim()).slice(0, 3).join("; ")}) aren't marked ordered in Printavo. They need to be here by ${nice(goodsHere)} for ${nice(due)}.${from}`, url, 2);
+    }
+    if (ordered.length && today > goodsHere) out.push({ orderId: r.id, number: +r.visual_id || 0, step: "goods_late", title: `Goods for ${job} aren't all in`, notes: `${ordered.length} line${ordered.length === 1 ? " is" : "s are"} still "ordered" in Printavo; they were needed by ${nice(goodsHere)} for ${nice(due)}. Check the tracking.`, by: goodsHere, today: true, url, ref: `pv:${r.id}:goods_late`, owner, archived: true });
+    if (/ready to ship/i.test(stName) && shipBy <= today) add("ship", shipBy, `${shipped ? "Ship" : "Deliver or set out"} ${job}${late(shipBy)}`, `It's ready (${stName}). In hands ${nice(due)}.`, url, 0);
+  }
+  return out;
 }
