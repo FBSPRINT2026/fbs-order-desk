@@ -21,7 +21,8 @@ export async function GET(req: Request) {
     const { user, isStaff } = await getViewer();
     if (!user || !isStaff) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   }
-  const deadline = Date.now() + 50000, cutoff = new Date(Date.now() - 15 * 60000).toISOString();
+  // well inside the 60-second limit (Oct 12: runs cut off by the limit left mailbox connections open)
+  const deadline = Date.now() + 42000, cutoff = new Date(Date.now() - 15 * 60000).toISOString();
   const { data } = await admin.from("mail_accounts").select("*").eq("enabled", true).or(`last_error_at.is.null,last_error_at.lt.${cutoff}`).order("last_run_at", { ascending: true, nullsFirst: true });
   const out: Record<string, unknown> = {};
   const all = (data || []) as MailAccount[];
@@ -43,6 +44,9 @@ export async function GET(req: Request) {
   for (let i = 0; i < accts.length; i++) {
     const a = accts[i];
     if (Date.now() > deadline - 5000) { out[a.email] = "next time"; continue; }
+    // the mail check has this mailbox right now: not both at once (two connections at a time is what the server allows)
+    const busyUntil = (a as MailAccount & { running_until?: string | null }).running_until;
+    if (busyUntil && Date.parse(busyUntil) > Date.now()) { out[a.email] = "mail check running"; continue; }
     // an equal share of what's left for each mailbox still to go
     const share = Math.max(12000, (deadline - Date.now()) / (accts.length - i));
     try { out[a.email] = await cacheAccount(admin, a, Math.min(deadline, Date.now() + share)); }

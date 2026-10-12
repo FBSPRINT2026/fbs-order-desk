@@ -20,10 +20,19 @@ const mid = (s?: string | null) => (s || "").trim().replace(/^<|>$/g, "");
 // folders that aren't mail to browse
 const SKIP = /^(calendar|contacts|tasks|notes|journal|sync issues|conversation history|rss feeds|outbox|suggested contacts|conflicts|local failures|server failures)(\/|$)/i;
 
-export async function withBox<T>(acct: MailAccount, fn: (c: ImapFlow) => Promise<T>) {
+/**
+ * One connection to the mailbox for the work in fn, always closed after. `until` (default 45 s from now) is a hard
+ * stop: the connection is closed then even mid-step (Oct 12: a cache run stuck on one huge email was cut off by the
+ * 60-second limit every time, leaving connections open until the mail server refused new ones: "Connection not
+ * available" for everything, mail checks and opening emails too).
+ */
+export async function withBox<T>(acct: MailAccount, fn: (c: ImapFlow) => Promise<T>, until = Date.now() + 45000) {
   const client = imapClient(cfgOf(acct));
-  await client.connect();
-  try { return await fn(client); } finally { await client.logout().catch(() => null); }
+  const stop = setTimeout(() => { try { client.close(); } catch { /* closed */ } }, Math.max(2000, until - Date.now()));
+  try {
+    await client.connect();
+    return await fn(client);
+  } finally { clearTimeout(stop); await Promise.race([client.logout().catch(() => null), new Promise((r) => setTimeout(r, 3000))]); try { client.close(); } catch { /* closed */ } }
 }
 
 export async function listFolders(c: ImapFlow, counts = true): Promise<Folder[]> {

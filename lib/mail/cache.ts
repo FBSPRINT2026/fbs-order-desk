@@ -54,9 +54,13 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
         for (const uid of missing) {
           if (Date.now() > deadline - 3000) break;
           try {
-            const m = await c.fetchOne(String(uid), { source: true, size: true, flags: true, envelope: true, internalDate: true }, { uid: true });
+            // the size first: a big email (over 5 MB, usually attachments) is kept by its headers only, and opened live
+            // when clicked (Oct 12: one huge email in Nick's Inbox/Archive stalled every run)
+            const head = await c.fetchOne(String(uid), { size: true, flags: true, envelope: true, internalDate: true }, { uid: true });
+            if (!head) continue;
+            const big = (head.size || 0) > 5 * 1024 * 1024;
+            const m = big ? head : await c.fetchOne(String(uid), { source: true, size: true, flags: true, envelope: true, internalDate: true }, { uid: true });
             if (!m) continue;
-            const big = (m.size || 0) > 12 * 1024 * 1024;
             const p = !big && m.source ? await simpleParser(m.source) : null;
             const env = m.envelope;
             const from = p ? addrList(p.from)[0] : env?.from?.[0];
@@ -88,7 +92,7 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
         tally.folders++;
       } finally { lock.release(); }
     }
-  });
+  }, deadline); // a hard stop at the deadline: never left hanging past the time limit
   return tally;
 }
 
