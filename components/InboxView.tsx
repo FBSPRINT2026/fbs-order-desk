@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
 import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
-import { inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, type Brief, type CalEvent, type Task } from "@/app/shop/myday-actions";
+import { addEvent, addTask, inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, suggestFollowUps, type Brief, type CalEvent, type FollowUp, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
 import { onPullRefresh } from "@/components/PullRefresh";
 import { SayButton } from "@/components/VoiceDraft";
@@ -228,13 +228,16 @@ export default function InboxView({ mode }: { mode: Mode }) {
   };
   const pickFolderRow = (r: MsgRow) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid && y.folder === r.folder ? { ...y, seen: true } : y))); };
   // after sending a reply to an email in my Inbox (Oct 12, Nick): archive it, or keep it in the Inbox?
-  const [afterSend, setAfterSend] = useState<{ it: InboxItem; msg: string } | null>(null);
+  type Sent = { to: string; subject: string; body: string; theirs?: string };
+  const [afterSend, setAfterSend] = useState<{ it?: InboxItem; msg: string; sent?: Sent } | null>(null);
+  // a reply sent from any folder or conversation says so too (MailFolders ReplyBox)
+  useEffect(() => { const h = (e: Event) => setAfterSend((e as CustomEvent<{ msg: string; sent: Sent }>).detail); window.addEventListener("fbs:sent", h); return () => window.removeEventListener("fbs:sent", h); }, []);
   const afterArchive = async () => {
-    const a = afterSend; if (!a) return;
+    const a = afterSend; if (!a?.it) return; const it = a.it;
     setAfterSend(null);
-    const drop = () => { setOl((l) => (l || []).filter((y) => y.id !== a.it.id)); setOpen(null); };
-    try { await boxPost({ do: "move", path: "INBOX", uid: a.it.uid, to: "archive" }); drop(); flash("Archived."); }
-    catch { const r = await archiveOutlookEmail({ id: a.it.id }); if (r.ok) { drop(); flash("Archived."); } else flash(r.error); }
+    const drop = () => { setOl((l) => (l || []).filter((y) => y.id !== it.id)); setOpen(null); };
+    try { await boxPost({ do: "move", path: "INBOX", uid: it.uid, to: "archive" }); drop(); flash("Archived."); }
+    catch { const r = await archiveOutlookEmail({ id: it.id }); if (r.ok) { drop(); flash("Archived."); } else flash(r.error); }
     void load();
   };
   // a customer email that's in my Inbox: Archive / Later / Black Hole / Move it there
@@ -274,13 +277,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
       {st && box?.enabled && settings && <EmailSettings st={st} onClose={() => setSettings(false)} onDone={(t) => { flash(t); load(); }} />}
       {box?.enabled && box.last_error && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
-      {afterSend && <div className="as-card" role="dialog" aria-label="After sending">
-        <div className="as-t"><b>{afterSend.msg}</b><span>Archive this email, or keep it in your Inbox?</span></div>
-        <div className="as-b">
-          <button type="button" className="btn sm ghost" onClick={() => setAfterSend(null)}>Keep in Inbox</button>
-          <button type="button" className="btn sm primary" onClick={() => void afterArchive()}>Archive</button>
-        </div>
-      </div>}
+      {afterSend && <AfterSend key={afterSend.msg + (afterSend.sent?.body.length || 0)} a={afterSend} onArchive={() => void afterArchive()} onClose={() => setAfterSend(null)} />}
 
       {mode === "mail" && <FolderBar folders={folders} current={view.kind === "folder" ? view.path : view.kind === "inbox" ? (folders?.find((f) => f.special === "\\Inbox")?.path || "INBOX") : ""} onPick={(p) => { setQ(""); void openFolder(p); }} />}
       <div className={"ibx2" + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
@@ -373,10 +370,10 @@ export default function InboxView({ mode }: { mode: Mode }) {
           : briefOn ? <BriefPane name={(st?.mine?.name || "").split(/\s+/)[0]} items={ol || []}
  listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
             openItem={(id) => { const it = (ol || []).find((x) => x.id === id); if (it) { setAutoBrief(false); setOpen(olKey(it)); setPicked(true); } }} />
-          : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} onSent={(m) => setAfterSend({ it: olCur, msg: m })} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
+          : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} onSent={(m, sent) => setAfterSend({ it: olCur, msg: m, sent })} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
           : !sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
-          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} onSent={(() => { const it = mode === "mail" ? ol?.find((i) => i.activity_id === sel.x.id) : undefined; return it ? (m: string) => setAfterSend({ it, msg: m }) : undefined; })()} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)}
+          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} onSent={(m, sent) => setAfterSend({ it: mode === "mail" ? ol?.find((i) => i.activity_id === sel.x.id) : undefined, msg: m, sent })} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)}
               moveBar={inboxMove(sel.x.id) ? <MoveBar folders={folders} busy={!!busy} here="INBOX" onMove={inboxMove(sel.x.id)!} /> : null} onMove={inboxMove(sel.x.id)} folders={folders} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
               orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
               thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
@@ -478,7 +475,7 @@ function BriefPane({ name, items, listOpen, toggleList, back, openItem }: { name
  * Inbox: an email that isn't a customer's. Read live from the mailbox (the portal doesn't keep it), with what the AI
  * made of it (to-dos, suggested events), Reply, Archive and the SaneBox moves.
  */
-function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy, done, onSent }: { /** sent a reply: ask archive or keep */ onSent?: (msg: string) => void; i: InboxItem; older: boolean; folders: Folder[] | null; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string, gone?: boolean) => void }) {
+function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy, done, onSent }: { /** sent a reply: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; i: InboxItem; older: boolean; folders: Folder[] | null; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string, gone?: boolean) => void }) {
   const [m, setM] = useState<{ html: string; text: string; from: string; to: string; cc: string; date: string; attachments: { name: string; size: number }[] } | null>(null);
   const [full, setFull] = useState<FullMsg | null>(null);
   const [err, setErr] = useState(""), [loadErr, setLoadErr] = useState("");
@@ -570,7 +567,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
           <textarea rows={7} autoFocus value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your reply" aria-label="Reply" />
           <SayButton chatId={"inbox:" + i.id} who={i.from_name || i.from_email} onDraft={(d) => setBody(d.body)} />
           <div className="ibx2-send">
-            <button type="button" className="btn primary" disabled={!!busy || !body.trim()} onClick={async () => { setBusy("send"); setErr(""); const r = await replyInboxEmail({ id: i.id, body }); setBusy(""); if (!r.ok) setErr(r.error); else { setWriting(false); setBody(""); if (onSent) onSent(`Sent to ${r.to}.`); else done(`Sent to ${r.to}.`, false); } }}>{busy === "send" ? "Sending…" : "Send"}</button>
+            <button type="button" className="btn primary" disabled={!!busy || !body.trim()} onClick={async () => { setBusy("send"); setErr(""); const r = await replyInboxEmail({ id: i.id, body }); setBusy(""); if (!r.ok) setErr(r.error); else { setWriting(false); setBody(""); if (onSent) onSent(`Sent to ${r.to}.`, { to: r.to, subject: i.subject, body, theirs: m?.text || "" }); else done(`Sent to ${r.to}.`, false); } }}>{busy === "send" ? "Sending…" : "Send"}</button>
             <span className="faint">Your signature and their email go underneath.</span>
             <span className="spacer" />
             <button type="button" className="btn sm ghost" onClick={() => setWriting(false)}>Close</button>
@@ -607,7 +604,7 @@ function Splitter({ dir, value, min, max, onChange, invert, className, style, la
  * The email column and the Assistant column for one email. The email column is either the email (with the answer box
  * docked at the bottom) or, after Create order, the order being made from it; the Assistant stays beside it.
  */
-function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders, onSent }: { /** sent a reply to an email in my Inbox: ask archive or keep */ onSent?: (msg: string) => void; /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
+function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders, onSent }: { /** sent a reply to an email in my Inbox: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
@@ -675,7 +672,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   useEffect(() => { if ((needs || focus) && !opts && !busy) loadOpts(); }, [x.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (focus) setTimeout(() => boxRef.current?.focus(), 60); }, [focus]);
   async function urlFor(path: string) { const { data } = await createClient().storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
-  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else if (key === "send" && onSent) { setWriting(false); onSent(ok); done("", false); } else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
+  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else if (key === "send" && onSent) { setWriting(false); onSent(ok, { to: x.from_email || "", subject, body, theirs: x.body || "" }); done("", false); } else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
   // the order confirmation arrives after the order is made: into the empty answer box, never over what's typed
   const confirmAt = x.meta?.reply_options?.at;
   useEffect(() => { if (confirm && !body.trim()) { setSubject(confirm.subject); setBody(confirm.body); setPicked(0); setWriting(true); } }, [confirmAt]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -980,6 +977,43 @@ function Connect({ st, onDone }: { st: Status; onDone: (msg: string) => void }) 
 }
 
 /** your Outlook signature, read from the emails you've sent, as it'll appear on replies sent from here */
+/**
+ * After a reply goes out (Oct 12, Nick): the follow-ups it promises ("we'll deliver Wednesday" → a to-do or event on My
+ * Day, one tap each), then, for an email in the Inbox, archive it or keep it.
+ */
+function AfterSend({ a, onArchive, onClose }: { a: { it?: InboxItem; msg: string; sent?: { to: string; subject: string; body: string; theirs?: string } }; onArchive: () => void; onClose: () => void }) {
+  const [items, setItems] = useState<FollowUp[] | null>(a.sent ? null : []), [added, setAdded] = useState<Record<number, string>>({});
+  useEffect(() => { if (a.sent) void suggestFollowUps(a.sent).then((r) => setItems(r.ok ? r.items : []), () => setItems([])); }, [a.sent]);
+  const day = (d: string | null) => (d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "");
+  const time = (t: string | null) => (t ? new Date(`2000-01-01T${t}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "");
+  const add = async (k: number, f: FollowUp) => {
+    setAdded((x) => ({ ...x, [k]: "…" }));
+    const r = f.kind === "event" && f.day ? await addEvent({ title: f.title, day: f.day, start: f.start }) : await addTask({ title: f.title, area: f.area, due: f.day });
+    setAdded((x) => ({ ...x, [k]: r.ok ? "✓ On My Day" : r.error }));
+  };
+  return (
+    <div className="as-card" role="dialog" aria-label="After sending">
+      <div className="as-t"><b>{a.msg}</b></div>
+      {items === null ? <div className="as-f faint">✦ Looking for anything you promised…</div>
+        : items.length > 0 && <div className="as-fl">
+          <span className="as-q">Want a reminder?</span>
+          {items.map((f, k) => <div key={k} className="as-f">
+            <span className={"as-k " + f.kind}>{f.kind === "event" ? "Event" : "To-do"}</span>
+            <span className="as-ft"><b>{f.title}</b>{(f.day || f.start) && <span className="faint"> · {day(f.day)}{f.start ? ` ${time(f.start)}` : ""}</span>}</span>
+            {added[k] ? <span className={"as-done" + (added[k].startsWith("✓") ? " ok" : "")}>{added[k]}</span> : <button type="button" className="btn sm" onClick={() => void add(k, f)}>Add</button>}
+          </div>)}
+        </div>}
+      <div className="as-b">
+        {a.it ? <>
+          <span className="as-q">This email:</span>
+          <button type="button" className="btn sm ghost" onClick={onClose}>Keep in Inbox</button>
+          <button type="button" className="btn sm primary" onClick={onArchive}>Archive</button>
+        </> : <button type="button" className="btn sm ghost" onClick={onClose}>Done</button>}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Email settings (Oct 12, Nick: "an email settings tab… signature and all those things… I don't want my emails to say
  * 'Thanks, FBS Team' and then have my signature"): how replies end (your sign-off line, then your signature) and who

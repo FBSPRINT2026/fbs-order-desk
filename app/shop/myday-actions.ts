@@ -212,3 +212,42 @@ export async function inboxBrief(fresh = false) {
     return r.ok ? { ok: true as const, brief: r.brief, stale: false } : { ok: false as const, error: r.error };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * After you send a reply (Oct 12, Nick: "I said we're on track and we're going to deliver on Wednesday… it should pop up
+ * and say would you like to create a task or a reminder to deliver Gateway on Wednesday, and put that on my
+ * dashboard"): the AI reads what you just wrote and offers the follow-ups it promises, as to-dos or calendar events.
+ * Nothing is added until you tap one.
+ */
+export type FollowUp = { kind: "todo" | "event"; title: string; day: string | null; start: string | null; area: "personal" | "money" | "shop"; why: string };
+export async function suggestFollowUps(input: { to: string; subject: string; body: string; theirs?: string }) {
+  try {
+    const { admin, owner } = await me();
+    const { aiState, askClaude } = await import("@/lib/ai/claude");
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: true as const, items: [] as FollowUp[] };
+    const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
+    const r = await askClaude<{ items: unknown }>({
+      task: "reply_followups", model: st.settings.assistant.ai.fastModel || st.settings.assistant.ai.model, maxTokens: 700, admin, ctx: { by: owner }, timeoutMs: 20_000,
+      tool: { name: "followups", description: "Follow-ups the sender just committed to.", input_schema: { type: "object", properties: {
+        items: { type: "array", maxItems: 3, description: "0-3 things the sender promised or now has to do because of this reply (deliver, ship, send a quote, call, follow up, meet). Empty when the reply commits to nothing.", items: { type: "object", properties: {
+          kind: { type: "string", enum: ["todo", "event"], description: "event: being somewhere or something happening at a set time (a meeting, a call at 2pm, a delivery they'll be there for). todo: something to do by a day." },
+          title: { type: "string", description: "Short, starts with a verb, names who/what: \"Deliver Gateway's order\", \"Send David the revised quote\"" },
+          day: { type: ["string", "null"], description: "YYYY-MM-DD when the reply gives or clearly implies the day (\"Wednesday\" = the coming Wednesday); null otherwise" },
+          start: { type: ["string", "null"], description: "HH:MM 24-hour when a time is given; else null" },
+          area: { type: "string", enum: ["personal", "money", "shop"] },
+          why: { type: "string", description: "A few words from the reply that it comes from" },
+        }, required: ["kind", "title", "day", "start", "area", "why"] } },
+      }, required: ["items"] } },
+      system: `You help a print shop owner keep their promises. They just sent this reply. List only follow-ups the reply actually commits them to. Today is ${today} (Central time).`,
+      prompt: `To: ${input.to}\nSubject: ${input.subject}\n\nWhat they wrote:\n"""\n${input.body.slice(0, 4000)}\n"""${input.theirs ? `\n\nThe email they were answering:\n"""\n${input.theirs.slice(0, 3000)}\n"""` : ""}`,
+    });
+    if (!r.ok) return { ok: true as const, items: [] as FollowUp[] };
+    const raw = Array.isArray(r.data.items) ? r.data.items : typeof r.data.items === "string" ? (() => { try { return JSON.parse(r.data.items as string); } catch { return []; } })() : [];
+    const items = (raw as Partial<FollowUp>[]).filter((x) => x && x.title).slice(0, 3).map((x) => ({
+      kind: x.kind === "event" && x.day ? "event" as const : "todo" as const, title: String(x.title).slice(0, 160), day: ymd(x.day || null), start: x.start && /^\d{1,2}:\d{2}$/.test(x.start) ? x.start : null,
+      area: (["personal", "money", "shop"].includes(String(x.area)) ? x.area : "shop") as FollowUp["area"], why: String(x.why || "").slice(0, 120),
+    }));
+    return { ok: true as const, items };
+  } catch (e) { return fail(e); }
+}

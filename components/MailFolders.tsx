@@ -329,7 +329,9 @@ export function ReplyBox({ m, all, start, onClose, onSent }: { m: FullMsg; all?:
       <SayButton chatId={`box:${m.uid}:${m.folder}`} who={m.fromName || m.fromAddress} onDraft={(d) => setBody(d.body)} />
       {err && <div className="pv-err">{err}</div>}
       <div className="ibx2-send">
-        <button type="button" className="btn primary" disabled={busy || !body.trim()} onClick={async () => { setBusy(true); setErr(""); try { const r = await boxPost<{ to: string }>({ do: "reply", path: m.folder, uid: m.uid, body, all: toAll }); onSent(r.to); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); }}>{busy ? "Sending…" : "Send"}</button>
+        <button type="button" className="btn primary" disabled={busy || !body.trim()} onClick={async () => { setBusy(true); setErr(""); try { const r = await boxPost<{ to: string }>({ do: "reply", path: m.folder, uid: m.uid, body, all: toAll }); onSent(r.to);
+            // the Email page offers the follow-ups this reply promises (a to-do or event on My Day)
+            window.dispatchEvent(new CustomEvent("fbs:sent", { detail: { msg: `Sent to ${r.to}.`, sent: { to: r.to, subject: m.subject, body, theirs: m.text || "" } } })); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); }}>{busy ? "Sending…" : "Send"}</button>
         <span className="faint">Your signature and their email go underneath.</span>
         <span className="spacer" />
         <button type="button" className="btn sm ghost" onClick={onClose}>Close</button>
