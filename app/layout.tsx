@@ -1,7 +1,8 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 
-export const metadata: Metadata = { title: "FBS Order Desk", description: "Quotes, invoices, production and customer portal" };
+// appleWebApp: from the Home Screen the portal opens as its own app (full screen), which iPhones need for notifications
+export const metadata: Metadata = { title: "FBS Order Desk", description: "Quotes, invoices, production and customer portal", appleWebApp: { capable: true, title: "FBS", statusBarStyle: "default" } };
 // maximumScale 1: iPhones don't zoom the page in when you tap into a search or reply box (pinch-zoom still works,
 // iOS ignores it for that) (Oct 12: Amanda's page stayed zoomed in after searching her email)
 export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, viewportFit: "cover" };

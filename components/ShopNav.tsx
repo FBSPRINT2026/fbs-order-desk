@@ -41,6 +41,7 @@ const ICONS: Record<string, React.ReactNode> = {
   ink: <svg viewBox="0 0 24 24"><path d="M12 3c3.5 4.2 6 7.6 6 10.6A6 6 0 0 1 6 13.6C6 10.6 8.5 7.2 12 3z" /><path d="M9.5 14.5a2.6 2.6 0 0 0 2.5 2.5" /></svg>,
   chat: <svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" /></svg>,
   cal: <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>,
+  bell: <svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></svg>,
   details: <svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4V3h6v1" /><path d="M8.5 12.5l2.3 2.3 4.7-4.8" /></svg>,
   seps: <svg viewBox="0 0 24 24"><rect x="3" y="3" width="12" height="12" rx="2" /><rect x="6" y="6" width="12" height="12" rx="2" /><rect x="9" y="9" width="12" height="12" rx="2" /></svg>,
   support: <svg viewBox="0 0 24 24"><path d="M4 13v-1a8 8 0 0 1 16 0v1" /><rect x="3" y="13" width="4" height="6" rx="1.5" /><rect x="17" y="13" width="4" height="6" rx="1.5" /><path d="M19 19c0 1.5-2 2.5-5 2.5" /></svg>,
@@ -224,6 +225,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         {link(["/shop", "home", "My Day"])}
         {link(["/shop/inbox", "inbox", "Email"])}
         {link(["/shop/my-calendar", "cal", "Calendar"])}
+        {link(["/shop/alerts", "bell", "Alerts & Away"])}
         {(crew ? [GROUPS[1], GROUPS[2], GROUPS[0]] : GROUPS).map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>

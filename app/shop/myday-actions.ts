@@ -97,10 +97,12 @@ export async function updateTask(id: string, p: { title?: string; area?: string;
 export async function setTaskDone(id: string, done: boolean) {
   try {
     const { admin, owner, user, email } = await me();
-    const { data: t } = await admin.from("tasks").select("id, mail_inbox_id, status").eq("id", id).eq("owner", owner).maybeSingle();
+    const { data: t } = await admin.from("tasks").select("id, mail_inbox_id, status, ref").eq("id", id).eq("owner", owner).maybeSingle();
     if (!t) return { ok: false as const, error: "That to-do isn't yours." };
     const now = new Date().toISOString();
     await admin.from("tasks").update(done ? { status: "done", done_at: now, done_by: email } : { status: "open", done_at: null, done_by: null }).eq("id", id);
+    // a Job watcher step done by one owner is done for the other too
+    if (done && t.ref) await admin.from("tasks").update({ status: "done", done_at: now, done_by: email }).eq("ref", t.ref).eq("status", "open").neq("id", id);
     let archived = false;
     if (done && t.mail_inbox_id) {
       const { count } = await admin.from("tasks").select("id", { count: "exact", head: true }).eq("mail_inbox_id", t.mail_inbox_id).eq("status", "open");
