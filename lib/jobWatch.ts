@@ -212,15 +212,18 @@ async function watchPrintavoJobs(admin: SupabaseClient, today: string, lead: num
     };
     const late = (by: string) => (by < today ? ` (was due ${nice(by)})` : by === today ? " today" : ` by ${nice(by)}`);
     const held = /waiting on details|on hold/i.test(stName);
+    // past the goods / art stage in Printavo (ready for production or scheduling, on press, ready to ship): the line
+    // markings often lag, so nothing about goods, sizes or art (Oct 12: the first run flagged jobs that were done)
+    const pastGoods = /ready for production|ready for scheduling|scheduling|press|printing|ready to ship|shipping|deliver|transfers ordered/i.test(stName);
 
     if (quote) { add("approve", needBy, `Get ${job} approved${late(needBy)}`, `${who} hasn't approved it yet. In hands ${nice(due)}; goods have to be ordered by ${nice(needBy)}.`, url, 3); continue; }
-    if (noSizes.length || held) add("sizes", needBy, `${noSizes.length ? `Get sizes from ${who}` : `Get the missing details from ${who}`} for ${job}${late(needBy)}`, `${noSizes.length ? `${noSizes.length} garment line${noSizes.length === 1 ? " has" : "s have"} no sizes` : `Printavo says "${stName}"`}. Goods have to be ordered by ${nice(needBy)} for the ${nice(due)} in-hands date.`, url, 3);
+    if (!pastGoods && (noSizes.length || held)) add("sizes", needBy, `${noSizes.length ? `Get sizes from ${who}` : `Get the missing details from ${who}`} for ${job}${late(needBy)}`, `${noSizes.length ? `${noSizes.length} garment line${noSizes.length === 1 ? " has" : "s have"} no sizes` : `Printavo says "${stName}"`}. Goods have to be ordered by ${nice(needBy)} for the ${nice(due)} in-hands date.`, url, 3);
     if (waiting && !approved) add("proof", bizAdd(goodsHere, 0), `Get ${who}'s approval on ${job}${late(goodsHere)}`, `The approval in Printavo is still waiting. In hands ${nice(due)}.`, url, 2);
-    if (!art && garments.length && !approved) {
+    if (!pastGoods && !art && garments.length && !approved) {
       const made = (d.createdAt || "").slice(0, 10), waited = made ? bizBetween(made, today) >= 2 : false, artBy = bizAdd(shipBy, 3);
       if (artBy <= today && waited !== undefined) out.push({ orderId: r.id, number: +r.visual_id || 0, step: "art", title: `No art or mockup on ${job} yet: ask ${who}`, notes: `Nothing on the job${waited ? ` ${bizBetween(made, today)} business days after it was made` : ""}. We need it by ${nice(artBy)} to proof and print for ${nice(due)}.`, by: artBy, today: true, url, ref: `pv:${r.id}:art`, owner, archived: true });
     }
-    if (notOrdered.length && !noSizes.length) {
+    if (!pastGoods && notOrdered.length && !noSizes.length) {
       let orderBy = needBy, from = "";
       if (opts.live !== false && bizBetween(today, needBy) <= 3) {
         const groups = [{ lines: notOrdered.map((l) => ({ brand: l.brand || "", style: l.itemNumber || "", color: l.color || "", sizes: Object.fromEntries(Object.entries(l.sizes || {}).map(([k, q]) => [k.replace(/^size_/, "").toUpperCase(), q])) })) }] as unknown as Group[];
@@ -231,7 +234,7 @@ async function watchPrintavoJobs(admin: SupabaseClient, today: string, lead: num
       add("goods", orderBy, `Order goods for ${job}${late(orderBy)}`, `${pcs} pcs (${notOrdered.map((l) => `${l.brand || ""} ${l.itemNumber || ""} ${l.color || ""}`.trim()).slice(0, 3).join("; ")}) aren't marked ordered in Printavo. They need to be here by ${nice(goodsHere)} for ${nice(due)}.${from}`, url, 2);
     }
     const inProd = /press|production|printing|ship|deliver|embroider|ready/i.test(stName) && !/pre production|ready for production|scheduling/i.test(stName);
-    if (ordered.length && today > goodsHere && !inProd && (/receiving/i.test(stName) || bizBetween(today, due) <= 2)) out.push({ orderId: r.id, number: +r.visual_id || 0, step: "goods_late", title: `Goods for ${job} aren't all in`, notes: `${ordered.length} line${ordered.length === 1 ? " is" : "s are"} still "ordered" in Printavo; they were needed by ${nice(goodsHere)} for ${nice(due)}. Check the tracking.`, by: goodsHere, today: true, url, ref: `pv:${r.id}:goods_late`, owner, archived: true });
+    if (ordered.length && today > goodsHere && !inProd && /receiving/i.test(stName)) out.push({ orderId: r.id, number: +r.visual_id || 0, step: "goods_late", title: `Goods for ${job} aren't all in`, notes: `${ordered.length} line${ordered.length === 1 ? " is" : "s are"} still "ordered" in Printavo; they were needed by ${nice(goodsHere)} for ${nice(due)}. Check the tracking.`, by: goodsHere, today: true, url, ref: `pv:${r.id}:goods_late`, owner, archived: true });
     if (false && /ready to ship/i.test(stName) && shipBy <= today) add("ship", shipBy, `${shipped ? "Ship" : "Deliver or set out"} ${job}${late(shipBy)}`, `It's ready (${stName}). In hands ${nice(due)}.`, url, 0);
   }
   return out;

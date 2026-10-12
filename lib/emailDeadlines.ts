@@ -46,8 +46,18 @@ export async function watchEmailOrders(admin: SupabaseClient, opts: { deadline?:
   const st = await aiState(admin);
   const out: JobAction[] = [];
   let asked = 0;
+  // an order made for the customer since the conversation started (in Printavo or here) counts as made too (Oct 12:
+  // Fossil's order was in Printavo, the email still showed "no order yet")
+  const custIds = [...new Set(convos.flatMap((g) => g.map((x) => x.customer_id)).filter(Boolean))] as string[];
+  const [{ data: pv }, { data: po }] = custIds.length ? await Promise.all([
+    admin.from("archived_orders").select("customer_id, order_date, data->>createdAt").in("customer_id", custIds).gte("order_date", since.slice(0, 10)),
+    admin.from("orders").select("customer_id, created_at").in("customer_id", custIds).gte("created_at", since),
+  ]) : [{ data: [] }, { data: [] }];
+  const ordersSince = (cid: string | null, from: string) => !!cid && ([...((pv || []) as { customer_id: string; order_date: string | null; createdAt?: string }[]).map((x) => ({ c: x.customer_id, at: x.createdAt || x.order_date || "" })), ...((po || []) as { customer_id: string; created_at: string }[]).map((x) => ({ c: x.customer_id, at: x.created_at }))])
+    .some((x) => x.c === cid && x.at.slice(0, 10) >= bizAdd(from.slice(0, 10), 2));
   for (const g of convos) {
     if (g.some((x) => done.has(x.id))) continue;
+    if (g.some((x) => x.customer_id && ordersSince(x.customer_id, g[g.length - 1].occurred_at))) continue;
     const newest = g[0], cust = g.find((x) => x.direction === "in" && x.customer_id) || newest;
     let r: Read | null = have.get(newest.id) || null;
     if (!r) {
