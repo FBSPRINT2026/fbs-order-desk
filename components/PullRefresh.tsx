@@ -28,7 +28,7 @@ export default function PullRefresh() {
     const inScroller = (t: EventTarget | null) => {
       for (let el = t as HTMLElement | null; el && el !== document.body; el = el.parentElement) {
         if (el.scrollTop > 0) return true;
-        if (el.matches?.("dialog, [role=dialog], .tb-menu, textarea, input, select")) return true;
+        if (el.matches?.("dialog, [role=dialog], .tb-menu, .tx, textarea, input, select")) return true;
       }
       return false;
     };

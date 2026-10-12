@@ -6655,3 +6655,29 @@ a.pdn-tag:hover{text-decoration:underline}
 .ptr.busy svg{animation:ptr-spin .8s linear infinite}
 @keyframes ptr-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.ptr.busy svg{animation-duration:2s}}
+
+/* phones, reading an email: no page header, menu bar or folder strip, just the email (like an app); the Assistant
+   opens as a full-screen chat, like a text conversation */
+@media (max-width:760px){
+  body:has(.ibx2.picked .eh-bar.has-pn) .side,
+  body:has(.ibx2.picked .eh-bar.has-pn) .ibx2-head,
+  body:has(.ibx2.picked .eh-bar.has-pn) .top-r,
+  body:has(.ibx2.picked .eh-bar.has-pn) .mf-bar,
+  .ibx2-work[data-side="mail"]:has(.eh-bar.has-pn) .ibx2-sw{display:none!important}
+  body:has(.ibx2.picked .eh-bar.has-pn) .main{padding-top:0!important}
+  .eh-pn-ai{height:34px;padding:0 12px!important;margin-right:4px;border-radius:999px!important;background:var(--accent-soft)!important;font-size:14px!important;font-weight:700;gap:5px}
+  .ibx2-work[data-side="ai"] .ibx2-ai{position:fixed;inset:0;z-index:2500;display:flex;flex-direction:column;height:100vh;height:100dvh;min-height:0!important;border-radius:0!important;background:var(--surface)}
+  .ibx2-work[data-side="ai"] .ibx2-ai .tx{flex:1;min-height:0}
+  .ibx2-work[data-side="ai"] .ibx2-ai .tx-h{padding:calc(6px + env(safe-area-inset-top)) 10px 8px 4px;gap:8px}
+  .ibx2-work[data-side="ai"] .ibx2-ai .tx-hide{display:none}
+  .ibx2-work[data-side="ai"] .ibx2-ai .tx-in{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .ibx2-work[data-side="ai"] .ibx2-ai .tx-in textarea{font-size:16px}
+  body:has(.ibx2-work[data-side="ai"]) {overflow:hidden}
+}
+.tx-back{display:none}
+.tx-ht{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.tx-ht small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:760px){
+  .tx-back{display:inline-flex;align-items:center;gap:0;border:0;background:none;font:inherit;font-size:16px;font-weight:600;color:var(--accent);padding:6px 6px 6px 0;cursor:pointer}
+  .tx-back svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+}

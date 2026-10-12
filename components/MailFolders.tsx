@@ -102,7 +102,7 @@ export const TbIcon = {
  * next email across the top, and its buttons (Reply, Archive, Later, Black Hole, Move) along the bottom of the screen.
  * The page that lists the emails says where back goes and what's before / after; every email header reads it.
  */
-export type PhoneNavT = { label: string; back: () => void; up?: () => void; down?: () => void; pos?: string };
+export type PhoneNavT = { label: string; back: () => void; up?: () => void; down?: () => void; pos?: string; /** e.g. the Assistant button on a customer email */ extra?: React.ReactNode };
 export const PhoneNav = createContext<PhoneNavT | null>(null);
 
 type SwipeTo = "archive" | "later" | "blackhole";
@@ -223,6 +223,7 @@ export function MailHead({ toolbar, subject, tags, fromName, fromEmail, to, cc, 
         {nav ? <div className="eh-pn">
           <button type="button" className="eh-pn-back" onClick={nav.back}>{TbIcon.back}<span>{nav.label}</span></button>
           {nav.pos && <span className="eh-pn-pos">{nav.pos}</span>}
+          {nav.extra}
           <button type="button" className="eh-pn-ud" disabled={!nav.up} onClick={nav.up} aria-label="Previous email">{TbIcon.up}</button>
           <button type="button" className="eh-pn-ud" disabled={!nav.down} onClick={nav.down} aria-label="Next email">{TbIcon.down}</button>
         </div> : back && <button type="button" className="eh-back" onClick={back} aria-label="Back to the list">{TbIcon.back}</button>}

@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
@@ -588,6 +588,9 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const [view, setView] = useState<"mail" | "order">("mail"), [orderStart, setOrderStart] = useState<{ told?: string; job?: string; n: number } | null>(null), [ordering, setOrdering] = useState(false);
   // phones: one column at a time
   const [side, setSide] = useState<"mail" | "ai">("mail");
+  // phones: "✦ Assistant" sits in the email's top bar and opens the chat full screen
+  const pnav = useContext(PhoneNav);
+  const myNav = pnav && x.direction === "in" ? { ...pnav, extra: <button type="button" className="eh-pn-ai" onClick={() => setSide("ai")}><span aria-hidden>✦</span> Assistant</button> } : pnav;
   const [made, setMade] = useState<{ id: string; number: number } | null>(null), [bump, setBump] = useState(0);
   const [aiW, setAiW] = useSticky<number>("inbox.aiW", 330), [composeH, setComposeH] = useSticky<number>("inbox.composeH", 0);
   // the Assistant's room (Oct 10, Nick: half screen, the chat took too much space): the email keeps at least EMAIL_MIN;
@@ -665,6 +668,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
       </div>
 
       {/* 2. the email (or the order being made from it) */}
+      <PhoneNav.Provider value={myNav}>
       <section className="ibx2-mail" aria-label="The email">
         <MailHead listOpen={listOpen} toggleList={toggleList} subject={x.subject} fromName={who !== fromName ? `${who} · ${fromName}` : who} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
           tags={<>
@@ -749,6 +753,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           </div>}
         </>}
       </section>
+      </PhoneNav.Provider>
 
       {/* 3. the Assistant: stays open while answering or making the order */}
       {aiMode !== "full" && (
@@ -758,7 +763,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
       )}
       <aside className="ibx2-ai" aria-label="Assistant">
         {x.direction === "in"
-          ? <EmailChat activityId={x.id} onAction={(a) => { if (narrow) setPeek(false); act(a); }} busyOutside={!!busy} bump={bump} summary={x.meta?.triage?.summary} onHide={hideAi} />
+          ? <EmailChat activityId={x.id} onAction={(a) => { if (narrow) setPeek(false); act(a); }} busyOutside={!!busy} bump={bump} summary={x.meta?.triage?.summary} onHide={hideAi} onBack={() => setSide("mail")} who={who} />
           : <div className="ibx2-none">Your sent email.</div>}
       </aside>
     </div>
