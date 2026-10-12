@@ -9,7 +9,7 @@ import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, 
 import { addEvent, addTask, inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, suggestFollowUps, type Brief, type CalEvent, type FollowUp, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
 import { onPullRefresh } from "@/components/PullRefresh";
-import { personName, senderLabel } from "@/lib/mail/sender";
+import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
@@ -127,8 +127,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
     if (s.ok) setSt(s as unknown as Status);
     // an email that came to someone's mailbox is theirs alone (Oct 12, Nick): only yours (or, viewing as someone,
     // theirs); one that came in another way (no mailbox) shows to everyone
-    const myAcct = s.ok ? s.mine?.id || null : null;
-    const list = ((a || []) as Act[]).filter((x) => !x.meta?.ignored && (!x.meta?.account_id || x.meta.account_id === myAcct));
+    const myAcct = s.ok ? s.mine?.id || null : null, myAddr = s.ok ? s.mine?.email || null : null;
+    const list = ((a || []) as Act[]).filter((x) => !x.meta?.ignored && emailIsMine(x, myAcct, myAddr));
     setActs(list);
     const ids = list.filter((x) => x.direction === "in").map((x) => x.id);
     const cIds = [...new Set(list.map((x) => x.customer_id).filter(Boolean))] as string[];

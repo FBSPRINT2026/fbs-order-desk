@@ -93,9 +93,11 @@ export async function sendEmailReply(input: { activityId: string; subject: strin
     if (!a?.from_email) return { ok: false as const, error: "That email isn't on file." };
     const meta = (a.meta || {}) as { references?: string[]; from_name?: string; account_id?: string; cc?: string[]; html?: string };
     const refs = [...(meta.references || []), a.external_id].filter(Boolean) as string[];
-    // from the mailbox the email came to (the thread stays in that person's Outlook), else your own
-    const acct = meta.account_id ? await accountById(admin, meta.account_id) : null;
-    const from = acct?.enabled ? acct : await accountForUser(admin, user!.id);
+    // from your own mailbox when you have one (an email sent to both owners is stored once, under one of them: Amanda
+    // answering States Made goes out from her address, not Nick's); else the mailbox it came to
+    const own = await accountForUser(admin, user!.id);
+    const acct = own?.enabled ? null : meta.account_id ? await accountById(admin, meta.account_id) : null;
+    const from = own?.enabled ? own : acct?.enabled ? acct : own;
     if (!from?.enabled) return { ok: false as const, error: "Connect your email in the Inbox first, so the reply can go out from your address." };
     const subject = input.subject || `Re: ${a.subject || ""}`;
     const sent = new Date(a.occurred_at as string).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" at ", " ");

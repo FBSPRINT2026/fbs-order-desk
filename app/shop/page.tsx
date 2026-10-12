@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import { mailRows, type MailSug } from "@/lib/inbox";
 import { getMailStatus } from "./mail-actions";
 import MyDay, { CrewTodos } from "@/components/MyDay";
-import { senderLabel } from "@/lib/mail/sender";
+import { emailIsMine, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { DETAILS_LABEL, detailsCount, ordersNeedingDetails } from "@/lib/productionDetails";
 import type { Group } from "@/lib/pricing";
@@ -31,7 +31,7 @@ type Cust = { id: string; company: string; name: string; email?: string | null }
 
 type Job = { id: string; href: string; number: number; nickname: string; customer_id: string | null; due: string | null; status: string; statusLabel: string; printavo: boolean; total: number; owner: string; ship: boolean };
 type Msg = { id: string; order_id: string | null; customer_id: string | null; author_name: string; author_email: string; body: string; created_at: string; topic: string | null };
-type Mail = { id: string; customer_id: string | null; order_id: string | null; subject: string; body: string; from_email: string; occurred_at: string; direction: string; external_id: string | null; thread_id: string | null; meta: { from_name?: string; account_id?: string; ignored?: boolean; no_reply?: boolean; references?: string[]; triage?: { needs_reply?: boolean; summary?: string; intent?: string; urgency?: string; urgent_reason?: string } } | null };
+type Mail = { id: string; customer_id: string | null; order_id: string | null; subject: string; body: string; from_email: string; to_email?: string | null; occurred_at: string; direction: string; external_id: string | null; thread_id: string | null; meta: { from_name?: string; account_id?: string; ignored?: boolean; no_reply?: boolean; references?: string[]; triage?: { needs_reply?: boolean; summary?: string; intent?: string; urgency?: string; urgent_reason?: string } } | null };
 type SepLite = { id: string; number: number; order_id: string | null; location: string; garment_color: string; status: string; due_date: string | null; customer_id: string | null; channels: unknown[]; updated_at: string };
 // separations on the dashboard are the ones being worked on (Printed and Archived aren't listed)
 const SEP_ST: Record<string, [string, string]> = { working: ["Working", "#A152C9"] };
@@ -61,7 +61,7 @@ export default function Dashboard() {
   const [custs, setCusts] = useState<Record<string, Cust>>({});
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [mailNeeds, setMailNeeds] = useState<Mail[]>([]), [mailUrgent, setMailUrgent] = useState<Mail[]>([]), [myBox, setMyBox] = useState<string | null>(null);
+  const [mailNeeds, setMailNeeds] = useState<Mail[]>([]), [mailUrgent, setMailUrgent] = useState<Mail[]>([]), [myBox, setMyBox] = useState<string | null>(null), [myBoxEmail, setMyBoxEmail] = useState<string | null>(null);
   const [reorders, setReorders] = useState<Reorder[]>([]);
   const [goods, setGoods] = useState({ today: 0, arrived: 0 });
   const [owners, setOwners] = useState<Record<string, string>>({}); // customer → account owner (first name)
@@ -124,7 +124,7 @@ export default function Dashboard() {
         setMailNeeds(mr.filter((r) => r.needs).map((r) => r.x));
         setMailUrgent(mr.filter((r) => r.urgent).map((r) => r.x));
       })().catch(() => null);
-      getMailStatus().then((r) => { if (!r.ok) return; const b = viewing ? (r.all || []).find((x) => x.email.toLowerCase() === myEmail.toLowerCase()) : r.mine; setMyBox(b?.enabled ? b.id : viewing ? "none" : null); }).catch(() => null);
+      getMailStatus().then((r) => { if (!r.ok) return; const b = viewing ? (r.all || []).find((x) => x.email.toLowerCase() === myEmail.toLowerCase()) : r.mine; setMyBox(b?.enabled ? b.id : viewing ? "none" : null); setMyBoxEmail(b?.enabled ? b.email : null); }).catch(() => null);
       // reorder reminders: ordered around this time last year, nothing since (in the last 60 days)
       const recentBuyers = new Set(((recent.data || []) as { customer_id: string | null; order_date: string | null }[]).filter((r) => r.order_date && r.order_date >= addDays(-60)).map((r) => r.customer_id));
       for (const x of js) if (!x.printavo && x.customer_id) recentBuyers.add(x.customer_id);
@@ -180,7 +180,7 @@ export default function Dashboard() {
   // an email is mine when it came to my mailbox (or it's one of my customers')
   // an email that came to someone's mailbox is theirs alone (Oct 12, Nick: "none of my email in any part of her login,
   // and none of hers in mine"): yours show, someone else's never do; one with no mailbox (a web form) shows to all
-  const mailMine = (x: Mail) => (x.meta?.account_id ? !!myBox && x.meta.account_id === myBox : true);
+  const mailMine = (x: Mail) => emailIsMine(x, myBox, myBoxEmail);
   const myNeeds = mailNeeds.filter(mailMine);
   const myUrgent = mailUrgent.filter(mailMine).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)); // longest waiting first
   // one list of everything waiting on a reply: urgent emails first (longest waiting first), then the rest, newest first
