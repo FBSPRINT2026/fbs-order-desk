@@ -5,6 +5,7 @@ import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
+import { archiveOutlookEmail, getOutlookInbox, type InboxItem } from "../mail-actions";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "../mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "../ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -20,6 +21,9 @@ import type { EmailAction } from "@/lib/ai/emailChat";
  *  - the Assistant: what the email is, a short conversation, and the next steps as buttons. It stays open the whole
  *    time, while answering or making the order.
  * Vendors, newsletters and personal mail never get here (they're skipped, not stored).
+ * My Inbox (Oct 12): your Outlook Inbox as it is right now, mirrored every couple of minutes (lib/mail/mirror.ts).
+ * What's left in it is the to-do list: archive in Outlook and it's gone here; Archive here archives it in Outlook.
+ * Customer email opens as usual; anything else shows the sender and subject only (the portal doesn't keep it).
  */
 type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; no_reply?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number; from_link?: string; source?: string }[]; links?: { url: string; kind: string; ok: boolean; error?: string }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; urgent_reason?: string; needs_reply?: boolean }; reply_options?: { at: string; options: { label: string; subject: string; body: string }[] } } };
 type Sug = { id: string; kind: string; status: string; activity_id: string | null; title: string; body: string; draft: { subject?: string; body?: string } | null; payload: { groups?: unknown[] } | null; order_id: string | null };
@@ -34,7 +38,8 @@ const INTENT: Record<string, string> = { new_order: "New order", reorder: "Reord
 export default function Inbox() {
   const [st, setSt] = useState<Status | null>(null);
   const [acts, setActs] = useState<Act[] | null>(null), [sugs, setSugs] = useState<Sug[]>([]), [custs, setCusts] = useState<Map<string, Cust>>(new Map()), [orders, setOrders] = useState<Ord[]>([]);
-  const [tab, setTab] = useSticky<"reply" | "leads" | "all">("inbox.tab", "reply");
+  const [tab, setTab] = useSticky<"outlook" | "reply" | "leads" | "all">("inbox.tab2", "outlook");
+  const [ol, setOl] = useState<InboxItem[] | null>(null); // my Outlook Inbox, mirrored
   const [whose, setWhose] = useSticky<"mine" | "everyone">("inbox.whose", "mine");
   const [settings, setSettings] = useState(false);
   // the list can be hidden to give the email more room (remembered)
@@ -50,6 +55,7 @@ export default function Inbox() {
     const [s, { data: a }] = await Promise.all([
       getMailStatus(),
       sb.from("activities").select("id, customer_id, order_id, direction, subject, body, from_email, to_email, external_id, thread_id, occurred_at, meta").eq("kind", "email").gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(800),
+      getOutlookInbox().then((r) => { if (r.ok) setOl(r.connected ? r.items : null); }, () => null),
     ]);
     if (s.ok) setSt(s as unknown as Status);
     const list = ((a || []) as Act[]).filter((x) => !x.meta?.ignored);
@@ -76,7 +82,7 @@ export default function Inbox() {
     if (!id) return;
     const r = rows.find((y) => y.x.id === id);
     if (r) {
-      if (!(r.needs && tab === "reply")) setTab(r.needs ? "reply" : "all");
+      if (!(tab === "outlook" && ol?.some((i) => i.activity_id === id)) && !(r.needs && tab === "reply")) setTab(r.needs ? "reply" : "all");
       if (whose === "mine" && r.x.meta?.account_id !== mineId) setWhose("everyone");
       setOpen(id); setFocus(id); setPicked(true);
     }
@@ -87,21 +93,36 @@ export default function Inbox() {
     .sort((a, b) => (tab === "reply" ? Number(b.urgent) - Number(a.urgent) : 0) || b.x.occurred_at.localeCompare(a.x.occurred_at)); // urgent ones first on Needs reply
   const counts = { urgent: scoped.filter((r) => r.urgent).length, reply: scoped.filter((r) => r.needs).length, leads: scoped.filter((r) => r.x.meta?.lead && !r.x.customer_id).length, all: scoped.length };
 
+  // My Inbox: the Outlook Inbox, mirrored. A customer email opens as usual (by its email id); anything else is "ol:<row>".
+  const rowByAct = useMemo(() => new Map(rows.map((r) => [r.x.id, r])), [rows]);
+  useEffect(() => { if (st && !st.mine?.enabled && tab === "outlook") setTab("reply"); }, [st, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  const olKey = (i: InboxItem) => (i.activity_id && rowByAct.has(i.activity_id) ? i.activity_id : "ol:" + i.id);
   const who = (x: Act) => { const c = x.customer_id ? custs.get(x.customer_id) : null; return c ? c.company || c.name || x.from_email : `${x.meta?.from_name || x.from_email}`; };
   const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(""), 5000); };
 
   // the email showing: the one picked, else the first in the list (after sending, the next one)
   const [q, setQ] = useState("");
   const listed = q.trim() ? shown.filter((r) => `${who(r.x)} ${r.x.from_email} ${r.x.subject} ${r.x.meta?.triage?.summary || ""}`.toLowerCase().includes(q.trim().toLowerCase())) : shown;
-  const sel = listed.find((r) => r.x.id === open) || (open ? rows.find((r) => r.x.id === open) : undefined) || listed[0];
+  const olShown = (ol || []).filter((i) => {
+    const t = q.trim().toLowerCase(), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
+    return !t || `${i.from_name} ${i.from_email} ${i.subject} ${r ? who(r.x) + " " + (r.x.meta?.triage?.summary || "") : ""}`.toLowerCase().includes(t);
+  });
+  const olCur = tab === "outlook" ? olShown.find((i) => olKey(i) === open) || olShown[0] : undefined;
+  const sel = tab === "outlook" ? (olCur?.activity_id ? rowByAct.get(olCur.activity_id) : undefined)
+    : listed.find((r) => r.x.id === open) || (open ? rows.find((r) => r.x.id === open) : undefined) || listed[0];
   const [picked, setPicked] = useState(false); // phones: the list until an email is picked, then the email
   const pickRow = (id: string, answer = false) => { setOpen(id); setPicked(true); if (answer) setFocus(id); };
   // the email showing stays put: a new email arriving at the top of the list never swaps it out from under you
-  useEffect(() => { if (!open && sel) setOpen(sel.x.id); }, [open, sel?.x.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!open && sel) setOpen(sel.x.id); else if (!open && olCur) setOpen(olKey(olCur)); }, [open, sel?.x.id, olCur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const listRef = useRef<HTMLDivElement | null>(null);
   const onKeys = (e: React.KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
+    if (tab === "outlook") {
+      const keys = olShown.map(olKey), i = olCur ? keys.indexOf(olKey(olCur)) : -1, k = keys[Math.max(0, Math.min(keys.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
+      if (k) { setOpen(k); listRef.current?.querySelector<HTMLElement>(`[data-id="${k}"]`)?.focus(); }
+      return;
+    }
     const i = listed.findIndex((r) => r.x.id === sel?.x.id), n = listed[Math.max(0, Math.min(listed.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
     if (n) { setOpen(n.x.id); listRef.current?.querySelector<HTMLElement>(`[data-id="${n.x.id}"]`)?.focus(); }
   };
@@ -123,12 +144,13 @@ export default function Inbox() {
       {box?.enabled && box.last_error && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
 
-      <div className={"ibx2" + (picked && sel ? " picked" : "") + (!listOpen && sel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
-        {(listOpen || !sel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
+      <div className={"ibx2" + (picked && (sel || olCur) ? " picked" : "") + (!listOpen && (sel || olCur) ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
+        {(listOpen || !(sel || olCur)) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
         {/* 1. the list */}
         <section className="ibx2-list" aria-label="Emails">
           <div className="ibx2-list-h">
             <div className="ibx2-tabs" role="tablist">
+              {ol !== null && <button type="button" role="tab" aria-selected={tab === "outlook"} className={tab === "outlook" ? "on" : ""} onClick={() => { setTab("outlook"); setOpen(null); }} title="Your Outlook Inbox as it is right now. Archive in Outlook and it's gone here; Archive here archives it in Outlook.">My Inbox <span>{ol.length}</span></button>}
               <button type="button" role="tab" aria-selected={tab === "reply"} className={tab === "reply" ? "on" : ""} onClick={() => setTab("reply")}>Needs reply <span className={counts.urgent ? "hot" : ""} title={counts.urgent ? `${counts.urgent} urgent` : undefined}>{counts.reply}</span></button>
               <button type="button" role="tab" aria-selected={tab === "leads"} className={tab === "leads" ? "on" : ""} onClick={() => setTab("leads")}>Leads <span>{counts.leads}</span></button>
               <button type="button" role="tab" aria-selected={tab === "all"} className={tab === "all" ? "on" : ""} onClick={() => setTab("all")}>All</button>
@@ -139,7 +161,27 @@ export default function Inbox() {
             </div>
           </div>
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
-            {!acts ? <div className="ibx2-none">Loading…</div> : !listed.length ? <div className="ibx2-none">{q ? "Nothing matches." : tab === "reply" ? "Nothing waiting on you." : tab === "leads" ? "No new leads." : "No customer email in the last 30 days."}</div>
+            {tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : "Your Outlook Inbox is empty. Nice."}</div>
+              : olShown.map((i) => {
+                const k = olKey(i), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
+                const name = r ? who(r.x) : i.from_name || i.from_email || "(unknown sender)";
+                return (
+                  <button key={i.id} data-id={k} type="button" className={"ibx2-item ol" + (olCur?.id === i.id ? " on" : "") + (r?.needs ? " needs" : "") + (r?.urgent ? " urgent" : "") + (i.unread ? " unread" : "") + (!r ? " plain" : "")} onClick={() => pickRow(k)} onDoubleClick={() => r && pickRow(k, true)}>
+                    <span className="ibx2-item-1">
+                      <b>{name}</b>
+                      {r?.urgent && <em>Urgent</em>}
+                      {i.flagged && <span className="ibx2-flag" title="Flagged in Outlook" aria-label="Flagged">⚑</span>}
+                      <time>{i.received_at ? ago(i.received_at) : ""}</time>
+                    </span>
+                    <span className="ibx2-item-2">{r?.x.meta?.triage?.summary || i.subject || "(no subject)"}</span>
+                    <span className="ibx2-item-3">
+                      {r ? (r.needs ? <span className="ol-needs">Needs reply</span> : r.answered ? <span>Answered</span> : null) : <span>Not a customer</span>}
+                      {i.cc_only && <span title="You were copied (Cc), not sent to">CC&apos;d</span>}
+                      {r?.x.order_id && orders.find((o) => o.id === r.x.order_id) && <span>#{orders.find((o) => o.id === r.x.order_id)!.number}</span>}
+                    </span>
+                  </button>
+                );
+              })) : !acts ? <div className="ibx2-none">Loading…</div> : !listed.length ? <div className="ibx2-none">{q ? "Nothing matches." : tab === "reply" ? "Nothing waiting on you." : tab === "leads" ? "No new leads." : "No customer email in the last 30 days."}</div>
               : listed.map(({ x, answered, needs, urgent }) => {
                 const late = needs && (Date.now() - new Date(x.occurred_at).getTime()) / 36e5 > 24;
                 const ord = orders.find((o) => o.id === x.order_id);
@@ -164,8 +206,10 @@ export default function Inbox() {
         </section>
 
         {/* 2 + 3. the email and the Assistant */}
-        {!sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
-          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} focus={focus === sel.x.id} x={sel.x} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
+        {!sel && tab === "outlook" && olCur ? <PlainMail key={olCur.id} i={olCur} older={!!olCur.activity_id} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
+            done={(t) => { flash(t); setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); }} />
+          : !sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
+          : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
               orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
               thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
               back={() => setPicked(false)} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} busy={busy} setBusy={setBusy} done={(t, next) => { flash(t); void load().then(() => { if (next) setOpen(null); }); }} />}
@@ -175,6 +219,23 @@ export default function Inbox() {
 }
 
 type Opt = { label: string; subject: string; body: string };
+
+/** My Inbox: an email that isn't a customer's (the portal keeps the sender and subject only). Archive archives it in Outlook. */
+function PlainMail({ i, older, listOpen, toggleList, back, busy, setBusy, done }: { i: InboxItem; older: boolean; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string) => void }) {
+  const [err, setErr] = useState("");
+  return (
+    <section className="ibx2-empty ibx2-plain">
+      <button type="button" className="ibx2-back" onClick={back}>← Emails</button>
+      <button type="button" className="ibx2-listbtn ibx2-plain-list" onClick={toggleList} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
+      <b>{i.subject || "(no subject)"}</b>
+      <span>{i.from_name ? `${i.from_name} · ` : ""}{i.from_email}{i.received_at ? ` · ${new Date(i.received_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}{i.cc_only ? " · you were CC'd" : ""}</span>
+      <p className="ibx2-plain-note">{older ? "A customer email from more than 30 days ago. Open it in Outlook." : "Not a customer email, so the portal only lists it here. Open it in Outlook to read it."}</p>
+      <button type="button" className="btn sm" disabled={!!busy} title="Moves it to Archive in your Outlook, the same as Outlook's Archive button"
+        onClick={async () => { setBusy("arch"); setErr(""); const r = await archiveOutlookEmail({ id: i.id }); setBusy(""); if (!r.ok) setErr(r.error); else done("Archived in Outlook."); }}>{busy === "arch" ? "Archiving…" : "Archive"}</button>
+      {err && <div className="err">{err}</div>}
+    </section>
+  );
+}
 
 /**
  * A border between two panes that can be dragged, like Outlook (Oct 10, Nick): left/right for the list and the
@@ -202,7 +263,7 @@ function Splitter({ dir, value, min, max, onChange, invert, className, style, la
  * The email column and the Assistant column for one email. The email column is either the email (with the answer box
  * docked at the bottom) or, after Create order, the order being made from it; the Assistant stays beside it.
  */
-function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList }: { x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
+function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly }: { /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
@@ -267,7 +328,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   useEffect(() => { if ((needs || focus) && !opts && !busy) loadOpts(); }, [x.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (focus) setTimeout(() => boxRef.current?.focus(), 60); }, [focus]);
   async function urlFor(path: string) { const { data } = await createClient().storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
-  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else done(ok, key === "send" || key === "nr" || key === "ign"); };
+  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (!r.ok) setErr(r.error || "Something went wrong."); else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
   // the order confirmation arrives after the order is made: into the empty answer box, never over what's typed
   const confirmAt = x.meta?.reply_options?.at;
   useEffect(() => { if (confirm && !body.trim()) { setSubject(confirm.subject); setBody(confirm.body); setPicked(0); setWriting(true); } }, [confirmAt]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -310,6 +371,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {x.customer_id && <Link className="ibx2-chip link" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
             {filed && <Link className="ibx2-chip link" href={`/shop/orders/${filed.id}`}>#{filed.number}</Link>}
             {answered && <span className="ibx2-chip ok">Answered</span>}
+            {ccOnly && <span className="ibx2-chip" title="You were copied (Cc), not sent to: not on your Needs reply list">CC&apos;d</span>}
           </div>
           {/* the everyday buttons in one row; the rest under More */}
           <div className="ibx2-acts">
@@ -323,6 +385,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               <option value="">File under…</option>{orders.slice(0, 40).map((o) => <option key={o.id} value={o.id}>#{o.number} {o.nickname || ""} ({o.status})</option>)}
             </select>}
             {needs && <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id), "Off your Needs reply list.")}>No reply needed</button>}
+            {inOutlook && <button type="button" className="btn sm ghost" disabled={!!busy} title="Moves it to Archive in your Outlook, the same as Outlook's Archive button" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id }), "Archived in Outlook.")}>{busy === "arch" ? "Archiving…" : "Archive"}</button>}
             {x.direction === "in" ? 
             <details className="ibx2-more" ref={moreRef}>
               <summary className="btn sm ghost">More</summary>

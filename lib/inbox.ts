@@ -7,13 +7,15 @@
  *  - the customer wrote again later, in another thread, and that newer email has been answered: the conversation
  *    moved on (Shag Carpet, Oct 7: "New shirt" asked for a price, then "500 shirt order" placed it and got the reply).
  * "Back to inbox" (meta.reopened_at) puts an answered email back: only what's sent after that answers it again.
+ * Not a reply for us either (Oct 12, the Outlook Inbox mirror): archived in Outlook (it left the person's Inbox; moving
+ * it back puts it back), or the person was only copied (on Cc, not To).
  * Urgent = needs a reply and the AI rated it high urgency (rush, deadline within a week, same-day pickup, a problem).
  */
 
 export type MailAct = {
   id: string; direction: string; occurred_at: string; external_id: string | null; thread_id: string | null; customer_id: string | null;
   from_email?: string | null; to_email?: string | null;
-  meta: { references?: string[]; account_id?: string; ignored?: boolean; lead?: boolean; no_reply?: boolean; /** put back in the Inbox by staff: only answers after this count */ reopened_at?: string; triage?: { needs_reply?: boolean; intent?: string; summary?: string; urgency?: string; urgent_reason?: string } } | null;
+  meta: { references?: string[]; account_id?: string; ignored?: boolean; lead?: boolean; no_reply?: boolean; /** put back in the Inbox by staff: only answers after this count */ reopened_at?: string; /** the mailbox it came to, and who was on Cc */ account?: string; cc?: string[]; /** archived in Outlook (or from the portal): out of the person's Inbox */ outlook_archived?: string; triage?: { needs_reply?: boolean; intent?: string; summary?: string; urgency?: string; urgent_reason?: string } } | null;
 };
 export type MailSug = { id: string; kind: string; status: string; activity_id: string | null };
 
@@ -35,9 +37,12 @@ export function mailRows<A extends MailAct, S extends MailSug>(acts: A[], sugs: 
     const mine = sugs.filter((s) => s.activity_id === x.id);
     const reply = mine.find((s) => s.kind === "email_reply" && (s.status === "open" || s.status === "snoozed"));
     const quote = mine.find((s) => s.kind === "draft_order" && s.status === "open");
-    const needs = !answered && !x.meta?.no_reply && (!!reply || !!quote || x.meta?.triage?.needs_reply === true);
+    const archived = !!x.meta?.outlook_archived && x.meta.outlook_archived > (x.meta.reopened_at || "");
+    const me = lc(x.meta?.account);
+    const ccOnly = !!me && (x.meta?.cc || []).map(lc).includes(me);
+    const needs = !answered && !archived && !ccOnly && !x.meta?.no_reply && (!!reply || !!quote || x.meta?.triage?.needs_reply === true);
     // urgent: still waiting on us and the customer needs it fast (the AI read a rush, a near deadline, a same-day pickup…)
     const urgent = needs && x.meta?.triage?.urgency === "high";
-    return { x, answered, reply, quote, needs, urgent };
+    return { x, answered, reply, quote, needs, urgent, archived, ccOnly };
   });
 }

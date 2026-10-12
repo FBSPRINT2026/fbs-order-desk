@@ -5,6 +5,7 @@ import { simpleParser, type ParsedMail, type AddressObject } from "mailparser";
 import { cfgOf, type MailAccount, type MailCfg } from "./config";
 import { handleIncoming, handleSent, saveAttachments, saveBody, type MailMsg, type Outcome } from "./process";
 import { accountById } from "./config";
+import { mirrorInbox } from "./mirror";
 
 export function imapClient(c: MailCfg) {
   return new ImapFlow({ host: c.imapHost, port: c.imapPort, secure: true, auth: { user: c.user, pass: c.pass }, logger: false, socketTimeout: 40000 });
@@ -69,6 +70,11 @@ export async function syncAccount(admin: SupabaseClient, acct: MailAccount, dead
           tally[`${kind}_${outcome}`] = (tally[`${kind}_${outcome}`] || 0) + 1;
           last = uid;
           await admin.from("mail_accounts").update({ [vKey]: validity, [uKey]: uid }).eq("id", acct.id);
+        }
+        // the Outlook Inbox as it is right now (what's left in it is the person's to-do list)
+        if (kind === "inbox") {
+          try { const r = await mirrorInbox(admin, client, acct, validity); if (r.gone) tally.inbox_archived = r.gone; }
+          catch (e) { tally.inbox_mirror_error = 1; console.error("mirrorInbox", acct.email, e instanceof Error ? e.message : e); }
         }
         if (Date.now() < deadline - 8000) { const f = await backfillHtml(admin, client, acct.id, kind, deadline - 5000); if (f) tally[`${kind}_formatted`] = f; }
       } finally { lock.release(); }

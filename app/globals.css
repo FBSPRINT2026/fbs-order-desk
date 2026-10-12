@@ -6151,3 +6151,20 @@ a.pdn-tag:hover{text-decoration:underline}
   .pdd-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .pdd-wide{grid-column:1/-1}
 }
+
+/* Inbox → My Inbox: the Outlook Inbox, mirrored (lib/mail/mirror.ts) */
+.ibx2-item.ol.unread .ibx2-item-1 b{color:var(--accent)}
+.ibx2-item.ol.unread{border-left-color:var(--accent)}
+.ibx2-item.ol.plain .ibx2-item-1 b{font-weight:500;color:var(--ink-2)}
+.ibx2-item.ol.plain .ibx2-item-2{color:var(--ink-3)}
+.ibx2-item .ol-needs{color:var(--warn);font-weight:700}
+.ibx2-flag{color:var(--danger);font-size:12px;margin-left:2px}
+.ibx2-plain{position:relative;gap:8px}
+.ibx2-plain>b{font-size:17px;max-width:60ch}
+.ibx2-plain-note{max-width:46ch;margin:4px 0 8px;font-size:13px}
+.ibx2-plain .ibx2-back{display:none}
+.ibx2-plain-list{position:absolute;top:10px;left:10px}
+@media (max-width:760px){
+  .ibx2.picked .ibx2-plain{display:flex}
+  .ibx2-plain .ibx2-back{display:block;position:absolute;top:8px;left:8px;border:0;background:none;font:inherit;color:var(--accent);cursor:pointer}
+}

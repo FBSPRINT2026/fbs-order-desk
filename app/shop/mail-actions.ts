@@ -8,6 +8,7 @@ import { addContact, closeAnswered, closeWrittenTo, saveBody } from "@/lib/mail/
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 import { detectSignature } from "@/lib/mail/signature";
 import { runAccount } from "@/lib/mail/run";
+import { archiveInbox } from "@/lib/mail/mirror";
 
 // Staff actions for the mailboxes: connect your own, reply from the mailbox an email came to, sort a sender, check now.
 
@@ -198,6 +199,38 @@ export async function setEmailOrder(activityId: string, orderId: string | null) 
     const { admin } = await staff();
     await admin.from("activities").update({ order_id: orderId }).eq("id", activityId);
     await admin.from("ai_suggestions").update({ order_id: orderId }).eq("activity_id", activityId);
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+
+export type InboxItem = { id: string; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean; unread: boolean; flagged: boolean; activity_id: string | null };
+
+/** your Outlook Inbox as it is right now (the mirror, refreshed every mailbox check): your to-do list */
+export async function getOutlookInbox() {
+  try {
+    const { admin, user } = await staff();
+    const a = await accountForUser(admin, user!.id);
+    if (!a || !a.enabled) return { ok: true as const, items: [] as InboxItem[], connected: false };
+    const { data } = await admin.from("mail_inbox").select("id, from_email, from_name, subject, received_at, cc_only, unread, flagged, activity_id")
+      .eq("account_id", a.id).is("gone_at", null).order("received_at", { ascending: false, nullsFirst: false }).limit(500);
+    return { ok: true as const, items: (data || []) as InboxItem[], connected: true, checked: a.last_ok_at };
+  } catch (e) { return fail(e); }
+}
+
+/** Archive: moves the email to Archive in your Outlook, the same as Outlook's Archive button (by row, or by the customer email on file) */
+export async function archiveOutlookEmail(input: { id?: string; activityId?: string }) {
+  try {
+    const { admin, user, email } = await staff();
+    const a = await accountForUser(admin, user!.id);
+    if (!a || !a.enabled) return { ok: false as const, error: "Connect your email first." };
+    let id = input.id || "";
+    if (!id && input.activityId) {
+      const { data } = await admin.from("mail_inbox").select("id").eq("account_id", a.id).eq("activity_id", input.activityId).is("gone_at", null).limit(1).maybeSingle();
+      id = (data?.id as string) || "";
+    }
+    if (!id) return { ok: false as const, error: "That email isn't in your Outlook Inbox." };
+    await archiveInbox(admin, a, id, email || "portal");
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }
