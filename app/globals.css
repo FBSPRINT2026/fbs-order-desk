@@ -6342,3 +6342,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .md-task-n{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
 .md-task-n.open{display:block;-webkit-line-clamp:unset}
 .ibx2-solo .ibx2-sum{display:block}
+.lm-row{flex-wrap:nowrap}
+.lm-row>div{flex:1}
+.lm-row.ev{flex-wrap:wrap}
+.lm-row .md-check{margin-top:2px}
