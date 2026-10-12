@@ -276,8 +276,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
           {st && !st.viewing && <button type="button" className="btn sm ghost" onClick={() => setSettings(!settings)}>{box?.enabled ? (settings ? "Close settings" : "⚙ Email settings") : "Connect my email"}</button>}
         </div>
       </div>
-      {st && !box?.enabled && (st.viewing ? <div className="panel panel-b ibx-viewing"><b>{st.viewing} hasn&apos;t connected their email yet.</b> <span className="faint">When they connect it (Email → Connect my email, signed in as themselves), their Inbox shows here.</span></div>
-        : <Connect st={st} onDone={(t) => { setSettings(false); flash(t); load(); }} />)}
+      {st && !box?.enabled && <Connect st={st} onDone={(t) => { setSettings(false); flash(t); load(); }} />}
       {st && box?.enabled && settings && <EmailSettings st={st} onClose={() => setSettings(false)} onDone={(t) => { flash(t); load(); }} />}
       {box?.enabled && box.last_error && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
@@ -964,10 +963,10 @@ function Connect({ st, onDone }: { st: Status; onDone: (msg: string) => void }) 
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   return (
     <section className="panel ibx-connect"><form className="panel-b stack" style={{ gap: 10 }} onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(""); const r = await connectMailbox({ email, password: pw, name, host }); setBusy(false); setPw(""); if (!r.ok) setErr(r.error); else if (r.sendProblem) setErr(`Connected for reading, but sending isn't on yet. ${r.sendProblem}`); else onDone("Your email is connected. Customer email will show up within a couple of minutes."); }}>
-      <div><b>{st.mine?.enabled ? "Your email" : "Connect your email"}</b><div className="faint" style={{ fontSize: 13 }}>The portal reads your Inbox and Sent Items every 2 minutes and keeps only customer email. Replies you send from here go out from your address and land in your Sent Items. Your password is checked with the mail server, then stored encrypted; nobody can see it.</div></div>
+      <div><b>{st.viewing ? `Connect ${st.viewing.split("@")[0].replace(/^./, (c) => c.toUpperCase())}'s email` : st.mine?.enabled ? "Your email" : "Connect your email"}</b>{st.viewing && <div className="faint" style={{ fontSize: 13, marginBottom: 4 }}>You&apos;re viewing as {st.viewing}. Type their email password below; it connects to their account, not yours.</div>}<div className="faint" style={{ fontSize: 13 }}>The portal reads your Inbox and Sent Items every 2 minutes and keeps only customer email. Replies you send from here go out from your address and land in your Sent Items. Your password is checked with the mail server, then stored encrypted; nobody can see it.</div></div>
       <div className="ibx-form">
-        <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required /></label>
-        <label>Your name (signs replies)<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nicholas" /></label>
+        <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} readOnly={!!st.viewing} autoComplete="username" required /></label>
+        <label>{st.viewing ? "Their name (signs replies)" : "Your name (signs replies)"}<input value={name} onChange={(e) => setName(e.target.value)} placeholder={st.viewing ? st.viewing.split("@")[0].replace(/^./, (c) => c.toUpperCase()) : "Nicholas"} /></label>
         <label>Email password<input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" required /></label>
       </div>
       <div className="faint" style={{ fontSize: 12.5 }}>IMAP and SMTP have to be ticked for your mailbox in HostPilot first (Services → Exchange → your name → Advanced Settings): IMAP to read, SMTP to send. The owner can do that for everyone.</div>

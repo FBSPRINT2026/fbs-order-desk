@@ -34,8 +34,22 @@ export async function getMailStatus() {
 /** connect (or reconnect) your own mailbox: the sign-in is tested first, then the password is stored encrypted */
 export async function connectMailbox(input: { email: string; password: string; name: string; host: string }) {
   try {
-    const v = await staff(), { admin, user } = v;
-    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
+    const v = await staff(), { admin } = v;
+    // an owner viewing as someone can connect that person's mailbox for them (Oct 12, Nick: "just connect her email");
+    // the owner types the password; it's tied to that person's sign-in, not the owner's
+    const viewing = await viewedEmail(v);
+    let user = v.user;
+    if (viewing) {
+      if (input.email.trim().toLowerCase() !== viewing) return { ok: false as const, error: `While viewing as ${viewing}, you can only connect ${viewing}.` };
+      let found: { id: string } | null = null;
+      for (let page = 1; page <= 10 && !found; page++) {
+        const { data } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+        found = (data?.users || []).find((u) => (u.email || "").toLowerCase() === viewing) || null;
+        if (!data?.users?.length || data.users.length < 200) break;
+      }
+      if (!found) return { ok: false as const, error: `${viewing} hasn't signed in to the portal yet. They need to sign in once first.` };
+      user = found as typeof user;
+    }
     const email = input.email.trim().toLowerCase(), host = (input.host || DEFAULT_MAIL_HOST).trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false as const, error: "Enter your full email address." };
     if (!input.password) return { ok: false as const, error: "Enter your email password." };
