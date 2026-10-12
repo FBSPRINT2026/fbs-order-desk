@@ -24,6 +24,25 @@ export default function PullRefresh({ children }: { children?: React.ReactNode }
   const [pull, setPull] = useState(0), [busy, setBusy] = useState(false), [gen, setGen] = useState(0);
   const router = useRouter(), [pending, startT] = useTransition(), doneRef = useRef<(() => void) | null>(null);
   useEffect(() => { if (!pending && doneRef.current) { doneRef.current(); doneRef.current = null; } }, [pending]);
+  // a newer version of the portal: picked up when you come back to it or pull to refresh (Oct 12: a phone kept running
+  // the old code after a fix went out, because refreshing only reloads the data)
+  const built = useRef(""), newer = useRef(false);
+  const checkVersion = useRef(async () => {
+    try {
+      const r = await fetch("/api/version", { cache: "no-store" }); const { v } = (await r.json()) as { v: string };
+      if (!v) return false;
+      if (!built.current) built.current = v;
+      newer.current = v !== built.current;
+      return newer.current;
+    } catch { return false; }
+  });
+  useEffect(() => {
+    void checkVersion.current();
+    const back = () => { if (document.visibilityState === "visible") void checkVersion.current().then((n) => { if (n && ![...document.querySelectorAll("textarea, input[type=text]")].some((t) => (t as HTMLInputElement).value.trim())) window.location.reload(); }); // not while something's being written };
+    document.addEventListener("visibilitychange", back);
+    const t = setInterval(() => void checkVersion.current(), 10 * 60000);
+    return () => { document.removeEventListener("visibilitychange", back); clearInterval(t); };
+  }, []);
   // this page only: the server part asked for again, then the page drawn fresh (its own lists load again)
   const refreshPage = useRef<() => Promise<void>>(async () => {});
   refreshPage.current = () => new Promise<void>((res) => { doneRef.current = () => { setGen((g) => g + 1); res(); }; startT(() => router.refresh()); });
@@ -62,6 +81,8 @@ export default function PullRefresh({ children }: { children?: React.ReactNode }
       if (!g?.on) return;
       if (pullRef.current < LINE) { set(0); return; }
       busyRef.current = true; setBusy(true); set(LINE * 0.8);
+      // a newer version is out: load it fresh instead
+      if (await checkVersion.current()) { window.location.reload(); return; }
       const waits: Promise<unknown>[] = [];
       window.dispatchEvent(new CustomEvent<RefreshDetail>("fbs:refresh", { detail: { wait: (p) => waits.push(p) } }));
       if (!waits.length) waits.push(refreshPage.current());
