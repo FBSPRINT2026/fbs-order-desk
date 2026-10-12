@@ -10,32 +10,49 @@ import { aiDraftReply } from "@/app/shop/ai-actions";
  * the draft goes into the reply box to check and send.
  */
 export type Draft = { subject: string; body: string };
-type Listener = { text: string; on: boolean; err: string; sub: (() => void) | null; stop: () => void; abort: () => void };
+type Listener = { text: string; on: boolean; err: string; heard: boolean; sub: (() => void) | null; stop: () => void; abort: () => void };
+/** iPhones and iPads: listening "continuously" there often never hands back the words; one sentence at a time does */
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-/** start listening right away (it has to start inside the tap, or the phone won't allow the microphone) */
+const DEAD = "fbs:voice.dead"; // listening didn't work on this phone lately (the Home Screen app often can't): type instead
+const voiceDead = () => { try { return Date.now() - Number(localStorage.getItem(DEAD) || 0) < 864e5; } catch { return false; } };
+const markDead = () => { try { localStorage.setItem(DEAD, String(Date.now())); } catch { /* fine */ } };
+
+/**
+ * Start listening right away (it has to start inside the tap, or the phone won't allow the microphone). When it can't
+ * listen here, the keyboard comes up instead (its own mic works everywhere): a stand-in field takes the focus inside
+ * the tap, so the reply box can take it over a moment later.
+ */
 export function startListening(): Listener | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any, S = w.SpeechRecognition || w.webkitSpeechRecognition;
-  if (!S) return null;
+  const keyboard = () => {
+    const t = document.createElement("textarea");
+    t.setAttribute("aria-hidden", "true"); t.style.cssText = "position:fixed;bottom:0;left:0;width:1px;height:1px;opacity:0;font-size:16px";
+    document.body.appendChild(t); t.focus(); setTimeout(() => t.remove(), 800);
+  };
+  if (!S || voiceDead()) { keyboard(); return null; }
   const r = new S();
-  r.lang = "en-US"; r.interimResults = true; r.continuous = true; r.maxAlternatives = 1;
+  r.lang = "en-US"; r.interimResults = true; r.continuous = !isIOS(); r.maxAlternatives = 1;
   let final = "";
-  const l: Listener = { text: "", on: true, err: "", sub: null, stop: () => { try { r.stop(); } catch { /* stopped */ } }, abort: () => { try { r.abort(); } catch { /* stopped */ } } };
+  const l: Listener = { text: "", on: true, err: "", heard: false, sub: null, stop: () => { try { r.stop(); } catch { /* stopped */ } }, abort: () => { try { r.abort(); } catch { /* stopped */ } } };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   r.onresult = (e: any) => {
     let interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript; if (e.results[i].isFinal) final += t + " "; else interim += t; }
-    l.text = (final + interim).replace(/\s+/g, " ").trim(); l.sub?.();
+    l.text = (final + interim).replace(/\s+/g, " ").trim(); l.heard = true; l.sub?.();
   };
   r.onend = () => { l.on = false; l.sub?.(); };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   r.onerror = (e: any) => { l.on = false; l.err = e?.error === "not-allowed" ? "The microphone isn't allowed for the portal. Type it instead, or allow it in Settings → Safari → Microphone." : e?.error === "no-speech" ? "" : "Couldn't hear that. Try again, or type it."; l.sub?.(); };
-  try { r.start(); } catch { return null; }
+  try { r.start(); } catch { keyboard(); return null; }
   return l;
 }
 
 export default function VoiceDraft({ chatId, who, listener, onDraft, onClose, openChat }: { chatId: string; who?: string; listener: Listener | null; onDraft: (d: Draft) => void; onClose: () => void; openChat?: () => void }) {
   const [text, setText] = useState(listener?.text || ""), [on, setOn] = useState(!!listener?.on);
+  // typing instead: the keyboard (with its own mic) when listening isn't working or you'd rather type
+  const typeInstead = (why = "") => { listener?.abort(); setOn(false); if (why) setErr(why); setTimeout(() => boxRef.current?.focus(), 30); };
   const [phase, setPhase] = useState<"listen" | "think" | "answer">("listen"), [answer, setAnswer] = useState(""), [err, setErr] = useState("");
   const quiet = useRef<ReturnType<typeof setTimeout> | null>(null), sent = useRef(false), boxRef = useRef<HTMLTextAreaElement | null>(null);
   const write = async (said: string) => {
@@ -55,9 +72,12 @@ export default function VoiceDraft({ chatId, who, listener, onDraft, onClose, op
       if (quiet.current) clearTimeout(quiet.current);
       if (listener.text && listener.on) quiet.current = setTimeout(() => void writeRef.current(listener.text), 2200);
       if (!listener.on && listener.text) void writeRef.current(listener.text);
+      if (!listener.on && !listener.text && !listener.err) setErr("Didn't catch anything. Type it here, or tap the mic on your keyboard.");
     };
-    return () => { listener.sub = null; listener.abort(); if (quiet.current) clearTimeout(quiet.current); };
-  }, [listener]);
+    // nothing heard after a few seconds (some phones open the microphone but never pass the words on): type it instead
+    const dead = setTimeout(() => { if (!listener.heard && listener.on && !sent.current) { markDead(); typeInstead("Listening isn't working here. Type it, or tap the mic on your keyboard and talk."); } }, 7000);
+    return () => { clearTimeout(dead); listener.sub = null; listener.abort(); if (quiet.current) clearTimeout(quiet.current); };
+  }, [listener]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
 
   return (
@@ -76,8 +96,11 @@ export default function VoiceDraft({ chatId, who, listener, onDraft, onClose, op
         {err && <div className="vd-err">{err}</div>}
         <div className="vd-acts">
           <button type="button" className="vd-b" onClick={onClose}>Cancel</button>
+          {phase === "listen" && listener && on && <button type="button" className="vd-b" onClick={() => typeInstead()}>Type</button>}
           {phase === "answer" && openChat && <button type="button" className="vd-b" onClick={() => { onClose(); openChat(); }}>Open the chat</button>}
-          {phase !== "think" && <button type="button" className="vd-b go" disabled={!text.trim()} onClick={() => { if (phase === "answer") { setPhase("listen"); setAnswer(""); } void write(text); }}>Write the reply</button>}
+          {phase === "listen" && listener && on
+            ? <button type="button" className="vd-b go" onClick={() => { if (text.trim()) void write(text); else typeInstead("Didn't catch anything yet. Type it here, or tap the mic on your keyboard."); }}>Done</button>
+            : phase !== "think" && <button type="button" className="vd-b go" disabled={!text.trim()} onClick={() => { if (phase === "answer") { setPhase("listen"); setAnswer(""); } void write(text); }}>Write the reply</button>}
         </div>
       </div>
     </div>
