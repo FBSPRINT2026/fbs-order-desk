@@ -227,14 +227,16 @@ export default function InboxView({ mode }: { mode: Mode }) {
               {mineId && mode === "crm" && <select value={whose} onChange={(e) => setWhose(e.target.value as "mine" | "everyone")} aria-label="Whose email"><option value="mine">Mine</option><option value="everyone">Everyone</option></select>}
             </div>
           </div>
+          {/* the Inbox brief: always first, stays put while the list scrolls */}
+          {mode === "mail" && view.kind === "inbox" && <button type="button" className={"ibx2-briefbtn" + (briefOn ? " on" : "")} onClick={() => { setQ(""); setBk("all"); setOpen("brief"); setPicked(true); }} aria-pressed={briefOn}>
+            <span className="ibx2-briefic" aria-hidden>✦</span>
+            <span className="ibx2-brieft"><b>Inbox brief</b><span>What&apos;s in your Inbox and what to do first</span></span>
+            <span className="ibx2-briefgo" aria-hidden>›</span>
+          </button>}
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
             {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={(r) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid ? { ...y, seen: true } : y))); }} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={fNext > 1} loading={fBusy} onMore={() => void openFolder(view.path, fNext)} /></>
             : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? <div className="ibx2-none">Nothing found for “{view.q}”.{sNote ? ` ${sNote}` : ""}</div> : <>{sNote && <div className="faint mf-note">{sNote}</div>}<ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} /></>)
             : tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : <>
-              {!q.trim() && bk === "all" && <button type="button" data-id="brief" className={"ibx2-item ol ibx2-brief" + (briefOn ? " on" : "")} onClick={() => { setOpen("brief"); setPicked(true); }}>
-                <span className="ibx2-item-1"><b>✦ Inbox brief</b><time>now</time></span>
-                <span className="ibx2-item-2">What&apos;s in your Inbox and what to do first, read by the AI.</span>
-              </button>}
               { !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
               : olShown.map((i) => {
                 const k = olKey(i), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
