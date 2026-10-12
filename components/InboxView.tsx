@@ -660,8 +660,13 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
     else if (a.kind === "no_reply") void run("nr", () => markNoReply(x.id), "Off your Needs reply list.");
     else if (a.kind === "order_goods") window.open(`/shop/order-goods?email=${x.id}`, "_blank");
   }
-  const orderish = ["new_order", "reorder"].includes(x.meta?.triage?.intent || "") || !!quote;
-  const reorder = x.meta?.triage?.intent === "reorder";
+  // anywhere in a customer conversation (Oct 12, Nick: replied "got it, thanks" and Create order was gone): the order
+  // comes from the customer's latest email in it, and it reads as an order when any email in it did
+  const custThread = [x, ...thread].filter((t) => t.direction === "in" && t.customer_id).sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
+  const orderFrom = x.direction === "in" ? x : custThread[0] || null;
+  const intents = [x, ...thread].map((t) => t.meta?.triage?.intent || "");
+  const orderish = intents.some((i) => i === "new_order" || i === "reorder") || !!quote;
+  const reorder = intents.includes("reorder");
   // a piece count in the email ("700 shirts"): an Order goods button right on it (Oct 12, Nick)
   const goodsPcs = pieceCount(x.meta?.triage?.summary, x.subject, (x.body || "").slice(0, 4000));
   async function loadOpts(fresh = false) {
@@ -715,21 +720,21 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             reply: x.direction === "in" ? () => write() : undefined, busy: busy === "mv" || busy === "arch", folders, here: "INBOX",
             ask: x.direction === "in" ? { id: x.id, who, onDraft: (d) => act({ kind: "reply", label: "", subject: d.subject, body: d.body }), openChat: () => setSide("ai") } : undefined,
             move: onMove || (inOutlook ? (to, label) => { const k = (["archive", "later", "news", "receipts", "cc", "blackhole"].includes(to) ? to : "archive") as "archive"; void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: k }), label); } : undefined),
-            more: x.direction === "in" ? (close) => <>
+            more: orderFrom ? (close) => <>
               {view === "order" ? <button type="button" role="menuitem" onClick={() => { close(); setView("mail"); }}>{TbIcon.back} Back to the email</button>
                 : <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); startOrder(); }}>{TbIcon.order} {ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"}</button>}
               <button type="button" role="menuitem" onClick={() => { close(); setSide("ai"); }}><span className="pbar-ic" aria-hidden>✦</span> Assistant chat</button>
               {needs && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr", () => markNoReply(x.id), "Off your Needs reply list."); }}>{TbIcon.check} No reply needed</button>}
               {!needs && x.meta?.no_reply && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr-undo", () => markNoReply(x.id, false), "Back on Needs reply."); }}>{TbIcon.reply} Needs a reply after all</button>}
               {x.customer_id && <a href={`/shop/customers/${x.customer_id}`} role="menuitem" onClick={close}>{TbIcon.file} Open the customer</a>}
-              <a href={`/shop/order-goods?email=${x.id}`} target="_blank" rel="noreferrer" role="menuitem" onClick={close}>{TbIcon.move} Order goods from S&amp;S</a>
-              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>{TbIcon.ban} Not a customer</button>
+              <a href={`/shop/order-goods?email=${orderFrom?.id || x.id}`} target="_blank" rel="noreferrer" role="menuitem" onClick={close}>{TbIcon.move} Order goods from S&amp;S</a>
+              {x.direction === "in" && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>{TbIcon.ban} Not a customer</button>}
             </> : undefined,
           }} fromName={personName(fromName) || who} org={who !== personName(fromName) && who !== fromName ? who : undefined} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
           tags={<>
             {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
             {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="eh-tag">{INTENT[x.meta.triage.intent]}</span>}
-            {x.direction === "in" && (orderish || reorder || ordering) && view !== "order" && <button type="button" className="eh-tag make" disabled={!!busy && busy !== "opts"} onClick={() => startOrder()}>{ordering ? "Back to the order" : reorder ? "＋ Create reorder" : "＋ Create order"}</button>}
+            {!!orderFrom && (x.customer_id || orderish || ordering) && view !== "order" && <button type="button" className="eh-tag make" disabled={!!busy && busy !== "opts"} onClick={() => startOrder()}>{ordering ? "Back to the order" : reorder ? "＋ Create reorder" : "＋ Create order"}</button>}
             {x.direction === "in" && goodsPcs > 0 && <Link className="eh-tag goods" href={orderGoodsHref(x.id)} title="Order the goods for this, or email our S&S rep (Tiffany) for a custom quote">🧺 Order goods · {goodsPcs} pcs</Link>}
             {x.customer_id && <Link className="eh-tag link" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
             {filed && <Link className="eh-tag link" href={`/shop/orders/${filed.id}`}>#{filed.number}</Link>}
@@ -737,10 +742,10 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {ccOnly && <span className="eh-tag" title="You were copied (Cc), not sent to: not on your Needs reply list">CC&apos;d</span>}
           </>}
           toolbar={<Toolbar>
-            {x.direction === "in" && <TbGroup>{view === "order"
+            {!!orderFrom && <TbGroup>{view === "order"
               ? <TbBtn icon={TbIcon.back} label="Back to the email" onClick={() => setView("mail")} />
               : <>
-                <TbBtn icon={TbIcon.reply} label="Reply" kind={!orderish || x.order_id ? "primary" : undefined} onClick={() => write()} />
+                {x.direction === "in" && <TbBtn icon={TbIcon.reply} label="Reply" kind={!orderish || x.order_id ? "primary" : undefined} onClick={() => write()} />}
                 <TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check" />
               </>}</TbGroup>}
             {moveBar || (inOutlook && <TbGroup><TbBtn icon={TbIcon.archive} label={busy === "arch" ? "Archiving…" : "Archive"} kind="strong" disabled={!!busy} title="Moves it to Archive in your Outlook" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id }), "Archived in Outlook.")} /></TbGroup>)}
@@ -764,7 +769,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
         {err && <div className="pv-err eh-err">{err}</div>}
 
         {ordering && <div className="ibx2-order" hidden={view !== "order"}>
-          <EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={x.id} start={orderStart || undefined}
+          <EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={orderFrom?.id || x.id} start={orderStart || undefined}
             onClose={() => { setOrdering(false); setView("mail"); }}
             onCreated={(id, n, opened) => { setOrdering(false); setView("mail"); setMade({ id, number: n }); if (!opened) window.open(`/shop/orders/${id}`, "_blank"); void noteEmailChat(x.id, `Order #${n} created from this email.`, `/shop/orders/${id}`).then(() => setBump((b) => b + 1)); done(`Order #${n} created. Our mockup is being built in a new tab.`); }} />
         </div>}
