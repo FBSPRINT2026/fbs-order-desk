@@ -8,7 +8,7 @@ import { mailRows } from "@/lib/inbox";
 import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
 import { inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, type Brief, type CalEvent, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
-import { Attachments, box as mailBox, boxPost, MailHead, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { Attachments, box as mailBox, boxPost, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailStatus, getSignature, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -210,6 +210,28 @@ export default function InboxView({ mode }: { mode: Mode }) {
   };
   const box = st?.mine;
 
+  // phones: slide an email left for Archive / Later / Black Hole (the same moves as the buttons)
+  const MOVED: Record<string, string> = { archive: "Archived.", later: "Moved to Later.", blackhole: "Black Hole: SaneBox won't show you this sender again." };
+  const quickMove = async (path: string, uid: number, to: string, drop: () => void) => {
+    try { await boxPost({ do: "move", path, uid, to }); drop(); flash(MOVED[to] || "Moved."); return true; }
+    catch (e) { flash(e instanceof Error ? e.message : String(e)); return false; }
+  };
+  const pickFolderRow = (r: MsgRow) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid && y.folder === r.folder ? { ...y, seen: true } : y))); };
+  // phones: "‹ Inbox" and ∧ ∨ on an open email, like the iPhone Mail app
+  const nav: PhoneNavT | null = (() => {
+    const step = (keys: string[], cur: string, pick: (k: string) => void, label: string): PhoneNavT => {
+      const i = keys.indexOf(cur), go = (k: string) => () => { pick(k); window.scrollTo({ top: 0 }); };
+      return { label, back: () => setPicked(false), up: i > 0 ? go(keys[i - 1]) : undefined, down: i >= 0 && i < keys.length - 1 ? go(keys[i + 1]) : undefined };
+    };
+    if (mode === "mail" && view.kind === "folder") {
+      const f = folders?.find((x) => x.path === view.path), rs = fRows || [];
+      return step(rs.map((r) => `${r.folder}:${r.uid}`), fSel ? `${fSel.folder}:${fSel.uid}` : "", (k) => { const r = rs.find((y) => `${y.folder}:${y.uid}` === k); if (r) pickFolderRow(r); }, f ? folderLabel(f) : "Back");
+    }
+    if (mode === "mail" && view.kind === "search") { const cs = convos || []; return step(cs.map((c) => c.key), cSel?.key || "", (k) => setCSel(cs.find((c) => c.key === k) || null), "Search"); }
+    if (tab === "outlook") return step(olShown.map(olKey), briefOn || !olCur ? "" : olKey(olCur), (k) => pickRow(k), "Inbox");
+    return step(listed.map((r) => r.x.id), sel?.x.id || "", (k) => pickRow(k), tab === "reply" ? "Needs reply" : tab === "leads" ? "Leads" : "All");
+  })();
+
   return (
     <>
       <div className="page-head ibx2-head">
@@ -256,7 +278,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
             <span className="ibx2-briefgo" aria-hidden>›</span>
           </button>}
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
-            {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={(r) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid ? { ...y, seen: true } : y))); }} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={!!fMore} loading={fBusy} onMore={() => fMore && void openFolder(view.path, fMore)} /></>
+            {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={pickFolderRow}
+              onSwipe={(r, to) => quickMove(r.folder, r.uid, to, () => { setFRows((x) => (x || []).filter((y) => !(y.uid === r.uid && y.folder === r.folder))); if (fSel?.uid === r.uid && fSel.folder === r.folder) setFSel(null); })} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={!!fMore} loading={fBusy} onMore={() => fMore && void openFolder(view.path, fMore)} /></>
             : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? <div className="ibx2-none">Nothing in the last 45 days for “{view.q}”.{sNote ? ` ${sNote}` : ""}<div style={{ marginTop: 10 }}><button type="button" className="btn sm" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail…" : "Search older mail"}</button></div></div> : <><div className="faint mf-note">Last 45 days.</div><ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} />
               <div className="mf-older-s">{sNote && <div className="faint">{sNote}</div>}<button type="button" className="btn sm ghost" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail… (up to a minute)" : "Search older mail too"}</button></div></>)
             : tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : <>
@@ -265,7 +288,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
                 const k = olKey(i), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
                 const name = r ? who(r.x) : i.from_name || i.from_email || "(unknown sender)";
                 return (
-                  <button key={i.id} data-id={k} type="button" className={"ibx2-item ol" + (olCur?.id === i.id ? " on" : "") + (r?.needs ? " needs" : "") + (r?.urgent ? " urgent" : "") + (i.unread ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => pickRow(k)} onDoubleClick={() => r && pickRow(k, true)}>
+                  <SwipeRow key={i.id} onAct={(to) => quickMove("INBOX", i.uid, to, () => { setOl((l) => (l || []).filter((y) => y.id !== i.id)); if (open === k) setOpen(null); })}>
+                  <button data-id={k} type="button" className={"ibx2-item ol" + (olCur?.id === i.id ? " on" : "") + (r?.needs ? " needs" : "") + (r?.urgent ? " urgent" : "") + (i.unread ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => pickRow(k)} onDoubleClick={() => r && pickRow(k, true)}>
                     <span className="ibx2-item-1">
                       <b>{name}</b>
                       {r?.urgent && <em>Urgent</em>}
@@ -279,6 +303,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
                       {r?.x.order_id && orders.find((o) => o.id === r.x.order_id) && <span>#{orders.find((o) => o.id === r.x.order_id)!.number}</span>}
                     </span>
                   </button>
+                  </SwipeRow>
                 );
               })}</>) : !acts ? <div className="ibx2-none">Loading…</div> : !listed.length ? <div className="ibx2-none">{q ? "Nothing matches." : tab === "reply" ? "Nothing waiting on you." : tab === "leads" ? "No new leads." : "No customer email in the last 30 days."}</div>
               : listed.map(({ x, answered, needs, urgent }) => {
@@ -305,8 +330,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
         </section>
 
         {/* 2 + 3. the email and the Assistant */}
+        <PhoneNav.Provider value={nav}>
         {mode === "mail" && view.kind === "folder" ? (fSel ? <FolderMail key={`${fSel.folder}:${fSel.uid}`} row={fSel} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
-            onGone={() => { setFRows((x) => (x || []).filter((y) => !(y.uid === fSel.uid && y.folder === fSel.folder))); setFSel(null); }} /> : <section className="ibx2-empty"><b>{fRows ? "Pick an email" : "Loading…"}</b></section>)
+            onGone={() => { const rs = fRows || [], i = rs.findIndex((y) => y.uid === fSel.uid && y.folder === fSel.folder), nx = rs[i + 1] || rs[i - 1] || null; setFRows(rs.filter((_, j) => j !== i)); if (nx) pickFolderRow(nx); else setFSel(null); }} /> : <section className="ibx2-empty"><b>{fRows ? "Pick an email" : "Loading…"}</b></section>)
           : mode === "mail" && view.kind === "search" ? (cSel ? <ThreadView key={cSel.key} c={cSel} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
             onMoved={(m) => setCSel((c) => (c ? { ...c, msgs: c.msgs.map((y) => (y.uid === m.uid && y.folder === m.folder ? { ...y, folder: "(moved)" } : y)) } : c))} /> : <section className="ibx2-empty"><b>{convos ? "Pick a conversation" : "Searching…"}</b><span>Each one shows what they sent and what you sent, oldest first.</span></section>)
           : briefOn && ol === null ? <section className="ibx2-empty"><b>Loading…</b></section>
@@ -321,6 +347,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
               orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
               thread={(acts || []).filter((o) => o.id !== sel.x.id && ((o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
               back={() => setPicked(false)} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} busy={busy} setBusy={setBusy} done={(t, next) => { flash(t); void load().then(() => { if (next) setOpen(null); }); }} />}
+        </PhoneNav.Provider>
       </div>
     </>
   );

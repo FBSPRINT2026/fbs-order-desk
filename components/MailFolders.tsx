@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import type { Convo, Folder, FullMsg, MsgRow } from "@/lib/mail/folders";
 
@@ -93,7 +93,80 @@ export const TbIcon = {
   check: P("M4 12l5 5L20 6"),
   more: P("M5 12h.01M12 12h.01M19 12h.01"),
   back: P("M15 5l-7 7 7 7"),
+  up: P("M5 15l7-7 7 7"),
+  down: P("M5 9l7 7 7-7"),
 };
+
+/**
+ * Phones, like the iPhone Mail app (Oct 12, Nick): an open email gets "‹ Inbox" to go back and ∧ ∨ for the previous /
+ * next email across the top, and its buttons (Reply, Archive, Later, Black Hole, Move) along the bottom of the screen.
+ * The page that lists the emails says where back goes and what's before / after; every email header reads it.
+ */
+export type PhoneNavT = { label: string; back: () => void; up?: () => void; down?: () => void; pos?: string };
+export const PhoneNav = createContext<PhoneNavT | null>(null);
+
+type SwipeTo = "archive" | "later" | "blackhole";
+let closeOpenRow: (() => void) | null = null;
+/**
+ * Phones: slide an email left for Later, Black Hole and Archive (like the iPhone Mail app); slide it all the way to
+ * archive it. Touch only: on a computer the row is a plain row.
+ */
+export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct: (to: SwipeTo) => Promise<boolean> }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const g = useRef<{ x: number; y: number; base: number; on: boolean; off: boolean } | null>(null);
+  const swallow = useRef(false);
+  const [off, setOff] = useState(0), [drag, setDrag] = useState(false), [gone, setGone] = useState(false);
+  const OPEN = 222; // three buttons
+  const width = () => ref.current?.offsetWidth || 360;
+  const full = off < -width() * 0.6;
+  const [shut] = useState(() => () => setOff(0)); // the same function every render: what's open is remembered by it
+  const close = () => { shut(); if (closeOpenRow === shut) closeOpenRow = null; };
+  useEffect(() => () => { if (closeOpenRow === shut) closeOpenRow = null; }, [shut]);
+  const fire = async (to: SwipeTo) => {
+    setGone(true); setOff(to === "archive" ? -width() : off);
+    if (closeOpenRow === shut) closeOpenRow = null;
+    const ok = await onAct(to);
+    if (!ok) { setGone(false); setOff(0); }
+  };
+  return (
+    <div className={"sw" + (gone ? " gone" : "") + (off ? " open" : "")} ref={ref}>
+      <div className={"sw-acts" + (full ? " full" : "")} style={{ width: Math.max(0, -off) }} aria-hidden={!off}>
+        <button type="button" className="sw-later" tabIndex={off ? 0 : -1} onClick={() => void fire("later")}>{TbIcon.later}<span>Later</span></button>
+        <button type="button" className="sw-bh" tabIndex={off ? 0 : -1} onClick={() => void fire("blackhole")}>{TbIcon.ban}<span>Black Hole</span></button>
+        <button type="button" className="sw-arch" tabIndex={off ? 0 : -1} onClick={() => void fire("archive")}>{TbIcon.archive}<span>Archive</span></button>
+      </div>
+      <div className="sw-row" style={{ transform: off ? `translateX(${off}px)` : undefined, transition: drag ? "none" : undefined }}
+        onPointerDown={(e) => {
+          if (e.pointerType !== "touch" || gone) return;
+          if (closeOpenRow && closeOpenRow !== shut) { closeOpenRow(); closeOpenRow = null; swallow.current = true; }
+          g.current = { x: e.clientX, y: e.clientY, base: off, on: false, off: false };
+        }}
+        onPointerMove={(e) => {
+          const s = g.current; if (!s || s.off) return;
+          const dx = e.clientX - s.x, dy = e.clientY - s.y;
+          if (!s.on) {
+            if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { s.off = true; return; }
+            if (Math.abs(dx) < 10) return;
+            s.on = true; setDrag(true);
+            try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* fine */ }
+          }
+          setOff(Math.max(-width(), Math.min(0, s.base + dx)));
+        }}
+        onPointerUp={() => {
+          const s = g.current; g.current = null; setDrag(false);
+          if (!s?.on) { if (s && !s.off && s.base) { swallow.current = true; close(); } return; }
+          swallow.current = true;
+          if (off < -width() * 0.6) void fire("archive");
+          else if (off < -OPEN / 2) { setOff(-OPEN); closeOpenRow = shut; }
+          else close();
+        }}
+        onPointerCancel={() => { g.current = null; setDrag(false); if (off && off > -OPEN / 2) close(); }}
+        onClickCapture={(e) => { if (swallow.current) { swallow.current = false; e.preventDefault(); e.stopPropagation(); } }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 export function Toolbar({ children }: { children: React.ReactNode }) { return <div className="tb" role="toolbar" aria-label="Email actions">{children}</div>; }
 export function TbGroup({ children }: { children: React.ReactNode }) { return <div className="tb-g">{children}</div>; }
 export function TbBtn({ icon, label, onClick, kind, disabled, title }: { icon: React.ReactNode; label: string; onClick?: () => void; kind?: "primary" | "danger" | "strong"; disabled?: boolean; title?: string }) {
@@ -137,6 +210,7 @@ export function MailHead({ toolbar, subject, tags, fromName, fromEmail, to, cc, 
   listOpen: boolean; toggleList: () => void; back?: () => void;
 }) {
   const [full, setFull] = useState(false);
+  const nav = useContext(PhoneNav);
   const name = fromName || fromEmail;
   const ini = name.replace(/[^A-Za-z ]/g, " ").trim().split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || "").join("") || "?";
   const names = (v?: string) => (v || "").split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map((x) => x.replace(/<[^>]+>/, "").replace(/"/g, "").trim()).filter(Boolean);
@@ -144,8 +218,13 @@ export function MailHead({ toolbar, subject, tags, fromName, fromEmail, to, cc, 
   const short = [...toN, ...ccN].slice(0, 2).map((x) => x.split(/[\s@]/)[0]).join(", ") + (toN.length + ccN.length > 2 ? ` +${toN.length + ccN.length - 2}` : "");
   return (
     <header className="eh">
-      <div className="eh-bar">
-        {back && <button type="button" className="eh-back" onClick={back} aria-label="Back to the list">{TbIcon.back}</button>}
+      <div className={"eh-bar" + (nav ? " has-pn" : "")}>
+        {nav ? <div className="eh-pn">
+          <button type="button" className="eh-pn-back" onClick={nav.back}>{TbIcon.back}<span>{nav.label}</span></button>
+          {nav.pos && <span className="eh-pn-pos">{nav.pos}</span>}
+          <button type="button" className="eh-pn-ud" disabled={!nav.up} onClick={nav.up} aria-label="Previous email">{TbIcon.up}</button>
+          <button type="button" className="eh-pn-ud" disabled={!nav.down} onClick={nav.down} aria-label="Next email">{TbIcon.down}</button>
+        </div> : back && <button type="button" className="eh-back" onClick={back} aria-label="Back to the list">{TbIcon.back}</button>}
         <button type="button" className="eh-list" onClick={toggleList} title={listOpen ? "Hide the list" : "Show the list"} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
         {toolbar}
       </div>
@@ -214,19 +293,20 @@ export function ReplyBox({ m, all, onClose, onSent }: { m: FullMsg; all?: boolea
 const when = (d: string) => { const x = new Date(d), t = new Date(); return x.toDateString() === t.toDateString() ? x.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : x.getFullYear() === t.getFullYear() ? x.toLocaleDateString([], { month: "short", day: "numeric" }) : x.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }); };
 
 /** a folder's emails (Sent shows who it went to) */
-export function FolderList({ rows, sel, onPick, sentBox, more, onMore, loading }: { rows: MsgRow[] | null; sel: string; onPick: (r: MsgRow) => void; sentBox: boolean; more: boolean; onMore: () => void; loading: boolean }) {
+export function FolderList({ rows, sel, onPick, onSwipe, sentBox, more, onMore, loading }: { rows: MsgRow[] | null; sel: string; onPick: (r: MsgRow) => void; onSwipe?: (r: MsgRow, to: SwipeTo) => Promise<boolean>; sentBox: boolean; more: boolean; onMore: () => void; loading: boolean }) {
   if (!rows) return <div className="ibx2-none">Loading…</div>;
   if (!rows.length) return <div className="ibx2-none">This folder is empty.</div>;
   return (
     <>
       {rows.map((r) => {
         const k = `${r.folder}:${r.uid}`;
-        return (
+        const row = (
           <button key={k} data-id={k} type="button" className={"ibx2-item ol" + (sel === k ? " on" : "") + (!r.seen && !r.sent ? " ol-unread" : "")} onClick={() => onPick(r)}>
             <span className="ibx2-item-1"><b>{sentBox || r.sent ? `${(r.toNames?.length ? r.toNames : r.to)[0] || ""}${r.to.length > 1 ? ` +${r.to.length - 1}` : ""}` : r.fromName || r.from}</b>{r.flagged && <span className="ibx2-flag">⚑</span>}<time>{when(r.date)}</time></span>
             <span className="ibx2-item-2">{r.subject || "(no subject)"}</span>
           </button>
         );
+        return onSwipe ? <SwipeRow key={k} onAct={(to) => onSwipe(r, to)}>{row}</SwipeRow> : row;
       })}
       {more && <button type="button" className="btn sm ghost mf-older" disabled={loading} onClick={onMore}>{loading ? "Loading…" : "Older emails"}</button>}
     </>

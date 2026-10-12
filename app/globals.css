@@ -6602,3 +6602,48 @@ a.pdn-tag:hover{text-decoration:underline}
 .sm2-t-fyi li span{color:var(--ink-3)}
 @media (prefers-reduced-motion:reduce){.sm2-start button{transition:none}.sm2-start button:hover:not(:disabled){transform:none}}
 @media (max-width:760px){.sm2-in{padding:18px 14px 30px}.sm2-grp li button,.sm2-grp li>div{flex-direction:column;gap:2px;align-items:stretch}.sm2-grp li b{max-width:none}.sm2-chev{display:none}}
+
+/* Email on phones, like the iPhone Mail app (components/MailFolders.tsx PhoneNav, SwipeRow) */
+.eh-pn{display:none}
+.sw{position:relative;overflow:hidden;max-height:240px}
+.sw-row{position:relative;z-index:1;background:var(--surface);transition:transform .22s cubic-bezier(.2,.8,.2,1);touch-action:pan-y}
+.sw-acts{position:absolute;top:0;right:0;bottom:0;display:flex;overflow:hidden}
+.sw-acts button{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;color:#fff;font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;overflow:hidden;white-space:nowrap;transition:flex-grow .18s}
+.sw-acts svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.sw-later{background:#7C5CE0}
+.sw-bh{background:var(--danger,#E5484D)}
+.sw-arch{background:var(--accent,#0E9BD8)}
+.sw-acts.full .sw-later,.sw-acts.full .sw-bh{flex-grow:0;padding:0}
+.sw-acts.full .sw-arch{flex-grow:1}
+.sw.gone{max-height:0;transition:max-height .22s ease .14s}
+@media (prefers-reduced-motion:reduce){.sw-row,.sw.gone,.sw-acts button{transition:none}}
+@media (max-width:760px){
+  /* the portal's top bar scrolls away while reading; the email's own bar stays at the top */
+  body:has(.ibx2.picked .eh-bar.has-pn) .side{position:relative}
+  /* no blur on this bar: it would hold the fixed bottom buttons inside it */
+  .eh-bar.has-pn{position:sticky;top:0;z-index:30;flex-wrap:wrap;padding:4px 4px;background:var(--surface);border-bottom:1px solid var(--line-2)}
+  .eh-bar.has-pn .eh-back,.eh-bar.has-pn .eh-list{display:none}
+  .eh-pn{display:flex;align-items:center;gap:2px;width:100%}
+  .eh-pn button{display:inline-flex;align-items:center;justify-content:center;border:0;background:none;font:inherit;color:var(--accent);cursor:pointer;border-radius:8px}
+  .eh-pn button:disabled{opacity:.28;cursor:default}
+  .eh-pn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+  .eh-pn-back{margin-right:auto;gap:0;height:40px;padding:0 8px 0 0;font-size:16.5px!important;font-weight:600}
+  .eh-pn-ud{width:44px;height:40px}
+  .eh-pn-pos{font-size:12px;color:var(--ink-3);margin-right:4px}
+  /* the buttons along the bottom of the screen, icons only */
+  .eh-bar.has-pn .tb{position:fixed;left:0;right:0;bottom:0;z-index:35;display:flex;flex-wrap:nowrap;justify-content:space-around;gap:0;container-type:normal;background:color-mix(in srgb,var(--surface) 94%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
+  .eh-bar.has-pn .tb-g{display:contents}
+  .eh-bar.has-pn .tb-m{position:static}
+  .eh-bar.has-pn .tb-b{flex:1 1 0;min-width:0;justify-content:center;height:46px;padding:0 4px;background:none;color:var(--accent);border-radius:10px}
+  .eh-bar.has-pn .tb-b.primary,.eh-bar.has-pn .tb-b.primary:hover:not(:disabled){background:none;color:var(--accent)}
+  .eh-bar.has-pn .tb-b.strong svg{color:inherit}
+  .eh-bar.has-pn .tb-b.danger{color:var(--danger)}
+  .eh-bar.has-pn .tb-b svg{width:25px;height:25px}
+  .eh-bar.has-pn .tb-l,.eh-bar.has-pn .tb-caret,.eh-bar.has-pn .mf-hint{display:none}
+  .eh-bar.has-pn .tb-menu{top:auto;bottom:calc(100% + 6px);left:8px;right:8px;min-width:0;max-height:60vh}
+  .eh-bar.has-pn .tb-menu button,.eh-bar.has-pn .tb-menu a{font-size:15px;padding:11px 12px}
+  .ibx2-mail:has(.eh-bar.has-pn),.ibx2-work:has(.eh-bar.has-pn) .ibx2-mail{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  /* writing a reply: the reply's own Send is at the bottom instead */
+  .ibx2-work:has(.ibx2-compose.open) .eh-bar.has-pn .tb{display:none}
+  .ibx2-work[data-side="mail"]:has(.eh-bar.has-pn) .ibx2-sw .ibx2-back{display:none}
+}
