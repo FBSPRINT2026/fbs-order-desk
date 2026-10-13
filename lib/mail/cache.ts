@@ -128,12 +128,12 @@ async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, 
     const patch: Record<string, unknown> = { body_fixed_at: new Date().toISOString() };
     try {
       const m = await c.fetchOne(String(r.uid), { source: true }, { uid: true });
-      if (!m || !m.source) continue; // not read this time (connection cut): tried again next run
+      if (!m || !m.source) { console.warn(`mail cache body ${folder}:${r.uid}: not read`); continue; } // tried again next run
       const p = await simpleParser(m.source);
       const slim = typeof p.html === "string" ? slimHtml(p.html) : null;
       if (slim) { patch.body_html = slim.html; patch.body_trimmed = slim.trimmed; }
       patch.body_text = (p.text || (typeof p.html === "string" ? htmlText(p.html) : "")).slice(0, 100000);
-    } catch { continue; /* the connection dropped: tried again next run */ }
+    } catch (e) { console.warn(`mail cache body ${folder}:${r.uid} (${r.size} bytes): ${e instanceof Error ? e.message : e}`); continue; /* tried again next run */ }
     await admin.from("mail_cache").update(patch).eq("id", r.id);
   }
 }
