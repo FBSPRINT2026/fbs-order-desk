@@ -39,8 +39,11 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
       try {
         const mb = c.mailbox && typeof c.mailbox === "object" ? c.mailbox : null;
         const validity = Number(mb?.uidValidity || 0);
-        const found = await c.search({ since: since() }, { uid: true }).catch(() => [] as number[]);
-        const inWindow = new Set(Array.isArray(found) ? found : []);
+        // a search that fails (the connection dropped) is NOT an empty folder: skip the folder this time, never mark its
+        // emails gone (Oct 12: a dropped search marked all 474 of Nick's Sent emails gone)
+        const found = await c.search({ since: since() }, { uid: true }).catch(() => null);
+        if (!Array.isArray(found)) continue;
+        const inWindow = new Set(found);
         const { data: have } = await admin.from("mail_cache").select("id, uid, uidvalidity").eq("account_id", acct.id).eq("folder", f.path).is("gone_at", null).limit(20000);
         const rows = (have || []) as { id: string; uid: number; uidvalidity: number }[];
         const cached = new Set(rows.filter((r) => Number(r.uidvalidity) === validity).map((r) => Number(r.uid)));
