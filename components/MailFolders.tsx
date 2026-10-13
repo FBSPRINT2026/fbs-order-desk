@@ -468,8 +468,8 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
   // long conversations: the first email, "N more emails", and the last few (Oct 13, Nick); the newest open at the bottom
   const [showAll, setShowAll] = useState(false);
   useEffect(() => { setShowAll(false); load(last); setTimeout(() => endRef.current?.scrollIntoView({ block: "end" }), 300); }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
-  const FOLD = c.msgs.length > 5 && !showAll;
-  const shown: (MsgRow | "more")[] = FOLD ? [c.msgs[0], "more", ...c.msgs.slice(-3)] : c.msgs;
+  const FOLD = c.msgs.length > 3 && !showAll;
+  const shown: (MsgRow | "more")[] = FOLD ? [c.msgs[0], "more", c.msgs[c.msgs.length - 1]] : c.msgs;
   const toggle = (m: MsgRow) => { const k = `${m.folder}:${m.uid}`; setOpen((o) => ({ ...o, [k]: !o[k] })); load(m); };
   const lastIn = [...c.msgs].reverse().find((m) => !m.sent) || last;
   // a customer's email in this conversation (stored when it came in): Create order / reorder from it, from here too
@@ -506,7 +506,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
           </Toolbar>} />
         <div className="ibx2-read mf-thread">
           {shown.map((m) => {
-            if (m === "more") return <button key="more" type="button" className="mf-more" onClick={() => setShowAll(true)}>{c.msgs.length - 4} more email{c.msgs.length - 4 === 1 ? "" : "s"} in between</button>;
+            if (m === "more") return <button key="more" type="button" className="mf-more" onClick={() => setShowAll(true)}>▾ {c.msgs.length - 2} more email{c.msgs.length - 2 === 1 ? "" : "s"} in between</button>;
             const k = `${m.folder}:${m.uid}`, f = full[k], isOpen = !!open[k];
             return (
               <article key={k} className={"mf-msg" + (m.sent ? " sent" : "") + (isOpen ? " open" : "")}>

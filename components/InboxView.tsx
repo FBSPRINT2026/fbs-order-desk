@@ -330,14 +330,24 @@ export default function InboxView({ mode }: { mode: Mode }) {
     return step(listed.map((r) => r.x.id), sel?.x.id || "", (k) => pickRow(k), tab === "reply" ? "Needs reply" : tab === "leads" ? "Leads" : "All");
   })();
 
+  const [stripOpen, setStripOpen] = useState(false);
+  const stripKey = (tab === "outlook" && olCur ? (groupOf.get(olCur.id) || allGroupOf.get(olCur.id))?.[0]?.id : "") || "";
+  useEffect(() => { setStripOpen(false); }, [stripKey]);
   // the open email's conversation, at the top of the email (phones, or with the list hidden): tap one to read it
   const curGroup = tab === "outlook" && olCur ? groupOf.get(olCur.id) || allGroupOf.get(olCur.id) : undefined;
+  // oldest first, newest last (Oct 13, Nick); a long chain folds to the first email, "N more", and the one showing
+  // (with anything newer than it), so the email itself is right below
+  const stripAll = curGroup ? [...curGroup].sort((a, b) => String(a.received_at || "").localeCompare(String(b.received_at || ""))) : [];
+  const curAt = olCur ? stripAll.findIndex((y) => y.id === olCur.id) : -1;
+  const stripFold = !stripOpen && stripAll.length > 4 && curAt > 1;
+  const stripShown: (typeof stripAll[number] | "more")[] = stripFold ? [stripAll[0], "more", ...stripAll.slice(curAt, curAt + 3)] : stripAll;
   const convoStrip = curGroup && curGroup.length > 1 && olCur ? <div className="cv-strip" role="group" aria-label="This conversation">
     <div className="cv-h">This conversation · {curGroup.length} emails</div>
-    {curGroup.map((y) => { const ry = y.activity_id ? rowByAct.get(y.activity_id) : undefined; return (
+    {stripShown.map((y) => { if (y === "more") return <button key="more" type="button" className="cv-more" onClick={() => setStripOpen(true)}>▾ {curAt - 1} more email{curAt - 1 === 1 ? "" : "s"}</button>;
+      const ry = y.activity_id ? rowByAct.get(y.activity_id) : undefined; return (
       <button key={y.id} type="button" className={"cv-i" + (y.id === olCur.id ? " on" : "") + (y.unread ? " ol-unread" : "")} aria-current={y.id === olCur.id ? "true" : undefined} onClick={() => { if (y.id !== olCur.id) { pickRow(olKey(y)); window.scrollTo({ top: 0 }); } }}>
         <b>{personName(y.from_name) || y.from_email || (ry ? who(ry.x) : "")}</b><time>{y.received_at ? new Date(y.received_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}</time>
-        <span>{y.id === olCur.id ? "Showing" : ry?.x.meta?.triage?.summary || y.summary || y.subject}</span>
+        <span>{y.id === olCur.id ? "Showing below" : ry?.x.meta?.triage?.summary || y.summary || y.subject}</span>
       </button>
     ); })}
   </div> : null;
