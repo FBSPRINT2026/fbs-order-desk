@@ -412,7 +412,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
         {err && <div className="pv-err eh-err">{err}</div>}
         <div className="ibx2-read">
           {!m ? <div className="ibx2-none">{err ? <button type="button" className="btn ghost sm" onClick={() => setN((x) => x + 1)}>Try again</button> : "Opening the email…"}</div> : <>
-            {m.partial && <div className="mf-partial">Some pictures in this email were left out to open it fast. <button type="button" className="btn ghost sm" onClick={() => setFull(true)}>Show the full email</button></div>}
+            {m.partial && <div className="mf-partial">Opened fast: big pictures and attachments in this email aren&apos;t shown here. <button type="button" className="btn ghost sm" onClick={() => setFull(true)}>Show the full email</button></div>}
             <MailFrame html={m.html} text={m.text} />
             <Attachments m={m} />
           </>}
@@ -507,7 +507,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
                 </button>
                 {isOpen && <div className="mf-msg-b">
                   {!f ? <div className="faint">Opening…</div> : f === "err" ? <div className="pv-err">Couldn&apos;t open this one{why[k] ? `: ${why[k]}` : "."} <button type="button" className="btn ghost sm" onClick={() => load(m, true)}>Try again</button></div> : <>
-                    {f.partial && <div className="mf-partial">Some pictures in this email were left out to open it fast. <button type="button" className="btn ghost sm" onClick={() => load(m, true)}>Show the full email</button></div>}
+                    {f.partial && <div className="mf-partial">Opened fast: big pictures and attachments in this email aren&apos;t shown here. <button type="button" className="btn ghost sm" onClick={() => load(m, true)}>Show the full email</button></div>}
                     <MailFrame html={f.html} text={f.text} />
                     <Attachments m={f} />
                     <div className="mf-msg-a tb">

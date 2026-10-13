@@ -74,15 +74,18 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
             if (!head) continue;
             const big = (head.size || 0) > 5 * 1024 * 1024;
             const m = big ? head : await c.fetchOne(String(uid), { source: true, size: true, flags: true, envelope: true, internalDate: true }, { uid: true });
+            // a big one: its words and HTML only (no attachments), so it still opens from the cache (Oct 13)
+            const bigBody = big ? await bodyOnly(c, uid).catch(() => null) : null;
             if (!m) continue;
             const p = !big && m.source ? await simpleParser(m.source) : null;
             const env = m.envelope;
             const from = p ? addrList(p.from)[0] : env?.from?.[0];
             const to = p ? addrList(p.to) : env?.to || [], cc = p ? addrList(p.cc) : env?.cc || [];
             const subject = (p?.subject ?? env?.subject ?? "").slice(0, 500);
-            const text = (p?.text || (typeof p?.html === "string" ? htmlText(p.html) : "")).slice(0, 100000);
+            const rawHtml = typeof p?.html === "string" ? p.html : bigBody?.html || "";
+            const text = (p?.text || bigBody?.text || (rawHtml ? htmlText(rawHtml) : "")).slice(0, 100000);
             // big pasted pictures are left out of the kept HTML, so the email still opens from the cache (Oct 13)
-            const slim = typeof p?.html === "string" ? slimHtml(p.html) : null;
+            const slim = rawHtml ? slimHtml(rawHtml) : null;
             const html = slim ? slim.html : null;
             const atts = (p?.attachments || []).map((a, i) => ({ i, name: a.filename || `attachment-${i + 1}`, size: a.size || 0, type: a.contentType || "application/octet-stream", inline: a.contentDisposition === "inline" && !!a.cid })).filter((a) => !a.inline).map(({ i, name, size, type }) => ({ i, name, size, type }));
             const refs = p ? (Array.isArray(p.references) ? p.references : p.references ? String(p.references).split(/\s+/) : []).filter(Boolean).map(mid).slice(-30) : [];
@@ -96,7 +99,7 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
               to_text: toText.slice(0, 2000), cc_text: ccText.slice(0, 2000), reply_to: lc(addrList(p?.replyTo)[0]?.address),
               sent_at: new Date(p?.date || env?.date || m.internalDate || Date.now()).toISOString(),
               seen: !!m.flags?.has("\\Seen"), flagged: !!m.flags?.has("\\Flagged"), size: m.size || 0,
-              body_text: text, body_html: big ? null : html, body_trimmed: !!slim?.trimmed, body_fixed_at: big ? null : new Date().toISOString(), attachments: atts,
+              body_text: text, body_html: html, body_trimmed: !!slim?.trimmed || big, body_fixed_at: big && !bigBody ? null : new Date().toISOString(), attachments: atts,
               hay: [from?.name, from?.address, toText, ccText, subject, text.slice(0, 4000)].filter(Boolean).join(" ").toLowerCase().slice(0, 8000),
             };
             const { error } = await admin.from("mail_cache").upsert(row, { onConflict: "account_id,folder,uidvalidity,uid" });
@@ -117,9 +120,38 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
 const htmlText = (h: string) => h.replace(/<(style|script|head)[\s\S]*?<\/\1>/gi, "").replace(/<img\b[^>]*>/gi, " ").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|tr|li|h\d)>/gi, "\n").replace(/<[^>]+>/g, " ")
   .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;|&rsquo;/g, "'").replace(/&quot;/g, '"').replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n+/g, "\n\n").trim();
 
+type BS = { part?: string; type?: string; disposition?: string; childNodes?: BS[] };
+/** an email's text and HTML parts only, not its attachments (a 9 MB email is usually 20 KB of words and 9 MB of files) */
+async function bodyOnly(c: ImapFlow, uid: number): Promise<{ html: string; text: string } | null> {
+  const m = await c.fetchOne(String(uid), { bodyStructure: true }, { uid: true });
+  const root = (m && (m as unknown as { bodyStructure?: BS }).bodyStructure) || null;
+  if (!root) return null;
+  let html = "", text = "";
+  const want: { part: string; kind: "html" | "text" }[] = [];
+  const walk = (n: BS, top: boolean) => {
+    if (n.childNodes?.length) { n.childNodes.forEach((x) => walk(x, false)); return; }
+    if (/attachment/i.test(n.disposition || "")) return;
+    const part = n.part || (top ? "1" : "");
+    if (!part) return;
+    if (/^text\/html$/i.test(n.type || "") && !want.some((w) => w.kind === "html")) want.push({ part, kind: "html" });
+    if (/^text\/plain$/i.test(n.type || "") && !want.some((w) => w.kind === "text")) want.push({ part, kind: "text" });
+  };
+  walk(root, true);
+  for (const w of want) {
+    const d = await c.download(String(uid), w.part, { uid: true, maxBytes: 4 * 1024 * 1024 });
+    const chunks: Buffer[] = [];
+    for await (const ch of d.content as AsyncIterable<Buffer>) chunks.push(Buffer.from(ch));
+    const body = Buffer.concat(chunks).toString("utf8");
+    if (w.kind === "html") html = body; else text = body;
+  }
+  // pictures shown from the email's own attachments (cid:) aren't kept: a note instead of a broken picture
+  html = html.replace(/<img\b[^>]*src\s*=\s*["']?cid:[^>]*>/gi, '<span style="display:inline-block;margin:4px 0;padding:6px 10px;border:1px dashed #b8c0cc;border-radius:6px;color:#6b7686;font:12px sans-serif">Picture left out here (Show the full email to see it)</span>');
+  return { html, text };
+}
+
 async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, folder: string, validity: number, deadline: number) {
   const base = () => admin.from("mail_cache").select("id, uid, size").eq("account_id", accountId).eq("folder", folder).eq("uidvalidity", validity)
-    .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lte("size", 10 * 1024 * 1024).order("sent_at", { ascending: false }).limit(3);
+    .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).order("sent_at", { ascending: false }).limit(3);
   // the ones with nothing at all to show first (no text either), then the rest
   let { data } = await base().or("body_text.is.null,body_text.eq.");
   if (!data?.length) ({ data } = await base());
@@ -127,12 +159,13 @@ async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, 
     if (Date.now() > deadline) break;
     const patch: Record<string, unknown> = { body_fixed_at: new Date().toISOString() };
     try {
-      const m = await c.fetchOne(String(r.uid), { source: true }, { uid: true });
-      if (!m || !m.source) { console.warn(`mail cache body ${folder}:${r.uid}: not read`); continue; } // tried again next run
-      const p = await simpleParser(m.source);
-      const slim = typeof p.html === "string" ? slimHtml(p.html) : null;
-      if (slim) { patch.body_html = slim.html; patch.body_trimmed = slim.trimmed; }
-      patch.body_text = (p.text || (typeof p.html === "string" ? htmlText(p.html) : "")).slice(0, 100000);
+      // only the words and the HTML, never the attachments (Oct 13: downloading a 9.5 MB email whole got the
+      // connection cut every run)
+      const b = await bodyOnly(c, r.uid);
+      if (!b) { console.warn(`mail cache body ${folder}:${r.uid}: not read`); continue; }
+      const slim = b.html ? slimHtml(b.html) : null;
+      if (slim) { patch.body_html = slim.html; patch.body_trimmed = true; }
+      patch.body_text = (b.text || (b.html ? htmlText(b.html) : "")).slice(0, 100000);
     } catch (e) { console.warn(`mail cache body ${folder}:${r.uid} (${r.size} bytes): ${e instanceof Error ? e.message : e}`); continue; /* tried again next run */ }
     await admin.from("mail_cache").update(patch).eq("id", r.id);
   }
