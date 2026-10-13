@@ -249,7 +249,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const hasSel = mode === "mail" && view.kind === "folder" ? !!fSel : mode === "mail" && view.kind === "search" ? !!cSel : briefOn || !!(sel || olCur);
   const pickRow = (id: string, answer = false) => { setAutoBrief(false); setOpen(id); setPicked(true); if (answer) setFocus(id); };
   // the email showing stays put: a new email arriving at the top of the list never swaps it out from under you
-  useEffect(() => { if (briefOn) return; if (!open && sel) setOpen(sel.x.id); else if (!open && olCur) setOpen(olKey(olCur)); }, [open, sel?.x.id, olCur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Only fills in when nothing is picked yet, counting a pick made in the same moment (Oct 12: the dashboard's link to
+  // Brett's email was overwritten by "show the first one" as the list loaded, and Methodist opened instead)
+  useEffect(() => { if (briefOn) return; if (!open && sel) { const k = sel.x.id; setOpen((cur) => cur || k); } else if (!open && olCur) { const k = olKey(olCur); setOpen((cur) => cur || k); } }, [open, sel?.x.id, olCur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const listRef = useRef<HTMLDivElement | null>(null);
   const onKeys = (e: React.KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
