@@ -7,8 +7,16 @@ import { handleIncoming, handleSent, saveAttachments, saveBody, type MailMsg, ty
 import { accountById } from "./config";
 import { mirrorInbox } from "./mirror";
 
+/**
+ * A connection to the mailbox. Its errors (a socket timeout, the server dropping it) are caught here: an "error" event
+ * nobody listens to is an uncaught exception that crashes the whole server process, and every other request running in
+ * it (Oct 12: socket timeouts crashed the process mid sign-in refresh, which logged Nick and Amanda out, and pages hung).
+ * The step that was waiting on the connection still fails normally and is handled where it was called.
+ */
 export function imapClient(c: MailCfg) {
-  return new ImapFlow({ host: c.imapHost, port: c.imapPort, secure: true, auth: { user: c.user, pass: c.pass }, logger: false, socketTimeout: 40000 });
+  const client = new ImapFlow({ host: c.imapHost, port: c.imapPort, secure: true, auth: { user: c.user, pass: c.pass }, logger: false, socketTimeout: 40000 });
+  client.on("error", (e: Error) => { console.warn("imap connection:", e?.message || e); });
+  return client;
 }
 
 /** the Sent Items folder (special-use \Sent, else by name) */
