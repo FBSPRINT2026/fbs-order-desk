@@ -25,7 +25,11 @@ export async function runAccount(admin: SupabaseClient, a: MailAccount, deadline
     const msg = e instanceof Error ? e.message : String(e);
     const friendly = /auth|login|credential|password|LOGIN failed|NO /i.test(msg) ? `The mailbox refused the sign-in. Check the password (reconnect it), and that IMAP is on for this mailbox in HostPilot. (${msg})`
       : /ENOTFOUND|ECONNREFUSED|ETIMEDOUT|timeout/i.test(msg) ? `Couldn't reach the mail server ${a.imap_host}. Check the server name in HostPilot (east or west site). (${msg})` : msg;
-    await admin.from("mail_accounts").update({ last_run_at: now, last_error: friendly.slice(0, 500), last_error_at: now, running_until: null }).eq("id", a.id);
+    // a refused or dropped connection (the mail server's connection limit: the phone, Outlook and the portal all count)
+    // is a blip: tried again on the next check instead of waiting 15 minutes (Oct 12: Nick's mail stopped for 15
+    // minutes after one refused connection). Sign-in and server-name problems still wait.
+    const blip = /Connection not available|Socket timeout|ETIMEOUT|ECONNRESET|EPIPE|closed|Too many/i.test(msg);
+    await admin.from("mail_accounts").update({ last_run_at: now, last_error: friendly.slice(0, 500), last_error_at: blip ? null : now, running_until: null }).eq("id", a.id);
     return { error: friendly };
   }
 }

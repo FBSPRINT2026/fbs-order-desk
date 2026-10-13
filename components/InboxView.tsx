@@ -265,6 +265,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
     if (n) { setOpen(n.x.id); listRef.current?.querySelector<HTMLElement>(`[data-id="${n.x.id}"]`)?.focus(); }
   };
   const box = st?.mine;
+  // a problem only when mail has actually stopped: the last good check is over 10 minutes old (a single refused
+  // connection is retried on the next check, Oct 12)
+  const boxStuck = !!box?.last_error && (!box.last_ok_at || Date.now() - Date.parse(box.last_ok_at) > 10 * 60000);
 
   // phones: slide an email left for Archive / Later / Black Hole (the same moves as the buttons)
   const MOVED: Record<string, string> = { archive: "Archived.", later: "Moved to Later.", blackhole: "Black Hole: SaneBox won't show you this sender again." };
@@ -344,8 +347,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
       <div className="page-head ibx2-head">
         <div><div className="eyebrow">{mode === "mail" ? "Your mailbox" : "Sales"}</div><h1>{mode === "mail" ? "Email" : "Conversations"}</h1></div>
         <div className="ibx2-status">
-          {box?.enabled && <span className={"ibx2-box" + (box.last_error ? " bad" : "")} title={box.last_error || `${box.email}${st && st.all.length > 1 ? ` · also connected: ${st.all.filter((b) => b.id !== box.id).map((b) => b.email).join(", ")}` : ""}`}>
-            <i aria-hidden />{box.last_error ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}
+          {box?.enabled && <span className={"ibx2-box" + (boxStuck ? " bad" : "")} title={box.last_error || `${box.email}${st && st.all.length > 1 ? ` · also connected: ${st.all.filter((b) => b.id !== box.id).map((b) => b.email).join(", ")}` : ""}`}>
+            <i aria-hidden />{boxStuck ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}
           </span>}
           {box?.enabled && <button type="button" className="btn sm" disabled={!!busy} onClick={async () => { setBusy("check"); const r = await checkMailNow(); setBusy(""); if (!r.ok) flash(r.error); else { flash("Checked."); load(); } }}>{busy === "check" ? "Checking…" : "Check now"}</button>}
           {st && !st.viewing && <button type="button" className="btn sm ghost" onClick={() => setSettings(!settings)}>{box?.enabled ? (settings ? "Close settings" : "⚙ Email settings") : "Connect my email"}</button>}
@@ -353,7 +356,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
       </div>
       {st && !box?.enabled && <Connect st={st} onDone={(t) => { setSettings(false); flash(t); load(); }} />}
       {st && box?.enabled && settings && <EmailSettings st={st} onClose={() => setSettings(false)} onDone={(t) => { flash(t); load(); }} />}
-      {box?.enabled && box.last_error && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
+      {box?.enabled && boxStuck && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
       {afterSend && <AfterSend key={afterSend.msg + (afterSend.sent?.body.length || 0)} a={afterSend} onArchive={() => void afterArchive()} onClose={() => setAfterSend(null)} />}
 

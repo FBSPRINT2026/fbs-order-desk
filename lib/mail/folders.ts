@@ -238,7 +238,8 @@ export async function searchConversations(admin: SupabaseClient, acct: MailAccou
     await client.logout().catch(() => null);
   };
   const queue = [...folders];
-  await Promise.all(Array.from({ length: 4 }, async () => { while (queue.length) await one(queue.shift()!); }));
+  // two at a time: the mailbox only allows so many connections, and the phone and Outlook use some (Oct 12)
+  await Promise.all(Array.from({ length: 2 }, async () => { while (queue.length) await one(queue.shift()!); }));
   return { convos: groupConvos(found, me), folders: looked, partial, timing };
 }
 
