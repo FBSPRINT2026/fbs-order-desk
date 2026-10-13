@@ -126,6 +126,13 @@ async function bodyOnly(c: ImapFlow, uid: number): Promise<{ html: string; text:
   const m = await c.fetchOne(String(uid), { bodyStructure: true }, { uid: true });
   const root = (m && (m as unknown as { bodyStructure?: BS }).bodyStructure) || null;
   if (!root) return null;
+  // not split into parts (a plain email, no attachments): the whole thing is small, read it as is
+  if (!root.childNodes?.length) {
+    const src = await c.fetchOne(String(uid), { source: true }, { uid: true });
+    if (!src || !src.source) return null;
+    const p = await simpleParser(src.source);
+    return { html: typeof p.html === "string" ? p.html : "", text: p.text || "" };
+  }
   let html = "", text = "";
   const want: { part: string; kind: "html" | "text" }[] = [];
   const walk = (n: BS, top: boolean) => {
@@ -139,6 +146,7 @@ async function bodyOnly(c: ImapFlow, uid: number): Promise<{ html: string; text:
   walk(root, true);
   for (const w of want) {
     const d = await c.download(String(uid), w.part, { uid: true, maxBytes: 4 * 1024 * 1024 });
+    if (!d?.content) continue; // the server didn't have that part
     const chunks: Buffer[] = [];
     for await (const ch of d.content as AsyncIterable<Buffer>) chunks.push(Buffer.from(ch));
     const body = Buffer.concat(chunks).toString("utf8");
@@ -153,7 +161,7 @@ async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, 
   // HTML missing and something to fix: no text at all, or a big email (pictures / attachments). A small plain-text
   // email has no HTML to get.
   const base = () => admin.from("mail_cache").select("id, folder, uid, uidvalidity, size, body_tries").eq("account_id", accountId)
-    .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lt("body_tries", 2).order("sent_at", { ascending: false }).limit(3);
+    .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lt("body_tries", 6).order("sent_at", { ascending: false }).limit(3);
   let { data } = await base().or("body_text.is.null,body_text.eq.");
   if (!data?.length) ({ data } = await base().gt("size", 200000));
   for (const r of (data || []) as { id: string; folder: string; uid: number; uidvalidity: number; size: number; body_tries: number }[]) {
