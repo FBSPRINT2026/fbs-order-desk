@@ -103,7 +103,7 @@ export async function markSeen(c: ImapFlow, path: string, uid: number) {
   try { await c.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true }); } finally { lock.release(); }
 }
 
-export type FullMsg = { folder: string; uid: number; messageId: string; references: string[]; fromAddress: string; fromName: string; from: string; to: string; cc: string; subject: string; date: string; html: string; text: string; attachments: { i: number; name: string; size: number; type: string }[];
+export type FullMsg = { folder: string; uid: number; messageId: string; references: string[]; fromAddress: string; fromName: string; from: string; to: string; cc: string; subject: string; date: string; html: string; text: string; attachments: { i: number; name: string; size: number; type: string; /** opened over EWS by this id */ ews?: string }[];
   /** from the cache with big pasted pictures left out (or as plain text): "Show the full email" reads it live */ partial?: boolean; seen?: boolean };
 
 /**

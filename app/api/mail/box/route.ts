@@ -7,6 +7,7 @@ import { customerAddrs, getAttachment, getMessage, groupConvos, listFolders, lis
 import { keepBody, cachedList, cachedMessage, cachedSearch, folderCached } from "@/lib/mail/cache";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 import { sendFromMailbox } from "@/lib/mail/send";
+import { ewsAttachment, ewsMessage } from "@/lib/mail/ews";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -60,6 +61,19 @@ export async function GET(req: Request) {
         if (!m.viewing && !hit.seen) after(async () => { try { await withBox(acct, (c) => markSeen(c, path, uid), Date.now() + 20000); await admin.from("mail_cache").update({ seen: true }).eq("account_id", acct.id).eq("folder", path).eq("uid", uid); } catch { /* fine */ } });
         return NextResponse.json({ ...hit, cached: true });
       }
+      // over EWS first (Oct 13): HTTPS like Outlook, no IMAP connection limit, and it hands over the big emails IMAP
+      // drops; pictures and attachments come through EWS too. Kept so it opens instantly next time.
+      const { data: kept } = await admin.from("mail_cache").select("message_id").eq("account_id", acct.id).eq("folder", path).eq("uid", uid).limit(1).maybeSingle();
+      const mid = (kept?.message_id as string) || q.get("mid") || "";
+      if (mid) {
+        const e = await ewsMessage(acct, path, uid, mid, (id) => `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id })}`).catch((x) => { console.warn(`mail open ${path}:${uid} ews failed: ${x instanceof Error ? x.message : x}`); return null; });
+        if (e) {
+          console.info(`mail open ${path}:${uid} ews ${Date.now() - t0}ms`);
+          const { ews: _e, ...msg } = e;
+          after(async () => { try { await keepBody(admin, acct.id, path, uid, msg); } catch { /* fine */ } });
+          return NextResponse.json(msg);
+        }
+      }
       // read it from the mailbox (25 s at most: the page offers Try again), and keep it so it opens instantly next time
       const r = await withBox(acct, (c) => getMessage(c, path, uid), Date.now() + 25000).catch((e) => {
         console.warn(`mail open ${path}:${uid} live failed ${Date.now() - t0}ms: ${String(e?.message || e)}`);
@@ -68,6 +82,12 @@ export async function GET(req: Request) {
       console.info(`mail open ${path}:${uid} live done ${Date.now() - t0}ms`);
       if (r) after(async () => { try { await keepBody(admin, acct.id, path, uid, r); } catch { /* fine */ } });
       return r ? NextResponse.json(r) : NextResponse.json({ error: "That email isn't there any more." }, { status: 404 });
+    }
+    // a picture inside an email, or an attachment, over EWS (by its EWS id; your own mailbox only)
+    if (what === "ewsatt") {
+      const a = await ewsAttachment(acct, q.get("id") || "");
+      if (!a) return NextResponse.json({ error: "Not found." }, { status: 404 });
+      return new Response(new Uint8Array(a.content), { headers: { "Content-Type": a.type, "Content-Disposition": `${/^(image\/|application\/pdf)/.test(a.type) ? "inline" : "attachment"}; filename="${a.name.replace(/["\\\r\n]/g, "_")}"`, "Cache-Control": "private, max-age=86400" } });
     }
     if (what === "attachment") {
       const a = await withBox(acct, (c) => getAttachment(c, path, uid, Number(q.get("i") || 0)));

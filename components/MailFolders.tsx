@@ -333,7 +333,7 @@ const kb = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${M
 
 export function Attachments({ m }: { m: FullMsg }) {
   if (!m.attachments.length) return null;
-  return <div className="mf-atts">{m.attachments.map((a) => <a key={a.i} href={attUrl(m.folder, m.uid, a.i)} target="_blank" rel="noreferrer" className="mf-att">📎 {a.name}<span>{kb(a.size)}</span></a>)}</div>;
+  return <div className="mf-atts">{m.attachments.map((a) => <a key={a.i} href={a.ews ? `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id: a.ews })}` : attUrl(m.folder, m.uid, a.i)} target="_blank" rel="noreferrer" className="mf-att">📎 {a.name}<span>{kb(a.size)}</span></a>)}</div>;
 }
 
 /** reply / reply all box (to any email in any folder) */

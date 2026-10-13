@@ -4,6 +4,7 @@ import type { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import type { MailAccount } from "./config";
 import { slimHtml, withBox, type Convo, type FullMsg, type MsgRow } from "./folders";
+import { ewsMessage } from "./ews";
 
 /**
  * Email cached mode (Oct 12): the last 45 days of a person's mail kept in mail_cache, like Outlook's cached mode, so
@@ -36,6 +37,8 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
   // time, so it hadn't been looked at since the day before and most of its emails weren't kept)
   const { data: states } = await admin.from("mail_cache_state").select("folder, checked_at").eq("account_id", acct.id);
   const lastLook = new Map(((states || []) as { folder: string; checked_at: string | null }[]).map((x) => [x.folder, x.checked_at || ""]));
+  // emails kept without a body, over EWS first (no IMAP connection needed, and it hands over the big ones IMAP drops)
+  if (Date.now() < deadline - 12000) await fixBodiesEws(admin, acct, Math.min(deadline - 10000, Date.now() + 7000)).catch((e) => console.warn(`mail cache ews ${acct.email}: ${e instanceof Error ? e.message : e}`));
   await withBox(acct, async (c) => {
     const order = (await cacheFolders(c)).map((f, i) => ({ f, i, at: /^inbox$/i.test(f.path) ? "0" : lastLook.get(f.path) || "" }))
       .sort((a, b) => (a.at === b.at ? a.i - b.i : a.at < b.at ? -1 : 1)).map((x) => x.f);
@@ -157,6 +160,37 @@ async function bodyOnly(c: ImapFlow, uid: number): Promise<{ html: string; text:
   return { html, text };
 }
 
+/**
+ * Emails kept without a body, read over EWS (Oct 13: Nick's big emails, which IMAP drops during the busy day). Up to
+ * 5 a run, the worst first; whether EWS works for the mailbox is kept in app_keys "ews" (a failure waits 6 hours).
+ */
+async function fixBodiesEws(admin: SupabaseClient, acct: MailAccount, deadline: number) {
+  const { data: k } = await admin.from("app_keys").select("value").eq("name", "ews").maybeSingle();
+  const st = ((k?.value || {}) as Record<string, { ok: boolean; detail: string; at: string }>);
+  const mine = st[acct.email.toLowerCase()];
+  if (mine && !mine.ok && Date.parse(mine.at) > Date.now() - 6 * 3600e3) return;
+  const base = () => admin.from("mail_cache").select("id, folder, uid, message_id, size, body_tries").eq("account_id", acct.id)
+    .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).neq("message_id", "").lt("body_tries", 6).order("sent_at", { ascending: false }).limit(5);
+  let { data } = await base().or("body_text.is.null,body_text.eq.");
+  if (!data?.length) ({ data } = await base().gt("size", 200000));
+  let result: { ok: boolean; detail: string } | null = null;
+  for (const r of (data || []) as { id: string; folder: string; uid: number; message_id: string; size: number; body_tries: number }[]) {
+    if (Date.now() > deadline) break;
+    try {
+      const e = await ewsMessage(acct, r.folder, r.uid, r.message_id, (id) => `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id })}`);
+      result = { ok: true, detail: "" };
+      if (!e) { await admin.from("mail_cache").update({ body_tries: (r.body_tries || 0) + 1 }).eq("id", r.id); continue; } // not found over EWS (moved): IMAP tries
+      const { ews: _x, ...m } = e;
+      await keepBody(admin, acct.id, r.folder, r.uid, m);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`mail cache ews ${r.folder}:${r.uid}: ${msg}`);
+      if (/401|sign-in refused|EWS 40[34]|EWS 5\d\d/.test(msg)) { result = { ok: false, detail: msg.slice(0, 200) }; break; }
+    }
+  }
+  if (result && (!mine || mine.ok !== result.ok)) await admin.from("app_keys").upsert({ name: "ews", value: { ...st, [acct.email.toLowerCase()]: { ...result, at: new Date().toISOString() } } }, { onConflict: "name" });
+}
+
 async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, deadline: number) {
   // HTML missing and something to fix: no text at all, or a big email (pictures / attachments). A small plain-text
   // email has no HTML to get.
@@ -194,6 +228,8 @@ export async function keepBody(admin: SupabaseClient, accountId: string, folder:
   const patch: Record<string, unknown> = { body_fixed_at: new Date().toISOString() };
   if (slim) { patch.body_html = slim.html; patch.body_trimmed = slim.trimmed; }
   patch.body_text = (m.text || (m.html ? htmlText(m.html) : "")).slice(0, 100000);
+  // read over EWS: its attachments (opened by their EWS id) are kept too, so they show from the cache
+  if (m.attachments?.some((a) => a.ews)) { patch.attachments = m.attachments; patch.body_trimmed = !!slim?.trimmed; }
   await admin.from("mail_cache").update(patch).eq("account_id", accountId).eq("folder", folder).eq("uid", uid).is("body_html", null);
 }
 
