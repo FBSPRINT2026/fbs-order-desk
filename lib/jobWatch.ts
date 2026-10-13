@@ -72,7 +72,7 @@ const rowsOf = (groups: Group[]) => {
 };
 
 /** where S&S would ship this job's goods from, and how many business days that takes (null: couldn't tell) */
-async function goodsTransit(admin: SupabaseClient, groups: Group[]): Promise<{ days: number; from: string; short: string[] } | null> {
+export async function goodsTransit(admin: SupabaseClient, groups: Group[]): Promise<{ days: number; from: string; short: string[] } | null> {
   if (!ssConfigured()) return null;
   const rows = rowsOf(groups);
   if (!rows.length) return null;

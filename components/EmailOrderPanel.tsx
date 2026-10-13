@@ -168,7 +168,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start 
         <button type="button" className="btn sm ghost" onClick={onClose}>Close</button>
       </div>
       {!data.ai && !d && <div className="warn">{data.aiReason || "AI is off."} You can still enter the order by hand from the order page.</div>}
-      {busy === "read" && <p className="eo-reading">Reading the email{files.length ? ` and ${files.length} attachment${files.length === 1 ? "" : "s"}` : ""}: garments, sizes, art, mockups, and whether it's a reorder. This takes 15 to 40 seconds.</p>}
+      {busy === "read" && <p className="eo-reading">Reading the whole conversation{(data as { emails?: number } | null)?.emails && (data as { emails?: number }).emails! > 1 ? ` (${(data as { emails?: number }).emails} emails)` : ""}{files.length ? ` and ${files.length} attachment${files.length === 1 ? "" : "s"}` : ""}: garments, the latest sizes, art, mockups, and whether it's a reorder. This takes 15 to 40 seconds.</p>}
       {err && <div className="err">{err}</div>}
       {busy === "read" && lookStep && <p className="eo-reading">{lookStep}</p>}
       {data.ai && busy !== "read" && d && (d.kind === "reorder" || d.looksReorder) && !d.reorderOk && !askStep && (

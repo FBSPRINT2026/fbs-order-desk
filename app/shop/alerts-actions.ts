@@ -34,13 +34,13 @@ export async function getAlerts() {
     const [{ data: s }, { data: subs }, { data: al }, keys] = await Promise.all([
       admin.from("staff").select("name, role, away_on, away_since, alerts").ilike("email", email).maybeSingle(),
       admin.from("push_subs").select("id, device, created_at, last_ok_at, last_error, endpoint").eq("email", email).order("created_at", { ascending: false }),
-      admin.from("alerts").select("id, kind, title, body, url, created_at, pushed_at, push_result").eq("owner", email).order("created_at", { ascending: false }).limit(40),
+      admin.from("alerts").select("id, kind, title, body, url, created_at, pushed_at, push_result").eq("owner", email).order("created_at", { ascending: false }).limit(120),
       vapidKeys(admin),
     ]);
     const prefs = (s?.alerts || {}) as { jobs?: boolean };
     const st: AlertState = {
       away: !!s?.away_on, awaySince: (s?.away_since as string) || null, jobsFor: organizerFor(email, String(s?.role || "")), jobs: prefs.jobs !== false,
-      key: keys.publicKey, devices: (subs || []) as AlertState["devices"], recent: (al || []) as AlertRow[], viewing, name: String(s?.name || email.split("@")[0]),
+      key: keys.publicKey, devices: (subs || []) as AlertState["devices"], recent: ((al || []) as AlertRow[]).filter((a) => !/^cleared/.test(a.push_result || "")).slice(0, 40), // not the first run's, cleared before they went out (Oct 12) viewing, name: String(s?.name || email.split("@")[0]),
     };
     return { ok: true as const, ...st };
   } catch (e) { return fail(e); }

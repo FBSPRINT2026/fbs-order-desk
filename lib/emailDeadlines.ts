@@ -6,7 +6,8 @@ import { newPart } from "@/lib/linkArt";
 import { convoKeys, groupConvos } from "@/lib/mail/convo";
 import type { Settings } from "@/lib/pricing";
 import { mergeSettings } from "@/lib/pricing";
-import { bizAdd, ctToday, nice, type JobAction } from "@/lib/jobWatch";
+import { bizAdd, bizBetween, ctToday, goodsTransit, nice, type JobAction } from "@/lib/jobWatch";
+import type { Group } from "@/lib/pricing";
 
 /**
  * Orders still in email (Oct 12, Nick: "if I don't order the heart transplant shirts today we're gonna miss the
@@ -37,10 +38,13 @@ export async function watchEmailOrders(admin: SupabaseClient, opts: { deadline?:
   if (!convos.length) return [];
   // an order already made from the conversation (Create order) counts as made
   const ids = convos.flatMap((g) => g.map((x) => x.id));
-  const [{ data: made }, { data: kept }] = await Promise.all([
+  const [{ data: made }, { data: kept }, { data: drafts }] = await Promise.all([
     admin.from("ai_suggestions").select("activity_id").eq("kind", "draft_order").eq("status", "done").in("activity_id", ids),
     admin.from("email_deadlines").select("activity_id, need_by, firm, what, pieces").in("activity_id", convos.map((g) => g[0].id)),
+    // the garments Create order read (if it has): where S&S really has them sets the order-by date
+    admin.from("ai_suggestions").select("activity_id, payload, updated_at").eq("kind", "draft_order").eq("status", "open").in("activity_id", ids).order("updated_at", { ascending: false }),
   ]);
+  const draftOf = (g: Act[]) => { const d = ((drafts || []) as { activity_id: string; payload: { draft?: { groups?: Group[] } } | null }[]).find((x) => g.some((y) => y.id === x.activity_id)); return d?.payload?.draft?.groups || null; };
   const done = new Set(((made || []) as { activity_id: string }[]).map((x) => x.activity_id));
   const have = new Map(((kept || []) as (Read & { activity_id: string })[]).map((x) => [x.activity_id, x]));
   const st = await aiState(admin);
@@ -68,7 +72,12 @@ export async function watchEmailOrders(admin: SupabaseClient, opts: { deadline?:
       await admin.from("email_deadlines").upsert({ activity_id: newest.id, need_by: r.need_by, firm: r.firm, what: r.what.slice(0, 200), pieces: r.pieces, read_at: new Date().toISOString() }, { onConflict: "activity_id" });
     }
     if (!r.need_by || !/^\d{4}-\d{2}-\d{2}$/.test(r.need_by) || r.need_by < today) continue;
-    const goodsHere = bizAdd(r.need_by, lead), orderBy = bizAdd(goodsHere, 1);
+    const goodsHere = bizAdd(r.need_by, lead);
+    let orderBy = bizAdd(goodsHere, 1), from = "";
+    // close to the date and the garments are known: the real S&S warehouses (Oct 12: Methodist's shirts are only in
+    // Illinois and Georgia, 2-3 days, so Fort Worth's 1 day would have flagged it two days late)
+    const gs = bizBetween(today, goodsHere) <= 6 ? draftOf(g) : null;
+    if (gs?.length) { const t = await goodsTransit(admin, gs).catch(() => null); if (t) { orderBy = bizAdd(goodsHere, t.days); from = ` S&S has them in ${t.from} (${t.days} business day${t.days === 1 ? "" : "s"}).${t.short.length ? ` Not carried / short: ${t.short.slice(0, 3).join(", ")}.` : ""}`; } }
     if (orderBy > today) continue;
     const { data: c } = cust.customer_id ? await admin.from("customers").select("company, name").eq("id", cust.customer_id).maybeSingle() : { data: null };
     const who = (c?.company as string) || (c?.name as string) || cust.meta?.from_name || cust.from_email || "a customer";
@@ -77,7 +86,7 @@ export async function watchEmailOrders(admin: SupabaseClient, opts: { deadline?:
     out.push({
       orderId: cust.id, number: 0, step: "goods", ref: `mail:${newest.id}:goods`, by: orderBy, today: true, owner, archived: true,
       title: `${who}: no order yet, goods ${late ? "should already be ordered" : "have to be ordered today"}`,
-      notes: `${r.what || "Their order"}${r.pieces ? ` (${r.pieces} pcs)` : ""} is needed ${r.firm ? "by" : "around"} ${nice(r.need_by)}. Goods need to be here by ${nice(goodsHere)}${late ? `; they should have been ordered by ${nice(orderBy)}` : ""}. Create the order and order the goods.`,
+      notes: `${r.what || "Their order"}${r.pieces ? ` (${r.pieces} pcs)` : ""} is needed ${r.firm ? "by" : "around"} ${nice(r.need_by)}. Goods need to be here by ${nice(goodsHere)}${late ? `; they should have been ordered by ${nice(orderBy)}` : ""}.${from} Create the order and order the goods.`,
       url: `/shop/email-order/${cust.id}`,
     });
   }
