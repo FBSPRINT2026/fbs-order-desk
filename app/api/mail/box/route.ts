@@ -63,7 +63,7 @@ export async function GET(req: Request) {
       // read it from the mailbox (25 s at most: the page offers Try again), and keep it so it opens instantly next time
       const r = await withBox(acct, (c) => getMessage(c, path, uid), Date.now() + 25000).catch((e) => {
         console.warn(`mail open ${path}:${uid} live failed ${Date.now() - t0}ms: ${String(e?.message || e)}`);
-        throw new Error(/Connection not available|Socket timeout|closed|ETIMEDOUT|ECONNRESET|Too many/i.test(String(e?.message || e)) ? "The mailbox is busy right now (it allows only a few connections at a time, shared with your phone and Outlook). Try again in a moment." : String(e?.message || e));
+        throw new Error(/Connection not available|Socket timeout|closed|ETIMEDOUT|ECONNRESET|Too many/i.test(String(e?.message || e)) ? "The mail server didn't hand this email over. It may be busy (it allows only a few connections at a time, shared with your phone and Outlook): try again in a moment. If it keeps happening with this email, open it in Outlook." : String(e?.message || e));
       });
       console.info(`mail open ${path}:${uid} live done ${Date.now() - t0}ms`);
       if (r) after(async () => { try { await keepBody(admin, acct.id, path, uid, r); } catch { /* fine */ } });
