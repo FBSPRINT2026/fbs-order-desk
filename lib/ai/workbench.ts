@@ -73,7 +73,7 @@ const TOOLS = [
       keep_files: { type: "array", items: { type: "string" }, description: "File ids to keep with the order (the spreadsheet or PDF it came from)" },
       questions: { type: "array", items: { type: "string" }, description: "What's still missing or unclear" },
       confidence: { type: "string", enum: ["high", "medium", "low"] },
-    }, required: ["summary", "groups", "questions", "confidence"] },
+    }, required: ["summary", "nickname", "groups", "questions", "confidence"] },
   },
 ];
 

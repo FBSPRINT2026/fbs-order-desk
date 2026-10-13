@@ -7049,3 +7049,5 @@ a.pdn-tag:hover{text-decoration:underline}
   .wb-scroll{padding-top:44px}
   .wb-msg.me{max-width:92%}
 }
+.wb-row .mic{position:static;transform:none;width:44px;height:44px;flex:none;border-radius:12px}
+.wb-row .mic svg{width:20px;height:20px}

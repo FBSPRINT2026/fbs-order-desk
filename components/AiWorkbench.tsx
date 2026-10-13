@@ -292,7 +292,7 @@ function OrderCard({ card, chatId, onCard, pending }: { card: Extract<WBCard, { 
               </tr>
             ))}
           </tbody></table>
-          {g.imprints.length > 0 && <div className="wb-prints">{g.imprints.map((im) => `${METHODS[im.method] || im.method} ${im.location}${im.method === "screen" ? `, ${im.colors >= FULL_COLOR ? "full color" : `${im.colors} color${im.colors === 1 ? "" : "s"}`}` : ""}${d.art[im.id] ? " (art attached)" : ""}`).join(" · ")}</div>}
+          {g.imprints.length > 0 && <div className="wb-prints">{g.imprints.map((im) => `${METHODS[im.method] || im.method} ${im.location}${im.method === "screen" ? `, ${im.colors >= FULL_COLOR ? "full color" : `${im.colors} color${im.colors === 1 ? "" : "s"}`}` : ""}${im.inks ? ` (${im.inks})` : ""}${d.art[im.id] ? " (art attached)" : ""}`).join(" · ")}</div>}
         </div>
       ))}
       {d.questions.length > 0 && <div className="wb-q"><b>Still to sort out</b><ul>{d.questions.map((x, i) => <li key={i}>{x}</li>)}</ul></div>}
