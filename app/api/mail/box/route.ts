@@ -51,7 +51,9 @@ export async function GET(req: Request) {
       return NextResponse.json(await withBox(acct, (c) => listMessages(c, me, path, Number(q.get("before") || 0) || undefined)));
     }
     if (what === "message") {
+      const t0 = Date.now();
       const hit = q.get("live") === "1" ? null : await cachedMessage(admin, acct.id, path, uid);
+      console.info(`mail open ${path}:${uid} ${hit ? "cache" : "live"} ${Date.now() - t0}ms`);
       if (hit) {
         // mark it read in Outlook too, after answering — only when it isn't already (each one is a connection to the
         // mailbox, and the mailbox only allows a few at a time, shared with the phone and Outlook: Oct 13)
@@ -60,8 +62,10 @@ export async function GET(req: Request) {
       }
       // read it from the mailbox (25 s at most: the page offers Try again), and keep it so it opens instantly next time
       const r = await withBox(acct, (c) => getMessage(c, path, uid), Date.now() + 25000).catch((e) => {
+        console.warn(`mail open ${path}:${uid} live failed ${Date.now() - t0}ms: ${String(e?.message || e)}`);
         throw new Error(/Connection not available|Socket timeout|closed|ETIMEDOUT|ECONNRESET|Too many/i.test(String(e?.message || e)) ? "The mailbox is busy right now (it allows only a few connections at a time, shared with your phone and Outlook). Try again in a moment." : String(e?.message || e));
       });
+      console.info(`mail open ${path}:${uid} live done ${Date.now() - t0}ms`);
       if (r) after(async () => { try { await keepBody(admin, acct.id, path, uid, r); } catch { /* fine */ } });
       return r ? NextResponse.json(r) : NextResponse.json({ error: "That email isn't there any more." }, { status: 404 });
     }

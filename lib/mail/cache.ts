@@ -80,7 +80,7 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
             const from = p ? addrList(p.from)[0] : env?.from?.[0];
             const to = p ? addrList(p.to) : env?.to || [], cc = p ? addrList(p.cc) : env?.cc || [];
             const subject = (p?.subject ?? env?.subject ?? "").slice(0, 500);
-            const text = (p?.text || "").slice(0, 100000);
+            const text = (p?.text || (typeof p?.html === "string" ? htmlText(p.html) : "")).slice(0, 100000);
             // big pasted pictures are left out of the kept HTML, so the email still opens from the cache (Oct 13)
             const slim = typeof p?.html === "string" ? slimHtml(p.html) : null;
             const html = slim ? slim.html : null;
@@ -96,7 +96,7 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
               to_text: toText.slice(0, 2000), cc_text: ccText.slice(0, 2000), reply_to: lc(addrList(p?.replyTo)[0]?.address),
               sent_at: new Date(p?.date || env?.date || m.internalDate || Date.now()).toISOString(),
               seen: !!m.flags?.has("\\Seen"), flagged: !!m.flags?.has("\\Flagged"), size: m.size || 0,
-              body_text: text, body_html: big ? null : html, body_trimmed: !!slim?.trimmed, body_fixed_at: new Date().toISOString(), attachments: atts,
+              body_text: text, body_html: big ? null : html, body_trimmed: !!slim?.trimmed, body_fixed_at: big ? null : new Date().toISOString(), attachments: atts,
               hay: [from?.name, from?.address, toText, ccText, subject, text.slice(0, 4000)].filter(Boolean).join(" ").toLowerCase().slice(0, 8000),
             };
             const { error } = await admin.from("mail_cache").upsert(row, { onConflict: "account_id,folder,uidvalidity,uid" });
@@ -113,6 +113,10 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
   return tally;
 }
 
+/** readable text from email HTML (when it has no plain-text part) */
+const htmlText = (h: string) => h.replace(/<(style|script|head)[\s\S]*?<\/\1>/gi, "").replace(/<img\b[^>]*>/gi, " ").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|tr|li|h\d)>/gi, "\n").replace(/<[^>]+>/g, " ")
+  .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;|&rsquo;/g, "'").replace(/&quot;/g, '"').replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n+/g, "\n\n").trim();
+
 async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, folder: string, validity: number, deadline: number) {
   const base = () => admin.from("mail_cache").select("id, uid, size").eq("account_id", accountId).eq("folder", folder).eq("uidvalidity", validity)
     .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lte("size", 10 * 1024 * 1024).order("sent_at", { ascending: false }).limit(3);
@@ -124,13 +128,12 @@ async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, 
     const patch: Record<string, unknown> = { body_fixed_at: new Date().toISOString() };
     try {
       const m = await c.fetchOne(String(r.uid), { source: true }, { uid: true });
-      if (m && m.source) {
-        const p = await simpleParser(m.source);
-        const slim = typeof p.html === "string" ? slimHtml(p.html) : null;
-        if (slim) { patch.body_html = slim.html; patch.body_trimmed = slim.trimmed; }
-        if (p.text) patch.body_text = p.text.slice(0, 100000);
-      }
-    } catch { /* tried; it opens live */ }
+      if (!m || !m.source) continue; // not read this time (connection cut): tried again next run
+      const p = await simpleParser(m.source);
+      const slim = typeof p.html === "string" ? slimHtml(p.html) : null;
+      if (slim) { patch.body_html = slim.html; patch.body_trimmed = slim.trimmed; }
+      patch.body_text = (p.text || (typeof p.html === "string" ? htmlText(p.html) : "")).slice(0, 100000);
+    } catch { continue; /* the connection dropped: tried again next run */ }
     await admin.from("mail_cache").update(patch).eq("id", r.id);
   }
 }
@@ -140,7 +143,7 @@ export async function keepBody(admin: SupabaseClient, accountId: string, folder:
   const slim = m.html ? slimHtml(m.html) : null;
   const patch: Record<string, unknown> = { body_fixed_at: new Date().toISOString() };
   if (slim) { patch.body_html = slim.html; patch.body_trimmed = slim.trimmed; }
-  if (m.text) patch.body_text = m.text.slice(0, 100000);
+  patch.body_text = (m.text || (m.html ? htmlText(m.html) : "")).slice(0, 100000);
   await admin.from("mail_cache").update(patch).eq("account_id", accountId).eq("folder", folder).eq("uid", uid).is("body_html", null);
 }
 
