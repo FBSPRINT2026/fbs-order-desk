@@ -1,6 +1,7 @@
 import "server-only";
 import { cfgOf, type MailAccount } from "./config";
 import type { FullMsg } from "./folders";
+import { ntlmPost } from "./ntlm";
 
 /**
  * Exchange Web Services (Oct 13, Nick: "we don't ever want to go back to Outlook"): the same mailbox over HTTPS, the
@@ -17,25 +18,35 @@ const attr = (attrs: string, name: string) => (attrs.match(new RegExp(`\\b${name
 
 export const ewsUrl = (host: string) => `https://${host}/EWS/Exchange.asmx`;
 
+/** which sign-in works for each mailbox (Basic for most; NTLM where Basic is turned down, Oct 13) */
+const useNtlm = new Map<string, boolean>();
+
 async function call(acct: MailAccount, body: string, timeoutMs = 25000): Promise<string> {
   const c = cfgOf(acct);
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(ewsUrl(c.imapHost), {
-      method: "POST", signal: ctrl.signal, cache: "no-store",
-      headers: { "Content-Type": "text/xml; charset=utf-8", Authorization: `Basic ${Buffer.from(`${c.user}:${c.pass}`).toString("base64")}` },
-      body: `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"><soap:Header><t:RequestServerVersion Version="Exchange2013_SP1"/></soap:Header><soap:Body>${body}</soap:Body></soap:Envelope>`,
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      const fault = one(text, "faultstring") || one(text, "MessageText");
-      throw new Error(res.status === 401 ? `EWS sign-in refused (401; the server offers: ${res.headers.get("www-authenticate") || "?"})` : `EWS ${res.status}${fault ? `: ${unesc(fault).slice(0, 200)}` : ""}`);
-    }
-    const bad = all(text, "ResponseCode").map((x) => x.inner).find((x) => x && x !== "NoError");
-    if (bad) throw new Error(`EWS ${bad}: ${unesc(one(text, "MessageText")).slice(0, 200)}`);
-    return text;
-  } finally { clearTimeout(t); }
+  const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"><soap:Header><t:RequestServerVersion Version="Exchange2013_SP1"/></soap:Header><soap:Body>${body}</soap:Body></soap:Envelope>`;
+  const key = acct.email.toLowerCase();
+  let status = 0, text = "", www = "";
+  if (!useNtlm.get(key)) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(ewsUrl(c.imapHost), { method: "POST", signal: ctrl.signal, cache: "no-store", headers: { "Content-Type": "text/xml; charset=utf-8", Authorization: `Basic ${Buffer.from(`${c.user}:${c.pass}`).toString("base64")}` }, body: soap });
+      status = res.status; text = await res.text(); www = res.headers.get("www-authenticate") || "";
+    } finally { clearTimeout(t); }
+  }
+  // Basic turned down but NTLM offered: sign in with NTLM (and keep using it for this mailbox)
+  if (useNtlm.get(key) || (status === 401 && /ntlm/i.test(www))) {
+    const r = await ntlmPost(ewsUrl(c.imapHost), c.user, c.pass, "text/xml; charset=utf-8", soap, timeoutMs);
+    status = r.status; text = r.body; www = ([] as string[]).concat(r.headers["www-authenticate"] || []).join(", ");
+    if (status !== 401) useNtlm.set(key, true);
+  }
+  if (status < 200 || status >= 300) {
+    const fault = one(text, "faultstring") || one(text, "MessageText");
+    throw new Error(status === 401 ? `EWS sign-in refused (401; Basic and NTLM; the server offers: ${www || "?"})` : `EWS ${status}${fault ? `: ${unesc(fault).slice(0, 200)}` : ""}`);
+  }
+  const bad = all(text, "ResponseCode").map((x) => x.inner).find((x) => x && x !== "NoError");
+  if (bad) throw new Error(`EWS ${bad}: ${unesc(one(text, "MessageText")).slice(0, 200)}`);
+  return text;
 }
 
 /** can this mailbox be read over EWS? (no secrets in the answer) */
