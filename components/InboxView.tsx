@@ -339,11 +339,13 @@ export default function InboxView({ mode }: { mode: Mode }) {
   // (with anything newer than it), so the email itself is right below
   const stripAll = curGroup ? [...curGroup].sort((a, b) => String(a.received_at || "").localeCompare(String(b.received_at || ""))) : [];
   const curAt = olCur ? stripAll.findIndex((y) => y.id === olCur.id) : -1;
-  const stripFold = !stripOpen && stripAll.length > 4 && curAt > 1;
-  const stripShown: (typeof stripAll[number] | "more")[] = stripFold ? [stripAll[0], "more", ...stripAll.slice(curAt, curAt + 3)] : stripAll;
+  // a long chain: just the original email, the arrow to open the rest, and the email you're reading (Oct 13, Nick)
+  const stripFold = !stripOpen && stripAll.length > 3;
+  const stripShown: (typeof stripAll[number] | "more")[] = stripFold ? (curAt <= 0 ? [stripAll[0], "more"] : [stripAll[0], "more", stripAll[curAt]]) : stripAll;
+  const stripHidden = stripAll.length - (curAt <= 0 ? 1 : 2);
   const convoStrip = curGroup && curGroup.length > 1 && olCur ? <div className="cv-strip" role="group" aria-label="This conversation">
     <div className="cv-h">This conversation · {curGroup.length} emails</div>
-    {stripShown.map((y) => { if (y === "more") return <button key="more" type="button" className="cv-more" onClick={() => setStripOpen(true)}>▾ {curAt - 1} more email{curAt - 1 === 1 ? "" : "s"}</button>;
+    {stripShown.map((y) => { if (y === "more") return <button key="more" type="button" className="cv-more" onClick={() => setStripOpen(true)} aria-expanded={false}>▸ {stripHidden} more email{stripHidden === 1 ? "" : "s"} — tap to show</button>;
       const ry = y.activity_id ? rowByAct.get(y.activity_id) : undefined; return (
       <button key={y.id} type="button" className={"cv-i" + (y.id === olCur.id ? " on" : "") + (y.unread ? " ol-unread" : "")} aria-current={y.id === olCur.id ? "true" : undefined} onClick={() => { if (y.id !== olCur.id) { pickRow(olKey(y)); window.scrollTo({ top: 0 }); } }}>
         <b>{personName(y.from_name) || y.from_email || (ry ? who(ry.x) : "")}</b><time>{y.received_at ? new Date(y.received_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}</time>
