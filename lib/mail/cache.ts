@@ -32,8 +32,16 @@ const addrList = (a: unknown) => (Array.isArray(a) ? a : a ? [a] : []).flatMap((
 /** keep one mailbox's cache current until the deadline; returns how many emails were saved / marked gone */
 export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, deadline: number) {
   const tally = { saved: 0, gone: 0, folders: 0 };
+  // the Inbox first, then the folder that waited longest (Oct 13: the runs ran out of time before INBOX/Archive every
+  // time, so it hadn't been looked at since the day before and most of its emails weren't kept)
+  const { data: states } = await admin.from("mail_cache_state").select("folder, checked_at").eq("account_id", acct.id);
+  const lastLook = new Map(((states || []) as { folder: string; checked_at: string | null }[]).map((x) => [x.folder, x.checked_at || ""]));
   await withBox(acct, async (c) => {
-    for (const f of await cacheFolders(c)) {
+    const order = (await cacheFolders(c)).map((f, i) => ({ f, i, at: /^inbox$/i.test(f.path) ? "0" : lastLook.get(f.path) || "" }))
+      .sort((a, b) => (a.at === b.at ? a.i - b.i : a.at < b.at ? -1 : 1)).map((x) => x.f);
+    // Inbox first, always
+    order.sort((a, b) => (/^inbox$/i.test(a.path) ? -1 : /^inbox$/i.test(b.path) ? 1 : 0));
+    for (const f of order) {
       if (Date.now() > deadline - 4000) break;
       const lock = await c.getMailboxLock(f.path);
       try {
@@ -94,7 +102,7 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
         }
         // emails saved before Oct 13 without their HTML (pasted pictures made it too big, or over 5 MB): read once more
         // and kept without the big pictures, a few per run, so they open from the cache instead of the mailbox
-        if (Date.now() < deadline - 10000) await fixBodies(admin, acct.id, c, f.path, validity, deadline - 6000);
+        if (Date.now() < deadline - 12000) await fixBodies(admin, acct.id, c, f.path, validity, deadline - 8000);
         await admin.from("mail_cache_state").upsert({ account_id: acct.id, folder: f.path, uidvalidity: validity, in_window: inWindow.size, cached: cached.size + saved, checked_at: new Date().toISOString() });
         tally.folders++;
       } finally { lock.release(); }
@@ -104,8 +112,11 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
 }
 
 async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, folder: string, validity: number, deadline: number) {
-  const { data } = await admin.from("mail_cache").select("id, uid, size").eq("account_id", accountId).eq("folder", folder).eq("uidvalidity", validity)
-    .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lte("size", 15 * 1024 * 1024).order("sent_at", { ascending: false }).limit(4);
+  const base = () => admin.from("mail_cache").select("id, uid, size").eq("account_id", accountId).eq("folder", folder).eq("uidvalidity", validity)
+    .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lte("size", 10 * 1024 * 1024).order("sent_at", { ascending: false }).limit(3);
+  // the ones with nothing at all to show first (no text either), then the rest
+  let { data } = await base().or("body_text.is.null,body_text.eq.");
+  if (!data?.length) ({ data } = await base());
   for (const r of (data || []) as { id: string; uid: number; size: number }[]) {
     if (Date.now() > deadline) break;
     const patch: Record<string, unknown> = { body_fixed_at: new Date().toISOString() };
