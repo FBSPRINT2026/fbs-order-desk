@@ -61,7 +61,7 @@ export default function LoginForm({ shopName, logoUrl, next, linkError }: { shop
         <form onSubmit={verify} className="stack">
           <div>
             <h1>Check Your Email</h1>
-            <p className="muted" style={{ margin: "6px 0 0" }}>We sent a code to <b>{email}</b>. Click the link in the email, or type the code here.</p>
+            <p className="muted" style={{ margin: "6px 0 0" }}>We sent a code to <b>{email}</b>. Type the code here{typeof window !== "undefined" && (window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone) ? " (the link in the email opens Safari, not this app)" : ", or click the link in the email"}. Use one or the other: each email works once.</p>
           </div>
           <div className="field">
             <label htmlFor="code">6-digit code</label>

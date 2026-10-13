@@ -20,5 +20,8 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     ok = !error;
   }
+  // the link didn't work (already used: the code from the same email was typed in first), but this browser is signed
+  // in: just go in (Oct 12: Nick typed the code, then tapped the link, and got "expired")
+  if (!ok) { const { data } = await supabase.auth.getUser(); ok = !!data.user; }
   return NextResponse.redirect(new URL(ok ? next : "/login?error=link", url.origin));
 }

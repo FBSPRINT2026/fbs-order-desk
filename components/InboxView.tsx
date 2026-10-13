@@ -157,33 +157,38 @@ export default function InboxView({ mode }: { mode: Mode }) {
 
   const rows = useMemo(() => mailRows(acts || [], sugs), [acts, sugs]);
   const mineId = st?.mine?.enabled ? st.mine.id : null;
-  // opened from a link (the dashboard's Reply): /shop/inbox?open=<email id> opens it ready to answer
+  // opened from a link (the dashboard's Reply): /shop/inbox?open=<email id> opens it ready to answer.
+  // The email showing is kept in the address (?show= / ?item=), so a reload (a new version of the portal, or coming
+  // back to the app) opens the same email again (Oct 12: Brett's email from the dashboard became another one after the
+  // app reloaded). Read once per page.
+  const urlDone = useRef(false);
   useEffect(() => {
-    if (!acts || !st) return;
-    const sp = new URLSearchParams(window.location.search), id = sp.get("open"), item = sp.get("item");
-    if (item && mode === "mail" && ol) {
+    if (!acts || !st || urlDone.current) return;
+    const sp = new URLSearchParams(window.location.search), item = sp.get("item"), shown = sp.get("show"), id = sp.get("open") || shown;
+    if (item && mode === "mail") {
+      if (ol === null) return;
+      urlDone.current = true;
       const it = ol.find((i) => i.id === item);
       if (it) { setBk("all"); setOpen(it.activity_id && rows.some((r) => r.x.id === it.activity_id) ? it.activity_id : "ol:" + it.id); setPicked(true); }
-      window.history.replaceState(null, "", window.location.pathname);
       return;
     }
-    if (!id) return;
+    if (!id) { urlDone.current = true; return; }
     // ?order=1: open it with Create order already started (from a searched conversation)
     if (sp.get("order")) setAutoOrder(id);
     // a customer email that isn't in the Inbox (any more): it's in Conversations
     if (mode === "mail") {
       if (ol === null) return;
+      urlDone.current = true;
       if (!ol.some((i) => i.activity_id === id)) { window.location.replace(`/shop/conversations?open=${id}`); return; }
-      setBk("all"); setOpen(id); setFocus(id); setPicked(true);
-      window.history.replaceState(null, "", window.location.pathname);
+      setBk("all"); setOpen(id); if (!shown) setFocus(id); setPicked(true);
       return;
     }
+    urlDone.current = true;
     const r = rows.find((y) => y.x.id === id);
     if (r) {
-      if (!(tab === "outlook" && ol?.some((i) => i.activity_id === id)) && !(r.needs && tab === "reply")) setTab(r.needs ? "reply" : "all");
-      setOpen(id); setFocus(id); setPicked(true);
-    }
-    window.history.replaceState(null, "", window.location.pathname);
+      if (!(r.needs && tab === "reply")) setTab(r.needs ? "reply" : "all");
+      setOpen(id); if (!shown) setFocus(id); setPicked(true);
+    } else flash("That email isn't in the last 30 days of customer email here. Search for it in Email.");
   }, [acts, st, ol]); // eslint-disable-line react-hooks/exhaustive-deps
   const scoped = rows; // only your mailbox's email is loaded (see load)
   const shown = scoped.filter((r) => (tab === "reply" ? r.needs : tab === "leads" ? r.x.meta?.lead && !r.x.customer_id : true))
@@ -229,6 +234,18 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const sel = tab === "outlook" ? (olCur?.activity_id ? rowByAct.get(olCur.activity_id) : undefined)
     : listed.find((r) => r.x.id === open) || (open ? rows.find((r) => r.x.id === open) : undefined) || listed[0];
   const [picked, setPicked] = useState(false); // phones: the list until an email is picked, then the email
+  // the email showing goes in the address (see the link handler above), so a reload comes back to it
+  useEffect(() => {
+    if (!urlDone.current) return;
+    const u = new URL(window.location.href);
+    for (const k of ["open", "order", "item", "show"]) u.searchParams.delete(k);
+    if (picked && open && open !== "brief") {
+      if (mode === "mail" && view.kind === "inbox" && olCur) u.searchParams.set("item", olCur.id);
+      else if (mode === "crm" && sel) u.searchParams.set("show", sel.x.id);
+    }
+    const next = u.pathname + u.search;
+    if (next !== window.location.pathname + window.location.search) window.history.replaceState(window.history.state, "", next);
+  }, [picked, open, olCur?.id, sel?.x.id, view.kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const hasSel = mode === "mail" && view.kind === "folder" ? !!fSel : mode === "mail" && view.kind === "search" ? !!cSel : briefOn || !!(sel || olCur);
   const pickRow = (id: string, answer = false) => { setAutoBrief(false); setOpen(id); setPicked(true); if (answer) setFocus(id); };
   // the email showing stays put: a new email arriving at the top of the list never swaps it out from under you
