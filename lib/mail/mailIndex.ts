@@ -38,6 +38,7 @@ export async function indexAccount(admin: SupabaseClient, acct: MailAccount, c: 
       const all = found.sort((a, b) => b - a);
       // new since last time (newest first), then the older ones not done yet
       const queue = [...all.filter((u) => u > high), ...all.filter((u) => u < low)];
+      const save = () => admin.from("mail_index_state").upsert({ account_id: acct.id, folder: f.path, uidvalidity: validity, total: all.length, indexed: Math.min(indexed, all.length), low_uid: Number.isFinite(low) ? low : null, high_uid: high || null, checked_at: new Date().toISOString() });
       while (queue.length && Date.now() < deadline - 3000) {
         const batch = queue.splice(0, 400);
         const rows: Record<string, unknown>[] = [];
@@ -57,8 +58,9 @@ export async function indexAccount(admin: SupabaseClient, acct: MailAccount, c: 
         }
         tally.added += rows.length; indexed += rows.length;
         high = Math.max(high, ...batch); low = Math.min(low, ...batch);
+        await save(); // after every batch: a run cut short keeps what it did
       }
-      await admin.from("mail_index_state").upsert({ account_id: acct.id, folder: f.path, uidvalidity: validity, total: all.length, indexed: Math.min(indexed, all.length), low_uid: Number.isFinite(low) ? low : null, high_uid: high || null, checked_at: new Date().toISOString() });
+      await save();
       tally.folders++;
     } finally { lock.release(); }
   }
