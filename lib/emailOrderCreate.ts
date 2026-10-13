@@ -86,9 +86,18 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
         if (cp.error) continue;
         if (buf) wh = dims(buf);
       }
+      // an .ai / EPS / PDF with a picture made of it (AI Workbench, Oct 13): the picture is the design's preview
+      let pvPath = f && isPicture(f) ? to : "";
+      if (!pvPath && f?.preview) {
+        const { data: pb } = await admin.storage.from("proofs").download(f.preview).then((r) => r, () => ({ data: null }));
+        const pbuf = pb ? Buffer.from(await pb.arrayBuffer()) : null;
+        const pt = pbuf ? (() => { try { return trimPng(pbuf); } catch { return null; } })() : null;
+        const pto = `${to.replace(/\.[^./]+$/, "")}-preview.png`;
+        if (pbuf && !(await admin.storage.from("proofs").upload(pto, pt ? pt.buf : pbuf, { contentType: "image/png" })).error) { pvPath = pto; wh = pt ? { w: pt.w, h: pt.h } : dims(pbuf); }
+      }
       const { data: des } = await admin.from("designs").insert({
         customer_id: custId, name: (d.nickname || name.replace(/\.[^.]+$/, "")).slice(0, 120), file_path: to, file_name: name, file_type: f?.type || "",
-        preview_path: f && isPicture(f) ? to : "", width_px: wh?.w || null, height_px: wh?.h || null, method: im.method || "screen",
+        preview_path: pvPath, width_px: wh?.w || null, height_px: wh?.h || null, method: im.method || "screen",
         colors: im.colors || 1, inks: im.inks || "", notes: a ? `From ${a.subject ? `the email "${String(a.subject).slice(0, 80)}"` : "an email"}` : input.via ? `From ${input.via}` : "From an older job", created_by: by,
       }).select("id").single();
       if (des) madeFor.set(path, des.id as string);

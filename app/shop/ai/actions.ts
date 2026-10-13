@@ -35,13 +35,13 @@ export async function getChat(id: string) {
     const msgs = (data.messages || []) as WBMsg[];
     const paths = new Set<string>();
     for (const m of msgs) {
-      for (const f of m.files || []) paths.add(f.path);
+      for (const f of m.files || []) { paths.add(f.path); if (f.preview) paths.add(f.preview.path); }
       for (const c of m.cards || []) if (c.kind === "mockups") for (const it of c.items) { it.prints.forEach((p) => paths.add(p.artPath)); if (it.saved) paths.add(it.saved); }
     }
     const { data: s } = paths.size ? await admin.storage.from("proofs").createSignedUrls([...paths], 6 * 3600) : { data: [] };
     const url = new Map<string, string>(((s || []) as { path: string | null; signedUrl: string }[]).map((x) => [x.path || "", x.signedUrl]));
     for (const m of msgs) {
-      for (const f of m.files || []) f.url = url.get(f.path) || "";
+      for (const f of m.files || []) { f.url = url.get(f.path) || ""; if (f.preview) f.preview.url = url.get(f.preview.path) || ""; }
       for (const c of m.cards || []) if (c.kind === "mockups") for (const it of c.items) { it.prints.forEach((p) => { p.art = url.get(p.artPath) || p.art; }); if (it.saved) it.savedUrl = url.get(it.saved) || ""; }
     }
     return { ok: true as const, id: data.id as string, title: String(data.title || ""), messages: msgs };

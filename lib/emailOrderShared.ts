@@ -7,7 +7,8 @@ import type { Group } from "@/lib/pricing";
  *    the customer's mockup, where their goods are coming from).
  *  - Reorder: a past job (portal order or Printavo invoice) copied with the new quantities.
  */
-export type EOFile = { path: string; name: string; type: string; size: number; role: "art" | "mockup" | "sheet" | "signature" | "other"; what?: string; url?: string };
+export type EOFile = { path: string; name: string; type: string; size: number; role: "art" | "mockup" | "sheet" | "signature" | "other"; what?: string; url?: string;
+  /** a PNG picture of an .ai / EPS / PDF (made in the browser): the design's preview, so mockups work right away */ preview?: string };
 /** a past job of this customer that a reorder can start from */
 export type PastJob = {
   /** "o:<order id>" or "a:<archived order id>" */ ref: string;

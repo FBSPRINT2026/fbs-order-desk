@@ -6,7 +6,12 @@ import type { EODraft } from "@/lib/emailOrderShared";
  * Shared between the server (lib/ai/workbench.ts) and the page (components/AiWorkbench.tsx).
  * Nothing the AI does changes anything by itself: a quote is made only when someone clicks Create quote on its card.
  */
-export type WBFile = { id: string; path: string; name: string; type: string; size: number; url?: string };
+export type WBFile = {
+  id: string; path: string; name: string; type: string; size: number; url?: string;
+  /** a PNG picture of a file the browser and the AI can't show as is (Illustrator .ai, EPS, PDF art, HEIC, TIFF),
+   *  made in the browser when it was dropped in: the AI looks at it and mockups are drawn with it (Oct 13) */
+  preview?: { path: string; url?: string };
+};
 
 /** one mockup picture: a garment photo with one or more prints on it (drawn in the browser) */
 export type WBMockItem = {
@@ -34,3 +39,7 @@ export type WBEvent =
 
 export const WB_PICTURE = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/i;
 export const isArtPicture = (f: Pick<WBFile, "type" | "name">) => WB_PICTURE.test(f.type) || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
+/** art files that aren't pictures: Illustrator, EPS, PDF, Photoshop, CorelDRAW */
+export const isArtDoc = (f: Pick<WBFile, "type" | "name">) => /\.(ai|eps|pdf|psd|cdr)$/i.test(f.name) || /postscript|illustrator|photoshop|^application\/pdf$/i.test(f.type);
+/** what a mockup is drawn with: the picture itself, or the picture made of an .ai / EPS / PDF */
+export const drawablePath = (f: WBFile) => (isArtPicture(f) ? f.path : f.preview?.path || "");

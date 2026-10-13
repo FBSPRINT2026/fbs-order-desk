@@ -6,7 +6,7 @@ import { MicButton } from "@/components/SearchInput";
 import { renderMockup } from "@/lib/mockupRender";
 import { METHODS, FULL_COLOR, sizeLabel } from "@/lib/pricing";
 import { createQuote, getChat, listChats, mockupTargets, saveMockups, searchCustomers, uploadTarget, type ChatRow } from "@/app/shop/ai/actions";
-import { isArtPicture, type WBCard, type WBEvent, type WBFile, type WBMockItem, type WBMsg } from "@/lib/ai/workbenchShared";
+import { isArtDoc, isArtPicture, type WBCard, type WBEvent, type WBFile, type WBMockItem, type WBMsg } from "@/lib/ai/workbenchShared";
 
 /**
  * AI Workbench (Oct 13, Nick: "upload two logos and say make me mockups in these different colors, or here's a
@@ -14,7 +14,16 @@ import { isArtPicture, type WBCard, type WBEvent, type WBFile, type WBMockItem, 
  * files, ask, and it answers, looks things up, draws mockups and puts orders together as cards. Nothing is created
  * until someone clicks a card's button.
  */
-type Up = WBFile & { busy?: boolean; err?: string; local?: string };
+type Up = WBFile & { busy?: boolean; err?: string; local?: string; note?: string };
+/** files that aren't pictures but are art (or photos the AI can't open): a PNG of them is made in the browser */
+const needsPicture = (f: File) => !isArtPicture({ type: f.type, name: f.name || "" }) && (isArtDoc({ type: f.type, name: f.name || "" }) || /heic|heif|tiff|bmp/i.test(f.type) || /\.(heic|heif|tiff?|bmp)$/i.test(f.name));
+async function pictureOf(f: File): Promise<File | null> {
+  const { makePreview } = await import("@/lib/artPrep");
+  // .ai files are PDFs inside when saved "PDF compatible" (Illustrator's default); older ones are PostScript like EPS
+  const pv = await makePreview(/\.ai$/i.test(f.name) ? new File([f], f.name, { type: "application/pdf" }) : f).catch(() => null);
+  if (pv || !/\.ai$/i.test(f.name)) return pv;
+  return makePreview(new File([f], f.name.replace(/\.ai$/i, ".eps"), { type: "application/postscript" })).catch(() => null);
+}
 const STARTERS = [
   "Make mockups of this logo on a Gildan 5000 in black, navy, red and sport grey",
   "Here's a spreadsheet: put it in as an order for ",
@@ -47,13 +56,28 @@ export default function AiWorkbench({ name }: { name: string }) {
 
   async function addFiles(list: FileList | File[]) {
     const arr = Array.from(list).slice(0, 12);
+    const set = (id: string, ch: Partial<Up>) => setFiles((x) => x.map((y) => (y.id === id ? { ...y, ...ch } : y)));
     for (const f of arr) {
-      const tmp: Up = { id: Math.random().toString(36).slice(2), path: "", name: f.name || "pasted.png", type: f.type, size: f.size, busy: true, local: f.type.startsWith("image/") ? URL.createObjectURL(f) : "" };
+      const tmp: Up = { id: Math.random().toString(36).slice(2), path: "", name: f.name || "pasted.png", type: f.type, size: f.size, busy: true, local: isArtPicture({ type: f.type, name: f.name || "" }) ? URL.createObjectURL(f) : "" };
       setFiles((x) => [...x, tmp]);
       const t = await uploadTarget(tmp.name, f.size);
-      if (!t.ok) { setFiles((x) => x.map((y) => (y.id === tmp.id ? { ...y, busy: false, err: t.error } : y))); continue; }
+      if (!t.ok) { set(tmp.id, { busy: false, err: t.error }); continue; }
       const up = await createClient().storage.from("proofs").uploadToSignedUrl(t.path, t.token, f, { contentType: f.type || undefined });
-      setFiles((x) => x.map((y) => (y.id === tmp.id ? { ...y, busy: false, path: up.error ? "" : t.path, err: up.error ? up.error.message : "" } : y)));
+      if (up.error) { set(tmp.id, { busy: false, err: up.error.message }); continue; }
+      set(tmp.id, { path: t.path, note: needsPicture(f) ? "Reading the art…" : "" });
+      // Illustrator / EPS / PDF art, iPhone photos, TIFFs: a PNG picture of it, made here, so the AI can see it and
+      // mockups can be drawn with it (Oct 13: ".ai files can't be read"). The original stays for production.
+      if (needsPicture(f)) {
+        const pv = await pictureOf(f);
+        if (pv) {
+          const t2 = await uploadTarget(pv.name, pv.size);
+          const up2 = t2.ok ? await createClient().storage.from("proofs").uploadToSignedUrl(t2.path, t2.token, pv, { contentType: "image/png" }) : null;
+          if (t2.ok && up2 && !up2.error) { set(tmp.id, { busy: false, note: "", local: URL.createObjectURL(pv), preview: { path: t2.path } }); continue; }
+        }
+        set(tmp.id, { busy: false, note: /\.(ai|eps)$/i.test(f.name) ? "No picture: save it PDF-compatible or send a PNG" : "" });
+        continue;
+      }
+      set(tmp.id, { busy: false });
     }
   }
 
@@ -62,10 +86,10 @@ export default function AiWorkbench({ name }: { name: string }) {
     const t = text.trim(), ready = files.filter((f) => f.path && !f.err);
     if (busy || (!t && !ready.length) || files.some((f) => f.busy)) return;
     setErr(""); setBusy(true); setStatus("Thinking…"); setLive({ text: [], cards: [] });
-    const mine: WBMsg = { role: "user", text: t, files: ready.map((f) => ({ ...f, url: f.local || f.url })), at: new Date().toISOString() };
+    const mine: WBMsg = { role: "user", text: t, files: ready.map((f) => ({ ...f, url: f.local || f.url, preview: f.preview ? { ...f.preview, url: f.local } : undefined })), at: new Date().toISOString() };
     setMsgs((m) => [...m, mine]); setText(""); setFiles([]);
     try {
-      const res = await fetch("/api/ai/workbench", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat: chatId || undefined, text: t, files: ready.map(({ path, name, type, size }) => ({ path, name, type, size })) }) });
+      const res = await fetch("/api/ai/workbench", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat: chatId || undefined, text: t, files: ready.map(({ path, name, type, size, preview }) => ({ path, name, type, size, preview })) }) });
       if (!res.ok || !res.body) { const j = await res.json().catch(() => ({})); throw new Error(j.error || `Error ${res.status}`); }
       const rd = res.body.getReader(), dec = new TextDecoder();
       let buf = "", done: WBMsg | null = null;
@@ -143,7 +167,7 @@ export default function AiWorkbench({ name }: { name: string }) {
                 <span key={f.id} className={"wb-file" + (f.err ? " bad" : "")} title={f.err || f.name}>
                   {f.local ? <img src={f.local} alt="" /> : <span className="wb-ext">{(f.name.split(".").pop() || "file").slice(0, 4)}</span>}
                   <span className="wb-fn">{f.name}</span>
-                  <span className="wb-fs">{f.busy ? "Uploading…" : f.err ? "Didn't upload" : kb(f.size)}</span>
+                  <span className="wb-fs">{f.err ? "Didn't upload" : f.note ? f.note : f.busy ? "Uploading…" : `${kb(f.size)}${f.preview ? " · picture made" : ""}`}</span>
                   <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((x) => x.filter((y) => y.id !== f.id))}>×</button>
                 </span>
               ))}
@@ -172,8 +196,8 @@ function Msg({ m, chatId, onCard }: { m: WBMsg; chatId: string; onCard: (c: WBCa
     <div className={"wb-msg " + (m.role === "user" ? "me" : "ai") + (m.error ? " err" : "")}>
       {m.files?.length ? (
         <div className="wb-mfiles">
-          {m.files.map((f) => f.url && isArtPicture(f)
-            ? <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="wb-mpic" title={`${f.id}: ${f.name}`}><img src={f.url} alt={f.name} /></a>
+          {m.files.map((f) => f.url && (isArtPicture(f) || f.preview?.url)
+            ? <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="wb-mpic" title={`${f.id}: ${f.name}`}><img src={isArtPicture(f) ? f.url : f.preview!.url} alt={f.name} />{!isArtPicture(f) && <span className="wb-mext">{(f.name.split(".").pop() || "").slice(0, 4)}</span>}</a>
             : <a key={f.id} href={f.url || undefined} target="_blank" rel="noreferrer" className="wb-mdoc" title={f.id}>{f.name}</a>)}
         </div>
       ) : null}

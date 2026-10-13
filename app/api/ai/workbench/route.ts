@@ -29,7 +29,8 @@ export async function POST(req: Request) {
   // the files: only ones uploaded here, numbered on after the chat's earlier files (f1, f2…)
   const had = (chat?.messages || []).flatMap((m) => m.files || []).length;
   const files: WBFile[] = (Array.isArray(b.files) ? b.files : []).filter((f: WBFile) => typeof f?.path === "string" && f.path.startsWith("ai/uploads/") && !f.path.includes(".."))
-    .slice(0, 12).map((f: WBFile, i: number) => ({ id: `f${had + i + 1}`, path: f.path, name: String(f.name || "file").slice(0, 120), type: String(f.type || "").slice(0, 100), size: Math.max(0, +f.size || 0) }));
+    .slice(0, 12).map((f: WBFile, i: number) => ({ id: `f${had + i + 1}`, path: f.path, name: String(f.name || "file").slice(0, 120), type: String(f.type || "").slice(0, 100), size: Math.max(0, +f.size || 0),
+      ...(typeof f.preview?.path === "string" && f.preview.path.startsWith("ai/uploads/") && !f.preview.path.includes("..") ? { preview: { path: f.preview.path } } : {}) }));
   if (!text && !files.length) return Response.json({ error: "Type something or add a file." }, { status: 400 });
   const userMsg: WBMsg = { role: "user", text, files: files.length ? files : undefined, at: new Date().toISOString() };
   if (!chat) {
