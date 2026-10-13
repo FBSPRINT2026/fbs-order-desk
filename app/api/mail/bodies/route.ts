@@ -1,0 +1,32 @@
+import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { MailAccount } from "@/lib/mail/config";
+import { fixBodiesSlow } from "@/lib/mail/cache";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
+/**
+ * Emails kept without a body (big ones the cache run couldn't wait for), read with all the time they need: every 5
+ * minutes by the database schedule (mail_bodies_tick, migration 139) with the sync token. Skips a mailbox whose mail
+ * check is running (the server only allows a couple of connections).
+ */
+export async function GET(req: Request) {
+  const admin = createAdminClient();
+  const { data: ps } = await admin.from("printavo_sync").select("token").eq("id", 1).single();
+  if (req.headers.get("x-sync-token") !== (ps as { token: string } | null)?.token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
+  const deadline = Date.now() + 240000;
+  const { data } = await admin.from("mail_accounts").select("*").eq("enabled", true);
+  const out: Record<string, unknown> = {};
+  for (const a of (data || []) as MailAccount[]) {
+    if (Date.now() > deadline - 40000) break;
+    const { count } = await admin.from("mail_cache").select("id", { count: "exact", head: true }).eq("account_id", a.id).is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lt("body_tries", 6).or("body_text.is.null,body_text.eq.,size.gt.200000");
+    if (!count) { out[a.email] = "nothing to do"; continue; }
+    const t0 = Date.now();
+    try { await fixBodiesSlow(admin, a, Math.min(deadline, Date.now() + 150000)); out[a.email] = { waiting: count, ms: Date.now() - t0 }; }
+    catch (e) { out[a.email] = { error: e instanceof Error ? e.message : String(e), ms: Date.now() - t0 }; }
+  }
+  console.info(`mail bodies ${JSON.stringify(out)}`);
+  return NextResponse.json({ ok: true, mailboxes: out });
+}

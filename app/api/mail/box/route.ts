@@ -74,8 +74,9 @@ export async function GET(req: Request) {
           return NextResponse.json(msg);
         }
       }
-      // read it from the mailbox (25 s at most: the page offers Try again), and keep it so it opens instantly next time
-      const r = await withBox(acct, (c) => getMessage(c, path, uid), Date.now() + 25000).catch((e) => {
+      // read it from the mailbox (the page offers Try again), and keep it so it opens instantly next time
+      // the server builds a big email the first time it's asked for: up to 50 s (the page waits 55)
+      const r = await withBox(acct, (c) => getMessage(c, path, uid), Date.now() + 50000, 50000).catch((e) => {
         console.warn(`mail open ${path}:${uid} live failed ${Date.now() - t0}ms: ${String(e?.message || e)}`);
         throw new Error(/Connection not available|Socket timeout|closed|ETIMEDOUT|ECONNRESET|Too many/i.test(String(e?.message || e)) ? "The mail server didn't hand this email over. It may be busy (it allows only a few connections at a time, shared with your phone and Outlook): try again in a moment. If it keeps happening with this email, open it in Outlook." : String(e?.message || e));
       });

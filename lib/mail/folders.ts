@@ -26,8 +26,8 @@ const SKIP = /^(calendar|contacts|tasks|notes|journal|sync issues|conversation h
  * 60-second limit every time, leaving connections open until the mail server refused new ones: "Connection not
  * available" for everything, mail checks and opening emails too).
  */
-export async function withBox<T>(acct: MailAccount, fn: (c: ImapFlow) => Promise<T>, until = Date.now() + 45000) {
-  const client = imapClient(cfgOf(acct));
+export async function withBox<T>(acct: MailAccount, fn: (c: ImapFlow) => Promise<T>, until = Date.now() + 45000, socketTimeout = 40000) {
+  const client = imapClient(cfgOf(acct), socketTimeout);
   const stop = setTimeout(() => { try { client.close(); } catch { /* closed */ } }, Math.max(2000, until - Date.now()));
   try {
     await client.connect();

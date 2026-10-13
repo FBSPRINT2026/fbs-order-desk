@@ -44,9 +44,6 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
       .sort((a, b) => (a.at === b.at ? a.i - b.i : a.at < b.at ? -1 : 1)).map((x) => x.f);
     // Inbox first, always
     order.sort((a, b) => (/^inbox$/i.test(a.path) ? -1 : /^inbox$/i.test(b.path) ? 1 : 0));
-    // first, up to 5 s on emails kept without a body, from any folder (an email that won't open is worse than one
-    // that isn't cached yet: that one is read from the mailbox)
-    if (Date.now() < deadline - 10000) await fixBodies(admin, acct.id, c, Math.min(deadline - 8000, Date.now() + 5000));
     for (const f of order) {
       if (Date.now() > deadline - 4000) break;
       const lock = await c.getMailboxLock(f.path);
@@ -189,6 +186,16 @@ async function fixBodiesEws(admin: SupabaseClient, acct: MailAccount, deadline: 
     }
   }
   if (result && (!mine || mine.ok !== result.ok)) await admin.from("app_keys").upsert({ name: "ews", value: { ...st, [acct.email.toLowerCase()]: { ...result, at: new Date().toISOString() } } }, { onConflict: "name" });
+}
+
+/**
+ * The slow lane (Oct 13): emails kept without a body, read over IMAP with all the time they need, in their own job
+ * (/api/mail/bodies, every 5 minutes, up to 4 minutes). The mail server builds a big email the first time it's asked
+ * for (that took longer than the 2-minute cache run allows, and the cut connection ended the run), so it's done here,
+ * one email at a time, without holding up the cache.
+ */
+export async function fixBodiesSlow(admin: SupabaseClient, acct: MailAccount, deadline: number) {
+  return withBox(acct, (c) => fixBodies(admin, acct.id, c, deadline - 30000), deadline, 150000);
 }
 
 async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, deadline: number) {

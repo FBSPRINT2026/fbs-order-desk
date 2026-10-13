@@ -13,8 +13,8 @@ import { mirrorInbox } from "./mirror";
  * it (Oct 12: socket timeouts crashed the process mid sign-in refresh, which logged Nick and Amanda out, and pages hung).
  * The step that was waiting on the connection still fails normally and is handled where it was called.
  */
-export function imapClient(c: MailCfg) {
-  const client = new ImapFlow({ host: c.imapHost, port: c.imapPort, secure: true, auth: { user: c.user, pass: c.pass }, logger: false, socketTimeout: 40000 });
+export function imapClient(c: MailCfg, socketTimeout = 40000) {
+  const client = new ImapFlow({ host: c.imapHost, port: c.imapPort, secure: true, auth: { user: c.user, pass: c.pass }, logger: false, socketTimeout });
   client.on("error", (e: Error) => { console.warn("imap connection:", e?.message || e); });
   return client;
 }

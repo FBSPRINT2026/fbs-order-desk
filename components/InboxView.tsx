@@ -15,7 +15,7 @@ import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
-import { Attachments, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -583,14 +583,19 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
   const [ex, setEx] = useState<{ tasks: Task[]; events: CalEvent[] } | null>(null);
   const [writing, setWriting] = useState(false), [body, setBody] = useState(""), [cc, setCc] = useState<string[]>([]);
   const [h, setH] = useState(240), ref = useRef<HTMLIFrameElement | null>(null), [plain, setPlain] = useState(false);
+  const [tryN, setTryN] = useState(0);
   useEffect(() => {
     let live = true;
-    // straight from the Inbox by its uid (with attachments to open); the Message-ID lookup if the uid moved
-    mailBox<FullMsg>({ do: "message", path: "INBOX", uid: i.uid }).then((r) => { if (!live) return; setFull(r); setM(r); })
-      .catch(() => readInboxEmail(i.id).then((r) => { if (!live) return; if (r.ok) setM(r); else setLoadErr(r.error); }));
+    setLoadErr("");
+    // straight from the Inbox by its uid (with attachments to open); the Message-ID lookup if the uid moved. Each
+    // step gives up after a while, so it never sits on "Opening…" (Oct 13, Meena Harris's email)
+    const within = <T,>(p: Promise<T>, ms: number) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("The mail server didn't answer in time.")), ms))]);
+    within(mailBox<FullMsg>({ do: "message", path: "INBOX", uid: i.uid }), 56000).then((r) => { if (!live) return; setFull(r); setM(r); })
+      .catch((e1) => { if (!live) return; if (/didn't answer in time/.test(String(e1?.message))) { setLoadErr(String(e1.message)); return; }
+        within(readInboxEmail(i.id), 30000).then((r) => { if (!live) return; if (r.ok) setM(r); else setLoadErr(r.error); }, (e2) => live && setLoadErr(e2 instanceof Error ? e2.message : String(e2))); });
     inboxItemExtras(i.id).then((r) => { if (live && r.ok) setEx({ tasks: r.tasks, events: r.events }); });
     return () => { live = false; };
-  }, [i.id]);
+  }, [i.id, tryN]);
   const doc = useMemo(() => {
     if (!m?.html) return null;
     const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}table img{max-width:none}table{max-width:100%}</style>`;
@@ -656,7 +661,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
             ))}
             {added.map((e) => <div key={e.id} className="lm-row ev on"><span className="lm-cal" aria-hidden>✓</span><div><b>{e.title}</b><span className="faint">On your calendar</span></div></div>)}
           </div>}
-          {!m ? <div className="ibx2-none">{loadErr || "Opening the email…"}</div> : <>
+          {!m ? <div className="ibx2-none">{loadErr ? <>{loadErr} <button type="button" className="btn ghost sm" onClick={() => setTryN((x) => x + 1)}>Try again</button></> : <OpeningNote />}</div> : <>
             {full ? <><MailFrame html={full.html} text={full.text} /><Attachments m={full} /></> : doc && !plain ? <div className="ibx-html">
               <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
               <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>

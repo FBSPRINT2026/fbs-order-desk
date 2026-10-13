@@ -311,6 +311,13 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
 
 const HEAD = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}table img{max-width:none}table{max-width:100%}</style>`;
 /** an email's body, the way Outlook shows it (sandboxed, links open in a new tab), or its text */
+/** "Opening…", then after a few seconds why it can take a while (Oct 13) */
+export function OpeningNote() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setSlow(true), 6000); return () => clearTimeout(t); }, []);
+  return <>{slow ? "Still opening: this one is coming from the mail server, and a big email can take up to a minute the first time…" : "Opening the email…"}</>;
+}
+
 export function MailFrame({ html, text }: { html: string; text: string }) {
   const [h, setH] = useState(200), ref = useRef<HTMLIFrameElement | null>(null), [plain, setPlain] = useState(false);
   const doc = useMemo(() => {
@@ -388,7 +395,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
   const [n, setN] = useState(0), [full, setFull] = useState(false);
   useEffect(() => {
     let live = true; setM(null); setErr("");
-    const slow = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("The mailbox didn't answer in time.")), 30000));
+    const slow = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("The mailbox didn't answer in time.")), 56000));
     Promise.race([box<FullMsg>({ do: "message", path: row.folder, uid: row.uid, ...(full ? { live: 1 } : {}) }), slow]).then((x) => live && setM(x), (e) => live && setErr(e.message));
     return () => { live = false; };
   }, [row.folder, row.uid, n, full]);
@@ -411,7 +418,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
           </Toolbar>} />
         {err && <div className="pv-err eh-err">{err}</div>}
         <div className="ibx2-read">
-          {!m ? <div className="ibx2-none">{err ? <button type="button" className="btn ghost sm" onClick={() => setN((x) => x + 1)}>Try again</button> : "Opening the email…"}</div> : <>
+          {!m ? <div className="ibx2-none">{err ? <button type="button" className="btn ghost sm" onClick={() => setN((x) => x + 1)}>Try again</button> : <OpeningNote />}</div> : <>
             {m.partial && <div className="mf-partial">Opened fast: big pictures and attachments in this email aren&apos;t shown here. <button type="button" className="btn ghost sm" onClick={() => setFull(true)}>Show the full email</button></div>}
             <MailFrame html={m.html} text={m.text} />
             <Attachments m={m} />
@@ -454,7 +461,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
     if (!live && (full[k] || asked.current.has(k))) return;
     asked.current.add(k);
     if (live) setFull((f) => { const n = { ...f }; delete n[k]; return n; });
-    const slow = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("The mailbox didn't answer in time.")), 30000));
+    const slow = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("The mailbox didn't answer in time.")), 56000));
     Promise.race([box<FullMsg>({ do: "message", path: m.folder, uid: m.uid, ...(live ? { live: 1 } : {}) }), slow])
       .then((x) => setFull((f) => ({ ...f, [k]: x })), (e) => { asked.current.delete(k); setWhy((w) => ({ ...w, [k]: e instanceof Error ? e.message : "" })); setFull((f) => ({ ...f, [k]: "err" })); });
   };
@@ -511,7 +518,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
                   <time>{new Date(m.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>
                 </button>
                 {isOpen && <div className="mf-msg-b">
-                  {!f ? <div className="faint">Opening…</div> : f === "err" ? <div className="pv-err">Couldn&apos;t open this one{why[k] ? `: ${why[k]}` : "."} <button type="button" className="btn ghost sm" onClick={() => load(m, true)}>Try again</button></div> : <>
+                  {!f ? <div className="faint"><OpeningNote /></div> : f === "err" ? <div className="pv-err">Couldn&apos;t open this one{why[k] ? `: ${why[k]}` : "."} <button type="button" className="btn ghost sm" onClick={() => load(m, true)}>Try again</button></div> : <>
                     {f.partial && <div className="mf-partial">Opened fast: big pictures and attachments in this email aren&apos;t shown here. <button type="button" className="btn ghost sm" onClick={() => load(m, true)}>Show the full email</button></div>}
                     <MailFrame html={f.html} text={f.text} />
                     <Attachments m={f} />
