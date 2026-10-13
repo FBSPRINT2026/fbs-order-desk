@@ -59,6 +59,9 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
         const gone = rows.filter((r) => Number(r.uidvalidity) !== validity || !inWindow.has(Number(r.uid))).map((r) => r.id);
         for (let i = 0; i < gone.length; i += 200) await admin.from("mail_cache").update({ gone_at: new Date().toISOString() }).in("id", gone.slice(i, i + 200));
         tally.gone += gone.length;
+        // emails kept without a body come before ones not kept yet, with up to 8 s of the run (an email that won't
+        // open is worse than one that isn't in the cache yet: that one is read from the mailbox)
+        if (Date.now() < deadline - 10000) await fixBodies(admin, acct.id, c, f.path, validity, Math.min(deadline - 6000, Date.now() + 8000));
         // not cached yet: newest first
         const missing = [...inWindow].filter((u) => !cached.has(u)).sort((a, b) => b - a);
         let saved = 0;
@@ -102,7 +105,6 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
         }
         // emails saved before Oct 13 without their HTML (pasted pictures made it too big, or over 5 MB): read once more
         // and kept without the big pictures, a few per run, so they open from the cache instead of the mailbox
-        if (Date.now() < deadline - 12000) await fixBodies(admin, acct.id, c, f.path, validity, deadline - 8000);
         await admin.from("mail_cache_state").upsert({ account_id: acct.id, folder: f.path, uidvalidity: validity, in_window: inWindow.size, cached: cached.size + saved, checked_at: new Date().toISOString() });
         tally.folders++;
       } finally { lock.release(); }
