@@ -17,6 +17,18 @@ import { isArtDoc, isArtPicture, type WBCard, type WBEvent, type WBFile, type WB
 type Up = WBFile & { busy?: boolean; err?: string; local?: string; note?: string };
 /** files that aren't pictures but are art (or photos the AI can't open): a PNG of them is made in the browser */
 const needsPicture = (f: File) => !isArtPicture({ type: f.type, name: f.name || "" }) && (isArtDoc({ type: f.type, name: f.name || "" }) || /heic|heif|tiff|bmp/i.test(f.type) || /\.(heic|heif|tiff?|bmp)$/i.test(f.name));
+/** an .ai / EPS / PDF already in the chat with no picture yet: one made now, once per file */
+const docPics = new Map<string, Promise<string>>();
+function docPicture(url: string, name: string) {
+  const key = url.split("?")[0];
+  if (!docPics.has(key)) docPics.set(key, (async () => {
+    const blob = await fetch(url).then((r) => (r.ok ? r.blob() : Promise.reject(new Error("Couldn't open the art"))));
+    const pv = await pictureOf(new File([blob], name, { type: blob.type }));
+    if (!pv) throw new Error("No picture could be made of the art");
+    return URL.createObjectURL(pv);
+  })());
+  return docPics.get(key)!;
+}
 async function pictureOf(f: File): Promise<File | null> {
   const { makePreview } = await import("@/lib/artPrep");
   // .ai files are PDFs inside when saved "PDF compatible" (Illustrator's default); older ones are PostScript like EPS
@@ -229,7 +241,8 @@ function Mockups({ card, chatId, onCard, pending }: { card: Extract<WBCard, { ki
           let photo = it.photo, blob: Blob | null = null;
           for (const p of it.prints) {
             if (!p.art) throw new Error("no art link");
-            blob = await renderMockup({ photo, art: p.art, location: p.location, widthIn: p.widthIn, youth: it.youth, size: 1000 });
+            const art = p.doc ? await docPicture(p.art, p.doc) : p.art;
+            blob = await renderMockup({ photo, art, location: p.location, widthIn: p.widthIn, youth: it.youth, size: 1000 });
             photo = URL.createObjectURL(blob);
           }
           if (blob) { blobs.push({ i, blob }); setPics((x) => x.map((v, j) => (j === i ? photo : v))); }

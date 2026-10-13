@@ -17,7 +17,8 @@ export type WBFile = {
 export type WBMockItem = {
   color: string; view: "front" | "back";
   /** the garment photo, through our image proxy */ photo: string;
-  prints: { file: string; artPath: string; art?: string; location: string; widthIn?: number }[];
+  prints: { file: string; artPath: string; art?: string; location: string; widthIn?: number;
+    /** the art is an .ai / EPS / PDF with no picture yet (dropped in before Oct 13's fix): the page makes one first */ doc?: string }[];
   youth?: boolean;
   /** the finished picture, once saved */ saved?: string; savedUrl?: string;
 };
