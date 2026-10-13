@@ -41,8 +41,15 @@ export async function GET(req: Request) {
   ]);
   // a draft read before the conversation's newest email (new sizes came in, Oct 12) is read again, the whole
   // conversation this time
-  const pl = sg?.payload as { v?: number; draft?: EODraft; seen?: string } | null;
+  let pl = sg?.payload as { v?: number; draft?: EODraft; seen?: string } | null;
   const newest = cv?.convo[0]?.occurred_at || "";
+  // no draft on this email, but one from another email in the same conversation that has read it all (Oct 12: starting
+  // from a different email in Methodist's thread read the whole thing again)
+  if (!pl && cv && cv.convo.length > 1) {
+    const { data: others } = await admin.from("ai_suggestions").select("payload, updated_at").eq("kind", "draft_order").eq("status", "open").in("activity_id", cv.convo.map((e) => e.id)).order("updated_at", { ascending: false }).limit(5);
+    const fresh = ((others || []) as { payload: { v?: number; draft?: EODraft; seen?: string } | null }[]).find((x) => x.payload?.v === 2 && x.payload.seen && x.payload.seen >= newest);
+    if (fresh) pl = fresh.payload;
+  }
   const stale = !!pl && sg?.status !== "done" && st.ready && (pl.seen ? newest > pl.seen : (cv?.convo.length || 1) > 1);
   const draft = pl?.v === 2 && !stale ? (pl as { draft: EODraft }).draft : null;
   // the files from the whole conversation, newest first
