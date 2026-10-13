@@ -22,13 +22,13 @@ export async function GET(req: Request) {
   for (const a of (data || []) as MailAccount[]) {
     if (Date.now() > deadline - 40000) break;
     const { count } = await admin.from("mail_cache").select("id", { count: "exact", head: true }).eq("account_id", a.id).is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lt("body_tries", 6).or("body_text.is.null,body_text.eq.,size.gt.200000");
-    if (!count) { out[a.email] = "nothing to do"; continue; }
     const t0 = Date.now();
     // over EWS first (several a minute); the mailbox connection only for what EWS can't do
-    try { for (let i = 0; i < 8 && Date.now() < deadline - 60000; i++) await fixBodiesEws(admin, a, Date.now() + 20000); } catch { /* falls through to IMAP */ }
+    if (count) try { for (let i = 0; i < 8 && Date.now() < deadline - 60000; i++) await fixBodiesEws(admin, a, Date.now() + 20000); } catch { /* falls through to IMAP */ }
     const { data: k } = await admin.from("app_keys").select("value").eq("name", "ews").maybeSingle();
-    if ((k?.value as Record<string, { ok: boolean }> | null)?.[a.email.toLowerCase()]?.ok) { out[a.email] = { waiting: count, ews: true, ms: Date.now() - t0 }; continue; }
-    try { await fixBodiesSlow(admin, a, Math.min(deadline, Date.now() + 150000)); out[a.email] = { waiting: count, ms: Date.now() - t0 }; }
+    const ewsOk = !!(k?.value as Record<string, { ok: boolean }> | null)?.[a.email.toLowerCase()]?.ok;
+    // the mailbox connection: the header index for Search older mail (every mailbox), and bodies EWS couldn't do
+    try { const idx = await fixBodiesSlow(admin, a, Math.min(deadline, Date.now() + 100000), ewsOk); out[a.email] = { waiting: count, ews: ewsOk, index: idx, ms: Date.now() - t0 }; }
     catch (e) { out[a.email] = { error: e instanceof Error ? e.message : String(e), ms: Date.now() - t0 }; }
   }
   console.info(`mail bodies ${JSON.stringify(out)}`);

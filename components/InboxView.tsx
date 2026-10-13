@@ -105,9 +105,12 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const searchOlder = async (term: string) => {
     setOlderBusy(true); setSNote("");
     try {
-      const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean }>({ do: "search", q: term.trim(), older: 1 });
+      const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; indexing?: { indexed: number; total: number } | null }>({ do: "search", q: term.trim(), older: 1 });
       setConvos((cur) => { const have = new Set((cur || []).map((c) => c.key)); return [...(cur || []), ...r.convos.filter((c) => !have.has(c.key))]; });
-      setSNote(r.convos.length ? (r.partial ? "Older mail: some big folders took too long and were skipped." : "Older mail added below.") : r.partial ? "Nothing older found (some big folders took too long)." : "Nothing older found.");
+      // older mail is searched from the kept headers; while they're still being filled in, say how far along
+      const pct = r.indexing && r.indexing.total ? Math.floor((100 * r.indexing.indexed) / r.indexing.total) : null;
+      const still = pct != null ? ` Older mail is still being read in (${pct}% so far), so there may be more: try again later.` : "";
+      setSNote((r.convos.length ? "Older mail added below." : "Nothing older found.") + (still || (r.partial ? " The mail server was busy, so some folders weren't searched: try again in a minute." : "")));
     } catch (e) { setSNote(e instanceof Error ? e.message : String(e)); }
     setOlderBusy(false);
   };

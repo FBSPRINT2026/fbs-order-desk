@@ -19,7 +19,7 @@ const lc = (s?: string | null) => (s || "").trim().toLowerCase();
 const mid = (s?: string | null) => (s || "").trim().replace(/^<|>$/g, "");
 const since = () => new Date(Date.now() - CACHE_DAYS * 864e5);
 
-async function cacheFolders(c: ImapFlow) {
+export async function cacheFolders(c: ImapFlow) {
   const list = await c.list();
   const rank = (f: { specialUse?: string; path: string }) => (/^inbox$/i.test(f.path) ? 0 : f.specialUse === "\\Sent" || /^sent items$/i.test(f.path) ? 1 : f.specialUse === "\\Archive" || /archive$/i.test(f.path) ? 2 : 3);
   return list
@@ -194,15 +194,23 @@ export async function fixBodiesEws(admin: SupabaseClient, acct: MailAccount, dea
  * for (that took longer than the 2-minute cache run allows, and the cut connection ended the run), so it's done here,
  * one email at a time, without holding up the cache.
  */
-export async function fixBodiesSlow(admin: SupabaseClient, acct: MailAccount, deadline: number) {
-  return withBox(acct, (c) => fixBodies(admin, acct.id, c, deadline - 30000), deadline, 150000);
+export async function fixBodiesSlow(admin: SupabaseClient, acct: MailAccount, deadline: number, skipBodies = false) {
+  // one connection, at most 100 s (it's one of the couple the mail server allows: the mail check needs one too):
+  // the header index first (Search older mail), then bodies of emails up to 6 MB (bigger ones never came through)
+  const until = Math.min(deadline, Date.now() + 100000);
+  return withBox(acct, async (c) => {
+    const { indexAccount } = await import("./mailIndex");
+    const idx = await indexAccount(admin, acct, c, until - 30000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    if (!skipBodies) await fixBodies(admin, acct.id, c, until - 10000);
+    return idx;
+  }, until + 5000, 60000);
 }
 
 async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, deadline: number) {
   // HTML missing and something to fix: no text at all, or a big email (pictures / attachments). A small plain-text
   // email has no HTML to get.
   const base = () => admin.from("mail_cache").select("id, folder, uid, uidvalidity, size, body_tries").eq("account_id", accountId)
-    .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lt("body_tries", 6).order("sent_at", { ascending: false }).limit(3);
+    .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lt("body_tries", 6).lte("size", 6 * 1024 * 1024).order("sent_at", { ascending: false }).limit(3);
   let { data } = await base().or("body_text.is.null,body_text.eq.");
   if (!data?.length) ({ data } = await base().gt("size", 200000));
   for (const r of (data || []) as { id: string; folder: string; uid: number; uidvalidity: number; size: number; body_tries: number }[]) {

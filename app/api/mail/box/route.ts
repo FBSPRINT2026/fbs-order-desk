@@ -98,10 +98,22 @@ export async function GET(req: Request) {
     // search: the last 45 days from the cache (instant); older mail on request, live
     if (what === "search") {
       const term = q.get("q") || "";
-      if (q.get("older") === "1") return NextResponse.json({ ...(await searchConversations(admin, acct, me, term, Date.now() + 40000, true)), scope: "older" });
       const addrs = [...(await customerAddrs(admin, term.trim()))];
       const FREE = /@(gmail|yahoo|hotmail|outlook|aol|icloud|live|msn|comcast|att|sbcglobal)\./i;
       const extra = [...new Set([...addrs.filter((a) => FREE.test(a)), ...addrs.filter((a) => !FREE.test(a)).map((a) => "@" + a.split("@")[1])])];
+      // older mail: from the kept headers (instant; Oct 13); while those are still being filled in, the mailbox too
+      if (q.get("older") === "1") {
+        const { indexSearch } = await import("@/lib/mail/mailIndex");
+        const ix = await indexSearch(admin, acct.id, me, term, extra);
+        const cutoff = new Date(Date.now() - 45 * 864e5).toISOString();
+        let rows = ix.rows.filter((r) => r.date < cutoff), partial = false;
+        if (!ix.done) {
+          const live = await searchConversations(admin, acct, me, term, Date.now() + 35000, true).catch(() => null);
+          if (live) { rows = [...rows, ...live.convos.flatMap((c) => c.msgs)]; partial = live.partial; } else partial = true;
+        }
+        console.info(`mail search older "${term.slice(0, 40)}": ${rows.length} (index ${ix.indexed}/${ix.total})`);
+        return NextResponse.json({ convos: groupConvos(rows, me), folders: 0, partial, scope: "older", indexing: ix.done ? null : { indexed: ix.indexed, total: ix.total } });
+      }
       const rows = await cachedSearch(admin, acct.id, me, term, extra);
       return NextResponse.json({ convos: groupConvos(rows, me), folders: 0, partial: false, scope: "45d" });
     }

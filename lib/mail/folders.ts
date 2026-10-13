@@ -57,7 +57,7 @@ export async function listFolders(c: ImapFlow, counts = true): Promise<Folder[]>
     });
 }
 
-const toRow = (folder: string, me: string, m: { uid: number; flags?: Set<string>; envelope?: { messageId?: string; inReplyTo?: string; subject?: string; date?: Date; from?: { address?: string; name?: string }[]; to?: { address?: string }[]; cc?: { address?: string }[] }; size?: number; internalDate?: Date | string }): MsgRow => {
+export const toRow = (folder: string, me: string, m: { uid: number; flags?: Set<string>; envelope?: { messageId?: string; inReplyTo?: string; subject?: string; date?: Date; from?: { address?: string; name?: string }[]; to?: { address?: string }[]; cc?: { address?: string }[] }; size?: number; internalDate?: Date | string }): MsgRow => {
   const e = m.envelope || {};
   const from = lc(e.from?.[0]?.address);
   return {
@@ -247,7 +247,8 @@ export async function searchConversations(admin: SupabaseClient, acct: MailAccou
       } finally { lock.release(); }
     })();
     const timer = new Promise<null>((res) => setTimeout(() => res(null), left));
-    const rows = await Promise.race([work.catch(() => [] as MsgRow[]), timer]);
+    // a folder the server wouldn't search (busy) counts as not looked at, not as "nothing there" (Oct 13)
+    const rows = await Promise.race([work.catch(() => { partial = true; timing[f.path] = "refused"; return [] as MsgRow[]; }), timer]);
     done = true; void done;
     if (rows === null) { partial = true; timing[f.path] = "timed out"; client.close(); return; }
     timing[f.path] = Date.now() - t0;
