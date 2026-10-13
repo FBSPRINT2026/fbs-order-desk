@@ -161,7 +161,7 @@ async function bodyOnly(c: ImapFlow, uid: number): Promise<{ html: string; text:
  * Emails kept without a body, read over EWS (Oct 13: Nick's big emails, which IMAP drops during the busy day). Up to
  * 5 a run, the worst first; whether EWS works for the mailbox is kept in app_keys "ews" (a failure waits 6 hours).
  */
-async function fixBodiesEws(admin: SupabaseClient, acct: MailAccount, deadline: number) {
+export async function fixBodiesEws(admin: SupabaseClient, acct: MailAccount, deadline: number) {
   const { data: k } = await admin.from("app_keys").select("value").eq("name", "ews").maybeSingle();
   const st = ((k?.value || {}) as Record<string, { ok: boolean; detail: string; at: string }>);
   const mine = st[acct.email.toLowerCase()];
