@@ -333,7 +333,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
     <div className="cv-h">This conversation · {curGroup.length} emails</div>
     {curGroup.map((y) => { const ry = y.activity_id ? rowByAct.get(y.activity_id) : undefined; return (
       <button key={y.id} type="button" className={"cv-i" + (y.id === olCur.id ? " on" : "") + (y.unread ? " ol-unread" : "")} aria-current={y.id === olCur.id ? "true" : undefined} onClick={() => { if (y.id !== olCur.id) { pickRow(olKey(y)); window.scrollTo({ top: 0 }); } }}>
-        <b>{ry ? who(ry.x) : personName(y.from_name) || y.from_email}</b><time>{y.received_at ? new Date(y.received_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}</time>
+        <b>{personName(y.from_name) || y.from_email || (ry ? who(ry.x) : "")}</b><time>{y.received_at ? new Date(y.received_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}</time>
         <span>{y.id === olCur.id ? "Showing" : ry?.x.meta?.triage?.summary || y.summary || y.subject}</span>
       </button>
     ); })}
@@ -426,7 +426,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
                   {g.length > 1 && openG && <div className="ibx2-cvl" role="group" aria-label="Emails in this conversation">
                     {g.map((y) => { const ky = olKey(y), ry = y.activity_id ? rowByAct.get(y.activity_id) : undefined; return (
                       <button key={y.id} type="button" className={"ibx2-cvi" + (olCur?.id === y.id ? " on" : "") + (y.unread ? " ol-unread" : "")} onClick={() => pickRow(ky)} onDoubleClick={() => ry && pickRow(ky, true)}>
-                        <b>{nameOf(y)}</b><time>{y.received_at ? ago(y.received_at) : ""}</time>
+                        <b>{personName(y.from_name) || y.from_email || nameOf(y)}</b><time>{y.received_at ? ago(y.received_at) : ""}</time>
                         <span>{ry?.x.meta?.triage?.summary || y.summary || y.subject || "(no subject)"}</span>
                       </button>
                     ); })}
@@ -763,7 +763,9 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const orderFrom = x.direction === "in" ? x : custThread[0] || null;
   const intents = [x, ...thread].map((t) => t.meta?.triage?.intent || "");
   const orderish = intents.some((i) => i === "new_order" || i === "reorder") || !!quote;
-  const reorder = intents.includes("reorder");
+  // a reorder only when nothing in the conversation reads as a new order (Oct 12: Methodist's "keep the original shirt
+  // count" was read as a reorder of a brand-new order)
+  const reorder = intents.includes("reorder") && !intents.includes("new_order");
   // a piece count in the email ("700 shirts"): an Order goods button right on it (Oct 12, Nick)
   const goodsPcs = pieceCount(x.meta?.triage?.summary, x.subject, (x.body || "").slice(0, 4000));
   async function loadOpts(fresh = false) {

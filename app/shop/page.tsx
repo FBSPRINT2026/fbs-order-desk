@@ -64,6 +64,9 @@ export default function Dashboard() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [mailNeeds, setMailNeeds] = useState<Mail[]>([]), [mailUrgent, setMailUrgent] = useState<Mail[]>([]), [myBox, setMyBox] = useState<string | null>(null), [myBoxEmail, setMyBoxEmail] = useState<string | null>(null);
   const [reorders, setReorders] = useState<Reorder[]>([]);
+  // Replies wait for both the email and whose mailbox is mine (Oct 12: "You're all caught up" showed for a few
+  // seconds before the emails came in)
+  const [mailIn, setMailIn] = useState(false), [boxIn, setBoxIn] = useState(false);
   const [goods, setGoods] = useState({ today: 0, arrived: 0 });
   const [owners, setOwners] = useState<Record<string, string>>({}); // customer → account owner (first name)
   // reorders of old Printavo jobs waiting on production (Jose) to confirm the print details
@@ -124,8 +127,8 @@ export default function Dashboard() {
         const mr = mailRows(allMail, (sg || []) as MailSug[]);
         setMailNeeds(mr.filter((r) => r.needs).map((r) => r.x));
         setMailUrgent(mr.filter((r) => r.urgent).map((r) => r.x));
-      })().catch(() => null);
-      getMailStatus().then((r) => { if (!r.ok) return; const b = viewing ? (r.all || []).find((x) => x.email.toLowerCase() === myEmail.toLowerCase()) : r.mine; setMyBox(b?.enabled ? b.id : viewing ? "none" : null); setMyBoxEmail(b?.enabled ? b.email : null); }).catch(() => null);
+      })().catch(() => null).finally(() => setMailIn(true));
+      getMailStatus().then((r) => { if (!r.ok) return; const b = viewing ? (r.all || []).find((x) => x.email.toLowerCase() === myEmail.toLowerCase()) : r.mine; setMyBox(b?.enabled ? b.id : viewing ? "none" : null); setMyBoxEmail(b?.enabled ? b.email : null); }).catch(() => null).finally(() => setBoxIn(true));
       // reorder reminders: ordered around this time last year, nothing since (in the last 60 days)
       const recentBuyers = new Set(((recent.data || []) as { customer_id: string | null; order_date: string | null }[]).filter((r) => r.order_date && r.order_date >= addDays(-60)).map((r) => r.customer_id));
       for (const x of js) if (!x.printavo && x.customer_id) recentBuyers.add(x.customer_id);
@@ -343,7 +346,7 @@ export default function Dashboard() {
     <>
       <MyDay name={(staffName || myEmail.split("@")[0]).split(/[\s._@-]+/)[0].replace(/^./, (c) => c.toUpperCase())} replyCount={replyItems.length} urgentCount={myUrgent.length} replies={
               <div className="md-scroll">
-                {!v ? <div className="md-empty">Loading…</div> : list(replyItems.length, (
+                {!v || !mailIn || !boxIn ? <div className="md-empty">Loading…</div> : list(replyItems.length, (
                   <ul className="db-list db-replies">{replyItems.map(({ msg: x, mail: e }) => x ? (
                     <li key={x.id} className="db-row db-reply">
                       <span className="db-main"><b>{who(x.customer_id) || x.author_name || x.author_email}</b><span className="db-one">{x.body.replace(/\s+/g, " ").slice(0, 160)}</span></span>
