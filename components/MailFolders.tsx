@@ -385,7 +385,14 @@ export function FolderList({ rows, sel, onPick, onSwipe, sentBox, more, onMore, 
 /** one email from any folder: read it, reply, move it */
 export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, flash }: { row: MsgRow; folders: Folder[] | null; onGone: () => void; toggleList: () => void; listOpen: boolean; back: () => void; flash: (t: string) => void }) {
   const [m, setM] = useState<FullMsg | null>(null), [err, setErr] = useState(""), [busy, setBusy] = useState(false), [rep, setRep] = useState<"" | "one" | "all">(""), [draft, setDraft] = useState<{ body: string; cc?: string[]; n: number } | null>(null);
-  useEffect(() => { let live = true; setM(null); setErr(""); box<FullMsg>({ do: "message", path: row.folder, uid: row.uid }).then((x) => live && setM(x), (e) => live && setErr(e.message)); return () => { live = false; }; }, [row.folder, row.uid]);
+  const [n, setN] = useState(0), [full, setFull] = useState(false);
+  useEffect(() => {
+    let live = true; setM(null); setErr("");
+    const slow = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("The mailbox didn't answer in time.")), 30000));
+    Promise.race([box<FullMsg>({ do: "message", path: row.folder, uid: row.uid, ...(full ? { live: 1 } : {}) }), slow]).then((x) => live && setM(x), (e) => live && setErr(e.message));
+    return () => { live = false; };
+  }, [row.folder, row.uid, n, full]);
+  useEffect(() => { setFull(false); }, [row.folder, row.uid]);
   const move = async (to: string, label: string) => { setBusy(true); try { await boxPost({ do: "move", path: row.folder, uid: row.uid, to }); flash(label); onGone(); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } setBusy(false); };
   return (
     <div className="ibx2-work ibx2-solo">
@@ -404,7 +411,8 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
           </Toolbar>} />
         {err && <div className="pv-err eh-err">{err}</div>}
         <div className="ibx2-read">
-          {!m ? <div className="ibx2-none">{err ? "" : "Opening the email…"}</div> : <>
+          {!m ? <div className="ibx2-none">{err ? <button type="button" className="btn ghost sm" onClick={() => setN((x) => x + 1)}>Try again</button> : "Opening the email…"}</div> : <>
+            {m.partial && <div className="mf-partial">Some pictures in this email were left out to open it fast. <button type="button" className="btn ghost sm" onClick={() => setFull(true)}>Show the full email</button></div>}
             <MailFrame html={m.html} text={m.text} />
             <Attachments m={m} />
           </>}
@@ -430,15 +438,27 @@ export function ConvoList({ convos, sel, onPick, me }: { convos: Convo[]; sel: s
   );
 }
 
-/** one conversation, oldest first: what they sent, what you sent, in order; open any email; reply to the last */
+/** one conversation, newest at the top (Oct 13, Nick): what they sent, what you sent; open any email; reply to the last */
 export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMoved }: { c: Convo; folders: Folder[] | null; toggleList: () => void; listOpen: boolean; back: () => void; flash: (t: string) => void; onMoved: (m: MsgRow) => void }) {
   const last = c.msgs[c.msgs.length - 1];
   const [open, setOpen] = useState<Record<string, boolean>>({ [`${last.folder}:${last.uid}`]: true });
   const [full, setFull] = useState<Record<string, FullMsg | "err">>({});
   const [rep, setRep] = useState<FullMsg | null>(null), [repStart, setRepStart] = useState(""), [repCc, setRepCc] = useState<string[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
-  const load = (m: MsgRow) => { const k = `${m.folder}:${m.uid}`; if (full[k]) return; box<FullMsg>({ do: "message", path: m.folder, uid: m.uid }).then((x) => setFull((f) => ({ ...f, [k]: x })), () => setFull((f) => ({ ...f, [k]: "err" }))); };
-  useEffect(() => { load(last); setTimeout(() => endRef.current?.scrollIntoView({ block: "end" }), 300); }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [why, setWhy] = useState<Record<string, string>>({});
+  const asked = useRef<Set<string>>(new Set());
+  // open one email: from the cache (instant), or from the mailbox (`live`: the full email, pictures and all). A read
+  // that takes over 30 s shows "Try again" instead of "Opening…" forever (Oct 13, Margaret Trame's conversation)
+  const load = (m: MsgRow, live = false) => {
+    const k = `${m.folder}:${m.uid}`;
+    if (!live && (full[k] || asked.current.has(k))) return;
+    asked.current.add(k);
+    if (live) setFull((f) => { const n = { ...f }; delete n[k]; return n; });
+    const slow = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("The mailbox didn't answer in time.")), 30000));
+    Promise.race([box<FullMsg>({ do: "message", path: m.folder, uid: m.uid, ...(live ? { live: 1 } : {}) }), slow])
+      .then((x) => setFull((f) => ({ ...f, [k]: x })), (e) => { asked.current.delete(k); setWhy((w) => ({ ...w, [k]: e instanceof Error ? e.message : "" })); setFull((f) => ({ ...f, [k]: "err" })); });
+  };
+  useEffect(() => { load(last); }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (m: MsgRow) => { const k = `${m.folder}:${m.uid}`; setOpen((o) => ({ ...o, [k]: !o[k] })); load(m); };
   const lastIn = [...c.msgs].reverse().find((m) => !m.sent) || last;
   // a customer's email in this conversation (stored when it came in): Create order / reorder from it, from here too
@@ -471,10 +491,10 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
           </>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); setRepCc(d.cc || []); replyLast(); } } }}
           toolbar={<Toolbar>
             <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
-            <span className="faint mf-hint">Oldest at the top. Click an email to open or fold it.</span>
+            <span className="faint mf-hint">Newest at the top. Click an email to open or fold it.</span>
           </Toolbar>} />
         <div className="ibx2-read mf-thread">
-          {c.msgs.map((m) => {
+          {[...c.msgs].reverse().map((m) => {
             const k = `${m.folder}:${m.uid}`, f = full[k], isOpen = !!open[k];
             return (
               <article key={k} className={"mf-msg" + (m.sent ? " sent" : "") + (isOpen ? " open" : "")}>
@@ -486,7 +506,8 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
                   <time>{new Date(m.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>
                 </button>
                 {isOpen && <div className="mf-msg-b">
-                  {!f ? <div className="faint">Opening…</div> : f === "err" ? <div className="pv-err">Couldn&apos;t open this one.</div> : <>
+                  {!f ? <div className="faint">Opening…</div> : f === "err" ? <div className="pv-err">Couldn&apos;t open this one{why[k] ? `: ${why[k]}` : "."} <button type="button" className="btn ghost sm" onClick={() => load(m, true)}>Try again</button></div> : <>
+                    {f.partial && <div className="mf-partial">Some pictures in this email were left out to open it fast. <button type="button" className="btn ghost sm" onClick={() => load(m, true)}>Show the full email</button></div>}
                     <MailFrame html={f.html} text={f.text} />
                     <Attachments m={f} />
                     <div className="mf-msg-a tb">

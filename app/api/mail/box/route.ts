@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { cfgOf } from "@/lib/mail/config";
 import { mailboxToRead, VIEWING_NO } from "@/lib/mail/viewing";
 import { customerAddrs, getAttachment, getMessage, groupConvos, listFolders, listMessages, listOlder, markSeen, moveMessage, searchConversations, withBox } from "@/lib/mail/folders";
-import { cachedList, cachedMessage, cachedSearch, folderCached } from "@/lib/mail/cache";
+import { keepBody, cachedList, cachedMessage, cachedSearch, folderCached } from "@/lib/mail/cache";
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 import { sendFromMailbox } from "@/lib/mail/send";
 
@@ -51,13 +51,18 @@ export async function GET(req: Request) {
       return NextResponse.json(await withBox(acct, (c) => listMessages(c, me, path, Number(q.get("before") || 0) || undefined)));
     }
     if (what === "message") {
-      const hit = await cachedMessage(admin, acct.id, path, uid);
+      const hit = q.get("live") === "1" ? null : await cachedMessage(admin, acct.id, path, uid);
       if (hit) {
-        // mark it read in Outlook too, after answering
-        if (!m.viewing) after(async () => { try { await withBox(acct, (c) => markSeen(c, path, uid)); await admin.from("mail_cache").update({ seen: true }).eq("account_id", acct.id).eq("folder", path).eq("uid", uid); } catch { /* fine */ } });
+        // mark it read in Outlook too, after answering — only when it isn't already (each one is a connection to the
+        // mailbox, and the mailbox only allows a few at a time, shared with the phone and Outlook: Oct 13)
+        if (!m.viewing && !hit.seen) after(async () => { try { await withBox(acct, (c) => markSeen(c, path, uid), Date.now() + 20000); await admin.from("mail_cache").update({ seen: true }).eq("account_id", acct.id).eq("folder", path).eq("uid", uid); } catch { /* fine */ } });
         return NextResponse.json({ ...hit, cached: true });
       }
-      const r = await withBox(acct, (c) => getMessage(c, path, uid));
+      // read it from the mailbox (25 s at most: the page offers Try again), and keep it so it opens instantly next time
+      const r = await withBox(acct, (c) => getMessage(c, path, uid), Date.now() + 25000).catch((e) => {
+        throw new Error(/Connection not available|Socket timeout|closed|ETIMEDOUT|ECONNRESET|Too many/i.test(String(e?.message || e)) ? "The mailbox is busy right now (it allows only a few connections at a time, shared with your phone and Outlook). Try again in a moment." : String(e?.message || e));
+      });
+      if (r) after(async () => { try { await keepBody(admin, acct.id, path, uid, r); } catch { /* fine */ } });
       return r ? NextResponse.json(r) : NextResponse.json({ error: "That email isn't there any more." }, { status: 404 });
     }
     if (what === "attachment") {
@@ -83,7 +88,7 @@ export async function POST(req: Request) {
   const m = await mine(); if ("err" in m) return m.err;
   const { admin, acct, v } = m;
   if (m.viewing) return NextResponse.json({ error: VIEWING_NO }, { status: 403 });
-  const b = await req.json().catch(() => ({})) as { do?: string; path?: string; uid?: number; to?: string; body?: string; all?: boolean };
+  const b = await req.json().catch(() => ({})) as { do?: string; path?: string; uid?: number; to?: string; body?: string; all?: boolean; cc?: string[] };
   const path = String(b.path || "INBOX"), uid = Number(b.uid || 0);
   if (!uid) return NextResponse.json({ error: "Which email?" }, { status: 400 });
   try {

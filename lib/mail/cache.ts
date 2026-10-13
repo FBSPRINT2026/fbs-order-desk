@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import type { MailAccount } from "./config";
-import { withBox, type Convo, type FullMsg, type MsgRow } from "./folders";
+import { slimHtml, withBox, type Convo, type FullMsg, type MsgRow } from "./folders";
 
 /**
  * Email cached mode (Oct 12): the last 45 days of a person's mail kept in mail_cache, like Outlook's cached mode, so
@@ -70,8 +70,9 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
             const to = p ? addrList(p.to) : env?.to || [], cc = p ? addrList(p.cc) : env?.cc || [];
             const subject = (p?.subject ?? env?.subject ?? "").slice(0, 500);
             const text = (p?.text || "").slice(0, 100000);
-            let html = typeof p?.html === "string" ? p.html : null;
-            if (html && html.length > 900_000) html = null;
+            // big pasted pictures are left out of the kept HTML, so the email still opens from the cache (Oct 13)
+            const slim = typeof p?.html === "string" ? slimHtml(p.html) : null;
+            const html = slim ? slim.html : null;
             const atts = (p?.attachments || []).map((a, i) => ({ i, name: a.filename || `attachment-${i + 1}`, size: a.size || 0, type: a.contentType || "application/octet-stream", inline: a.contentDisposition === "inline" && !!a.cid })).filter((a) => !a.inline).map(({ i, name, size, type }) => ({ i, name, size, type }));
             const refs = p ? (Array.isArray(p.references) ? p.references : p.references ? String(p.references).split(/\s+/) : []).filter(Boolean).map(mid).slice(-30) : [];
             const toText = to.map((x: { address?: string; name?: string }) => [x.name, x.address].filter(Boolean).join(" ")).join(", ");
@@ -84,19 +85,50 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
               to_text: toText.slice(0, 2000), cc_text: ccText.slice(0, 2000), reply_to: lc(addrList(p?.replyTo)[0]?.address),
               sent_at: new Date(p?.date || env?.date || m.internalDate || Date.now()).toISOString(),
               seen: !!m.flags?.has("\\Seen"), flagged: !!m.flags?.has("\\Flagged"), size: m.size || 0,
-              body_text: text, body_html: big ? null : html, attachments: atts,
+              body_text: text, body_html: big ? null : html, body_trimmed: !!slim?.trimmed, body_fixed_at: new Date().toISOString(), attachments: atts,
               hay: [from?.name, from?.address, toText, ccText, subject, text.slice(0, 4000)].filter(Boolean).join(" ").toLowerCase().slice(0, 8000),
             };
             const { error } = await admin.from("mail_cache").upsert(row, { onConflict: "account_id,folder,uidvalidity,uid" });
             if (!error) { saved++; tally.saved++; }
           } catch { /* skip this one; tried again next run */ }
         }
+        // emails saved before Oct 13 without their HTML (pasted pictures made it too big, or over 5 MB): read once more
+        // and kept without the big pictures, a few per run, so they open from the cache instead of the mailbox
+        if (Date.now() < deadline - 10000) await fixBodies(admin, acct.id, c, f.path, validity, deadline - 6000);
         await admin.from("mail_cache_state").upsert({ account_id: acct.id, folder: f.path, uidvalidity: validity, in_window: inWindow.size, cached: cached.size + saved, checked_at: new Date().toISOString() });
         tally.folders++;
       } finally { lock.release(); }
     }
   }, deadline); // a hard stop at the deadline: never left hanging past the time limit
   return tally;
+}
+
+async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, folder: string, validity: number, deadline: number) {
+  const { data } = await admin.from("mail_cache").select("id, uid, size").eq("account_id", accountId).eq("folder", folder).eq("uidvalidity", validity)
+    .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lte("size", 15 * 1024 * 1024).order("sent_at", { ascending: false }).limit(4);
+  for (const r of (data || []) as { id: string; uid: number; size: number }[]) {
+    if (Date.now() > deadline) break;
+    const patch: Record<string, unknown> = { body_fixed_at: new Date().toISOString() };
+    try {
+      const m = await c.fetchOne(String(r.uid), { source: true }, { uid: true });
+      if (m && m.source) {
+        const p = await simpleParser(m.source);
+        const slim = typeof p.html === "string" ? slimHtml(p.html) : null;
+        if (slim) { patch.body_html = slim.html; patch.body_trimmed = slim.trimmed; }
+        if (p.text) patch.body_text = p.text.slice(0, 100000);
+      }
+    } catch { /* tried; it opens live */ }
+    await admin.from("mail_cache").update(patch).eq("id", r.id);
+  }
+}
+
+/** a live read, kept in the cache so it opens instantly next time (Oct 13) */
+export async function keepBody(admin: SupabaseClient, accountId: string, folder: string, uid: number, m: FullMsg) {
+  const slim = m.html ? slimHtml(m.html) : null;
+  const patch: Record<string, unknown> = { body_fixed_at: new Date().toISOString() };
+  if (slim) { patch.body_html = slim.html; patch.body_trimmed = slim.trimmed; }
+  if (m.text) patch.body_text = m.text.slice(0, 100000);
+  await admin.from("mail_cache").update(patch).eq("account_id", accountId).eq("folder", folder).eq("uid", uid).is("body_html", null);
 }
 
 /** is this folder fully cached (the server's 45-day count and ours agree, checked in the last 15 minutes)? */
@@ -122,12 +154,15 @@ export async function cachedMessage(admin: SupabaseClient, accountId: string, fo
   const { data } = await admin.from("mail_cache").select("*").eq("account_id", accountId).eq("folder", folder).eq("uid", uid).is("gone_at", null).order("cached_at", { ascending: false }).limit(1).maybeSingle();
   const r = data as (CacheRow & { size: number }) | null;
   if (!r) return null;
-  if (r.body_html === null && r.size > 600_000) return null; // big email: its formatting wasn't kept; read it live
+  // nothing kept to show (saved by its headers only): read it live. Only plain text kept: show that now, with
+  // "Show the full email" (Oct 13: these waited on the mailbox and sat on "Opening…")
+  if (!r.body_html && !(r.body_text || "").trim()) return null;
   const who = (name: string, addr: string) => (name ? `"${name}" <${addr}>` : addr);
   return {
     folder, uid, messageId: r.message_id ? `<${r.message_id}>` : "", references: (r.refs || []).map((x) => `<${x}>`),
     fromAddress: r.reply_to || r.from_email, fromName: r.from_name, from: who(r.from_name, r.from_email), to: r.to_text, cc: r.cc_text, subject: r.subject, date: r.sent_at,
     html: r.body_html || "", text: r.body_text, attachments: r.attachments || [],
+    partial: !!(r as { body_trimmed?: boolean }).body_trimmed || (!r.body_html && r.size > 200_000), seen: r.seen,
   };
 }
 

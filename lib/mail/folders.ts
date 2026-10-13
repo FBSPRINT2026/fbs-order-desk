@@ -103,7 +103,24 @@ export async function markSeen(c: ImapFlow, path: string, uid: number) {
   try { await c.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true }); } finally { lock.release(); }
 }
 
-export type FullMsg = { folder: string; uid: number; messageId: string; references: string[]; fromAddress: string; fromName: string; from: string; to: string; cc: string; subject: string; date: string; html: string; text: string; attachments: { i: number; name: string; size: number; type: string }[] };
+export type FullMsg = { folder: string; uid: number; messageId: string; references: string[]; fromAddress: string; fromName: string; from: string; to: string; cc: string; subject: string; date: string; html: string; text: string; attachments: { i: number; name: string; size: number; type: string }[];
+  /** from the cache with big pasted pictures left out (or as plain text): "Show the full email" reads it live */ partial?: boolean; seen?: boolean };
+
+/**
+ * Email HTML without the big pictures pasted into it (each picture is inside the HTML as text, so a long reply chain
+ * with screenshots and mockups runs to megabytes). Pictures over 40 KB become a small "picture left out" note; the
+ * rest of the email (and its small pictures, like signatures) stays as it was. null when it's still too big.
+ */
+export function slimHtml(html: string, max = 900_000): { html: string; trimmed: boolean } | null {
+  if (html.length <= max) return { html, trimmed: false };
+  let trimmed = false;
+  const out = html.replace(/<img\b[^>]*>/gi, (tag) => {
+    if (tag.length < 40_000 || !/src\s*=\s*["']?data:/i.test(tag)) return tag;
+    trimmed = true;
+    return '<span style="display:inline-block;margin:4px 0;padding:6px 10px;border:1px dashed #b8c0cc;border-radius:6px;color:#6b7686;font:12px sans-serif">Picture left out here (Show the full email to see it)</span>';
+  }).replace(/url\(\s*["']?data:[^)]{40000,}\)/gi, () => { trimmed = true; return "none"; });
+  return out.length <= max ? { html: out, trimmed } : null;
+}
 
 async function parsed(c: ImapFlow, path: string, uid: number): Promise<ParsedMail | null> {
   const lock = await c.getMailboxLock(path);
