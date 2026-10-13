@@ -292,7 +292,7 @@ export default function Dashboard() {
     return (
       <>
         <div className="page-head">
-          <div><div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div><h1>Production Dashboard</h1></div>
+          <div><div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Chicago" })}</div><h1>Production Dashboard</h1></div>
         </div>
         <div className="dash-top"><AiSearch /></div>
         {!v ? <div className="empty">Loading your day…</div> : (

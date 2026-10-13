@@ -532,7 +532,7 @@ function BriefPane({ name, items, listOpen, toggleList, back, openItem }: { name
         </div>
         <div className="ibx2-read sm2-b">
           <div className="sm2-in">
-            <div className="sm2-date">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</div>
+            <div className="sm2-date">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Chicago" })}</div>
             <h2 className="sm2-hi">{b ? b.greeting : `Good ${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}${name ? `, ${name}` : ""}`}</h2>
             {b ? <p className="sm2-head">{b.headline}</p> : <p className="sm2-head faint">{err ? `Couldn't write the summary: ${err}` : <><span className="br-dots" aria-hidden><i /><i /><i /></span> Reading your Inbox…</>}</p>}
 

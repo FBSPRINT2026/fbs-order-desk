@@ -57,7 +57,7 @@ export default function TimeToday({ d }: { d: TimeData }) {
         <div className="sc-kpi blue"><span>Hours Today</span><b>{hm(rows.reduce((a, r) => a + r.card.worked, 0))}</b><small>everyone, so far</small></div>
       </div>
       <section className="db-card db-blue">
-        <div className="db-card-h"><h2>Today</h2><span className="faint db-h-note">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</span></div>
+        <div className="db-card-h"><h2>Today</h2><span className="faint db-h-note">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Chicago" })}</span></div>
         {punches === null ? <div className="db-empty">Loading…</div> : !rows.length ? <div className="db-empty">No employees yet. Add them on the Employees tab, give each a PIN, then set up the wall clock.</div> : (
           <ul className="db-list">{[...rows].sort((a, b) => order(a) - order(b) || fullName(a.e).localeCompare(fullName(b.e))).map((r) => (
             <li key={r.e.id} className="db-row tmx-row">

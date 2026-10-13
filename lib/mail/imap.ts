@@ -46,6 +46,9 @@ export async function syncAccount(admin: SupabaseClient, acct: MailAccount, dead
   const c = cfgOf(acct), st = { ...acct };
   const tally: Record<string, number> = {};
   const client = imapClient(c);
+  // a hard stop a few seconds after the deadline: the connection closes even mid-step, so a slow step can't run the
+  // check past the 60-second limit (Oct 12: one did, and a cut-off run leaves the connection open)
+  const stop = setTimeout(() => { try { client.close(); } catch { /* closed */ } }, Math.max(3000, deadline - Date.now() + 6000));
   await client.connect();
   try {
     const sent = st.sent_folder || (await sentFolder(client));
@@ -87,7 +90,7 @@ export async function syncAccount(admin: SupabaseClient, acct: MailAccount, dead
         if (Date.now() < deadline - 8000) { const f = await backfillHtml(admin, client, acct.id, kind, deadline - 5000); if (f) tally[`${kind}_formatted`] = f; }
       } finally { lock.release(); }
     }
-  } finally { await client.logout().catch(() => null); }
+  } finally { clearTimeout(stop); await Promise.race([client.logout().catch(() => null), new Promise((r) => setTimeout(r, 3000))]); try { client.close(); } catch { /* closed */ } }
   return tally;
 }
 

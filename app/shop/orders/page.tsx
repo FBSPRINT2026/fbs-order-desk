@@ -132,7 +132,7 @@ export default function OrdersPage() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+          <div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Chicago" })}</div>
           <h1>Orders</h1>
         </div>
         {canQuote && <button className="btn primary" type="button" disabled={creating} onClick={async () => {

@@ -523,7 +523,7 @@ export default function GoodsReceiving() {
       {/* today's update: arriving today, then what already arrived; the boxes open the other lists */}
       <section className="rv-day">
         <div className="rv-day-h">
-          <b>Today&apos;s Update</b>{term.length >= 2 && <span className="rv-filter">Showing “{q.trim()}”{searching ? " …" : ""} <button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></span>}<span className="faint">{new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })} · tracking and matching run hourly, Mon–Fri 6 a.m.–6 p.m.</span>
+          <b>Today&apos;s Update</b>{term.length >= 2 && <span className="rv-filter">Showing “{q.trim()}”{searching ? " …" : ""} <button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></span>}<span className="faint">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Chicago" })} · tracking and matching run hourly, Mon–Fri 6 a.m.–6 p.m.</span>
           <span className="spacer" />
           <div className="rv-seg" role="group" aria-label="Group by">
             <button type="button" className={groupBy === "carrier" ? "on" : ""} onClick={() => setGroupBy("carrier")}>By carrier</button>

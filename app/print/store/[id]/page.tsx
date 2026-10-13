@@ -118,7 +118,7 @@ export default async function PrintPage({ params, searchParams }: P) {
     title = "Blank order sheet"; hint = over ? `Includes ${over}% extra for misprints.` : "Exact counts from the orders.";
     body = (
       <section className="pg letter">
-        <div className="hd"><div><h1>Blanks to order</h1><div className="sub">{school} · {st.name} · {all.filter((o) => !["cancelled", "refunded", "pending"].includes(o.status)).length} orders{over ? ` · +${over}% extra` : ""}</div></div><div className="code">{new Date().toLocaleDateString("en-US")}</div></div>
+        <div className="hd"><div><h1>Blanks to order</h1><div className="sub">{school} · {st.name} · {all.filter((o) => !["cancelled", "refunded", "pending"].includes(o.status)).length} orders{over ? ` · +${over}% extra` : ""}</div></div><div className="code">{new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago" })}</div></div>
         <table><thead><tr><th>Supplier</th><th>Style</th><th>Color</th>{sizes.map((z) => <th key={z} className="r">{z}</th>)}<th className="r">Total</th><th className="c">Ordered</th></tr></thead>
           <tbody>{rows.map((r) => <tr key={r.supplier + r.style + r.color}><td>{r.supplier === "ss" ? "S&S" : r.supplier === "sanmar" ? "SanMar" : r.supplier}</td><td><b>{r.style}</b><div style={{ fontSize: 11 }}>{r.brand}</div></td><td>{r.color}</td>{sizes.map((z) => <td key={z} className="r">{r.sizes[z] ? plus(r.sizes[z]) : ""}</td>)}<td className="r"><b>{sizes.reduce((a, z) => a + (r.sizes[z] ? plus(r.sizes[z]) : 0), 0)}</b></td><td className="c"><span className="box" /></td></tr>)}</tbody></table>
       </section>

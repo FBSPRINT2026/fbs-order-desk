@@ -117,7 +117,7 @@ export default function AssistantPage() {
   return (
     <>
       <div className="page-head">
-        <div><div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div><h1>Assistant</h1></div>
+        <div><div className="eyebrow">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Chicago" })}</div><h1>Assistant</h1></div>
         <div className="row">
           <Link href="/shop/settings#assistant" className={"as-ai" + (ai.ready ? " on" : "")} title={`${ai.reason || (ai.ready ? "AI is on" : "")} · Click to change AI settings`}>{ai.ready ? "AI on" : "AI off"} ⚙</Link>
           <button type="button" className="btn" onClick={() => setMail(mail ? null : { from: "", subject: "", text: "" })}>Paste an email</button>
