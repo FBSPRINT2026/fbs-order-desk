@@ -41,6 +41,9 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
       .sort((a, b) => (a.at === b.at ? a.i - b.i : a.at < b.at ? -1 : 1)).map((x) => x.f);
     // Inbox first, always
     order.sort((a, b) => (/^inbox$/i.test(a.path) ? -1 : /^inbox$/i.test(b.path) ? 1 : 0));
+    // first, up to 5 s on emails kept without a body, from any folder (an email that won't open is worse than one
+    // that isn't cached yet: that one is read from the mailbox)
+    if (Date.now() < deadline - 10000) await fixBodies(admin, acct.id, c, Math.min(deadline - 8000, Date.now() + 5000));
     for (const f of order) {
       if (Date.now() > deadline - 4000) break;
       const lock = await c.getMailboxLock(f.path);
@@ -59,9 +62,6 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
         const gone = rows.filter((r) => Number(r.uidvalidity) !== validity || !inWindow.has(Number(r.uid))).map((r) => r.id);
         for (let i = 0; i < gone.length; i += 200) await admin.from("mail_cache").update({ gone_at: new Date().toISOString() }).in("id", gone.slice(i, i + 200));
         tally.gone += gone.length;
-        // emails kept without a body come before ones not kept yet, with up to 8 s of the run (an email that won't
-        // open is worse than one that isn't in the cache yet: that one is read from the mailbox)
-        if (Date.now() < deadline - 10000) await fixBodies(admin, acct.id, c, f.path, validity, Math.min(deadline - 6000, Date.now() + 8000));
         // not cached yet: newest first
         const missing = [...inWindow].filter((u) => !cached.has(u)).sort((a, b) => b - a);
         let saved = 0;
@@ -149,27 +149,33 @@ async function bodyOnly(c: ImapFlow, uid: number): Promise<{ html: string; text:
   return { html, text };
 }
 
-async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, folder: string, validity: number, deadline: number) {
-  const base = () => admin.from("mail_cache").select("id, uid, size, body_tries").eq("account_id", accountId).eq("folder", folder).eq("uidvalidity", validity)
+async function fixBodies(admin: SupabaseClient, accountId: string, c: ImapFlow, deadline: number) {
+  // HTML missing and something to fix: no text at all, or a big email (pictures / attachments). A small plain-text
+  // email has no HTML to get.
+  const base = () => admin.from("mail_cache").select("id, folder, uid, uidvalidity, size, body_tries").eq("account_id", accountId)
     .is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lt("body_tries", 2).order("sent_at", { ascending: false }).limit(3);
-  // the ones with nothing at all to show first (no text either), then the rest
   let { data } = await base().or("body_text.is.null,body_text.eq.");
-  if (!data?.length) ({ data } = await base());
-  for (const r of (data || []) as { id: string; uid: number; size: number; body_tries: number }[]) {
+  if (!data?.length) ({ data } = await base().gt("size", 200000));
+  for (const r of (data || []) as { id: string; folder: string; uid: number; uidvalidity: number; size: number; body_tries: number }[]) {
     if (Date.now() > deadline) break;
     const patch: Record<string, unknown> = { body_fixed_at: new Date().toISOString() };
     // counted before asking: an email that makes the server drop the connection ends this run, so it can't be
     // counted afterwards (tried twice, then left alone)
     await admin.from("mail_cache").update({ body_tries: (r.body_tries || 0) + 1 }).eq("id", r.id);
+    let lock: { release: () => void } | null = null;
     try {
+      lock = await c.getMailboxLock(r.folder);
+      const mb = c.mailbox && typeof c.mailbox === "object" ? c.mailbox : null;
+      if (Number(mb?.uidValidity || 0) !== Number(r.uidvalidity)) continue; // the folder was rebuilt: the cache run sorts it out
       // only the words and the HTML, never the attachments (Oct 13: downloading a 9.5 MB email whole got the
       // connection cut every run)
       const b = await bodyOnly(c, r.uid);
-      if (!b) { console.warn(`mail cache body ${folder}:${r.uid}: not read`); continue; }
+      if (!b) { console.warn(`mail cache body ${r.folder}:${r.uid}: not read`); continue; }
       const slim = b.html ? slimHtml(b.html) : null;
       if (slim) { patch.body_html = slim.html; patch.body_trimmed = true; }
       patch.body_text = (b.text || (b.html ? htmlText(b.html) : "")).slice(0, 100000);
-    } catch (e) { console.warn(`mail cache body ${folder}:${r.uid} (${r.size} bytes): ${e instanceof Error ? e.message : e}`); continue; /* tried again next run */ }
+    } catch (e) { console.warn(`mail cache body ${r.folder}:${r.uid} (${r.size} bytes): ${e instanceof Error ? e.message : e}`); continue; /* tried again next run */ }
+    finally { lock?.release(); }
     await admin.from("mail_cache").update(patch).eq("id", r.id);
   }
 }
