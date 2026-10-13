@@ -42,7 +42,7 @@ function dims(b: Buffer): { w: number; h: number } | null {
 }
 
 /** activityId: the email it came from (Inbox), or customerId alone (a reorder from the Printavo archive) */
-export type CreateInput = { activityId?: string; customerId?: string; draft: EODraft; status: "quote" | "approved" };
+export type CreateInput = { activityId?: string; customerId?: string; draft: EODraft; status: "quote" | "approved"; /** where it came from, when not an email (the AI Workbench) */ via?: string };
 
 export async function createOrderFromDraft(admin: SupabaseClient, by: string, input: CreateInput): Promise<{ ok: true; id: string; number: number } | { ok: false; error: string }> {
   const { data: a } = input.activityId ? await admin.from("activities").select("id, customer_id, subject, meta").eq("id", input.activityId).maybeSingle() : { data: null };
@@ -89,7 +89,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
       const { data: des } = await admin.from("designs").insert({
         customer_id: custId, name: (d.nickname || name.replace(/\.[^.]+$/, "")).slice(0, 120), file_path: to, file_name: name, file_type: f?.type || "",
         preview_path: f && isPicture(f) ? to : "", width_px: wh?.w || null, height_px: wh?.h || null, method: im.method || "screen",
-        colors: im.colors || 1, inks: im.inks || "", notes: a ? `From ${a.subject ? `the email "${String(a.subject).slice(0, 80)}"` : "an email"}` : "From an older job", created_by: by,
+        colors: im.colors || 1, inks: im.inks || "", notes: a ? `From ${a.subject ? `the email "${String(a.subject).slice(0, 80)}"` : "an email"}` : input.via ? `From ${input.via}` : "From an older job", created_by: by,
       }).select("id").single();
       if (des) madeFor.set(path, des.id as string);
     }
@@ -133,7 +133,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     const { data: got } = await admin.from("blank_orders").update({ order_id: oid }).eq("activity_id", a.id).is("order_id", null).select("supplier_order");
     if (got?.length) await admin.from("order_events").insert({ order_id: oid, kind: "blanks", detail: `Goods already ordered from S&S for this email: ${got.map((g) => g.supplier_order).join(", ")}`, actor: by });
   }
-  await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}${a ? ", from the customer's email" : " (Reorder on the archived job)"}` : "From the customer's email (Inbox → Create order)", actor: by });
+  await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}${a ? ", from the customer's email" : " (Reorder on the archived job)"}` : input.via ? `Made in ${input.via}` : "From the customer's email (Inbox → Create order)", actor: by });
   const pn = [
     d.questions?.length ? `Questions for the customer${a ? " (from the email)" : ""}:\n- ${d.questions.join("\n- ")}` : "",
     d.told ? `What we told the AI: ${d.told}` : "",

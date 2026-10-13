@@ -136,7 +136,7 @@ export async function pastJobs(admin: SupabaseClient, customerId: string | null)
  * Jobs staff named by number in what they told the AI ("it's a reorder of 31174"): looked up even when they're older
  * than the recent jobs listed (portal orders by number, Printavo jobs by their number), this customer's first.
  */
-async function jobsNamed(admin: SupabaseClient, told: string, customerId: string | null, have: PastJob[]): Promise<PastJob[]> {
+export async function jobsNamed(admin: SupabaseClient, told: string, customerId: string | null, have: PastJob[]): Promise<PastJob[]> {
   const nums = [...new Set((told.match(/(?<![\d.$])#?(\d{4,6})(?![\d.])/g) || []).map((x) => x.replace("#", "")))].slice(0, 4);
   if (!nums.length) return [];
   const out: PastJob[] = [];

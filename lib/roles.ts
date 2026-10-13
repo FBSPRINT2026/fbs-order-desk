@@ -35,6 +35,7 @@ export const PERMS = [
   { k: "shipping", group: "Shop tools", label: "Can open the Shipping Center" },
   { k: "receiving", group: "Shop tools", label: "Can open Goods & Receiving" },
   { k: "timeclock", group: "Shop tools", label: "Can open the Time Clock" },
+  { k: "workbench", group: "Shop tools", label: "Can use the AI Workbench (chat with the AI, mockups, orders from files)" },
   { k: "settings", group: "Admin", label: "Can open Settings (pricing, garments, staff, user access)" },
 ] as const;
 export type PermKey = (typeof PERMS)[number]["k"];
@@ -43,7 +44,7 @@ export type Perms = Record<PermKey, boolean>;
 export type AccessOverrides = Record<string, Partial<Perms>>;
 
 const ALL = Object.fromEntries(PERMS.map((p) => [p.k, true])) as Perms;
-const CREW: Perms = { ...ALL, money: false, payments: false, quotes: false, customers: false, incoming: false, projects: false, assistant: false, settings: false, inkStock: false, pay: false };
+const CREW: Perms = { ...ALL, money: false, payments: false, quotes: false, customers: false, incoming: false, projects: false, assistant: false, settings: false, inkStock: false, pay: false, workbench: false };
 /** what each role starts with */
 export const roleDefaults = (role?: string | null): Perms => {
   if (!role || role === "owner" || role === "admin") return { ...ALL };
@@ -65,7 +66,7 @@ export const PAGE_PERMS: [string, PermKey][] = [
   ["/shop/customers", "customers"], ["/shop/inbox", "customers"], ["/shop/conversations", "customers"], ["/shop/incoming", "incoming"], ["/shop/printavo-sync", "quotes"], ["/shop/projects", "projects"], ["/shop/stores", "stores"], ["/shop/assistant", "assistant"],
   ["/shop/settings", "settings"], ["/shop/catalog", "settings"], ["/shop/artwork", "artwork"], ["/shop/details", "artwork"], ["/shop/separations", "separations"],
   ["/shop/board", "schedule"], ["/shop/calendar", "schedule"], ["/shop/employees", "employees"], ["/shop/shipping", "shipping"],
-  ["/shop/receiving", "receiving"], ["/shop/order-goods", "receiving"], ["/shop/time", "timeclock"],
+  ["/shop/receiving", "receiving"], ["/shop/order-goods", "receiving"], ["/shop/time", "timeclock"], ["/shop/ai", "workbench"],
 ];
 export const permForPath = (path: string): PermKey | null => PAGE_PERMS.find(([p]) => path === p || path.startsWith(p + "/"))?.[1] ?? null;
 export const canOpen = (path: string, perms: Perms) => { const k = permForPath(path); return !k || perms[k]; };
