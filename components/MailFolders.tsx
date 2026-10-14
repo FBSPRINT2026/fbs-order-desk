@@ -89,6 +89,7 @@ export function FolderBar({ folders, current, onPick }: { folders: Folder[] | nu
 const P = (d: string) => <svg viewBox="0 0 24 24" aria-hidden><path d={d} /></svg>;
 export const TbIcon = {
   reply: P("M10 8V4L3 11l7 7v-4c5 0 8 1.5 11 6-1-6-4-11-11-12z"),
+  forward: P("M14 8V4l7 7-7 7v-4c-5 0-8 1.5-11 6 1-6 4-11 11-12z"),
   replyAll: P("M8 8V4L1 11l7 7v-4M14 8V4l-7 7 7 7v-4c4 0 7 1.4 9 5-1-5-3.5-9.6-9-11"),
   archive: P("M3 4h18v4H3zM5 8v12h14V8M10 12h4"),
   later: P("M12 7v5l3 2M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"),
@@ -97,6 +98,8 @@ export const TbIcon = {
   move: P("M3 6h6l2 2h10v11H3zM12 13h6M15 10l3 3-3 3"),
   order: P("M6 3h9l3 3v15H6zM9 12h6M12 9v6"),
   file: P("M4 5h7l2 2h7v12H4zM8 13h8"),
+  goods: P("M4 8h16l-1.5 12h-13zM8 8V6a4 4 0 0 1 8 0v2"),
+  person: P("M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0M19 8v6M16 11h6"),
   check: P("M4 12l5 5L20 6"),
   more: P("M5 12h.01M12 12h.01M19 12h.01"),
   back: P("M15 5l-7 7 7 7"),
@@ -234,20 +237,26 @@ function PhoneBar({ a }: { a: PhoneActs }) {
   );
 }
 
-/** Archive, News, Black Hole and Move to any folder: the same group on every email (News took Later's place Oct 14:
+/** Move (Archive, News, Move to any folder) and Spam (Black Hole): the same groups on every email (News took Later's place Oct 14:
  *  Nick uses SaneBox News, rarely Later; Later is still in Move → SaneBox folders) */
 export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | null; busy?: boolean; onMove: (to: string, label: string) => void; here?: string }) {
   const others = (folders || []).filter((f) => f.path !== here && !/\\(Drafts|Junk)/.test(f.special));
   return (
+    <>
+    {/* Move (Oct 14, Nick: Email · Move · Spam · Actions) */}
     <TbGroup>
       <TbBtn icon={TbIcon.archive} label="Archive" kind="strong" disabled={busy} onClick={() => onMove("archive", "Archived.")} title="Move it to Archive, like Outlook's Archive button" />
       <TbBtn icon={TbIcon.news} label="News" disabled={busy} onClick={() => onMove("news", "Moved to News.")} title="SaneBox News: this sender's mail goes to News from now on" />
-      <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={busy} onClick={() => onMove("blackhole", "Black Hole: SaneBox won't show you this sender again.")} title="SaneBox Black Hole: junk, and this sender is blocked from now on" />
       <TbMenu icon={TbIcon.move} label="Move">{(close) => <>
         {others.map((f) => <button key={f.path} type="button" role="menuitem" disabled={busy} onClick={() => { close(); onMove(f.path, `Moved to ${folderLabel(f)}.`); }} style={{ paddingLeft: 12 + Math.min(3, f.depth) * 10 }}>{folderLabel(f)}</button>)}
         {!others.length && <span className="faint" style={{ padding: 8 }}>Loading folders…</span>}
       </>}</TbMenu>
     </TbGroup>
+    {/* Spam */}
+    <TbGroup>
+      <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={busy} onClick={() => onMove("blackhole", "Black Hole: SaneBox won't show you this sender again.")} title="SaneBox Black Hole: junk, and this sender is blocked from now on" />
+    </TbGroup>
+    </>
   );
 }
 

@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
 import { convoKeys, groupConvos } from "@/lib/mail/convo";
-import { archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
+import { forwardEmail, archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
 import { addEvent, addTask, inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, suggestFollowUps, type Brief, type CalEvent, type FollowUp, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
 import { onPullRefresh } from "@/components/PullRefresh";
@@ -797,6 +797,9 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const reorder = intents.includes("reorder") && !intents.includes("new_order");
   // a piece count in the email ("700 shirts"): an Order goods button right on it (Oct 12, Nick)
   const goodsPcs = pieceCount(x.meta?.triage?.summary, x.subject, (x.body || "").slice(0, 4000));
+  /** Match to customer (toolbar): opens the new-sender box on "Add to a customer" */
+  const [matchKey, setMatchKey] = useState(0);
+  const [fwdOpen, setFwdOpen] = useState(false);
   async function loadOpts(fresh = false) {
     setBusy("opts"); setErr("");
     const r = await aiReplyOptions(x.id, fresh);
@@ -862,22 +865,33 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           tags={<>
             {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
             {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="eh-tag">{INTENT[x.meta.triage.intent]}</span>}
-            {!!orderFrom && (x.customer_id || orderish || ordering) && view !== "order" && <button type="button" className="eh-tag make" disabled={!!busy && busy !== "opts"} onClick={() => startOrder()}>{ordering ? "Back to the order" : reorder ? "＋ Create reorder" : "＋ Create order"}</button>}
-            {x.direction === "in" && goodsPcs > 0 && <Link className="eh-tag goods" href={orderGoodsHref(x.id)} title="Order the goods for this, or email our S&S rep (Tiffany) for a custom quote">🧺 Order goods · {goodsPcs} pcs</Link>}
             {x.customer_id && <Link className="eh-tag link" href={`/shop/customers/${x.customer_id}`}>Customer</Link>}
             {filed && <Link className="eh-tag link" href={`/shop/orders/${filed.id}`}>#{filed.number}</Link>}
             {answered && <span className="eh-tag ok">Answered</span>}
             {ccOnly && <span className="eh-tag" title="You were copied (Cc), not sent to: not on your Needs reply list">CC&apos;d</span>}
           </>}
           toolbar={<Toolbar>
-            {!!orderFrom && <TbGroup>{view === "order"
-              ? <TbBtn icon={TbIcon.back} label="Back to the email" onClick={() => setView("mail")} />
-              : <>
-                {x.direction === "in" && <TbBtn icon={TbIcon.reply} label="Reply" kind={!orderish || x.order_id ? "primary" : undefined} onClick={() => write()} />}
-                <TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check" />
-              </>}</TbGroup>}
-            {moveBar || (inOutlook && <TbGroup><TbBtn icon={TbIcon.archive} label={busy === "arch" ? "Archiving…" : "Archive"} kind="strong" disabled={!!busy} title="Moves it to Archive in your Outlook" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id }), "Archived in Outlook.")} /></TbGroup>)}
+            {view === "order" ? <TbGroup><TbBtn icon={TbIcon.back} label="Back to the email" onClick={() => setView("mail")} /></TbGroup> : <>
+            {/* Email (Oct 14, Nick: Email · Move · Spam · Actions, then the AI summary, then the email as it came) */}
             {x.direction === "in" && <TbGroup>
+              <TbBtn icon={TbIcon.reply} label="Reply" kind={!orderish || x.order_id ? "primary" : undefined} onClick={() => write()} />
+              <TbBtn icon={TbIcon.forward} label="Forward" onClick={() => setFwdOpen((v) => !v)} />
+            </TbGroup>}
+            {/* Move · Spam */}
+            {moveBar || (inOutlook && <>
+              <TbGroup>
+                <TbBtn icon={TbIcon.archive} label={busy === "arch" ? "Archiving…" : "Archive"} kind="strong" disabled={!!busy} title="Moves it to Archive in your Outlook" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id }), "Archived in Outlook.")} />
+                <TbBtn icon={TbIcon.news} label="News" disabled={!!busy} title="SaneBox News: this sender's mail goes to News from now on" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "news" }), "Moved to News (SaneBox).")} />
+              </TbGroup>
+              <TbGroup>
+                <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={!!busy} title="SaneBox Black Hole: junk, and this sender is blocked from now on" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "blackhole" }), "Black Hole: SaneBox won't show you this sender again.")} />
+              </TbGroup>
+            </>)}
+            {/* Actions */}
+            {x.direction === "in" && <TbGroup>
+              {!!orderFrom && <TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check" />}
+              <TbBtn icon={TbIcon.goods} label={goodsPcs > 0 ? `Order goods · ${goodsPcs}` : "Order goods"} title="Order the goods for this from S&S, or email our S&S rep for a custom quote" onClick={() => { window.location.href = orderGoodsHref(x.id); }} />
+              {!x.customer_id && <TbBtn icon={TbIcon.person} label="Match to customer" title="Make them a customer, or add them as a contact at one" onClick={() => setMatchKey((k) => k + 1)} />}
               {x.customer_id && <TbMenu icon={TbIcon.file} label={filed ? `#${filed.number}` : "File under"}>{(close) => <>
                 {orders.slice(0, 40).map((o) => <button key={o.id} type="button" role="menuitem" className={o.id === x.order_id ? "on" : ""} disabled={!!busy} onClick={() => { close(); void run("ord", () => setEmailOrder(x.id, o.id), "Filed under the order."); }}>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></button>)}
                 {x.order_id && <button type="button" role="menuitem" onClick={() => { close(); void run("ord", () => setEmailOrder(x.id, null), "Not filed under an order now."); }}>Not filed under an order</button>}
@@ -885,14 +899,15 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               </>}</TbMenu>}
               {needs && <TbBtn icon={TbIcon.check} label="No reply needed" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id), "Off your Needs reply list.")} />}
               <TbMenu icon={TbIcon.more} label="More">{(close) => <>
-                <a href={`/shop/order-goods?email=${x.id}`} target="_blank" rel="noreferrer" role="menuitem" onClick={close}>Order goods from S&amp;S</a>
+                {x.customer_id && <a href={`/shop/customers/${x.customer_id}`} role="menuitem" onClick={close}>Open the customer</a>}
                 {!needs && x.meta?.no_reply && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr-undo", () => markNoReply(x.id, false), "Back on Needs reply."); }}>Needs a reply after all</button>}
                 {!needs && !x.meta?.no_reply && answered && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("back", () => putBackInInbox(x.id), "Back in the Inbox."); }}>Back to Needs reply</button>}
-                {!moveBar && inOutlook && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "news" }), "Moved to News (SaneBox)."); }}>Move to Later (@SaneLater)</button>}
                 <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>Not a customer (stop reading their email)</button>
               </>}</TbMenu>
             </TbGroup>}
+            </>}
           </Toolbar>} />
+        {fwdOpen && view !== "order" && <ForwardBox id={x.id} onDone={(msg) => { setFwdOpen(false); if (msg) done(msg, false); }} />}
         {made && <div className="ibx2-made eh-err">Order <b>#{made.number}</b> created. <a href={`/shop/orders/${made.id}`} target="_blank" rel="noreferrer">Open it</a></div>}
         {err && <div className="pv-err eh-err">{err}</div>}
 
@@ -905,7 +920,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
         {view === "mail" && <>
           <div className="ibx2-read">
             {convo}
-            {!x.customer_id && x.direction === "in" && <NewSender x={x} busy={busy} run={run} />}
+            {!x.customer_id && x.direction === "in" && <NewSender key={`ns-${matchKey}`} x={x} busy={busy} run={run} start={matchKey ? "contact" : ""} />}
             <EmailBody x={x} />
             {(x.meta?.attachments || []).length > 0 && <div className="ibx2-files">{x.meta!.attachments!.map((f) => <button key={f.path} type="button" onClick={() => urlFor(f.path)}>📎 {f.name}</button>)}</div>}
             <CanvaGet x={x} busy={busy} run={run} />
@@ -991,8 +1006,8 @@ function CanvaGet({ x, busy, run }: { x: Act; busy: string; run: (key: string, f
   );
 }
 
-function NewSender({ x, busy, run }: { x: Act; busy: string; run: (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => Promise<void> }) {
-  const [mode, setMode] = useState<"" | "new" | "contact">(""), [company, setCompany] = useState(""), [custQ, setCustQ] = useState(""), [hits, setHits] = useState<Cust[]>([]);
+function NewSender({ x, busy, run, start = "" }: { x: Act; busy: string; run: (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => Promise<void>; /** opened from the Match to customer button */ start?: "" | "contact" }) {
+  const [mode, setMode] = useState<"" | "new" | "contact">(start), [company, setCompany] = useState(""), [custQ, setCustQ] = useState(""), [hits, setHits] = useState<Cust[]>([]);
   async function find(q: string) { setCustQ(q); if (q.trim().length < 2) return setHits([]); const s = q.replace(/[,()]/g, ""); const { data } = await createClient().from("customers").select("id, company, name").or(`company.ilike.%${s}%,name.ilike.%${s}%,email.ilike.%${s}%`).limit(8); setHits((data || []) as Cust[]); }
   const first = x.meta?.from_name?.split(" ")[0] || "them";
   return (
@@ -1232,6 +1247,29 @@ function Signature() {
         {msg && <span className="faint" style={{ fontSize: 12.5 }}>{msg}</span>}
       </div>
       <div className="faint" style={{ fontSize: 12 }}>Changed your signature in Outlook? Send an email from Outlook, wait a few minutes, then press Update from Outlook.</div>
+    </div>
+  );
+}
+
+/** Forward (Oct 14): to whoever you type, your note on top, the original and its attachments underneath */
+function ForwardBox({ id, onDone }: { id: string; onDone: (msg: string) => void }) {
+  const [to, setTo] = useState(""), [body, setBody] = useState(""), [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const send = async () => {
+    setBusy(true); setErr("");
+    const r = await forwardEmail({ activityId: id, to, body }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+    setBusy(false);
+    if (!r.ok) { setErr(r.error); return; }
+    onDone(`Forwarded to ${r.to.join(", ")}.`);
+  };
+  return (
+    <div className="ibx2-fwd">
+      <label className="ibx2-fwd-to">To<input type="text" inputMode="email" autoFocus value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@company.com (comma between)" aria-label="Forward to" /></label>
+      <textarea rows={3} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Add a note (optional). The email and its attachments go underneath." aria-label="Your note" />
+      <div className="ibx2-fwd-a">
+        <button type="button" className="btn primary sm" disabled={busy || !to.includes("@")} onClick={() => void send()}>{busy ? "Sending…" : "Send"}</button>
+        <button type="button" className="btn ghost sm" disabled={busy} onClick={() => onDone("")}>Cancel</button>
+        {err && <span className="pv-err" style={{ margin: 0 }}>{err}</span>}
+      </div>
     </div>
   );
 }

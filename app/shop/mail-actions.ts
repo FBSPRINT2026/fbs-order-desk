@@ -125,6 +125,54 @@ export async function sendEmailReply(input: { activityId: string; subject: strin
   } catch (e) { return fail(e); }
 }
 
+/**
+ * Forward (Oct 14, Nick: the email toolbar's first section is "basic email function like reply and forward"): to
+ * whoever you type, with your note on top, the original underneath (as Outlook forwards it) and its attachments.
+ * From your mailbox, kept on the customer's timeline like a reply.
+ */
+export async function forwardEmail(input: { activityId: string; to: string; body: string }) {
+  try {
+    const v = await staff(), { admin, email, user } = v;
+    if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
+    const to = [...new Set((input.to.match(/[^\s<>,;"]+@[^\s<>,;"]+\.[a-z]{2,}/gi) || []).map((x) => x.toLowerCase()))].slice(0, 10);
+    if (!to.length) return { ok: false as const, error: "Who should it go to? Type an email address." };
+    const { data: a } = await admin.from("activities").select("*").eq("id", input.activityId).maybeSingle();
+    if (!a) return { ok: false as const, error: "That email isn't on file." };
+    const meta = (a.meta || {}) as { from_name?: string; account_id?: string; cc?: string[]; html?: string; attachments?: { name: string; path: string; type?: string; size?: number }[] };
+    const own = await accountForUser(admin, user!.id);
+    const acct = own?.enabled ? null : meta.account_id ? await accountById(admin, meta.account_id) : null;
+    const from = own?.enabled ? own : acct?.enabled ? acct : own;
+    if (!from?.enabled) return { ok: false as const, error: "Connect your email in the Inbox first, so it can go out from your address." };
+    const subject = /^(fw|fwd):/i.test(String(a.subject || "")) ? String(a.subject) : `Fwd: ${a.subject || ""}`;
+    const sent = new Date(a.occurred_at as string).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" at ", " ");
+    let origHtml = "";
+    if (meta.html) { const { data: blob } = await admin.storage.from("proofs").download(meta.html); if (blob && blob.size < 1_500_000) origHtml = await blob.text(); }
+    const quote = { from: meta.from_name ? `${meta.from_name} <${a.from_email}>` : String(a.from_email || ""), sent, to: String(a.to_email || from.email), cc: (meta.cc || []).join("; "), subject: String(a.subject || ""), html: origHtml, text: String(a.body || "") };
+    const signature = from.signature_on !== false ? from.signature_html || "" : "";
+    const page = replyHtml({ body: input.body || " ", signature, css: signature ? from.signature_css : "", quote });
+    const { html, attachments } = inlineImages(page);
+    const text = replyText({ body: input.body || "", signature, quote });
+    // the original's attachments go along (up to 20 MB in all)
+    const files: { filename: string; content: Buffer; contentType: string; contentDisposition: "attachment" }[] = [];
+    let total = 0;
+    for (const f of (meta.attachments || []).slice(0, 15)) {
+      if (!f?.path) continue;
+      const { data: blob } = await admin.storage.from("proofs").download(f.path);
+      if (!blob || total + blob.size > 20_000_000) continue;
+      total += blob.size;
+      files.push({ filename: f.name || "attachment", content: Buffer.from(await blob.arrayBuffer()), contentType: f.type || blob.type || "application/octet-stream", contentDisposition: "attachment" });
+    }
+    const { messageId } = await sendFromMailbox(cfgOf(from), { to: to.join(", "), subject, text, html, attachments: [...attachments, ...files] });
+    const saved = await saveBody(admin, { html: page, attachments: [] }, (a.customer_id as string) || "leads").catch(() => ({}));
+    await admin.from("activities").insert({
+      customer_id: a.customer_id, order_id: a.order_id, kind: "email", direction: "out", subject: subject.slice(0, 500), body: (input.body || "").trim() || `(forwarded to ${to.join(", ")})`,
+      from_email: from.email, to_email: to.join(", "), external_id: messageId, thread_id: a.thread_id || a.external_id, occurred_at: new Date().toISOString(),
+      created_by: email || "staff", ai_processed_at: new Date().toISOString(), meta: { mailbox: "sent", via: "portal", forwarded: a.id, account_id: from.id, account: from.email, ...saved, html_checked: true },
+    });
+    return { ok: true as const, to };
+  } catch (e) { return fail(e); }
+}
+
 /** your signature as it'll go on replies (and whether it's on) */
 export async function getSignature() {
   try {

@@ -7132,3 +7132,9 @@ a.pdn-tag:hover{text-decoration:underline}
 .prg-sug-why{margin:0;font-size:13px;color:var(--ink-2)}
 .prg-sug-a{display:flex;flex-wrap:wrap;gap:6px}
 .prg-sug-err{margin:0;color:var(--danger);font-size:13px}
+/* forward box under the email toolbar (Oct 14) */
+.ibx2-fwd{display:flex;flex-direction:column;gap:8px;margin:8px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.ibx2-fwd-to{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600}
+.ibx2-fwd-to input{flex:1;min-width:0}
+.ibx2-fwd textarea{width:100%;resize:vertical}
+.ibx2-fwd-a{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
