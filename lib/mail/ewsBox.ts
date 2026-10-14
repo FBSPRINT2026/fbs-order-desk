@@ -186,7 +186,8 @@ export async function ewsSearch(admin: SupabaseClient, acct: MailAccount, me: st
   const t = await ewsTree(acct);
   // the whole mailbox in one search, through Exchange's own "AllItems" folder (one index lookup instead of one per
   // folder: Amanda's 18 folders took 14 s one by one); each result is put back in the folder it's in
-  const allId = await allItemsId(acct);
+  // (Intermedia's AllItems answers nothing — tried Oct 14 — so this is off unless EWS_ALLITEMS is set)
+  const allId = process.env.EWS_ALLITEMS ? await allItemsId(acct) : "";
   if (allId) {
     try {
       const x = await call(acct, `<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties>${ITEM_PROPS}</t:AdditionalProperties></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="250" Offset="0" BasePoint="Beginning"/><m:SortOrder><t:FieldOrder Order="Descending"><t:FieldURI FieldURI="item:DateTimeReceived"/></t:FieldOrder></m:SortOrder><m:ParentFolderIds><t:FolderId Id="${esc(allId)}"/></m:ParentFolderIds><m:QueryString>${esc(term)}</m:QueryString></m:FindItem>`, 25000);
