@@ -136,7 +136,10 @@ export async function ewsGetById(acct: MailAccount, id: string, imapPath: string
     id: attr(all(a.inner, "AttachmentId")[0]?.attrs || "", "Id"), name: unesc(one(a.inner, "Name")) || "attachment", type: unesc(one(a.inner, "ContentType")) || "application/octet-stream",
     size: Number(one(a.inner, "Size")) || 0, inline: one(a.inner, "IsInline") === "true", cid: unesc(one(a.inner, "ContentId")).replace(/^<|>$/g, ""),
   })).filter((a) => a.id);
-  let html = unesc(one(x, "Body"));
+  // the email's own <t:Body>, not the SOAP envelope's <s:Body> around the whole answer: matching "Body" with any prefix
+  // took the envelope's, so "NoError", the subject and "Normal" (ResponseCode, Subject, Importance) showed above the
+  // email (Oct 14, Nick's sent reply to Tera Murphy)
+  let html = unesc(/<t:Body\b[^>]*>([\s\S]*?)<\/t:Body>/.exec(x)?.[1] || "");
   // pictures inside the email: served from EWS when the page shows them
   for (const a of atts) if (a.cid) html = html.split(`cid:${a.cid}`).join(picUrl(a.id));
   const text = "";

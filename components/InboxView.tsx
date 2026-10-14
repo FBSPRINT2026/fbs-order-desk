@@ -864,7 +864,15 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (r.ok && key === "arch") cheerWin("archived"); if (!r.ok) setErr(r.error || "Something went wrong."); else if (key === "send" && onSent) { setWriting(false); onSent(ok, { to: x.from_email || "", subject, body, theirs: x.body || "" }); done("", false); } else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
   // the order confirmation arrives after the order is made: into the empty answer box, never over what's typed
   const confirmAt = x.meta?.reply_options?.at;
-  useEffect(() => { if (confirm && !body.trim()) { setSubject(confirm.subject); setBody(confirm.body); setPicked(0); setWriting(true); } }, [confirmAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  // only when it arrives while you're on the email (an order just made from it), never just from opening the email again
+  // (Oct 14, Nick: "whenever I go into this message from Cheri the weird pop-up shows up": the reply box opened every time
+  // with the old confirmation in it)
+  const confirmSeen = useRef(confirmAt);
+  useEffect(() => {
+    if (confirmAt === confirmSeen.current) return;
+    confirmSeen.current = confirmAt;
+    if (confirm && !body.trim()) { setSubject(confirm.subject); setBody(confirm.body); setPicked(0); setWriting(true); }
+  }, [confirmAt]); // eslint-disable-line react-hooks/exhaustive-deps
   // the More menu closes when you click anywhere else
   useEffect(() => {
     const off = (e: PointerEvent) => { const m = moreRef.current; if (m?.open && !m.contains(e.target as Node)) m.open = false; };
