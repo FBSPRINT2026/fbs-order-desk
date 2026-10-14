@@ -20,29 +20,51 @@ export const ewsUrl = (host: string) => `https://${host}/EWS/Exchange.asmx`;
 
 /** which sign-in works for each mailbox (Basic for most; NTLM where Basic is turned down, Oct 13) */
 const useNtlm = new Map<string, boolean>();
+/**
+ * which EWS server answers for each mailbox. Intermedia runs an East and a West site: a mailbox is reached over IMAP
+ * on one and may only sign in to EWS on the other (Oct 14: Intermedia support gave Nick's as the West site, while
+ * Amanda's works on the East one). The mailbox's own server first, then the other site; the one that works is kept.
+ */
+const useHost = new Map<string, string>();
+const hostsFor = (host: string) => {
+  const other = /^east\./i.test(host) ? host.replace(/^east\./i, "west.") : /^west\./i.test(host) ? host.replace(/^west\./i, "east.") : "";
+  return [host, other].filter(Boolean);
+};
 
 export async function call(acct: MailAccount, body: string, timeoutMs = 25000): Promise<string> {
   const c = cfgOf(acct);
   const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"><soap:Header><t:RequestServerVersion Version="Exchange2013_SP1"/></soap:Header><soap:Body>${body}</soap:Body></soap:Envelope>`;
   const key = acct.email.toLowerCase();
-  let status = 0, text = "", www = "";
-  if (!useNtlm.get(key)) {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const res = await fetch(ewsUrl(c.imapHost), { method: "POST", signal: ctrl.signal, cache: "no-store", headers: { "Content-Type": "text/xml; charset=utf-8", Authorization: `Basic ${Buffer.from(`${c.user}:${c.pass}`).toString("base64")}` }, body: soap });
-      status = res.status; text = await res.text(); www = res.headers.get("www-authenticate") || "";
-    } finally { clearTimeout(t); }
+  const attempt = async (host: string) => {
+    let status = 0, text = "", www = "";
+    if (!useNtlm.get(key)) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(ewsUrl(host), { method: "POST", signal: ctrl.signal, cache: "no-store", headers: { "Content-Type": "text/xml; charset=utf-8", Authorization: `Basic ${Buffer.from(`${c.user}:${c.pass}`).toString("base64")}` }, body: soap });
+        status = res.status; text = await res.text(); www = res.headers.get("www-authenticate") || "";
+      } finally { clearTimeout(t); }
+    }
+    // Basic turned down but NTLM offered: sign in with NTLM (and keep using it for this mailbox)
+    if (useNtlm.get(key) || (status === 401 && /ntlm/i.test(www))) {
+      const r = await ntlmPost(ewsUrl(host), c.user, c.pass, "text/xml; charset=utf-8", soap, timeoutMs);
+      status = r.status; text = r.body; www = ([] as string[]).concat(r.headers["www-authenticate"] || []).join(", ");
+      if (status !== 401) useNtlm.set(key, true);
+    }
+    return { status, text, www };
+  };
+  const known = useHost.get(key);
+  let r = { status: 0, text: "", www: "" };
+  const tried: string[] = [];
+  for (const host of known ? [known] : hostsFor(c.imapHost)) {
+    tried.push(host);
+    r = await attempt(host);
+    if (r.status !== 401) { useHost.set(key, host); break; }
   }
-  // Basic turned down but NTLM offered: sign in with NTLM (and keep using it for this mailbox)
-  if (useNtlm.get(key) || (status === 401 && /ntlm/i.test(www))) {
-    const r = await ntlmPost(ewsUrl(c.imapHost), c.user, c.pass, "text/xml; charset=utf-8", soap, timeoutMs);
-    status = r.status; text = r.body; www = ([] as string[]).concat(r.headers["www-authenticate"] || []).join(", ");
-    if (status !== 401) useNtlm.set(key, true);
-  }
+  const { status, text, www } = r;
   if (status < 200 || status >= 300) {
     const fault = one(text, "faultstring") || one(text, "MessageText");
-    throw new Error(status === 401 ? `EWS sign-in refused (401; Basic and NTLM; the server offers: ${www || "?"})` : `EWS ${status}${fault ? `: ${unesc(fault).slice(0, 200)}` : ""}`);
+    throw new Error(status === 401 ? `EWS sign-in refused (401 on ${tried.join(" and ")}; Basic and NTLM; the server offers: ${www || "?"})` : `EWS ${status}${fault ? `: ${unesc(fault).slice(0, 200)}` : ""}`);
   }
   const bad = all(text, "ResponseCode").map((x) => x.inner).find((x) => x && x !== "NoError");
   if (bad) throw new Error(`EWS ${bad}: ${unesc(one(text, "MessageText")).slice(0, 200)}`);
