@@ -3,12 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { LOCATIONS } from "@/lib/pricing";
-import { PROGRAM_SIZES, type Program, type ProgramImprint, type ProgramItem } from "@/lib/programs";
+import { BIG_SIZES, BACKS, FRONTS, newRateCard, PROGRAM_SIZES, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
 
 const blankItem = (programId: string, position: number): Omit<ProgramItem, "id"> => ({ program_id: programId, name: "", style: "", brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"], price: 0, min_qty: 0, imprints: [{ location: "Full Front", method: "screen", colors: 1, inks: "", size: "", notes: "" }], design_id: null, image_path: "", notes: "", active: true, position });
 
 /**
- * Staff: a customer's program pricing. Items they order often, each with a flat price per piece (any quantity),
+ * Staff: a customer's program pricing. The rate card (Oct 14): their price per print on a base shirt, used when an order
+ * is set to Program. Then items they order often, each with a flat price per piece (any quantity),
  * the garment, colors, sizes, print details, their logo and a picture. These make up the customer's program order form.
  */
 export default function ProgramAdmin({ customerId }: { customerId: string }) {
@@ -45,8 +46,8 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
     <div className="pg-none">
       <div className="pg-none-ic" aria-hidden="true">★</div>
       <h3>No program yet</h3>
-      <p>Set up program pricing for this customer: the items they order often, each at a flat price per piece. They&apos;ll get a quick order form in their portal.</p>
-      <button type="button" className="btn primary" onClick={async () => { await sb.from("programs").insert({ customer_id: customerId, name: "Program", active: true }); load(); }}>Set up program pricing</button>
+      <p>Set up program pricing for this customer: their own price for each print (1/1, 2/1, 3/3…) on a base shirt, with a minimum. On an order, pick <b>Program</b> next to Retail / Wholesale and the prices fill in.</p>
+      <button type="button" className="btn primary" onClick={async () => { await sb.from("programs").insert({ customer_id: customerId, name: "Program", active: false, rate_card: newRateCard() }); load(); }}>Set up program pricing</button>
     </div>
   );
   return (
@@ -54,6 +55,8 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       <div className="aa-bar"><div className="aa-bar-l"><h2>Program pricing</h2><span className="aa-sum">{items.filter((i) => i.active).length} active item{items.length === 1 ? "" : "s"} · {state || "Saves as you type"}</span></div>
         <label className="check"><input type="checkbox" checked={program.active} onChange={(e) => saveProgram({ active: e.target.checked })} /> Show in their portal</label>
       </div>
+      <RateCardEditor card={program.rate_card || null} onSave={(rate_card) => saveProgram({ rate_card })} />
+      <h3 className="pga-sub">Prices by design <span className="faint">(a design's own price at a quantity: on an order set to Program it wins over the rate card; also their portal order form)</span></h3>
       <div className="pga-head">
         <label>Program name<input type="text" value={program.name} onChange={(e) => saveProgram({ name: e.target.value })} placeholder="e.g. Two Men Moving: crew apparel" /></label>
         <label className="wide">Note shown to the customer<input type="text" value={program.notes} onChange={(e) => saveProgram({ notes: e.target.value })} placeholder="e.g. Prices include one-color front and back. Ships in 7 business days." /></label>
@@ -75,8 +78,8 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
             </div>
             <div className="pga-fields">
               <div className="pga-row">
-                <label className="grow">Item name<input type="text" value={it.name} onChange={(e) => saveItem(it.id, { name: e.target.value })} placeholder="Crew tee" /></label>
-                <label>Flat price / piece<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={it.price ? String(it.price) : ""} onBlur={(e) => saveItem(it.id, { price: Math.round((+e.target.value.replace(/[^\d.]/g, "") || 0) * 100) / 100 })} placeholder="0.00" /></div></label>
+                <label className="grow">Design or item name<input type="text" value={it.name} onChange={(e) => saveItem(it.id, { name: e.target.value })} placeholder="Mewjira" /></label>
+                <label>Price / piece<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={it.price ? String(it.price) : ""} onBlur={(e) => saveItem(it.id, { price: Math.round((+e.target.value.replace(/[^\d.]/g, "") || 0) * 100) / 100 })} placeholder="0.00" /></div></label>
                 <label>Minimum<input type="number" min={0} value={it.min_qty || ""} onChange={(e) => saveItem(it.id, { min_qty: +e.target.value || 0 })} placeholder="none" /></label>
               </div>
               <div className="pga-row">
@@ -114,7 +117,75 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
           </article>
         ))}
       </div>
-      <button type="button" className="btn primary" onClick={async () => { const { error } = await sb.from("program_items").insert(blankItem(program.id, items.length)); if (error) setState(error.message); load(); }}>+ Add program item</button>
+      <button type="button" className="btn primary" onClick={async () => { const { error } = await sb.from("program_items").insert(blankItem(program.id, items.length)); if (error) setState(error.message); load(); }}>+ Add a design price</button>
     </div>
+  );
+}
+
+/**
+ * The rate card (Oct 14, Nick): Peticolas pays $11.50 for a 1/1 on a Next Level 6210 at 50 pieces or more, no setup;
+ * another shirt is the difference in blank cost × 1.2 more (or less). Furry Feline supplies their own shirts: print-only
+ * prices. Saved when a field is left.
+ */
+function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: RateCard) => void }) {
+  const sb = createClient();
+  const [c, setC] = useState<RateCard>(card || newRateCard());
+  const [cost, setCost] = useState<number | null>(card?.base.cost ?? null);
+  const style = c.base.style.trim(), brand = c.base.brand.trim();
+  useEffect(() => {
+    if (!style) { setCost(null); return; }
+    let live = true;
+    sb.from("garments").select("cost, brand").ilike("style", style).limit(5).then(({ data }) => {
+      if (!live) return;
+      const rows = (data || []) as { cost: number; brand: string }[];
+      const hit = rows.find((x) => !brand || x.brand.toLowerCase() === brand.toLowerCase()) || rows[0];
+      setCost(hit?.cost ? +hit.cost : null);
+    });
+    return () => { live = false; };
+  }, [style, brand]); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = (n: RateCard) => { setC(n); onSave({ ...n, base: { ...n.base, cost: cost ?? n.base.cost } }); };
+  const money2 = (v: string) => Math.round((+v.replace(/[^\d.]/g, "") || 0) * 100) / 100;
+  const set = (patch: Partial<RateCard>) => save({ ...c, ...patch });
+  const ex = c.garmentIncluded && cost != null ? c.prices["1/1"] || Object.values(c.prices).find((x) => x > 0) : null;
+  return (
+    <section className="rc">
+      <div className="rc-h"><h3>Rate card</h3><span className="faint">Used when an order is set to <b>Program</b> (next to Retail / Wholesale)</span></div>
+      <div className="pga-row">
+        <label>Base shirt brand<input type="text" value={c.base.brand} onChange={(e) => setC({ ...c, base: { ...c.base, brand: e.target.value } })} onBlur={() => save(c)} placeholder="Next Level" /></label>
+        <label>Style #<input type="text" value={c.base.style} onChange={(e) => setC({ ...c, base: { ...c.base, style: e.target.value } })} onBlur={() => save(c)} placeholder="6210" /></label>
+        <span className="rc-cost">{cost != null ? <>Blank cost now <b>{money(cost)}</b></> : style ? "Not in the garment catalog yet" : ""}</span>
+      </div>
+      <div className="pga-row">
+        <label className="check"><input type="radio" name="rc-g" checked={c.garmentIncluded} onChange={() => set({ garmentIncluded: true })} /> Price includes the shirt</label>
+        <label className="check"><input type="radio" name="rc-g" checked={!c.garmentIncluded} onChange={() => set({ garmentIncluded: false })} /> Print only (they supply shirts)</label>
+      </div>
+      <div className="pga-row">
+        {c.garmentIncluded && <label>Other shirts: difference ×<input type="text" inputMode="decimal" defaultValue={String(c.markup)} onBlur={(e) => set({ markup: +e.target.value.replace(/[^\d.]/g, "") || 1 })} style={{ width: 70 }} /></label>}
+        <label>Minimum pieces<input type="number" min={0} defaultValue={c.minQty || ""} onBlur={(e) => set({ minQty: +e.target.value || 0 })} style={{ width: 90 }} /></label>
+        <label className="check"><input type="checkbox" checked={c.waiveSetup} onChange={(e) => set({ waiveSetup: e.target.checked })} /> No setup charge</label>
+      </div>
+      <div className="pga-row rc-up">
+        <span>Big sizes, per piece</span>
+        {BIG_SIZES.map((z) => <label key={z}>{z}<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={c.sizeUp?.[z] != null ? String(c.sizeUp[z]) : ""} onBlur={(e) => set({ sizeUp: { ...c.sizeUp, [z]: money2(e.target.value) } })} placeholder="0.00" /></div></label>)}
+      </div>
+      <div className="rc-grid-wrap">
+        <table className="rc-grid">
+          <caption>Price per piece by colors: front / back{c.garmentIncluded && style ? ` (on a ${style})` : ""}. Leave a box empty if there&apos;s no deal for it.</caption>
+          <thead><tr><th>Front ↓ · Back →</th>{BACKS.map((b) => <th key={b}>{b === 0 ? "No back" : `${b}`}</th>)}</tr></thead>
+          <tbody>
+            {FRONTS.map((f) => (
+              <tr key={f}><th>{f} color{f === 1 ? "" : "s"}</th>
+                {BACKS.map((b) => {
+                  const k = `${f}/${b}`, v = c.prices[k];
+                  return <td key={k}><input type="text" inputMode="decimal" aria-label={`${k} price`} title={k} defaultValue={v ? v.toFixed(2) : ""} placeholder={k}
+                    onBlur={(e) => { const n = money2(e.target.value); const prices = { ...c.prices }; if (n > 0) prices[k] = n; else delete prices[k]; if (n !== (v || 0)) set({ prices }); }} /></td>;
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {ex && cost != null && <p className="faint rc-ex">Example: a shirt whose blank costs {money(cost + 2)} on a 1/1 = {money(ex)} + ({money(cost + 2)} − {money(cost)}) × {c.markup} = <b>{money(Math.round((ex + 2 * c.markup) * 100) / 100)}</b>. A cheaper shirt comes down the same way.</p>}
+    </section>
   );
 }

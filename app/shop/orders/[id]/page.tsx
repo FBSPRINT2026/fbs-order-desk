@@ -32,6 +32,9 @@ import Timeline from "@/components/Timeline";
 import { useCan, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
 import { PAY_TERMS, SIZES } from "@/lib/pricing";
+import { BIG_SIZES, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
+import { programCard } from "@/app/shop/program-pricing-actions";
+import { PastPrices, ProgramNotes } from "@/components/ProgramPricing";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -82,6 +85,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [flash, setFlash] = useState("");
   const [armed, setArmed] = useState("");
   const [confirmRetail, setConfirmRetail] = useState(false);
+  /** the customer's program rate card (Program chip), and the base shirt's blank cost now */
+  const [prog, setProg] = useState<{ card: RateCard | null; baseCost: number | null; items: DesignPrice[] } | null>(null);
   const [custOwed, setCustOwed] = useState<{ n: number; owed: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -214,7 +219,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const c = calcOrder(d, settings);
     const { error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
-      price_type: d.price_type || "retail", po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
+      price_type: d.price_type || "retail", use_program: !!d.use_program, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
       ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "",
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, total: c.total, qty: c.qty,
@@ -263,6 +268,52 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       patch((d) => d.groups.forEach((g, i) => { if (g.specialtyInkSet || !want[i]) return; g.specialtyInk = want[i].on || undefined; g.fabricNote = want[i].why || undefined; }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o, catalog]);
+
+  // program pricing (Oct 14, Nick: Peticolas, Nine18, Furry Feline): the customer's rate card, for the Program chip
+  useEffect(() => {
+    if (!custId || !seesMoney) { setProg(null); return; }
+    let live = true;
+    programCard(custId).then((r) => { if (live) setProg(r.ok && (r.card || r.items.length) ? { card: r.card, baseCost: r.baseCost, items: r.items } : null); }, () => live && setProg(null));
+    return () => { live = false; };
+  }, [custId, seesMoney]);
+  /** what a group's design is called, for the designs' own program prices: the order's name and its prints' designs */
+  const designCtx = (d: Pick<Order, "nickname">, g: Group): DesignCtx => ({ items: prog?.items || [], text: [d.nickname || "", ...g.imprints.map((x) => designs.find((y) => y.id === x.design_id)?.name || "")].join(" ") });
+  // with Program on, each line gets the card's price (GLine.prog, saved as the line's price so every total agrees);
+  // a price typed by hand wins and stays; off, or not covered (under the minimum, a print the card doesn't have), the
+  // line goes back to normal pricing. Not once the job is in production.
+  useEffect(() => {
+    if (!o || ["production", "ready", "completed"].includes(o.status)) return;
+    const on = !!o.use_program && !!prog;
+    const findGm = (l: GLine) => catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || c.brand.toLowerCase() === l.brand.toLowerCase()));
+    const apply = (d: Order) => {
+      const plans = on ? d.groups.map((g) => programForGroup(g, prog!.card, prog!.baseCost, designCtx(d, g))) : [];
+      d.groups.forEach((g, gi) => g.lines.forEach((l) => {
+        if (l.progOff) { if (l.priceOverride == null) delete l.progOff; else return; }
+        if (l.prog && l.priceOverride !== l.prog.each) { l.progOff = true; delete l.prog; return; }
+        const want = on ? plans[gi]?.lines[l.id] || null : null;
+        if (want) {
+          const up: GLine["sizeUp"] = {};
+          for (const z of BIG_SIZES) if (prog!.card?.sizeUp?.[z] != null) up[z] = +prog!.card.sizeUp[z]!;
+          if (!l.prog || l.prog.each !== want.each || l.prog.note !== want.note) { l.prog = want; l.priceOverride = want.each; }
+          if (JSON.stringify(l.sizeUp || {}) !== JSON.stringify(up)) l.sizeUp = up;
+        } else if (l.prog) {
+          delete l.prog; l.priceOverride = null;
+          const gm = findGm(l), sc = gm?.size_costs || {}, up: GLine["sizeUp"] = {};
+          if (gm) for (const z of BIG_SIZES) if (sc[z] && gm.cost) up[z] = Math.max(0, Math.round((sc[z] - +gm.cost) * 100) / 100);
+          l.sizeUp = Object.keys(up).length ? up : undefined;
+        }
+      }));
+      // the card's "no setup": while Program is on, setup is waived when every group is on program prices
+      if (on && (prog!.card ? prog!.card.waiveSetup : true)) {
+        const all = d.groups.every((g, gi) => plans[gi]?.ok || !g.lines.some((l) => Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
+        if (d.waive_setup !== all) d.waive_setup = all;
+      }
+    };
+    const trial: Order = JSON.parse(JSON.stringify(o));
+    apply(trial);
+    if (JSON.stringify(trial.groups) !== JSON.stringify(o.groups) || trial.waive_setup !== o.waive_setup) patch(apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [o, prog, catalog, designs]);
 
   // a customer's own mockup goes in the job's Production files as a reference, stamped "CUSTOMER SUPPLIED MOCKUP"
   // across it (we remake the mockup ourselves for the separations). Made once per file: the stamped file is named
@@ -590,12 +641,24 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                       ) : <div className="faint" style={{ fontSize: 13, flex: 1 }}>Pick a customer, or add a new one without leaving this order.</div>}
                       <div className="pt-box money-only">
                         <div className="chips">
-                          <button type="button" className={"chip" + (o.price_type !== "wholesale" ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; }); }}>Retail</button>
-                          <button type="button" className={"chip" + (o.price_type === "wholesale" ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; }); }}>Wholesale</button>
+                          <button type="button" className={"chip" + (o.price_type !== "wholesale" && !o.use_program ? " on" : "")} onClick={() => { if (o.price_type === "wholesale" && cust?.price_type === "wholesale") setConfirmRetail(true); else patch((d) => { d.price_type = "retail"; d.use_program = false; }); }}>Retail</button>
+                          <button type="button" className={"chip" + (o.price_type === "wholesale" && !o.use_program ? " on" : "")} onClick={() => { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; d.use_program = false; }); }}>Wholesale</button>
+                          {(prog || o.use_program) && <button type="button" className={"chip" + (o.use_program ? " on" : "")} title="This customer's program rate card (their Program tab)" onClick={() => { setConfirmRetail(false); patch((d) => { d.use_program = true; }); }}>Program</button>}
                         </div>
-                        {cust && o.price_type !== (cust.price_type || "retail") && <div className="faint" style={{ fontSize: 11.5 }}>Changed for this order</div>}
+                        {cust && !o.use_program && o.price_type !== (cust.price_type || "retail") && <div className="faint" style={{ fontSize: 11.5 }}>Changed for this order</div>}
+                        {o.use_program && !prog && <div className="faint" style={{ fontSize: 11.5 }}>No rate card on their Program tab</div>}
                       </div>
                     </div>
+                    {o.use_program && prog && <ProgramNotes groups={o.groups} card={prog.card} baseCost={prog.baseCost} ctx={(g) => designCtx(o, g)} />}
+                    {seesMoney && cust && <PastPrices customerId={cust.id} orderId={o.id}
+                      terms={[o.nickname || "", ...o.groups.flatMap((g) => g.imprints.map((d) => designs.find((x) => x.id === d.design_id)?.name || ""))].filter(Boolean)}
+                      onUse={(price, styles) => patch((d) => {
+                        const want = styles.map((x) => x.trim().toLowerCase()).filter(Boolean);
+                        const lines = d.groups.flatMap((g) => g.lines).filter((l) => Object.values(l.sizes || {}).some((n) => +(n || 0) > 0));
+                        const hit = lines.filter((l) => want.includes((l.style || "").trim().toLowerCase()));
+                        for (const l of hit.length ? hit : lines) { l.priceOverride = price; delete l.prog; l.progOff = true; }
+                        say(`Price set to ${money(price)} on ${(hit.length ? hit : lines).length} line${(hit.length ? hit : lines).length === 1 ? "" : "s"}.`);
+                      })} />}
                     {confirmRetail && cust && (
                       <div className="confirm-bar">
                         <span><b>{custLabel(cust)}</b> is a wholesale customer. Are you sure you want to price this order as retail?</span>
