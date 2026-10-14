@@ -8,6 +8,7 @@ import { keepBody, cachedList, cachedMessage, cachedSearch, folderCached } from 
 import { inlineImages, replyHtml, replyText } from "@/lib/mail/compose";
 import { sendFromMailbox } from "@/lib/mail/send";
 import { ewsAttachment, ewsMessage } from "@/lib/mail/ews";
+import { ewsFolders, ewsList, ewsMarkRead, ewsMove, ewsOpen, ewsReady, ewsSaveSent, ewsSearch, isEwsUid } from "@/lib/mail/ewsBox";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -38,7 +39,38 @@ export async function GET(req: Request) {
   const { admin, acct } = m;
   const u = new URL(req.url), q = u.searchParams, what = q.get("do"), path = q.get("path") || "INBOX", uid = Number(q.get("uid") || 0);
   const me = acct.email.toLowerCase();
+  const pic = (id: string) => `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id })}`;
   try {
+    // a mailbox EWS works on (Oct 14): the folder list, a folder, search and opening an email all go through EWS — no
+    // IMAP connection limit. If EWS has a problem, the IMAP way below still answers.
+    const ews = await ewsReady(admin, acct);
+    if (ews) {
+      try {
+        if (what === "folders") return NextResponse.json({ folders: await ewsFolders(acct), ews: true });
+        if (what === "list") { const r = await ewsList(admin, acct, me, path, q.get("older") || undefined); return NextResponse.json({ rows: r.rows, more: r.more, live: true, ews: true }); }
+        if (what === "search") {
+          // the server's own index: every year at once, so "older" has nothing more to add
+          if (q.get("older") === "1") return NextResponse.json({ convos: [], folders: 0, partial: false, scope: "older", all: true });
+          const t0 = Date.now();
+          const r = await ewsSearch(admin, acct, me, q.get("q") || "");
+          console.info(`mail search ews "${(q.get("q") || "").slice(0, 40)}": ${r.convos.length} conversations, ${r.folders} folders, ${Date.now() - t0}ms`);
+          return NextResponse.json({ ...r, scope: "all", all: true });
+        }
+        if (what === "message" && (isEwsUid(uid) || q.get("live") === "1")) {
+          const t0 = Date.now();
+          const e = await ewsOpen(admin, acct, path, uid, pic);
+          console.info(`mail open ${path}:${uid} ews ${Date.now() - t0}ms`);
+          if (!e) return NextResponse.json({ error: "That email isn't there any more (moved or deleted?)." }, { status: 404 });
+          const { ews: _x, read, itemId, ...msg } = e;
+          if (!read && !m.viewing) after(async () => { try { await ewsMarkRead(acct, itemId); } catch { /* fine */ } });
+          if (!isEwsUid(uid)) after(async () => { try { await keepBody(admin, acct.id, path, uid, msg); } catch { /* fine */ } });
+          return NextResponse.json(msg);
+        }
+      } catch (e) {
+        console.warn(`mail ${what} ews failed: ${e instanceof Error ? e.message : e}`);
+        if (isEwsUid(uid)) throw e;
+      }
+    }
     // the folder list alone is quick; counts (how many, unread) come in a second call in the background
     if (what === "folders") return NextResponse.json({ folders: await withBox(acct, (c) => listFolders(c, q.get("counts") === "1")) });
     // a folder: from the 45-day cache when it's complete (instant), paging back past it live; else live
@@ -58,14 +90,30 @@ export async function GET(req: Request) {
       if (hit) {
         // mark it read in Outlook too, after answering — only when it isn't already (each one is a connection to the
         // mailbox, and the mailbox only allows a few at a time, shared with the phone and Outlook: Oct 13)
-        if (!m.viewing && !hit.seen) after(async () => { try { await withBox(acct, (c) => markSeen(c, path, uid), Date.now() + 20000); await admin.from("mail_cache").update({ seen: true }).eq("account_id", acct.id).eq("folder", path).eq("uid", uid); } catch { /* fine */ } });
+        if (!m.viewing && !hit.seen) after(async () => {
+          try {
+            if (ews) { const { itemIdFor } = await import("@/lib/mail/ewsBox"); const id = await itemIdFor(admin, acct, path, uid); if (id) await ewsMarkRead(acct, id); }
+            else await withBox(acct, (c) => markSeen(c, path, uid), Date.now() + 20000);
+            await admin.from("mail_cache").update({ seen: true }).eq("account_id", acct.id).eq("folder", path).eq("uid", uid);
+          } catch { /* fine */ }
+        });
         return NextResponse.json({ ...hit, cached: true });
       }
       // over EWS first (Oct 13): HTTPS like Outlook, no IMAP connection limit, and it hands over the big emails IMAP
       // drops; pictures and attachments come through EWS too. Kept so it opens instantly next time.
+      if (ews) {
+        const e = await ewsOpen(admin, acct, path, uid, pic).catch(() => null);
+        if (e) {
+          const { ews: _x, read, itemId, ...msg } = e;
+          if (!read && !m.viewing) after(async () => { try { await ewsMarkRead(acct, itemId); } catch { /* fine */ } });
+          after(async () => { try { await keepBody(admin, acct.id, path, uid, msg); } catch { /* fine */ } });
+          console.info(`mail open ${path}:${uid} ews ${Date.now() - t0}ms`);
+          return NextResponse.json(msg);
+        }
+      }
       const { data: kept } = await admin.from("mail_cache").select("message_id").eq("account_id", acct.id).eq("folder", path).eq("uid", uid).limit(1).maybeSingle();
       const mid = (kept?.message_id as string) || q.get("mid") || "";
-      if (mid) {
+      if (mid && !ews) {
         const e = await ewsMessage(acct, path, uid, mid, (id) => `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id })}`).catch((x) => { console.warn(`mail open ${path}:${uid} ews failed: ${x instanceof Error ? x.message : x}`); return null; });
         if (e) {
           console.info(`mail open ${path}:${uid} ews ${Date.now() - t0}ms`);
@@ -129,17 +177,24 @@ export async function POST(req: Request) {
   const path = String(b.path || "INBOX"), uid = Number(b.uid || 0);
   if (!uid) return NextResponse.json({ error: "Which email?" }, { status: 400 });
   try {
+    const ews = await ewsReady(admin, acct);
     if (b.do === "move") {
+      // over EWS when it works for this mailbox (no IMAP connection needed); an EWS-listed email only that way
+      if (ews || isEwsUid(uid)) {
+        try { const r = await ewsMove(admin, acct, path, uid, String(b.to || "archive"), v.email || "portal"); return NextResponse.json({ ok: true, dest: r.dest }); }
+        catch (e) { if (isEwsUid(uid)) throw e; console.warn(`mail move ews failed: ${e instanceof Error ? e.message : e}`); }
+      }
       const r = await withBox(acct, (c) => moveMessage(admin, acct, c, path, uid, String(b.to || "archive"), v.email || "portal"));
       return NextResponse.json({ ok: true, dest: r.dest });
     }
     if (b.do === "reply") {
       if (!String(b.body || "").trim()) return NextResponse.json({ error: "Write the reply first." }, { status: 400 });
-      const msg = await withBox(acct, (c) => getMessage(c, path, uid));
+      const viaEws = ews || isEwsUid(uid) ? await ewsOpen(admin, acct, path, uid, (id) => `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id })}`).catch((e) => { if (isEwsUid(uid)) throw e; return null; }) : null;
+      const msg = viaEws ? (({ ews: _x, read: _r, itemId: _i, ...rest }) => rest)(viaEws) : await withBox(acct, (c) => getMessage(c, path, uid));
       if (!msg) return NextResponse.json({ error: "That email isn't there any more." }, { status: 404 });
       const me = acct.email.toLowerCase();
       // replying to something I sent goes to the people I sent it to
-      const fromMe = msg.fromAddress === me;
+      const fromMe = msg.fromAddress === me || (!msg.fromAddress.includes("@") && /sent/i.test(path));
       const split = (s: string) => (s.match(/[^\s<>,;"]+@[^\s<>,;"]+/g) || []).map((x) => x.toLowerCase());
       const toList = fromMe ? split(msg.to) : [msg.fromAddress];
       // reply all: everyone on it; plus anyone added in Cc (Oct 12)
@@ -152,7 +207,9 @@ export async function POST(req: Request) {
       const page = replyHtml({ body: String(b.body), signature, css: signature ? acct.signature_css : "", quote });
       const { html, attachments } = inlineImages(page);
       const text = replyText({ body: String(b.body), signature, quote });
-      await sendFromMailbox(cfgOf(acct), { to: toList.join(", "), cc: ccList.join(", ") || undefined, subject, text, html, attachments, inReplyTo: msg.messageId || undefined, references: [...msg.references, msg.messageId].filter(Boolean).slice(-20) });
+      await sendFromMailbox(cfgOf(acct), { to: toList.join(", "), cc: ccList.join(", ") || undefined, subject, text, html, attachments, inReplyTo: msg.messageId || undefined, references: [...msg.references, msg.messageId].filter(Boolean).slice(-20) },
+        // the Sent Items copy over EWS when it works (no IMAP connection)
+        ews ? (raw) => ewsSaveSent(acct, raw) : undefined);
       return NextResponse.json({ ok: true, to: toList.join(", ") });
     }
     return NextResponse.json({ error: "Unknown request." }, { status: 400 });

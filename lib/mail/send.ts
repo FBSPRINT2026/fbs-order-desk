@@ -27,7 +27,7 @@ export async function checkSending(c: MailCfg) {
 export async function sendFromMailbox(c: MailCfg, o: {
   to: string; cc?: string; subject: string; text: string; html?: string; inReplyTo?: string; references?: string[];
   attachments?: { filename: string; content: Buffer; contentType: string; cid?: string; contentDisposition?: "inline" | "attachment" }[];
-}) {
+}, /** keep the Sent Items copy some other way (EWS); IMAP when it fails or there isn't one */ saveSent?: (raw: Buffer) => Promise<void>) {
   const messageId = `<${crypto.randomUUID()}@fbsprint.com>`;
   const mail = {
     from: { name: c.fromName, address: c.user }, to: o.to, cc: o.cc || undefined, subject: o.subject, text: o.text, html: o.html || undefined, attachments: o.attachments?.length ? o.attachments : undefined,
@@ -38,6 +38,7 @@ export async function sendFromMailbox(c: MailCfg, o: {
   // a copy in Sent Items (SMTP doesn't keep one); the next mailbox read sees it and skips it as already on file
   try {
     const raw = await new MailComposer(mail).compile().build();
+    if (saveSent) { try { await saveSent(raw); return { messageId }; } catch (e) { console.warn(`sent copy over EWS failed: ${e instanceof Error ? e.message : e}`); } }
     const client = imapClient(c);
     await client.connect();
     try { await client.append(await sentFolder(client), raw, ["\\Seen"]); } finally { await client.logout().catch(() => null); }

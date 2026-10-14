@@ -9,19 +9,19 @@ import { ntlmPost } from "./ntlm";
  * phone, Outlook and SaneBox) and drops some big emails outright; EWS has no such limit, so an email IMAP won't hand
  * over is opened through EWS instead, pictures and attachments included.
  */
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const unesc = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&amp;/g, "&");
+export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+export const unesc = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&amp;/g, "&");
 /** the inside of each <t:Name …>…</t:Name> (any namespace prefix) */
-const all = (xml: string, name: string) => [...xml.matchAll(new RegExp(`<(?:\\w+:)?${name}\\b([^>]*?)(?:/>|>([\\s\\S]*?)</(?:\\w+:)?${name}>)`, "g"))].map((m) => ({ attrs: m[1] || "", inner: m[2] || "" }));
-const one = (xml: string, name: string) => all(xml, name)[0]?.inner ?? "";
-const attr = (attrs: string, name: string) => (attrs.match(new RegExp(`\\b${name}="([^"]*)"`)) || [])[1] || "";
+export const all = (xml: string, name: string) => [...xml.matchAll(new RegExp(`<(?:\\w+:)?${name}\\b([^>]*?)(?:/>|>([\\s\\S]*?)</(?:\\w+:)?${name}>)`, "g"))].map((m) => ({ attrs: m[1] || "", inner: m[2] || "" }));
+export const one = (xml: string, name: string) => all(xml, name)[0]?.inner ?? "";
+export const attr = (attrs: string, name: string) => (attrs.match(new RegExp(`\\b${name}="([^"]*)"`)) || [])[1] || "";
 
 export const ewsUrl = (host: string) => `https://${host}/EWS/Exchange.asmx`;
 
 /** which sign-in works for each mailbox (Basic for most; NTLM where Basic is turned down, Oct 13) */
 const useNtlm = new Map<string, boolean>();
 
-async function call(acct: MailAccount, body: string, timeoutMs = 25000): Promise<string> {
+export async function call(acct: MailAccount, body: string, timeoutMs = 25000): Promise<string> {
   const c = cfgOf(acct);
   const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"><soap:Header><t:RequestServerVersion Version="Exchange2013_SP1"/></soap:Header><soap:Body>${body}</soap:Body></soap:Envelope>`;
   const key = acct.email.toLowerCase();
@@ -93,7 +93,15 @@ export async function ewsMessage(acct: MailAccount, imapPath: string, uid: numbe
   if (!messageId) return null;
   const id = await findItem(acct, imapPath, messageId);
   if (!id) return null;
-  const x = await call(acct, `<m:GetItem><m:ItemShape><t:BaseShape>Default</t:BaseShape><t:BodyType>HTML</t:BodyType><t:AdditionalProperties><t:FieldURI FieldURI="item:Body"/><t:FieldURI FieldURI="item:Attachments"/><t:FieldURI FieldURI="message:InternetMessageId"/><t:FieldURI FieldURI="message:References"/><t:FieldURI FieldURI="message:ReplyTo"/></t:AdditionalProperties></m:ItemShape><m:ItemIds><t:ItemId Id="${esc(id)}"/></m:ItemIds></m:GetItem>`, 40000);
+  return ewsGetById(acct, id, imapPath, uid, picUrl);
+}
+
+/** the EWS id of an email by its Message-ID (in the folder it was listed in, else the Inbox and Sent) */
+export const ewsFindByMessageId = findItem;
+
+/** one email by its EWS id, shaped like the IMAP reader's (see ewsMessage) */
+export async function ewsGetById(acct: MailAccount, id: string, imapPath: string, uid: number, picUrl: (id: string) => string): Promise<(FullMsg & { ews: EwsAtt[]; read: boolean }) | null> {
+  const x = await call(acct, `<m:GetItem><m:ItemShape><t:BaseShape>Default</t:BaseShape><t:BodyType>HTML</t:BodyType><t:AdditionalProperties><t:FieldURI FieldURI="item:Body"/><t:FieldURI FieldURI="item:Attachments"/><t:FieldURI FieldURI="message:InternetMessageId"/><t:FieldURI FieldURI="message:References"/><t:FieldURI FieldURI="message:ReplyTo"/><t:FieldURI FieldURI="message:IsRead"/></t:AdditionalProperties></m:ItemShape><m:ItemIds><t:ItemId Id="${esc(id)}"/></m:ItemIds></m:GetItem>`, 40000);
   const box = (xml: string) => all(xml, "Mailbox").map((m) => ({ name: unesc(one(m.inner, "Name")), addr: unesc(one(m.inner, "EmailAddress")).toLowerCase() }));
   const fmt = (l: { name: string; addr: string }[]) => l.map((p) => (p.name && p.name !== p.addr ? `"${p.name}" <${p.addr}>` : p.addr)).join(", ");
   const from = box(one(x, "From"))[0] || { name: "", addr: "" };
@@ -113,7 +121,7 @@ export async function ewsMessage(acct: MailAccount, imapPath: string, uid: numbe
     subject: unesc(one(x, "Subject")), date: one(x, "DateTimeSent") || one(x, "DateTimeReceived"), html, text,
     // attachments: numbered after the IMAP ones would be; opened by their EWS id (see ewsAttachment)
     attachments: listed.map((a, i) => ({ i: 1000 + i, name: a.name, size: a.size, type: a.type, ews: a.id })),
-    ews: atts,
+    ews: atts, read: one(x, "IsRead") === "true",
   };
 }
 

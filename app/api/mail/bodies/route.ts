@@ -23,6 +23,8 @@ export async function GET(req: Request) {
     if (Date.now() > deadline - 40000) break;
     const { count } = await admin.from("mail_cache").select("id", { count: "exact", head: true }).eq("account_id", a.id).is("gone_at", null).is("body_html", null).is("body_fixed_at", null).lt("body_tries", 6).or("body_text.is.null,body_text.eq.,size.gt.200000");
     const t0 = Date.now();
+    // a mailbox EWS didn't work for: check again (it switches over by itself once EWS is turned on)
+    try { const { recheckEws } = await import("@/lib/mail/ewsBox"); await recheckEws(admin, a); } catch { /* next time */ }
     // over EWS first (several a minute); the mailbox connection only for what EWS can't do
     if (count) try { for (let i = 0; i < 8 && Date.now() < deadline - 60000; i++) await fixBodiesEws(admin, a, Date.now() + 20000); } catch { /* falls through to IMAP */ }
     const { data: k } = await admin.from("app_keys").select("value").eq("name", "ews").maybeSingle();

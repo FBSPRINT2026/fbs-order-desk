@@ -95,10 +95,12 @@ export default function InboxView({ mode }: { mode: Mode }) {
     setFBusy(false);
   };
   const [olderBusy, setOlderBusy] = useState(false);
+  // searched over EWS (Oct 14): the whole mailbox, every year, at once — no "last 45 days" / "search older mail"
+  const [searchAll, setSearchAll] = useState(false);
   const runSearch = async (term: string) => {
     if (term.trim().length < 2) return;
     setView({ kind: "search", q: term.trim() }); setConvos(null); setCSel(null); setSNote(""); setPicked(false);
-    try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean }>({ do: "search", q: term.trim() }); setConvos(r.convos); }
+    try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; all?: boolean }>({ do: "search", q: term.trim() }); setConvos(r.convos); setSearchAll(!!r.all); if (r.all && r.partial) setSNote("Some folders didn't answer, so there may be more."); }
     catch (e) { setConvos([]); setSNote(e instanceof Error ? e.message : String(e)); }
   };
   // past the 45 days: searched live on request, added to the list
@@ -407,8 +409,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
             {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={pickFolderRow}
               onSwipe={(r, to) => quickMove(r.folder, r.uid, to, () => { setFRows((x) => (x || []).filter((y) => !(y.uid === r.uid && y.folder === r.folder))); if (fSel?.uid === r.uid && fSel.folder === r.folder) setFSel(null); })} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={!!fMore} loading={fBusy} onMore={() => fMore && void openFolder(view.path, fMore)} /></>
-            : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? <div className="ibx2-none">Nothing in the last 45 days for “{view.q}”.{sNote ? ` ${sNote}` : ""}<div style={{ marginTop: 10 }}><button type="button" className="btn sm" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail…" : "Search older mail"}</button></div></div> : <><div className="faint mf-note">Last 45 days.</div><ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} />
-              <div className="mf-older-s">{sNote && <div className="faint">{sNote}</div>}<button type="button" className="btn sm ghost" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail… (up to a minute)" : "Search older mail too"}</button></div></>)
+            : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? (searchAll ? <div className="ibx2-none">Nothing in your mailbox for “{view.q}”.{sNote ? ` ${sNote}` : ""}</div> : <div className="ibx2-none">Nothing in the last 45 days for “{view.q}”.{sNote ? ` ${sNote}` : ""}<div style={{ marginTop: 10 }}><button type="button" className="btn sm" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail…" : "Search older mail"}</button></div></div>) : <><div className="faint mf-note">{searchAll ? "Your whole mailbox, newest first." : "Last 45 days."}</div><ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} />
+              <div className="mf-older-s">{sNote && <div className="faint">{sNote}</div>}{!searchAll && <button type="button" className="btn sm ghost" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail… (up to a minute)" : "Search older mail too"}</button>}</div></>)
             : tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : <>
               { !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
               : olGroups.map((g) => {

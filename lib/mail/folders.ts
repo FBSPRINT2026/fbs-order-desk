@@ -18,7 +18,7 @@ export type MsgRow = { folder: string; uid: number; messageId: string; inReplyTo
 const lc = (s?: string | null) => (s || "").trim().toLowerCase();
 const mid = (s?: string | null) => (s || "").trim().replace(/^<|>$/g, "");
 // folders that aren't mail to browse
-const SKIP = /^(calendar|contacts|tasks|notes|journal|sync issues|conversation history|rss feeds|outbox|suggested contacts|conflicts|local failures|server failures)(\/|$)/i;
+export const SKIP = /^(calendar|contacts|tasks|notes|journal|sync issues|conversation history|rss feeds|outbox|suggested contacts|conflicts|local failures|server failures)(\/|$)/i;
 
 /**
  * One connection to the mailbox for the work in fn, always closed after. `until` (default 45 s from now) is a hard
@@ -177,7 +177,13 @@ export async function moveMessage(admin: SupabaseClient, acct: MailAccount, c: I
     messageId = mid(m && m.envelope ? m.envelope.messageId : "");
     await c.messageMove(String(uid), dest, { uid: true });
   } finally { lock.release(); }
-  if (/^inbox$/i.test(path) && messageId) {
+  if (/^inbox$/i.test(path) && messageId) await afterInboxMove(admin, acct, messageId, dest, by);
+  return { dest };
+}
+
+/** an email moved out of the Inbox (by IMAP or EWS): the Inbox mirror and the email's to-dos follow */
+export async function afterInboxMove(admin: SupabaseClient, acct: MailAccount, messageId: string, dest: string, by: string) {
+  {
     const now = new Date().toISOString();
     const { data: rows } = await admin.from("mail_inbox").select("id, activity_id").eq("account_id", acct.id).eq("message_id", messageId).is("gone_at", null);
     for (const r of (rows || []) as { id: string; activity_id: string | null }[]) {
@@ -189,7 +195,6 @@ export async function moveMessage(admin: SupabaseClient, acct: MailAccount, c: I
       }
     }
   }
-  return { dest };
 }
 
 export type Convo = { key: string; subject: string; people: string[]; last: string; count: number; unread: number; msgs: MsgRow[] };
