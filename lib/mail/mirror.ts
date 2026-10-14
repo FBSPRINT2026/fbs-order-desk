@@ -274,3 +274,29 @@ export async function archiveInbox(admin: SupabaseClient, acct: MailAccount, row
   await admin.from("tasks").update({ status: "done", done_at: now, done_by: ARCHIVED }).eq("mail_inbox_id", r.id).eq("status", "open");
   if (r.activity_id) await archiveActs(admin, [r.activity_id], now);
 }
+
+/**
+ * Emails in the Inbox from someone who wasn't a customer when they came in, and is now (Oct 14: Cheri Ong's Mewjira
+ * reprint showed "New sender" because she was added as a Furry Feline contact afterwards): linked to that customer
+ * when the Inbox list loads, by the same matching as new mail (email, contact, Printavo, company domain). At most every
+ * minute a mailbox; only emails still in the Inbox.
+ */
+const relinked = new Map<string, number>();
+export async function relinkInboxLeads(admin: SupabaseClient, acct: Pick<MailAccount, "id">) {
+  if (Date.now() - (relinked.get(acct.id) || 0) < 60000) return 0;
+  relinked.set(acct.id, Date.now());
+  const { data: rows } = await admin.from("mail_inbox").select("activity_id").eq("account_id", acct.id).is("gone_at", null).not("activity_id", "is", null).limit(300);
+  const ids = [...new Set(((rows || []) as { activity_id: string }[]).map((r) => r.activity_id))];
+  if (!ids.length) return 0;
+  const { data: acts } = await admin.from("activities").select("id, from_email, meta").in("id", ids).is("customer_id", null).eq("direction", "in").limit(100);
+  if (!acts?.length) return 0;
+  const { matchAddress } = await import("./process");
+  let n = 0;
+  for (const a of acts as { id: string; from_email: string; meta: Record<string, unknown> | null }[]) {
+    const m = await matchAddress(admin, a.from_email).catch(() => null);
+    if (!m?.customerId || m.ignore) continue;
+    const { error } = await admin.from("activities").update({ customer_id: m.customerId, meta: { ...(a.meta || {}), lead: false, linked_by: m.how || "match" } }).eq("id", a.id).is("customer_id", null);
+    if (!error) n++;
+  }
+  return n;
+}

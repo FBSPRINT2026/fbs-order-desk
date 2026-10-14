@@ -130,9 +130,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   const notes = [d.notes, reorderOf && fromLabel ? `Reorder of ${fromLabel}.` : ""].filter(Boolean).join(" ").slice(0, 2000);
   // a program customer (Oct 14: Furry Feline's Mewjira reprint from Cheri's email): the order starts on Program, so the
   // order page prices it from their design prices / rate card, or recommends a price for a new quantity
-  const { data: prog } = await admin.from("programs").select("id, rate_card").eq("customer_id", custId).limit(1).maybeSingle();
-  const { count: progItems } = prog ? await admin.from("program_items").select("id", { count: "exact", head: true }).eq("program_id", prog.id).eq("active", true).is("archived_at", null) : { count: 0 };
-  const useProgram = !!prog && (!!progItems || !!prog.rate_card);
+  const useProgram = await customerUsesProgram(admin, custId);
   const { data: o, error } = await admin.from("orders").insert({
     customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
     nickname: (d.nickname || "").slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
@@ -212,4 +210,14 @@ export function confirmationReply(o: { number: number; id: string; nickname: str
     "FBS Print",
   ].join("\n");
   return { label: "Order confirmation", subject: o.subject.toLowerCase().startsWith("re:") ? o.subject : `Re: ${o.subject}`, body };
+}
+
+/** does this customer have program pricing (a rate card or design prices)? New orders for them start on Program. */
+export async function customerUsesProgram(admin: SupabaseClient, customerId: string | null | undefined) {
+  if (!customerId) return false;
+  const { data: prog } = await admin.from("programs").select("id, rate_card").eq("customer_id", customerId).limit(1).maybeSingle();
+  if (!prog) return false;
+  if (prog.rate_card) return true;
+  const { count } = await admin.from("program_items").select("id", { count: "exact", head: true }).eq("program_id", prog.id).eq("active", true).is("archived_at", null);
+  return !!count;
 }

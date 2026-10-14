@@ -152,8 +152,10 @@ export async function quoteFromSuggestion(suggestionId: string) {
     if (!groups.length) return { ok: false as const, error: "This suggestion has no order in it." };
     const p = (sg.payload?.proposal || {}) as ProposedOrder;
     const { data: cust } = sg.customer_id ? await admin.from("customers").select("price_type,tax_exempt").eq("id", sg.customer_id).maybeSingle() : { data: null };
+    const { customerUsesProgram } = await import("@/lib/emailOrderCreate");
+    const useProgram = await customerUsesProgram(admin, sg.customer_id as string | null);
     const { data, error } = await admin.from("orders").insert({
-      customer_id: sg.customer_id, status: "quote", type: "quote", source: "email", groups, lines: [],
+      customer_id: sg.customer_id, status: "quote", type: "quote", source: "email", groups, lines: [], use_program: useProgram,
       nickname: (p.nickname || "").slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(p.due_date || "") ? p.due_date : null,
       notes: (p.notes || "").slice(0, 2000), po_number: (p.po_number || "").slice(0, 60),
       delivery_method: p.delivery && ["pickup", "ship", "deliver"].includes(p.delivery) ? p.delivery : "pickup", ship_to: (p.ship_to || "").slice(0, 500),
