@@ -31,7 +31,17 @@ export type RateCard = {
   sizeUp: Partial<Record<"2XL" | "3XL" | "4XL" | "5XL", number>>;
   /** price per piece by front colors / back colors: "1/0", "1/1", "2/1"… */
   prices: Record<string, number>;
+  /** rules that apply to every job on Program, whatever the print */
+  /** price per screen instead of the price list's (Tiger Blue: $15, they supply print-ready separations) */
+  screenFee?: number | null;
+  /** parts of the deal the card can't hold yet, in plain words: shown on every order set to Program */
+  extras?: string[];
+  /** the deal in the account manager's words, newest first (kept from the Program tab's AI box) */
+  about?: { text: string; by: string; at: string }[];
 };
+/** does the card set anything? (prices, or a rule) */
+export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.extras?.length);
+export const cardHasPrices = (c: RateCard | null | undefined) => !!c && Object.values(c.prices || {}).some((x) => +x > 0);
 export const BIG_SIZES = ["2XL", "3XL", "4XL", "5XL"] as const;
 export const newRateCard = (): RateCard => ({ base: { brand: "Next Level", style: "6210" }, markup: 1.2, minQty: 50, waiveSetup: true, garmentIncluded: true, sizeUp: { "2XL": 2.5, "3XL": 2.5, "4XL": 2.5, "5XL": 2.5 }, prices: {} });
 export const FRONTS = [1, 2, 3, 4, 5, 6], BACKS = [0, 1, 2, 3, 4, 5, 6];

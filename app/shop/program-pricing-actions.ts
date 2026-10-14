@@ -2,7 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewerPerms } from "@/lib/access";
-import type { DesignPrice, RateCard } from "@/lib/programs";
+import { cardSetsAnything, type DesignPrice, type RateCard } from "@/lib/programs";
 
 /**
  * Program pricing on the order page (Oct 14, Nick): the customer's rate card (with the base shirt's blank cost now),
@@ -28,7 +28,7 @@ export async function programCard(customerId: string) {
     const { data: its } = await admin.from("program_items").select("id, name, style, price, min_qty, design_id, active").eq("program_id", p.id).eq("active", true);
     const items = ((its || []) as DesignPrice[]).filter((x) => +x.price > 0);
     let card = (p.rate_card || null) as RateCard | null;
-    if (card && !Object.values(card.prices || {}).some((x) => +x > 0)) card = null;
+    if (!cardSetsAnything(card)) card = null;
     let baseCost: number | null = null;
     if (card) {
       const { data: g } = await admin.from("garments").select("cost, brand").ilike("style", card.base.style.trim()).limit(5);
@@ -76,5 +76,149 @@ export async function pastPricesForDesign(input: { customerId: string; orderId: 
     }
     rows.sort((a, b) => b.date.localeCompare(a.date));
     return { ok: true as const, rows: rows.slice(0, 10), keys };
+  } catch (e) { return fail(e); }
+}
+
+/* ───────── the Program tab's AI box (Oct 14, Nick: "an AI chat box where the account managers can explain the special
+   pricing they get, then you set it for their account" — e.g. Tiger Blue: always $15 a screen, they supply print-ready
+   separations). The AI proposes; nothing changes until someone presses Apply. ───────── */
+export type ProgramProposal = {
+  summary: string;
+  card?: { base_brand?: string; base_style?: string; garment_included?: boolean; markup?: number; min_qty?: number; waive_setup?: boolean;
+    screen_fee?: number | null; size_up?: Partial<Record<"2XL" | "3XL" | "4XL" | "5XL", number>>; prices?: { front: number; back: number; price: number }[] };
+  design_prices?: { name: string; price: number; min_qty?: number; style?: string; front_colors?: number; back_colors?: number; notes?: string }[];
+  not_supported?: string[];
+  questions?: string[];
+};
+
+const PROPOSAL_TOOL = {
+  name: "set_program",
+  description: "The program pricing settings to propose for this customer, from what the account manager said.",
+  input_schema: {
+    type: "object",
+    properties: {
+      summary: { type: "string", description: "One to three plain sentences: what will be set, in the shop's words (e.g. 'Screens at $15 each on every job, because they supply print-ready separations.')." },
+      card: {
+        type: "object", description: "Only the rate card fields the account manager's words set or change. Leave out anything not mentioned.",
+        properties: {
+          base_brand: { type: "string" }, base_style: { type: "string", description: "the base shirt the per-piece prices are for, e.g. 6210" },
+          garment_included: { type: "boolean", description: "true: prices include the shirt; false: print only (they supply shirts)" },
+          markup: { type: "number", description: "multiplier on the blank-cost difference for other shirts, e.g. 1.2" },
+          min_qty: { type: "integer", description: "minimum pieces per job for program per-piece prices" },
+          waive_setup: { type: "boolean", description: "no setup charge on program jobs" },
+          screen_fee: { type: ["number", "null"], description: "price per screen on every job (null removes the rule)" },
+          size_up: { type: "object", properties: { "2XL": { type: "number" }, "3XL": { type: "number" }, "4XL": { type: "number" }, "5XL": { type: "number" } } },
+          prices: { type: "array", description: "per-piece price by front colors / back colors (back 0 = no back print)", items: { type: "object", properties: { front: { type: "integer" }, back: { type: "integer" }, price: { type: "number" } }, required: ["front", "back", "price"] } },
+        },
+      },
+      design_prices: { type: "array", description: "a specific design's own price at a quantity (e.g. 'Mewjira 200 at $5.50')", items: { type: "object", properties: {
+        name: { type: "string" }, price: { type: "number" }, min_qty: { type: "integer" }, style: { type: "string" }, front_colors: { type: "integer" }, back_colors: { type: "integer" }, notes: { type: "string" } }, required: ["name", "price"] } },
+      not_supported: { type: "array", items: { type: "string" }, description: "parts of the deal these settings can't hold yet (they'll be kept as a note for whoever prices the order)" },
+      questions: { type: "array", items: { type: "string" }, description: "what's unclear and needed to set it exactly (only if truly needed)" },
+    },
+    required: ["summary"],
+  },
+};
+
+/** their last 18 months on Printavo, boiled down: per-piece prices by style and print, and the fees charged */
+async function historyBrief(admin: ReturnType<typeof createAdminClient>, customerId: string) {
+  const since = new Date(Date.now() - 548 * 864e5).toISOString().slice(0, 10);
+  const { data } = await admin.from("archived_orders").select("visual_id, order_date, nickname, data").eq("customer_id", customerId).eq("kind", "invoice").gte("order_date", since).order("order_date", { ascending: false }).limit(80);
+  type PvLine = { itemNumber?: string; items?: number; price?: number; description?: string };
+  type PvData = { groups?: { lines?: PvLine[] }[]; fees?: { description?: string; unitPrice?: number }[] };
+  const lines = new Map<string, { n: number; min: number; max: number; qmin: number; qmax: number }>(), fees = new Map<string, number>();
+  for (const o of (data || []) as { data: PvData }[]) {
+    for (const l of (o.data?.groups || []).flatMap((g) => g.lines || [])) {
+      if (!(+(l.items || 0) > 0)) continue;
+      const deco = (l.description || "").split(/\r?\n/).slice(1).join(" ").trim().slice(0, 60);
+      const k = `${(l.itemNumber || "?").trim()} | ${deco || "?"}`, p = +(l.price || 0), q = +(l.items || 0);
+      const x = lines.get(k) || { n: 0, min: p, max: p, qmin: q, qmax: q };
+      x.n++; x.min = Math.min(x.min, p); x.max = Math.max(x.max, p); x.qmin = Math.min(x.qmin, q); x.qmax = Math.max(x.qmax, q); lines.set(k, x);
+    }
+    for (const f of o.data?.fees || []) { const k = `${(f.description || "Fee").trim()} @ $${(+(f.unitPrice || 0)).toFixed(2)}`; fees.set(k, (fees.get(k) || 0) + 1); }
+  }
+  const top = [...lines.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 25).map(([k, x]) => `- ${k}: ${x.n} orders, $${x.min.toFixed(2)}–$${x.max.toFixed(2)} each, ${x.qmin}–${x.qmax} pcs`);
+  const fz = [...fees.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, n]) => `- ${k}: ${n} orders`);
+  return `${(data || []).length} invoices in the last 18 months.\nLines (style | print: orders, price range, qty range):\n${top.join("\n") || "- none"}\nFees:\n${fz.join("\n") || "- none"}`;
+}
+
+export async function programAssist(input: { customerId: string; text: string }) {
+  try {
+    const { admin } = await me();
+    const v = await getViewer(", name");
+    const text = input.text.trim().slice(0, 3000);
+    if (!text) return { ok: false as const, error: "Say what their deal is first." };
+    const { aiState, askClaude } = await import("@/lib/ai/claude");
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false as const, error: st.reason || "AI isn't set up." };
+    const [{ data: c }, { data: p }] = await Promise.all([
+      admin.from("customers").select("company, name, price_type").eq("id", input.customerId).maybeSingle(),
+      admin.from("programs").select("id, rate_card").eq("customer_id", input.customerId).order("created_at").limit(1).maybeSingle(),
+    ]);
+    if (!c) return { ok: false as const, error: "Customer not found." };
+    const { data: its } = p ? await admin.from("program_items").select("name, price, min_qty, style, notes, active").eq("program_id", p.id) : { data: [] };
+    const s = st.settings;
+    const system = [
+      "You set up program (special) pricing for a customer of FBS Print, a screen printing and embroidery shop in Richardson, Texas.",
+      "An account manager describes the customer's deal in their own words. Turn it into the settings below, exactly as said. Never invent a number they didn't give.",
+      "If they say to use the customer's history, read the history given and say in the summary which numbers came from it.",
+      "What the settings can hold:",
+      "- Rules on every job while the order is set to Program: screen_fee (price per screen, replaces the normal screen charge), waive_setup.",
+      "- A rate card: per-piece prices by front colors / back colors on a base shirt (garment_included true) or print only (false, they supply shirts); markup on the blank-cost difference for other shirts; a minimum qty; 2XL+ per-piece charges.",
+      "- Design prices: one design's own price at a minimum qty.",
+      "Anything else (PMS, ink changes, discounts on embroidery, rush, shipping…) goes in not_supported, in plain words.",
+      `The shop's normal setup: retail charges $${(+s.screenFee || 0).toFixed(2)} a screen; wholesale (contract) $${(+(s.wholesale?.screenFee || 0)).toFixed(2)} a screen, remakes $${(+(s.wholesale?.remakeFee || 0)).toFixed(2)}.`,
+      "Write the summary in plain, short sentences a shop owner would use.",
+    ].join("\n");
+    const prompt = [
+      `Customer: ${c.company || c.name} (normally priced as ${c.price_type || "retail"}).`,
+      `Their program now: ${p?.rate_card ? JSON.stringify(p.rate_card) : "none"}.`,
+      `Design prices now: ${(its || []).length ? JSON.stringify(its) : "none"}.`,
+      `\nTheir pricing history:\n${await historyBrief(admin, input.customerId)}`,
+      `\nWhat the account manager (${v.email}) says:\n"""${text}"""`,
+    ].join("\n");
+    const r = await askClaude<ProgramProposal>({ task: "program_assist", model: s.assistant.ai.model, system, prompt, tool: PROPOSAL_TOOL, maxTokens: 2000, timeoutMs: 55_000, admin, ctx: { customer_id: input.customerId, by: v.email } });
+    if (!r.ok) return { ok: false as const, error: r.error };
+    return { ok: true as const, proposal: r.data };
+  } catch (e) { return fail(e); }
+}
+
+/** Apply: the proposal goes on their program (made if they don't have one; their portal order form stays off) */
+export async function applyProgramProposal(input: { customerId: string; proposal: ProgramProposal; text: string }) {
+  try {
+    const { admin } = await me();
+    const v = await getViewer(", name");
+    const { newRateCard } = await import("@/lib/programs");
+    let { data: p } = await admin.from("programs").select("id, rate_card").eq("customer_id", input.customerId).order("created_at").limit(1).maybeSingle();
+    if (!p) {
+      const ins = await admin.from("programs").insert({ customer_id: input.customerId, name: "Program", notes: "", active: false, rate_card: null }).select("id, rate_card").single();
+      if (ins.error) return { ok: false as const, error: ins.error.message };
+      p = ins.data;
+    }
+    const pc = input.proposal.card || {};
+    const had = (p!.rate_card || null) as RateCard | null;
+    const card: RateCard = had ? { ...had, prices: { ...(had.prices || {}) }, sizeUp: { ...(had.sizeUp || {}) } } : { ...newRateCard(), waiveSetup: false };
+    if (pc.base_brand != null) card.base = { ...card.base, brand: pc.base_brand };
+    if (pc.base_style != null) card.base = { ...card.base, style: pc.base_style };
+    if (pc.garment_included != null) card.garmentIncluded = pc.garment_included;
+    if (pc.markup != null && pc.markup > 0) card.markup = pc.markup;
+    if (pc.min_qty != null) card.minQty = Math.max(0, Math.round(pc.min_qty));
+    if (pc.waive_setup != null) card.waiveSetup = pc.waive_setup;
+    if (pc.screen_fee !== undefined) { if (pc.screen_fee == null) delete card.screenFee; else { card.screenFee = Math.round(pc.screen_fee * 100) / 100; card.waiveSetup = false; } }
+    for (const [z, n] of Object.entries(pc.size_up || {})) if (n != null) card.sizeUp[z as "2XL"] = Math.round(+n * 100) / 100;
+    for (const x of pc.prices || []) if (x.front >= 1 && x.back >= 0 && x.price > 0) card.prices[`${Math.round(x.front)}/${Math.round(x.back)}`] = Math.round(x.price * 100) / 100;
+    if (input.proposal.not_supported?.length) card.extras = [...new Set([...(card.extras || []), ...input.proposal.not_supported.map((x) => x.trim().slice(0, 200)).filter(Boolean)])].slice(0, 12);
+    card.about = [{ text: input.text.trim().slice(0, 2000), by: v.email, at: new Date().toISOString() }, ...(card.about || [])].slice(0, 20);
+    const up = await admin.from("programs").update({ rate_card: card }).eq("id", p!.id);
+    if (up.error) return { ok: false as const, error: up.error.message };
+    const { count } = await admin.from("program_items").select("id", { count: "exact", head: true }).eq("program_id", p!.id);
+    let pos = count || 0;
+    for (const d of input.proposal.design_prices || []) {
+      if (!d.name?.trim() || !(d.price > 0)) continue;
+      const imps = [{ location: "Full Front", method: "screen", colors: Math.max(1, d.front_colors || 1), inks: "", size: "", notes: "" }, ...(d.back_colors ? [{ location: "Full Back", method: "screen", colors: d.back_colors, inks: "", size: "", notes: "" }] : [])];
+      await admin.from("program_items").insert({ program_id: p!.id, name: d.name.trim().slice(0, 120), style: (d.style || "").slice(0, 40), brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"],
+        price: Math.round(d.price * 100) / 100, min_qty: Math.max(0, Math.round(d.min_qty || 0)), imprints: imps, design_id: null, image_path: "", notes: (d.notes || "").slice(0, 300), active: true, position: pos++ });
+    }
+    return { ok: true as const };
   } catch (e) { return fail(e); }
 }

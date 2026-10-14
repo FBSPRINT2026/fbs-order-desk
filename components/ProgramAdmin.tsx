@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
+import { applyProgramProposal, programAssist, type ProgramProposal } from "@/app/shop/program-pricing-actions";
 import { LOCATIONS } from "@/lib/pricing";
 import { BIG_SIZES, BACKS, FRONTS, newRateCard, PROGRAM_SIZES, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
 
@@ -20,6 +21,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
   const [imgs, setImgs] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
   const [state, setState] = useState("");
+  const [ver, setVer] = useState(0);
   const load = useCallback(async () => {
     const [{ data: ps }, { data: ds }] = await Promise.all([
       sb.from("programs").select("*").eq("customer_id", customerId).order("created_at").limit(1),
@@ -34,7 +36,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       const paths = list.filter((i) => i.image_path).map((i) => i.image_path);
       if (paths.length) { const { data: sg } = await sb.storage.from("proofs").createSignedUrls(paths, 3600); setImgs(Object.fromEntries(paths.map((pth, i) => [pth, sg?.[i]?.signedUrl || ""]))); }
     }
-    setLoaded(true);
+    setLoaded(true); setVer((x) => x + 1);
   }, [customerId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
 
@@ -43,11 +45,14 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
 
   if (!loaded) return <div className="gb-empty">Loading…</div>;
   if (!program) return (
+    <div className="pga">
+    <ProgramAssist customerId={customerId} about={[]} onApplied={load} />
     <div className="pg-none">
       <div className="pg-none-ic" aria-hidden="true">★</div>
       <h3>No program yet</h3>
       <p>Set up program pricing for this customer: their own price for each print (1/1, 2/1, 3/3…) on a base shirt, with a minimum. On an order, pick <b>Program</b> next to Retail / Wholesale and the prices fill in.</p>
-      <button type="button" className="btn primary" onClick={async () => { await sb.from("programs").insert({ customer_id: customerId, name: "Program", active: false, rate_card: newRateCard() }); load(); }}>Set up program pricing</button>
+      <button type="button" className="btn primary" onClick={async () => { await sb.from("programs").insert({ customer_id: customerId, name: "Program", active: false, rate_card: newRateCard() }); load(); }}>Set it up by hand</button>
+    </div>
     </div>
   );
   return (
@@ -55,7 +60,8 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       <div className="aa-bar"><div className="aa-bar-l"><h2>Program pricing</h2><span className="aa-sum">{items.filter((i) => i.active).length} active item{items.length === 1 ? "" : "s"} · {state || "Saves as you type"}</span></div>
         <label className="check"><input type="checkbox" checked={program.active} onChange={(e) => saveProgram({ active: e.target.checked })} /> Show in their portal</label>
       </div>
-      <RateCardEditor card={program.rate_card || null} onSave={(rate_card) => saveProgram({ rate_card })} />
+      <ProgramAssist customerId={customerId} about={program.rate_card?.about || []} onApplied={load} />
+      <RateCardEditor key={ver} card={program.rate_card || null} onSave={(rate_card) => saveProgram({ rate_card })} />
       <h3 className="pga-sub">Prices by design <span className="faint">(a design's own price at a quantity: on an order set to Program it wins over the rate card; also their portal order form)</span></h3>
       <div className="pga-head">
         <label>Program name<input type="text" value={program.name} onChange={(e) => saveProgram({ name: e.target.value })} placeholder="e.g. Two Men Moving: crew apparel" /></label>
@@ -186,6 +192,69 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
         </table>
       </div>
       {ex && cost != null && <p className="faint rc-ex">Example: a shirt whose blank costs {money(cost + 2)} on a 1/1 = {money(ex)} + ({money(cost + 2)} − {money(cost)}) × {c.markup} = <b>{money(Math.round((ex + 2 * c.markup) * 100) / 100)}</b>. A cheaper shirt comes down the same way.</p>}
+    </section>
+  );
+}
+
+/**
+ * The AI box (Oct 14, Nick): the account manager says the deal in their own words ("Tiger Blue: always $15 a screen,
+ * they supply print-ready separations"); the AI proposes the exact settings; Apply puts them on the program.
+ */
+function ProgramAssist({ customerId, about, onApplied }: { customerId: string; about: { text: string; by: string; at: string }[]; onApplied: () => void }) {
+  const [text, setText] = useState(""), [busy, setBusy] = useState(""), [err, setErr] = useState("");
+  const [p, setP] = useState<{ proposal: ProgramProposal; text: string } | null>(null);
+  const ask = async () => {
+    if (!text.trim() || busy) return;
+    setBusy("ask"); setErr(""); setP(null);
+    const r = await programAssist({ customerId, text }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+    setBusy("");
+    if (!r.ok) { setErr(r.error); return; }
+    setP({ proposal: r.proposal, text });
+  };
+  const apply = async () => {
+    if (!p) return;
+    setBusy("apply"); setErr("");
+    const r = await applyProgramProposal({ customerId, proposal: p.proposal, text: p.text }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+    setBusy("");
+    if (!r.ok) { setErr(r.error); return; }
+    setP(null); setText(""); onApplied();
+  };
+  const c = p?.proposal.card, ds = p?.proposal.design_prices || [];
+  const changes: string[] = [];
+  if (c) {
+    if (c.screen_fee !== undefined) changes.push(c.screen_fee == null ? "Remove the price per screen" : `Screens: ${money(c.screen_fee)} each, on every job`);
+    if (c.waive_setup != null) changes.push(c.waive_setup ? "No setup charge" : "Setup charged");
+    if (c.base_style || c.base_brand) changes.push(`Base shirt: ${[c.base_brand, c.base_style].filter(Boolean).join(" ")}`);
+    if (c.garment_included != null) changes.push(c.garment_included ? "Prices include the shirt" : "Print only (they supply shirts)");
+    if (c.markup != null) changes.push(`Other shirts: blank-cost difference × ${c.markup}`);
+    if (c.min_qty != null) changes.push(`Minimum ${c.min_qty} pieces`);
+    for (const [z, n] of Object.entries(c.size_up || {})) changes.push(`${z}: ${money(+(n || 0))} a piece`);
+    for (const x of c.prices || []) changes.push(`${x.front}/${x.back}: ${money(x.price)} a piece`);
+  }
+  for (const d of ds) changes.push(`${d.name}: ${money(d.price)} a piece${d.min_qty ? ` at ${d.min_qty}+` : ""}`);
+  return (
+    <section className="pas">
+      <div className="pas-h"><span className="pas-ic" aria-hidden>✦</span><div><h3>Tell the AI their deal</h3><p className="faint">In your own words. It proposes the settings; nothing changes until you press Apply.</p></div></div>
+      <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={"e.g. Tiger Blue always pays $15 a screen because they send print-ready separations.\ne.g. Peticolas: 1/1 on a 6210 is $11.50 at 50+, 2/2 is $12.50, no setup, other shirts the difference × 1.2."}
+        onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void ask(); }} />
+      <div className="pas-row"><button type="button" className="btn primary" disabled={!text.trim() || !!busy} onClick={() => void ask()}>{busy === "ask" ? "Working it out…" : "Set it up"}</button>{err && <span className="pas-err">{err}</span>}</div>
+      {p && (
+        <div className="pas-prop">
+          <p className="pas-sum">{p.proposal.summary}</p>
+          {changes.length > 0 && <ul className="pas-list">{changes.map((x) => <li key={x}>{x}</li>)}</ul>}
+          {!!p.proposal.not_supported?.length && <div className="pas-note"><b>Kept as a note on their orders</b> (the settings can't do these yet):<ul>{p.proposal.not_supported.map((x) => <li key={x}>{x}</li>)}</ul></div>}
+          {!!p.proposal.questions?.length && <div className="pas-note"><b>To set it exactly:</b><ul>{p.proposal.questions.map((x) => <li key={x}>{x}</li>)}</ul></div>}
+          <div className="pas-row">
+            <button type="button" className="btn primary" disabled={!!busy || (!changes.length && !p.proposal.not_supported?.length)} onClick={() => void apply()}>{busy === "apply" ? "Applying…" : "Apply"}</button>
+            <button type="button" className="btn ghost" disabled={!!busy} onClick={() => setP(null)}>Discard</button>
+          </div>
+        </div>
+      )}
+      {about.length > 0 && (
+        <details className="pas-about"><summary>What's been said about their deal ({about.length})</summary>
+          <ul>{about.map((a, i) => <li key={i}><span className="faint">{new Date(a.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {a.by.split("@")[0]}</span> {a.text}</li>)}</ul>
+        </details>
+      )}
     </section>
   );
 }

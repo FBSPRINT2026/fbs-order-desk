@@ -109,7 +109,9 @@ export type Group = { id: string; name?: string; lines: GLine[]; imprints: Impri
    *  Set from the garments' fabric by the order editor unless staff set it by hand (specialtyInkSet) */ specialtyInk?: boolean;
   /** staff ticked / unticked specialty ink themselves: the garments no longer decide */ specialtyInkSet?: boolean;
   /** why specialty ink was picked automatically ("ST350: 100% polyester") */ fabricNote?: string;
-  /** the screens are on file from an earlier order: remake price instead of new setup */ remake?: boolean };
+  /** the screens are on file from an earlier order: remake price instead of new setup */ remake?: boolean;
+  /** price per screen from the customer's program (Oct 14: Tiger Blue pays $15 a screen, they supply separations);
+   *  set by the order page while Program is on, instead of the price list's screen fee */ screenFee?: number };
 export type PriceType = "retail" | "wholesale";
 
 /** Older orders stored one garment per line with its own decorations. */
@@ -438,7 +440,7 @@ export function screensFor(d: Imprint, s: Pick<PriceList, "darkAddsColor">, ligh
   return { n: d.screens != null && d.screens > 0 ? d.screens : auto, under, auto };
 }
 
-function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light, x: { eti?: number; remake?: boolean } = {}) {
+function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light, x: { eti?: number; remake?: boolean; screenFee?: number } = {}) {
   const inkFee = num(d.inkChanges) * num(s.inkChangeFee) + (d.method === "screen" ? pmsCount(d) : num(d.pms)) * num(s.pmsFee);
   if (d.method === "screen") {
     const k0 = Math.max(1, num(d.colors) || 1);
@@ -454,7 +456,7 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
     const row = (light && s.screenLight ? s.screenLight : s.screen)[ti] || [];
     const n = Math.min(row.length || 6, k);
     const dtg = s.dtg ? num((dtgLight && s.dtgLight ? s.dtgLight : s.dtg)[ti]) : 0;
-    const fee = (d.remake ?? x.remake) && s.remakeFee != null ? s.remakeFee : s.screenFee;
+    const fee = (d.remake ?? x.remake) && s.remakeFee != null ? s.remakeFee : x.screenFee != null ? x.screenFee : s.screenFee;
     return { each: num(row[n - 1]), setup: Math.min(sc.n, 15) * num(fee), inkFee, dtg, full: false, under, screens: sc.n, custom: k > (row.length || 99) };
   }
   if (d.method === "embroidery") {
@@ -474,7 +476,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const ti = tierIndex(qty, pl);
   // embroidery has its own quantity breaks on contract pricing
   const eti = pl.embTiers?.length ? tierIndex(qty, { tiers: pl.embTiers }) : ti;
-  const ix = { eti, remake: !!g.remake };
+  const ix = { eti, remake: !!g.remake, screenFee: g.screenFee != null && !isNaN(+g.screenFee) ? +g.screenFee : undefined };
   const imprints = (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl, false, false, ix) }));
   // Print price per piece. With a digital (full color) price list, screen prints switch to digital
   // for the whole garment when that is cheaper, or when any location is full color.

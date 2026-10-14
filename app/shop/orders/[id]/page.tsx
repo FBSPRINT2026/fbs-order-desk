@@ -276,6 +276,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     programCard(custId).then((r) => { if (live) setProg(r.ok && (r.card || r.items.length) ? { card: r.card, baseCost: r.baseCost, items: r.items } : null); }, () => live && setProg(null));
     return () => { live = false; };
   }, [custId, seesMoney]);
+  // a new order for a program customer starts on Program (once per order: switching to Retail / Wholesale stays)
+  const autoProg = useRef("");
+  useEffect(() => {
+    if (!o || !prog || autoProg.current === o.id) return;
+    autoProg.current = o.id;
+    const empty = !o.groups.some((g) => g.lines.some((l) => Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
+    if (!o.use_program && empty && ["quote", "request"].includes(o.status)) patch((d) => { d.use_program = true; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [o?.id, prog]);
   /** what a group's design is called, for the designs' own program prices: the order's name and its prints' designs */
   const designCtx = (d: Pick<Order, "nickname">, g: Group): DesignCtx => ({ items: prog?.items || [], text: [d.nickname || "", ...g.imprints.map((x) => designs.find((y) => y.id === x.design_id)?.name || "")].join(" ") });
   // with Program on, each line gets the card's price (GLine.prog, saved as the line's price so every total agrees);
@@ -303,8 +312,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           l.sizeUp = Object.keys(up).length ? up : undefined;
         }
       }));
-      // the card's "no setup": while Program is on, setup is waived when every group is on program prices
-      if (on && (prog!.card ? prog!.card.waiveSetup : true)) {
+      // program rules for every job: the price per screen (Tiger Blue $15) on each group with a screen print
+      d.groups.forEach((g) => {
+        const want = on && prog!.card?.screenFee != null && g.imprints.some((x) => x.method === "screen") ? +prog!.card.screenFee : undefined;
+        if (want == null) { if (g.screenFee != null) delete g.screenFee; } else if (g.screenFee !== want) g.screenFee = want;
+      });
+      // the card's "no setup": while Program is on, setup is waived when every group is on program prices (never when
+      // the card prices the screens)
+      if (on && (prog!.card ? prog!.card.waiveSetup && prog!.card.screenFee == null : true)) {
         const all = d.groups.every((g, gi) => plans[gi]?.ok || !g.lines.some((l) => Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
         if (d.waive_setup !== all) d.waive_setup = all;
       }

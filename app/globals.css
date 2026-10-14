@@ -7088,3 +7088,21 @@ a.pdn-tag:hover{text-decoration:underline}
 .prg-past-t .r{text-align:right;font-variant-numeric:tabular-nums}
 .prg-tag{display:block;font-size:10px;font-weight:700;color:var(--ok);text-align:right;line-height:1;margin-bottom:2px}
 .pre.prg{color:var(--ok)}
+/* the Program tab's AI box (Oct 14) */
+.pas{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:10px}
+.pas-h{display:flex;gap:10px;align-items:flex-start}
+.pas-h h3{margin:0;font-size:16px}
+.pas-h p{margin:2px 0 0;font-size:12.5px}
+.pas-ic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:14px;flex:none}
+.pas textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;font-size:14px;resize:vertical;background:var(--surface)}
+.pas-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pas-err{color:var(--danger);font-size:13px}
+.pas-prop{border-left:3px solid var(--accent);padding:4px 0 4px 12px;display:flex;flex-direction:column;gap:8px}
+.pas-sum{margin:0;font-size:14px}
+.pas-list{margin:0;padding-left:18px;font-size:13.5px}
+.pas-list li{margin:2px 0}
+.pas-note{font-size:13px;color:var(--ink-2)}
+.pas-note ul{margin:4px 0 0;padding-left:18px}
+.pas-about summary{cursor:pointer;font-size:13px;color:var(--ink-2)}
+.pas-about ul{margin:6px 0 0;padding-left:18px;font-size:13px}
+.pas-about li{margin:4px 0}
