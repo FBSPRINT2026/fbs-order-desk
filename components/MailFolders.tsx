@@ -238,13 +238,13 @@ export function PPick({ icon, label, items, empty, extra }: { icon: React.ReactN
   );
 }
 /**
- * Phones (Oct 14, Nick: "reimagine a cleaner look"): five buttons along the bottom, where your thumb is: Archive, Move,
- * Reply, Forward, More. More slides up a sheet with every other button as tiles, under the same section names as the
+ * Phones (Oct 14, Nick: "reimagine a cleaner look"): five buttons along the bottom, where your thumb is: Archive, Black
+ * Hole, Reply, Forward (Nick's pick, Oct 14), More; Move is in More. More slides up a sheet with every other button as tiles, under the same section names as the
  * computer's toolbar (Actions, Messages, Move & spam). The main next step (Create order / reorder) and the Assistant's
  * microphone sit in the AI card at the top of the email. A button an email can't use stays in its place, greyed out.
  */
 function PhoneBar({ a }: { a: PhoneActs }) {
-  const [sheet, setSheet] = useState<"" | "move" | "more">("");
+  const [sheet, setSheet] = useState<"" | "move" | "more" | "bh">("");
   const [askBH, setAskBH] = useState(false);
   const [voice, setVoice] = useState<{ l: ReturnType<typeof startListening> } | null>(null);
   const others = (a.folders || []).filter((f) => f.path !== a.here && !/\\(Drafts|Junk)/.test(f.special));
@@ -256,7 +256,7 @@ function PhoneBar({ a }: { a: PhoneActs }) {
     <>
       <nav className="pbar" aria-label="Email actions">
         <button type="button" className="pbar-b" disabled={off} onClick={() => mv("archive", "Archived.")}>{TbIcon.archive}<span>Archive</span></button>
-        <button type="button" className="pbar-b" disabled={off} onClick={() => setSheet("move")}>{TbIcon.move}<span>Move</span></button>
+        <button type="button" className="pbar-b danger" disabled={off} onClick={() => (a.known ? (setSheet("bh"), setAskBH(true)) : mv("blackhole", bh))}>{TbIcon.ban}<span>Black Hole</span></button>
         <button type="button" className="pbar-b" disabled={!a.reply} onClick={() => { a.reply?.(); window.scrollTo({ top: 0 }); }}>{TbIcon.reply}<span>Reply</span></button>
         <button type="button" className="pbar-b" disabled={!a.forward} onClick={() => a.forward?.()}>{TbIcon.forward}<span>Forward</span></button>
         <button type="button" className="pbar-b" onClick={() => setSheet("more")}>{TbIcon.more}<span>More</span></button>
@@ -271,15 +271,15 @@ function PhoneBar({ a }: { a: PhoneActs }) {
             {others.map((f) => <button key={f.path} type="button" role="menuitem" disabled={off} onClick={() => mv(f.path, `Moved to ${folderLabel(f)}.`)} style={{ paddingLeft: 16 + Math.min(3, f.depth) * 12 }}>{TbIcon.file} {folderLabel(f)}</button>)}
             {!others.length && <span className="faint" style={{ padding: 12 }}>Loading folders…</span>}
           </> : <>
-            {a.more?.(close)}
-            <PSec label="Move & spam">
+            {sheet === "more" && a.more?.(close)}
+            {sheet === "more" && <PSec label="Move">
               <PTile icon={TbIcon.news} label="News" disabled={off} onClick={() => mv("news", "Moved to News.")} />
-              <PTile icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={off} onClick={() => (a.known ? setAskBH(true) : mv("blackhole", bh))} />
+              <PTile icon={TbIcon.move} label="Move to…" disabled={off} onClick={() => setSheet("move")} />
               {a.ask && !a.ask.openChat && <PTile icon={<span className="pbar-ic" aria-hidden>✦</span>} label="Say a reply" onClick={() => { close(); setVoice({ l: startListening() }); }} />}
-            </PSec>
+            </PSec>}
             {askBH && <div className="ps-ask" role="alertdialog" aria-label="Black Hole a customer?">
               <span><b>{a.known}</b> is a customer. Black Hole blocks their email from now on. Are you sure?</span>
-              <div><button type="button" className="btn danger" onClick={() => mv("blackhole", bh, true)}>Yes, Black Hole</button><button type="button" className="btn ghost" onClick={() => setAskBH(false)}>No</button></div>
+              <div><button type="button" className="btn danger" onClick={() => mv("blackhole", bh, true)}>Yes, Black Hole</button><button type="button" className="btn ghost" onClick={() => (sheet === "bh" ? close() : setAskBH(false))}>No</button></div>
             </div>}
           </>}
           <button type="button" className="pbar-cancel" onClick={close}>Cancel</button>
