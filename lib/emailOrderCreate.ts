@@ -128,8 +128,13 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   else if (reorderOf?.startsWith("a:")) { const { data: o } = await admin.from("archived_orders").select("visual_id").eq("id", reorderOf.slice(2)).maybeSingle(); if (o) fromLabel = `Printavo #${o.visual_id}`; }
   const priceType = d.goods?.supplied ? "wholesale" : cust?.price_type || "retail";
   const notes = [d.notes, reorderOf && fromLabel ? `Reorder of ${fromLabel}.` : ""].filter(Boolean).join(" ").slice(0, 2000);
+  // a program customer (Oct 14: Furry Feline's Mewjira reprint from Cheri's email): the order starts on Program, so the
+  // order page prices it from their design prices / rate card, or recommends a price for a new quantity
+  const { data: prog } = await admin.from("programs").select("id, rate_card").eq("customer_id", custId).limit(1).maybeSingle();
+  const { count: progItems } = prog ? await admin.from("program_items").select("id", { count: "exact", head: true }).eq("program_id", prog.id).eq("active", true).is("archived_at", null) : { count: 0 };
+  const useProgram = !!prog && (!!progItems || !!prog.rate_card);
   const { data: o, error } = await admin.from("orders").insert({
-    customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [],
+    customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
     nickname: (d.nickname || "").slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
     notes, po_number: (d.po_number || "").slice(0, 60),
     delivery_method: ["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup", ship_to: (d.ship_to || "").slice(0, 500),
