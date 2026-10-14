@@ -1,28 +1,32 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cfgOf, type MailAccount } from "@/lib/mail/config";
+import type { MailAccount } from "@/lib/mail/config";
+import { ewsFolders, ewsList, ewsReady, ewsSearch } from "@/lib/mail/ewsBox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
-/** Can this mailbox use Exchange Web Services (sync token only)? Reads the Sent Items folder's name; sends nothing. */
+/**
+ * EWS health check (sync token only): for each mailbox, whether EWS works and how long the folder list, the Inbox,
+ * Sent Items and a search take. Counts and times only — no email content.
+ */
 export async function GET(req: Request) {
   const admin = createAdminClient();
   const { data: ps } = await admin.from("printavo_sync").select("token").eq("id", 1).single();
   if (req.headers.get("x-sync-token") !== (ps as { token: string } | null)?.token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
-  const { data: a } = await admin.from("mail_accounts").select("*").eq("id", new URL(req.url).searchParams.get("account") || "").maybeSingle();
-  if (!a) return NextResponse.json({ error: "no account" });
-  const c = cfgOf(a as MailAccount);
-  const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"><soap:Header><t:RequestServerVersion Version="Exchange2013"/></soap:Header><soap:Body><m:GetFolder><m:FolderShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties><t:FieldURI FieldURI="folder:DisplayName"/></t:AdditionalProperties></m:FolderShape><m:FolderIds><t:DistinguishedFolderId Id="sentitems"/></m:FolderIds></m:GetFolder></soap:Body></soap:Envelope>`;
-  const out: unknown[] = [];
-  for (const host of [c.imapHost, c.imapHost.replace(/^east\./, "")]) {
-    const url = `https://${host}/EWS/Exchange.asmx`;
-    try {
-      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "text/xml; charset=utf-8", Authorization: `Basic ${Buffer.from(`${c.user}:${c.pass}`).toString("base64")}` }, body: soap, signal: AbortSignal.timeout(12000) });
-      const t = await r.text();
-      out.push({ url, status: r.status, auth: r.headers.get("www-authenticate"), result: (t.match(/ResponseClass="(\w+)"/) || [])[1] || null, name: (t.match(/<t:DisplayName>([^<]*)</) || [])[1] || null, error: (t.match(/<m:MessageText>([^<]*)</) || [])[1] || (r.ok ? null : t.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 200)) });
-    } catch (e) { out.push({ url, error: e instanceof Error ? e.message : String(e) }); }
+  const term = new URL(req.url).searchParams.get("q") || "fbs";
+  const { data } = await admin.from("mail_accounts").select("*").eq("enabled", true);
+  const out: Record<string, unknown> = {};
+  for (const a of (data || []) as MailAccount[]) {
+    const me = a.email.toLowerCase(), r: Record<string, unknown> = {};
+    if (!(await ewsReady(admin, a))) { out[me] = "EWS not working for this mailbox"; continue; }
+    const time = async (k: string, fn: () => Promise<unknown>) => { const t0 = Date.now(); try { r[k] = { ...(await fn() as object), ms: Date.now() - t0 }; } catch (e) { r[k] = { error: e instanceof Error ? e.message : String(e), ms: Date.now() - t0 }; } };
+    await time("folders", async () => { const f = await ewsFolders(a); return { count: f.length, special: f.filter((x) => x.special).map((x) => `${x.path} ${x.special} ${x.messages}`) }; });
+    await time("inbox", async () => { const l = await ewsList(admin, a, me, "INBOX"); return { rows: l.rows.length, more: l.more, newest: l.rows[0]?.date || null, seenFlags: l.rows.filter((x) => !x.seen).length }; });
+    await time("sent", async () => { const l = await ewsList(admin, a, me, "Sent Items"); return { rows: l.rows.length, fromMe: l.rows.filter((x) => x.sent).length }; });
+    await time("search", async () => { const s = await ewsSearch(admin, a, me, term); return { convos: s.convos.length, folders: s.folders, partial: s.partial, oldest: s.convos.map((c) => c.last).sort()[0] || null }; });
+    out[me] = r;
   }
-  return NextResponse.json({ tries: out });
+  return NextResponse.json(out);
 }
