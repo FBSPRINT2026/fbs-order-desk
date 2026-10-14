@@ -294,11 +294,12 @@ export function fitWidth(f: HTMLIFrameElement, d: Document) {
   if (w > 0 && sw > w + 2) b.style.zoom = String(Math.max(0.35, w / sw));
 }
 
-export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEmail, to, cc, date, summary, listOpen, toggleList, back }: {
+export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEmail, to, cc, date, summary, listOpen, toggleList, back, ai }: { /** the AI section's button(s), e.g. Assistant (Oct 14) */ ai?: React.ReactNode;
   toolbar: React.ReactNode; /** phones: the bottom bar's actions */ phone?: PhoneActs; subject: string; /** the sender's company, beside their name */ org?: string; tags?: React.ReactNode; fromName: string; fromEmail: string; to?: string; cc?: string; date: string; summary?: string;
   listOpen: boolean; toggleList: () => void; back?: () => void;
 }) {
   const [full, setFull] = useState(false);
+  void listOpen; void toggleList; // the list's hide arrow is gone (Oct 14): the list always shows beside the email
   const nav = useContext(PhoneNav);
   const name = fromName || fromEmail;
   const ini = name.replace(/[^A-Za-z ]/g, " ").trim().split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || "").join("") || "?";
@@ -316,12 +317,15 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
           <button type="button" className="eh-pn-ud" disabled={!nav.down} onClick={nav.down} aria-label="Next email">{TbIcon.down}</button>
         </div> : null}
         {(nav || back) && <button type="button" className="eh-back" onClick={nav?.back || back} aria-label="Back to the list">{TbIcon.back}</button>}
-        <button type="button" className="eh-list" onClick={toggleList} title={listOpen ? "Hide the list" : "Show the list"} aria-label={listOpen ? "Hide the list" : "Show the list"}>{listOpen ? "⟨" : "☰"}</button>
         {toolbar}
         {nav && <PhoneBar a={phone || {}} />}
       </div>
-      {/* the AI's summary right under the toolbar, above the email (Oct 14, Nick) */}
-      {(summary || tags) && <div className="eh-meta eh-meta-top">{summary && <span className="eh-sum">✦ {summary}</span>}{tags}</div>}
+      {/* AI: the summary and the Assistant button, right under the toolbar, above the email (Oct 14, Nick) */}
+      {(summary || tags || ai) && <div className="eh-ai" role="group" aria-label="AI">
+        <span className="tb-sec-l eh-ai-l" aria-hidden>AI</span>
+        <div className="eh-ai-b">{summary && <span className="eh-sum">{summary}</span>}{tags && <span className="eh-ai-tags">{tags}</span>}</div>
+        {ai}
+      </div>}
       <div className="eh-b">
         <h2 className="eh-subj">{subject || "(no subject)"}</h2>
         <div className="eh-from">

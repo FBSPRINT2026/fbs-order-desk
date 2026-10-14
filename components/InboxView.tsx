@@ -119,7 +119,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [ol, setOl] = useState<InboxItem[] | null>(null); // my Outlook Inbox, mirrored
   const [settings, setSettings] = useState(false);
   // the list can be hidden to give the email more room (remembered)
-  const [listOpen, setListOpen] = useSticky<boolean>("inbox.list", true);
+  // the list always shows beside the email (Oct 14: the hide arrow is gone)
+  const [listOpen, setListOpen] = useState(true);
   // pane sizes, dragged like Outlook (remembered)
   const [listW, setListW] = useSticky<number>("inbox.listW", 300);
   const [open, setOpen] = useState<string | null>(null), [focus, setFocus] = useState<string | null>(null), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
@@ -789,10 +790,14 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   }, []);
   const EMAIL_MIN = 470, room = workW ? workW - EMAIL_MIN - 12 : aiW;
   const narrow = !stacked && workW > 0 && room < 280;
-  const aiMode: "full" | "rail" | "drawer" = stacked ? "full" : narrow ? (peek ? "drawer" : "rail") : aiHidden ? "rail" : "full";
+  // the Assistant isn't there until you ask for it (Oct 14, Nick: "the assistant shouldn't be there by default, you
+  // should hit that button"): the AI section's Assistant button opens it on the side
+  const [aiOpen, setAiOpen] = useState(false);
+  void aiHidden;
+  const aiMode: "full" | "rail" | "drawer" | "off" = stacked ? "full" : !aiOpen ? "off" : narrow ? "drawer" : "full";
   const aiShown = narrow ? aiW : Math.max(280, Math.min(aiW, room));
-  const openAi = () => { if (narrow) setPeek(true); else setAiHidden(false); };
-  const hideAi = stacked ? undefined : () => { if (narrow) setPeek(false); else setAiHidden(true); };
+  const openAi = () => { if (stacked) setSide("ai"); else { setAiOpen(true); setPeek(true); setAiHidden(false); } };
+  const hideAi = stacked ? undefined : () => { setAiOpen(false); setPeek(false); };
   useEffect(() => { setOrdering(false); setOrderStart(null); setMade(null); setView("mail"); }, [x.id]);
   const startOrder = (s?: { told?: string; job?: string }) => { if (s) setOrderStart((p) => ({ ...s, n: (p?.n || 0) + 1 })); setOrdering(true); setView("order"); setSide("mail"); };
   useEffect(() => { if (autoOrder) { startOrder(); onAutoOrdered?.(); } }, [autoOrder]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -842,7 +847,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
     write();
   }
   // emails waiting on an answer get their suggested answers straight away (written once, then kept with the email)
-  useEffect(() => { if ((needs || focus) && !opts && !busy) loadOpts(); }, [x.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // (no suggested answers fetched up front any more: Oct 14)
   useEffect(() => { if (focus) setTimeout(() => boxRef.current?.focus(), 60); }, [focus]);
   async function urlFor(path: string) { const { data } = await createClient().storage.from("proofs").createSignedUrl(path, 600); if (data?.signedUrl) window.open(data.signedUrl, "_blank"); }
   const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) => { setBusy(key); setErr(""); if (moreRef.current) moreRef.current.open = false; const r = await fn(); setBusy(""); if (r.ok && key === "arch") cheerWin("archived"); if (!r.ok) setErr(r.error || "Something went wrong."); else if (key === "send" && onSent) { setWriting(false); onSent(ok, { to: x.from_email || "", subject, body, theirs: x.body || "" }); done("", false); } else done(ok, key === "send" || key === "nr" || key === "ign" || key === "arch"); };
@@ -858,10 +863,12 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const when = new Date(x.occurred_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const filed = orders.find((o) => o.id === x.order_id);
   const fromName = x.meta?.from_name || x.from_email;
+  void loadOpts; void pick; void opts;
   const suggestions: { i: number; label: string; text: string }[] = [
     ...(reply?.draft?.body ? [{ i: -2, label: "AI's draft", text: reply.draft.body }] : []),
     ...(opts || []).map((o, i) => ({ i, label: o.label, text: o.body })),
   ];
+  void suggestions;
 
   return (
     <div className="ibx2-work" ref={workRef} data-side={side} data-ai={aiMode} style={{ ["--ibx-ai" as string]: `${aiShown}px` }}>
@@ -890,7 +897,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               <a href={`/shop/order-goods?email=${orderFrom?.id || x.id}`} target="_blank" rel="noreferrer" role="menuitem" onClick={close}>{TbIcon.move} Order goods from S&amp;S</a>
               {x.direction === "in" && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>{TbIcon.ban} Not a customer</button>}
             </> : undefined,
-          }} fromName={personName(fromName) || who} org={who !== personName(fromName) && who !== fromName ? who : undefined} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
+          }} ai={x.direction === "in" ? <button type="button" className={"btn sm eh-ai-btn" + (aiOpen ? " on" : "")} onClick={() => (aiOpen ? hideAi?.() : openAi())} aria-expanded={aiOpen}>✦ {aiOpen ? "Hide the Assistant" : "Assistant"}</button> : undefined}
+          fromName={personName(fromName) || who} org={who !== personName(fromName) && who !== fromName ? who : undefined} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
           tags={<>
             {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
             {x.meta?.triage?.intent && INTENT[x.meta.triage.intent] && <span className="eh-tag">{INTENT[x.meta.triage.intent]}</span>}
@@ -987,18 +995,13 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           {/* the answer, docked at the bottom like Outlook */}
           {x.direction === "in" && writing && <Splitter dir="y" value={composeH || 300} min={160} max={900} invert onChange={setComposeH} className="ibx2-sh" label="Drag to make the answer box taller or shorter" />}
           {x.direction === "in" && <div className={"ibx2-compose" + (writing ? " open" : "") + (writing && composeH ? " sized" : "")} style={writing && composeH ? { height: composeH } : undefined}>
-            {suggestions.length > 0 || busy === "opts" ? <div className="ibx2-sugs" role="list" aria-label="Suggested answers">
-              {busy === "opts" ? <span className="ibx2-thinking">✦ Thinking of answers…</span> : suggestions.map((s) => (
-                <button key={s.i} type="button" role="listitem" className={"ibx2-sug" + (picked === s.i ? " on" : "")} title={s.text.slice(0, 400)} onClick={() => pick(s.i)}>{s.label}</button>
-              ))}
-              {busy !== "opts" && <button type="button" className="ibx2-sug ghost" disabled={!!busy} onClick={() => loadOpts(!!opts)}>{opts ? "✦ Others" : "✦ Suggest"}</button>}
-            </div> : null}
+            {/* the suggested answers strip is gone (Oct 14, Nick: "you're going to get there from whatever I tell you to do"): tell the Assistant instead */}
             {!writing ? (
               <button type="button" className="ibx2-replybar" onClick={() => write()}>Reply to {fromName.split(/[\s@]/)[0]}…</button>
             ) : <>
               <div className="ibx2-to"><span>To {x.from_email}</span><input value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject" /></div>
               <CcField value={cc} onChange={setCc} text={`${told}\n${body}`} />
-              <textarea ref={boxRef} rows={7} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your answer, pick one above, or tell the AI what to say below" aria-label="Reply" />
+              <textarea ref={boxRef} rows={7} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your answer, or tell the AI what to say below" aria-label="Reply" />
               <SayButton chatId={x.id} who={who} onDraft={(d) => { act({ kind: "reply", label: "", subject: d.subject, body: d.body }); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); }} />
               <form className="ibx2-tell" onSubmit={async (e) => { e.preventDefault(); if (!ask.trim()) return; setBusy("ai"); setErr(""); setTold((t) => `${t}\n${ask}`); const r = await aiWriteReply({ activityId: x.id, instruction: ask, subject }); setBusy(""); if (!r.ok) setErr(r.error || "The AI couldn't write that."); else { setSubject(r.subject || subject); setBody(r.body); setPicked(-1); setAsk(""); boxRef.current?.focus(); } }}>
                 <input value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Tell the AI what to say, e.g. “yes, if we get the order by Saturday”" aria-label="Tell the AI what to say" />
@@ -1018,7 +1021,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
       </PhoneNav.Provider>
 
       {/* 3. the Assistant: stays open while answering or making the order */}
-      {aiMode !== "full" && (
+      {aiMode === "drawer" && (
         <button type="button" className="ibx2-rail" aria-expanded={aiMode === "drawer"} onClick={() => (aiMode === "drawer" ? hideAi?.() : openAi())} title={aiMode === "drawer" ? "Hide the Assistant" : "Open the Assistant"}>
           <span className="tx-av" aria-hidden>✦</span><span className="ibx2-rail-t">Assistant</span>
         </button>
