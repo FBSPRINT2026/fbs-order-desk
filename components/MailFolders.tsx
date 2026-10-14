@@ -322,7 +322,7 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
       </div>
       {/* AI: the summary and the Assistant button, right under the toolbar, above the email (Oct 14, Nick) */}
       {(summary || tags || ai) && <div className="eh-ai" role="group" aria-label="AI">
-        <span className="tb-sec-l eh-ai-l" aria-hidden>AI</span>
+        <span className="eh-ai-l" aria-hidden><span className="eh-ai-orb">✦</span>AI</span>
         <div className="eh-ai-b">{summary && <span className="eh-sum">{summary}</span>}{tags && <span className="eh-ai-tags">{tags}</span>}</div>
         {ai}
       </div>}

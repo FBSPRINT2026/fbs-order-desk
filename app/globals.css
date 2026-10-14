@@ -7178,3 +7178,43 @@ a.pdn-tag:hover{text-decoration:underline}
 .ibx2-work[data-ai-left] .ibx2-ai,.ibx2-work[data-ai-left] .ibx2-rail{order:-1}
 .ibx2-work[data-ai-left][data-ai="drawer"]{grid-template-columns:44px minmax(0,1fr)}
 .ibx2-work[data-ai-left][data-ai="drawer"] .ibx2-ai{right:auto;left:0;box-shadow:12px 0 32px rgba(15,23,42,.16)}
+
+/* ───────── Inbox restyle (Oct 14, Nick picked version A): one panel for the toolbar, one button, one tab style ───────── */
+:root{--ai-a:#0E9BD8;--ai-b:#3A7BD5;--ai-c:#6A5AE0;--ai-grad:linear-gradient(120deg,var(--ai-a) 0%,var(--ai-b) 55%,var(--ai-c) 100%)}
+/* tabs: the folder bar and the list filters are the same control: white raised pill, ink words, blue count */
+.mf-chip,.ibx2-tabs button{min-height:32px;font-size:13.5px;font-weight:600;border-radius:8px}
+.mf-bar,.ibx2-tabs{background:var(--surface-2);border:0;border-radius:10px;padding:3px}
+.mf-chip.on,.mf-dd.on>.mf-chip,.ibx2-tabs button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(20,29,43,.12)}
+.mf-chip b,.ibx2-tabs button span{font-size:11.5px;font-weight:700;color:var(--ink-3)}
+.mf-chip.on b,.mf-dd.on>.mf-chip b,.ibx2-tabs button.on span:not(:empty){color:#fff;background:var(--accent);border-radius:999px;padding:0 6px;line-height:17px}
+.ibx2-tabs button span.hot{color:var(--danger)}
+.ibx2-tabs button.on span.hot{background:var(--danger);color:#fff}
+@media (min-width:761px){
+  /* the toolbar is one white panel: two rows split by a hairline, sections split by a thin line, no boxes */
+  .eh-bar:has(.tb-row){background:var(--surface);padding:0;border-bottom:1px solid var(--line-2)}
+  .eh-bar:has(.tb-row) .tb{row-gap:0;gap:0}
+  .eh-bar .tb-row{padding:6px 10px;gap:0}
+  .eh-bar .tb-row+.tb-row{border-top:1px solid var(--line-2)}
+  .eh-bar .tb-row .tb-g{background:none;border:0;border-radius:0;padding:0 10px;border-left:1px solid var(--line-2)}
+  .eh-bar .tb-row>.tb-g:first-child{border-left:0;padding-left:0}
+  .eh-bar .tb-row .tb-sec-l{border-right:0;padding:0 6px 0 0;margin:0;font-size:11.5px}
+  .eh-bar .tb-row>.tb-g:first-child>.tb-sec-l{min-width:58px}
+  .eh-bar .tb-row .tb-b{padding:0 10px}
+  .eh-bar .tb-row .tb-b.strong svg{color:inherit}
+}
+/* the AI row: the toolbar's last row, shaded in the AI colours */
+.eh .eh-ai{position:relative;margin:0;gap:12px;padding:8px 12px 8px 10px;border:0;border-radius:0;border-bottom:1px solid var(--line);
+  background:linear-gradient(100deg,color-mix(in srgb,var(--ai-a) 16%,var(--surface)) 0%,color-mix(in srgb,var(--ai-b) 14%,var(--surface)) 50%,color-mix(in srgb,var(--ai-c) 20%,var(--surface)) 100%)}
+.eh .eh-ai::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--ai-grad)}
+.eh-bar:has(+ .eh-ai){border-bottom:1px solid color-mix(in srgb,var(--ai-b) 22%,var(--line-2))}
+.eh .eh-ai-l{flex:none;display:flex;align-items:center;gap:7px;min-width:58px;padding:0;border:0;font-size:11.5px;font-weight:700;color:var(--ai-c)}
+.eh-ai-orb{width:22px;height:22px;border-radius:7px;background:var(--ai-grad);display:grid;place-items:center;color:#fff;font-size:12px}
+.eh .eh-ai-b .eh-sum{flex-basis:auto;font-size:14px;font-weight:500;color:var(--ink)}
+.eh .eh-ai-tags .eh-tag{background:var(--surface);border:1px solid color-mix(in srgb,var(--ai-c) 25%,transparent);color:var(--ai-c)}
+.eh .eh-ai-tags .eh-tag.todo{color:var(--ai-a);border-color:color-mix(in srgb,var(--ai-a) 30%,transparent)}
+.eh .eh-ai-tags .eh-tag.event{color:#9A6A00;border-color:color-mix(in srgb,#FCB122 45%,transparent)}
+.eh .eh-ai-tags .eh-tag.hot{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
+.eh .eh-ai-tags .eh-tag.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,transparent)}
+.tb-b.ai{background:var(--ai-grad);color:#fff;box-shadow:0 3px 10px rgba(58,123,213,.35)}
+.tb-b.ai:hover:not(:disabled){background:var(--ai-grad);filter:brightness(1.06)}
+.tb-b.ai.on{background:var(--surface);color:var(--ai-b);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ai-b) 40%,transparent)}

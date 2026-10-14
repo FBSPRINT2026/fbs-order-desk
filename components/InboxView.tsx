@@ -900,7 +900,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
               <a href={`/shop/order-goods?email=${orderFrom?.id || x.id}`} target="_blank" rel="noreferrer" role="menuitem" onClick={close}>{TbIcon.move} Order goods from S&amp;S</a>
               {x.direction === "in" && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>{TbIcon.ban} Not a customer</button>}
             </> : undefined,
-          }} ai={x.direction === "in" ? <button type="button" className={"btn sm eh-ai-btn" + (aiOpen ? " on" : "")} onClick={() => (aiOpen ? hideAi?.() : openAi())} aria-expanded={aiOpen}>✦ {aiOpen ? "Hide the Assistant" : "Assistant"}</button> : undefined}
+          }} ai={x.direction === "in" ? <button type="button" className={"tb-b ai eh-ai-btn" + (aiOpen ? " on" : "")} onClick={() => (aiOpen ? hideAi?.() : openAi())} aria-expanded={aiOpen} title={aiOpen ? "Hide the Assistant" : "Open the Assistant and start listening"}><svg viewBox="0 0 24 24" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg><span className="tb-l">{aiOpen ? "Hide Assistant" : "Assistant"}</span></button> : undefined}
           fromName={personName(fromName) || who} org={who !== personName(fromName) && who !== fromName ? who : undefined} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
           tags={<>
             {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
