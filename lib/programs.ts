@@ -105,7 +105,13 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCtx): { item?: DesignPrice; under?: DesignPrice } {
   const ids = new Set((g.imprints || []).map((x) => x.design_id).filter(Boolean));
   const text = ` ${norm(d.text)} `;
-  const hits = d.items.filter((it) => it.active && tiersOf(it).length && ((it.design_id && ids.has(it.design_id)) || (norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `))));
+  const linked = d.items.filter((it) => it.active && tiersOf(it).length && it.design_id && ids.has(it.design_id));
+  let hits = linked;
+  if (!hits.length) {
+    const named = d.items.filter((it) => it.active && tiersOf(it).length && norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `));
+    // the most specific name wins: "Rice Life Totes" over "Rice Life", "SPICY Deep Shit Pizza" over "Deep Shit Pizza"
+    hits = named.filter((it) => !named.some((o) => o !== it && norm(o.name).length > norm(it.name).length && ` ${norm(o.name)} `.includes(` ${norm(it.name)} `)));
+  }
   if (!hits.length) return {};
   // every break of every matching entry, highest minimum first: the first one the quantity reaches
   const breaks = hits.flatMap((it) => tiersOf(it).map((t) => ({ ...it, price: t.price, min_qty: t.min }))).sort((a, b) => (b.min_qty || 0) - (a.min_qty || 0));
