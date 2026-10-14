@@ -184,8 +184,11 @@ export function Toolbar({ children }: { children: React.ReactNode }) { return <d
 /** a section of the toolbar; label: the little header above it (Oct 14, Nick: Email · Move · Spam · Actions) */
 export function TbGroup({ children, label }: { children: React.ReactNode; label?: string }) {
   if (!label) return <div className="tb-g">{children}</div>;
-  return <div className="tb-sec" role="group" aria-label={label}><span className="tb-sec-l" aria-hidden>{label}</span><div className="tb-g">{children}</div></div>;
+  return <div className="tb-g tb-sec" role="group" aria-label={label}><span className="tb-sec-l" aria-hidden>{label}</span>{children}</div>;
 }
+/** one line of the toolbar (Oct 14, Nick: "always two lines, never three"): it never wraps; when it runs out of room
+ *  the buttons drop their words (icon + tooltip) instead. r1: Email · Move · Spam; r2: Actions · Messages */
+export function TbRow({ children, line }: { children: React.ReactNode; line: 1 | 2 }) { return <div className={`tb-row r${line}`}>{children}</div>; }
 export function TbBtn({ icon, label, onClick, kind, disabled, title }: { icon: React.ReactNode; label: string; onClick?: () => void; kind?: "primary" | "danger" | "strong"; disabled?: boolean; title?: string }) {
   return <button type="button" className={"tb-b" + (kind ? " " + kind : "")} onClick={onClick} disabled={disabled} title={title || label}>{icon}<span className="tb-l">{label}</span></button>;
 }
@@ -317,6 +320,8 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
         {toolbar}
         {nav && <PhoneBar a={phone || {}} />}
       </div>
+      {/* the AI's summary right under the toolbar, above the email (Oct 14, Nick) */}
+      {(summary || tags) && <div className="eh-meta eh-meta-top">{summary && <span className="eh-sum">✦ {summary}</span>}{tags}</div>}
       <div className="eh-b">
         <h2 className="eh-subj">{subject || "(no subject)"}</h2>
         <div className="eh-from">
@@ -328,7 +333,6 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
           </div>
           <time className="eh-date">{date}</time>
         </div>
-        {(summary || tags) && <div className="eh-meta">{summary && <span className="eh-sum">✦ {summary}</span>}{tags}</div>}
       </div>
     </header>
   );

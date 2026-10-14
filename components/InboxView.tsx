@@ -15,7 +15,7 @@ import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
-import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -669,13 +669,15 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
             {older && <span className="eh-tag">Customer</span>}
           </>}
           toolbar={<Toolbar>
+            <TbRow line={1}>
             <TbGroup label="Email"><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setWriting(true)} /></TbGroup>
             <MoveBar folders={folders} busy={busy === "mv"} here="INBOX" onMove={(to, label) => move(to, label)} />
-            {onKeep && <TbGroup label="Actions">
+            </TbRow>
+            {onKeep && <TbRow line={2}><TbGroup label="Actions">
               <TbBtn icon={TbIcon.order} label={busy === "keep" ? "Opening…" : "Create order"} disabled={!!busy} title="Bring this email into the portal and make an order from it" onClick={() => onKeep("order")} />
               <TbBtn icon={TbIcon.goods} label="Order goods" disabled={!!busy} onClick={() => onKeep("goods")} />
               <TbBtn icon={TbIcon.person} label="Match to customer" disabled={!!busy} title="Make them a customer, or add them as a contact at one" onClick={() => onKeep("match")} />
-            </TbGroup>}
+            </TbGroup></TbRow>}
           </Toolbar>} />
         {err && <div className="pv-err eh-err">{err}</div>}
         <div className="ibx2-read">
@@ -899,6 +901,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           </>}
           toolbar={<Toolbar>
             {view === "order" ? <TbGroup><TbBtn icon={TbIcon.back} label="Back to the email" onClick={() => setView("mail")} /></TbGroup> : <>
+            <TbRow line={1}>
             {/* Email (Oct 14, Nick: Email · Move · Spam · Actions, then the AI summary, then the email as it came) */}
             {x.direction === "in" && <TbGroup label="Email">
               <TbBtn icon={TbIcon.reply} label="Reply" kind={!orderish || x.order_id ? "primary" : undefined} onClick={() => write()} />
@@ -919,12 +922,14 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
                   : <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={!!busy} title="SaneBox Black Hole: junk, and this sender is blocked from now on" onClick={() => (x.customer_id ? setAskBH(true) : run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "blackhole" }), "Black Hole: SaneBox won't show you this sender again."))} />}
               </TbGroup>
             </>)}
+            </TbRow>
+            <TbRow line={2}>
             {/* Actions */}
             <TbGroup label="Actions">
               {<TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check" />}
               <TbBtn icon={TbIcon.goods} label="Order goods" title="Order the goods for this from S&S, or email our S&S rep for a custom quote" onClick={() => { window.location.href = orderGoodsHref(x.id); }} />
               {x.customer_id
-                ? <TbBtn icon={TbIcon.person} label="Customer profile" title="Open this customer's page" onClick={() => { window.location.href = `/shop/customers/${x.customer_id}`; }} />
+                ? <TbBtn icon={TbIcon.person} label="Customer" title="Customer profile: open this customer's page" onClick={() => { window.location.href = `/shop/customers/${x.customer_id}`; }} />
                 : <TbBtn icon={TbIcon.person} label="Match to customer" title="Make them a customer, or add them as a contact at one" onClick={() => setMatchKey((k) => k + 1)} />}
               <TbMenu icon={TbIcon.more} label="More">{(close) => <>
                 {needs && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr", () => markNoReply(x.id), "Off your Needs reply list."); }}>No reply needed</button>}
@@ -935,22 +940,23 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             </TbGroup>
             {/* Messages: keep this email with an order or a project (Oct 14) */}
             {x.customer_id && <TbGroup label="Messages">
-              <TbMenu icon={TbIcon.file} label={filed ? `Filed: #${filed.number}` : "File under order"}>{(close) => <>
+              <TbMenu icon={TbIcon.file} label={filed ? `Filed #${filed.number}` : "File under"}>{(close) => <>
                 {orders.slice(0, 40).map((o) => <button key={o.id} type="button" role="menuitem" className={o.id === x.order_id ? "on" : ""} disabled={!!busy} onClick={() => { close(); void run("ord", () => setEmailOrder(x.id, o.id), `Filed under #${o.number}.`); }}>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></button>)}
                 {x.order_id && <button type="button" role="menuitem" onClick={() => { close(); void run("ord", () => setEmailOrder(x.id, null), "Not filed under an order now."); }}>Not filed under an order</button>}
                 {!orders.length && <span className="faint" style={{ padding: 8 }}>No orders for this customer yet.</span>}
               </>}</TbMenu>
-              <TbMenu icon={TbIcon.folder} label={projOn ? `Project: ${projOn.name}` : "Save to project"}>{(close) => <>
+              <TbMenu icon={TbIcon.folder} label={projOn ? projOn.name.slice(0, 18) : "Project"}>{(close) => <>
                 {projs.map((p) => <button key={p.id} type="button" role="menuitem" className={p.id === x.project_id ? "on" : ""} disabled={!!busy} onClick={() => { close(); void run("proj", () => setEmailProject(x.id, p.id), `Saved to the project ${p.name}.`); }}>{p.name} <span className="faint">({p.status})</span></button>)}
                 {x.project_id && <button type="button" role="menuitem" onClick={() => { close(); void run("proj", () => setEmailProject(x.id, null), "Taken off the project."); }}>Not on a project</button>}
                 {!projs.length && <span className="faint" style={{ padding: 8 }}>No projects for this customer yet.</span>}
                 <a role="menuitem" href={`/shop/projects?new=${x.customer_id}`} onClick={close}>New project…</a>
               </>}</TbMenu>
-              <TbMenu icon={TbIcon.note} label="Add to order notes">{(close) => <>
+              <TbMenu icon={TbIcon.note} label="Order notes">{(close) => <>
                 {orders.slice(0, 40).map((o) => <button key={o.id} type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("onote", async () => { const r = await addEmailToOrderNotes(x.id, o.id); return r; }, `Added to the notes on #${o.number}.`); }}>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></button>)}
                 {!orders.length && <span className="faint" style={{ padding: 8 }}>No orders for this customer yet.</span>}
               </>}</TbMenu>
             </TbGroup>}
+            </TbRow>
             </>}
           </Toolbar>} />
         {fwdOpen && view !== "order" && <ForwardBox id={x.id} onDone={(msg) => { setFwdOpen(false); if (msg) done(msg, false); }} />}
