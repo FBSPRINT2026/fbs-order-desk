@@ -200,6 +200,9 @@ export async function ewsSearch(admin: SupabaseClient, acct: MailAccount, me: st
         const [r] = rowsOf(b[0], f.path, me, f.id === t.sent);
         if (r) byFolder.set(f.path, [...(byFolder.get(f.path) || []), r]);
       }
+      console.info(`mail search AllItems "${term.slice(0, 30)}": ${blocks.length} found, ${[...byFolder.values()].reduce((n, x) => n + x.length, 0)} in mail folders, total ${attr(all(x, "RootFolder")[0]?.attrs || "", "TotalItemsInView")}`);
+      // nothing at all from AllItems (some servers don't search it): never again for this mailbox, folder by folder
+      if (!blocks.length) { allItems.set(acct.email.toLowerCase(), ""); throw new Error("AllItems found nothing"); }
       for (const [path, got] of byFolder) {
         const ids = await uidsFor(admin, acct.id, path, got.map((g) => g.id));
         for (const g of got) { const u = ids.get(g.id); if (u) { const { conv: _c, ...r } = g.row; found.push({ ...r, uid: u }); } }
@@ -221,7 +224,7 @@ export async function ewsSearch(admin: SupabaseClient, acct: MailAccount, me: st
     } catch { partial = true; }
   };
   // several folders at a time: EWS has no connection limit (IMAP allowed two)
-  await Promise.all(Array.from({ length: 6 }, async () => { while (queue.length) await one1(queue.shift()!); }));
+  await Promise.all(Array.from({ length: 12 }, async () => { while (queue.length) await one1(queue.shift()!); }));
   return { convos: groupConvos(found, me), folders: looked, partial };
 }
 
