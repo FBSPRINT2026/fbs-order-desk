@@ -34,7 +34,7 @@ import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/cr
 import { PAY_TERMS, SIZES } from "@/lib/pricing";
 import { BIG_SIZES, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
 import { programCard } from "@/app/shop/program-pricing-actions";
-import { PastPrices, ProgramNotes } from "@/components/ProgramPricing";
+import { PastPrices, PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -667,6 +667,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                       </div>
                     </div>
                     {o.use_program && prog && <ProgramNotes groups={o.groups} card={prog.card} baseCost={prog.baseCost} ctx={(g) => designCtx(o, g)} />}
+                    {o.use_program && prog && !["production", "ready", "completed"].includes(o.status) && <PriceSuggestions groups={o.groups} ctx={(g) => designCtx(o, g)} settings={settings}
+                      onUse={(gid, price) => { patch((d) => { const g = d.groups.find((x) => x.id === gid); g?.lines.forEach((l) => { if (Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)) { l.priceOverride = price; delete l.prog; l.progOff = true; } }); }); say(`Price set to ${money(price)}.`); }}
+                      onSaved={() => { if (custId) programCard(custId).then((r) => { if (r.ok && (r.card || r.items.length)) setProg({ card: r.card, baseCost: r.baseCost, items: r.items }); }); }} />}
                     {seesMoney && cust && <PastPrices customerId={cust.id} orderId={o.id}
                       terms={[o.nickname || "", ...o.groups.flatMap((g) => g.imprints.map((d) => designs.find((x) => x.id === d.design_id)?.name || ""))].filter(Boolean)}
                       onUse={(price, styles) => patch((d) => {

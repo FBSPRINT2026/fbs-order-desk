@@ -7123,3 +7123,12 @@ a.pdn-tag:hover{text-decoration:underline}
 .rc-switch{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:600;padding:3px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer}
 .rc-switch input{accent-color:var(--accent)}
 .pga-mode{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13.5px}
+/* program: a recommended price for a quantity they've never had (Oct 14) */
+.prg-sug{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.prg-sug-c{border:1px solid var(--accent);background:var(--accent-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.prg-sug-h{font-size:14px}
+.prg-sug-h>span{color:var(--accent)}
+.prg-sug-p{font-size:16px}
+.prg-sug-why{margin:0;font-size:13px;color:var(--ink-2)}
+.prg-sug-a{display:flex;flex-wrap:wrap;gap:6px}
+.prg-sug-err{margin:0;color:var(--danger);font-size:13px}

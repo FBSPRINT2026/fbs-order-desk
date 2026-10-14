@@ -1,4 +1,4 @@
-import type { GLine, Group } from "@/lib/pricing";
+import { calcGroup, type GLine, type Group, type Settings } from "@/lib/pricing";
 
 /** Program pricing: items a customer orders often, at a flat price per piece (any quantity), with a quick order form. */
 export type ProgramImprint = { location: string; method: "screen" | "embroidery" | "dtf"; colors: number; inks: string; size: string; notes: string };
@@ -99,7 +99,7 @@ export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Rec
  */
 /** a design's own program price (Oct 14, Nick: "Mewjira, 200 pieces at $5.50… this one is by design"): a program item
  *  linked to the design, or named like it (Printavo-era orders have no design links) */
-export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active" | "tiers" | "price_mode">;
+export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active" | "tiers" | "price_mode" | "supplied">;
 export type DesignCtx = { items: DesignPrice[]; /** the order's name and its prints' design names */ text: string };
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCtx): { item?: DesignPrice; under?: DesignPrice } {
@@ -152,4 +152,45 @@ export function programForGroup(g: Group, card: RateCard | null, baseCost: numbe
     lines[l.id] = { each: r2(price + diff), note: `Program ${k.key}: ${price.toFixed(2)} ${diff < 0 ? `− (${baseCost.toFixed(2)} − ${cost.toFixed(2)})` : `+ (${cost.toFixed(2)} − ${baseCost.toFixed(2)})`} × ${card.markup} = ${r2(price + diff).toFixed(2)}` };
   }
   return { ok: all, key: k.key, note: all ? `program ${k.key}, ${qty} pieces` : "program price waits for a blank cost", lines };
+}
+
+/* ───────── a price for a quantity they've never had (Oct 14, Nick: "if they reorder a design that's part of their
+   program at a quantity we've never done… recommend a price. I would have wanted you to get to 200 at $5.50") ─────────
+   Their nearest real price, moved by as much as the retail table moves between that quantity and this one:
+   Mewjira $6.00 at 150 × (retail $6.29 at 200 ÷ $6.88 at 150) = $5.48 → $5.50. Only above their top break or under
+   their lowest one (between breaks, the breaks they agreed to apply). Rounded to 5 cents. */
+export type PriceSuggestion = { itemId: string; name: string; qty: number; refQty: number; refPrice: number; retailRef: number; retailNow: number; price: number; above: boolean };
+const qtyOfG = (g: Pick<Group, "lines">) => (g.lines || []).reduce((a, l) => a + qtyOf(l), 0);
+/** the retail table's price per piece for this group's prints at a quantity (their shirts: no garment) */
+export function retailEach(g: Group, qty: number, s: Settings, supplied: boolean): number {
+  const l0 = (g.lines || []).find((l) => qtyOf(l) > 0) || g.lines?.[0];
+  if (!l0 || qty <= 0) return 0;
+  const line: GLine = { ...l0, id: "x", cost: supplied ? "" : l0.cost, sizes: { L: qty }, priceOverride: null, prog: undefined, progOff: undefined };
+  const c = calcGroup({ ...g, lines: [line], screenFee: undefined }, { waive_setup: true, price_type: "retail" }, s);
+  return c.lines[0]?.calcEach || 0;
+}
+export function suggestDesignPrice(g: Group, d: DesignCtx, s: Settings): PriceSuggestion | null {
+  const qty = qtyOfG(g);
+  if (!qty || !d.items.length) return null;
+  const dp = designPrice(g, qty, d);
+  const hit = dp.item || dp.under;
+  if (!hit) return null;
+  const orig = d.items.find((x) => x.id === hit.id);
+  if (!orig || orig.price_mode === "flat") return null;
+  const t = tiersOf(orig);
+  if (!t.length) return null;
+  const top = t[t.length - 1], low = t[0];
+  let ref: { min: number; price: number };
+  if (dp.item) { if (qty <= top.min || hit.min_qty !== top.min) return null; ref = top; }
+  else ref = low;
+  if (!ref.min) return null;
+  // only a real jump (Nick: "150 to 160 you don't change anything… 150 to 200 justifies a fresh look"): at least 25% more
+  // pieces (or 20% fewer) than their price break, and the retail table moving 5% or more
+  if (qty < ref.min * 1.25 && qty > ref.min * 0.8) return null;
+  const supplied = !!orig.supplied;
+  const a = retailEach(g, ref.min, s, supplied), b = retailEach(g, qty, s, supplied);
+  if (!a || !b || Math.abs(b / a - 1) < 0.05) return null;
+  const price = Math.round((ref.price * b) / a / 0.05) * 0.05;
+  if (Math.abs(price - ref.price) < 0.01) return null;
+  return { itemId: orig.id, name: orig.name, qty, refQty: ref.min, refPrice: ref.price, retailRef: r2(a), retailNow: r2(b), price: r2(price), above: !!dp.item };
 }

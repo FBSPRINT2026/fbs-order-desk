@@ -25,7 +25,7 @@ export async function programCard(customerId: string) {
     const { admin } = await me();
     const { data: p } = await admin.from("programs").select("id, name, rate_card").eq("customer_id", customerId).order("created_at").limit(1).maybeSingle();
     if (!p) return { ok: true as const, card: null, baseCost: null, items: [] as DesignPrice[] };
-    const { data: its } = await admin.from("program_items").select("id, name, style, price, min_qty, design_id, active, tiers, price_mode").eq("program_id", p.id).eq("active", true).is("archived_at", null);
+    const { data: its } = await admin.from("program_items").select("id, name, style, price, min_qty, design_id, active, tiers, price_mode, supplied").eq("program_id", p.id).eq("active", true).is("archived_at", null);
     const items = ((its || []) as DesignPrice[]).filter((x) => tiersOf(x).length);
     let card = (p.rate_card || null) as RateCard | null;
     if (!cardSetsAnything(card)) card = null;
@@ -235,6 +235,23 @@ export async function applyProgramProposal(input: { customerId: string; proposal
       await admin.from("program_items").insert({ program_id: p!.id, name: d0.name.trim().slice(0, 120), style: (d0.style || "").slice(0, 40), brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"],
         price: first.price, min_qty: first.min, tiers: list, price_mode: mode, supplied: !card.garmentIncluded, imprints: imps, design_id: null, image_path: "", notes: ds.map((x) => x.notes || "").filter(Boolean).join(" ").slice(0, 300), active: true, position: pos++ });
     }
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** a recommended price kept as one of the design's price breaks (from the order page's recommendation card) */
+export async function addPriceBreak(input: { itemId: string; min: number; price: number }) {
+  try {
+    const { admin } = await me();
+    const min = Math.max(0, Math.round(input.min)), price = Math.round(input.price * 100) / 100;
+    if (!(price > 0)) return { ok: false as const, error: "Price first." };
+    const { data: it } = await admin.from("program_items").select("id, price, min_qty, tiers, price_mode").eq("id", input.itemId).is("archived_at", null).maybeSingle();
+    if (!it) return { ok: false as const, error: "That design price isn't on their program any more." };
+    const t = new Map(tiersOf(it as never).map((x) => [x.min, x.price]));
+    t.set(min, price);
+    const list = [...t.entries()].map(([m, p]) => ({ min: m, price: p })).sort((a, b) => a.min - b.min);
+    const { error } = await admin.from("program_items").update({ tiers: list, price_mode: "breaks", price: list[0].price, min_qty: list[0].min }).eq("id", input.itemId);
+    if (error) return { ok: false as const, error: error.message };
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }

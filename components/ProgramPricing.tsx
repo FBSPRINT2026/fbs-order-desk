@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { money, fmtDate } from "@/lib/format";
-import type { Group } from "@/lib/pricing";
-import { cardHasPrices, programForGroup, type DesignCtx, type RateCard } from "@/lib/programs";
-import { pastPricesForDesign, type PastPrice } from "@/app/shop/program-pricing-actions";
+import type { Group, Settings } from "@/lib/pricing";
+import { cardHasPrices, programForGroup, suggestDesignPrice, type DesignCtx, type RateCard } from "@/lib/programs";
+import { addPriceBreak, pastPricesForDesign, type PastPrice } from "@/app/shop/program-pricing-actions";
 
 /**
  * Under Retail / Wholesale / Program on an order (Oct 14, Nick): with Program on, what the rate card did to each group
@@ -60,6 +60,43 @@ export function PastPrices({ customerId, orderId, terms, onUse }: { customerId: 
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+/**
+ * A program design at a quantity they've never had (Oct 14, Nick: "recommend this price… I would have wanted you to get
+ * to 200 at $5.50"): their nearest price moved as much as the retail table moves, only on a real jump (25%+ more or
+ * 20%+ fewer pieces, retail moving 5%+). Use it, use it and keep it as a price break, or keep their price.
+ */
+export function PriceSuggestions({ groups, ctx, settings, onUse, onSaved }: { groups: Group[]; ctx: (g: Group) => DesignCtx; settings: Settings; onUse: (groupId: string, price: number) => void; onSaved: () => void }) {
+  const [gone, setGone] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(""), [err, setErr] = useState("");
+  const list = groups.map((g) => ({ g, s: suggestDesignPrice(g, ctx(g), settings) })).filter((x) => x.s && !gone.has(`${x.g.id}:${x.s.qty}`) && !x.g.lines.every((l) => !Object.values(l.sizes || {}).some((n) => +(n || 0) > 0) || +(l.priceOverride ?? -1) === x.s!.price));
+  if (!list.length) return null;
+  return (
+    <div className="prg-sug" role="region" aria-label="Recommended program price">
+      {list.map(({ g, s }) => {
+        const k = `${g.id}:${s!.qty}`, pct = Math.round((s!.retailNow / s!.retailRef - 1) * 100);
+        return (
+          <div key={k} className="prg-sug-c">
+            <div className="prg-sug-h"><span aria-hidden>✦</span> <b>{s!.name} at {s!.qty} pieces:</b> they&apos;ve never had this quantity. I recommend <b className="prg-sug-p">{money(s!.price)}</b> each.</div>
+            <p className="prg-sug-why">Their price is {money(s!.refPrice)} at {s!.refQty}. On the retail table this print goes from {money(s!.retailRef)} at {s!.refQty} to {money(s!.retailNow)} at {s!.qty} ({pct > 0 ? "+" : ""}{pct}%), so the same move from {money(s!.refPrice)} is {money(s!.price)}.</p>
+            <div className="prg-sug-a">
+              <button type="button" className="btn sm primary" disabled={!!busy} onClick={() => onUse(g.id, s!.price)}>Use {money(s!.price)}</button>
+              <button type="button" className="btn sm" disabled={!!busy} onClick={async () => {
+                setBusy(k); setErr("");
+                const r = await addPriceBreak({ itemId: s!.itemId, min: s!.qty, price: s!.price }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+                setBusy("");
+                if (!r.ok) { setErr(r.error); return; }
+                onUse(g.id, s!.price); onSaved();
+              }}>{busy === k ? "Saving…" : `Use it and save ${s!.qty}+ ${money(s!.price)} as a price break`}</button>
+              <button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => setGone((x) => new Set(x).add(k))}>Keep {money(s!.refPrice)}</button>
+            </div>
+            {err && <p className="prg-sug-err">{err}</p>}
+          </div>
+        );
+      })}
     </div>
   );
 }
