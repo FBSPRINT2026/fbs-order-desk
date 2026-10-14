@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { MailAccount } from "@/lib/mail/config";
 import { fixBodiesEws, fixBodiesSlow } from "@/lib/mail/cache";
@@ -16,6 +16,13 @@ export async function GET(req: Request) {
   const admin = createAdminClient();
   const { data: ps } = await admin.from("printavo_sync").select("token").eq("id", 1).single();
   if (req.headers.get("x-sync-token") !== (ps as { token: string } | null)?.token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
+  // answer at once and do the work after (Oct 14): the database's scheduler waits for each answer before it sends the
+  // next jobs, so a 4-minute answer held up the mail check, the Printavo sync and the away alerts behind it
+  after(() => work(admin));
+  return NextResponse.json({ ok: true, started: true });
+}
+
+async function work(admin: ReturnType<typeof createAdminClient>) {
   const deadline = Date.now() + 240000;
   const { data } = await admin.from("mail_accounts").select("*").eq("enabled", true);
   const out: Record<string, unknown> = {};
@@ -34,5 +41,4 @@ export async function GET(req: Request) {
     catch (e) { out[a.email] = { error: e instanceof Error ? e.message : String(e), ms: Date.now() - t0 }; }
   }
   console.info(`mail bodies ${JSON.stringify(out)}`);
-  return NextResponse.json({ ok: true, mailboxes: out });
 }
