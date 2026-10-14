@@ -188,6 +188,12 @@ export async function POST(req: Request) {
   try {
     const ews = await ewsReady(admin, acct);
     if (b.do === "move") {
+      // never Black Hole a customer without asking (Oct 14, Nick): the page asks first; a swipe or anything else that
+      // didn't is refused with who they are
+      if (String(b.to || "") === "blackhole" && !(b as { confirmed?: boolean }).confirmed) {
+        const who = await customerSender(admin, acct.id, path, uid);
+        if (who) return NextResponse.json({ error: `${who} is a customer. Open the email and press Black Hole there to confirm.` }, { status: 409 });
+      }
       // over EWS when it works for this mailbox (no IMAP connection needed); an EWS-listed email only that way
       if (ews || isEwsUid(uid)) {
         try { const r = await ewsMove(admin, acct, path, uid, String(b.to || "archive"), v.email || "portal"); return NextResponse.json({ ok: true, dest: r.dest }); }
@@ -223,4 +229,19 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({ error: "Unknown request." }, { status: 400 });
   } catch (e) { return bad(e); }
+}
+
+/** the customer this email is from (their name), if it's from one: looked up by the sender on file for it */
+async function customerSender(admin: ReturnType<typeof createAdminClient>, accountId: string, path: string, uid: number): Promise<string> {
+  const [{ data: ib }, { data: mc }] = await Promise.all([
+    /^inbox$/i.test(path) ? admin.from("mail_inbox").select("from_email").eq("account_id", accountId).eq("uid", uid).limit(1).maybeSingle() : Promise.resolve({ data: null }),
+    admin.from("mail_cache").select("from_email").eq("account_id", accountId).eq("folder", path).eq("uid", uid).limit(1).maybeSingle(),
+  ]);
+  const from = String((ib as { from_email?: string } | null)?.from_email || (mc as { from_email?: string } | null)?.from_email || "");
+  if (!from) return "";
+  const { matchAddress } = await import("@/lib/mail/process");
+  const m = await matchAddress(admin, from).catch(() => null);
+  if (!m?.customerId || m.ignore) return "";
+  const { data: c } = await admin.from("customers").select("company, name").eq("id", m.customerId).maybeSingle();
+  return String(c?.company || c?.name || "This sender");
 }

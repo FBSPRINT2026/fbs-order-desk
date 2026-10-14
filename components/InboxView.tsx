@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { mailRows } from "@/lib/inbox";
 import { convoKeys, groupConvos } from "@/lib/mail/convo";
-import { forwardEmail, archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
+import { keepInboxEmail, addEmailToOrderNotes, setEmailProject, forwardEmail, archiveOutlookEmail, getOutlookInbox, readInboxEmail, replyInboxEmail, type InboxItem } from "@/app/shop/mail-actions";
 import { addEvent, addTask, inboxBrief, inboxItemExtras, setEventStatus, setTaskDone, suggestFollowUps, type Brief, type CalEvent, type FollowUp, type Task } from "@/app/shop/myday-actions";
 import { AREAS } from "@/components/MyDay";
 import { onPullRefresh } from "@/components/PullRefresh";
@@ -35,7 +35,7 @@ import type { EmailAction } from "@/lib/ai/emailChat";
  * What's left in it is the to-do list: archive in Outlook and it's gone here; Archive here archives it in Outlook.
  * Customer email opens as usual; anything else shows the sender and subject only (the portal doesn't keep it).
  */
-type Act = { id: string; customer_id: string | null; order_id: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; no_reply?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number; from_link?: string; source?: string }[]; links?: { url: string; kind: string; ok: boolean; error?: string }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; urgent_reason?: string; needs_reply?: boolean }; reply_options?: { at: string; options: { label: string; subject: string; body: string }[] } } };
+type Act = { id: string; customer_id: string | null; order_id: string | null; project_id?: string | null; direction: string; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; meta: { account_id?: string; account?: string; from_name?: string; lead?: boolean; ignored?: boolean; no_reply?: boolean; match?: string; references?: string[]; attachments?: { name: string; path: string; type: string; size: number; from_link?: string; source?: string }[]; links?: { url: string; kind: string; ok: boolean; error?: string }[]; html?: string; inline?: Record<string, string>; triage?: { intent?: string; summary?: string; urgency?: string; urgent_reason?: string; needs_reply?: boolean }; reply_options?: { at: string; options: { label: string; subject: string; body: string }[] } } };
 type Sug = { id: string; kind: string; status: string; activity_id: string | null; title: string; body: string; draft: { subject?: string; body?: string } | null; payload: { groups?: unknown[] } | null; order_id: string | null };
 type Cust = { id: string; company: string | null; name: string | null; email?: string | null };
 type Ord = { id: string; number: number; nickname: string | null; customer_id: string | null; status: string };
@@ -130,7 +130,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
     // the mailbox status and the email go out together
     const [s, { data: a }] = await Promise.all([
       getMailStatus(),
-      sb.from("activities").select("id, customer_id, order_id, direction, subject, body, from_email, to_email, external_id, thread_id, occurred_at, meta").eq("kind", "email").gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(800),
+      sb.from("activities").select("id, customer_id, order_id, project_id, direction, subject, body, from_email, to_email, external_id, thread_id, occurred_at, meta").eq("kind", "email").gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(800),
       getOutlookInbox().then((r) => { if (r.ok) setOl(r.connected ? r.items : []); }, () => null),
     ]);
     if (s.ok) setSt(s as unknown as Status);
@@ -315,10 +315,22 @@ export default function InboxView({ mode }: { mode: Mode }) {
     void load();
   };
   // a customer email that's in my Inbox: Archive / Later / Black Hole / Move it there
+  /** an Inbox email the portal didn't keep: kept now, then opened with its Actions (Create order starts right away) */
+  const keepAndOpen = async (it: InboxItem, then: "order" | "goods" | "match") => {
+    setBusy("keep");
+    const r = await keepInboxEmail(it.id).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+    setBusy("");
+    if (!r.ok) { flash(r.error); return; }
+    setOl((l) => (l || []).map((y) => (y.id === it.id ? { ...y, activity_id: r.activityId } : y)));
+    await load();
+    if (then === "goods") { window.location.href = `/shop/order-goods?email=${r.activityId}`; return; }
+    if (then === "order") setAutoOrder(r.activityId);
+    setOpen(r.activityId); setPicked(true);
+  };
   const inboxMove = (actId: string) => {
     const it = ol?.find((i) => i.activity_id === actId);
     if (!it || mode !== "mail") return undefined;
-    return async (to: string, label: string) => { setBusy("mv"); try { await boxPost({ do: "move", path: "INBOX", uid: it.uid, to }); setOl((l) => (l || []).filter((y) => y.id !== it.id)); const n = await moveRest(it, to); flash(n ? `${label.replace(/\.$/, "")} (the whole conversation, ${n + 1} emails).` : label); setOpen(null); void load(); } catch (e) { flash(e instanceof Error ? e.message : String(e)); } setBusy(""); };
+    return async (to: string, label: string, confirmed?: boolean) => { setBusy("mv"); try { await boxPost({ do: "move", path: "INBOX", uid: it.uid, to, ...(confirmed ? { confirmed: true } : {}) }); setOl((l) => (l || []).filter((y) => y.id !== it.id)); const n = await moveRest(it, to); flash(n ? `${label.replace(/\.$/, "")} (the whole conversation, ${n + 1} emails).` : label); setOpen(null); void load(); } catch (e) { flash(e instanceof Error ? e.message : String(e)); } setBusy(""); };
   };
   // phones: "‹ Inbox" and ∧ ∨ on an open email, like the iPhone Mail app
   const nav: PhoneNavT | null = (() => {
@@ -487,11 +499,11 @@ export default function InboxView({ mode }: { mode: Mode }) {
           : briefOn ? <BriefPane name={(st?.mine?.name || "").split(/\s+/)[0]} items={ol || []}
  listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)}
             openItem={(id) => { const it = (ol || []).find((x) => x.id === id); if (it) { setAutoBrief(false); setOpen(olKey(it)); setPicked(true); } }} />
-          : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} convo={convoStrip} onMoved={(to) => void moveRest(olCur, to)} onSent={(m, sent) => setAfterSend({ it: olCur, msg: m, sent })} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
+          : !sel && tab === "outlook" && olCur ? <LiveMail key={olCur.id} onKeep={(then) => void keepAndOpen(olCur, then)} convo={convoStrip} onMoved={(to) => void moveRest(olCur, to)} onSent={(m, sent) => setAfterSend({ it: olCur, msg: m, sent })} i={olCur} older={!!olCur.activity_id} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} busy={busy} setBusy={setBusy}
             done={(t, gone) => { flash(t); if (gone !== false) { setOl((l) => (l || []).filter((y) => y.id !== olCur.id)); setOpen(null); } }} />
           : !sel ? <section className="ibx2-empty"><b>{acts ? "Nothing to answer" : "Loading…"}</b>{acts && <span>New customer email shows up here within a couple of minutes.</span>}</section>
           : <Detail key={sel.x.id + (focus === sel.x.id ? ":f" : "")} autoOrder={autoOrder === sel.x.id} onAutoOrdered={() => setAutoOrder(null)} onSent={(m, sent) => setAfterSend({ it: mode === "mail" ? ol?.find((i) => i.activity_id === sel.x.id) : undefined, msg: m, sent })} focus={focus === sel.x.id} x={sel.x} inOutlook={!!ol?.some((i) => i.activity_id === sel.x.id)}
-              moveBar={inboxMove(sel.x.id) ? <MoveBar folders={folders} busy={busy === "mv"} here="INBOX" onMove={inboxMove(sel.x.id)!} /> : null} onMove={inboxMove(sel.x.id)} folders={folders} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
+              moveBar={inboxMove(sel.x.id) ? <MoveBar folders={folders} busy={busy === "mv"} here="INBOX" onMove={inboxMove(sel.x.id)!} known={sel.x.customer_id ? who(sel.x) : undefined} /> : null} onMove={inboxMove(sel.x.id)} folders={folders} ccOnly={sel.ccOnly} who={who(sel.x)} reply={sel.reply} quote={sel.quote} needs={sel.needs} urgent={sel.urgent} answered={sel.answered}
               orders={orders.filter((o) => o.customer_id && o.customer_id === sel.x.customer_id)}
               thread={(acts || []).filter((o) => o.id !== sel.x.id && ((actConvo.get(sel.x.id) || []).includes(o) || (o.thread_id && (o.thread_id === sel.x.thread_id || o.thread_id === sel.x.external_id)) || (sel.x.external_id && (o.meta?.references || []).includes(sel.x.external_id)) || (o.external_id && (sel.x.meta?.references || []).includes(o.external_id))))}
               convo={convoStrip}
@@ -593,7 +605,7 @@ function BriefPane({ name, items, listOpen, toggleList, back, openItem }: { name
  * Inbox: an email that isn't a customer's. Read live from the mailbox (the portal doesn't keep it), with what the AI
  * made of it (to-dos, suggested events), Reply, Archive and the SaneBox moves.
  */
-function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy, done, onSent, convo, onMoved }: { /** the rest of its conversation, shown at the top */ convo?: React.ReactNode; /** moved: the rest of the conversation goes the same way */ onMoved?: (to: string) => void; /** sent a reply: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; i: InboxItem; older: boolean; folders: Folder[] | null; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string, gone?: boolean) => void }) {
+function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy, done, onSent, convo, onMoved, onKeep }: { /** Actions (Oct 14): keep the email in the portal, then open it there with this started */ onKeep?: (then: "order" | "goods" | "match") => void; /** the rest of its conversation, shown at the top */ convo?: React.ReactNode; /** moved: the rest of the conversation goes the same way */ onMoved?: (to: string) => void; /** sent a reply: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; i: InboxItem; older: boolean; folders: Folder[] | null; listOpen: boolean; toggleList: () => void; back: () => void; busy: string; setBusy: (s: string) => void; done: (msg: string, gone?: boolean) => void }) {
   const [m, setM] = useState<{ html: string; text: string; from: string; to: string; cc: string; date: string; attachments: { name: string; size: number }[] } | null>(null);
   const [full, setFull] = useState<FullMsg | null>(null);
   const [err, setErr] = useState(""), [loadErr, setLoadErr] = useState("");
@@ -659,6 +671,11 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
           toolbar={<Toolbar>
             <TbGroup label="Email"><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setWriting(true)} /></TbGroup>
             <MoveBar folders={folders} busy={busy === "mv"} here="INBOX" onMove={(to, label) => move(to, label)} />
+            {onKeep && <TbGroup label="Actions">
+              <TbBtn icon={TbIcon.order} label={busy === "keep" ? "Opening…" : "Create order"} disabled={!!busy} title="Bring this email into the portal and make an order from it" onClick={() => onKeep("order")} />
+              <TbBtn icon={TbIcon.goods} label="Order goods" disabled={!!busy} onClick={() => onKeep("goods")} />
+              <TbBtn icon={TbIcon.person} label="Match to customer" disabled={!!busy} title="Make them a customer, or add them as a contact at one" onClick={() => onKeep("match")} />
+            </TbGroup>}
           </Toolbar>} />
         {err && <div className="pv-err eh-err">{err}</div>}
         <div className="ibx2-read">
@@ -800,6 +817,16 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   /** Match to customer (toolbar): opens the new-sender box on "Add to a customer" */
   const [matchKey, setMatchKey] = useState(0);
   const [fwdOpen, setFwdOpen] = useState(false);
+  const [askBH, setAskBH] = useState(false);
+  /** the customer's projects, for Messages → Save to project */
+  const [projs, setProjs] = useState<{ id: string; name: string; status: string }[]>([]);
+  useEffect(() => {
+    if (!x.customer_id) { setProjs([]); return; }
+    let live = true;
+    createClient().from("projects").select("id, name, status").eq("customer_id", x.customer_id).order("created_at", { ascending: false }).limit(30).then(({ data }) => { if (live) setProjs((data || []) as never); });
+    return () => { live = false; };
+  }, [x.customer_id]);
+  const projOn = projs.find((p) => p.id === x.project_id);
   async function loadOpts(fresh = false) {
     setBusy("opts"); setErr("");
     const r = await aiReplyOptions(x.id, fresh);
@@ -884,25 +911,44 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
                 <TbBtn icon={TbIcon.news} label="News" disabled={!!busy} title="SaneBox News: this sender's mail goes to News from now on" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "news" }), "Moved to News (SaneBox).")} />
               </TbGroup>
               <TbGroup label="Spam">
-                <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={!!busy} title="SaneBox Black Hole: junk, and this sender is blocked from now on" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "blackhole" }), "Black Hole: SaneBox won't show you this sender again.")} />
+                {askBH ? <span className="tb-ask" role="alertdialog" aria-label="Black Hole a customer?">
+                  <span><b>{who}</b> is a customer. Black Hole blocks their email from now on. Are you sure?</span>
+                  <button type="button" className="btn sm danger" disabled={!!busy} onClick={() => { setAskBH(false); void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "blackhole", confirmed: true }), "Black Hole: SaneBox won't show you this sender again."); }}>Yes, Black Hole</button>
+                  <button type="button" className="btn sm ghost" onClick={() => setAskBH(false)}>Cancel</button>
+                </span>
+                  : <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={!!busy} title="SaneBox Black Hole: junk, and this sender is blocked from now on" onClick={() => (x.customer_id ? setAskBH(true) : run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "blackhole" }), "Black Hole: SaneBox won't show you this sender again."))} />}
               </TbGroup>
             </>)}
             {/* Actions */}
-            {x.direction === "in" && <TbGroup label="Actions">
-              {!!orderFrom && <TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check" />}
-              <TbBtn icon={TbIcon.goods} label={goodsPcs > 0 ? `Order goods · ${goodsPcs}` : "Order goods"} title="Order the goods for this from S&S, or email our S&S rep for a custom quote" onClick={() => { window.location.href = orderGoodsHref(x.id); }} />
-              {!x.customer_id && <TbBtn icon={TbIcon.person} label="Match to customer" title="Make them a customer, or add them as a contact at one" onClick={() => setMatchKey((k) => k + 1)} />}
-              {x.customer_id && <TbMenu icon={TbIcon.file} label={filed ? `#${filed.number}` : "File under"}>{(close) => <>
-                {orders.slice(0, 40).map((o) => <button key={o.id} type="button" role="menuitem" className={o.id === x.order_id ? "on" : ""} disabled={!!busy} onClick={() => { close(); void run("ord", () => setEmailOrder(x.id, o.id), "Filed under the order."); }}>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></button>)}
-                {x.order_id && <button type="button" role="menuitem" onClick={() => { close(); void run("ord", () => setEmailOrder(x.id, null), "Not filed under an order now."); }}>Not filed under an order</button>}
-                {!orders.length && <span className="faint" style={{ padding: 8 }}>No orders for this customer yet.</span>}
-              </>}</TbMenu>}
-              {needs && <TbBtn icon={TbIcon.check} label="No reply needed" disabled={!!busy} onClick={() => run("nr", () => markNoReply(x.id), "Off your Needs reply list.")} />}
+            <TbGroup label="Actions">
+              {<TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check" />}
+              <TbBtn icon={TbIcon.goods} label="Order goods" title="Order the goods for this from S&S, or email our S&S rep for a custom quote" onClick={() => { window.location.href = orderGoodsHref(x.id); }} />
+              {x.customer_id
+                ? <TbBtn icon={TbIcon.person} label="Customer profile" title="Open this customer's page" onClick={() => { window.location.href = `/shop/customers/${x.customer_id}`; }} />
+                : <TbBtn icon={TbIcon.person} label="Match to customer" title="Make them a customer, or add them as a contact at one" onClick={() => setMatchKey((k) => k + 1)} />}
               <TbMenu icon={TbIcon.more} label="More">{(close) => <>
-                {x.customer_id && <a href={`/shop/customers/${x.customer_id}`} role="menuitem" onClick={close}>Open the customer</a>}
+                {needs && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr", () => markNoReply(x.id), "Off your Needs reply list."); }}>No reply needed</button>}
                 {!needs && x.meta?.no_reply && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr-undo", () => markNoReply(x.id, false), "Back on Needs reply."); }}>Needs a reply after all</button>}
                 {!needs && !x.meta?.no_reply && answered && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("back", () => putBackInInbox(x.id), "Back in the Inbox."); }}>Back to Needs reply</button>}
-                <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>Not a customer (stop reading their email)</button>
+                {x.direction === "in" && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>Not a customer (stop reading their email)</button>}
+              </>}</TbMenu>
+            </TbGroup>
+            {/* Messages: keep this email with an order or a project (Oct 14) */}
+            {x.customer_id && <TbGroup label="Messages">
+              <TbMenu icon={TbIcon.file} label={filed ? `Filed: #${filed.number}` : "File under order"}>{(close) => <>
+                {orders.slice(0, 40).map((o) => <button key={o.id} type="button" role="menuitem" className={o.id === x.order_id ? "on" : ""} disabled={!!busy} onClick={() => { close(); void run("ord", () => setEmailOrder(x.id, o.id), `Filed under #${o.number}.`); }}>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></button>)}
+                {x.order_id && <button type="button" role="menuitem" onClick={() => { close(); void run("ord", () => setEmailOrder(x.id, null), "Not filed under an order now."); }}>Not filed under an order</button>}
+                {!orders.length && <span className="faint" style={{ padding: 8 }}>No orders for this customer yet.</span>}
+              </>}</TbMenu>
+              <TbMenu icon={TbIcon.folder} label={projOn ? `Project: ${projOn.name}` : "Save to project"}>{(close) => <>
+                {projs.map((p) => <button key={p.id} type="button" role="menuitem" className={p.id === x.project_id ? "on" : ""} disabled={!!busy} onClick={() => { close(); void run("proj", () => setEmailProject(x.id, p.id), `Saved to the project ${p.name}.`); }}>{p.name} <span className="faint">({p.status})</span></button>)}
+                {x.project_id && <button type="button" role="menuitem" onClick={() => { close(); void run("proj", () => setEmailProject(x.id, null), "Taken off the project."); }}>Not on a project</button>}
+                {!projs.length && <span className="faint" style={{ padding: 8 }}>No projects for this customer yet.</span>}
+                <a role="menuitem" href={`/shop/projects?new=${x.customer_id}`} onClick={close}>New project…</a>
+              </>}</TbMenu>
+              <TbMenu icon={TbIcon.note} label="Add to order notes">{(close) => <>
+                {orders.slice(0, 40).map((o) => <button key={o.id} type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("onote", async () => { const r = await addEmailToOrderNotes(x.id, o.id); return r; }, `Added to the notes on #${o.number}.`); }}>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></button>)}
+                {!orders.length && <span className="faint" style={{ padding: 8 }}>No orders for this customer yet.</span>}
               </>}</TbMenu>
             </TbGroup>}
             </>}
@@ -921,6 +967,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           <div className="ibx2-read">
             {convo}
             {!x.customer_id && x.direction === "in" && <NewSender key={`ns-${matchKey}`} x={x} busy={busy} run={run} start={matchKey ? "contact" : ""} />}
+            <div className="ibx2-orig-h">{x.direction === "in" ? `${fromName}'s email, as sent` : "Our email, as sent"} <span className="faint">· {when}</span></div>
             <EmailBody x={x} />
             {(x.meta?.attachments || []).length > 0 && <div className="ibx2-files">{x.meta!.attachments!.map((f) => <button key={f.path} type="button" onClick={() => urlFor(f.path)}>📎 {f.name}</button>)}</div>}
             <CanvaGet x={x} busy={busy} run={run} />

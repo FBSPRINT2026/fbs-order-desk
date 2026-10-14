@@ -198,6 +198,36 @@ export async function handleIncoming(admin: SupabaseClient, m: MailMsg, acct: Ac
   return lead ? "lead" : "customer";
 }
 
+/**
+ * Keep one Inbox email in the portal on request (Oct 14, Nick: "Kayla Heady sent an email and the actions toolbar
+ * doesn't pop up"): the mail check skips senders it can't place, so Create order, Order goods and Match to customer
+ * had nothing to work with. Saved like any customer email (attachments, body, the AI's read of it); linked to the
+ * customer when the sender is one, else a new sender (lead). Returns the email's id here.
+ */
+export async function keepIncoming(admin: SupabaseClient, m: MailMsg, acct: Acct): Promise<string> {
+  const from = lc(m.from.address);
+  if (m.messageId) { const { data: dup } = await admin.from("activities").select("id").eq("external_id", m.messageId).maybeSingle(); if (dup) return dup.id as string; }
+  const parent = await threadParent(admin, m);
+  let match = await matchAddress(admin, from);
+  if (!match.customerId && parent?.customer_id) match = { customerId: parent.customer_id as string, how: "thread" };
+  const lead = !match.customerId;
+  const orderId = parent?.order_id || (await orderFor(admin, match.customerId, m.subject));
+  const attachments = await saveAttachments(admin, m, match.customerId || "leads");
+  const body = await saveBody(admin, m, match.customerId || "leads");
+  const { data: ins, error } = await admin.from("activities").insert({
+    customer_id: match.customerId, order_id: orderId, kind: "email", direction: "in",
+    subject: m.subject.slice(0, 500), body: m.text.slice(0, 100000), from_email: from,
+    to_email: [...m.to, ...m.cc].map((x) => x.address).join(", ").slice(0, 500),
+    external_id: m.messageId ? m.messageId.slice(0, 500) : null, thread_id: (m.inReplyTo || m.references[0] || m.messageId || "").slice(0, 500) || null,
+    occurred_at: m.date.toISOString(), created_by: "kept",
+    meta: { from_name: m.from.name.slice(0, 200), match: match.how, lead, kept: true, references: m.references.slice(-20), cc: m.cc.map((x) => x.address), attachments, ...body, mailbox: "inbox", account_id: acct.id, account: acct.email },
+  }).select("id").single();
+  if (error) throw new Error(error.message);
+  await linkArtForEmail(admin, ins.id as string).catch(() => null);
+  await processEmailActivity(admin, ins.id as string).catch(() => null);
+  return ins.id as string;
+}
+
 export async function handleSent(admin: SupabaseClient, m: MailMsg, acct: Acct): Promise<Outcome> {
   if (m.messageId) { const { data: dup } = await admin.from("activities").select("id").eq("external_id", m.messageId).maybeSingle(); if (dup) return "duplicate"; }
   const parent = await threadParent(admin, m);

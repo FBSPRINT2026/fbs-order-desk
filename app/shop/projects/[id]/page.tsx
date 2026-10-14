@@ -20,6 +20,9 @@ export default function ShopProject({ params }: { params: Promise<{ id: string }
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [arch, setArch] = useState<{ id: string; visual_id: string; nickname: string; status_name: string; status_color: string; kind: string; total: number; balance: number; due_date: string | null; project_id: string | null }[]>([]);
   const [missing, setMissing] = useState(false);
+  /** emails saved to this project from the Inbox (Messages → Save to project) */
+  const [mails, setMails] = useState<{ id: string; subject: string; from_email: string; occurred_at: string; direction: string; meta: { from_name?: string; triage?: { summary?: string } } | null }[]>([]);
+  useEffect(() => { sb.from("activities").select("id, subject, from_email, occurred_at, direction, meta").eq("project_id", id).order("occurred_at", { ascending: false }).limit(50).then(({ data }) => setMails((data || []) as never)); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   const load = useCallback(async () => {
     const { data } = await sb.from("projects").select("*").eq("id", id).maybeSingle();
     if (!data) { setMissing(true); return; }
@@ -51,7 +54,7 @@ export default function ShopProject({ params }: { params: Promise<{ id: string }
     <>
       <Link className="back" href="/shop/projects">← Projects</Link>
       <div style={{ marginTop: 10 }}>
-        <ProjectView mode="shop" project={p} tasks={tasks} orders={inProj} linkable={linkable} company={custLabel(cust)} customerHref={`/shop/customers/${p.customer_id}`}
+        <ProjectView mode="shop" emails={mails.length ? <section className="pv2-msgs"><h2>Emails saved to this project</h2><ul className="pv2-mails">{mails.map((m) => <li key={m.id}><b>{m.direction === "in" ? m.meta?.from_name || m.from_email : "Us"}</b> <span className="faint">{new Date(m.occurred_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span><div>{m.subject}</div>{m.meta?.triage?.summary && <div className="faint">{m.meta.triage.summary}</div>}</li>)}</ul></section> : null} project={p} tasks={tasks} orders={inProj} linkable={linkable} company={custLabel(cust)} customerHref={`/shop/customers/${p.customer_id}`}
           messages={<ShopMessages customerId={p.customer_id} customerName={cust?.name || custLabel(cust)} orders={[]} projects={[{ id: p.id, name: p.name }]} only={`p:${p.id}`} shopName={settings.shop.name} height={480} />}
           act={{
             save: async (patch) => ok((await sb.from("projects").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id)).error),

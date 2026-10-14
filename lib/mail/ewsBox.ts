@@ -250,6 +250,15 @@ export async function ewsInboxMessageIds(acct: MailAccount): Promise<Set<string>
   return new Set(all(x, "InternetMessageId").map((m) => mid(unesc(m.inner))).filter(Boolean));
 }
 
+/** an Inbox email's raw message (MIME), found by its Message-ID, for keeping it in the portal */
+export async function ewsMimeByMessageId(acct: MailAccount, messageId: string): Promise<Buffer | null> {
+  const id = await ewsFindByMessageId(acct, "INBOX", messageId).catch(() => "");
+  if (!id) return null;
+  const x = await call(acct, `<m:GetItem><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:IncludeMimeContent>true</t:IncludeMimeContent></m:ItemShape><m:ItemIds><t:ItemId Id="${esc(id)}"/></m:ItemIds></m:GetItem>`, 40000);
+  const b64 = one(x, "MimeContent").replace(/\s+/g, "");
+  return b64 ? Buffer.from(b64, "base64") : null;
+}
+
 export async function ewsMarkRead(acct: MailAccount, itemId: string) {
   await call(acct, `<m:UpdateItem MessageDisposition="SaveOnly" ConflictResolution="AutoResolve" SuppressReadReceipts="true"><m:ItemChanges><t:ItemChange><t:ItemId Id="${esc(itemId)}"/><t:Updates><t:SetItemField><t:FieldURI FieldURI="message:IsRead"/><t:Message><t:IsRead>true</t:IsRead></t:Message></t:SetItemField></t:Updates></t:ItemChange></m:ItemChanges></m:UpdateItem>`);
 }

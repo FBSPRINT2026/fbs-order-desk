@@ -300,6 +300,39 @@ export async function setEmailOrder(activityId: string, orderId: string | null) 
 }
 
 
+/** Messages → Save to project (Oct 14): the email is kept with the customer's project (shown on the project page) */
+export async function setEmailProject(activityId: string, projectId: string | null) {
+  try {
+    const { admin } = await staff();
+    const { error } = await admin.from("activities").update({ project_id: projectId }).eq("id", activityId);
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** Messages → Add to order notes (Oct 14): who wrote, when, and what they said (the AI's summary, or the start of the
+ *  email) appended to the order's notes; the email is filed under that order too */
+export async function addEmailToOrderNotes(activityId: string, orderId: string) {
+  try {
+    const { admin } = await staff();
+    const [{ data: a }, { data: o }] = await Promise.all([
+      admin.from("activities").select("id, from_email, subject, body, occurred_at, meta").eq("id", activityId).maybeSingle(),
+      admin.from("orders").select("id, number, notes").eq("id", orderId).maybeSingle(),
+    ]);
+    if (!a || !o) return { ok: false as const, error: "That email or order isn't there any more." };
+    const meta = (a.meta || {}) as { from_name?: string; triage?: { summary?: string } };
+    const when = new Date(a.occurred_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
+    const what = (meta.triage?.summary || String(a.body || "").replace(/\s+/g, " ").trim().slice(0, 600)).trim();
+    const line = `From ${meta.from_name || a.from_email}'s email (${when}, "${String(a.subject || "").slice(0, 80)}"): ${what}`;
+    if (String(o.notes || "").includes(line)) return { ok: true as const, number: o.number as number };
+    const notes = [String(o.notes || "").trim(), line].filter(Boolean).join("\n").slice(0, 8000);
+    const { error } = await admin.from("orders").update({ notes }).eq("id", orderId);
+    if (error) return { ok: false as const, error: error.message };
+    await admin.from("activities").update({ order_id: orderId }).eq("id", activityId).is("order_id", null);
+    return { ok: true as const, number: o.number as number };
+  } catch (e) { return fail(e); }
+}
+
 export type InboxItem = { id: string; uid: number; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean; unread: boolean; flagged: boolean; activity_id: string | null; bucket: string | null; summary: string };
 
 /** your Outlook Inbox as it is right now (the mirror, refreshed every mailbox check): your to-do list */
@@ -322,7 +355,7 @@ export async function getOutlookInbox() {
 }
 
 /** Archive: moves the email to Archive in your Outlook, the same as Outlook's Archive button (by row, or by the customer email on file) */
-export async function archiveOutlookEmail(input: { id?: string; activityId?: string; to?: MoveTo }) {
+export async function archiveOutlookEmail(input: { id?: string; activityId?: string; to?: MoveTo; /** Black Hole on a customer, after the page asked */ confirmed?: boolean }) {
   try {
     const v = await staff(), { admin, user, email } = v;
     if (await viewedEmail(v)) return { ok: false as const, error: VIEWING_NO };
@@ -335,8 +368,43 @@ export async function archiveOutlookEmail(input: { id?: string; activityId?: str
     }
     if (!id) return { ok: false as const, error: "That email isn't in your Outlook Inbox." };
     const to: MoveTo = input.to && input.to in MOVES ? input.to : "archive";
+    // never Black Hole a customer without asking (Oct 14, Nick)
+    if (to === "blackhole" && !input.confirmed) {
+      const { data: row } = await admin.from("mail_inbox").select("from_email, activity_id").eq("id", id).maybeSingle();
+      const { data: act } = row?.activity_id ? await admin.from("activities").select("customer_id").eq("id", row.activity_id).maybeSingle() : { data: null };
+      let custId = (act?.customer_id as string) || "";
+      if (!custId && row?.from_email) { const { matchAddress } = await import("@/lib/mail/process"); const mm = await matchAddress(admin, String(row.from_email)).catch(() => null); custId = mm?.customerId && !mm.ignore ? mm.customerId : ""; }
+      if (custId) { const { data: c } = await admin.from("customers").select("company, name").eq("id", custId).maybeSingle(); return { ok: false as const, error: `${c?.company || c?.name || "This sender"} is a customer. Open the email and press Black Hole there to confirm.` }; }
+    }
     await archiveInbox(admin, a, id, email || "portal", to);
     return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** an Inbox email the portal didn't keep (a sender it couldn't place): kept now, so the email's Actions work on it */
+export async function keepInboxEmail(inboxId: string) {
+  try {
+    const v = await staff(), { admin } = v;
+    const { acct: a } = await mailboxToRead(admin, v);
+    if (!a || !a.enabled) return { ok: false as const, error: "Connect your email first." };
+    const { data: r } = await admin.from("mail_inbox").select("id, account_id, uid, uidvalidity, message_id, activity_id").eq("id", inboxId).maybeSingle();
+    if (!r || r.account_id !== a.id) return { ok: false as const, error: "That email isn't in your Inbox." };
+    if (r.activity_id) return { ok: true as const, activityId: r.activity_id as string };
+    const { simpleParser } = await import("mailparser");
+    const { toMsg } = await import("@/lib/mail/imap");
+    const { keepIncoming } = await import("@/lib/mail/process");
+    let raw: Buffer | null = null;
+    const { ewsReady, ewsMimeByMessageId } = await import("@/lib/mail/ewsBox");
+    if (r.message_id && (await ewsReady(admin, a))) raw = await ewsMimeByMessageId(a, String(r.message_id)).catch(() => null);
+    if (!raw) {
+      const { withBox } = await import("@/lib/mail/folders");
+      raw = await withBox(a, async (c) => { const lock = await c.getMailboxLock("INBOX"); try { const m = await c.fetchOne(String(r.uid), { source: true }, { uid: true }); return m && m.source ? Buffer.from(m.source) : null; } finally { lock.release(); } }, Date.now() + 40000).catch(() => null);
+    }
+    if (!raw) return { ok: false as const, error: "Couldn't read that email from your mailbox. Try again in a minute." };
+    const m = toMsg(await simpleParser(raw));
+    const id = await keepIncoming(admin, m, { id: a.id, email: a.email });
+    await admin.from("mail_inbox").update({ activity_id: id }).eq("id", r.id);
+    return { ok: true as const, activityId: id };
   } catch (e) { return fail(e); }
 }
 

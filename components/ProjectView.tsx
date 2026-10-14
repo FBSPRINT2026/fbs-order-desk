@@ -21,7 +21,7 @@ export type ProjectActs = {
  * One project: key dates with a countdown, its orders (with totals), details and special requests,
  * a task checklist (ours and theirs; shop-only tasks never reach the customer) and the project's conversation.
  */
-export default function ProjectView({ mode, project, tasks, orders, linkable, messages, act, canAct = true, customerHref, company }: {
+export default function ProjectView({ mode, project, tasks, orders, linkable, messages, act, canAct = true, customerHref, company, emails }: { /** shop: emails saved to this project from the Inbox (Oct 14) */ emails?: React.ReactNode;
   mode: "portal" | "shop"; project: Project; tasks: ProjectTask[]; orders: ProjectOrder[];
   /** the customer's orders not in this project yet */
   linkable: { id: string; label: string; archived?: boolean }[];
@@ -153,6 +153,7 @@ export default function ProjectView({ mode, project, tasks, orders, linkable, me
         </aside>
       </div>
 
+      {mode === "shop" && emails}
       <section className="pv2-msgs">
         <h2>Project conversation</h2>
         {messages}

@@ -99,6 +99,8 @@ export const TbIcon = {
   order: P("M6 3h9l3 3v15H6zM9 12h6M12 9v6"),
   file: P("M4 5h7l2 2h7v12H4zM8 13h8"),
   goods: P("M4 8h16l-1.5 12h-13zM8 8V6a4 4 0 0 1 8 0v2"),
+  folder: P("M3 6h6l2 2h10v11H3z"),
+  note: P("M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"),
   person: P("M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0M19 8v6M16 11h6"),
   check: P("M4 12l5 5L20 6"),
   more: P("M5 12h.01M12 12h.01M19 12h.01"),
@@ -243,7 +245,10 @@ function PhoneBar({ a }: { a: PhoneActs }) {
 
 /** Move (Archive, News, Move to any folder) and Spam (Black Hole): the same groups on every email (News took Later's place Oct 14:
  *  Nick uses SaneBox News, rarely Later; Later is still in Move → SaneBox folders) */
-export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | null; busy?: boolean; onMove: (to: string, label: string) => void; here?: string }) {
+export function MoveBar({ folders, busy, onMove, here, known }: { folders: Folder[] | null; busy?: boolean; onMove: (to: string, label: string, confirmed?: boolean) => void; here?: string;
+  /** the sender is a customer (their name): Black Hole asks first (Oct 14, Nick: "keep you from black holing a known customer") */ known?: string }) {
+  const [askBH, setAskBH] = useState(false);
+  const bh = () => onMove("blackhole", "Black Hole: SaneBox won't show you this sender again.", true);
   const others = (folders || []).filter((f) => f.path !== here && !/\\(Drafts|Junk)/.test(f.special));
   return (
     <>
@@ -258,7 +263,12 @@ export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | n
     </TbGroup>
     {/* Spam */}
     <TbGroup label="Spam">
-      <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={busy} onClick={() => onMove("blackhole", "Black Hole: SaneBox won't show you this sender again.")} title="SaneBox Black Hole: junk, and this sender is blocked from now on" />
+      {askBH && known ? <span className="tb-ask" role="alertdialog" aria-label="Black Hole a customer?">
+        <span><b>{known}</b> is a customer. Black Hole blocks their email from now on. Are you sure?</span>
+        <button type="button" className="btn sm danger" disabled={busy} onClick={() => { setAskBH(false); bh(); }}>Yes, Black Hole</button>
+        <button type="button" className="btn sm ghost" onClick={() => setAskBH(false)}>Cancel</button>
+      </span>
+        : <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={busy} onClick={() => (known ? setAskBH(true) : onMove("blackhole", "Black Hole: SaneBox won't show you this sender again."))} title="SaneBox Black Hole: junk, and this sender is blocked from now on" />}
     </TbGroup>
     </>
   );
