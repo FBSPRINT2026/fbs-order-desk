@@ -15,7 +15,7 @@ import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
-import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -348,6 +348,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
     return step(listed.map((r) => r.x.id), sel?.x.id || "", (k) => pickRow(k), tab === "reply" ? "Needs reply" : tab === "leads" ? "Leads" : "All");
   })();
 
+  const [cvPop, setCvPop] = useState(false);
   const [stripOpen, setStripOpen] = useState(false);
   const stripKey = (tab === "outlook" && olCur ? (groupOf.get(olCur.id) || allGroupOf.get(olCur.id))?.[0]?.id : "") || "";
   useEffect(() => { setStripOpen(false); }, [stripKey]);
@@ -361,7 +362,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const stripFold = !stripOpen && stripAll.length > 3;
   const stripShown: (typeof stripAll[number] | "more")[] = stripFold ? (curAt <= 0 ? [stripAll[0], "more"] : [stripAll[0], "more", stripAll[curAt]]) : stripAll;
   const stripHidden = stripAll.length - (curAt <= 0 ? 1 : 2);
-  const convoStrip = curGroup && curGroup.length > 1 && olCur ? <div className="cv-strip" role="group" aria-label="This conversation">
+  // phones: folded to one line until you tap it (Oct 14, Nick: the cleaner phone look)
+  const convoStrip = curGroup && curGroup.length > 1 && olCur ? <div className={"cv-strip" + (cvPop ? " pop" : "")} role="group" aria-label="This conversation">
+    <button type="button" className="cv-sum" onClick={() => setCvPop(!cvPop)} aria-expanded={cvPop}><b>{curGroup.length} emails</b> in this conversation<span>{cvPop ? "Hide" : "Show ›"}</span></button>
     <div className="cv-h">This conversation · {curGroup.length} emails</div>
     {stripShown.map((y) => { if (y === "more") return <button key="more" type="button" className="cv-more" onClick={() => setStripOpen(true)} aria-expanded={false}>▸ {stripHidden} more email{stripHidden === 1 ? "" : "s"} — tap to show</button>;
       const ry = y.activity_id ? rowByAct.get(y.activity_id) : undefined; return (
@@ -632,7 +635,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
   }, [i.id, tryN]);
   const doc = useMemo(() => {
     if (!m?.html) return null;
-    const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}@media (max-width:760px) and (pointer:coarse){html,body{padding:6px 8px;font-size:12.5px;line-height:1.4}body p,body div,body span,body td,body li,body font,body a,body blockquote,body pre{font-size:12.5px!important;line-height:1.4!important}}table img{max-width:none}table{max-width:100%}</style>`;
+    const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}@media (max-width:760px) and (pointer:coarse){html,body{padding:4px 0;font-size:14px;line-height:1.45}body p,body div,body span,body td,body li,body font,body a,body blockquote,body pre{font-size:14px!important;line-height:1.45!important}}table img{max-width:none}table{max-width:100%}</style>`;
     const html = m.html.replace(/<script[\s\S]*?<\/script>/gi, "");
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (x) => x + head) : head + html;
   }, [m?.html]);
@@ -656,12 +659,12 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={i.subject} fromName={i.from_name} fromEmail={i.from_email} to={m?.to} cc={m?.cc} date={when} summary={i.summary}
           phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: busy === "mv",
             ask: { id: "inbox:" + i.id, who: i.from_name || i.from_email, onDraft: (d) => { setBody(d.body); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); setWriting(true); } },
-            more: (close) => <>
-              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("news", "Moved to News."); }}>{TbIcon.news} News (SaneBox)</button>
-              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("news", "Moved to News."); }}>{TbIcon.file} News (SaneBox)</button>
-              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("receipts", "Moved to Receipts."); }}>{TbIcon.file} Receipts (SaneBox)</button>
-              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("cc", "Moved to CC."); }}>{TbIcon.file} CC (SaneBox)</button>
-            </> }}
+            more: onKeep ? (close) => <PSec label="Actions">
+              <PTile icon={TbIcon.order} label="Create order" kind="primary" disabled={!!busy} onClick={() => { close(); onKeep("order"); }} />
+              <PTile icon={TbIcon.goods} label="Order goods" disabled={!!busy} onClick={() => { close(); onKeep("goods"); }} />
+              <PTile icon={TbIcon.person} label="Match to customer" disabled={!!busy} onClick={() => { close(); onKeep("match"); }} />
+            </PSec> : undefined }}
+          ai={onKeep ? <button type="button" className="tb-b primary eh-ai-go" disabled={!!busy} onClick={() => onKeep("order")}>{TbIcon.order}<span className="tb-l">{busy === "keep" ? "Opening…" : "Create order"}</span></button> : undefined}
           tags={<>
             {i.bucket === "todo" && <span className="eh-tag todo">To-do</span>}
             {i.bucket === "event" && <span className="eh-tag event">Event</span>}
@@ -887,20 +890,32 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
       <section className="ibx2-mail" aria-label="The email">
         <MailHead listOpen={listOpen} toggleList={toggleList} subject={x.subject}
           phone={{
-            reply: x.direction === "in" ? () => write() : undefined, busy: busy === "mv" || busy === "arch", folders, here: "INBOX",
+            reply: x.direction === "in" ? () => write() : undefined, forward: view !== "order" ? () => setFwdOpen(true) : undefined, known: x.customer_id ? who : undefined,
+            busy: busy === "mv" || busy === "arch", folders, here: "INBOX",
             ask: x.direction === "in" ? { id: x.id, who, onDraft: (d) => { act({ kind: "reply", label: "", subject: d.subject, body: d.body }); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); }, openChat: () => setSide("ai") } : undefined,
-            move: onMove || (inOutlook ? (to, label) => { const k = (["archive", "later", "news", "receipts", "cc", "blackhole"].includes(to) ? to : "archive") as "archive"; void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: k }), label); } : undefined),
-            more: orderFrom ? (close) => <>
-              {view === "order" ? <button type="button" role="menuitem" onClick={() => { close(); setView("mail"); }}>{TbIcon.back} Back to the email</button>
-                : <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); startOrder(); }}>{TbIcon.order} {ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"}</button>}
-              <button type="button" role="menuitem" onClick={() => { close(); setSide("ai"); }}><span className="pbar-ic" aria-hidden>✦</span> Assistant chat</button>
-              {needs && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr", () => markNoReply(x.id), "Off your Needs reply list."); }}>{TbIcon.check} No reply needed</button>}
-              {!needs && x.meta?.no_reply && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr-undo", () => markNoReply(x.id, false), "Back on Needs reply."); }}>{TbIcon.reply} Needs a reply after all</button>}
-              {x.customer_id && <a href={`/shop/customers/${x.customer_id}`} role="menuitem" onClick={close}>{TbIcon.file} Open the customer</a>}
-              <a href={`/shop/order-goods?email=${orderFrom?.id || x.id}`} target="_blank" rel="noreferrer" role="menuitem" onClick={close}>{TbIcon.move} Order goods from S&amp;S</a>
-              {x.direction === "in" && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>{TbIcon.ban} Not a customer</button>}
-            </> : undefined,
-          }} ai={x.direction === "in" ? <button type="button" className={"tb-b ai eh-ai-btn" + (aiOpen ? " on" : "")} onClick={() => (aiOpen ? hideAi?.() : openAi())} aria-expanded={aiOpen} title={aiOpen ? "Hide the Assistant" : "Open the Assistant and start listening"}><svg viewBox="0 0 24 24" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg><span className="tb-l">{aiOpen ? "Hide Assistant" : "Assistant"}</span></button> : undefined}
+            move: onMove || (inOutlook ? (to, label, confirmed) => { const k = (["archive", "later", "news", "receipts", "cc", "blackhole"].includes(to) ? to : "archive") as "archive"; void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: k, ...(confirmed ? { confirmed: true } : {}) }), label); } : undefined),
+            more: (close) => <>
+              <PSec label="Actions">
+                {view === "order" ? <PTile icon={TbIcon.back} label="Back to the email" onClick={() => { close(); setView("mail"); }} />
+                  : <PTile icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind="primary" disabled={!!busy} onClick={() => { close(); startOrder(); }} />}
+                <PTile icon={TbIcon.goods} label="Order goods" href={orderGoodsHref(x.id)} onClick={close} />
+                {x.customer_id ? <PTile icon={TbIcon.person} label="Customer" href={`/shop/customers/${x.customer_id}`} onClick={close} />
+                  : <PTile icon={TbIcon.person} label="Match to customer" onClick={() => { close(); setMatchKey((k) => k + 1); }} />}
+                {x.direction === "in" && !x.customer_id && <PTile icon={TbIcon.ban} label="Not a customer" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }} />}
+              </PSec>
+              {x.customer_id && <PSec label="Messages">
+                <PPick icon={TbIcon.file} label={filed ? `Filed #${filed.number}` : "File under"} empty="No orders for this customer yet."
+                  items={[...orders.slice(0, 40).map((o) => ({ key: o.id, on: o.id === x.order_id, label: <>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></>, onClick: () => { close(); void run("ord", () => setEmailOrder(x.id, o.id), `Filed under #${o.number}.`); } })),
+                    ...(x.order_id ? [{ key: "none", label: "Not filed under an order", onClick: () => { close(); void run("ord", () => setEmailOrder(x.id, null), "Not filed under an order now."); } }] : [])]} />
+                <PPick icon={TbIcon.folder} label={projOn ? projOn.name.slice(0, 18) : "Project"} empty="No projects for this customer yet."
+                  items={[...projs.map((p) => ({ key: p.id, on: p.id === x.project_id, label: <>{p.name} <span className="faint">({p.status})</span></>, onClick: () => { close(); void run("proj", () => setEmailProject(x.id, p.id), `Saved to the project ${p.name}.`); } })),
+                    ...(x.project_id ? [{ key: "none", label: "Not on a project", onClick: () => { close(); void run("proj", () => setEmailProject(x.id, null), "Taken off the project."); } }] : [])]}
+                  extra={<a href={`/shop/projects?new=${x.customer_id}`} onClick={close}>New project…</a>} />
+                <PPick icon={TbIcon.note} label="Order notes" empty="No orders for this customer yet."
+                  items={orders.slice(0, 40).map((o) => ({ key: o.id, label: <>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></>, onClick: () => { close(); void run("onote", () => addEmailToOrderNotes(x.id, o.id), `Added to the notes on #${o.number}.`); } }))} />
+              </PSec>}
+            </>,
+          }} ai={x.direction === "in" ? <>{view !== "order" && <button type="button" className="tb-b primary eh-ai-go" disabled={!!busy} onClick={() => startOrder()}>{TbIcon.order}<span className="tb-l">{ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"}</span></button>}<button type="button" className={"tb-b ai eh-ai-btn" + (aiOpen ? " on" : "")} onClick={() => (aiOpen ? hideAi?.() : openAi())} aria-expanded={aiOpen} title={aiOpen ? "Hide the Assistant" : "Open the Assistant and start listening"}><svg viewBox="0 0 24 24" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg><span className="tb-l">{aiOpen ? "Hide Assistant" : "Assistant"}</span></button></> : undefined}
           fromName={personName(fromName) || who} org={who !== personName(fromName) && who !== fromName ? who : undefined} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
           tags={<>
             {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
@@ -1152,7 +1167,7 @@ function EmailBody({ x }: { x: Act }) {
         inline.forEach(([cid, p]) => { const u = urls?.find((r) => r.path === p)?.signedUrl; if (u) html = html.split(`cid:${cid}`).join(u); });
       }
       html = html.replace(/<script[\s\S]*?<\/script>/gi, "");
-      const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}table img{max-width:none}table{max-width:100%}</style>`;
+      const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}@media (max-width:760px) and (pointer:coarse){html,body{padding:4px 0;font-size:14px;line-height:1.45}body p,body div,body span,body td,body li,body font,body a,body blockquote,body pre{font-size:14px!important;line-height:1.45!important}}table img{max-width:none}table{max-width:100%}</style>`;
       html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + head) : head + html;
       if (live) setDoc(html);
     })().catch(() => null);

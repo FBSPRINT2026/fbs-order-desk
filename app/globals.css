@@ -7246,8 +7246,6 @@ a.pdn-tag:hover{text-decoration:underline}
   .eh-bar.has-pn .tb-row .tb-b.strong svg{color:inherit}
   .eh-bar.has-pn .tb-menu{position:fixed;left:8px;right:8px;top:auto;min-width:0;margin-top:4px}
   .eh-bar.has-pn .tb-ask{flex:0 0 100%;font-size:12px}
-  .pbar{display:none!important}
-  .ibx2-mail:has(.eh-bar.has-pn){padding-bottom:calc(14px + env(safe-area-inset-bottom))}
   .eh .eh-ai{padding:10px 10px 10px 12px}
   .eh .eh-ai-l{min-width:0}
   .eh .eh-ai-btn{width:46px;height:46px;border-radius:50%;padding:0;justify-content:center}
@@ -7342,4 +7340,87 @@ a.pdn-tag:hover{text-decoration:underline}
   .ibx2-read{font-size:12.5px;line-height:1.4}
   .tx-b{font-size:13px}
   .tx-h{font-size:13px}
+}
+
+/* ───────── Phone email, the cleaner look (Oct 14, Nick picked the mockup) ─────────
+   ‹ Inbox ∧ ∨ pinned at the top; the subject and one sender line; an AI card (summary, the main next step, the
+   microphone); the conversation folded to one line; the email at a normal reading size; Archive · Move · Reply ·
+   Forward · More along the bottom, More sliding up every other button as tiles under the toolbar's section names */
+.cv-sum,.eh-ai-go,.ps-grab{display:none}
+@media (max-width:760px) and (pointer:coarse){
+  .eh{display:flex;flex-direction:column;border-bottom:0}
+  .eh-bar.has-pn{order:0;border:0;background:none}
+  .eh-bar.has-pn .tb{display:none!important}
+  .eh-pn{border-bottom:1px solid var(--line-2);padding:calc(4px + env(safe-area-inset-top)) 6px 4px 2px}
+  .eh-pn-pos{display:none}
+  .eh-sec{display:none}
+  .eh-b{order:1;padding:8px 16px 0;gap:10px}
+  .eh-subj{font-size:19px!important;line-height:1.25}
+  .eh-from{grid-template-columns:34px minmax(0,1fr) auto;column-gap:10px;align-items:center}
+  .eh-av{width:34px;height:34px;font-size:12.5px;grid-row:auto}
+  .eh-who{font-size:14px;line-height:1.3}
+  .eh-n b{font-size:14px}
+  .eh-org{font-size:14px;color:var(--ink-2)}
+  .eh-to{font-size:12px;color:var(--ink-3)}
+  .eh-who{grid-column:2 / 4;grid-row:1}
+  .eh-date{font-size:12px;color:var(--ink-3);grid-column:3;grid-row:1;align-self:end;padding-bottom:1px}
+  /* the AI card */
+  .eh .eh-ai{order:2;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 16px 2px;padding:12px 12px 12px 14px;border:0;border-radius:14px;
+    background:linear-gradient(110deg,color-mix(in srgb,var(--ai-a) 11%,var(--surface)),color-mix(in srgb,var(--ai-c) 13%,var(--surface)))}
+  .eh .eh-ai::before{display:none}
+  .eh .eh-ai-l{flex:0 0 100%;flex-direction:row;gap:6px;font-size:11.5px;font-weight:700;color:var(--ai-c)}
+  .eh .eh-ai-l::after{content:"summary";margin-left:-2px}
+  .eh-ai-orb{width:18px;height:18px;border-radius:6px;font-size:10px}
+  .eh .eh-ai-b{flex:0 0 100%}
+  .eh .eh-ai-b .eh-sum{font-size:13.5px;line-height:1.4;color:var(--ink);font-weight:400;display:block;-webkit-line-clamp:unset;overflow:visible}
+  .eh .eh-ai-tags{display:none}
+  .eh .eh-ai-go{display:inline-flex;flex:1 1 auto;justify-content:center;height:38px;border-radius:10px;font-size:14px}
+  .eh .eh-ai-go .tb-l{display:inline!important}
+  .eh .eh-ai-btn{flex:none;width:38px;height:38px;border-radius:10px;padding:0;justify-content:center}
+  .eh .eh-ai-btn .tb-l{display:none}
+  .eh .eh-ai-btn svg{width:18px;height:18px}
+  /* the email */
+  .ibx2-read{padding:10px 16px 12px;font-size:14px;line-height:1.5}
+  .ibx2-orig-h{display:none}
+  .ibx-html>.btn{display:none}
+  /* the conversation, folded to one line */
+  .cv-strip{border:0;border-radius:0;margin:0;background:none}
+  .cv-strip:not(.pop)>:not(.cv-sum){display:none!important}
+  .cv-sum{display:flex;align-items:baseline;gap:5px;width:100%;border:0;border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);background:none;padding:9px 0;font:inherit;font-size:13px;color:var(--ink-2);text-align:left;cursor:pointer}
+  .cv-sum b{color:var(--ink);font-weight:600}
+  .cv-sum span{margin-left:auto;color:var(--accent);font-size:12.5px;font-weight:600}
+  .cv-strip.pop .cv-sum{border-bottom:0}
+  .cv-strip.pop{border-bottom:1px solid var(--line-2);margin-bottom:6px}
+  .cv-strip.pop .cv-h{display:none}
+  .cv-i{grid-template-columns:auto minmax(0,1fr) auto;align-items:baseline;gap:0 6px;padding:7px 0;border-bottom:0;border-top:1px solid var(--line-2)}
+  .cv-i.on{background:none;box-shadow:none}
+  .cv-i b{font-size:13px}
+  .cv-i span{grid-column:2;grid-row:1;font-size:12.5px}
+  .cv-i time{grid-column:3;grid-row:1;font-size:11.5px}
+  /* the bottom bar: five, evenly spaced */
+  .pbar{grid-template-columns:repeat(5,1fr);padding:5px 6px calc(4px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--surface) 96%,transparent);border-top:1px solid var(--line-2)}
+  .pbar-b{height:48px;font-size:10px;gap:3px}
+  .ibx2-mail:has(.eh-bar.has-pn){padding-bottom:calc(66px + env(safe-area-inset-bottom))}
+  /* the More sheet: tiles under section names */
+  .pbar-sheet{padding:8px 14px calc(14px + env(safe-area-inset-bottom));border-radius:18px 18px 0 0}
+  .ps-grab{display:block;width:38px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 4px;flex:none}
+  .pbar-sheet .pbar-t{font-size:11.5px;font-weight:600;color:var(--ink-3);padding:12px 4px 6px}
+  .ps-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .ps-t{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:70px;padding:10px 3px 8px;border:0;border-radius:12px;background:var(--bg);font:inherit;font-size:11.5px;font-weight:600;line-height:1.15;color:var(--ink);text-align:center;text-decoration:none;cursor:pointer}
+  .ps-t svg{width:22px;height:22px;color:var(--accent);fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .ps-t.primary{background:var(--accent);color:#fff}
+  .ps-t.primary svg{color:#fff}
+  .ps-t.danger,.ps-t.danger svg{color:var(--danger)}
+  .ps-t.open{box-shadow:inset 0 0 0 1.5px var(--accent)}
+  .ps-t:disabled{opacity:.4}
+  .ps-t:active:not(:disabled){filter:brightness(.95)}
+  .ps-list{grid-column:1/-1;display:flex;flex-direction:column;max-height:34vh;overflow-y:auto;border:1px solid var(--line);border-radius:12px;padding:4px}
+  .ps-list button,.ps-list a{border:0;background:none;text-align:left;font:inherit;font-size:14.5px;color:var(--ink);padding:10px 12px;border-radius:8px;text-decoration:none}
+  .ps-list button.on{color:var(--accent);font-weight:700}
+  .ps-list .faint{padding:10px 12px;font-size:13px}
+  .ps-ask{margin-top:10px;padding:12px;border-radius:12px;background:var(--danger-soft);font-size:14px;display:flex;flex-direction:column;gap:10px}
+  .ps-ask div{display:flex;gap:8px}
+  .ps-ask .btn{flex:1;justify-content:center;height:40px}
+  .ps-ask .btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+  .pbar-cancel{height:46px;margin-top:14px!important;border:0!important;border-radius:12px!important;background:var(--bg)!important;font-size:15.5px!important}
 }

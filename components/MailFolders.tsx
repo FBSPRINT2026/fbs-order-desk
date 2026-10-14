@@ -205,41 +205,84 @@ export function TbMenu({ icon, label, children, kind }: { icon: React.ReactNode;
 }
 
 /** what an open email can do, for the phone's bottom bar */
-export type PhoneActs = { reply?: () => void; move?: (to: string, label: string) => void; here?: string; folders?: Folder[] | null; busy?: boolean; more?: (close: () => void) => React.ReactNode;
+export type PhoneActs = { reply?: () => void; /** Forward (greyed when the email can't be forwarded from here) */ forward?: () => void;
+  move?: (to: string, label: string, confirmed?: boolean) => void; here?: string; folders?: Folder[] | null; busy?: boolean;
+  /** the More sheet's own sections (Actions, Messages…): <PSec> blocks of <PTile>/<PPick>; Move & spam is added after them */
+  more?: (close: () => void) => React.ReactNode;
+  /** the sender is a customer (their name): Black Hole asks first */ known?: string;
   /** the Assistant: say what to tell them, it writes the reply (id: a customer email's id, "inbox:<id>" or "box:<uid>:<folder>") */
   ask?: { id: string; who?: string; onDraft: (d: Draft) => void; openChat?: () => void } };
+
+/** a section of the phone's More sheet: a small header, then its buttons as tiles */
+export function PSec({ label, children }: { label: string; children: React.ReactNode }) {
+  return <><div className="pbar-t">{label}</div><div className="ps-grid">{children}</div></>;
+}
+/** a button in the phone's More sheet: icon over a word, like the iPhone's share sheet */
+export function PTile({ icon, label, onClick, href, kind, disabled }: { icon: React.ReactNode; label: string; onClick?: () => void; href?: string; kind?: "primary" | "danger"; disabled?: boolean }) {
+  const cls = "ps-t" + (kind ? " " + kind : "");
+  if (href) return <a className={cls} href={href} onClick={onClick} role="menuitem">{icon}<span>{label}</span></a>;
+  return <button type="button" className={cls} onClick={onClick} disabled={disabled} role="menuitem">{icon}<span>{label}</span></button>;
+}
+/** a tile that opens its choices right under the tiles (File under, Project, Order notes) */
+export function PPick({ icon, label, items, empty, extra }: { icon: React.ReactNode; label: string; items: { key: string; label: React.ReactNode; on?: boolean; onClick: () => void }[]; empty?: string; extra?: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className={"ps-t" + (open ? " open" : "")} onClick={() => setOpen(!open)} aria-expanded={open}>{icon}<span>{label}</span></button>
+      {open && <div className="ps-list" role="menu">
+        {items.map((it) => <button key={it.key} type="button" role="menuitem" className={it.on ? "on" : ""} onClick={it.onClick}>{it.label}</button>)}
+        {!items.length && <span className="faint">{empty || "Nothing to pick yet."}</span>}
+        {extra}
+      </div>}
+    </>
+  );
+}
 /**
- * Phones: the same five buttons in the same places on every email (Oct 12, Nick: "it changes every time, it should be
- * more of a static thing"): Archive, Move, Black Hole, Assistant, Reply, More. Move and More open a sheet from the
- * bottom; the Assistant listens and writes the reply (components/VoiceDraft.tsx).
- * A button an email can't use stays in its place, greyed out.
+ * Phones (Oct 14, Nick: "reimagine a cleaner look"): five buttons along the bottom, where your thumb is: Archive, Move,
+ * Reply, Forward, More. More slides up a sheet with every other button as tiles, under the same section names as the
+ * computer's toolbar (Actions, Messages, Move & spam). The main next step (Create order / reorder) and the Assistant's
+ * microphone sit in the AI card at the top of the email. A button an email can't use stays in its place, greyed out.
  */
 function PhoneBar({ a }: { a: PhoneActs }) {
   const [sheet, setSheet] = useState<"" | "move" | "more">("");
+  const [askBH, setAskBH] = useState(false);
   const [voice, setVoice] = useState<{ l: ReturnType<typeof startListening> } | null>(null);
   const others = (a.folders || []).filter((f) => f.path !== a.here && !/\\(Drafts|Junk)/.test(f.special));
-  const mv = (to: string, label: string) => { setSheet(""); a.move?.(to, label); };
+  const close = () => { setSheet(""); setAskBH(false); };
+  const mv = (to: string, label: string, confirmed?: boolean) => { close(); a.move?.(to, label, confirmed); };
   const off = !a.move || !!a.busy;
+  const bh = "Black Hole: SaneBox won't show you this sender again.";
   return (
     <>
       <nav className="pbar" aria-label="Email actions">
         <button type="button" className="pbar-b" disabled={off} onClick={() => mv("archive", "Archived.")}>{TbIcon.archive}<span>Archive</span></button>
         <button type="button" className="pbar-b" disabled={off} onClick={() => setSheet("move")}>{TbIcon.move}<span>Move</span></button>
-        <button type="button" className="pbar-b danger" disabled={off} onClick={() => mv("blackhole", "Black Hole: SaneBox won't show you this sender again.")}>{TbIcon.ban}<span>Black Hole</span></button>
-        <button type="button" className="pbar-b pbar-ai" disabled={!a.ask} onClick={() => setVoice({ l: startListening() })} aria-label="Assistant: say what to tell them and it writes the reply"><i aria-hidden>✦</i><span>Assistant</span></button>
         <button type="button" className="pbar-b" disabled={!a.reply} onClick={() => { a.reply?.(); window.scrollTo({ top: 0 }); }}>{TbIcon.reply}<span>Reply</span></button>
-        <button type="button" className="pbar-b" disabled={!a.more} onClick={() => setSheet("more")}>{TbIcon.more}<span>More</span></button>
+        <button type="button" className="pbar-b" disabled={!a.forward} onClick={() => a.forward?.()}>{TbIcon.forward}<span>Forward</span></button>
+        <button type="button" className="pbar-b" onClick={() => setSheet("more")}>{TbIcon.more}<span>More</span></button>
       </nav>
       {voice && a.ask && <VoiceDraft chatId={a.ask.id} who={a.ask.who} listener={voice.l} onDraft={(d) => { a.ask?.onDraft(d); window.scrollTo({ top: 0 }); }} openChat={a.ask.openChat} onClose={() => setVoice(null)} />}
-      {sheet && <div className="pbar-bg" onClick={() => setSheet("")}>
+      {sheet && <div className="pbar-bg" onClick={close}>
         <div className="pbar-sheet" role="menu" onClick={(e) => e.stopPropagation()}>
+          <div className="ps-grab" aria-hidden />
           {sheet === "move" ? <>
             <div className="pbar-t">Move to</div>
-            <button type="button" role="menuitem" onClick={() => mv("news", "Moved to News.")}>{TbIcon.news} News <span>SaneBox: this sender goes to News from now on</span></button>
-            {others.map((f) => <button key={f.path} type="button" role="menuitem" onClick={() => mv(f.path, `Moved to ${folderLabel(f)}.`)} style={{ paddingLeft: 16 + Math.min(3, f.depth) * 12 }}>{TbIcon.file} {folderLabel(f)}</button>)}
+            <button type="button" role="menuitem" disabled={off} onClick={() => mv("news", "Moved to News.")}>{TbIcon.news} News <span>SaneBox: this sender goes to News from now on</span></button>
+            {others.map((f) => <button key={f.path} type="button" role="menuitem" disabled={off} onClick={() => mv(f.path, `Moved to ${folderLabel(f)}.`)} style={{ paddingLeft: 16 + Math.min(3, f.depth) * 12 }}>{TbIcon.file} {folderLabel(f)}</button>)}
             {!others.length && <span className="faint" style={{ padding: 12 }}>Loading folders…</span>}
-          </> : a.more?.(() => setSheet(""))}
-          <button type="button" className="pbar-cancel" onClick={() => setSheet("")}>Cancel</button>
+          </> : <>
+            {a.more?.(close)}
+            <PSec label="Move & spam">
+              <PTile icon={TbIcon.news} label="News" disabled={off} onClick={() => mv("news", "Moved to News.")} />
+              <PTile icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={off} onClick={() => (a.known ? setAskBH(true) : mv("blackhole", bh))} />
+              {a.ask && !a.ask.openChat && <PTile icon={<span className="pbar-ic" aria-hidden>✦</span>} label="Say a reply" onClick={() => { close(); setVoice({ l: startListening() }); }} />}
+            </PSec>
+            {askBH && <div className="ps-ask" role="alertdialog" aria-label="Black Hole a customer?">
+              <span><b>{a.known}</b> is a customer. Black Hole blocks their email from now on. Are you sure?</span>
+              <div><button type="button" className="btn danger" onClick={() => mv("blackhole", bh, true)}>Yes, Black Hole</button><button type="button" className="btn ghost" onClick={() => setAskBH(false)}>No</button></div>
+            </div>}
+          </>}
+          <button type="button" className="pbar-cancel" onClick={close}>Cancel</button>
         </div>
       </div>}
     </>
@@ -442,7 +485,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={row.subject} fromName={row.fromName} fromEmail={row.from} to={m?.to} cc={m?.cc}
           phone={{ reply: m ? () => setRep("one") : undefined, move, here: row.folder, folders, busy,
             ask: { id: `box:${row.uid}:${row.folder}`, who: row.fromName || row.from, onDraft: (d) => { setDraft((x) => ({ body: d.body, cc: d.cc || [], n: (x?.n || 0) + 1 })); setRep("one"); } },
-            more: m ? (close) => <button type="button" role="menuitem" onClick={() => { close(); setRep("all"); }}>{TbIcon.replyAll} Reply all</button> : undefined }}
+            more: m ? (close) => <PSec label="Email"><PTile icon={TbIcon.replyAll} label="Reply all" onClick={() => { close(); setRep("all"); }} /></PSec> : undefined }}
           date={new Date(row.date).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
           toolbar={<Toolbar>
             <TbGroup label="Email">
@@ -532,8 +575,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={c.subject} fromName={c.people.join(", ")} fromEmail="" date={`${c.count} email${c.count === 1 ? "" : "s"}`}
           tags={orderAct ? <a className="eh-tag order" href={orderHref}>＋ {orderLabel}</a> : undefined}
           phone={{ reply: replyLast, more: (close) => <>
-            {orderAct && <a href={orderHref} role="menuitem" onClick={close}>{TbIcon.order} {orderLabel}</a>}
-            <button type="button" role="menuitem" onClick={() => { close(); replyLast(); }}>{TbIcon.reply} Reply to the last email</button>
+            {orderAct && <PSec label="Actions"><PTile icon={TbIcon.order} label={orderLabel} kind="primary" href={orderHref} onClick={close} /></PSec>}
           </>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); setRepCc(d.cc || []); replyLast(); } } }}
           toolbar={<Toolbar>
             <TbGroup label="Email"><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
