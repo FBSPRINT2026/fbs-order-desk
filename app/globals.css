@@ -7443,3 +7443,13 @@ a.pdn-tag:hover{text-decoration:underline}
   .eh .eh-ai-go .tb-l,.eh .eh-ai-btn .tb-l{display:block!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
   .eh .eh-ai-go:active,.eh .eh-ai-btn:active{background:color-mix(in srgb,var(--surface) 60%,transparent)}
 }
+/* phone: the AI card's buttons and the bottom bar shorter (Oct 14, Nick: "need to take up less height") */
+@media (max-width:760px) and (pointer:coarse){
+  .eh .eh-ai{padding:10px 10px 6px 12px;row-gap:2px}
+  .eh .eh-ai-go,.eh .eh-ai-go.primary,.eh .eh-ai-btn,.eh .eh-ai-btn.on{height:36px;gap:1px;font-size:9.5px}
+  .eh .eh-ai-go svg,.eh .eh-ai-btn svg{width:19px;height:19px}
+  .pbar{padding-top:3px}
+  .pbar-b{height:40px;gap:1px;font-size:9.5px}
+  .pbar-b svg{width:21px;height:21px}
+  .ibx2-mail:has(.eh-bar.has-pn){padding-bottom:calc(56px + env(safe-area-inset-bottom))}
+}
