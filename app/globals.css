@@ -7331,3 +7331,8 @@ a.pdn-tag:hover{text-decoration:underline}
   /* "… email, as sent": one small line */
   .ibx2-orig-h{font-size:10.5px;margin:6px 0 4px;padding-top:6px}
 }
+/* phone toolbar words a size smaller again (Oct 14, Nick) */
+@media (max-width:760px) and (pointer:coarse){
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  .eh-bar.has-pn .tb-row .tb-b{font-size:7.5px;font-weight:600;letter-spacing:.01em}
+}
