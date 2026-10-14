@@ -664,7 +664,11 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
               <PTile icon={TbIcon.goods} label="Order goods" disabled={!!busy} onClick={() => { close(); onKeep("goods"); }} />
               <PTile icon={TbIcon.person} label="Match to customer" disabled={!!busy} onClick={() => { close(); onKeep("match"); }} />
             </PSec> : undefined }}
-          ai={onKeep ? <button type="button" className="tb-b primary eh-ai-go" disabled={!!busy} onClick={() => onKeep("order")}>{TbIcon.order}<span className="tb-l">{busy === "keep" ? "Opening…" : "Create order"}</span></button> : undefined}
+          ai={onKeep ? <>
+            <button type="button" className="tb-b primary eh-ai-go" disabled={!!busy} onClick={() => onKeep("order")}><span className="tb-l">{busy === "keep" ? "Opening…" : "New order"}</span></button>
+            <button type="button" className="tb-b eh-ai-go" disabled={!!busy} onClick={() => onKeep("order")}><span className="tb-l">Reorder</span></button>
+            <button type="button" className="tb-b eh-ai-go" disabled={!!busy} onClick={() => onKeep("goods")}><span className="tb-l">Order goods</span></button>
+          </> : undefined}
           tags={<>
             {i.bucket === "todo" && <span className="eh-tag todo">To-do</span>}
             {i.bucket === "event" && <span className="eh-tag event">Event</span>}
@@ -915,7 +919,12 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
                   items={orders.slice(0, 40).map((o) => ({ key: o.id, label: <>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></>, onClick: () => { close(); void run("onote", () => addEmailToOrderNotes(x.id, o.id), `Added to the notes on #${o.number}.`); } }))} />
               </PSec>}
             </>,
-          }} ai={x.direction === "in" ? <>{view !== "order" && <button type="button" className="tb-b primary eh-ai-go" disabled={!!busy} onClick={() => startOrder()}>{TbIcon.order}<span className="tb-l">{ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"}</span></button>}<button type="button" className={"tb-b ai eh-ai-btn" + (aiOpen ? " on" : "")} onClick={() => (aiOpen ? hideAi?.() : openAi())} aria-expanded={aiOpen} title={aiOpen ? "Hide the Assistant" : "Open the Assistant and start listening"}><svg viewBox="0 0 24 24" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg><span className="tb-l">{aiOpen ? "Hide Assistant" : "Assistant"}</span></button></> : undefined}
+          }} ai={x.direction === "in" ? <>{/* phones: the AI card's buttons (Oct 14, Nick: "New Order, Reorder, Order goods, then the microphone") */}
+            {view !== "order" && (ordering ? <button type="button" className="tb-b primary eh-ai-go" onClick={() => startOrder()}><span className="tb-l">Back to the order</span></button> : <>
+              <button type="button" className={"tb-b eh-ai-go" + (!reorder ? " primary" : "")} disabled={!!busy} onClick={() => startOrder(reorder ? { told: "This is a new order, not a reorder of a past job." } : undefined)}><span className="tb-l">New order</span></button>
+              <button type="button" className={"tb-b eh-ai-go" + (reorder ? " primary" : "")} disabled={!!busy} onClick={() => startOrder(!reorder ? { told: "This is a reorder of a past job: find the job it repeats." } : undefined)}><span className="tb-l">Reorder</span></button>
+            </>)}
+            {view !== "order" && <a className="tb-b eh-ai-go" href={orderGoodsHref(x.id)}><span className="tb-l">Order goods</span></a>}<button type="button" className={"tb-b ai eh-ai-btn" + (aiOpen ? " on" : "")} onClick={() => (aiOpen ? hideAi?.() : openAi())} aria-expanded={aiOpen} title={aiOpen ? "Hide the Assistant" : "Open the Assistant and start listening"}><svg viewBox="0 0 24 24" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg><span className="tb-l">{aiOpen ? "Hide Assistant" : "Assistant"}</span></button></> : undefined}
           fromName={personName(fromName) || who} org={who !== personName(fromName) && who !== fromName ? who : undefined} fromEmail={x.from_email} to={x.to_email || ""} date={when} summary={x.meta?.triage?.summary}
           tags={<>
             {urgent && <span className="eh-tag hot">Urgent{x.meta?.triage?.urgent_reason ? `: ${x.meta.triage.urgent_reason}` : ""}</span>}
