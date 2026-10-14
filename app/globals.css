@@ -7106,3 +7106,6 @@ a.pdn-tag:hover{text-decoration:underline}
 .pas-about summary{cursor:pointer;font-size:13px;color:var(--ink-2)}
 .pas-about ul{margin:6px 0 0;padding-left:18px;font-size:13px}
 .pas-about li{margin:4px 0}
+.pga-tiers{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface);font-size:13.5px}
+.pga-tiers>div{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
+.pga-tiers span{color:var(--ink-2)}

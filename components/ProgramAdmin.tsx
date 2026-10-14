@@ -62,6 +62,13 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       </div>
       <ProgramAssist customerId={customerId} about={program.rate_card?.about || []} onApplied={load} />
       <RateCardEditor key={ver} card={program.rate_card || null} onSave={(rate_card) => saveProgram({ rate_card })} />
+      {items.some((i) => i.active && i.price > 0) && (
+        <div className="pga-tiers">
+          {[...new Set(items.filter((i) => i.active && i.price > 0).map((i) => i.name.trim() || "Untitled"))].map((n) => (
+            <div key={n}><b>{n}</b>{items.filter((i) => i.active && i.price > 0 && (i.name.trim() || "Untitled") === n).sort((a, b) => (a.min_qty || 0) - (b.min_qty || 0)).map((i) => <span key={i.id}>{i.min_qty ? `${i.min_qty}+` : "any qty"} <b>{money(i.price)}</b></span>)}</div>
+          ))}
+        </div>
+      )}
       <h3 className="pga-sub">Prices by design <span className="faint">(a design's own price at a quantity: on an order set to Program it wins over the rate card; also their portal order form)</span></h3>
       <div className="pga-head">
         <label>Program name<input type="text" value={program.name} onChange={(e) => saveProgram({ name: e.target.value })} placeholder="e.g. Two Men Moving: crew apparel" /></label>
@@ -168,7 +175,9 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
       <div className="pga-row">
         {c.garmentIncluded && <label>Other shirts: difference ×<input type="text" inputMode="decimal" defaultValue={String(c.markup)} onBlur={(e) => set({ markup: +e.target.value.replace(/[^\d.]/g, "") || 1 })} style={{ width: 70 }} /></label>}
         <label>Minimum pieces<input type="number" min={0} defaultValue={c.minQty || ""} onBlur={(e) => set({ minQty: +e.target.value || 0 })} style={{ width: 90 }} /></label>
-        <label className="check"><input type="checkbox" checked={c.waiveSetup} onChange={(e) => set({ waiveSetup: e.target.checked })} /> No setup charge</label>
+        <label className="check"><input type="checkbox" checked={c.waiveSetup} onChange={(e) => set({ waiveSetup: e.target.checked })} /> No setup on grid prices</label>
+        <label className="check"><input type="checkbox" checked={!!c.noSetupEver} onChange={(e) => set({ noSetupEver: e.target.checked })} /> No setup on any job</label>
+        <label>Screens, each<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={c.screenFee != null ? String(c.screenFee) : ""} onBlur={(e) => { const v = e.target.value.trim(); set({ screenFee: v === "" ? null : money2(v) }); }} placeholder="normal" /></div></label>
       </div>
       <div className="pga-row rc-up">
         <span>Big sizes, per piece</span>

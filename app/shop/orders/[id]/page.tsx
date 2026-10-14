@@ -302,7 +302,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         const want = on ? plans[gi]?.lines[l.id] || null : null;
         if (want) {
           const up: GLine["sizeUp"] = {};
-          for (const z of BIG_SIZES) if (prog!.card?.sizeUp?.[z] != null) up[z] = +prog!.card.sizeUp[z]!;
+          // a design's flat price is everything in: no 2XL+ charge; else the card's
+          for (const z of BIG_SIZES) if (plans[gi]?.flat) up[z] = 0; else if (prog!.card?.sizeUp?.[z] != null) up[z] = +prog!.card.sizeUp[z]!;
           if (!l.prog || l.prog.each !== want.each || l.prog.note !== want.note) { l.prog = want; l.priceOverride = want.each; }
           if (JSON.stringify(l.sizeUp || {}) !== JSON.stringify(up)) l.sizeUp = up;
         } else if (l.prog) {
@@ -319,7 +320,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       });
       // the card's "no setup": while Program is on, setup is waived when every group is on program prices (never when
       // the card prices the screens)
-      if (on && (prog!.card ? prog!.card.waiveSetup && prog!.card.screenFee == null : true)) {
+      if (on && prog!.card?.noSetupEver) { if (!d.waive_setup) d.waive_setup = true; }
+      else if (on && (prog!.card ? prog!.card.waiveSetup && prog!.card.screenFee == null : true)) {
         const all = d.groups.every((g, gi) => plans[gi]?.ok || !g.lines.some((l) => Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
         if (d.waive_setup !== all) d.waive_setup = all;
       }

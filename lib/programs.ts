@@ -34,13 +34,15 @@ export type RateCard = {
   /** rules that apply to every job on Program, whatever the print */
   /** price per screen instead of the price list's (Tiger Blue: $15, they supply print-ready separations) */
   screenFee?: number | null;
+  /** no setup (screens, digitizing, PMS…) on any job (Furry Feline: they supply everything and pay a flat price) */
+  noSetupEver?: boolean;
   /** parts of the deal the card can't hold yet, in plain words: shown on every order set to Program */
   extras?: string[];
   /** the deal in the account manager's words, newest first (kept from the Program tab's AI box) */
   about?: { text: string; by: string; at: string }[];
 };
 /** does the card set anything? (prices, or a rule) */
-export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.extras?.length);
+export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.noSetupEver || !!c.extras?.length);
 export const cardHasPrices = (c: RateCard | null | undefined) => !!c && Object.values(c.prices || {}).some((x) => +x > 0);
 export const BIG_SIZES = ["2XL", "3XL", "4XL", "5XL"] as const;
 export const newRateCard = (): RateCard => ({ base: { brand: "Next Level", style: "6210" }, markup: 1.2, minQty: 50, waiveSetup: true, garmentIncluded: true, sizeUp: { "2XL": 2.5, "3XL": 2.5, "4XL": 2.5, "5XL": 2.5 }, prices: {} });
@@ -72,7 +74,8 @@ export function printKey(g: Pick<Group, "imprints">): { key: string } | { why: s
   return { key: `${f}/${b}` };
 }
 
-export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Record<string, { each: number; note: string } | null> };
+export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Record<string, { each: number; note: string } | null>;
+  /** a design's flat price: everything in (no garment, no 2XL+ charge) */ flat?: boolean };
 /**
  * The program price for each line of a group, or why there isn't one. baseCost: the base shirt's blank cost now.
  * A line whose blank cost isn't known yet gets no price (the order page fills costs from the catalog first).
@@ -102,7 +105,7 @@ export function programForGroup(g: Group, card: RateCard | null, baseCost: numbe
     if (dp.item) {
       const it = dp.item, lines: ProgramGroup["lines"] = {};
       for (const l of g.lines || []) lines[l.id] = qtyOf(l) ? { each: r2(+it.price), note: `${it.name} program price: ${(+it.price).toFixed(2)}${it.min_qty ? ` at ${it.min_qty}+` : ""}` } : null;
-      return { ok: true, key: it.name, note: `${it.name}: ${(+it.price).toFixed(2)} a piece${it.min_qty ? ` at ${it.min_qty}+` : ""}, ${qty} pieces`, lines };
+      return { ok: true, flat: true, key: it.name, note: `${it.name}: ${(+it.price).toFixed(2)} a piece${it.min_qty ? ` at ${it.min_qty}+` : ""}, ${qty} pieces`, lines };
     }
     if (dp.under) pre = `${dp.under.name} program price starts at ${dp.under.min_qty} (this is ${qty}); `;
   }

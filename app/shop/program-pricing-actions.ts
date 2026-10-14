@@ -84,7 +84,7 @@ export async function pastPricesForDesign(input: { customerId: string; orderId: 
    separations). The AI proposes; nothing changes until someone presses Apply. ───────── */
 export type ProgramProposal = {
   summary: string;
-  card?: { base_brand?: string; base_style?: string; garment_included?: boolean; markup?: number; min_qty?: number; waive_setup?: boolean;
+  card?: { base_brand?: string; base_style?: string; garment_included?: boolean; markup?: number; min_qty?: number; waive_setup?: boolean; no_setup_any_job?: boolean;
     screen_fee?: number | null; size_up?: Partial<Record<"2XL" | "3XL" | "4XL" | "5XL", number>>; prices?: { front: number; back: number; price: number }[] };
   design_prices?: { name: string; price: number; min_qty?: number; style?: string; front_colors?: number; back_colors?: number; notes?: string }[];
   not_supported?: string[];
@@ -105,13 +105,14 @@ const PROPOSAL_TOOL = {
           garment_included: { type: "boolean", description: "true: prices include the shirt; false: print only (they supply shirts)" },
           markup: { type: "number", description: "multiplier on the blank-cost difference for other shirts, e.g. 1.2" },
           min_qty: { type: "integer", description: "minimum pieces per job for program per-piece prices" },
-          waive_setup: { type: "boolean", description: "no setup charge on program jobs" },
+          waive_setup: { type: "boolean", description: "no setup charge on jobs priced by the grid" },
+          no_setup_any_job: { type: "boolean", description: "no setup (screens, digitizing…) on ANY job for this customer, e.g. they supply everything and pay a flat price per piece" },
           screen_fee: { type: ["number", "null"], description: "price per screen on every job (null removes the rule)" },
           size_up: { type: "object", properties: { "2XL": { type: "number" }, "3XL": { type: "number" }, "4XL": { type: "number" }, "5XL": { type: "number" } } },
           prices: { type: "array", description: "per-piece price by front colors / back colors (back 0 = no back print)", items: { type: "object", properties: { front: { type: "integer" }, back: { type: "integer" }, price: { type: "number" } }, required: ["front", "back", "price"] } },
         },
       },
-      design_prices: { type: "array", description: "a specific design's own price at a quantity (e.g. 'Mewjira 200 at $5.50')", items: { type: "object", properties: {
+      design_prices: { type: "array", description: "a specific design's own flat price per piece at a minimum quantity (everything in). Tiers are one entry per break, e.g. Mewjira 100 at $6.25, 150 at $6.00, 200 at $5.50", items: { type: "object", properties: {
         name: { type: "string" }, price: { type: "number" }, min_qty: { type: "integer" }, style: { type: "string" }, front_colors: { type: "integer" }, back_colors: { type: "integer" }, notes: { type: "string" } }, required: ["name", "price"] } },
       not_supported: { type: "array", items: { type: "string" }, description: "parts of the deal these settings can't hold yet (they'll be kept as a note for whoever prices the order)" },
       questions: { type: "array", items: { type: "string" }, description: "what's unclear and needed to set it exactly (only if truly needed)" },
@@ -163,9 +164,9 @@ export async function programAssist(input: { customerId: string; text: string })
       "An account manager describes the customer's deal in their own words. Turn it into the settings below, exactly as said. Never invent a number they didn't give.",
       "If they say to use the customer's history, read the history given and say in the summary which numbers came from it.",
       "What the settings can hold:",
-      "- Rules on every job while the order is set to Program: screen_fee (price per screen, replaces the normal screen charge), waive_setup.",
+      "- Rules on every job while the order is set to Program: screen_fee (price per screen, replaces the normal screen charge), no_setup_any_job.",
       "- A rate card: per-piece prices by front colors / back colors on a base shirt (garment_included true) or print only (false, they supply shirts); markup on the blank-cost difference for other shirts; a minimum qty; 2XL+ per-piece charges.",
-      "- Design prices: one design's own price at a minimum qty.",
+      "- Design prices: a design's own flat price per piece (garment, screens and setup all in), tiered by minimum qty (one entry per break).",
       "Anything else (PMS, ink changes, discounts on embroidery, rush, shipping…) goes in not_supported, in plain words.",
       `The shop's normal setup: retail charges $${(+s.screenFee || 0).toFixed(2)} a screen; wholesale (contract) $${(+(s.wholesale?.screenFee || 0)).toFixed(2)} a screen, remakes $${(+(s.wholesale?.remakeFee || 0)).toFixed(2)}.`,
       "Write the summary in plain, short sentences a shop owner would use.",
@@ -204,6 +205,7 @@ export async function applyProgramProposal(input: { customerId: string; proposal
     if (pc.markup != null && pc.markup > 0) card.markup = pc.markup;
     if (pc.min_qty != null) card.minQty = Math.max(0, Math.round(pc.min_qty));
     if (pc.waive_setup != null) card.waiveSetup = pc.waive_setup;
+    if (pc.no_setup_any_job != null) card.noSetupEver = pc.no_setup_any_job;
     if (pc.screen_fee !== undefined) { if (pc.screen_fee == null) delete card.screenFee; else { card.screenFee = Math.round(pc.screen_fee * 100) / 100; card.waiveSetup = false; } }
     for (const [z, n] of Object.entries(pc.size_up || {})) if (n != null) card.sizeUp[z as "2XL"] = Math.round(+n * 100) / 100;
     for (const x of pc.prices || []) if (x.front >= 1 && x.back >= 0 && x.price > 0) card.prices[`${Math.round(x.front)}/${Math.round(x.back)}`] = Math.round(x.price * 100) / 100;

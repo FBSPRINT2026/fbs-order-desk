@@ -11,14 +11,14 @@ import { pastPricesForDesign, type PastPrice } from "@/app/shop/program-pricing-
  * before for the same design (Printavo history and orders here) with Use this price.
  */
 export function ProgramNotes({ groups, card, baseCost, ctx }: { groups: Group[]; card: RateCard | null; baseCost: number | null; ctx: (g: Group) => DesignCtx }) {
-  const rules = [...(card?.screenFee != null ? [`Screens at ${money(card.screenFee)} each`] : []), ...(card?.extras || []).map((x) => `Also: ${x}`)];
+  const rules = [...(card?.noSetupEver ? ["No setup on any job"] : []), ...(card?.screenFee != null ? [`Screens at ${money(card.screenFee)} each`] : []), ...(card?.extras || []).map((x) => `Also: ${x}`)];
   const priced = cardHasPrices(card) || groups.some((g) => ctx(g).items.length > 0);
   return (
     <div className="prg-notes">
       {rules.map((r) => <div key={r} className="prg-note ok"><b>Program:</b> {r}</div>)}
       {priced && groups.map((g, i) => {
         const r = programForGroup(g, card, baseCost, ctx(g));
-        return <div key={g.id} className={"prg-note" + (r.ok ? " ok" : "")}><b>{groups.length > 1 ? `Group ${i + 1}` : "Program"}:</b> {r.ok ? <>{r.note}{!card || (card.waiveSetup && card.screenFee == null) ? ", no setup" : ""}</> : <>{r.note}; priced normally</>}</div>;
+        return <div key={g.id} className={"prg-note" + (r.ok ? " ok" : "")}><b>{groups.length > 1 ? `Group ${i + 1}` : "Program"}:</b> {r.ok ? <>{r.note}{!card || card.noSetupEver || (card.waiveSetup && card.screenFee == null) ? ", no setup" : ""}</> : <>{r.note}; priced normally</>}</div>;
       })}
     </div>
   );
