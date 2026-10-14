@@ -8,6 +8,7 @@ import { needsDetails, type DetailsInput } from "@/lib/productionDetails";
 import { applySpec, latestSpecs, reorderLabel, type DesignSpecs, type SpecEntry } from "@/lib/designSpecs";
 import { confirmDetails } from "@/app/shop/details-actions";
 import { confirmReorderPricing } from "@/app/shop/reorder-actions";
+import type { PrintSpecs, SpecHistory } from "@/lib/ai/specHistory";
 
 /**
  * The order's Reorder section (Oct 14, Nick: "pop open a reorder section… confirm pricing, the specs greyed out or a way
@@ -49,6 +50,39 @@ export default function ReorderPanel({ o, total, patch, save, onReload }: {
   const [thumbs, setThumbs] = useState<{ url: string; name: string }[]>([]);
   const [edit, setEdit] = useState<Record<string, DetailsInput>>({});
   const [busy, setBusy] = useState(""), [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
+  // the spec history: everything we have about the design, read by the AI (lib/ai/specHistory.ts)
+  const [hist, setHist] = useState<SpecHistory | null>(null), [histBusy, setHistBusy] = useState(false), [histErr, setHistErr] = useState("");
+  const [showEv, setShowEv] = useState<Record<string, boolean>>({});
+  async function searchHistory() {
+    setHistBusy(true); setHistErr("");
+    const r = await fetch("/api/orders/spec-history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: o.id }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." })) as { history?: SpecHistory; error?: string };
+    setHistBusy(false);
+    if (r.history) setHist(r.history); else setHistErr(r.error || "The search didn't finish.");
+  }
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/orders/spec-history?order=${o.id}`).then((x) => x.json()).then((r: { history?: SpecHistory | null }) => {
+      if (!live) return;
+      if (r.history) setHist(r.history);
+      // a reorder with prints we don't know yet: search the history straight away (Oct 14, Nick: "scan everything")
+      else if (waiting.length) void searchHistory();
+    }).catch(() => null);
+    return () => { live = false; };
+  }, [o.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** what the history concluded, onto the print as our guess (still awaiting production) */
+  function useHistory(im: Imprint, h: PrintSpecs) {
+    patch((d) => {
+      for (const g of d.groups) for (const x of g.imprints) if (x.id === im.id) {
+        if (h.size) x.size = h.size;
+        if (h.drop) x.drop = h.drop;
+        if (h.inks) x.inks = h.inks;
+        if (h.colors >= 1 && h.colors <= 20) x.colors = h.colors;
+        if (h.underbase === "yes") x.underbase = true; else if (h.underbase === "no") x.underbase = false;
+        x.confirm = { ...(x.confirm || { size: true, ink: true, why: "" }), why: `From the spec history (${h.confidence} confidence): ${h.reasoning}`.slice(0, 400), filled: { by: `${me} (spec history)`, at: new Date().toISOString() } };
+      }
+    });
+    setMsg({ t: "Using the spec history as our guess. Still greyed out until production confirms." });
+  }
 
   useEffect(() => {
     let live = true;
@@ -154,6 +188,14 @@ export default function ReorderPanel({ o, total, patch, save, onReload }: {
           <span className="ro-n">3</span>
           <div className="ro-b">
             <div className="ro-t">Print specs <span className="faint">· production confirms these once, then every reorder uses them</span></div>
+            <div className="ro-hist">
+              <span className="ro-hist-i" aria-hidden>✦</span>
+              {histBusy ? <span>Searching everything we have about this design (old jobs, emails, pictures)… this can take a minute or two.</span>
+                : hist ? <span><b>Spec history:</b> {hist.summary} <span className="faint">Searched {hist.searched} · {day(hist.at)}</span></span>
+                  : <span>Search every old job, email and picture about this design for its specs.</span>}
+              {!histBusy && <button type="button" className="btn sm ghost" onClick={searchHistory}>{hist ? "Search again" : "Search the history"}</button>}
+            </div>
+            {histErr && <div className="err">{histErr}</div>}
             {prints.map(({ g, im }) => {
               const guess = needsDetails(im), f = edit[im.id];
               const garment = [...new Set(g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")))].filter(Boolean).join(", ");
@@ -170,6 +212,25 @@ export default function ReorderPanel({ o, total, patch, save, onReload }: {
                   </div>
                   <div className={"ro-spec" + (guess ? " grey" : "")}>{specLine(im) || "No specs yet"}</div>
                   {guess && im.confirm?.why && !im.confirm.filled && <div className="ro-why faint">Our guess: {im.confirm.why}.</div>}
+                  {(() => {
+                    const h = hist?.prints.find((x) => x.imprint_id === im.id);
+                    if (!h) return null;
+                    const line = specLine({ size: h.size, drop: h.drop, inks: h.inks, colors: h.colors || undefined, underbase: h.underbase === "yes" ? true : h.underbase === "no" ? false : undefined });
+                    return (
+                      <div className={"ro-ev " + h.confidence}>
+                        <div className="ro-ev-h">
+                          <span><b>History says:</b> {[h.location, line].filter(Boolean).join(" · ") || "nothing definite"} <span className={"ro-conf " + h.confidence}>{h.confidence} confidence</span></span>
+                          {guess && line && <button type="button" className="btn sm" onClick={() => useHistory(im, h)}>Use as our guess</button>}
+                        </div>
+                        <div className="ro-ev-r">{h.reasoning}</div>
+                        {h.conflicts.length > 0 && <div className="ro-ev-c">⚠ {h.conflicts.join(" · ")}</div>}
+                        {h.evidence.length > 0 && <button type="button" className="linkbtn" onClick={() => setShowEv((x) => ({ ...x, [im.id]: !x[im.id] }))}>{showEv[im.id] ? "Hide" : "Show"} the evidence ({h.evidence.length})</button>}
+                        {showEv[im.id] && <ol className="ro-ev-l">{h.evidence.map((e, k) => (
+                          <li key={k}><span className="ro-ev-d">{e.date}</span><span className="ro-ev-s">{e.source}</span><span><b>{e.who}:</b> “{e.quote}” <span className="faint">→ {e.says}</span></span></li>
+                        ))}</ol>}
+                      </div>
+                    );
+                  })()}
                   {mine.map((c, i) => (
                     <div key={i} className="ro-cand">
                       <span>Production confirmed <b>{c.name}</b> on {day(c.e.at)} (#{c.e.order_number}): {specLine(c.e)}</span>

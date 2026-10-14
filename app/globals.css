@@ -7527,3 +7527,21 @@ a.pdn-tag:hover{text-decoration:underline}
 .ro-msg{margin:0 16px 12px;font-size:13px;color:var(--ok);font-weight:600}
 .ro .err{margin:0 16px 12px}
 @media (max-width:640px){.ro-state{margin-left:0}.ro-form .ro-wide{grid-column:1/-1}}
+/* the Reorder section's spec history (lib/ai/specHistory.ts) */
+.ro-hist{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;font-size:13.5px;padding:9px 12px;border-radius:10px;background:linear-gradient(110deg,color-mix(in srgb,var(--ai-a,#0E9BD8) 8%,var(--surface)),color-mix(in srgb,var(--ai-c,#6A5AE0) 9%,var(--surface)))}
+.ro-hist>span:nth-child(2){flex:1;min-width:240px}
+.ro-hist .faint{font-size:12px}
+.ro-hist-i{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;color:#fff;font-size:11px;background:linear-gradient(120deg,#0E9BD8,#6A5AE0)}
+.ro-ev{border-left:3px solid var(--line);padding:6px 0 6px 10px;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.ro-ev.high{border-left-color:var(--ok)}.ro-ev.medium{border-left-color:var(--warn)}.ro-ev.low{border-left-color:var(--danger)}
+.ro-ev-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}
+.ro-ev-h>span{flex:1;min-width:220px}
+.ro-conf{font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:4px;background:var(--surface-2);color:var(--ink-2)}
+.ro-conf.high{background:var(--ok-soft);color:var(--ok)}.ro-conf.medium{background:var(--warn-soft);color:var(--warn)}.ro-conf.low{background:var(--danger-soft);color:var(--danger)}
+.ro-ev-r{color:var(--ink-2)}
+.ro-ev-c{color:var(--warn);font-weight:600}
+.ro-ev-l{margin:2px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.ro-ev-l li{display:grid;grid-template-columns:84px 70px minmax(0,1fr);gap:8px;align-items:baseline}
+.ro-ev-d{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:12px}
+.ro-ev-s{font-size:11px;font-weight:700;text-transform:capitalize;color:var(--ink-2);background:var(--surface-2);border-radius:5px;padding:1px 6px;justify-self:start}
+@media (max-width:640px){.ro-ev-l li{grid-template-columns:1fr}}
