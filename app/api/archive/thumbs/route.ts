@@ -8,7 +8,7 @@ export const maxDuration = 60;
 /**
  * Small pictures of Printavo mockups kept in storage (Oct 14: the Furry Feline price history page shows each design's
  * mockup, and a page can't load pictures from elsewhere). Sync token only; Printavo copies only (printavo/…);
- * resized by storage (320 px wide). GET ?p=path&p=path… → { [path]: "data:image/jpeg;base64,…" }.
+ * resized by storage to fit 400 × 400, proportions kept. GET ?p=path&p=path… → { [path]: "data:image/jpeg;base64,…" }.
  */
 export async function GET(req: Request) {
   const admin = createAdminClient();
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
   const out: Record<string, string> = {};
   await Promise.all(paths.map(async (p) => {
     try {
-      let { data, error } = await admin.storage.from("proofs").download(p, { transform: { width: 320, quality: 70 } });
+      let { data, error } = await admin.storage.from("proofs").download(p, { transform: { width: 400, height: 400, resize: "contain", quality: 70 } });
       if (error || !data) ({ data, error } = await admin.storage.from("proofs").download(p));
       if (!data) return;
       const buf = Buffer.from(await data.arrayBuffer());
