@@ -7218,3 +7218,6 @@ a.pdn-tag:hover{text-decoration:underline}
 .tb-b.ai{background:var(--ai-grad);color:#fff;box-shadow:0 3px 10px rgba(58,123,213,.35)}
 .tb-b.ai:hover:not(:disabled){background:var(--ai-grad);filter:brightness(1.06)}
 .tb-b.ai.on{background:var(--surface);color:var(--ai-b);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ai-b) 40%,transparent)}
+/* "Message": the section header over the email, in the toolbar's label style (Oct 14, Nick) */
+.eh-sec{display:flex;align-items:center;height:30px;padding:0 10px;background:var(--surface);border-bottom:1px solid var(--line-2)}
+.eh-sec span{font-size:11.5px;font-weight:600;color:var(--ink-3);letter-spacing:.02em}

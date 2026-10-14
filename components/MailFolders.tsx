@@ -326,6 +326,8 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
         <div className="eh-ai-b">{summary && <span className="eh-sum">{summary}</span>}{tags && <span className="eh-ai-tags">{tags}</span>}</div>
         {ai}
       </div>}
+      {/* Oct 14, Nick: a section header over the email itself, like the toolbar's */}
+      <div className="eh-sec" aria-hidden><span>Message</span></div>
       <div className="eh-b">
         <h2 className="eh-subj">{subject || "(no subject)"}</h2>
         <div className="eh-from">
