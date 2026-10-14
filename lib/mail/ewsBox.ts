@@ -214,17 +214,22 @@ export async function ewsSearch(admin: SupabaseClient, acct: MailAccount, me: st
   const found: MsgRow[] = [];
   let partial = false, looked = 0;
   const queue = [...folders].sort((a, b) => (a.special ? 0 : 1) - (b.special ? 0 : 1));
-  const one1 = async (f: Folder & { id: string }) => {
+  const failed: (Folder & { id: string })[] = [];
+  const one1 = async (f: Folder & { id: string }, again = false) => {
     try {
       const x = await call(acct, `<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties>${ITEM_PROPS}</t:AdditionalProperties></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="80" Offset="0" BasePoint="Beginning"/><m:SortOrder><t:FieldOrder Order="Descending"><t:FieldURI FieldURI="item:DateTimeReceived"/></t:FieldOrder></m:SortOrder><m:ParentFolderIds><t:FolderId Id="${esc(f.id)}"/></m:ParentFolderIds><m:QueryString>${esc(term)}</m:QueryString></m:FindItem>`, 20000);
       const got = rowsOf(x, f.path, me, f.id === t.sent);
       const ids = await uidsFor(admin, acct.id, f.path, got.map((g) => g.id));
       for (const g of got) { const u = ids.get(g.id); if (u) { const { conv: _c, ...r } = g.row; found.push({ ...r, uid: u }); } }
       looked++;
-    } catch { partial = true; }
+    } catch (e) {
+      if (again) { partial = true; console.warn(`mail search ${f.path}: ${e instanceof Error ? e.message : e}`); } else failed.push(f);
+    }
   };
   // several folders at a time: EWS has no connection limit (IMAP allowed two)
-  await Promise.all(Array.from({ length: 12 }, async () => { while (queue.length) await one1(queue.shift()!); }));
+  await Promise.all(Array.from({ length: 8 }, async () => { while (queue.length) await one1(queue.shift()!); }));
+  // a folder the server was too busy for: once more, one at a time
+  for (const f of failed) await one1(f, true);
   return { convos: groupConvos(found, me), folders: looked, partial };
 }
 
