@@ -1099,7 +1099,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (!g) return false;
     // write the size the mockup actually shows, even if it was never typed (e.g. the 3.5" left chest default)
     const sized = imprints.map((im) => { if (im.size.trim()) return im; const p = place(im); return p.d ? { ...im, size: `${Math.round(p.wIn * 100) / 100}" wide` } : im; });
-    g.imprints = sized.map((im) => ({ ...(g.imprints.find((x) => x.id === im.id) || {}), ...im }));
+    g.imprints = sized.map((im) => {
+      const saved = g.imprints.find((x) => x.id === im.id);
+      // production confirmed this print while the builder was open: its confirmed specs win (lib/designSpecs.ts)
+      if (saved?.confirmed && !saved.confirm && im.confirm) return { ...saved, ...im, size: saved.size, inks: saved.inks, colors: saved.colors, underbase: saved.underbase, drop: saved.drop, sizeFrom: saved.sizeFrom, remake: saved.remake, notes: saved.notes, confirm: undefined, confirmed: saved.confirmed };
+      return { ...(saved || {}), ...im };
+    });
     // the AI read this print's size / drop off the customer's mockup: what staff saved teaches it (not in auto mode,
     // where nobody has looked yet)
     if (!auto) for (const im of g.imprints) {

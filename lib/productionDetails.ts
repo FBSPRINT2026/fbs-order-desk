@@ -43,7 +43,7 @@ export function keepConfirmed(local: Group[], saved: Pick<Group, "id" | "imprint
       if (!s) return im;
       changed = true;
       // the confirmed details, keeping anything else changed here (art, location, notes)
-      return { ...im, size: s.size, inks: s.inks, colors: s.colors, underbase: s.underbase, drop: s.drop, sizeFrom: s.sizeFrom, remake: s.remake, confirm: undefined, confirmed: s.confirmed };
+      return { ...im, size: s.size, inks: s.inks, colors: s.colors, underbase: s.underbase, drop: s.drop, sizeFrom: s.sizeFrom, remake: s.remake, notes: s.notes, design_id: s.design_id || im.design_id, confirm: undefined, confirmed: s.confirmed };
     }),
   }));
   return { groups, changed };

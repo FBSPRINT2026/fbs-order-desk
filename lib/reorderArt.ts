@@ -88,13 +88,14 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
       const pc = got.filter((p) => !used.has(p) && p.side === side).sort((a, b) => b.widthIn - a.widthIn)[0];
       if (!pc) continue;
       used.add(pc);
-      const dsg = await uploadDesign(sb, { file: pc.file, customer_id: o.customerId, name: `${y.nickname || "Art"} ${side}`, colors: 1, inks: pc.ink, notes: `Pulled from ${from}`, method: im.method });
+      const dsg = await uploadDesign(sb, { file: pc.file, customer_id: o.customerId, name: `${y.nickname || "Art"} ${side}`, colors: im.colors || 1, inks: "", notes: `Pulled from ${from}`, method: im.method });
       im.design_id = dsg.id;
       im.size = `${pc.widthIn}" wide`;
       im.location = side === "back" ? (pc.widthIn <= 4.5 && pc.dropIn < 3.5 ? "Upper Back (Yoke)" : pc.widthIn <= 8 ? "Medium Back" : "Full Back")
         : pc.widthIn > 8 ? "Full Front" : pc.widthIn > 5 ? "Medium Front" : Math.abs(pc.offIn) >= 1.75 ? (pc.offIn > 0 ? "Left Chest" : "Right Chest") : "Center Chest";
       im.drop = String(pc.dropIn);
-      if (!im.inks) { im.inks = pc.ink; im.colors = 1; }
+      // a guess on this order only (flagged below): never saved to the design, and Printavo's color count stays (Oct 14)
+      if (!im.inks) im.inks = pc.ink;
       im.notes = [im.notes, `Art, size (${pc.widthIn}" wide) and placement (${pc.dropIn}" down) from the old mockup; ink looks like ${pc.ink} (${pc.hex})`].filter(Boolean).join(". ").slice(0, 300);
       im.confirm = { size: true, ink: true, why: `Reorder of ${from.replace(/ mockup\.pdf$/, "")}: size and placement measured off the old mockup, ink guessed from its color` };
       pulled.push({ imId: im.id, widthIn: pc.widthIn, heightIn: pc.heightIn });

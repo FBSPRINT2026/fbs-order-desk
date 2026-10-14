@@ -19,13 +19,14 @@ import OrderSeparations from "@/components/OrderSeparations";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
 import ProductionPanel from "@/components/ProductionPanel";
+import ReorderPanel, { isReorder } from "@/components/ReorderPanel";
 import { labelFileName } from "@/lib/printavoNames";
 import ShopGoods from "@/components/ShopGoods";
 import ProjectPicker from "@/components/ProjectPicker";
 import { Pill } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import { checkOrder } from "@/lib/orderChecks";
-import { DETAILS_LABEL, detailsCount, keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
+import { keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
 import { specialtyGarment } from "@/lib/fabric";
 import { withPrivate } from "@/lib/crm/private";
 import { ChecksPanel, FillFromText } from "@/components/OrderAssist";
@@ -599,7 +600,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       </div>
       {(() => { const x = o as Order & { printavo_id?: string | null; printavo_visual_id?: string | null; printavo_state?: { url?: string; publicUrl?: string; status?: string } | null }; return x.printavo_id ? <PrintavoLink visualId={x.printavo_visual_id || ""} url={x.printavo_state?.url} publicUrl={x.printavo_state?.publicUrl} status={x.printavo_state?.status} number={o.number} orderId={o.id} onRenumbered={(v) => setO((y) => (y ? ({ ...y, printavo_visual_id: v } as Order) : y))} /> : null; })()}
       {(o as Order & { printavo_id?: string | null }).printavo_id && o.number >= 40000 && o.number < 50000 && calc && <PrintavoChanges o={o} calc={calc} patch={patch} prodNote={prodNotes} onProdNote={onProdNotes} />}
-      {orderNeedsDetails(o.groups) && <div className="pdn-banner" role="status"><b>{DETAILS_LABEL}</b><span>{detailsCount(o.groups)} print{detailsCount(o.groups) === 1 ? "" : "s"} carry our best guess at size and inks from the old job. Production confirms them; the customer sees the print specs greyed out as REORDER until then.</span><Link href={`/shop/details?order=${o.id}`} className="btn sm">Production Details</Link></div>}
+      {/* a reorder: the mockup kept, pricing checked, the print specs with where each came from (Oct 14, Nick) */}
+      {isReorder(o) && calc && <ReorderPanel o={o} total={calc.total} patch={patch} save={save}
+        onReload={(groups) => { setO((x) => (x ? { ...x, groups } : x)); if (latest.current) latest.current = { ...latest.current, groups }; }} />}
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
       {o.status === "request" && (
         <div className="callout req-callout">

@@ -7486,3 +7486,44 @@ a.pdn-tag:hover{text-decoration:underline}
   .eh .eh-ai-btn,.eh .eh-ai-btn.on{flex:0 0 30px;width:30px;padding:0}
   .eh .eh-ai-btn .tb-l{display:none!important}
 }
+.imp-reorder-st{display:inline-block;font-size:.82em;font-style:italic;color:#9AA3B0}
+/* the order's Reorder section (components/ReorderPanel.tsx) */
+.ro{padding:0;margin:0 0 14px;overflow:hidden}
+.ro-h{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;padding:12px 16px;border-bottom:1px solid var(--line-2);background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.ro-tag{font-size:11px;font-weight:800;letter-spacing:.06em;color:#fff;background:var(--ink-2);border-radius:4px;padding:2px 7px}
+.ro-h b{font-size:15px}
+.ro-state{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:999px;padding:3px 10px}
+.ro-state.ok{color:var(--ok);background:var(--ok-soft)}
+.ro-steps{display:flex;flex-direction:column}
+.ro-step{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line-2)}
+.ro-step:last-child{border-bottom:0}
+.ro-n{flex:none;width:22px;height:22px;border-radius:50%;background:var(--surface-2);color:var(--ink-2);font-size:12px;font-weight:700;display:grid;place-items:center;margin-top:1px}
+.ro-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.ro-t{font-weight:700;font-size:14px}
+.ro-t .faint{font-weight:400;font-size:12.5px}
+.ro-mock{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.ro-mock img{width:64px;height:64px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
+.ro-mock .faint{font-size:13px}
+.ro-row{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.ro-ok{font-size:13px;font-weight:600;color:var(--ok)}
+.ro-print{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.ro-print.guess{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface))}
+.ro-ph{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px}
+.ro-ph .spacer{flex:1}
+.ro-chip{font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;background:var(--surface-2);color:var(--ink-2)}
+.ro-chip.wait{background:var(--warn-soft);color:var(--warn)}
+.ro-chip.ok{background:var(--ok-soft);color:var(--ok)}
+.ro-spec{font-size:14px;color:var(--ink)}
+.ro-spec.grey{color:var(--ink-3)}
+.ro-why{font-size:12.5px}
+.ro-cand{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;padding:7px 10px;border-radius:8px;background:var(--ok-soft)}
+.ro-cand span{flex:1;min-width:200px}
+.ro-acts{display:flex;gap:8px;flex-wrap:wrap}
+.ro-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px 10px;padding-top:4px}
+.ro-form .ro-wide{grid-column:span 2}
+.ro-form-a{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ro-form-a .spacer{flex:1}
+.ro-note{font-size:13px}
+.ro-msg{margin:0 16px 12px;font-size:13px;color:var(--ok);font-weight:600}
+.ro .err{margin:0 16px 12px}
+@media (max-width:640px){.ro-state{margin-left:0}.ro-form .ro-wide{grid-column:1/-1}}

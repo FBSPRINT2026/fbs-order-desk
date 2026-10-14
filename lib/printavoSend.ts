@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getOrder, pv, transitionWrite, PrintavoError } from "@/lib/printavo";
 import { calcOrder, imprintLabel, mergeSettings, orderGroups, SIZES, type Order } from "@/lib/pricing";
+import { SITE_URL } from "@/lib/config";
 
 /**
  * "Send to Printavo" (the move off Printavo, Oct 7 - Nov 1, 2026): an order entered here in the 40,000 series is made
@@ -157,7 +158,8 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
       imprints: g.imprints.map((d, ii) => {
         const t = towFor(d.method);
         // production runs from Printavo during the move: an unconfirmed size / ink says so on the print
-        const unconf = d.confirm && (d.confirm.size || d.confirm.ink) ? `*** REORDER - PRODUCTION DETAILS NEEDED: ${[d.confirm.size && "SIZE & PLACEMENT", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} *** (best guess: ${d.confirm.why})` : "";
+        const unconf = d.confirm && (d.confirm.size || d.confirm.ink) ? `*** REORDER - PRODUCTION DETAILS NEEDED: ${[d.confirm.size && "SIZE & PLACEMENT", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} *** (best guess: ${d.confirm.why}). Confirm in the portal: link in the production note.`
+          : d.confirmed ? `Specs confirmed by production (${d.confirmed.by}, ${new Date(d.confirmed.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}${d.confirmed.from ? `, from ${d.confirmed.from}` : ""}).` : "";
         const details = [imprintLabel(d), unconf, d.notes].filter(Boolean).join("\n").slice(0, 1000);
         return { details, ...(t ? { typeOfWork: { id: t.id } } : {}), ...(ii === 0 ? { mockups: mockFor(gi) } : {}) };
       }),
@@ -196,7 +198,12 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
     visualPoNumber: inp.po || undefined,
     customerDueAt: inp.customerDue,
     dueAt: `${inp.productionDue}T17:00:00-05:00`,
-    productionNote: [inp.productionNote, `Entered in the new FBS system as order #${number}.`].filter(Boolean).join("\n\n"),
+    // a reorder with prints production hasn't confirmed: the link to confirm them in the portal (Oct 14, Nick: "a link in
+    // the production notes so they can click it and fill it out"); Printavo itself is never changed for this
+    productionNote: [
+      groups.some((g) => g.imprints.some((d) => d.confirm && (d.confirm.size || d.confirm.ink))) ? `REORDER: confirm the print specs (size, placement, inks) before printing: ${SITE_URL}/shop/details?order=${inp.orderId}` : "",
+      inp.productionNote, `Entered in the new FBS system as order #${number}.`,
+    ].filter(Boolean).join("\n\n"),
     customerNote: String(o.notes || "").trim() || undefined,
     salesTax: taxed ? calc.rate : 0,
     ...(discount ? { discount, discountAsPercentage: o.discount_type !== "amt" } : {}),

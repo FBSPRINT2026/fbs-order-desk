@@ -18,7 +18,10 @@ type Done = { id: number; order_id: string; detail: string; actor: string; creat
 type ArtRef = { id: string; order_id: string; name: string; file_path: string };
 
 const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "No date");
-const formOf = (im: Imprint): DetailsInput => ({ id: im.id, size: im.size || "", inks: im.inks || "", colors: im.colors || 1, underbase: im.underbase === true ? "yes" : im.underbase === false ? "no" : "", drop: im.drop || "", screensOnFile: !!im.remake, notes: "" });
+// blank, with our guesses shown greyed in each box (Oct 14, Nick: a guess must never become a fact by clicking through);
+// "Copy in our guesses" fills them in on purpose
+const formOf = (im: Imprint): DetailsInput => ({ id: im.id, size: "", inks: "", colors: im.colors || 1, underbase: "", drop: "", screensOnFile: !!im.remake, notes: "" });
+const guessOf = (im: Imprint): DetailsInput => ({ id: im.id, size: im.size || "", inks: im.inks || "", colors: im.colors || 1, underbase: im.underbase === true ? "yes" : im.underbase === false ? "no" : "", drop: im.drop || "", screensOnFile: !!im.remake, notes: "" });
 
 export default function ProductionDetailsPage() {
   const sb = useMemo(() => createClient(), []);
@@ -113,6 +116,7 @@ export default function ProductionDetailsPage() {
         <button type="button" role="tab" aria-selected={tab === "done"} className={tab === "done" ? "on" : ""} onClick={() => setTab("done")}>Recently confirmed<span className="aa-n">{done.length}</span></button>
       </div>
       {msg && !msg.bad && <div className="banner pdd-ok" role="status">{msg.text}</div>}
+      {open0 && rows && !rows.some((r) => r.id === open0) && <div className="banner pdd-ok" role="status">This order&apos;s print specs are already confirmed (or it has nothing waiting). <Link href={`/shop/orders/${open0}`}>Open the order</Link></div>}
 
       {tab === "waiting" && (rows === null ? <div className="empty">Loading…</div> : !waiting.length ? <div className="empty">Nothing waiting. Reorders of old Printavo jobs show up here until their print details are confirmed.</div> : (
         <div className="pdd-list">
@@ -138,13 +142,13 @@ export default function ProductionDetailsPage() {
                           <div className="pdd-art">{im.design_id && dUrl[im.design_id] ? <img src={dUrl[im.design_id]} alt="" /> : <span className="faint">No art</span>}</div>
                           <div className="pdd-fields">
                             <div className="pdd-ph"><b>{im.location || "Print"}</b><span className="faint">{METHODS[im.method] || im.method}{garment ? ` on ${garment}` : ""}</span></div>
-                            {im.confirm?.why && <div className="pdd-why faint">Our guess: {im.confirm.why}.</div>}
+                            {im.confirm?.why && <div className="pdd-why faint">Our guess: {im.confirm.why}.{(im.size || im.inks || im.drop) && !(f.size || f.inks || f.drop) && <> <button type="button" className="linkbtn" onClick={() => set(im.id, { ...guessOf(im), screensOnFile: f.screensOnFile, notes: f.notes })}>Copy in our guesses</button></>}</div>}
                             <div className="pdd-grid">
-                              <label className="field"><span>Print size</span><input type="text" value={f.size} placeholder={'e.g. 11" wide'} onChange={(e) => set(im.id, { size: e.target.value })} /></label>
-                              <label className="field pdd-wide"><span>Inks (by name)</span><input type="text" value={f.inks} placeholder="e.g. White, PMS 186 C" onChange={(e) => set(im.id, { inks: e.target.value })} /></label>
+                              <label className="field"><span>Print size</span><input type="text" value={f.size} placeholder={im.size ? `Guess: ${im.size}` : 'e.g. 11" wide'} onChange={(e) => set(im.id, { size: e.target.value })} /></label>
+                              <label className="field pdd-wide"><span>Inks (by name)</span><input type="text" value={f.inks} placeholder={im.inks ? `Guess: ${im.inks}` : "e.g. White, PMS 186 C"} onChange={(e) => set(im.id, { inks: e.target.value })} /></label>
                               <label className="field"><span>Colors</span><input type="number" min={1} max={20} value={f.colors} onChange={(e) => set(im.id, { colors: +e.target.value || 1 })} /></label>
                               <label className="field"><span>Underbase</span><select value={f.underbase} onChange={(e) => set(im.id, { underbase: e.target.value as DetailsInput["underbase"] })}><option value="">Not sure</option><option value="yes">Yes</option><option value="no">No</option></select></label>
-                              <label className="field"><span>Drop (in.)</span><input type="text" value={f.drop} placeholder="Standard" onChange={(e) => set(im.id, { drop: e.target.value })} /></label>
+                              <label className="field"><span>Drop (in.)</span><input type="text" value={f.drop} placeholder={im.drop ? `Guess: ${im.drop}` : "Standard"} onChange={(e) => set(im.id, { drop: e.target.value })} /></label>
                               <label className="check pdd-chk"><input type="checkbox" checked={f.screensOnFile} onChange={(e) => set(im.id, { screensOnFile: e.target.checked })} />Screens on file</label>
                               <label className="field pdd-full"><span>Press notes (optional)</span><input type="text" value={f.notes} placeholder="Mesh, flash, ink order, anything for next time" onChange={(e) => set(im.id, { notes: e.target.value })} /></label>
                             </div>

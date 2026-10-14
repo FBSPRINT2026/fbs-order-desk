@@ -4,7 +4,8 @@ import { needsDetails } from "@/lib/productionDetails";
 
 /**
  * The prints on a customer-facing order (portal, quote / invoice PDF). A reorder whose print details production
- * hasn't confirmed yet shows its specs greyed out, marked REORDER: we print it the way we did before.
+ * hasn't confirmed yet shows its specs greyed out, marked REORDER, "Matches previous order", and "Awaiting production
+ * team confirmation of specs" (Oct 14, Nick): we print it the way we did before.
  */
 export default function ImprintSpecs({ list, sep = " · " }: { list: Imprint[]; sep?: string }) {
   return (
@@ -18,7 +19,7 @@ export default function ImprintSpecs({ list, sep = " · " }: { list: Imprint[]; 
           d.inks, d.size, d.drop ? `${d.drop}" drop` : "",
         ].filter(Boolean).join(" · ");
         return (
-          <Fragment key={d.id || i}>{pre}{head} <span className="imp-reorder" title="A reorder: printed the same way as last time">REORDER</span>{specs ? <span className="imp-reorder-specs"> {specs}</span> : null}</Fragment>
+          <Fragment key={d.id || i}>{pre}{head} <span className="imp-reorder" title="A reorder: printed to match your previous order">REORDER</span><span className="imp-reorder-specs"> Matches previous order{specs ? ` · ${specs}` : ""}</span> <span className="imp-reorder-st">Awaiting production team confirmation of specs</span></Fragment>
         );
       })}
     </>

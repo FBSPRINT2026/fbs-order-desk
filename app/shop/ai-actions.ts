@@ -268,6 +268,8 @@ export async function applyReorderFix(orderId: string, fix: ReorderFix) {
     let hit: Imprint | null = null;
     for (const g of groups) for (const im of g.imprints) if (im.id === fix.imprint_id) hit = im;
     if (!hit) return { ok: false as const, error: "That print isn't on the order anymore." };
+    // production confirmed this print: the AI doesn't change it (Oct 14, Nick: no guess may override confirmed facts)
+    if (hit.confirmed && !hit.confirm) return { ok: false as const, error: `Production confirmed this print${hit.confirmed.at ? ` on ${new Date(hit.confirmed.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}. Change it on the order by hand if it's really different.` };
     const v = String(fix.value || "").trim().slice(0, 120);
     if (fix.field === "size") hit.size = /^\d/.test(v) && !/wide|tall/i.test(v) ? `${parseFloat(v)}" wide` : v;
     else if (fix.field === "location") { if (!(LOCATIONS as readonly string[]).includes(v)) return { ok: false as const, error: `"${v}" isn't one of the locations.` }; hit.location = v; }

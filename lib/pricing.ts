@@ -64,9 +64,10 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   /** this print's screens are on file from an earlier order: remake price per screen (else group.remake) */ remake?: boolean;
   /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film";
   /** not known for sure (a reorder of an old Printavo job with no film found): production confirms before printing */
-  confirm?: { size?: boolean; ink?: boolean; why: string };
-  /** production (Jose) confirmed this print's details on a reorder: who and when (Production Details) */
-  confirmed?: { by: string; at: string };
+  confirm?: { size?: boolean; ink?: boolean; why: string; /** staff filled in what they think (still not confirmed): who and when */ filled?: { by: string; at: string } };
+  /** production (Jose) confirmed this print's details on a reorder: who and when (Production Details); `from` = taken
+   *  from what production confirmed on an earlier order ("#40071"), lib/designSpecs.ts */
+  confirmed?: { by: string; at: string; from?: string };
   /** what the AI read off the customer's mockup (size, drop, on which garment size), to learn from staff changes */ aiPlace?: { size: string; drop: string; garment: string; kind: string }; /** inches down from the collar; blank = standard */ drop?: string; /** the customer design printed here */ design_id?: string; /** staff confirmed a small print really goes on this big location */ keepLocation?: boolean; };
 /** A piece of customer art, saved under their account and reused across orders. */
 export type Design = { id: string; number: number; customer_id: string | null; name: string; file_path: string; file_name: string; file_type: string; preview_path: string; width_px: number | null; height_px: number | null; starred?: boolean; archived_at?: string | null; /** made in the shirt designer: where its editable layers are saved */ designer?: { file: string } | null; /** how it prints (lib/printPlan.ts PrintPlan), shared by the Mockup Creator and separations */ print_plan?: unknown;

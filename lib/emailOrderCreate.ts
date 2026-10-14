@@ -1,4 +1,5 @@
 import "server-only";
+import { applyConfirmedSpecs } from "@/lib/designSpecs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { proposalToGroups } from "@/lib/ai/normalize";
 import { METHODS, SIZES, STATUSES, sizeLabel, type Group } from "@/lib/pricing";
@@ -126,6 +127,8 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   let fromLabel = "";
   if (reorderOf?.startsWith("o:")) { const { data: o } = await admin.from("orders").select("number").eq("id", reorderOf.slice(2)).maybeSingle(); if (o) fromLabel = `#${o.number}`; }
   else if (reorderOf?.startsWith("a:")) { const { data: o } = await admin.from("archived_orders").select("visual_id").eq("id", reorderOf.slice(2)).maybeSingle(); if (o) fromLabel = `Printavo #${o.visual_id}`; }
+  // a reorder of a job production already confirmed: its prints take the confirmed specs, not guesses (lib/designSpecs.ts)
+  const tookSpecs = reorderOf && fromLabel ? await applyConfirmedSpecs(admin, custId, fromLabel, groups) : [];
   const priceType = d.goods?.supplied ? "wholesale" : cust?.price_type || "retail";
   const notes = [d.notes, reorderOf && fromLabel ? `Reorder of ${fromLabel}.` : ""].filter(Boolean).join(" ").slice(0, 2000);
   // a program customer (Oct 14: Furry Feline's Mewjira reprint from Cheri's email): the order starts on Program, so the
@@ -146,6 +149,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     if (got?.length) await admin.from("order_events").insert({ order_id: oid, kind: "blanks", detail: `Goods already ordered from S&S for this email: ${got.map((g) => g.supplier_order).join(", ")}`, actor: by });
   }
   await admin.from("order_events").insert({ order_id: oid, kind: reorderOf ? "reorder" : "created", detail: reorderOf && fromLabel ? `Reorder of ${fromLabel}${a ? ", from the customer's email" : " (Reorder on the archived job)"}` : input.via ? `Made in ${input.via}` : "From the customer's email (Inbox → Create order)", actor: by });
+  if (tookSpecs.length) await admin.from("order_events").insert({ order_id: oid, kind: "details", detail: `Specs taken from what production confirmed before: ${tookSpecs.join("; ")}`.slice(0, 2000), actor: by });
   const pn = [
     d.questions?.length ? `Questions for the customer${a ? " (from the email)" : ""}:\n- ${d.questions.join("\n- ")}` : "",
     d.told ? `What we told the AI: ${d.told}` : "",
@@ -189,7 +193,8 @@ export function confirmationReply(o: { number: number; id: string; nickname: str
       const qty = SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0) || 0), 0);
       if (qty) lines.push(`- ${[l.brand, l.style].filter(Boolean).join(" ")}${l.color ? `, ${l.color}` : ""}${l.garment ? ` (${l.garment})` : ""}: ${sizes} (${qty} pcs)`);
     }
-    for (const im of g.imprints) lines.push(`- ${im.location}: ${METHODS[im.method] || im.method}${im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}${im.inks ? ` (${im.inks})` : ""}${im.size ? `, ${im.size}` : ""}`);
+    // a reorder print production hasn't confirmed: no guessed specs in the customer's email (lib/designSpecs.ts)
+    for (const im of g.imprints) lines.push(im.confirm && (im.confirm.size || im.confirm.ink) ? `- ${im.location}: ${METHODS[im.method] || im.method}, printed to match your previous order` : `- ${im.location}: ${METHODS[im.method] || im.method}${im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}${im.inks ? ` (${im.inks})` : ""}${im.size ? `, ${im.size}` : ""}`);
   }
   const due = o.due && /^\d{4}-\d{2}-\d{2}$/.test(o.due) ? new Date(o.due + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : "";
   const body = [
