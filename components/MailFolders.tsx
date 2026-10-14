@@ -179,7 +179,11 @@ export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct
   );
 }
 export function Toolbar({ children }: { children: React.ReactNode }) { return <div className="tb" role="toolbar" aria-label="Email actions">{children}</div>; }
-export function TbGroup({ children }: { children: React.ReactNode }) { return <div className="tb-g">{children}</div>; }
+/** a section of the toolbar; label: the little header above it (Oct 14, Nick: Email · Move · Spam · Actions) */
+export function TbGroup({ children, label }: { children: React.ReactNode; label?: string }) {
+  if (!label) return <div className="tb-g">{children}</div>;
+  return <div className="tb-sec" role="group" aria-label={label}><span className="tb-sec-l" aria-hidden>{label}</span><div className="tb-g">{children}</div></div>;
+}
 export function TbBtn({ icon, label, onClick, kind, disabled, title }: { icon: React.ReactNode; label: string; onClick?: () => void; kind?: "primary" | "danger" | "strong"; disabled?: boolean; title?: string }) {
   return <button type="button" className={"tb-b" + (kind ? " " + kind : "")} onClick={onClick} disabled={disabled} title={title || label}>{icon}<span className="tb-l">{label}</span></button>;
 }
@@ -244,7 +248,7 @@ export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | n
   return (
     <>
     {/* Move (Oct 14, Nick: Email · Move · Spam · Actions) */}
-    <TbGroup>
+    <TbGroup label="Move">
       <TbBtn icon={TbIcon.archive} label="Archive" kind="strong" disabled={busy} onClick={() => onMove("archive", "Archived.")} title="Move it to Archive, like Outlook's Archive button" />
       <TbBtn icon={TbIcon.news} label="News" disabled={busy} onClick={() => onMove("news", "Moved to News.")} title="SaneBox News: this sender's mail goes to News from now on" />
       <TbMenu icon={TbIcon.move} label="Move">{(close) => <>
@@ -253,7 +257,7 @@ export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | n
       </>}</TbMenu>
     </TbGroup>
     {/* Spam */}
-    <TbGroup>
+    <TbGroup label="Spam">
       <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={busy} onClick={() => onMove("blackhole", "Black Hole: SaneBox won't show you this sender again.")} title="SaneBox Black Hole: junk, and this sender is blocked from now on" />
     </TbGroup>
     </>
@@ -421,7 +425,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
             more: m ? (close) => <button type="button" role="menuitem" onClick={() => { close(); setRep("all"); }}>{TbIcon.replyAll} Reply all</button> : undefined }}
           date={new Date(row.date).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
           toolbar={<Toolbar>
-            <TbGroup>
+            <TbGroup label="Email">
               <TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setRep("one")} />
               <TbBtn icon={TbIcon.replyAll} label="Reply all" disabled={!m} onClick={() => setRep("all")} />
             </TbGroup>
@@ -512,7 +516,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
             <button type="button" role="menuitem" onClick={() => { close(); replyLast(); }}>{TbIcon.reply} Reply to the last email</button>
           </>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); setRepCc(d.cc || []); replyLast(); } } }}
           toolbar={<Toolbar>
-            <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
+            <TbGroup label="Email"><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
             <span className="faint mf-hint">Oldest at the top, newest at the bottom. Click an email to open or fold it.</span>
           </Toolbar>} />
         <div className="ibx2-read mf-thread">

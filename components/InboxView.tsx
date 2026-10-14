@@ -657,7 +657,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
             {older && <span className="eh-tag">Customer</span>}
           </>}
           toolbar={<Toolbar>
-            <TbGroup><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setWriting(true)} /></TbGroup>
+            <TbGroup label="Email"><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" disabled={!m} onClick={() => setWriting(true)} /></TbGroup>
             <MoveBar folders={folders} busy={busy === "mv"} here="INBOX" onMove={(to, label) => move(to, label)} />
           </Toolbar>} />
         {err && <div className="pv-err eh-err">{err}</div>}
@@ -873,22 +873,22 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
           toolbar={<Toolbar>
             {view === "order" ? <TbGroup><TbBtn icon={TbIcon.back} label="Back to the email" onClick={() => setView("mail")} /></TbGroup> : <>
             {/* Email (Oct 14, Nick: Email · Move · Spam · Actions, then the AI summary, then the email as it came) */}
-            {x.direction === "in" && <TbGroup>
+            {x.direction === "in" && <TbGroup label="Email">
               <TbBtn icon={TbIcon.reply} label="Reply" kind={!orderish || x.order_id ? "primary" : undefined} onClick={() => write()} />
               <TbBtn icon={TbIcon.forward} label="Forward" onClick={() => setFwdOpen((v) => !v)} />
             </TbGroup>}
             {/* Move · Spam */}
             {moveBar || (inOutlook && <>
-              <TbGroup>
+              <TbGroup label="Move">
                 <TbBtn icon={TbIcon.archive} label={busy === "arch" ? "Archiving…" : "Archive"} kind="strong" disabled={!!busy} title="Moves it to Archive in your Outlook" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id }), "Archived in Outlook.")} />
                 <TbBtn icon={TbIcon.news} label="News" disabled={!!busy} title="SaneBox News: this sender's mail goes to News from now on" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "news" }), "Moved to News (SaneBox).")} />
               </TbGroup>
-              <TbGroup>
+              <TbGroup label="Spam">
                 <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={!!busy} title="SaneBox Black Hole: junk, and this sender is blocked from now on" onClick={() => run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "blackhole" }), "Black Hole: SaneBox won't show you this sender again.")} />
               </TbGroup>
             </>)}
             {/* Actions */}
-            {x.direction === "in" && <TbGroup>
+            {x.direction === "in" && <TbGroup label="Actions">
               {!!orderFrom && <TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : reorder ? "Create reorder" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => startOrder()} title="The AI reads the email and its attachments and fills in the order (new, or a reorder of a past job) for you to check" />}
               <TbBtn icon={TbIcon.goods} label={goodsPcs > 0 ? `Order goods · ${goodsPcs}` : "Order goods"} title="Order the goods for this from S&S, or email our S&S rep for a custom quote" onClick={() => { window.location.href = orderGoodsHref(x.id); }} />
               {!x.customer_id && <TbBtn icon={TbIcon.person} label="Match to customer" title="Make them a customer, or add them as a contact at one" onClick={() => setMatchKey((k) => k + 1)} />}

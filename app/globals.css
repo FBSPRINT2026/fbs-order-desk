@@ -7138,3 +7138,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .ibx2-fwd-to input{flex:1;min-width:0}
 .ibx2-fwd textarea{width:100%;resize:vertical}
 .ibx2-fwd-a{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* toolbar section headers (Oct 14, Nick: Email · Move · Spam · Actions) */
+.tb{align-items:flex-end}
+.tb-sec{display:flex;flex-direction:column;gap:3px;min-width:0}
+.tb-sec-l{font-size:11px;font-weight:600;color:var(--ink-3);letter-spacing:.02em;padding-left:6px;line-height:1}
