@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { recordVisit, touchCurrent } from "@/lib/navTrail";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
@@ -59,6 +60,22 @@ const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((
 
 export default function ShopNav({ email, firstName, brand, shortcuts, people = [] }: { email: string; firstName: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string }; shortcuts: Shortcut[]; people?: { email: string; name: string; role: string }[] }) {
   const path = usePathname();
+  // breadcrumbs (Oct 14): every page visited in this tab, with its address as you left it, for the "←" links
+  useEffect(() => { recordVisit(path, window.location.pathname + window.location.search); }, [path]);
+  useEffect(() => {
+    // the email page keeps the open email in its address (replaceState): the trail keeps the latest
+    const h = window.history as History & { __trail?: boolean };
+    if (!h.__trail) {
+      const orig = h.replaceState.bind(h);
+      h.replaceState = (...a: Parameters<History["replaceState"]>) => { orig(...a); try { touchCurrent(); } catch { /* fine */ } };
+      h.__trail = true;
+    }
+    // leaving a page by a link or a full load: its name (the customer's, the order's) as it shows now
+    const keep = () => { try { touchCurrent(); } catch { /* fine */ } };
+    document.addEventListener("click", keep, true);
+    window.addEventListener("pagehide", keep);
+    return () => { document.removeEventListener("click", keep, true); window.removeEventListener("pagehide", keep); };
+  }, []);
   const { realRole, viewAs, perms } = useRole();
   const crew = !perms.money;
   const router = useRouter();

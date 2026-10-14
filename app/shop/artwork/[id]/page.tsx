@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -56,7 +57,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   const ratio = d.width_px && d.height_px ? d.height_px / d.width_px : 0;
   return (
     <>
-      <Link className="back" href="/shop/artwork">← Artwork</Link>
+      <BackLink href="/shop/artwork" label="Artwork" />
       <div className="page-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === d.customer_id)) || "No customer"}</div><h1>{designLabel(d)}</h1></div>
         <div className="row"><span className="save-state">{msg}</span><Link className="btn" href={`/shop/artwork/mockup?customer=${d.customer_id || ""}&design=${d.id}`}>Put on a shirt</Link>{orig && <a className="btn" href={orig} target="_blank" rel="noreferrer">Download original</a>}<button className={"btn ghost danger" + (armed ? " armed" : "")} type="button" onClick={del}>{armed ? "Delete logo?" : "Delete"}</button></div>

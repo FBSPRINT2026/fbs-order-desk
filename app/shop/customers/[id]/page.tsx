@@ -1,5 +1,6 @@
 "use client";
 import TestAccount from "@/components/TestAccount";
+import BackLink from "@/components/BackLink";
 import CustomerProductionFiles from "@/components/CustomerProductionFiles";
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -153,7 +154,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
 
   return (
     <>
-      <Link className="back" href="/shop/customers">← Customers</Link>
+      <BackLink href="/shop/customers" label="Customers" />
       <div className="page-head" style={{ marginTop: 8 }}>
         <div><div className="eyebrow">Customer{c.is_test ? <span className="ta-tag">Test account</span> : null}</div><h1>{c.company || c.name || "New Customer"}</h1></div>
         <div className="row">

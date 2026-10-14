@@ -1,5 +1,6 @@
 "use client";
 import JobLabor from "@/components/team/JobLabor";
+import BackLink from "@/components/BackLink";
 import JobFiles from "@/components/job/JobFiles";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
@@ -573,7 +574,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     <>
       {fromEmail
         ? <button type="button" className="back back-btn" title="Saves this order, then opens the customer's email to reply or send the quote" onClick={async () => { await save(); router.push(`/shop/conversations?open=${fromEmail}`); }}>← Save &amp; return to the email</button>
-        : <a className="back" href="/shop/orders" onClick={(e) => { if (window.history.length > 1) { e.preventDefault(); router.back(); } }} title="Back to where you were">← Back</a>}
+        : <BackLink href="/shop/orders" label="Orders" />}
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
           <div className="eyebrow">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>

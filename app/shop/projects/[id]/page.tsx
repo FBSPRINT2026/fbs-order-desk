@@ -1,5 +1,6 @@
 "use client";
 import { use, useCallback, useEffect, useState } from "react";
+import BackLink from "@/components/BackLink";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -52,7 +53,7 @@ export default function ShopProject({ params }: { params: Promise<{ id: string }
   const ok = (e: { message: string } | null) => (e ? { ok: false, error: e.message } : { ok: true });
   return (
     <>
-      <Link className="back" href="/shop/projects">← Projects</Link>
+      <BackLink href="/shop/projects" label="Projects" />
       <div style={{ marginTop: 10 }}>
         <ProjectView mode="shop" emails={mails.length ? <section className="pv2-msgs"><h2>Emails saved to this project</h2><ul className="pv2-mails">{mails.map((m) => <li key={m.id}><b>{m.direction === "in" ? m.meta?.from_name || m.from_email : "Us"}</b> <span className="faint">{new Date(m.occurred_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span><div>{m.subject}</div>{m.meta?.triage?.summary && <div className="faint">{m.meta.triage.summary}</div>}</li>)}</ul></section> : null} project={p} tasks={tasks} orders={inProj} linkable={linkable} company={custLabel(cust)} customerHref={`/shop/customers/${p.customer_id}`}
           messages={<ShopMessages customerId={p.customer_id} customerName={cust?.name || custLabel(cust)} orders={[]} projects={[{ id: p.id, name: p.name }]} only={`p:${p.id}`} shopName={settings.shop.name} height={480} />}
