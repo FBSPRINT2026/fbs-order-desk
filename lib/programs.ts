@@ -8,6 +8,8 @@ export type ProgramItem = {
   /** price breaks for this design: from min pieces, price per piece (Oct 14: Mewjira 100+ 6.25, 150+ 6.00, 200+ 5.50).
    *  price / min_qty hold the first break (the portal order form reads those) */
   tiers?: { min: number; price: number }[] | null;
+  /** the back picture (image_path is the front) */
+  image_back?: string;
   /** the customer supplies the shirts: the shirt fields don't apply */
   supplied?: boolean;
   /** taken off the program (kept, not deleted) */

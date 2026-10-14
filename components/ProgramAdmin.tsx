@@ -33,7 +33,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       const { data: its } = await sb.from("program_items").select("*").eq("program_id", p.id).is("archived_at", null).order("position");
       const list = (its || []) as ProgramItem[];
       setItems(list);
-      const paths = list.filter((i) => i.image_path).map((i) => i.image_path);
+      const paths = list.flatMap((i) => [i.image_path, i.image_back || ""]).filter(Boolean);
       if (paths.length) { const { data: sg } = await sb.storage.from("proofs").createSignedUrls(paths, 3600); setImgs(Object.fromEntries(paths.map((pth, i) => [pth, sg?.[i]?.signedUrl || ""]))); }
     }
     setLoaded(true); setVer((x) => x + 1);
@@ -77,16 +77,23 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
         {items.map((it) => (
           <article key={it.id} className={"pga-item" + (it.active ? "" : " off")}>
             <div className="pga-img">
-              {it.image_path && imgs[it.image_path] ? <img src={imgs[it.image_path]} alt="" /> : <span>👕</span>}
-              <label className="btn sm">Picture<input type="file" hidden accept="image/*" onChange={async (e) => {
-                const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
-                const path = `programs/${customerId}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]+/g, "_").slice(-80)}`;
-                const up = await sb.storage.from("proofs").upload(path, f, { contentType: f.type || undefined });
-                if (up.error) { setState(up.error.message); return; }
-                const { data: sg } = await sb.storage.from("proofs").createSignedUrl(path, 3600);
-                setImgs((x) => ({ ...x, [path]: sg?.signedUrl || "" }));
-                saveItem(it.id, { image_path: path });
-              }} /></label>
+              {(["image_path", "image_back"] as const).map((field) => {
+                const path = (it[field] || "") as string;
+                return (
+                  <div key={field} className="pga-pic">
+                    {path && imgs[path] ? <img src={imgs[path]} alt={`${it.name || "Design"} ${field === "image_path" ? "front" : "back"}`} /> : <span>👕</span>}
+                    <label className="btn sm">{field === "image_path" ? "Front" : "Back"}<input type="file" hidden accept="image/*" onChange={async (e) => {
+                      const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
+                      const up = `programs/${customerId}/${crypto.randomUUID()}-${f.name.replace(/[^\w.\-]+/g, "_").slice(-80)}`;
+                      const r = await sb.storage.from("proofs").upload(up, f, { contentType: f.type || undefined });
+                      if (r.error) { setState(r.error.message); return; }
+                      const { data: sg } = await sb.storage.from("proofs").createSignedUrl(up, 3600);
+                      setImgs((x) => ({ ...x, [up]: sg?.signedUrl || "" }));
+                      saveItem(it.id, { [field]: up } as Partial<ProgramItem>);
+                    }} /></label>
+                  </div>
+                );
+              })}
             </div>
             <div className="pga-fields">
               <div className="pga-row">

@@ -7117,3 +7117,5 @@ a.pdn-tag:hover{text-decoration:underline}
 .pga-tier-r .qp-amt-in{width:100px}
 .pga-sup{font-size:13.5px}
 .pga-supplied{border:1px dashed var(--line-2);border-radius:10px;padding:10px 12px;color:var(--ink-3);background:var(--surface-2);font-size:13px}
+.pga-pic{display:flex;flex-direction:column;gap:6px}
+.pga-pic>img,.pga-pic>span{aspect-ratio:1;border-radius:10px;background:var(--surface-2);display:grid;place-items:center;font-size:36px;object-fit:contain;width:100%}
