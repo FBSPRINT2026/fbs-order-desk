@@ -1,5 +1,6 @@
 import "server-only";
-import { createHmac, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, X509Certificate } from "node:crypto";
+import type { TLSSocket } from "node:tls";
 import https from "node:https";
 
 /**
@@ -42,43 +43,65 @@ function md4(input: Buffer): Buffer {
 }
 export const md4Hex = (s: string) => md4(Buffer.from(s, "utf8")).toString("hex"); // for checking against known values
 
-const FLAGS = 0xa2088207; // unicode, OEM, request target, NTLM, always sign, extended session security, target info, 128, 56
+// unicode, OEM, request target, NTLM, always sign, extended session security, target info, version, 128-bit, 56-bit
+const FLAGS = 0xa2888207;
 const u16 = (s: string) => Buffer.from(s, "utf16le");
+const VERSION = Buffer.from([10, 0, 0x61, 0x4a, 0, 0, 0, 15]); // Windows 10.0.19041, NTLM revision 15
 
-function type1() {
-  const b = Buffer.alloc(32);
+function type1(): Buffer {
+  const b = Buffer.alloc(40);
   b.write("NTLMSSP\0", 0, "ascii"); b.writeUInt32LE(1, 8); b.writeUInt32LE(FLAGS >>> 0, 12);
-  return b.toString("base64");
+  // domain and workstation: none (length 0, offset 40); then the version
+  b.writeUInt32LE(40, 20); b.writeUInt32LE(40, 28); VERSION.copy(b, 32);
+  return b;
 }
 
-function type3(challengeB64: string, user: string, pass: string) {
-  const ch = Buffer.from(challengeB64, "base64");
+/**
+ * The answer to the server's challenge (NTLMv2, MS-NLMP 3.1.5.1.2), with what servers that check "Extended Protection"
+ * require (Oct 14: the first version, without these, was turned down even for Amanda, whose password works): the TLS
+ * channel binding (the server certificate's hash), the target name, and the message integrity code.
+ */
+function type3(t1: Buffer, ch: Buffer, user: string, pass: string, host: string, cert: Buffer | null): Buffer {
   if (ch.toString("ascii", 0, 7) !== "NTLMSSP" || ch.readUInt32LE(8) !== 2) throw new Error("Not an NTLM challenge");
   const serverChallenge = ch.subarray(24, 32);
   const tiLen = ch.readUInt16LE(40), tiOff = ch.readUInt32LE(44);
-  const targetInfo = tiLen ? ch.subarray(tiOff, tiOff + tiLen) : Buffer.alloc(0);
-  // the server's time from the target info (MsvAvTimestamp), else now, as a Windows FILETIME
+  const ti = tiLen ? ch.subarray(tiOff, tiOff + tiLen) : Buffer.alloc(0);
+  // the server's AV pairs, minus the end and any flags (ours are added below)
+  const pairs: { id: number; v: Buffer }[] = [];
   let ts: Buffer | null = null;
-  for (let p = 0; p + 4 <= targetInfo.length;) {
-    const id = targetInfo.readUInt16LE(p), l = targetInfo.readUInt16LE(p + 2);
+  for (let p = 0; p + 4 <= ti.length;) {
+    const id = ti.readUInt16LE(p), l = ti.readUInt16LE(p + 2);
     if (id === 0) break;
-    if (id === 7 && l === 8) ts = targetInfo.subarray(p + 4, p + 12);
+    const v = ti.subarray(p + 4, p + 4 + l);
+    if (id === 7 && l === 8) ts = Buffer.from(v);
+    if (id !== 6) pairs.push({ id, v });
     p += 4 + l;
   }
-  if (!ts) { ts = Buffer.alloc(8); const ft = (BigInt(Date.now()) + 11644473600000n) * 10000n; ts.writeBigUInt64LE(ft); }
+  const withMic = !!ts;
+  if (!ts) { ts = Buffer.alloc(8); ts.writeBigUInt64LE((BigInt(Date.now()) + 11644473600000n) * 10000n); }
+  if (withMic) { const f = Buffer.alloc(4); f.writeUInt32LE(2, 0); pairs.push({ id: 6, v: f }); }
+  // channel binding: MD5 of gss_channel_bindings_struct with "tls-server-end-point:" + the certificate's hash
+  if (cert) {
+    const app = Buffer.concat([Buffer.from("tls-server-end-point:", "ascii"), createHash(certHash(cert)).update(cert).digest()]);
+    const cb = Buffer.alloc(20 + app.length); cb.writeUInt32LE(app.length, 16); app.copy(cb, 20);
+    pairs.push({ id: 10, v: createHash("md5").update(cb).digest() });
+  }
+  pairs.push({ id: 9, v: u16(`HTTP/${host}`) });
+  const tiOut = Buffer.concat([...pairs.map(({ id, v }) => { const h = Buffer.alloc(4); h.writeUInt16LE(id, 0); h.writeUInt16LE(v.length, 2); return Buffer.concat([h, v]); }), Buffer.alloc(4)]);
+
   // "DOMAIN\\name" (an old Windows login, Oct 14): the domain and the name apart; a UPN sign-in ("name@domain"): the
   // whole address is the user, the domain is empty
   const bs = user.indexOf("\\");
   const domain = bs > 0 ? user.slice(0, bs) : "", name = bs > 0 ? user.slice(bs + 1) : user;
-  const ntHash = md4(u16(pass));
-  const v2 = createHmac("md5", ntHash).update(u16(name.toUpperCase() + domain)).digest();
+  const keyNT = createHmac("md5", md4(u16(pass))).update(u16(name.toUpperCase() + domain)).digest();
   const cc = randomBytes(8);
-  const blob = Buffer.concat([Buffer.from([1, 1, 0, 0, 0, 0, 0, 0]), ts, cc, Buffer.alloc(4), targetInfo, Buffer.alloc(4)]);
-  const proof = createHmac("md5", v2).update(Buffer.concat([serverChallenge, blob])).digest();
+  const blob = Buffer.concat([Buffer.from([1, 1, 0, 0, 0, 0, 0, 0]), ts, cc, Buffer.alloc(4), tiOut, Buffer.alloc(4)]);
+  const proof = createHmac("md5", keyNT).update(Buffer.concat([serverChallenge, blob])).digest();
   const nt = Buffer.concat([proof, blob]);
-  const lm = Buffer.concat([createHmac("md5", v2).update(Buffer.concat([serverChallenge, cc])).digest(), cc]);
+  const lm = withMic ? Buffer.alloc(24) : Buffer.concat([createHmac("md5", keyNT).update(Buffer.concat([serverChallenge, cc])).digest(), cc]);
+  const sessionKey = createHmac("md5", keyNT).update(proof).digest();
   const dom = u16(domain), usr = u16(name), ws = u16("PORTAL");
-  const head = 64;
+  const head = 88; // the fixed part, the version (64) and the MIC (72)
   const parts = [dom, usr, ws, lm, nt];
   const offs: number[] = [];
   let off = head;
@@ -87,18 +110,34 @@ function type3(challengeB64: string, user: string, pass: string) {
   b.write("NTLMSSP\0", 0, "ascii"); b.writeUInt32LE(3, 8);
   const sec = (at: number, buf: Buffer, o: number) => { b.writeUInt16LE(buf.length, at); b.writeUInt16LE(buf.length, at + 2); b.writeUInt32LE(o, at + 4); };
   sec(12, lm, offs[3]); sec(20, nt, offs[4]); sec(28, dom, offs[0]); sec(36, usr, offs[1]); sec(44, ws, offs[2]);
-  sec(52, Buffer.alloc(0), off); // no session key
-  b.writeUInt32LE((ch.readUInt32LE(20) & FLAGS) >>> 0, 60);
-  return Buffer.concat([b, ...parts]).toString("base64");
+  sec(52, Buffer.alloc(0), off); // no session key exchange
+  b.writeUInt32LE(((ch.readUInt32LE(20) & FLAGS) | 1) >>> 0, 60);
+  VERSION.copy(b, 64);
+  const msg = Buffer.concat([b, ...parts]);
+  if (withMic) createHmac("md5", sessionKey).update(Buffer.concat([t1, ch, msg])).digest().copy(msg, 72);
+  return msg;
 }
 
-type Res = { status: number; headers: Record<string, string | string[] | undefined>; body: string };
+/** the hash the channel binding uses: the certificate's own signature hash, SHA-256 for MD5 / SHA-1 ones */
+function certHash(der: Buffer): string {
+  try {
+    const x = new X509Certificate(der) as X509Certificate & { signatureAlgorithm?: string };
+    const alg = (x.signatureAlgorithm || "").toLowerCase();
+    if (/sha384/.test(alg)) return "sha384";
+    if (/sha512/.test(alg)) return "sha512";
+  } catch { /* SHA-256 */ }
+  return "sha256";
+}
+
+type Res = { status: number; headers: Record<string, string | string[] | undefined>; body: string; cert?: Buffer | null };
 function send(agent: https.Agent, url: URL, headers: Record<string, string>, body: string, timeoutMs: number): Promise<Res> {
   return new Promise((resolve, reject) => {
     const req = https.request({ agent, method: "POST", hostname: url.hostname, path: url.pathname, port: 443, headers: { ...headers, "Content-Length": Buffer.byteLength(body) } }, (res) => {
       const chunks: Buffer[] = [];
       res.on("data", (c: Buffer) => chunks.push(c));
-      res.on("end", () => resolve({ status: res.statusCode || 0, headers: res.headers, body: Buffer.concat(chunks).toString("utf8") }));
+      let cert: Buffer | null = null;
+      try { cert = ((res.socket as TLSSocket).getPeerCertificate?.() as { raw?: Buffer } | undefined)?.raw || null; } catch { /* none */ }
+      res.on("end", () => resolve({ status: res.statusCode || 0, headers: res.headers, body: Buffer.concat(chunks).toString("utf8"), cert }));
       res.on("error", reject);
     });
     req.setTimeout(timeoutMs, () => req.destroy(new Error("The mail server took too long.")));
@@ -112,10 +151,12 @@ export async function ntlmPost(urlStr: string, user: string, pass: string, conte
   const url = new URL(urlStr);
   const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
   try {
-    const first = await send(agent, url, { "Content-Type": contentType, Authorization: `NTLM ${type1()}` }, "", timeoutMs);
+    const t1 = type1();
+    const first = await send(agent, url, { "Content-Type": contentType, Authorization: `NTLM ${t1.toString("base64")}` }, "", timeoutMs);
     const www = ([] as string[]).concat(first.headers["www-authenticate"] || []).join(",");
     const m = www.match(/NTLM\s+([A-Za-z0-9+/=]+)/);
     if (first.status !== 401 || !m) return first;
-    return await send(agent, url, { "Content-Type": contentType, Authorization: `NTLM ${type3(m[1], user, pass)}` }, body, timeoutMs);
+    const t3 = type3(t1, Buffer.from(m[1], "base64"), user, pass, url.hostname, first.cert || null);
+    return await send(agent, url, { "Content-Type": contentType, Authorization: `NTLM ${t3.toString("base64")}` }, body, timeoutMs);
   } finally { agent.destroy(); }
 }
