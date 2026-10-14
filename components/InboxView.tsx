@@ -15,7 +15,7 @@ import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
-import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, PHONE_MAIL_CSS, QuoteToggle, frameHeight, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -635,11 +635,11 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
   }, [i.id, tryN]);
   const doc = useMemo(() => {
     if (!m?.html) return null;
-    const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}@media (max-width:760px) and (pointer:coarse){html,body{padding:4px 0;font-size:14px;line-height:1.45}body p,body div,body span,body td,body li,body font,body a,body blockquote,body pre{font-size:14px!important;line-height:1.45!important}}table img{max-width:none}table{max-width:100%}</style>`;
+    const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}${PHONE_MAIL_CSS}table img{max-width:none}table{max-width:100%}</style>`;
     const html = m.html.replace(/<script[\s\S]*?<\/script>/gi, "");
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (x) => x + head) : head + html;
   }, [m?.html]);
-  const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(120, d.documentElement.scrollHeight + 4))); };
+  const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(60, frameHeight(d)))); };
   const move = async (to: string, label: string) => {
     setBusy("mv"); setErr("");
     try { await boxPost({ do: "move", path: "INBOX", uid: i.uid, to }); onMoved?.(to); done(label); }
@@ -712,6 +712,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
           {!m ? <div className="ibx2-none">{loadErr ? <>{loadErr} <button type="button" className="btn ghost sm" onClick={() => setTryN((x) => x + 1)}>Try again</button></> : <OpeningNote />}</div> : <>
             {full ? <><MailFrame html={full.html} text={full.text} /><Attachments m={full} /></> : doc && !plain ? <div className="ibx-html">
               <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
+              <QuoteToggle html={doc} frame={ref} fit={fit} />
               <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>
             </div> : <div className="lm-text">{m.text || "(no text)"}</div>}
             {!full && m.attachments.length > 0 && <div className="ibx2-files">{m.attachments.map((f, k) => <span key={k} className="lm-att">📎 {f.name}</span>)}<span className="faint"> Open attachments in Outlook for now.</span></div>}
@@ -1176,14 +1177,14 @@ function EmailBody({ x }: { x: Act }) {
         inline.forEach(([cid, p]) => { const u = urls?.find((r) => r.path === p)?.signedUrl; if (u) html = html.split(`cid:${cid}`).join(u); });
       }
       html = html.replace(/<script[\s\S]*?<\/script>/gi, "");
-      const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}@media (max-width:760px) and (pointer:coarse){html,body{padding:4px 0;font-size:14px;line-height:1.45}body p,body div,body span,body td,body li,body font,body a,body blockquote,body pre{font-size:14px!important;line-height:1.45!important}}table img{max-width:none}table{max-width:100%}</style>`;
+      const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}${PHONE_MAIL_CSS}table img{max-width:none}table{max-width:100%}</style>`;
       html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + head) : head + html;
       if (live) setDoc(html);
     })().catch(() => null);
     return () => { live = false; };
   }, [x.id, x.meta?.html, x.meta?.inline]);
   // the frame grows to the whole email (the pane scrolls, not a box inside it)
-  const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(120, d.documentElement.scrollHeight + 4))); };
+  const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(60, frameHeight(d)))); };
   if (!x.meta?.html || plain || doc == null) return (
     <div>
       <PlainBody x={x} />
@@ -1193,6 +1194,7 @@ function EmailBody({ x }: { x: Act }) {
   return (
     <div className="ibx-html">
       <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
+      <QuoteToggle html={doc} frame={ref} fit={fit} />
       <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>
     </div>
   );

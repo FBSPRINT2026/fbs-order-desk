@@ -388,7 +388,29 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
   );
 }
 
-const HEAD = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}table img{max-width:none}table{max-width:100%}</style>`;
+/**
+ * Inside an email's frame on a phone (Oct 14, Nick: "clean up how the email conversation reads"): one font and size for
+ * the whole email, no box, and the earlier emails it quotes folded away (they're in the conversation list) until
+ * "Show the earlier emails" is tapped (QuoteToggle puts .show-q on the frame's body)
+ */
+export const PHONE_MAIL_CSS = `@media (max-width:760px) and (pointer:coarse){html,body{padding:0 0 4px!important;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important;color:#1d2433}body p,body div,body span,body td,body li,body font,body a,body pre,body b,body strong,body i,body em{font-family:inherit!important;font-size:14px!important;line-height:1.5!important}body p{margin:0 0 10px}body:not(.show-q) blockquote,body:not(.show-q) .gmail_quote,body:not(.show-q) .yahoo_quoted,body:not(.show-q) #divRplyFwdMsg,body:not(.show-q) #divRplyFwdMsg~*,body:not(.show-q) #appendonsend~*,body:not(.show-q) div[type=cite],body:not(.show-q) div:has(+blockquote),body:not(.show-q) div:has(+br+blockquote){display:none!important}body.show-q blockquote{margin:8px 0!important;padding:0 0 0 10px!important;border-left:2px solid #d5dbe3!important;color:#5a6577}body.show-q blockquote *{color:#5a6577!important}}`;
+const HEAD = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}table img{max-width:none}table{max-width:100%}${PHONE_MAIL_CSS}</style>`;
+/** how tall an email's frame needs to be: its content, not the frame's current height (documentElement.scrollHeight
+ *  never drops below the frame, so folding the quoted emails away left a blank gap) */
+export function frameHeight(d: Document) {
+  const cs = d.defaultView?.getComputedStyle(d.documentElement);
+  const pad = cs ? (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) : 0;
+  return Math.max(d.body.scrollHeight, d.body.offsetHeight) + pad + 4;
+}
+const QUOTED = /<blockquote|gmail_quote|yahoo_quoted|divRplyFwdMsg|appendonsend/i;
+/** phones: "Show the earlier emails" under an email whose quoted replies are folded away (PHONE_MAIL_CSS) */
+export function QuoteToggle({ html, frame, fit }: { html: string | null; frame: React.RefObject<HTMLIFrameElement | null>; fit: () => void }) {
+  const [on, setOn] = useState(false);
+  useEffect(() => { setOn(false); }, [html]);
+  if (!html || !QUOTED.test(html)) return null;
+  const flip = () => { const b = frame.current?.contentDocument?.body; if (!b) return; b.classList.toggle("show-q", !on); setOn(!on); setTimeout(fit, 30); setTimeout(fit, 300); };
+  return <button type="button" className="ibx-q" onClick={flip} aria-expanded={on}>{on ? "Hide the earlier emails" : "··· Show the earlier emails"}</button>;
+}
 /** an email's body, the way Outlook shows it (sandboxed, links open in a new tab), or its text */
 /** "Opening…", then after a few seconds why it can take a while (Oct 13) */
 export function OpeningNote() {
@@ -404,11 +426,12 @@ export function MailFrame({ html, text }: { html: string; text: string }) {
     const x = html.replace(/<script[\s\S]*?<\/script>/gi, "");
     return /<head[^>]*>/i.test(x) ? x.replace(/<head[^>]*>/i, (m) => m + HEAD) : HEAD + x;
   }, [html]);
-  const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(80, d.documentElement.scrollHeight + 4))); };
+  const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(80, frameHeight(d)))); };
   if (!doc || plain) return <div className="lm-text">{text || "(no text)"}{doc && <div><button type="button" className="btn sm ghost" onClick={() => setPlain(false)}>Show as in Outlook</button></div>}</div>;
   return (
     <div className="ibx-html">
       <iframe ref={ref} title="Email" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} style={{ height: h }} onLoad={() => { fit(); setTimeout(fit, 400); setTimeout(fit, 1500); }} />
+      <QuoteToggle html={doc} frame={ref} fit={fit} />
       <button type="button" className="btn sm ghost" onClick={() => setPlain(true)}>Plain text</button>
     </div>
   );
