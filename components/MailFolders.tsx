@@ -103,6 +103,7 @@ export const TbIcon = {
   note: P("M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"),
   person: P("M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0M19 8v6M16 11h6"),
   check: P("M4 12l5 5L20 6"),
+  repeat: P("M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3"),
   more: P("M5 12h.01M12 12h.01M19 12h.01"),
   back: P("M15 5l-7 7 7 7"),
   up: P("M5 15l7-7 7 7"),

@@ -7433,3 +7433,13 @@ a.pdn-tag:hover{text-decoration:underline}
   .eh .eh-ai-go .tb-l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .eh .eh-ai-btn{width:36px;height:36px}
 }
+
+/* phone AI card buttons styled like the bottom bar: blue icon over a small word, no box (Oct 14, Nick) */
+@media (max-width:760px) and (pointer:coarse){
+  .eh .eh-ai{row-gap:4px}
+  .eh .eh-ai-go,.eh .eh-ai-go.primary,.eh .eh-ai-btn,.eh .eh-ai-btn.on{flex:1 1 0;min-width:0;width:auto;height:48px;flex-direction:column;justify-content:center;align-items:center;gap:3px;padding:0;
+    border:0;border-radius:10px;background:none;box-shadow:none;color:var(--accent);font-size:10px;font-weight:600;letter-spacing:0;filter:none}
+  .eh .eh-ai-go svg,.eh .eh-ai-btn svg{width:24px;height:24px;stroke-width:1.9}
+  .eh .eh-ai-go .tb-l,.eh .eh-ai-btn .tb-l{display:block!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .eh .eh-ai-go:active,.eh .eh-ai-btn:active{background:color-mix(in srgb,var(--surface) 60%,transparent)}
+}
