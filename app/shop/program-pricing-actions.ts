@@ -25,7 +25,7 @@ export async function programCard(customerId: string) {
     const { admin } = await me();
     const { data: p } = await admin.from("programs").select("id, name, rate_card").eq("customer_id", customerId).order("created_at").limit(1).maybeSingle();
     if (!p) return { ok: true as const, card: null, baseCost: null, items: [] as DesignPrice[] };
-    const { data: its } = await admin.from("program_items").select("id, name, style, price, min_qty, design_id, active, tiers").eq("program_id", p.id).eq("active", true).is("archived_at", null);
+    const { data: its } = await admin.from("program_items").select("id, name, style, price, min_qty, design_id, active, tiers, price_mode").eq("program_id", p.id).eq("active", true).is("archived_at", null);
     const items = ((its || []) as DesignPrice[]).filter((x) => tiersOf(x).length);
     let card = (p.rate_card || null) as RateCard | null;
     if (!cardSetsAnything(card)) card = null;
@@ -209,6 +209,7 @@ export async function applyProgramProposal(input: { customerId: string; proposal
     if (pc.screen_fee !== undefined) { if (pc.screen_fee == null) delete card.screenFee; else { card.screenFee = Math.round(pc.screen_fee * 100) / 100; card.waiveSetup = false; } }
     for (const [z, n] of Object.entries(pc.size_up || {})) if (n != null) card.sizeUp[z as "2XL"] = Math.round(+n * 100) / 100;
     for (const x of pc.prices || []) if (x.front >= 1 && x.back >= 0 && x.price > 0) card.prices[`${Math.round(x.front)}/${Math.round(x.back)}`] = Math.round(x.price * 100) / 100;
+    if ((pc.prices || []).length) card.gridOn = true;
     if (input.proposal.not_supported?.length) card.extras = [...new Set([...(card.extras || []), ...input.proposal.not_supported.map((x) => x.trim().slice(0, 200)).filter(Boolean)])].slice(0, 12);
     card.about = [{ text: input.text.trim().slice(0, 2000), by: v.email, at: new Date().toISOString() }, ...(card.about || [])].slice(0, 20);
     const up = await admin.from("programs").update({ rate_card: card }).eq("id", p!.id);
@@ -228,10 +229,11 @@ export async function applyProgramProposal(input: { customerId: string; proposal
       for (const d of ds) tiers.set(Math.max(0, Math.round(d.min_qty || 0)), Math.round(d.price * 100) / 100);
       const list = [...tiers.entries()].map(([min, price]) => ({ min, price })).sort((a, b) => a.min - b.min);
       const first = list[0], d0 = ds[0];
-      if (old) { await admin.from("program_items").update({ tiers: list, price: first.price, min_qty: first.min, active: true }).eq("id", old.id); continue; }
+      const mode = list.length === 1 && !list[0].min ? "flat" : "breaks";
+      if (old) { await admin.from("program_items").update({ tiers: list, price: first.price, min_qty: first.min, price_mode: mode, active: true }).eq("id", old.id); continue; }
       const imps = [{ location: "Full Front", method: "screen", colors: Math.max(1, d0.front_colors || 1), inks: "", size: "", notes: "" }, ...(d0.back_colors ? [{ location: "Full Back", method: "screen", colors: d0.back_colors, inks: "", size: "", notes: "" }] : [])];
       await admin.from("program_items").insert({ program_id: p!.id, name: d0.name.trim().slice(0, 120), style: (d0.style || "").slice(0, 40), brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"],
-        price: first.price, min_qty: first.min, tiers: list, supplied: !card.garmentIncluded, imprints: imps, design_id: null, image_path: "", notes: ds.map((x) => x.notes || "").filter(Boolean).join(" ").slice(0, 300), active: true, position: pos++ });
+        price: first.price, min_qty: first.min, tiers: list, price_mode: mode, supplied: !card.garmentIncluded, imprints: imps, design_id: null, image_path: "", notes: ds.map((x) => x.notes || "").filter(Boolean).join(" ").slice(0, 300), active: true, position: pos++ });
     }
     return { ok: true as const };
   } catch (e) { return fail(e); }

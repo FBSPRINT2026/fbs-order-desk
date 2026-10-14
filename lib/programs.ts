@@ -8,6 +8,8 @@ export type ProgramItem = {
   /** price breaks for this design: from min pieces, price per piece (Oct 14: Mewjira 100+ 6.25, 150+ 6.00, 200+ 5.50).
    *  price / min_qty hold the first break (the portal order form reads those) */
   tiers?: { min: number; price: number }[] | null;
+  /** "flat": one price at any quantity; "breaks": by quantity (tiers) */
+  price_mode?: "flat" | "breaks";
   /** the back picture (image_path is the front) */
   image_back?: string;
   /** the customer supplies the shirts: the shirt fields don't apply */
@@ -16,8 +18,8 @@ export type ProgramItem = {
   archived_at?: string | null;
 };
 /** a design price's breaks, lowest first: its tiers, or its one price at its minimum */
-export const tiersOf = (it: Pick<ProgramItem, "price" | "min_qty"> & { tiers?: { min: number; price: number }[] | null }) =>
-  (it.tiers?.length ? it.tiers : [{ min: it.min_qty || 0, price: +it.price }]).filter((t) => +t.price > 0).map((t) => ({ min: Math.max(0, Math.round(+t.min || 0)), price: +t.price })).sort((a, b) => a.min - b.min);
+export const tiersOf = (it: Pick<ProgramItem, "price" | "min_qty"> & { tiers?: { min: number; price: number }[] | null; price_mode?: string | null }) =>
+  (it.price_mode === "flat" ? [{ min: 0, price: +it.price }] : it.tiers?.length ? it.tiers : [{ min: it.min_qty || 0, price: +it.price }]).filter((t) => +t.price > 0).map((t) => ({ min: Math.max(0, Math.round(+t.min || 0)), price: +t.price })).sort((a, b) => a.min - b.min);
 export type Program = { id: string; customer_id: string; name: string; notes: string; active: boolean; rate_card?: RateCard | null };
 export const PROGRAM_SIZES = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
 
@@ -43,6 +45,9 @@ export type RateCard = {
   sizeUp: Partial<Record<"2XL" | "3XL" | "4XL" | "5XL", number>>;
   /** price per piece by front colors / back colors: "1/0", "1/1", "2/1"… */
   prices: Record<string, number>;
+  /** the price grid is in use (Oct 14: "toggle the rate card on and off"); not set = on when it has prices.
+   *  Off, orders ignore the grid; the rules (no setup, screen price) still apply. */
+  gridOn?: boolean;
   /** rules that apply to every job on Program, whatever the print */
   /** price per screen instead of the price list's (Tiger Blue: $15, they supply print-ready separations) */
   screenFee?: number | null;
@@ -55,7 +60,7 @@ export type RateCard = {
 };
 /** does the card set anything? (prices, or a rule) */
 export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.noSetupEver || !!c.extras?.length);
-export const cardHasPrices = (c: RateCard | null | undefined) => !!c && Object.values(c.prices || {}).some((x) => +x > 0);
+export const cardHasPrices = (c: RateCard | null | undefined) => !!c && c.gridOn !== false && Object.values(c.prices || {}).some((x) => +x > 0);
 export const BIG_SIZES = ["2XL", "3XL", "4XL", "5XL"] as const;
 export const newRateCard = (): RateCard => ({ base: { brand: "Next Level", style: "6210" }, markup: 1.2, minQty: 50, waiveSetup: true, garmentIncluded: true, sizeUp: { "2XL": 2.5, "3XL": 2.5, "4XL": 2.5, "5XL": 2.5 }, prices: {} });
 export const FRONTS = [1, 2, 3, 4, 5, 6], BACKS = [0, 1, 2, 3, 4, 5, 6];
@@ -94,7 +99,7 @@ export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Rec
  */
 /** a design's own program price (Oct 14, Nick: "Mewjira, 200 pieces at $5.50… this one is by design"): a program item
  *  linked to the design, or named like it (Printavo-era orders have no design links) */
-export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active" | "tiers">;
+export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active" | "tiers" | "price_mode">;
 export type DesignCtx = { items: DesignPrice[]; /** the order's name and its prints' design names */ text: string };
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCtx): { item?: DesignPrice; under?: DesignPrice } {
@@ -122,7 +127,7 @@ export function programForGroup(g: Group, card: RateCard | null, baseCost: numbe
     }
     if (dp.under) pre = `${dp.under.name} program price starts at ${dp.under.min_qty} (this is ${qty}); `;
   }
-  if (!card) return none(`${pre}no rate card`);
+  if (!card || card.gridOn === false) return none(`${pre}no rate card`);
   const k = printKey(g);
   if ("why" in k) return none(`${pre}no program price: ${k.why}`);
   const price = card.prices?.[k.key];

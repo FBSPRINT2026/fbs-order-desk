@@ -7119,3 +7119,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .pga-supplied{border:1px dashed var(--line-2);border-radius:10px;padding:10px 12px;color:var(--ink-3);background:var(--surface-2);font-size:13px}
 .pga-pic{display:flex;flex-direction:column;gap:6px}
 .pga-pic>img,.pga-pic>span{aspect-ratio:1;border-radius:10px;background:var(--surface-2);display:grid;place-items:center;font-size:36px;object-fit:contain;width:100%}
+.rc.off{padding-block:10px}
+.rc-switch{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:600;padding:3px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer}
+.rc-switch input{accent-color:var(--accent)}
+.pga-mode{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13.5px}

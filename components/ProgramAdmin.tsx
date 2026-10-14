@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { applyProgramProposal, programAssist, type ProgramProposal } from "@/app/shop/program-pricing-actions";
 import { LOCATIONS } from "@/lib/pricing";
-import { BIG_SIZES, BACKS, FRONTS, newRateCard, PROGRAM_SIZES, tiersOf, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
+import { BIG_SIZES, BACKS, FRONTS, cardHasPrices, newRateCard, PROGRAM_SIZES, tiersOf, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
 
 const blankItem = (programId: string, position: number): Omit<ProgramItem, "id"> => ({ program_id: programId, name: "", style: "", brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"], price: 0, min_qty: 0, imprints: [{ location: "Full Front", method: "screen", colors: 1, inks: "", size: "", notes: "" }], design_id: null, image_path: "", notes: "", active: true, position });
 
@@ -100,6 +100,13 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
                 <label className="grow">Design name<input type="text" value={it.name} onChange={(e) => saveItem(it.id, { name: e.target.value })} placeholder="Mewjira" /></label>
                 <label className="grow">Their design on file<select value={it.design_id || ""} onChange={(e) => saveItem(it.id, { design_id: e.target.value || null })}><option value="">None (matched by name)</option>{designs.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
               </div>
+              <div className="pga-mode" role="radiogroup" aria-label="How this design is priced">
+                <label className="check"><input type="radio" name={`pm-${it.id}`} checked={it.price_mode === "flat"} onChange={() => saveItem(it.id, { price_mode: "flat", tiers: [{ min: 0, price: tiersOf(it)[0]?.price || it.price || 0 }], min_qty: 0 })} /> Flat rate <span className="faint">(same price at any quantity)</span></label>
+                <label className="check"><input type="radio" name={`pm-${it.id}`} checked={it.price_mode !== "flat"} onChange={() => saveItem(it.id, { price_mode: "breaks" })} /> Price breaks <span className="faint">(by quantity)</span></label>
+              </div>
+              {it.price_mode === "flat" ? (
+                <div className="pga-tier-r"><span className="pga-tier-h">Price per piece</span><div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" aria-label="Flat price each" key={`f-${it.price}`} defaultValue={it.price ? (+it.price).toFixed(2) : ""} placeholder="0.00" onBlur={(e) => { const v = Math.round((+e.target.value.replace(/[^\d.]/g, "") || 0) * 100) / 100; saveItem(it.id, { price: v, min_qty: 0, tiers: [{ min: 0, price: v }] }); }} /></div><span className="faint">each, any quantity</span></div>
+              ) : (
               <div className="pga-tier" key={JSON.stringify(it.tiers || [])}>
                 <span className="pga-tier-h">Price per piece</span>
                 {(it.tiers?.length ? it.tiers : tiersOf(it).length ? tiersOf(it) : [{ min: 0, price: 0 }]).map((t, k, all) => (
@@ -112,6 +119,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
                 ))}
                 <button type="button" className="btn sm" onClick={() => { const t = it.tiers?.length ? it.tiers : tiersOf(it); const last = t[t.length - 1]; saveItem(it.id, { tiers: [...t, { min: (last?.min || 0) + 50, price: 0 }] }); }}>+ Price break</button>
               </div>
+              )}
               <label className="check pga-sup"><input type="checkbox" checked={!!it.supplied} onChange={(e) => saveItem(it.id, { supplied: e.target.checked })} /> Customer supplied shirts <span className="faint">(the price is the print only: no shirt, screens or setup)</span></label>
               {it.supplied ? (
                 <div className="pga-supplied">Customer supplied: no shirt in this price.</div>
@@ -151,7 +159,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
           </article>
         ))}
       </div>
-      <button type="button" className="btn primary" onClick={async () => { const { error } = await sb.from("program_items").insert({ ...blankItem(program.id, items.length), supplied: program.rate_card?.garmentIncluded === false }); if (error) setState(error.message); load(); }}>+ Add a design price</button>
+      <button type="button" className="btn primary" onClick={async () => { const { error } = await sb.from("program_items").insert({ ...blankItem(program.id, items.length), price_mode: "flat", supplied: program.rate_card?.garmentIncluded === false }); if (error) setState(error.message); load(); }}>+ Add a design price</button>
     </div>
   );
 }
@@ -180,10 +188,24 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
   const save = (n: RateCard) => { setC(n); onSave({ ...n, base: { ...n.base, cost: cost ?? n.base.cost } }); };
   const money2 = (v: string) => Math.round((+v.replace(/[^\d.]/g, "") || 0) * 100) / 100;
   const set = (patch: Partial<RateCard>) => save({ ...c, ...patch });
+  const gridOn = c.gridOn ?? cardHasPrices(c);
   const ex = c.garmentIncluded && cost != null ? c.prices["1/1"] || Object.values(c.prices).find((x) => x > 0) : null;
   return (
+    <>
     <section className="rc">
-      <div className="rc-h"><h3>Rate card</h3><span className="faint">Used when an order is set to <b>Program</b> (next to Retail / Wholesale)</span></div>
+      <div className="rc-h"><h3>Rules on every Program job</h3><span className="faint">Apply whenever an order is set to <b>Program</b>, with or without a rate card</span></div>
+      <div className="pga-row">
+        <label className="check"><input type="checkbox" checked={!!c.noSetupEver} onChange={(e) => set({ noSetupEver: e.target.checked })} /> No setup on any job</label>
+        <label>Screens, each<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={c.screenFee != null ? String(c.screenFee) : ""} onBlur={(e) => { const v = e.target.value.trim(); set({ screenFee: v === "" ? null : money2(v) }); }} placeholder="normal" /></div></label>
+      </div>
+    </section>
+    <section className={"rc" + (gridOn ? "" : " off")}>
+      <div className="rc-h">
+        <h3>Rate card</h3>
+        <label className="rc-switch"><input type="checkbox" role="switch" checked={gridOn} onChange={(e) => set({ gridOn: e.target.checked })} /> {gridOn ? "On" : "Off"}</label>
+        <span className="faint">{gridOn ? "A price for each print (1/1, 2/1…) on a base shirt, for designs without their own price" : "Not used: orders price by design (below) or normally"}</span>
+      </div>
+      {gridOn && <>
       <div className="pga-row">
         <label>Base shirt brand<input type="text" value={c.base.brand} onChange={(e) => setC({ ...c, base: { ...c.base, brand: e.target.value } })} onBlur={() => save(c)} placeholder="Next Level" /></label>
         <label>Style #<input type="text" value={c.base.style} onChange={(e) => setC({ ...c, base: { ...c.base, style: e.target.value } })} onBlur={() => save(c)} placeholder="6210" /></label>
@@ -197,8 +219,6 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
         {c.garmentIncluded && <label>Other shirts: difference ×<input type="text" inputMode="decimal" defaultValue={String(c.markup)} onBlur={(e) => set({ markup: +e.target.value.replace(/[^\d.]/g, "") || 1 })} style={{ width: 70 }} /></label>}
         <label>Minimum pieces<input type="number" min={0} defaultValue={c.minQty || ""} onBlur={(e) => set({ minQty: +e.target.value || 0 })} style={{ width: 90 }} /></label>
         <label className="check"><input type="checkbox" checked={c.waiveSetup} onChange={(e) => set({ waiveSetup: e.target.checked })} /> No setup on grid prices</label>
-        <label className="check"><input type="checkbox" checked={!!c.noSetupEver} onChange={(e) => set({ noSetupEver: e.target.checked })} /> No setup on any job</label>
-        <label>Screens, each<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={c.screenFee != null ? String(c.screenFee) : ""} onBlur={(e) => { const v = e.target.value.trim(); set({ screenFee: v === "" ? null : money2(v) }); }} placeholder="normal" /></div></label>
       </div>
       <div className="pga-row rc-up">
         <span>Big sizes, per piece</span>
@@ -222,7 +242,9 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
         </table>
       </div>
       {ex && cost != null && <p className="faint rc-ex">Example: a shirt whose blank costs {money(cost + 2)} on a 1/1 = {money(ex)} + ({money(cost + 2)} − {money(cost)}) × {c.markup} = <b>{money(Math.round((ex + 2 * c.markup) * 100) / 100)}</b>. A cheaper shirt comes down the same way.</p>}
+      </>}
     </section>
+    </>
   );
 }
 
