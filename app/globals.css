@@ -7280,3 +7280,21 @@ a.pdn-tag:hover{text-decoration:underline}
   .eh-addr,.eh-to,.eh-date{font-size:11.5px}
   .ibx2-read{font-size:13.5px}
 }
+/* phone email, tighter still (Oct 14, Nick: "takes up way too much vertical space"): no section-label line in the toolbar
+   (the thin dividers keep the groups), shorter buttons, the AI row's tags and the Message header row dropped */
+@media (max-width:760px) and (pointer:coarse){
+  .eh-bar.has-pn .tb-row{padding:2px 2px}
+  .eh-bar.has-pn .tb-row .tb-sec-l{display:none!important}
+  .eh-bar.has-pn .tb-row .tb-g{align-items:stretch}
+  .eh-bar.has-pn .tb-row .tb-b{min-height:0;height:auto;padding:4px 1px 3px;gap:1px;font-size:9.5px;line-height:1.05}
+  .eh-bar.has-pn .tb-row .tb-b svg{width:16px;height:16px}
+  .eh .eh-ai{padding:6px 6px 6px 10px}
+  .eh .eh-ai-l{flex-direction:column;gap:1px;font-size:9px}
+  .eh .eh-ai-tags{display:none}
+  .eh .eh-ai-b .eh-sum{font-size:12px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .eh .eh-ai-btn{width:34px;height:34px}
+  .eh .eh-ai-btn svg{width:17px;height:17px}
+  .eh-sec{display:none}
+  .eh-b{padding:8px 12px 6px;gap:6px}
+  .eh-subj{font-size:15px!important}
+}
