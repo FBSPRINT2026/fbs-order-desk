@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { MailAccount } from "@/lib/mail/config";
 import { ewsFolders, ewsList, ewsOpen, ewsReady, ewsSearch } from "@/lib/mail/ewsBox";
+import { ewsProbe, forceNtlm } from "@/lib/mail/ews";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,16 @@ export async function GET(req: Request) {
   const term = new URL(req.url).searchParams.get("q") || "fbs";
   const { data } = await admin.from("mail_accounts").select("*").eq("enabled", true);
   const out: Record<string, unknown> = {};
+  // ?ntlm=<email>: sign that mailbox in with NTLM only and report (checks the NTLM sign-in on a mailbox Basic works for)
+  const ntlmFor = new URL(req.url).searchParams.get("ntlm");
+  if (ntlmFor) {
+    const a = ((data || []) as MailAccount[]).find((x) => x.email.toLowerCase() === ntlmFor.toLowerCase());
+    if (!a) return NextResponse.json({ error: "No such mailbox" });
+    forceNtlm(a.email);
+    const r = await ewsProbe(a);
+    forceNtlm(a.email, false);
+    return NextResponse.json({ [a.email]: { ntlm: r } });
+  }
   for (const a of (data || []) as MailAccount[]) {
     const me = a.email.toLowerCase(), r: Record<string, unknown> = {};
     if (!(await ewsReady(admin, a))) { out[me] = "EWS not working for this mailbox"; continue; }

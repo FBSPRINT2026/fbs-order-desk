@@ -277,7 +277,8 @@ export async function recheckEws(admin: SupabaseClient, acct: MailAccount) {
   const { data } = await admin.from("app_keys").select("value").eq("name", "ews").maybeSingle();
   const st = (data?.value || {}) as Record<string, { ok: boolean; detail: string; at: string }>;
   const k = acct.email.toLowerCase(), mine = st[k];
-  if (mine?.ok || (mine && Date.parse(mine.at) > Date.now() - 10 * 60000)) return mine?.ok ?? false;
+  // every 30 minutes (each refused try counts as a failed sign-in on the mailbox: not too many)
+  if (mine?.ok || (mine && Date.parse(mine.at) > Date.now() - 30 * 60000)) return mine?.ok ?? false;
   const { ewsProbe } = await import("./ews");
   const r = await ewsProbe(acct);
   const { data: again } = await admin.from("app_keys").select("value").eq("name", "ews").maybeSingle();

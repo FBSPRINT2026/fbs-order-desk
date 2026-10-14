@@ -20,6 +20,8 @@ export const ewsUrl = (host: string) => `https://${host}/EWS/Exchange.asmx`;
 
 /** which sign-in works for each mailbox (Basic for most; NTLM where Basic is turned down, Oct 13) */
 const useNtlm = new Map<string, boolean>();
+/** test: sign this mailbox in with NTLM even when Basic works (to check the NTLM sign-in on a mailbox that works) */
+export const forceNtlm = (email: string, on = true) => { useNtlm.set(email.toLowerCase(), on); useHost.delete(email.toLowerCase()); };
 /**
  * which EWS server answers for each mailbox. Intermedia runs an East and a West site: a mailbox is reached over IMAP
  * on one and may only sign in to EWS on the other (Oct 14: Intermedia support gave Nick's as the West site, while

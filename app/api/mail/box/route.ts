@@ -113,7 +113,8 @@ export async function GET(req: Request) {
       }
       const { data: kept } = await admin.from("mail_cache").select("message_id").eq("account_id", acct.id).eq("folder", path).eq("uid", uid).limit(1).maybeSingle();
       const mid = (kept?.message_id as string) || q.get("mid") || "";
-      if (mid && !ews) {
+      // (over EWS only when it works for this mailbox: handled above; a refused EWS sign-in is a failed sign-in on the mailbox)
+      if (mid && ews) {
         const e = await ewsMessage(acct, path, uid, mid, (id) => `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id })}`).catch((x) => { console.warn(`mail open ${path}:${uid} ews failed: ${x instanceof Error ? x.message : x}`); return null; });
         if (e) {
           console.info(`mail open ${path}:${uid} ews ${Date.now() - t0}ms`);
