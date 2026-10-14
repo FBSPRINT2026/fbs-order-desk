@@ -7109,3 +7109,11 @@ a.pdn-tag:hover{text-decoration:underline}
 .pga-tiers{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface);font-size:13.5px}
 .pga-tiers>div{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
 .pga-tiers span{color:var(--ink-2)}
+.pga-tier{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.pga-tier-h{font-size:12.5px;color:var(--ink-2)}
+.pga-tier-r{display:flex;align-items:center;gap:8px}
+.pga-tier-r label{display:flex;align-items:center;gap:6px;font-size:13px}
+.pga-tier-r input[type=number]{width:80px}
+.pga-tier-r .qp-amt-in{width:100px}
+.pga-sup{font-size:13.5px}
+.pga-supplied{border:1px dashed var(--line-2);border-radius:10px;padding:10px 12px;color:var(--ink-3);background:var(--surface-2);font-size:13px}

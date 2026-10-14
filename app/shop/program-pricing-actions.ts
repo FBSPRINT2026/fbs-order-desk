@@ -2,7 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewerPerms } from "@/lib/access";
-import { cardSetsAnything, type DesignPrice, type RateCard } from "@/lib/programs";
+import { cardSetsAnything, tiersOf, type DesignPrice, type RateCard } from "@/lib/programs";
 
 /**
  * Program pricing on the order page (Oct 14, Nick): the customer's rate card (with the base shirt's blank cost now),
@@ -25,8 +25,8 @@ export async function programCard(customerId: string) {
     const { admin } = await me();
     const { data: p } = await admin.from("programs").select("id, name, rate_card").eq("customer_id", customerId).order("created_at").limit(1).maybeSingle();
     if (!p) return { ok: true as const, card: null, baseCost: null, items: [] as DesignPrice[] };
-    const { data: its } = await admin.from("program_items").select("id, name, style, price, min_qty, design_id, active").eq("program_id", p.id).eq("active", true);
-    const items = ((its || []) as DesignPrice[]).filter((x) => +x.price > 0);
+    const { data: its } = await admin.from("program_items").select("id, name, style, price, min_qty, design_id, active, tiers").eq("program_id", p.id).eq("active", true).is("archived_at", null);
+    const items = ((its || []) as DesignPrice[]).filter((x) => tiersOf(x).length);
     let card = (p.rate_card || null) as RateCard | null;
     if (!cardSetsAnything(card)) card = null;
     let baseCost: number | null = null;
@@ -157,7 +157,7 @@ export async function programAssist(input: { customerId: string; text: string })
       admin.from("programs").select("id, rate_card").eq("customer_id", input.customerId).order("created_at").limit(1).maybeSingle(),
     ]);
     if (!c) return { ok: false as const, error: "Customer not found." };
-    const { data: its } = p ? await admin.from("program_items").select("name, price, min_qty, style, notes, active").eq("program_id", p.id) : { data: [] };
+    const { data: its } = p ? await admin.from("program_items").select("name, price, min_qty, tiers, style, notes, active").eq("program_id", p.id).is("archived_at", null) : { data: [] };
     const s = st.settings;
     const system = [
       "You set up program (special) pricing for a customer of FBS Print, a screen printing and embroidery shop in Richardson, Texas.",
@@ -213,13 +213,25 @@ export async function applyProgramProposal(input: { customerId: string; proposal
     card.about = [{ text: input.text.trim().slice(0, 2000), by: v.email, at: new Date().toISOString() }, ...(card.about || [])].slice(0, 20);
     const up = await admin.from("programs").update({ rate_card: card }).eq("id", p!.id);
     if (up.error) return { ok: false as const, error: up.error.message };
-    const { count } = await admin.from("program_items").select("id", { count: "exact", head: true }).eq("program_id", p!.id);
-    let pos = count || 0;
+    // design prices: one entry per design, its breaks as tiers (merged into the design's entry when it has one)
+    const { data: have } = await admin.from("program_items").select("id, name, price, min_qty, tiers, position").eq("program_id", p!.id).is("archived_at", null);
+    const byName = new Map<string, NonNullable<ProgramProposal["design_prices"]>>();
     for (const d of input.proposal.design_prices || []) {
       if (!d.name?.trim() || !(d.price > 0)) continue;
-      const imps = [{ location: "Full Front", method: "screen", colors: Math.max(1, d.front_colors || 1), inks: "", size: "", notes: "" }, ...(d.back_colors ? [{ location: "Full Back", method: "screen", colors: d.back_colors, inks: "", size: "", notes: "" }] : [])];
-      await admin.from("program_items").insert({ program_id: p!.id, name: d.name.trim().slice(0, 120), style: (d.style || "").slice(0, 40), brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"],
-        price: Math.round(d.price * 100) / 100, min_qty: Math.max(0, Math.round(d.min_qty || 0)), imprints: imps, design_id: null, image_path: "", notes: (d.notes || "").slice(0, 300), active: true, position: pos++ });
+      const k = d.name.trim().toLowerCase();
+      byName.set(k, [...(byName.get(k) || []), d]);
+    }
+    let pos = (have || []).length;
+    for (const [k, ds] of byName) {
+      const old = (have || []).find((x) => String(x.name).trim().toLowerCase() === k) as { id: string; price: number; min_qty: number; tiers: { min: number; price: number }[] | null } | undefined;
+      const tiers = new Map<number, number>(old ? tiersOf(old).map((t) => [t.min, t.price]) : []);
+      for (const d of ds) tiers.set(Math.max(0, Math.round(d.min_qty || 0)), Math.round(d.price * 100) / 100);
+      const list = [...tiers.entries()].map(([min, price]) => ({ min, price })).sort((a, b) => a.min - b.min);
+      const first = list[0], d0 = ds[0];
+      if (old) { await admin.from("program_items").update({ tiers: list, price: first.price, min_qty: first.min, active: true }).eq("id", old.id); continue; }
+      const imps = [{ location: "Full Front", method: "screen", colors: Math.max(1, d0.front_colors || 1), inks: "", size: "", notes: "" }, ...(d0.back_colors ? [{ location: "Full Back", method: "screen", colors: d0.back_colors, inks: "", size: "", notes: "" }] : [])];
+      await admin.from("program_items").insert({ program_id: p!.id, name: d0.name.trim().slice(0, 120), style: (d0.style || "").slice(0, 40), brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"],
+        price: first.price, min_qty: first.min, tiers: list, supplied: !card.garmentIncluded, imprints: imps, design_id: null, image_path: "", notes: ds.map((x) => x.notes || "").filter(Boolean).join(" ").slice(0, 300), active: true, position: pos++ });
     }
     return { ok: true as const };
   } catch (e) { return fail(e); }

@@ -99,7 +99,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const projects = await projectSummaries(admin, ctx.customerIds, true);
   const { data: progs } = ctx.customerIds.length ? await admin.from("programs").select("*").in("customer_id", ctx.customerIds).eq("active", true).limit(1) : { data: [] };
   const program = ((progs || [])[0] || null) as Program | null;
-  const { data: pits } = program ? await admin.from("program_items").select("*").eq("program_id", program.id).eq("active", true).order("position") : { data: [] };
+  const { data: pits } = program ? await admin.from("program_items").select("*").eq("program_id", program.id).eq("active", true).is("archived_at", null).order("position") : { data: [] };
   const programItems = (pits || []) as ProgramItem[];
   const programImages: Record<string, string> = {};
   {

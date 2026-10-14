@@ -24,7 +24,7 @@ export async function placeProgramOrder(input: { lines: ProgramCartLine[]; due_d
     if (!cust) return { ok: false, error: "We couldn't find your account." };
     // row security: only their own active program items come back
     const ids = [...new Set(input.lines.map((l) => l.itemId))];
-    const { data: its } = ids.length ? await supabase.from("program_items").select("*").in("id", ids) : { data: [] };
+    const { data: its } = ids.length ? await supabase.from("program_items").select("*").in("id", ids).is("archived_at", null) : { data: [] };
     const items = new Map(((its || []) as ProgramItem[]).map((i) => [i.id, i]));
     const groups: Group[] = [];
     let total = 0, pcs = 0;

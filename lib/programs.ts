@@ -5,7 +5,17 @@ export type ProgramImprint = { location: string; method: "screen" | "embroidery"
 export type ProgramItem = {
   id: string; program_id: string; name: string; style: string; brand: string; garment: string; colors: string[]; sizes: string[];
   price: number; min_qty: number; imprints: ProgramImprint[]; design_id: string | null; image_path: string; notes: string; active: boolean; position: number;
+  /** price breaks for this design: from min pieces, price per piece (Oct 14: Mewjira 100+ 6.25, 150+ 6.00, 200+ 5.50).
+   *  price / min_qty hold the first break (the portal order form reads those) */
+  tiers?: { min: number; price: number }[] | null;
+  /** the customer supplies the shirts: the shirt fields don't apply */
+  supplied?: boolean;
+  /** taken off the program (kept, not deleted) */
+  archived_at?: string | null;
 };
+/** a design price's breaks, lowest first: its tiers, or its one price at its minimum */
+export const tiersOf = (it: Pick<ProgramItem, "price" | "min_qty"> & { tiers?: { min: number; price: number }[] | null }) =>
+  (it.tiers?.length ? it.tiers : [{ min: it.min_qty || 0, price: +it.price }]).filter((t) => +t.price > 0).map((t) => ({ min: Math.max(0, Math.round(+t.min || 0)), price: +t.price })).sort((a, b) => a.min - b.min);
 export type Program = { id: string; customer_id: string; name: string; notes: string; active: boolean; rate_card?: RateCard | null };
 export const PROGRAM_SIZES = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
 
@@ -82,17 +92,18 @@ export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Rec
  */
 /** a design's own program price (Oct 14, Nick: "Mewjira, 200 pieces at $5.50… this one is by design"): a program item
  *  linked to the design, or named like it (Printavo-era orders have no design links) */
-export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active">;
+export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active" | "tiers">;
 export type DesignCtx = { items: DesignPrice[]; /** the order's name and its prints' design names */ text: string };
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCtx): { item?: DesignPrice; under?: DesignPrice } {
   const ids = new Set((g.imprints || []).map((x) => x.design_id).filter(Boolean));
   const text = ` ${norm(d.text)} `;
-  const hits = d.items.filter((it) => it.active && +it.price > 0 && ((it.design_id && ids.has(it.design_id)) || (norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `))));
+  const hits = d.items.filter((it) => it.active && tiersOf(it).length && ((it.design_id && ids.has(it.design_id)) || (norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `))));
   if (!hits.length) return {};
-  const sorted = [...hits].sort((a, b) => (b.min_qty || 0) - (a.min_qty || 0));
-  const item = sorted.find((it) => qty >= (it.min_qty || 0));
-  return item ? { item } : { under: sorted[sorted.length - 1] };
+  // every break of every matching entry, highest minimum first: the first one the quantity reaches
+  const breaks = hits.flatMap((it) => tiersOf(it).map((t) => ({ ...it, price: t.price, min_qty: t.min }))).sort((a, b) => (b.min_qty || 0) - (a.min_qty || 0));
+  const item = breaks.find((it) => qty >= (it.min_qty || 0));
+  return item ? { item } : { under: breaks[breaks.length - 1] };
 }
 
 export function programForGroup(g: Group, card: RateCard | null, baseCost: number | null, design?: DesignCtx): ProgramGroup {

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { applyProgramProposal, programAssist, type ProgramProposal } from "@/app/shop/program-pricing-actions";
 import { LOCATIONS } from "@/lib/pricing";
-import { BIG_SIZES, BACKS, FRONTS, newRateCard, PROGRAM_SIZES, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
+import { BIG_SIZES, BACKS, FRONTS, newRateCard, PROGRAM_SIZES, tiersOf, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
 
 const blankItem = (programId: string, position: number): Omit<ProgramItem, "id"> => ({ program_id: programId, name: "", style: "", brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"], price: 0, min_qty: 0, imprints: [{ location: "Full Front", method: "screen", colors: 1, inks: "", size: "", notes: "" }], design_id: null, image_path: "", notes: "", active: true, position });
 
@@ -30,7 +30,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
     const p = ((ps || [])[0] || null) as Program | null;
     setProgram(p); setDesigns((ds || []) as never);
     if (p) {
-      const { data: its } = await sb.from("program_items").select("*").eq("program_id", p.id).order("position");
+      const { data: its } = await sb.from("program_items").select("*").eq("program_id", p.id).is("archived_at", null).order("position");
       const list = (its || []) as ProgramItem[];
       setItems(list);
       const paths = list.filter((i) => i.image_path).map((i) => i.image_path);
@@ -41,6 +41,12 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
   useEffect(() => { load(); }, [load]);
 
   const saveProgram = async (patch: Partial<Program>) => { if (!program) return; setProgram({ ...program, ...patch }); await sb.from("programs").update(patch).eq("id", program.id); setState("Saved"); };
+  /** a design's price breaks: saved lowest first; price / min_qty keep the first break (the portal order form reads those) */
+  const saveTiers = (it: ProgramItem, list: { min: number; price: number }[]) => {
+    const t = list.map((x) => ({ min: Math.max(0, Math.round(x.min || 0)), price: Math.round((x.price || 0) * 100) / 100 })).sort((a, b) => a.min - b.min);
+    const priced = t.filter((x) => x.price > 0);
+    saveItem(it.id, { tiers: t, price: priced[0]?.price || 0, min_qty: priced[0]?.min || 0 });
+  };
   const saveItem = async (id: string, patch: Partial<ProgramItem>) => { setItems((xs) => xs.map((x) => (x.id === id ? { ...x, ...patch } : x))); const { error } = await sb.from("program_items").update(patch).eq("id", id); setState(error ? "Couldn't save: " + error.message : "Saved"); };
 
   if (!loaded) return <div className="gb-empty">Loading…</div>;
@@ -57,18 +63,11 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
   );
   return (
     <div className="pga">
-      <div className="aa-bar"><div className="aa-bar-l"><h2>Program pricing</h2><span className="aa-sum">{items.filter((i) => i.active).length} active item{items.length === 1 ? "" : "s"} · {state || "Saves as you type"}</span></div>
+      <div className="aa-bar"><div className="aa-bar-l"><h2>Program pricing</h2><span className="aa-sum">{items.filter((i) => i.active).length} design price{items.filter((i) => i.active).length === 1 ? "" : "s"} · {state || "Saves as you type"}</span></div>
         <label className="check"><input type="checkbox" checked={program.active} onChange={(e) => saveProgram({ active: e.target.checked })} /> Show in their portal</label>
       </div>
       <ProgramAssist customerId={customerId} about={program.rate_card?.about || []} onApplied={load} />
       <RateCardEditor key={ver} card={program.rate_card || null} onSave={(rate_card) => saveProgram({ rate_card })} />
-      {items.some((i) => i.active && i.price > 0) && (
-        <div className="pga-tiers">
-          {[...new Set(items.filter((i) => i.active && i.price > 0).map((i) => i.name.trim() || "Untitled"))].map((n) => (
-            <div key={n}><b>{n}</b>{items.filter((i) => i.active && i.price > 0 && (i.name.trim() || "Untitled") === n).sort((a, b) => (a.min_qty || 0) - (b.min_qty || 0)).map((i) => <span key={i.id}>{i.min_qty ? `${i.min_qty}+` : "any qty"} <b>{money(i.price)}</b></span>)}</div>
-          ))}
-        </div>
-      )}
       <h3 className="pga-sub">Prices by design <span className="faint">(a design's own price at a quantity: on an order set to Program it wins over the rate card; also their portal order form)</span></h3>
       <div className="pga-head">
         <label>Program name<input type="text" value={program.name} onChange={(e) => saveProgram({ name: e.target.value })} placeholder="e.g. Two Men Moving: crew apparel" /></label>
@@ -91,20 +90,35 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
             </div>
             <div className="pga-fields">
               <div className="pga-row">
-                <label className="grow">Design or item name<input type="text" value={it.name} onChange={(e) => saveItem(it.id, { name: e.target.value })} placeholder="Mewjira" /></label>
-                <label>Price / piece<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={it.price ? String(it.price) : ""} onBlur={(e) => saveItem(it.id, { price: Math.round((+e.target.value.replace(/[^\d.]/g, "") || 0) * 100) / 100 })} placeholder="0.00" /></div></label>
-                <label>Minimum<input type="number" min={0} value={it.min_qty || ""} onChange={(e) => saveItem(it.id, { min_qty: +e.target.value || 0 })} placeholder="none" /></label>
+                <label className="grow">Design name<input type="text" value={it.name} onChange={(e) => saveItem(it.id, { name: e.target.value })} placeholder="Mewjira" /></label>
+                <label className="grow">Their design on file<select value={it.design_id || ""} onChange={(e) => saveItem(it.id, { design_id: e.target.value || null })}><option value="">None (matched by name)</option>{designs.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
               </div>
-              <div className="pga-row">
-                <label>Brand<input type="text" value={it.brand} onChange={(e) => saveItem(it.id, { brand: e.target.value })} placeholder="Gildan" /></label>
-                <label>Style #<input type="text" value={it.style} onChange={(e) => saveItem(it.id, { style: e.target.value })} placeholder="5000" /></label>
-                <label className="grow">Garment<input type="text" value={it.garment} onChange={(e) => saveItem(it.id, { garment: e.target.value })} placeholder="Heavy Cotton T-Shirt" /></label>
+              <div className="pga-tier" key={JSON.stringify(it.tiers || [])}>
+                <span className="pga-tier-h">Price per piece</span>
+                {(it.tiers?.length ? it.tiers : tiersOf(it).length ? tiersOf(it) : [{ min: 0, price: 0 }]).map((t, k, all) => (
+                  <div key={k} className="pga-tier-r">
+                    <label>From<input type="number" min={0} defaultValue={t.min || ""} placeholder="any" onBlur={(e) => saveTiers(it, all.map((x, j) => (j === k ? { ...x, min: +e.target.value || 0 } : x)))} /> pcs</label>
+                    <div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" aria-label="Price each" defaultValue={t.price ? t.price.toFixed(2) : ""} placeholder="0.00" onBlur={(e) => saveTiers(it, all.map((x, j) => (j === k ? { ...x, price: +e.target.value.replace(/[^\d.]/g, "") || 0 } : x)))} /></div>
+                    <span className="faint">each</span>
+                    {all.length > 1 && <button type="button" className="btn icon ghost sm" aria-label="Remove this price break" onClick={() => saveTiers(it, all.filter((_, j) => j !== k))}>✕</button>}
+                  </div>
+                ))}
+                <button type="button" className="btn sm" onClick={() => { const t = it.tiers?.length ? it.tiers : tiersOf(it); const last = t[t.length - 1]; saveItem(it.id, { tiers: [...t, { min: (last?.min || 0) + 50, price: 0 }] }); }}>+ Price break</button>
               </div>
-              <div className="pga-row">
-                <label className="grow">Colors they can pick (comma between)<input type="text" defaultValue={it.colors.join(", ")} onBlur={(e) => saveItem(it.id, { colors: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} placeholder="Black, Navy" /></label>
-                <label className="grow">Their logo<select value={it.design_id || ""} onChange={(e) => saveItem(it.id, { design_id: e.target.value || null })}><option value="">None</option>{designs.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
-              </div>
-              <div className="pga-sizes"><span>Sizes</span>{PROGRAM_SIZES.map((z) => <button key={z} type="button" className={it.sizes.includes(z) ? "on" : ""} onClick={() => saveItem(it.id, { sizes: it.sizes.includes(z) ? it.sizes.filter((x) => x !== z) : PROGRAM_SIZES.filter((x) => x === z || it.sizes.includes(x)) })}>{z}</button>)}</div>
+              <label className="check pga-sup"><input type="checkbox" checked={!!it.supplied} onChange={(e) => saveItem(it.id, { supplied: e.target.checked })} /> Customer supplied shirts <span className="faint">(the price is the print only: no shirt, screens or setup)</span></label>
+              {it.supplied ? (
+                <div className="pga-supplied">Customer supplied: no shirt in this price.</div>
+              ) : (<>
+                <div className="pga-row">
+                  <label>Brand<input type="text" value={it.brand} onChange={(e) => saveItem(it.id, { brand: e.target.value })} placeholder="Gildan" /></label>
+                  <label>Style #<input type="text" value={it.style} onChange={(e) => saveItem(it.id, { style: e.target.value })} placeholder="5000" /></label>
+                  <label className="grow">Garment<input type="text" value={it.garment} onChange={(e) => saveItem(it.id, { garment: e.target.value })} placeholder="Heavy Cotton T-Shirt" /></label>
+                </div>
+                <div className="pga-row">
+                  <label className="grow">Colors they can pick (comma between)<input type="text" defaultValue={it.colors.join(", ")} onBlur={(e) => saveItem(it.id, { colors: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} placeholder="Black, Navy" /></label>
+                </div>
+                <div className="pga-sizes"><span>Sizes</span>{PROGRAM_SIZES.map((z) => <button key={z} type="button" className={it.sizes.includes(z) ? "on" : ""} onClick={() => saveItem(it.id, { sizes: it.sizes.includes(z) ? it.sizes.filter((x) => x !== z) : PROGRAM_SIZES.filter((x) => x === z || it.sizes.includes(x)) })}>{z}</button>)}</div>
+              </>)}
               <div className="pga-imps">
                 <span>Print</span>
                 {it.imprints.map((im, k) => {
@@ -124,13 +138,13 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
               <div className="pga-row">
                 <label className="grow">Note for the customer<input type="text" value={it.notes} onChange={(e) => saveItem(it.id, { notes: e.target.value })} placeholder="e.g. Includes name drop on back" /></label>
                 <label className="check"><input type="checkbox" checked={it.active} onChange={(e) => saveItem(it.id, { active: e.target.checked })} /> Active</label>
-                <span className="pga-price">{it.price ? `${money(it.price)} / pc` : ""}</span>
+                <button type="button" className="btn sm ghost" onClick={async () => { await saveItem(it.id, { archived_at: new Date().toISOString(), active: false }); setItems((xs) => xs.filter((x) => x.id !== it.id)); }}>Remove</button>
               </div>
             </div>
           </article>
         ))}
       </div>
-      <button type="button" className="btn primary" onClick={async () => { const { error } = await sb.from("program_items").insert(blankItem(program.id, items.length)); if (error) setState(error.message); load(); }}>+ Add a design price</button>
+      <button type="button" className="btn primary" onClick={async () => { const { error } = await sb.from("program_items").insert({ ...blankItem(program.id, items.length), supplied: program.rate_card?.garmentIncluded === false }); if (error) setState(error.message); load(); }}>+ Add a design price</button>
     </div>
   );
 }
