@@ -127,7 +127,7 @@ async function messageIdOf(admin: SupabaseClient, acct: MailAccount, path: strin
 
 /* ------------------------------------------------------------------ lists and search */
 
-const ITEM_PROPS = ["item:Subject", "message:From", "item:DisplayTo", "item:DisplayCc", "item:DateTimeReceived", "message:IsRead", "item:Size", "message:InternetMessageId", "item:HasAttachments", "item:ConversationId", "item:Flag"]
+const ITEM_PROPS = ["item:ParentFolderId", "item:Subject", "message:From", "item:DisplayTo", "item:DisplayCc", "item:DateTimeReceived", "message:IsRead", "item:Size", "message:InternetMessageId", "item:HasAttachments", "item:ConversationId", "item:Flag"]
   .map((f) => `<t:FieldURI FieldURI="${f}"/>`).join("");
 const KINDS = "Message|MeetingRequest|MeetingResponse|MeetingCancellation|PostItem|Item";
 
@@ -143,10 +143,24 @@ function rowsOf(xml: string, folder: string, me: string, sentFolder = false): { 
     out.push({ id, row: {
       folder, messageId: mid(unesc(one(x, "InternetMessageId"))), inReplyTo: "", subject: unesc(one(x, "Subject")), from, fromName: unesc(one(fromBox, "Name")),
       to: [], toNames, cc: [], date: one(x, "DateTimeReceived") || new Date().toISOString(), seen: one(x, "IsRead") !== "false",
-      flagged: /Flagged/.test(one(x, "FlagStatus")), sent: from === me, size: Number(one(x, "Size")) || 0, conv: attr(all(x, "ConversationId")[0]?.attrs || "", "Id"),
+      flagged: /Flagged/.test(one(x, "FlagStatus")), sent: sentFolder || from === me, size: Number(one(x, "Size")) || 0, conv: attr(all(x, "ConversationId")[0]?.attrs || "", "Id"),
     } });
   }
   return out;
+}
+
+/** Exchange's hidden "AllItems" search folder (every email in the mailbox), if it has one */
+const allItems = new Map<string, string>();
+async function allItemsId(acct: MailAccount) {
+  const k = acct.email.toLowerCase();
+  if (allItems.has(k)) return allItems.get(k)!;
+  let id = "";
+  try {
+    const x = await call(acct, `<m:FindFolder Traversal="Shallow"><m:FolderShape><t:BaseShape>IdOnly</t:BaseShape></m:FolderShape><m:Restriction><t:IsEqualTo><t:FieldURI FieldURI="folder:DisplayName"/><t:FieldURIOrConstant><t:Constant Value="AllItems"/></t:FieldURIOrConstant></t:IsEqualTo></m:Restriction><m:ParentFolderIds><t:DistinguishedFolderId Id="root"/></m:ParentFolderIds></m:FindFolder>`, 15000);
+    id = attr(all(x, "FolderId")[0]?.attrs || "", "Id");
+  } catch { /* none */ }
+  allItems.set(k, id);
+  return id;
 }
 
 /** a folder's newest 50 (`older`: the ones before that date, for "Older emails") */
@@ -170,6 +184,29 @@ export async function ewsSearch(admin: SupabaseClient, acct: MailAccount, me: st
   const term = q.trim().replace(/[<>]/g, " ").slice(0, 120);
   if (term.length < 2) return { convos: [] as Convo[], folders: 0, partial: false };
   const t = await ewsTree(acct);
+  // the whole mailbox in one search, through Exchange's own "AllItems" folder (one index lookup instead of one per
+  // folder: Amanda's 18 folders took 14 s one by one); each result is put back in the folder it's in
+  const allId = await allItemsId(acct);
+  if (allId) {
+    try {
+      const x = await call(acct, `<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties>${ITEM_PROPS}</t:AdditionalProperties></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="250" Offset="0" BasePoint="Beginning"/><m:SortOrder><t:FieldOrder Order="Descending"><t:FieldURI FieldURI="item:DateTimeReceived"/></t:FieldOrder></m:SortOrder><m:ParentFolderIds><t:FolderId Id="${esc(allId)}"/></m:ParentFolderIds><m:QueryString>${esc(term)}</m:QueryString></m:FindItem>`, 25000);
+      const pathById = new Map([...t.byPath.values()].map((f) => [f.id, f]));
+      const blocks = [...x.matchAll(new RegExp(`<t:(${KINDS})>([\\s\\S]*?)</t:\\1>`, "g"))];
+      const found: MsgRow[] = [];
+      const byFolder = new Map<string, { id: string; row: Omit<MsgRow, "uid"> & { conv: string } }[]>();
+      for (const b of blocks) {
+        const f = pathById.get(attr(all(b[2], "ParentFolderId")[0]?.attrs || "", "Id"));
+        if (!f || /\\(Junk|Trash|Drafts)/.test(f.special) || /^@saneblackhole$/i.test(f.name)) continue; // not shown: junk, deleted, drafts, calendars…
+        const [r] = rowsOf(b[0], f.path, me, f.id === t.sent);
+        if (r) byFolder.set(f.path, [...(byFolder.get(f.path) || []), r]);
+      }
+      for (const [path, got] of byFolder) {
+        const ids = await uidsFor(admin, acct.id, path, got.map((g) => g.id));
+        for (const g of got) { const u = ids.get(g.id); if (u) { const { conv: _c, ...r } = g.row; found.push({ ...r, uid: u }); } }
+      }
+      return { convos: groupConvos(found, me), folders: byFolder.size, partial: false };
+    } catch (e) { console.warn(`mail search AllItems failed, folder by folder instead: ${e instanceof Error ? e.message : e}`); }
+  }
   const folders = [...t.byPath.values()].filter((f) => !/\\(Junk|Trash|Drafts)/.test(f.special) && !/^@saneblackhole$/i.test(f.name) && f.messages > 0);
   const found: MsgRow[] = [];
   let partial = false, looked = 0;
