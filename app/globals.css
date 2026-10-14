@@ -7453,3 +7453,12 @@ a.pdn-tag:hover{text-decoration:underline}
   .pbar-b svg{width:21px;height:21px}
   .ibx2-mail:has(.eh-bar.has-pn){padding-bottom:calc(56px + env(safe-area-inset-bottom))}
 }
+/* phone AI card: real buttons again, small white tiles (icon over word) like the More sheet's (Oct 14, Nick: "they
+   just don't look like buttons now") */
+@media (max-width:760px) and (pointer:coarse){
+  .eh .eh-ai{padding:10px 10px 10px 12px;row-gap:4px;column-gap:6px}
+  .eh .eh-ai-go,.eh .eh-ai-go.primary,.eh .eh-ai-btn,.eh .eh-ai-btn.on{height:42px;gap:2px;border-radius:10px;background:var(--surface);
+    box-shadow:0 1px 2px rgba(20,29,43,.08),inset 0 0 0 1px color-mix(in srgb,var(--ai-b) 18%,transparent);font-size:10px}
+  .eh .eh-ai-go svg,.eh .eh-ai-btn svg{width:18px;height:18px}
+  .eh .eh-ai-go:active,.eh .eh-ai-btn:active{background:var(--surface-2)}
+}
