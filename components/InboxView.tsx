@@ -796,8 +796,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   void aiHidden;
   const aiMode: "full" | "rail" | "drawer" | "off" = stacked ? "full" : !aiOpen ? "off" : narrow ? "drawer" : "full";
   const aiShown = narrow ? aiW : Math.max(280, Math.min(aiW, room));
-  // Oct 14, Nick: "when you click the assistant button it should open the assistant on the left and start recording
-  // automatically": each open bumps `listen`, which starts the microphone; hiding it stops listening
+  // Oct 14, Nick: "when you click the assistant button it should … start recording automatically"; it opens on the
+  // right, as before (Oct 14, Nick): each open bumps `listen`, which starts the microphone; hiding it stops listening
   const [listen, setListen] = useState(0);
   const openAi = () => { setListen((n) => n + 1); if (stacked) setSide("ai"); else { setAiOpen(true); setPeek(true); setAiHidden(false); } };
   const hideAi = stacked ? undefined : () => { setAiOpen(false); setPeek(false); };
@@ -874,8 +874,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   void suggestions;
 
   return (
-    <div className="ibx2-work" ref={workRef} data-side={side} data-ai={aiMode} data-ai-left={stacked ? undefined : ""} style={{ ["--ibx-ai" as string]: `${aiShown}px` }}>
-      {aiMode === "full" && !stacked && <Splitter dir="x" value={aiShown} min={280} max={Math.max(280, Math.min(720, room))} onChange={setAiW} className="ibx2-sv ibx2-sv-ai" style={{ left: aiShown + 2 }} label="Drag to make the Assistant wider or narrower" />}
+    <div className="ibx2-work" ref={workRef} data-side={side} data-ai={aiMode} style={{ ["--ibx-ai" as string]: `${aiShown}px` }}>
+      {aiMode === "full" && !stacked && <Splitter dir="x" value={aiShown} min={280} max={Math.max(280, Math.min(720, room))} invert onChange={setAiW} className="ibx2-sv ibx2-sv-ai" style={{ right: aiShown + 2 }} label="Drag to make the Assistant wider or narrower" />}
       <div className="ibx2-sw" role="tablist" aria-label="Show">
         <button type="button" className="ibx2-back" onClick={back} aria-label="Back to the emails">←</button>
         <button type="button" role="tab" aria-selected={side === "mail"} className={side === "mail" ? "on" : ""} onClick={() => setSide("mail")}>{view === "order" ? "Order" : "Email"}</button>
