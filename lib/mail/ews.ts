@@ -35,19 +35,21 @@ export async function call(acct: MailAccount, body: string, timeoutMs = 25000): 
   const c = cfgOf(acct);
   const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types" xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages"><soap:Header><t:RequestServerVersion Version="Exchange2013_SP1"/></soap:Header><soap:Body>${body}</soap:Body></soap:Envelope>`;
   const key = acct.email.toLowerCase();
+  // the EWS sign-in name: the email address, unless the mailbox has its own (an old Windows login, Oct 14)
+  const login = (acct.ews_user || "").trim() || c.user;
   const attempt = async (host: string) => {
     let status = 0, text = "", www = "";
     if (!useNtlm.get(key)) {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), timeoutMs);
       try {
-        const res = await fetch(ewsUrl(host), { method: "POST", signal: ctrl.signal, cache: "no-store", headers: { "Content-Type": "text/xml; charset=utf-8", Authorization: `Basic ${Buffer.from(`${c.user}:${c.pass}`).toString("base64")}` }, body: soap });
+        const res = await fetch(ewsUrl(host), { method: "POST", signal: ctrl.signal, cache: "no-store", headers: { "Content-Type": "text/xml; charset=utf-8", Authorization: `Basic ${Buffer.from(`${login}:${c.pass}`).toString("base64")}` }, body: soap });
         status = res.status; text = await res.text(); www = res.headers.get("www-authenticate") || "";
       } finally { clearTimeout(t); }
     }
     // Basic turned down but NTLM offered: sign in with NTLM (and keep using it for this mailbox)
     if (useNtlm.get(key) || (status === 401 && /ntlm/i.test(www))) {
-      const r = await ntlmPost(ewsUrl(host), c.user, c.pass, "text/xml; charset=utf-8", soap, timeoutMs);
+      const r = await ntlmPost(ewsUrl(host), login, c.pass, "text/xml; charset=utf-8", soap, timeoutMs);
       status = r.status; text = r.body; www = ([] as string[]).concat(r.headers["www-authenticate"] || []).join(", ");
       if (status !== 401) useNtlm.set(key, true);
     }

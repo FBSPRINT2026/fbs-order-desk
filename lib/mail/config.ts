@@ -35,6 +35,7 @@ export type MailAccount = {
   signature_html?: string | null; signature_css?: string | null; signature_on?: boolean; signature_at?: string | null; signature_checked_at?: string | null;
   /** Email settings: the line replies end with (signature under it), and the AI writing as "me" or "shop" */
   sign_off?: string; write_as?: string;
+  /** the EWS sign-in name when it isn't the email address ("EXCH021\\name", Oct 14) */ ews_user?: string | null;
 };
 export type MailCfg = { user: string; pass: string; imapHost: string; smtpHost: string; imapPort: number; smtpPort: number; fromName: string };
 

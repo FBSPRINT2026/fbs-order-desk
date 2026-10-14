@@ -66,8 +66,10 @@ function type3(challengeB64: string, user: string, pass: string) {
     p += 4 + l;
   }
   if (!ts) { ts = Buffer.alloc(8); const ft = (BigInt(Date.now()) + 11644473600000n) * 10000n; ts.writeBigUInt64LE(ft); }
-  // a UPN sign-in ("name@domain"): the whole address is the user, the domain is empty
-  const domain = "", name = user;
+  // "DOMAIN\\name" (an old Windows login, Oct 14): the domain and the name apart; a UPN sign-in ("name@domain"): the
+  // whole address is the user, the domain is empty
+  const bs = user.indexOf("\\");
+  const domain = bs > 0 ? user.slice(0, bs) : "", name = bs > 0 ? user.slice(bs + 1) : user;
   const ntHash = md4(u16(pass));
   const v2 = createHmac("md5", ntHash).update(u16(name.toUpperCase() + domain)).digest();
   const cc = randomBytes(8);
