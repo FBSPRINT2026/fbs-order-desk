@@ -7336,3 +7336,10 @@ a.pdn-tag:hover{text-decoration:underline}
   html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   .eh-bar.has-pn .tb-row .tb-b{font-size:7.5px;font-weight:600;letter-spacing:.01em}
 }
+/* phone email: the AI's words and the email itself a size smaller (Oct 14, Nick) */
+@media (max-width:760px) and (pointer:coarse){
+  .eh .eh-ai-b .eh-sum{font-size:11.5px}
+  .ibx2-read{font-size:12.5px;line-height:1.4}
+  .tx-b{font-size:13px}
+  .tx-h{font-size:13px}
+}

@@ -632,7 +632,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
   }, [i.id, tryN]);
   const doc = useMemo(() => {
     if (!m?.html) return null;
-    const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}table img{max-width:none}table{max-width:100%}</style>`;
+    const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}@media (max-width:760px) and (pointer:coarse){html,body{padding:6px 8px;font-size:12.5px;line-height:1.4}body p,body div,body span,body td,body li,body font,body a,body blockquote,body pre{font-size:12.5px!important;line-height:1.4!important}}table img{max-width:none}table{max-width:100%}</style>`;
     const html = m.html.replace(/<script[\s\S]*?<\/script>/gi, "");
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (x) => x + head) : head + html;
   }, [m?.html]);
