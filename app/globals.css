@@ -7254,3 +7254,29 @@ a.pdn-tag:hover{text-decoration:underline}
   .eh .eh-ai-btn .tb-l{display:none}
   .eh .eh-ai-btn svg{width:22px;height:22px}
 }
+/* phone email, a size smaller all round (Oct 14, Nick: "everything looks big, make the fonts smaller") */
+@media (max-width:760px) and (pointer:coarse){
+  .eh-pn-back{font-size:15px!important;height:36px}
+  .eh-pn svg{width:21px;height:21px}
+  .eh-pn-ud{width:38px;height:36px}
+  .eh-pn-pos{font-size:11px}
+  .eh-bar.has-pn .tb-row{padding:3px 2px}
+  .eh-bar.has-pn .tb-row .tb-sec-l{height:13px;font-size:9px}
+  .eh-bar.has-pn .tb-row .tb-b{min-height:38px;padding:3px 1px;gap:1px;font-size:9.5px}
+  .eh-bar.has-pn .tb-row .tb-b svg{width:17px;height:17px}
+  .eh .eh-ai{padding:8px 8px 8px 10px;gap:8px}
+  .eh .eh-ai-l{font-size:10px;gap:5px}
+  .eh-ai-orb{width:18px;height:18px;border-radius:6px;font-size:10px}
+  .eh .eh-ai-b .eh-sum{font-size:12.5px;line-height:1.35}
+  .eh .eh-ai-tags .eh-tag{font-size:10.5px;padding:1px 7px}
+  .eh .eh-ai-btn{width:38px;height:38px}
+  .eh .eh-ai-btn svg{width:18px;height:18px}
+  .eh-sec{height:24px}
+  .eh-sec span{font-size:10px}
+  .eh-b{padding:10px 12px 8px;gap:8px}
+  .eh-subj{font-size:16px!important}
+  .eh-av{width:30px;height:30px;font-size:11px}
+  .eh-who{font-size:13px}
+  .eh-addr,.eh-to,.eh-date{font-size:11.5px}
+  .ibx2-read{font-size:13.5px}
+}
