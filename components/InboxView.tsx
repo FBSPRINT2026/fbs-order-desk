@@ -796,7 +796,10 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   void aiHidden;
   const aiMode: "full" | "rail" | "drawer" | "off" = stacked ? "full" : !aiOpen ? "off" : narrow ? "drawer" : "full";
   const aiShown = narrow ? aiW : Math.max(280, Math.min(aiW, room));
-  const openAi = () => { if (stacked) setSide("ai"); else { setAiOpen(true); setPeek(true); setAiHidden(false); } };
+  // Oct 14, Nick: "when you click the assistant button it should open the assistant on the left and start recording
+  // automatically": each open bumps `listen`, which starts the microphone; hiding it stops listening
+  const [listen, setListen] = useState(0);
+  const openAi = () => { setListen((n) => n + 1); if (stacked) setSide("ai"); else { setAiOpen(true); setPeek(true); setAiHidden(false); } };
   const hideAi = stacked ? undefined : () => { setAiOpen(false); setPeek(false); };
   useEffect(() => { setOrdering(false); setOrderStart(null); setMade(null); setView("mail"); }, [x.id]);
   const startOrder = (s?: { told?: string; job?: string }) => { if (s) setOrderStart((p) => ({ ...s, n: (p?.n || 0) + 1 })); setOrdering(true); setView("order"); setSide("mail"); };
@@ -871,8 +874,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   void suggestions;
 
   return (
-    <div className="ibx2-work" ref={workRef} data-side={side} data-ai={aiMode} style={{ ["--ibx-ai" as string]: `${aiShown}px` }}>
-      {aiMode === "full" && !stacked && <Splitter dir="x" value={aiShown} min={280} max={Math.max(280, Math.min(720, room))} invert onChange={setAiW} className="ibx2-sv ibx2-sv-ai" style={{ right: aiShown + 2 }} label="Drag to make the Assistant wider or narrower" />}
+    <div className="ibx2-work" ref={workRef} data-side={side} data-ai={aiMode} data-ai-left={stacked ? undefined : ""} style={{ ["--ibx-ai" as string]: `${aiShown}px` }}>
+      {aiMode === "full" && !stacked && <Splitter dir="x" value={aiShown} min={280} max={Math.max(280, Math.min(720, room))} onChange={setAiW} className="ibx2-sv ibx2-sv-ai" style={{ left: aiShown + 2 }} label="Drag to make the Assistant wider or narrower" />}
       <div className="ibx2-sw" role="tablist" aria-label="Show">
         <button type="button" className="ibx2-back" onClick={back} aria-label="Back to the emails">←</button>
         <button type="button" role="tab" aria-selected={side === "mail"} className={side === "mail" ? "on" : ""} onClick={() => setSide("mail")}>{view === "order" ? "Order" : "Email"}</button>
@@ -1028,7 +1031,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
       )}
       <aside className="ibx2-ai" aria-label="Assistant">
         {x.direction === "in"
-          ? <EmailChat activityId={x.id} onAction={(a) => { if (narrow) setPeek(false); act(a); }} busyOutside={!!busy} bump={bump} summary={x.meta?.triage?.summary} onHide={hideAi} onBack={() => setSide("mail")} who={who} />
+          ? <EmailChat activityId={x.id} onAction={(a) => { if (narrow) setPeek(false); act(a); }} busyOutside={!!busy} bump={bump} summary={x.meta?.triage?.summary} onHide={hideAi} onBack={() => setSide("mail")} who={who} listen={listen} hush={stacked ? side !== "ai" : !aiOpen} />
           : <div className="ibx2-none">Your sent email.</div>}
       </aside>
     </div>

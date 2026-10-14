@@ -29,14 +29,21 @@ function typeInto(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
  * search). `keepListening`: stay on through pauses until clicked again (talking through a longer note). `label`: what
  * the button says to screen readers and on hover.
  */
-export function MicButton({ target, onDone, append = false, keepListening = false, label = "Search by voice", className = "" }: {
+export function MicButton({ target, onDone, append = false, keepListening = false, label = "Search by voice", className = "", autoStart, off }: {
   target: () => HTMLInputElement | HTMLTextAreaElement | null; onDone?: (text: string) => void;
   append?: boolean; keepListening?: boolean; label?: string; className?: string;
+  /** start listening whenever this changes to a new non-zero value (the Inbox's Assistant button) */ autoStart?: number;
+  /** stop listening while true (the panel is hidden) */ off?: boolean;
 }) {
   const [ok, setOk] = useState(false);
   const [on, setOn] = useState(false);
   const rec = useRef<Rec>(null);
+  const startRef = useRef<() => void>(() => {});
+  const onRef = useRef(false); onRef.current = on;
   useEffect(() => { setOk(!!speechApi()); return () => { try { rec.current?.abort(); } catch { /* already stopped */ } }; }, []);
+  const seen = useRef(autoStart); // only a new press starts it, never the value it mounted with
+  useEffect(() => { if (!ok || !autoStart || autoStart === seen.current) return; seen.current = autoStart; if (!onRef.current) startRef.current(); }, [autoStart, ok]);
+  useEffect(() => { if (off && onRef.current) { try { rec.current?.stop(); } catch { /* already stopped */ } } }, [off]);
   if (!ok) return null;
 
   const toggle = () => {
@@ -61,6 +68,7 @@ export function MicButton({ target, onDone, append = false, keepListening = fals
     setOn(true);
     try { r.start(); } catch { setOn(false); }
   };
+  startRef.current = toggle;
 
   return (
     <button type="button" className={"mic" + (on ? " on" : "") + (className ? " " + className : "")} onClick={toggle} aria-pressed={on}

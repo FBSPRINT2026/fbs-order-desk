@@ -13,7 +13,7 @@ import { MicButton } from "@/components/SearchInput";
  */
 const when = (t: string) => new Date(t).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
 
-export default function EmailChat({ activityId, onAction, busyOutside, bump = 0, summary, onHide, onBack, who }: { activityId: string; /** fold the Assistant out of the way (Inbox) */ onHide?: () => void; /** phones: the chat fills the screen; this goes back to the email */ onBack?: () => void; /** phones: who the email is from, under "Assistant" */ who?: string; onAction: (a: EmailAction) => void; busyOutside?: boolean; /** changes when something happened outside (an order made): reload */ bump?: number; /** the AI's one-line read of the email, its first message */ summary?: string }) {
+export default function EmailChat({ activityId, onAction, busyOutside, bump = 0, summary, onHide, onBack, who, listen, hush }: { activityId: string; /** changes each time the Assistant button opens it: start the microphone */ listen?: number; /** the Assistant is hidden: stop listening */ hush?: boolean; /** fold the Assistant out of the way (Inbox) */ onHide?: () => void; /** phones: the chat fills the screen; this goes back to the email */ onBack?: () => void; /** phones: who the email is from, under "Assistant" */ who?: string; onAction: (a: EmailAction) => void; busyOutside?: boolean; /** changes when something happened outside (an order made): reload */ bump?: number; /** the AI's one-line read of the email, its first message */ summary?: string }) {
   const [msgs, setMsgs] = useState<EmailChatMsg[]>([]);
   const [text, setText] = useState(""), [busy, setBusy] = useState(""), [note, setNote] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null), boxRef = useRef<HTMLTextAreaElement | null>(null);
@@ -70,7 +70,7 @@ export default function EmailChat({ activityId, onAction, busyOutside, bump = 0,
         <div className="tx-field">
           <textarea rows={1} value={text} aria-label="Message the Assistant" ref={(el) => { boxRef.current = el; if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 110)}px`; } }} placeholder="Message"
             onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
-          <MicButton target={() => boxRef.current} append keepListening label="Talk to the Assistant (microphone)" className="tx-mic" />
+          <MicButton target={() => boxRef.current} append keepListening autoStart={listen} off={hush} label="Talk to the Assistant (microphone)" className="tx-mic" />
         </div>
         <button type="submit" className="tx-send" disabled={!!busy || !text.trim()} aria-label="Send">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg>

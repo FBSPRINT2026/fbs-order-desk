@@ -7167,3 +7167,14 @@ a.pdn-tag:hover{text-decoration:underline}
 .eh-ai-tags{display:inline-flex;flex-wrap:wrap;gap:6px}
 .eh-ai-btn{flex:none;white-space:nowrap}
 .eh-ai-btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+/* Oct 14, Nick: the AI row reads as part of the toolbar (same band, same section label), not the email */
+.eh-bar:has(+ .eh-ai){border-bottom:0;padding-bottom:4px}
+.eh .eh-ai{margin:0;padding:2px 10px 8px;border:0;border-bottom:1px solid var(--line-2);border-radius:0;background:var(--bg);gap:6px}
+.eh .eh-ai-l{padding-top:4px;padding-bottom:4px}
+.eh .eh-ai-b .eh-sum{font-size:13.5px;color:var(--ink-2)}
+/* the Assistant opens on the left of the email (Oct 14, Nick) */
+.ibx2-work[data-ai-left][data-ai="full"]{grid-template-columns:var(--ibx-ai,330px) minmax(0,1fr)}
+.ibx2-work[data-ai-left] .ibx2-ai,.ibx2-work[data-ai-left] .ibx2-rail{order:-1}
+.ibx2-work[data-ai-left][data-ai="drawer"]{grid-template-columns:44px minmax(0,1fr)}
+.ibx2-work[data-ai-left][data-ai="drawer"] .ibx2-ai{right:auto;left:0;box-shadow:12px 0 32px rgba(15,23,42,.16)}
