@@ -27,6 +27,9 @@ const mid = (s?: string | null) => (s || "").trim().replace(/^<|>$/g, "");
 
 export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct: Pick<MailAccount, "id" | "email" | "name">, validity: number, deadline = Date.now() + 20000) {
   const me = lc(acct.email);
+  // what's in the Inbox is read first and compared after: an email archived in the portal meanwhile isn't brought
+  // back as "moved back into the Inbox" (Oct 14, Nick: "if I archive something it pops back into the inbox")
+  const t0 = new Date().toISOString();
   const found = await client.search({ all: true }, { uid: true });
   const all = (Array.isArray(found) ? found : []).sort((a, b) => a - b);
   const uids = all.slice(-MAX);
@@ -71,7 +74,8 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
     } else {
       const cc_only = !e.to.includes(me) && e.cc.includes(me);
       // moved back into the Inbox: the same row comes back, and the to-dos archiving closed are open again
-      const { data: was } = e.messageId ? await admin.from("mail_inbox").select("id").eq("account_id", acct.id).eq("message_id", e.messageId).not("gone_at", "is", null).order("gone_at", { ascending: false }).limit(1).maybeSingle() : { data: null };
+      const { data: was } = e.messageId ? await admin.from("mail_inbox").select("id, gone_at").eq("account_id", acct.id).eq("message_id", e.messageId).not("gone_at", "is", null).order("gone_at", { ascending: false }).limit(1).maybeSingle() : { data: null };
+      if (was && (was as { gone_at: string }).gone_at >= t0) continue; // moved out after the Inbox was read: stays gone
       if (was) {
         await admin.from("mail_inbox").update({ gone_at: null, done_by: null, uid: e.uid, uidvalidity: validity, unread, flagged, ...(act ? { activity_id: act.id } : {}) }).eq("id", was.id);
         await admin.from("tasks").update({ status: "open", done_at: null, done_by: null }).eq("mail_inbox_id", was.id).eq("status", "done").eq("done_by", ARCHIVED);
@@ -114,6 +118,33 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
 }
 
 export const ARCHIVED = "Archived in Outlook";
+
+/**
+ * Between mail checks (and while IMAP is refusing connections), the Inbox list can still show an email SaneBox or
+ * Outlook already moved out; opening it then says it isn't there (Oct 14, Nick: the Pizza Hut email). For a mailbox
+ * EWS works on, what's in the Inbox is read in under a second each time the list loads, and anything no longer there
+ * is gone from the list. Only takes away (new mail still comes in with the mail check); at most every 15 s a mailbox.
+ */
+const pruned = new Map<string, number>();
+export async function pruneInboxEws(admin: SupabaseClient, acct: MailAccount, force = false) {
+  const k = acct.id;
+  if (!force && Date.now() - (pruned.get(k) || 0) < 15000) return 0;
+  pruned.set(k, Date.now());
+  const { ewsReady, ewsInboxMessageIds } = await import("./ewsBox");
+  if (!(await ewsReady(admin, acct))) return 0;
+  const t0 = new Date(Date.now() - 60000).toISOString();
+  const ids = await ewsInboxMessageIds(acct);
+  if (!ids) return 0;
+  // only emails the mirror had before this read (a brand-new one may not be listed yet)
+  const { data: cur } = await admin.from("mail_inbox").select("id, message_id, activity_id").eq("account_id", acct.id).is("gone_at", null).lt("first_seen", t0).limit(2000);
+  const gone = ((cur || []) as { id: string; message_id: string | null; activity_id: string | null }[]).filter((r) => r.message_id && !ids.has(r.message_id));
+  if (!gone.length) return 0;
+  const now = new Date().toISOString();
+  await admin.from("mail_inbox").update({ gone_at: now }).in("id", gone.map((r) => r.id)).is("gone_at", null);
+  await archiveActs(admin, gone.map((r) => r.activity_id).filter(Boolean) as string[], now);
+  await admin.from("tasks").update({ status: "done", done_at: now, done_by: ARCHIVED }).in("mail_inbox_id", gone.map((r) => r.id)).eq("status", "open");
+  return gone.length;
+}
 
 /** who gets the personal organizer (AI reading all their mail into to-dos and events): the two owners only, Oct 12 */
 export const ORGANIZER_EMAILS = ["amanda@fbsprint.com"];

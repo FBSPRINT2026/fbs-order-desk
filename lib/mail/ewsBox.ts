@@ -243,6 +243,13 @@ export async function ewsOpen(admin: SupabaseClient, acct: MailAccount, path: st
   return m ? { ...m, itemId: id } : null;
 }
 
+/** the Message-IDs of everything sitting in the Inbox right now, or null if the list didn't come back whole */
+export async function ewsInboxMessageIds(acct: MailAccount): Promise<Set<string> | null> {
+  const x = await call(acct, `<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties><t:FieldURI FieldURI="message:InternetMessageId"/></t:AdditionalProperties></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="1000" Offset="0" BasePoint="Beginning"/><m:ParentFolderIds><t:DistinguishedFolderId Id="inbox"/></m:ParentFolderIds></m:FindItem>`, 8000);
+  if (attr(all(x, "RootFolder")[0]?.attrs || "", "IncludesLastItemInRange") !== "true") return null;
+  return new Set(all(x, "InternetMessageId").map((m) => mid(unesc(m.inner))).filter(Boolean));
+}
+
 export async function ewsMarkRead(acct: MailAccount, itemId: string) {
   await call(acct, `<m:UpdateItem MessageDisposition="SaveOnly" ConflictResolution="AutoResolve" SuppressReadReceipts="true"><m:ItemChanges><t:ItemChange><t:ItemId Id="${esc(itemId)}"/><t:Updates><t:SetItemField><t:FieldURI FieldURI="message:IsRead"/><t:Message><t:IsRead>true</t:IsRead></t:Message></t:SetItemField></t:Updates></t:ItemChange></m:ItemChanges></m:UpdateItem>`);
 }

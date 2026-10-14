@@ -275,7 +275,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const boxStuck = !!box?.last_error && (!box.last_ok_at || Date.now() - Date.parse(box.last_ok_at) > 10 * 60000);
 
   // phones: slide an email left for Archive / Later / Black Hole (the same moves as the buttons)
-  const MOVED: Record<string, string> = { archive: "Archived.", later: "Moved to Later.", blackhole: "Black Hole: SaneBox won't show you this sender again." };
+  const MOVED: Record<string, string> = { archive: "Archived.", later: "Moved to Later.", news: "Moved to News.", blackhole: "Black Hole: SaneBox won't show you this sender again." };
   const quickMove = async (path: string, uid: number, to: string, drop: () => void) => {
     try { await boxPost({ do: "move", path, uid, to }); drop(); flash(MOVED[to] || "Moved."); return true; }
     catch (e) { flash(e instanceof Error ? e.message : String(e)); return false; }
@@ -609,7 +609,11 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
     const within = <T,>(p: Promise<T>, ms: number) => Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error("The mail server didn't answer in time.")), ms))]);
     within(mailBox<FullMsg>({ do: "message", path: "INBOX", uid: i.uid }), 56000).then((r) => { if (!live) return; setFull(r); setM(r); })
       .catch((e1) => { if (!live) return; if (/didn't answer in time/.test(String(e1?.message))) { setLoadErr(String(e1.message)); return; }
-        within(readInboxEmail(i.id), 30000).then((r) => { if (!live) return; if (r.ok) setM(r); else setLoadErr(r.error); }, (e2) => live && setLoadErr(e2 instanceof Error ? e2.message : String(e2))); });
+        if (/not in your Inbox any more/.test(String(e1?.message))) { done("That one was already moved out of your Inbox.", true); return; }
+        within(readInboxEmail(i.id), 30000).then((r) => { if (!live) return; if (r.ok) setM(r);
+          // already moved out of the Inbox (SaneBox, Outlook, the phone): off the list, no error to stare at
+          else if ("gone" in r && r.gone) done("That one was already moved out of your Inbox.", true);
+          else setLoadErr(r.error); }, (e2) => live && setLoadErr(e2 instanceof Error ? e2.message : String(e2))); });
     inboxItemExtras(i.id).then((r) => { if (live && r.ok) setEx({ tasks: r.tasks, events: r.events }); });
     return () => { live = false; };
   }, [i.id, tryN]);
@@ -640,7 +644,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
           phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: busy === "mv",
             ask: { id: "inbox:" + i.id, who: i.from_name || i.from_email, onDraft: (d) => { setBody(d.body); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); setWriting(true); } },
             more: (close) => <>
-              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("later", "Moved to Later."); }}>{TbIcon.later} Later (SaneBox)</button>
+              <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("news", "Moved to News."); }}>{TbIcon.news} News (SaneBox)</button>
               <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("news", "Moved to News."); }}>{TbIcon.file} News (SaneBox)</button>
               <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("receipts", "Moved to Receipts."); }}>{TbIcon.file} Receipts (SaneBox)</button>
               <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void move("cc", "Moved to CC."); }}>{TbIcon.file} CC (SaneBox)</button>
@@ -884,7 +888,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
                 <a href={`/shop/order-goods?email=${x.id}`} target="_blank" rel="noreferrer" role="menuitem" onClick={close}>Order goods from S&amp;S</a>
                 {!needs && x.meta?.no_reply && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("nr-undo", () => markNoReply(x.id, false), "Back on Needs reply."); }}>Needs a reply after all</button>}
                 {!needs && !x.meta?.no_reply && answered && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("back", () => putBackInInbox(x.id), "Back in the Inbox."); }}>Back to Needs reply</button>}
-                {!moveBar && inOutlook && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "later" }), "Moved to Later (SaneBox)."); }}>Move to Later (@SaneLater)</button>}
+                {!moveBar && inOutlook && <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("arch", () => archiveOutlookEmail({ activityId: x.id, to: "news" }), "Moved to News (SaneBox)."); }}>Move to Later (@SaneLater)</button>}
                 <button type="button" role="menuitem" disabled={!!busy} onClick={() => { close(); void run("ign", () => markNotCustomer(x.id), `${x.from_email} won't be read again.`); }}>Not a customer (stop reading their email)</button>
               </>}</TbMenu>
             </TbGroup>}

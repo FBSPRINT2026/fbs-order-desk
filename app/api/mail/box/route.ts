@@ -102,13 +102,21 @@ export async function GET(req: Request) {
       // over EWS first (Oct 13): HTTPS like Outlook, no IMAP connection limit, and it hands over the big emails IMAP
       // drops; pictures and attachments come through EWS too. Kept so it opens instantly next time.
       if (ews) {
-        const e = await ewsOpen(admin, acct, path, uid, pic).catch(() => null);
+        let failed = false;
+        const e = await ewsOpen(admin, acct, path, uid, pic).catch(() => { failed = true; return null; });
         if (e) {
           const { ews: _x, read, itemId, ...msg } = e;
           if (!read && !m.viewing) after(async () => { try { await ewsMarkRead(acct, itemId); } catch { /* fine */ } });
           after(async () => { try { await keepBody(admin, acct.id, path, uid, msg); } catch { /* fine */ } });
           console.info(`mail open ${path}:${uid} ews ${Date.now() - t0}ms`);
           return NextResponse.json(msg);
+        }
+        // EWS answered and it isn't in the Inbox: SaneBox / Outlook moved it out. Say so now (not after 50 s of IMAP)
+        // and take it off the Inbox list (Oct 14, Nick: the Pizza Hut email)
+        if (!failed && /^inbox$/i.test(path)) {
+          const { pruneInboxEws } = await import("@/lib/mail/mirror");
+          await pruneInboxEws(admin, acct, true).catch(() => 0);
+          return NextResponse.json({ error: "It's not in your Inbox any more (archived or moved in Outlook?).", gone: true }, { status: 404 });
         }
       }
       const { data: kept } = await admin.from("mail_cache").select("message_id").eq("account_id", acct.id).eq("folder", path).eq("uid", uid).limit(1).maybeSingle();

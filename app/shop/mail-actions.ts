@@ -260,6 +260,9 @@ export async function getOutlookInbox() {
     const v = await staff(), { admin } = v;
     const { acct: a } = await mailboxToRead(admin, v);
     if (!a || !a.enabled) return { ok: true as const, items: [] as InboxItem[], connected: false };
+    // drop what SaneBox / Outlook already moved out (EWS, under a second); never holds the list up for long
+    { const { pruneInboxEws } = await import("@/lib/mail/mirror");
+      await Promise.race([pruneInboxEws(admin, a).catch((e) => console.warn("pruneInboxEws", e instanceof Error ? e.message : e)), new Promise((r) => setTimeout(r, 4000))]); }
     const { data } = await admin.from("mail_inbox").select("id, uid, from_email, from_name, subject, received_at, cc_only, unread, flagged, activity_id, bucket, summary")
       .eq("account_id", a.id).is("gone_at", null).order("received_at", { ascending: false, nullsFirst: false }).limit(500);
     return { ok: true as const, items: (data || []) as InboxItem[], connected: true, checked: a.last_ok_at };
@@ -295,7 +298,12 @@ export async function readInboxEmail(id: string) {
     if (!r || r.account_id !== a.id) return { ok: false as const, error: "That email isn't in your Inbox." };
     const { readLive } = await import("@/lib/mail/read");
     const m = await readLive(a, r as { uid: number; uidvalidity: number; message_id: string });
-    if (!m) return { ok: false as const, error: "It's not in your Inbox any more (archived or moved in Outlook?)." };
+    if (!m) {
+      // gone from the Inbox: take it off the list too (checked over EWS when it works for this mailbox)
+      const { pruneInboxEws } = await import("@/lib/mail/mirror");
+      const n = await pruneInboxEws(admin, a, true).catch(() => 0);
+      return { ok: false as const, error: "It's not in your Inbox any more (archived or moved in Outlook?).", gone: n > 0 };
+    }
     return { ok: true as const, ...m };
   } catch (e) { return fail(e); }
 }

@@ -92,6 +92,7 @@ export const TbIcon = {
   replyAll: P("M8 8V4L1 11l7 7v-4M14 8V4l-7 7 7 7v-4c4 0 7 1.4 9 5-1-5-3.5-9.6-9-11"),
   archive: P("M3 4h18v4H3zM5 8v12h14V8M10 12h4"),
   later: P("M12 7v5l3 2M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"),
+  news: P("M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M7 9h7M7 13h7M7 16h4"),
   ban: P("M5.6 5.6l12.8 12.8M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z"),
   move: P("M3 6h6l2 2h10v11H3zM12 13h6M15 10l3 3-3 3"),
   order: P("M6 3h9l3 3v15H6zM9 12h6M12 9v6"),
@@ -111,10 +112,10 @@ export const TbIcon = {
 export type PhoneNavT = { label: string; back: () => void; up?: () => void; down?: () => void; pos?: string; /** e.g. the Assistant button on a customer email */ extra?: React.ReactNode };
 export const PhoneNav = createContext<PhoneNavT | null>(null);
 
-type SwipeTo = "archive" | "later" | "blackhole";
+type SwipeTo = "archive" | "news" | "blackhole";
 let closeOpenRow: (() => void) | null = null;
 /**
- * Phones: slide an email left for Later, Black Hole and Archive (like the iPhone Mail app); slide it all the way to
+ * Phones: slide an email left for News, Black Hole and Archive (like the iPhone Mail app); slide it all the way to
  * archive it. Touch only: on a computer the row is a plain row.
  */
 export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct: (to: SwipeTo) => Promise<boolean> }) {
@@ -138,7 +139,7 @@ export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct
   return (
     <div className={"sw" + (gone ? " gone" : "") + (off ? " open" : "")} ref={ref}>
       <div className={"sw-acts" + (full ? " full" : "")} style={{ width: Math.max(0, -off) }} aria-hidden={!off}>
-        <button type="button" className="sw-later" tabIndex={off ? 0 : -1} onClick={() => void fire("later")}>{TbIcon.later}<span>Later</span></button>
+        <button type="button" className="sw-later" tabIndex={off ? 0 : -1} onClick={() => void fire("news")}>{TbIcon.news}<span>News</span></button>
         <button type="button" className="sw-bh" tabIndex={off ? 0 : -1} onClick={() => void fire("blackhole")}>{TbIcon.ban}<span>Black Hole</span></button>
         <button type="button" className="sw-arch" tabIndex={off ? 0 : -1} onClick={() => void fire("archive")}>{TbIcon.archive}<span>Archive</span></button>
       </div>
@@ -222,7 +223,7 @@ function PhoneBar({ a }: { a: PhoneActs }) {
         <div className="pbar-sheet" role="menu" onClick={(e) => e.stopPropagation()}>
           {sheet === "move" ? <>
             <div className="pbar-t">Move to</div>
-            <button type="button" role="menuitem" onClick={() => mv("later", "Moved to Later.")}>{TbIcon.later} Later <span>SaneBox: this sender goes to Later from now on</span></button>
+            <button type="button" role="menuitem" onClick={() => mv("news", "Moved to News.")}>{TbIcon.news} News <span>SaneBox: this sender goes to News from now on</span></button>
             {others.map((f) => <button key={f.path} type="button" role="menuitem" onClick={() => mv(f.path, `Moved to ${folderLabel(f)}.`)} style={{ paddingLeft: 16 + Math.min(3, f.depth) * 12 }}>{TbIcon.file} {folderLabel(f)}</button>)}
             {!others.length && <span className="faint" style={{ padding: 12 }}>Loading folders…</span>}
           </> : a.more?.(() => setSheet(""))}
@@ -233,13 +234,14 @@ function PhoneBar({ a }: { a: PhoneActs }) {
   );
 }
 
-/** Archive, Later, Black Hole and Move to any folder: the same group on every email */
+/** Archive, News, Black Hole and Move to any folder: the same group on every email (News took Later's place Oct 14:
+ *  Nick uses SaneBox News, rarely Later; Later is still in Move → SaneBox folders) */
 export function MoveBar({ folders, busy, onMove, here }: { folders: Folder[] | null; busy?: boolean; onMove: (to: string, label: string) => void; here?: string }) {
   const others = (folders || []).filter((f) => f.path !== here && !/\\(Drafts|Junk)/.test(f.special));
   return (
     <TbGroup>
       <TbBtn icon={TbIcon.archive} label="Archive" kind="strong" disabled={busy} onClick={() => onMove("archive", "Archived.")} title="Move it to Archive, like Outlook's Archive button" />
-      <TbBtn icon={TbIcon.later} label="Later" disabled={busy} onClick={() => onMove("later", "Moved to Later.")} title="SaneBox Later: this sender's mail goes to Later from now on" />
+      <TbBtn icon={TbIcon.news} label="News" disabled={busy} onClick={() => onMove("news", "Moved to News.")} title="SaneBox News: this sender's mail goes to News from now on" />
       <TbBtn icon={TbIcon.ban} label="Black Hole" kind="danger" disabled={busy} onClick={() => onMove("blackhole", "Black Hole: SaneBox won't show you this sender again.")} title="SaneBox Black Hole: junk, and this sender is blocked from now on" />
       <TbMenu icon={TbIcon.move} label="Move">{(close) => <>
         {others.map((f) => <button key={f.path} type="button" role="menuitem" disabled={busy} onClick={() => { close(); onMove(f.path, `Moved to ${folderLabel(f)}.`); }} style={{ paddingLeft: 12 + Math.min(3, f.depth) * 10 }}>{folderLabel(f)}</button>)}
