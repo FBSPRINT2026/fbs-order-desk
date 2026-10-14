@@ -335,7 +335,7 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
           <div className="eh-who">
             <div className="eh-n"><b>{name}</b>{org && <span className="eh-org">{org}</span>}{fromName && fromEmail && <span className="eh-addr">{fromEmail}</span>}</div>
             {short && <button type="button" className="eh-to" onClick={() => setFull(!full)} aria-expanded={full}>to {short} <span aria-hidden>{full ? "▴" : "▾"}</span></button>}
-            {full && <div className="eh-full">{to && <div><span>To</span>{to}</div>}{cc && <div><span>Cc</span>{cc}</div>}</div>}
+            {full && <div className="eh-full">{fromEmail && fromName && <div className="eh-full-from"><span>From</span>{fromEmail}</div>}{to && <div><span>To</span>{to}</div>}{cc && <div><span>Cc</span>{cc}</div>}</div>}
           </div>
           <time className="eh-date">{date}</time>
         </div>

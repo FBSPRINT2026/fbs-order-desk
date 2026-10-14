@@ -7298,3 +7298,36 @@ a.pdn-tag:hover{text-decoration:underline}
   .eh-b{padding:8px 12px 6px;gap:6px}
   .eh-subj{font-size:15px!important}
 }
+.eh-full-from{display:none}
+/* phone email, the sender and the conversation in as few lines as possible (Oct 14, Nick: "compact the conversations
+   and sender section on the iPhone… the toolbar can still be smaller") */
+@media (max-width:760px) and (pointer:coarse){
+  /* toolbar: smaller still */
+  .eh-bar.has-pn .tb-row{padding:1px 1px}
+  .eh-bar.has-pn .tb-row .tb-g{padding:0 1px}
+  .eh-bar.has-pn .tb-row .tb-b{padding:3px 0 2px;gap:0;font-size:8.5px;line-height:1.05;font-weight:600}
+  .eh-bar.has-pn .tb-row .tb-b svg{width:14px;height:14px;stroke-width:2}
+  /* sender: line 1 = avatar, name · company, the date; line 2 = to … ▾ (the address is in the ▾) */
+  .eh-b{padding:6px 10px 4px;gap:4px}
+  .eh-subj{font-size:14.5px!important}
+  .eh-from{grid-template-columns:24px minmax(0,1fr) auto;column-gap:8px;row-gap:0;align-items:center}
+  .eh-av{width:24px;height:24px;font-size:9.5px;grid-row:1 / span 2}
+  .eh-who{grid-column:2;font-size:12.5px;line-height:1.25}
+  .eh-n{flex-wrap:nowrap;overflow:hidden;white-space:nowrap}
+  .eh-n b{font-size:13px}
+  .eh-org{font-size:12px;overflow:hidden;text-overflow:ellipsis}
+  .eh-addr{display:none}
+  .eh-full-from{display:block}
+  .eh-to,.eh-full{font-size:11px}
+  .eh-date{grid-column:3;grid-row:1;font-size:10.5px;padding:0}
+  /* the conversation: one line per email */
+  .cv-strip{margin:0 0 6px;border-radius:8px}
+  .cv-h{font-size:10.5px;padding:3px 10px}
+  .cv-i{grid-template-columns:auto minmax(0,1fr) auto;align-items:baseline;gap:0 6px;padding:5px 10px}
+  .cv-i b{font-size:12px}
+  .cv-i span{grid-column:2;grid-row:1;font-size:11.5px}
+  .cv-i time{grid-column:3;grid-row:1;font-size:10.5px}
+  .cv-more{font-size:11.5px;padding:5px 10px}
+  /* "… email, as sent": one small line */
+  .ibx2-orig-h{font-size:10.5px;margin:6px 0 4px;padding-top:6px}
+}
