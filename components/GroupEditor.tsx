@@ -627,6 +627,21 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup }: { d
           <figcaption><b>{cur ? designLabel(cur) : ""}</b>{size ? ` · ${size} on the ${d.location}` : ""}<button type="button" className="btn sm" onClick={() => setZoom(false)}>Close</button></figcaption>
         </figure>
       </div>}
+      <div className="pr-main">
+        <div className="pr-top">
+          {n > 0 && <span className="pr-n">{n}</span>}
+          <b>{d.location || "Print"}</b>
+          <span className="pr-how">{METHODS[d.method]}</span>
+          {each && <span className="pr-each"><b>{each}</b> each</span>}
+        </div>
+        <div className="pr-specs">
+          {colors && <span>{colors}</span>}
+          {d.inks && <span className="pr-ink">{d.inks}</span>}
+          {size && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
+          <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>
+          {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches</span> : null}
+        </div>
+        {cur && <div className="pr-art">{designLabel(cur)}</div>}
         {d.notes && <div className="pr-notes">{d.notes}</div>}
         {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>Production details needed</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>Production Details</a> : null}</div>}
       </div>
