@@ -7,6 +7,8 @@ import { aiState } from "@/lib/ai/claude";
 import { designWords } from "@/lib/ai/specHistory";
 import { designEmails } from "@/lib/designMail";
 import { canSeeTexts, sha } from "@/lib/texts";
+import { createHmac } from "node:crypto";
+import type { MailAccount } from "@/lib/mail/config";
 import { customerJobs, fileCustomerTexts, jobKeys, squash, type Job } from "@/lib/textJobs";
 
 export const runtime = "nodejs";
@@ -23,7 +25,16 @@ export const maxDuration = 120;
  */
 type Item =
   | { kind: "text"; id: string; date: string; from_me: boolean; who: string; body: string; files: { name: string; type: string; url: string }[]; how: string }
-  | { kind: "email"; id: string; date: string; incoming: boolean; from: string; subject: string; text: string; pics?: string[]; src: string; folder?: string; uid?: number; act?: string };
+  | { kind: "email"; id: string; date: string; incoming: boolean; from: string; subject: string; text: string; pics?: string[]; src: string; folder?: string; uid?: number; act?: string; acct?: string; t?: string };
+
+/**
+ * Jose and Claudia see the job's emails too (Oct 15, Nick: "only the emails that pull up because they're attached to a
+ * job, not like logging into my email"): each mailbox email on the job carries a signature for that job, and only a
+ * signed one opens (with its attachments) for someone who isn't the mailbox's owner. Nothing else in the mailbox can be
+ * reached from here.
+ */
+const sign = (s: string) => createHmac("sha256", process.env.SUPABASE_SERVICE_ROLE_KEY || "fbs").update(s).digest("base64url").slice(0, 32);
+const okSig = (t: string | null, s: string) => !!t && t === sign(s);
 type Talk = { sig: string; summary: string; approvals: { id: string; what: string }[] };
 
 /** the owners, Jose and Claudia (lib/texts.ts TEXT_VIEWERS); mailbox emails only for the owners */
@@ -51,10 +62,34 @@ export async function GET(req: Request) {
   if (!v) return NextResponse.json({ error: "Only the owners, Jose and Claudia." }, { status: 403 });
   const u = new URL(req.url), ref = u.searchParams.get("ref") || "";
   const admin = createAdminClient();
+  // ?acct&folder&uid&t: a mailbox email on this job, in full; ?acct&att&t: one of its attachments (signed for this job)
+  const acctId = u.searchParams.get("acct");
+  if (acctId) {
+    const { data: a } = await admin.from("mail_accounts").select("*").eq("id", acctId).maybeSingle();
+    if (!a) return NextResponse.json({ error: "That mailbox isn't connected any more." }, { status: 404 });
+    const att = u.searchParams.get("att");
+    if (att) {
+      if (!okSig(u.searchParams.get("t"), `${acctId}|att|${att}|${ref}`)) return NextResponse.json({ error: "Not on this job." }, { status: 403 });
+      const { ewsAttachment } = await import("@/lib/mail/ews");
+      const f = await ewsAttachment(a as MailAccount, att);
+      if (!f) return NextResponse.json({ error: "That attachment isn't there any more." }, { status: 404 });
+      const dl = u.searchParams.get("dl") === "1";
+      return new Response(new Uint8Array(f.content), { headers: { "Content-Type": f.type, "Content-Disposition": `${!dl && /^(image\/|application\/pdf)/.test(f.type) ? "inline" : "attachment"}; filename="${f.name.replace(/["\\\r\n]/g, "_")}"`, "Cache-Control": "private, max-age=3600" } });
+    }
+    const folder = u.searchParams.get("folder") || "", uid = Number(u.searchParams.get("uid") || 0);
+    if (!okSig(u.searchParams.get("t"), `${acctId}|${folder}|${uid}|${ref}`)) return NextResponse.json({ error: "Not on this job." }, { status: 403 });
+    const attUrl = (id: string, dl = false) => `/api/jobs/talk?${new URLSearchParams({ ref, acct: acctId, att: id, t: sign(`${acctId}|att|${id}|${ref}`), ...(dl ? { dl: "1" } : {}) })}`;
+    const { ewsOpen } = await import("@/lib/mail/ewsBox");
+    const m = await ewsOpen(admin, a as MailAccount, folder, uid, (id) => attUrl(id)).catch(() => null);
+    if (!m) return NextResponse.json({ error: "That email isn't in the mailbox any more." }, { status: 404 });
+    const atts = ((m as unknown as { ews?: { id: string; name: string; size?: number; inline?: boolean }[] }).ews || []).filter((x) => !x.inline);
+    return NextResponse.json({ html: m.html, text: m.text, from: m.fromName ? `${m.fromName} <${m.fromAddress}>` : m.fromAddress, to: m.to, cc: m.cc, date: m.date, subject: m.subject,
+      attachments: atts.map((x) => ({ name: x.name, size: x.size || 0, type: "", url: attUrl(x.id), download: attUrl(x.id, true) })) });
+  }
   // ?act=<activity id>: an email kept in the portal, in full (its HTML, as Outlook shows it, and its attachments)
   const actId = u.searchParams.get("act");
   if (actId) {
-    if (!v.boss) return NextResponse.json({ error: "Owners only." }, { status: 403 });
+    if (!v.boss && !okSig(u.searchParams.get("t"), `act|${actId}|${ref}`)) return NextResponse.json({ error: "Not on this job." }, { status: 403 });
     const { data: a } = await admin.from("activities").select("subject, body, from_email, to_email, occurred_at, direction, meta").eq("id", actId).maybeSingle();
     if (!a) return NextResponse.json({ error: "That email isn't here any more." }, { status: 404 });
     const meta = (a.meta || {}) as { html?: string; cc?: string[] | string; from_name?: string; attachments?: { path?: string; name?: string; size?: number; type?: string; signature?: boolean }[] };
@@ -104,10 +139,21 @@ export async function GET(req: Request) {
   const me = jobs.find((j) => j.ref === ref);
   job.pvMsgs.forEach((m, i) => { if ((m.text || m.subject || "").trim()) items.push({ kind: "email", id: `pv${i}`, date: String(m.at || ""), incoming: !!m.incoming, from: m.incoming ? m.from || c?.name || "Customer" : "FBS (Printavo)", subject: m.subject || "", text: String(m.text || "").slice(0, 3000), src: "Printavo" }); });
   const { acct } = v.boss ? await mailboxToRead(admin, v) : { acct: null };
+  // Jose and Claudia: the owners' mailboxes (only what's on this job comes back)
+  let boxes: MailAccount[] = acct && acct.enabled ? [acct] : [];
+  if (!v.boss) {
+    const { data: accts } = await admin.from("mail_accounts").select("*").eq("enabled", true);
+    const { data: st2 } = await admin.from("staff").select("email, role");
+    boxes = ((accts || []) as MailAccount[]).filter((x) => { const r = ((st2 || []) as { email: string; role: string }[]).find((y) => y.email.toLowerCase() === x.email.toLowerCase()); return organizerFor(x.email, r?.role || ""); });
+  }
   const words = [...new Set([...designWords(job.name), job.number])];
   const keys = jobKeys(job.name);
-  const sign = async (p: string[]) => { if (!p.length) return [] as string[]; const { data } = await admin.storage.from("proofs").createSignedUrls(p, 3600); return (data || []).map((d) => d.signedUrl || "").filter(Boolean); };
-  const found = !v.boss ? { emails: [] as never[] } : await designEmails(admin, acct && acct.enabled ? acct : null, job.customer, words, { pics: sign }).catch(() => ({ emails: [] as never[] }));
+  const signUrls = async (p: string[]) => { if (!p.length) return [] as string[]; const { data } = await admin.storage.from("proofs").createSignedUrls(p, 3600); return (data || []).map((d) => d.signedUrl || "").filter(Boolean); };
+  const found: { emails: (Awaited<ReturnType<typeof designEmails>>["emails"][number] & { acct?: string })[] } = { emails: [] };
+  for (const bx of boxes.length ? boxes : [null]) {
+    const r = await designEmails(admin, bx, job.customer, words, { pics: signUrls }).catch(() => ({ emails: [] as never[] }));
+    for (const e of r.emails) found.emails.push({ ...e, ...(bx && e.folder && e.uid ? { acct: bx.id } : {}) });
+  }
   const seen = new Set(items.filter((i) => i.kind === "email").map((i) => `${(i as { subject: string }).subject}|${i.date.slice(0, 10)}`));
   found.emails.forEach((e, i) => {
     const hay = `${e.subject} ${e.text}`, at = Date.parse(e.date);
@@ -115,7 +161,7 @@ export async function GET(req: Request) {
     const byName = me && at >= me.start && at <= me.end && keys.some((k) => squash(hay).includes(k));
     if (!byNumber && !byName) return;
     const k = `${e.subject}|${e.date.slice(0, 10)}`; if (seen.has(k)) return; seen.add(k);
-    items.push({ kind: "email", id: `m${i}`, date: e.date, incoming: e.incoming, from: e.from, subject: e.subject, text: e.text, ...(e.pics?.length ? { pics: e.pics } : {}), ...(e.folder && e.uid ? { folder: e.folder, uid: e.uid } : {}), ...(e.act ? { act: e.act } : {}), src: byNumber ? `names #${job.number}` : "names the job, while it was open" });
+    items.push({ kind: "email", id: `m${i}`, date: e.date, incoming: e.incoming, from: e.from, subject: e.subject, text: e.text, ...(e.pics?.length ? { pics: e.pics } : {}), ...(e.folder && e.uid && e.acct ? { folder: e.folder, uid: e.uid, acct: e.acct, t: sign(`${e.acct}|${e.folder}|${e.uid}|${ref}`) } : {}), ...(e.act ? { act: e.act, ...(e.folder && e.uid && e.acct ? {} : { t: sign(`act|${e.act}|${ref}`) }) } : {}), src: byNumber ? `names #${job.number}` : "names the job, while it was open" });
   });
   items.sort((a, b) => a.date.localeCompare(b.date));
 

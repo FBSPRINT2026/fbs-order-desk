@@ -71,14 +71,14 @@ export async function designEmails(admin: SupabaseClient, acct: MailAccount | nu
   const box = await mailboxEmails(admin, acct, customerId, words, !!opts.fresh).catch(() => ({ emails: [] as DesignEmail[], searched: false }));
   const seen = new Set(box.emails.map((e) => key(e.subject, e.date)));
   const out = [...box.emails];
-  const { data: mails } = await admin.from("mail_cache").select("subject, from_email, from_name, to_text, sent_at, body_text, folder, uid").or(words.map((w) => `hay.ilike.%${w}%`).join(",")).is("gone_at", null).order("sent_at").limit(150);
+  const { data: mails } = await admin.from("mail_cache").select("subject, from_email, from_name, to_text, sent_at, body_text, folder, uid, account_id").or(words.map((w) => `hay.ilike.%${w}%`).join(",")).is("gone_at", null).order("sent_at").limit(150);
   for (const m of mails || []) {
     if (!who.theirs(`${m.from_email} ${m.to_text}`)) continue;
     const k = key(m.subject || "", String(m.sent_at));
     if (seen.has(k)) continue;
     seen.add(k);
     const incoming = !/@fbsprint\.com/i.test(String(m.from_email || ""));
-    out.push({ date: String(m.sent_at), from: incoming ? (m.from_name || m.from_email) : (m.from_name || "FBS"), incoming, subject: m.subject || "", text: clean(m.body_text || "").slice(0, 3000), ...(m.folder && m.uid ? { folder: String(m.folder), uid: Number(m.uid) } : {}) });
+    out.push({ date: String(m.sent_at), from: incoming ? (m.from_name || m.from_email) : (m.from_name || "FBS"), incoming, subject: m.subject || "", text: clean(m.body_text || "").slice(0, 3000), ...(m.folder && m.uid && acct && m.account_id === acct.id ? { folder: String(m.folder), uid: Number(m.uid) } : {}) });
   }
   const { data: acts } = await admin.from("activities").select("id, occurred_at, direction, subject, body, from_email, meta").eq("customer_id", customerId).order("occurred_at").limit(600);
   for (const a of (acts || []).filter((x) => hit(x.subject) || hit(x.body))) {

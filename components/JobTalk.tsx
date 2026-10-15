@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
-import { Attachments, MailFrame, box, type FullMsg } from "@/components/MailFolders";
+import { MailFrame } from "@/components/MailFolders";
 
 /**
  * A job's emails and texts in one timeline (Oct 15, Nick, on Printavo invoice 27166: "a shop-side tab that shows the
@@ -9,7 +9,7 @@ import { Attachments, MailFrame, box, type FullMsg } from "@/components/MailFold
  */
 type Item =
   | { kind: "text"; id: string; date: string; from_me: boolean; who: string; body: string; files: { name: string; type: string; url: string }[]; how: string }
-  | { kind: "email"; id: string; date: string; incoming: boolean; from: string; subject: string; text: string; pics?: string[]; src: string; folder?: string; uid?: number; act?: string };
+  | { kind: "email"; id: string; date: string; incoming: boolean; from: string; subject: string; text: string; pics?: string[]; src: string; folder?: string; uid?: number; act?: string; acct?: string; t?: string };
 type Kept = { html: string; text: string; from: string; to: string; cc: string; date: string; subject: string; attachments: { name: string; size: number; type: string; url: string; download: string }[] };
 type Talk = { customer: string; number: string; name: string; items: Item[]; summary: string; approvals: { id: string; what: string }[] };
 
@@ -20,16 +20,17 @@ export default function JobTalk({ jobRef, printavo, printavoCount = 0 }: { jobRe
   const [d, setD] = useState<Talk | null>(null), [no, setNo] = useState(false), [err, setErr] = useState("");
   const [show, setShow] = useState<"all" | "text" | "email" | "pv">("all"), [big, setBig] = useState(""), [open, setOpen] = useState<Record<string, boolean>>({});
   /** an email opened in full: from the mailbox (FullMsg) or kept in the portal; "…" while loading */
-  const [full, setFull] = useState<Record<string, FullMsg | Kept | "…" | string>>({});
+  const [full, setFull] = useState<Record<string, Kept | "…" | string>>({});
   const openEmail = async (i: Extract<Item, { kind: "email" }>) => {
     const was = open[i.id];
     setOpen((o) => ({ ...o, [i.id]: !was }));
     if (was || full[i.id]) return;
-    if (!(i.folder && i.uid) && !i.act) return;
+    if (!(i.acct && i.t) && !i.act) return;
     setFull((f) => ({ ...f, [i.id]: "…" }));
     try {
-      const m = i.folder && i.uid ? await box<FullMsg>({ do: "message", path: i.folder, uid: i.uid })
-        : await fetch(`/api/jobs/talk?act=${i.act}`).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j as Kept; });
+      // the mailbox email (signed for this job, so Jose and Claudia can open it too) or the copy kept in the portal
+      const q = i.acct && i.t ? { ref: jobRef, acct: i.acct, folder: i.folder || "", uid: String(i.uid || 0), t: i.t } : { ref: jobRef, act: i.act || "", ...(i.t ? { t: i.t } : {}) };
+      const m = await fetch(`/api/jobs/talk?${new URLSearchParams(q)}`).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j as Kept; });
       setFull((f) => ({ ...f, [i.id]: m }));
     } catch (e) { setFull((f) => ({ ...f, [i.id]: e instanceof Error ? e.message : "Couldn't open it." })); }
   };
@@ -76,10 +77,6 @@ export default function JobTalk({ jobRef, printavo, printavoCount = 0 }: { jobRe
                       const f = full[i.id];
                       if (f === "…") return <div className="jt-em-body faint">Opening…</div>;
                       if (typeof f === "string") return <div className="jt-em-body"><div className="pv-err">{f}</div><div className="jt-emt">{i.text}</div></div>;
-                      if (f && "uid" in f) {
-                        const m = f as FullMsg;
-                        return <div className="jt-em-body"><div className="jt-em-meta"><b>{m.fromName || m.fromAddress}</b> <span className="faint">{m.fromAddress}</span><div className="faint">To {m.to}{m.cc ? ` · Cc ${m.cc}` : ""}</div></div><MailFrame html={m.html} text={m.text} /><Attachments m={m} /></div>;
-                      }
                       if (f) {
                         const k = f as Kept;
                         return <div className="jt-em-body"><div className="jt-em-meta"><b>{k.from}</b><div className="faint">To {k.to}{k.cc ? ` · Cc ${k.cc}` : ""}</div></div><MailFrame html={k.html} text={k.text} />
