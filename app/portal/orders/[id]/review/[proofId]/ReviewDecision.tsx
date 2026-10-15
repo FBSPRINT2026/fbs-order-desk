@@ -26,7 +26,7 @@ export default function ReviewDecision({ proofId, orderId, defaultName, disabled
 
   const opt = (k: Choice, title: string, about: string, more?: React.ReactNode) => (
     <div className={"ar-opt" + (pick === k ? " on" : "")}>
-      <label><input type="radio" name="ar-pick" checked={pick === k} onChange={() => { setPick(k); setErr(""); }} disabled={disabled} /><b>{title}</b></label>
+      <label><input type="radio" name="ar-pick" checked={pick === k} onChange={() => { setPick(k); setErr(""); }} /><b>{title}</b></label>
       <p>{about}</p>
       {pick === k && more}
     </div>

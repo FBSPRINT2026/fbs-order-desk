@@ -8661,3 +8661,15 @@ a.pdn-tag:hover{text-decoration:underline}
   .ar-stage,.ar-pr{grid-template-columns:minmax(0,1fr)}
   .ar-mk{min-height:0}
 }
+
+/* old Printavo jobs: the items table fits its card, no sideways scroll (Oct 15, Nick): tighter cells, the
+   description wraps, headers may wrap; money and sizes stay on one line */
+.pv-scroll{overflow-x:visible}
+.pv-items{table-layout:auto}
+.pv-items th,.pv-items td{padding:8px 5px}
+.pv-items th{white-space:normal;line-height:1.2}
+.pv-items .desc{min-width:0}
+.pv-items .pv-desc{min-width:0}
+.pv-items th.sz,.pv-items td.c.num{min-width:0}
+.pv-items td.num{white-space:nowrap}
+@media (max-width:640px){ .pv-scroll{overflow-x:auto} }
