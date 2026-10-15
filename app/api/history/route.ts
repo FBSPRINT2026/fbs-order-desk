@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { organizerFor } from "@/lib/mail/mirror";
+import { canSeeTexts } from "@/lib/texts";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { designWords } from "@/lib/ai/specHistory";
@@ -109,7 +109,7 @@ export async function GET(req: Request) {
   const found = await designEmails(admin, acct && acct.enabled ? acct : null, cid, words, { fresh: u.searchParams.get("fresh") === "1", pics: sign });
   for (const e of found.emails) items.push({ kind: "email", date: e.date, from: e.from, incoming: e.incoming, subject: e.subject, text: e.text, ...(e.pics?.length ? { pics: e.pics } : {}) });
   // texts with them that name the design, and pictures sent around those (Oct 15: the Mac's texts; owners only)
-  if (organizerFor(v.email, v.role)) {
+  if (await canSeeTexts(v.email, v.role)) {
     const { data: tx } = await admin.from("text_messages").select("from_me, body, sent_at, files").eq("customer_id", cid).order("sent_at").limit(3000);
     const all = (tx || []) as { from_me: boolean; body: string; sent_at: string; files: { path: string; type: string }[] }[];
     const near = all.filter((t) => hit(t.body)).map((t) => Date.parse(t.sent_at));

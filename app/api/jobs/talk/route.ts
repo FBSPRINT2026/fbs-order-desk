@@ -6,7 +6,7 @@ import { mailboxToRead } from "@/lib/mail/viewing";
 import { aiState } from "@/lib/ai/claude";
 import { designWords } from "@/lib/ai/specHistory";
 import { designEmails } from "@/lib/designMail";
-import { sha } from "@/lib/texts";
+import { canSeeTexts, sha } from "@/lib/texts";
 import { customerJobs, fileCustomerTexts, jobKeys, squash, type Job } from "@/lib/textJobs";
 
 export const runtime = "nodejs";
@@ -26,10 +26,11 @@ type Item =
   | { kind: "email"; id: string; date: string; incoming: boolean; from: string; subject: string; text: string; pics?: string[]; src: string };
 type Talk = { sig: string; summary: string; approvals: { id: string; what: string }[] };
 
+/** the owners, Jose and Claudia (lib/texts.ts TEXT_VIEWERS); mailbox emails only for the owners */
 async function owner() {
   const v = await getViewer();
-  if (!v.user || !v.isStaff || !organizerFor(v.email, v.role)) return null;
-  return v;
+  if (!v.user || !v.isStaff || !(await canSeeTexts(v.email, v.role))) return null;
+  return { ...v, boss: organizerFor(v.email, v.role) };
 }
 
 async function jobOf(admin: ReturnType<typeof createAdminClient>, ref: string) {
@@ -47,7 +48,7 @@ async function jobOf(admin: ReturnType<typeof createAdminClient>, ref: string) {
 
 export async function GET(req: Request) {
   const v = await owner();
-  if (!v) return NextResponse.json({ error: "Owners only." }, { status: 403 });
+  if (!v) return NextResponse.json({ error: "Only the owners, Jose and Claudia." }, { status: 403 });
   const u = new URL(req.url), ref = u.searchParams.get("ref") || "";
   const admin = createAdminClient();
   const job = await jobOf(admin, ref);
@@ -89,11 +90,11 @@ export async function GET(req: Request) {
   const jobs = await customerJobs(admin, job.customer);
   const me = jobs.find((j) => j.ref === ref);
   job.pvMsgs.forEach((m, i) => { if ((m.text || m.subject || "").trim()) items.push({ kind: "email", id: `pv${i}`, date: String(m.at || ""), incoming: !!m.incoming, from: m.incoming ? m.from || c?.name || "Customer" : "FBS (Printavo)", subject: m.subject || "", text: String(m.text || "").slice(0, 3000), src: "Printavo" }); });
-  const { acct } = await mailboxToRead(admin, v);
+  const { acct } = v.boss ? await mailboxToRead(admin, v) : { acct: null };
   const words = [...new Set([...designWords(job.name), job.number])];
   const keys = jobKeys(job.name);
   const sign = async (p: string[]) => { if (!p.length) return [] as string[]; const { data } = await admin.storage.from("proofs").createSignedUrls(p, 3600); return (data || []).map((d) => d.signedUrl || "").filter(Boolean); };
-  const found = await designEmails(admin, acct && acct.enabled ? acct : null, job.customer, words, { pics: sign }).catch(() => ({ emails: [] as never[] }));
+  const found = !v.boss ? { emails: [] as never[] } : await designEmails(admin, acct && acct.enabled ? acct : null, job.customer, words, { pics: sign }).catch(() => ({ emails: [] as never[] }));
   const seen = new Set(items.filter((i) => i.kind === "email").map((i) => `${(i as { subject: string }).subject}|${i.date.slice(0, 10)}`));
   found.emails.forEach((e, i) => {
     const hay = `${e.subject} ${e.text}`, at = Date.parse(e.date);
@@ -131,7 +132,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const v = await owner();
-  if (!v) return NextResponse.json({ error: "Owners only." }, { status: 403 });
+  if (!v) return NextResponse.json({ error: "Only the owners, Jose and Claudia." }, { status: 403 });
   const b = (await req.json().catch(() => ({}))) as { ref?: string; not?: string };
   if (!b.ref || !b.not) return NextResponse.json({ error: "ref and not" }, { status: 400 });
   const admin = createAdminClient();

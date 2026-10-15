@@ -2,13 +2,19 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { organizerFor } from "@/lib/mail/mirror";
-import { handleKey, newToken, sha } from "@/lib/texts";
+import { canSeeTexts, handleKey, newToken, sha } from "@/lib/texts";
 
 /** Settings > Texts: the Macs that send customer texts (owners only, like the texts themselves) */
 async function owner() {
   const v = await getViewer();
   if (!v.user || !v.isStaff || !organizerFor(v.email, v.role)) throw new Error("Only the owners can set up texts.");
   return { v, admin: createAdminClient(), email: v.email.toLowerCase() };
+}
+/** who can read the texts: the owners, Jose and Claudia (lib/texts.ts TEXT_VIEWERS) */
+async function viewer() {
+  const v = await getViewer();
+  if (!v.user || !v.isStaff || !(await canSeeTexts(v.email, v.role))) throw new Error("Only the owners, Jose and Claudia can see texts.");
+  return { v, admin: createAdminClient() };
 }
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." });
 
@@ -54,7 +60,7 @@ export type TextRow = { id: string; from_me: boolean; body: string; sent_at: str
 /** a customer's texts, newest last (owners only); pictures as links good for an hour */
 export async function getCustomerTexts(customerId: string, limit = 300) {
   try {
-    const { admin } = await owner();
+    const { admin } = await viewer();
     const { data } = await admin.from("text_messages").select("id, owner, from_me, body, sent_at, handle, chat, chat_name, service, files").eq("customer_id", customerId).order("sent_at", { ascending: false }).limit(Math.min(1000, limit));
     const rows = ((data || []) as (Omit<TextRow, "files" | "who" | "mine" | "convo"> & { owner: string; files: { name: string; type: string; path: string }[] })[]).reverse();
     // whose phone: the staff member's first name (Oct 15, Nick: "texts between Nicholas and Michael… we will sync Amanda soon")
@@ -87,7 +93,7 @@ export async function getCustomerTexts(customerId: string, limit = 300) {
 /** how many texts a customer has (0 for anyone but the owners): the customer page shows a Texts tab when there are some */
 export async function customerTextCount(customerId: string) {
   try {
-    const { admin } = await owner();
+    const { admin } = await viewer();
     const { count } = await admin.from("text_messages").select("id", { count: "exact", head: true }).eq("customer_id", customerId);
     return count || 0;
   } catch { return 0; }

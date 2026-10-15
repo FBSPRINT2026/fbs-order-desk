@@ -5,7 +5,7 @@ import { getCustomerTexts, type TextRow } from "@/app/shop/texts-actions";
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: new Date(s).getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
 const time = (s: string) => new Date(s).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-/** A customer's texts (from the Mac, Settings > Texts), like Messages: theirs on the left, ours on the right, with pictures. Owners only: shows nothing for anyone else. */
+/** A customer's texts (from the Mac, Settings > Texts), like Messages: theirs on the left, ours on the right, with pictures. The owners, Jose and Claudia (lib/texts.ts TEXT_VIEWERS): shows nothing for anyone else. */
 export default function CustomerTexts({ customerId }: { customerId: string }) {
   const [t, setT] = useState<TextRow[] | null>(null), [no, setNo] = useState(false), [big, setBig] = useState("");
   /** one conversation, or all of them together (Oct 15, Nick: "texts with Michael and with Kayla") */
@@ -19,7 +19,7 @@ export default function CustomerTexts({ customerId }: { customerId: string }) {
   let last = "", lastConvo = "";
   return (
     <section className="panel ctx-panel">
-      <div className="panel-h"><h2>Texts</h2><span className="faint" style={{ fontSize: 12 }}>{t.length} from your phone · owners only</span></div>
+      <div className="panel-h"><h2>Texts</h2><span className="faint" style={{ fontSize: 12 }}>{t.length} · shop only (owners, Jose, Claudia)</span></div>
       {/* always say whose texts these are: "Nicholas & Michael Peticolas" (one chip per conversation) */}
       <div className="ctx-chips" role="group" aria-label="Conversations">
         {convos.length > 1 && <button type="button" className={!only ? "on" : ""} onClick={() => setOnly("")}>All <small>{t.length}</small></button>}

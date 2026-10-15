@@ -103,3 +103,13 @@ export async function purgeOurOwn(admin: SupabaseClient) {
   await admin.from("text_messages").delete().in("id", rows.map((r) => r.id));
   return rows.length;
 }
+
+/**
+ * Who can see customer texts (Oct 15, Nick: "viewable by Amanda, myself, Jose and Claudia"): the owners, plus these.
+ * Setting up a Mac (Settings > Texts) stays with the owners.
+ */
+export const TEXT_VIEWERS = ["jose@fbsprint.com", "claudia@fbsprint.com"];
+export async function canSeeTexts(email: string, role: string) {
+  const { organizerFor } = await import("@/lib/mail/mirror");
+  return organizerFor(email, role) || TEXT_VIEWERS.includes(String(email || "").trim().toLowerCase());
+}
