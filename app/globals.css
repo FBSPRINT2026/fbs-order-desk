@@ -8335,3 +8335,11 @@ a.pdn-tag:hover{text-decoration:underline}
 .grp-sum b{color:var(--ink-2);font-weight:600;margin-left:3px}
 .grp-sum-t{color:var(--ink);font-weight:600}
 .grp-sum-t b{font-size:18px;font-weight:800;color:var(--ink);margin-left:6px}
+/* the screens line: read, with a pencil to change underbase / remake (Oct 15, Nick) */
+.pr-scr-v{display:inline-flex;align-items:center;gap:6px}
+.pr-scr-tag{font-size:11.5px;font-weight:600;color:var(--ink-2);background:var(--surface-2);border-radius:999px;padding:1px 8px}
+.pr-scr-ed{display:inline-grid;place-items:center;min-width:24px;height:24px;border:0;border-radius:6px;background:none;color:var(--ink-3);cursor:pointer;padding:0 4px;font:inherit;font-size:12.5px;font-weight:600}
+.pr-scr-ed:hover{background:var(--surface-2);color:var(--accent)}
+.pr-scr-ed.on{color:var(--accent)}
+.pr-scr-ed svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pr-scr-opts{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 14px;padding:3px 10px;border-radius:8px;background:var(--surface-2)}

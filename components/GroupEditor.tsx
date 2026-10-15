@@ -139,15 +139,14 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
     const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake);
     const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
     return (
-      <div className="pr-scr">
-        <span className="pr-scr-l">Screens</span>
-        <span>{sc.n} screen{sc.n === 1 ? "" : "s"}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0))}</b></>}</span>
+      <ScreensLine key={d.id} summary={<>{sc.n} screen{sc.n === 1 ? "" : "s"}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0))}</b></>}
+        {sc.under && !allLight ? <span className="pr-scr-tag">underbase</span> : null}{rm ? <span className="pr-scr-tag">remake</span> : null}</>}>
         {allLight ? <span className="faint">no underbase</span> : <span className={"sbx-ub" + (d.underbase == null ? " auto" : "")}>
           <label className="check" title={d.underbase == null ? (sc.under ? "Automatic: a light ink needs one. Click to override." : "Automatic: dark inks print without one. Click to override.") : "Set by hand"}><input type="checkbox" checked={sc.under} onChange={(e) => update((x) => { x.imprints[di].underbase = e.target.checked; x.imprints[di].screens = undefined; })} />Underbase</label>
           {d.underbase != null && <span className="sbx-ovr">override <button type="button" aria-label="Back to automatic" title="Back to automatic" onClick={() => update((x) => { x.imprints[di].underbase = undefined; })}>×</button></span>}
         </span>}
         {wpl.remakeFee != null && <label className="check" title="The screens are on file from an earlier order"><input type="checkbox" checked={rm} onChange={(e) => update((x) => { x.imprints[di].remake = e.target.checked; })} />Remake {money(wpl.remakeFee)}</label>}
-      </div>
+      </ScreensLine>
     );
   };
   const inksSec = scrImps.some((d) => pmsInks(d).some((x) => x.auto) || (!inkNames(d.inks).length && wpl.pmsFee)) || !!g.specialtyInk || !!g.specialtyInkSet;
@@ -604,6 +603,21 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
 /** Under each imprint: which customer design prints here, with its size worked out from the print size. */
 /** a print's logo on the order page: read only, set in the Mockup Creator (Oct 15, Nick: "grey out that section…
  *  see the logo a little larger"), beside the print's fields so it adds no row */
+/** a print's screens: what they come to, with a pencil to change underbase / remake (Oct 15, Nick) */
+function ScreensLine({ summary, children }: { summary: React.ReactNode; children: React.ReactNode }) {
+  const [edit, setEdit] = useState(false);
+  return (
+    <div className="pr-scr">
+      <span className="pr-scr-l">Screens</span>
+      <span className="pr-scr-v">{summary}</span>
+      <button type="button" className={"pr-scr-ed" + (edit ? " on" : "")} aria-label={edit ? "Done changing the screens" : "Change the screens (underbase, remake)"} title={edit ? "Done" : "Underbase or remake"} onClick={() => setEdit(!edit)}>
+        {edit ? "Done" : <svg viewBox="0 0 24 24" aria-hidden><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" /></svg>}
+      </button>
+      {edit && <span className="pr-scr-opts">{children}</span>}
+    </div>
+  );
+}
+
 /**
  * A print as the Mockup Creator set it, to read (Oct 15, Nick: "read only… filled in from the mockup creator… looks
  * messy, don't like all the grey, rethink the style"): the logo, then where and how it prints and its price, one line
