@@ -45,6 +45,16 @@ export async function middleware(request: NextRequest) {
     url.search = `?next=${encodeURIComponent(path + request.nextUrl.search)}`;
     return NextResponse.redirect(url);
   }
+  // the Home Screen app opened (its start page, /shop, loaded fresh, not a click inside the portal): straight on to the
+  // page chosen on this phone (fbs_app_start, set by "Open the app to Email"; components/AppStart.tsx), before
+  // anything is drawn (Oct 15, Nick: "it still goes to the dashboard first, then a few seconds later")
+  const start = request.cookies.get("fbs_app_start")?.value || "";
+  if (user && path === "/shop" && /^\/shop\/[a-z-]+$/.test(start) && !request.headers.get("rsc") && !request.headers.get("next-router-prefetch") && (request.headers.get("sec-fetch-dest") || "document") === "document" && !request.headers.get("referer")) {
+    const url = request.nextUrl.clone();
+    url.pathname = start;
+    url.search = "";
+    return NextResponse.redirect(url, 307);
+  }
   return response;
 }
 
