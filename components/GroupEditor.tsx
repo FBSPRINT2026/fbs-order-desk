@@ -604,11 +604,20 @@ function PrintRow({ d, n, designs, urls, each, detailsHref, onMockup }: { d: Gro
   const other = cur && val ? designOther(cur, val, given) : 0;
   const size = val ? (given === "W" ? `${val}" × ${other || "?"}"` : `${other || "?"}" × ${val}"`) : "";
   const colors = d.method === "dtf" || d.colors === FULL_COLOR ? "Full color" : d.colors ? `${d.colors} color${d.colors === 1 ? "" : "s"}` : "";
+  // click the logo to see it big (Oct 15, Nick: "you should be able to click it and zoom in")
+  const [zoom, setZoom] = useState(false);
+  const pic = cur ? urls[cur.id] : "";
   return (
     <div className="pr">
-      <button type="button" className="pr-logo" onClick={onMockup} title={cur ? `${designLabel(cur)}: change it in the Mockup Creator` : "Pick the logo in the Mockup Creator"}>
-        {cur && urls[cur.id] ? <img src={urls[cur.id]} alt="" /> : <span>No logo</span>}
+      <button type="button" className="pr-logo" onClick={() => (pic ? setZoom(true) : onMockup())} title={pic ? "See it bigger" : "Pick the logo in the Mockup Creator"}>
+        {pic ? <img src={pic} alt="" /> : <span>No logo</span>}
       </button>
+      {zoom && pic && <div className="pr-zoom" role="dialog" aria-modal="true" aria-label={cur ? designLabel(cur) : "Logo"} onClick={() => setZoom(false)} onKeyDown={(e) => { if (e.key === "Escape") setZoom(false); }} tabIndex={-1} ref={(el) => el?.focus()}>
+        <figure onClick={(e) => e.stopPropagation()}>
+          <img src={pic} alt={cur ? designLabel(cur) : ""} />
+          <figcaption><b>{cur ? designLabel(cur) : ""}</b>{size ? ` · ${size} on the ${d.location}` : ""}<button type="button" className="btn sm" onClick={() => setZoom(false)}>Close</button></figcaption>
+        </figure>
+      </div>}
       <div className="pr-main">
         <div className="pr-top">
           {n > 0 && <span className="pr-n">{n}</span>}
