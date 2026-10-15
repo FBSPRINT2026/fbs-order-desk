@@ -8517,3 +8517,5 @@ a.pdn-tag:hover{text-decoration:underline}
   .tag-go .go-lines b:nth-child(2){width:22px}
   .tag-go .go-lines b:nth-child(3){width:11px}
 }
+/* "On the go" sits on the bottom of the white letters, above the colored bars (Oct 15, Nick) */
+@media (max-width:820px){ .brand.brand-logo span.tag-go{margin-bottom:7px} }
