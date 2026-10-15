@@ -8828,3 +8828,20 @@ a.pdn-tag:hover{text-decoration:underline}
 /* the little rainbow under section titles runs a bit past the words, like everywhere else (Oct 15, Nick) */
 .portal .aa-sec-h h3{width:fit-content}
 .portal .aa-sec-h h3::after{width:calc(100% + 36px);min-width:72px;height:4px;border-radius:4px}
+
+/* customer supplied goods in the portal: full-width cards in the portal's style (Oct 15, Nick) */
+.portal .gb{display:flex;flex-direction:column;gap:14px}
+.portal .gc{border:1px solid var(--line);border-radius:14px;padding:16px 18px;gap:12px;position:relative;overflow:hidden}
+.portal .gc::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--gc)}
+.portal .gc-t b{font-family:var(--display);font-stretch:85%;font-weight:800;font-size:22px;line-height:1.15}
+.portal .gc-no{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.portal .gc-sub{font-size:13.5px;color:var(--ink-2);margin-top:2px}
+.portal .gc-st{font-size:12.5px}
+.portal .gc-steps{gap:8px;margin-top:2px}
+.portal .gc-steps li{font-size:12.5px;gap:7px}
+.portal .gc-steps li span{height:7px}
+.portal .gc-steps li.done span{background:var(--ok)}
+.portal .gc-steps li.now span{background:var(--fbs-fade)}
+.portal .gc-help{font-size:14px;background:var(--surface-2);border-radius:10px;padding:9px 12px}
+.portal .gc-from{font-size:13.5px}
+.portal .gc-acts{border-top:1px solid var(--line-2,var(--line));padding-top:12px}
