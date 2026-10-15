@@ -7649,3 +7649,26 @@ a.pdn-tag:hover{text-decoration:underline}
   body:has(.pit) .ibx2-item-1 b{font-size:15px}
 }
 @media (max-width:420px) and (pointer:coarse){ .pit-qa{gap:4px} .pit-qa button{padding:0 4px;font-size:11px;gap:3px} .pit-qa button svg{display:none} }
+
+/* ───────── Inbox rows (Oct 15, Nick picked it): bold name + blue dot + blue time = unread, normal weight = read;
+   nothing else changes the weight or colors the name; what the email is goes in small colored tags ───────── */
+.ibx2-item.ol{position:relative;border-left:0;padding-left:24px}
+.ibx2-item.ol .ibx2-item-1 b,.ibx2-item.ol.needs .ibx2-item-1 b,.ibx2-item.ol.ol-plain .ibx2-item-1 b,.ibx2-item.ol.ol-unread .ibx2-item-1 b{font-weight:400;color:var(--ink)}
+.ibx2-item.ol.ol-unread .ibx2-item-1 b{font-weight:700}
+.ibx2-item.ol .ibx2-item-s{font-size:13.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35}
+.ibx2-item.ol.ol-unread .ibx2-item-s{color:var(--ink);font-weight:600}
+.ibx2-item.ol .ibx2-item-2,.ibx2-item.ol.ol-plain .ibx2-item-2{color:var(--ink-3);font-size:12.5px}
+.ibx2-item.ol.ol-unread .ibx2-item-1 time{color:var(--accent);font-weight:600}
+.ibx2-dot{position:absolute;left:9px;top:15px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.ibx2-item.ol.on{background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.ibx2-item.ol.urgent,.ibx2-item.ol.ol-unread,.ibx2-item.ol.on{border-left-color:transparent}
+.ibx2-item.ol .ibx2-item-3{display:flex;flex-wrap:wrap;gap:4px 5px;margin-top:4px}
+.itag{font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;line-height:16px}
+.itag.urg{background:var(--danger-soft);color:var(--danger)}
+.itag.rep{background:var(--warn-soft);color:var(--warn)}
+.itag.cus{background:var(--accent-soft);color:color-mix(in srgb,var(--accent) 80%,var(--ink))}
+.itag.todo{background:color-mix(in srgb,#6A5AE0 12%,var(--surface));color:#6A5AE0}
+.itag.ev{background:color-mix(in srgb,#FCB122 22%,var(--surface));color:#9A6A00}
+.itag.fyi{background:var(--surface-2);color:var(--ink-3)}
+.itag-sorting{font-size:11.5px;color:var(--ink-3);font-style:italic}
+@media (max-width:760px) and (pointer:coarse){ body:has(.pit) .ibx2-item.ol{padding:11px 16px 11px 26px} body:has(.pit) .ibx2-dot{left:11px;top:17px} }

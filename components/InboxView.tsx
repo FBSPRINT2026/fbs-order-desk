@@ -496,18 +496,22 @@ export default function InboxView({ mode }: { mode: Mode }) {
                   <div key={i.id} className={"ibx2-cv" + (g.length > 1 ? " multi" : "") + (openG && g.length > 1 ? " open" : "")}>
                   <SwipeRow onAct={(to) => moveGroup(g, to)}>
                   <button data-id={k} type="button" className={"ibx2-item ol" + (openG ? " on" : "") + (needsG ? " needs" : "") + (urgentG ? " urgent" : "") + (unreadG ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => pickRow(openG && olCur ? olKey(olCur) : k)} onDoubleClick={() => r && pickRow(k, true)} aria-expanded={g.length > 1 ? openG : undefined}>
+                    {/* Oct 15, Nick: bold + blue dot = unread, nothing else; what it is goes in colored tags */}
+                    {unreadG && <span className="ibx2-dot" aria-label="Unread" />}
                     <span className="ibx2-item-1">
                       <b>{name}</b>
                       {g.length > 1 && <span className="ibx2-cvn" title={`${g.length} emails in this conversation`}>{g.length}</span>}
-                      {urgentG && <em>Urgent</em>}
                       {flagG && <span className="ibx2-flag" title="Flagged in Outlook" aria-label="Flagged">⚑</span>}
                       <time>{i.received_at ? ago(i.received_at) : ""}</time>
                     </span>
-                    <span className="ibx2-item-2">{r?.x.meta?.triage?.summary || i.summary || i.subject || "(no subject)"}</span>
+                    <span className="ibx2-item-s">{i.subject || "(no subject)"}</span>
+                    {(() => { const sm = r?.x.meta?.triage?.summary || i.summary || ""; return sm && sm !== i.subject ? <span className="ibx2-item-2">{sm}</span> : null; })()}
                     <span className="ibx2-item-3">
-                      {r ? (needsG ? <span className="ol-needs">Needs reply</span> : r.answered ? <span>Answered</span> : <span>Customer</span>) : i.bucket === "todo" ? <span className="ol-todo">To-do</span> : i.bucket === "event" ? <span className="ol-event">Event</span> : i.bucket ? <span>FYI</span> : <span>Sorting…</span>}
-                      {i.cc_only && <span title="You were copied (Cc), not sent to">CC&apos;d</span>}
-                      {ordG && <span>#{ordG.number}</span>}
+                      {urgentG && <span className="itag urg">Urgent</span>}
+                      {r ? <>{needsG ? <span className="itag rep">Needs reply</span> : r.answered ? <span className="itag fyi">Answered</span> : null}<span className="itag cus">Customer</span></>
+                        : i.bucket === "todo" ? <span className="itag todo">To-do</span> : i.bucket === "event" ? <span className="itag ev">Event</span> : i.bucket ? <span className="itag fyi">FYI</span> : <span className="itag-sorting">Sorting…</span>}
+                      {i.cc_only && <span className="itag fyi" title="You were copied (Cc), not sent to">CC&apos;d</span>}
+                      {ordG && <span className="itag fyi">#{ordG.number}</span>}
                     </span>
                   </button>
                   </SwipeRow>
