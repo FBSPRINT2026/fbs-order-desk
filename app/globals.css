@@ -8494,3 +8494,14 @@ a.pdn-tag:hover{text-decoration:underline}
   .ord .pr-specs>span+span::before{display:none}
   .ord .pr-art{font-size:12px}
 }
+
+/* a garment on a phone (Oct 15, Nick: "make the pricing below the garment size breakdown"): style and color, brand
+   and description, the sizes, then qty / each / total in one line, the total lined up with the group total */
+@media (max-width:760px){
+  .ord .gl-list .gl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-areas:"st st co co" "br br de de" "sz sz sz sz" "qt ea to to" "x x x x";gap:8px;align-items:end}
+  .ord .gl-list .gl>.gl-row:not(.grp-total){display:contents}
+  .ord .gl-list .gl>.szrow{grid-area:sz;margin:0}
+  .ord .gl-list .gl .a-qt,.ord .gl-list .gl .a-ea,.ord .gl-list .gl .a-to{border-top:1px dashed var(--line-2);padding-top:8px}
+  .ord .gl-list .gl .a-to{text-align:right}
+  .ord .gl-list .gl .a-x:empty{display:none}
+}
