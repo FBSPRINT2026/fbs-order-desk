@@ -15,6 +15,7 @@ import { useSticky } from "@/lib/useSticky";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
+  /** an old (Printavo) invoice with a balance: its online invoice, where it can be paid until the cutover */ payUrl?: string;
   /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string };
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean };
@@ -128,6 +129,7 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
   const [showArch, setShowArch] = useSticky("account.showArchived", false);
   /** portal Orders: quotes older than 60 days are hidden unless this is ticked (Oct 15, Nick) */
   const [oldQuotes, setOldQuotes] = useSticky("portal.oldQuotes", false);
+  const [showOldOwed, setShowOldOwed] = useState(false);
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
   // "Pay this statement" arrives with ?pay=all: everything open is checked
@@ -163,10 +165,13 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
   // old archived orders are listed with the rest but aren't paid or tracked here
   const liveInvoices = invoices.filter((o) => !o.archived);
   const receive = orders.filter((o) => o.price_type === "wholesale" && o.type === "invoice" && WAITING.includes(o.status));
-  const due = liveInvoices.reduce((a, o) => a + Math.max(0, o.balance), 0);
+  // what they owe: portal orders and invoices from before the portal (Printavo balances are real: Nick, Oct 15)
+  const owed = invoices.filter((o) => o.balance > 0.004);
+  const oldOwed = owed.filter((o) => o.archived);
+  const due = owed.reduce((a, o) => a + Math.max(0, o.balance), 0);
   // payment due date under the customer's terms (null = not due yet, e.g. still being made)
-  const payDue = (o: AOrder) => o.pay_due || null;
-  const overdue = liveInvoices.filter((o) => { const d = payDue(o); return d && d < today(); }).reduce((a, o) => a + Math.max(0, o.balance), 0);
+  const payDue = (o: AOrder) => o.pay_due || (o.archived && o.status !== "quote" ? o.due_date || o.created_at?.slice(0, 10) || null : null);
+  const overdue = owed.filter((o) => { const d = payDue(o); return d && d < today(); }).reduce((a, o) => a + Math.max(0, o.balance), 0);
   const openQuotes = quotes.filter((o) => !o.archived && o.status === "quote_sent").reduce((a, o) => a + o.total, 0);
 
   const AREAS: { id: Area; label: string; icon: string; n?: number; show?: boolean }[] = [
@@ -382,7 +387,7 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
       { k: "61–90 days", test: (d: number | null) => d !== null && d >= 61 && d <= 90 },
       { k: "Over 90 days", test: (d: number | null) => d !== null && d > 90 },
     ].map((b) => {
-      const list = liveInvoices.filter((o) => { const d = payDue(o); return o.balance > 0.004 && b.test(d ? Math.floor((Date.parse(today()) - Date.parse(d)) / 86400000) : null); });
+      const list = owed.filter((o) => { const d = payDue(o); return o.balance > 0.004 && b.test(d ? Math.floor((Date.parse(today()) - Date.parse(d)) / 86400000) : null); });
       return { ...b, n: list.length, amt: list.reduce((a, o) => a + o.balance, 0) };
     });
     const payTable = (list: AOrder[], isQuote: boolean) => (
@@ -430,6 +435,32 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
         <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Open orders</h3>{canPay && open.length > 1 && <span className="faint">Check the ones you want to pay together.</span>}</div>
         {payTable(open, false)}
       </div>
+      {oldOwed.length > 0 && (() => {
+        const list = oldOwed.filter((o) => has(q, o.number, o.nickname)).sort((a, b) => (a.due_date || a.created_at || "").localeCompare(b.due_date || b.created_at || ""));
+        const shown = showOldOwed ? list : list.slice(0, 15);
+        return (
+          <div className="aa-card aa-tblcard">
+            <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Invoices from before the new portal</h3><span className="faint">{oldOwed.length} invoice{oldOwed.length === 1 ? "" : "s"} · {money(oldOwed.reduce((a, o) => a + o.balance, 0))} open{mode === "portal" ? " · pay each one on its invoice for now" : ""}</span></div>
+            <table className="aa-tbl">
+              <thead><tr><th>#</th><th>Order</th><th>Status</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th><th /></tr></thead>
+              <tbody>
+                {shown.map((o) => (
+                  <tr key={o.id} onClick={() => router.push(orderHref(o.id))}>
+                    <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
+                    <td className="m"><div className="aa-t">{o.nickname || "Order"}</div><div className="aa-s">{payDue(o) ? `${o.due_date ? "In hands" : "Ordered"} ${when(payDue(o))}` : ""}</div></td>
+                    <td>{pill(o)}</td>
+                    <td className="r num" data-l="Total">{money(o.total)}</td>
+                    <td className="r num" data-l="Paid">{money(o.paid)}</td>
+                    <td className="r num aa-due" data-l="Balance">{money(o.balance)}</td>
+                    <td className="r pay" onClick={(e) => e.stopPropagation()}>{mode === "portal" && o.payUrl ? <a className="btn sm" href={o.payUrl} target="_blank" rel="noreferrer">Pay</a> : <Link className="btn sm ghost" href={orderHref(o.id)}>View</Link>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {list.length > shown.length && <div className="aa-more-row"><button type="button" className="btn sm" onClick={() => setShowOldOwed(true)}>Show all {list.length}</button></div>}
+          </div>
+        );
+      })()}
       {waitingQuotes.length > 0 && (
         <div className="aa-card aa-tblcard">
           <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Quotes</h3><span className="faint">{canPay ? "You can pay a quote here too. Paying it approves the quote." : "Waiting on the customer's approval."}</span></div>

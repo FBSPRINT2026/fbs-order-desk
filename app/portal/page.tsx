@@ -86,7 +86,13 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const aOrders: AOrder[] = orders.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type, search: orderSearchText(o),
     pay_due: o.type === "invoice" ? payDueDate(o, ctx.customers.find((c) => c.id === o.customer_id)?.payment_terms) : null }));
   const archHref = (id: string) => `/portal/archive/${id}${qs}`;
-  aOrders.push(...archived.map((a) => archiveAsOrder(a, archHref(a.id))));
+  const owedArch = archived.filter((a) => a.kind === "invoice" && +a.balance > 0.004).map((a) => a.id);
+  const payUrls: Record<string, string> = {};
+  for (let i = 0; i < owedArch.length; i += 200) {
+    const { data: pu } = await admin.from("archived_orders").select("id, pay:data->urls->>publicUrl").in("id", owedArch.slice(i, i + 200));
+    ((pu || []) as { id: string; pay: string | null }[]).forEach((r) => { if (r.pay && /^https:\/\//.test(r.pay)) payUrls[r.id] = r.pay; });
+  }
+  aOrders.push(...archived.map((a) => ({ ...archiveAsOrder(a, archHref(a.id)), payUrl: payUrls[a.id] })));
   payments = [...payments, ...archived.flatMap((a) => archivePayments(a, archHref(a.id)))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at));
 
   // what's waiting on the customer
@@ -173,8 +179,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const jobs = jobOrders.map(jobOf), pastJobs = doneRecent.map(jobOf);
   const IDX_AFTER_ART = ["blanks", "production", "ready"];
   // what's waiting on them, with a picture and one button
-  // the same balance the Payments tab shows: orders in the portal only (Printavo balances are paid through Printavo / QuickBooks for now)
-  const due = aOrders.filter((o) => o.type === "invoice" && !o.archived && o.balance > 0.004).reduce((a, o) => a + o.balance, 0);
+  // the same balance the Payments tab shows: portal orders and invoices from before the portal
+  const due = aOrders.filter((o) => o.type === "invoice" && o.balance > 0.004).reduce((a, o) => a + o.balance, 0);
   const needs: DashNeed[] = attention.map((a, i) => {
     const o = orders.find((x) => x.id === a.order_id);
     const nm = o ? `#${o.number} ${o.nickname || ""}`.trim() : "";
