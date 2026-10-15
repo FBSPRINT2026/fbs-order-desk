@@ -20,7 +20,7 @@ type Talk = { customer: string; number: string; name: string; items: Item[]; sum
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 const time = (s: string) => new Date(s).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-export default function JobTalk({ jobRef, printavo, printavoCount = 0, title }: { jobRef: string; /** a header of its own (a reorder: "From the original order #27166") */ title?: string; /** a Printavo job's own messages & approvals (Oct 15, Nick: "add messages and approval to Emails & Texts… call them Printavo Messages") */ printavo?: ReactNode; printavoCount?: number }) {
+export default function JobTalk({ jobRef, printavo, printavoCount = 0, title, onCount }: { jobRef: string; /** how many emails and texts, once loaded (the order page's Messages tab) */ onCount?: (n: number) => void; /** a header of its own (a reorder: "From the original order #27166") */ title?: string; /** a Printavo job's own messages & approvals (Oct 15, Nick: "add messages and approval to Emails & Texts… call them Printavo Messages") */ printavo?: ReactNode; printavoCount?: number }) {
   const [d, setD] = useState<Talk | null>(null), [no, setNo] = useState(false), [err, setErr] = useState("");
   const [show, setShow] = useState<"all" | "text" | "email" | "pv">("all"), [big, setBig] = useState(""), [open, setOpen] = useState<Record<string, boolean>>({});
   /** an email opened in full: from the mailbox (FullMsg) or kept in the portal; "…" while loading */
@@ -40,6 +40,7 @@ export default function JobTalk({ jobRef, printavo, printavoCount = 0, title }: 
   };
   const load = () => fetch(`/api/jobs/talk?ref=${encodeURIComponent(jobRef)}`).then(async (r) => { if (r.status === 403) { setNo(true); return; } const j = await r.json(); if (j.error) setErr(j.error); else setD(j); }).catch((e) => setErr(String(e)));
   useEffect(() => { void load(); }, [jobRef]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (d) onCount?.((d.items || []).filter((i) => !(printavo && i.kind === "email" && i.src === "Printavo")).length + printavoCount); }, [d, printavoCount]); // eslint-disable-line react-hooks/exhaustive-deps
   if (no) return null;
   const notThis = async (id: string) => {
     if (!confirm("Take these texts off this job? They'll be filed to another job if one fits.")) return;

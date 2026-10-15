@@ -47,6 +47,8 @@ const EVENT_LABEL: Record<string, string> = {
   payment: "Payment received", viewed: "Customer viewed", request_submitted: "Customer sent in the request", reorder: "Reordered by the customer",
 };
 
+const GOODS_WORD: Record<string, string> = { waiting: "Waiting on goods", on_way: "On the way", arrived: "Arrived, checking in", partial: "Partly arrived", received: "Received", issue: "Receiving issue" };
+
 export default function OrderEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -94,6 +96,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Order | null>(null);
+  // the page's tabs (Oct 15, Nick: "too much information on one page… tabs at the top"); ?tab= keeps it on refresh
+  type Tab = "order" | "prod" | "msg" | "pay" | "act";
+  const [tab, setTabS] = useState<Tab>("order");
+  const setTab = (t: Tab) => { setTabS(t); try { const u = new URL(window.location.href); if (t === "order") u.searchParams.delete("tab"); else u.searchParams.set("tab", t); window.history.replaceState(window.history.state, "", u.toString()); } catch { /* */ } };
+  useEffect(() => { try { const t = new URL(window.location.href).searchParams.get("tab"); if (t && ["order", "prod", "msg", "pay", "act"].includes(t)) setTabS(t as Tab); else if (window.location.hash === "#messages") setTabS("msg"); } catch { /* */ } }, []);
+  const [talkN, setTalkN] = useState(0);
+  const [goodsSt, setGoodsSt] = useState<{ status: string; updated_by: string | null } | null>(null);
 
   const say = (m: string) => { setFlash(m); setTimeout(() => setFlash(""), 4000); };
   const arm = (k: string) => { setArmed(k); setTimeout(() => setArmed((a) => (a === k ? "" : a)), 3500); };
@@ -560,6 +569,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     notesTimer.current = setTimeout(() => { sb.from("order_internal").upsert({ order_id: id, production_notes: v }); }, 700);
   }
 
+  useEffect(() => {
+    if (!o?.id || o.price_type !== "wholesale") { setGoodsSt(null); return; }
+    sb.from("order_goods").select("status, updated_by").eq("order_id", o.id).maybeSingle().then(({ data }) => setGoodsSt((data as { status: string; updated_by: string | null } | null) || null), () => setGoodsSt(null));
+  }, [o?.id, o?.price_type]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (missing) return <><Link className="back" href="/shop/orders">← Orders</Link><div className="empty">This order was deleted or doesn&apos;t exist.</div></>;
   if (!o || !calc) return <div className="empty">Loading…</div>;
 
@@ -592,34 +606,65 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </select>}
           {o.number >= 40000 && o.number < 50000 && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
             <SendToPrintavo orderId={o.id} onSaved={save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
+          {o.status === "quote" && <button className="btn primary" type="button" onClick={send} title="Publishes it to their portal and emails them a link (add a note on the Messages tab first if you like)">Send quote to customer</button>}
           {o.type === "quote" && !pvStatusOf(o as never) && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
           <a className="btn" href={`/print/${o.id}`} target="_blank" rel="noreferrer">{o.type === "quote" ? "Quote PDF" : "Invoice PDF"}</a>
           <a className="btn" href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
-          <a className="btn" href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer">Box labels</a>
-          <a className="btn" href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)">Phone menu</a>
-          <button className="btn" type="button" onClick={duplicate}>Duplicate</button>
-          <button className={"btn danger" + (armed === "del" ? " armed" : "")} type="button" onClick={del}>{armed === "del" ? "Confirm delete" : "Delete"}</button>
+          <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
+            <summary className="btn">More ▾</summary>
+            <div className="ot-menu">
+              <a href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer">Box labels</a>
+              <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)">Phone menu</a>
+              <button type="button" onClick={duplicate}>Duplicate</button>
+              <button type="button" className={"danger" + (armed === "del" ? " armed" : "")} onClick={del}>{armed === "del" ? "Click again to delete" : "Delete order"}</button>
+            </div>
+          </details>
         </div>
       </div>
+      <div className="pv-box">
       {(() => { const x = o as Order & { printavo_id?: string | null; printavo_visual_id?: string | null; printavo_state?: { url?: string; publicUrl?: string; status?: string } | null }; return x.printavo_id ? <PrintavoLink visualId={x.printavo_visual_id || ""} url={x.printavo_state?.url} publicUrl={x.printavo_state?.publicUrl} status={x.printavo_state?.status} number={o.number} orderId={o.id} onRenumbered={(v) => setO((y) => (y ? ({ ...y, printavo_visual_id: v } as Order) : y))} /> : null; })()}
       {(o as Order & { printavo_id?: string | null }).printavo_id && o.number >= 40000 && o.number < 50000 && calc && <PrintavoChanges o={o} calc={calc} patch={patch} prodNote={prodNotes} onProdNote={onProdNotes} />}
-      {/* a reorder: the mockup kept, pricing checked, the print specs with where each came from (Oct 14, Nick) */}
-      {isReorder(o) && calc && <ReorderPanel o={o} total={calc.total} patch={patch} save={save}
-        onReload={(groups) => { setO((x) => (x ? { ...x, groups } : x)); if (latest.current) latest.current = { ...latest.current, groups }; }} />}
+      </div>
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
       {o.status === "request" && (
         <div className="callout req-callout">
           <h2>Order request from the customer{o.submitted_at ? ` · sent ${new Date(o.submitted_at).toLocaleDateString()}` : " · still being built by the customer"}</h2>
           <div className="muted">They built this in their portal without prices. Prices below are <b>suggested from your pricing matrix</b>, with blank costs filled in from the garment catalog. Adjust anything, answer their questions in Messages, then finalize. They&apos;ll get it back as a quote for their final approval.</div>
-          <div className="row"><button type="button" className="btn primary" onClick={send} disabled={!o.submitted_at}>Finalize &amp; send for approval</button><a className="btn ghost" href="#messages">Their questions</a></div>
+          <div className="row"><button type="button" className="btn primary" onClick={send} disabled={!o.submitted_at}>Finalize &amp; send for approval</button><button type="button" className="btn ghost" onClick={() => setTab("msg")}>Their questions</button></div>
         </div>
       )}
 
       {/* moving off Printavo: a 40,000-series order waits until its customer has been moved (checklist done) */}
       {cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) && <NotMovedBanner customerId={cust.id} name={custLabel(cust)} what="this order"
         onMoved={async () => { const { data } = await sb.from("customers").select("*").eq("id", cust.id).maybeSingle(); if (data) setCustomers((cs) => cs.map((x) => (x.id === cust.id ? (data as Customer) : x))); }} />}
-      <div className="ed-grid" inert={(cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>)) || undefined} style={cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) ? { opacity: 0.45 } : undefined}>
-        <div className="stack">
+      {(() => {
+        const pv = pvStatusOf(o as never);
+        const day = (d?: string | null) => (d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "");
+        const prints = o.groups.reduce((n, g) => n + g.imprints.length, 0);
+        const gw = goodsSt ? (GOODS_WORD[goodsSt.status] || goodsSt.status) + (goodsSt.updated_by === "Printavo" && /received|partial/.test(goodsSt.status) ? " in Printavo" : "") : "";
+        const approved = proofs.filter((p) => p.status === "approved").length;
+        return (
+          <div className="ot-sum">
+            <div><span>Customer</span><b>{cust ? `${custLabel(cust)}${cust.company && cust.name ? " · " + cust.name : ""}` : "No customer yet"}</b><small>{o.price_type === "wholesale" ? "Wholesale" : "Retail"}{cust ? ` · ${PAY_TERMS[cust.payment_terms || "receipt"]}` : ""}{o.tax_exempt ? " · tax exempt" : ""}</small></div>
+            <div><span>In hands</span><b className={o.rush ? "hot" : ""}>{o.due_date ? day(o.due_date) : "No date"}{o.rush ? " · Rush" : o.firm ? " · Firm" : ""}</b><small>{o.production_date ? `Production ${day(o.production_date)} · ` : ""}{o.delivery_method === "ship" ? "Ship" : o.delivery_method === "deliver" ? "Delivery" : "Pickup"}</small></div>
+            <div><span>Pieces</span><b>{calc.qty}</b><small>{o.groups.length} group{o.groups.length === 1 ? "" : "s"} · {prints} print{prints === 1 ? "" : "s"}</small></div>
+            {gw ? <div><span>Goods</span><b className={goodsSt?.status === "received" ? "ok" : goodsSt?.status === "issue" ? "hot" : ""}>{gw}</b><small>Customer supplied</small></div>
+              : <div><span>Proofs</span><b className={pendingProofs ? "" : approved ? "ok" : ""}>{pendingProofs ? `${pendingProofs} waiting` : approved ? `${approved} approved` : proofs.length ? `${proofs.length} sent` : "None yet"}</b><small>{pv || st.label}</small></div>}
+            {seesMoney && <div><span>Total</span><b>{money(calc.total)}</b><small className={calc.balance > 0.004 ? "due" : "ok"}>{calc.balance > 0.004 ? `${money(calc.balance)} due` : calc.total > 0 ? "Paid in full" : "—"}</small></div>}
+          </div>
+        );
+      })()}
+      <nav className="aa-nav ot-nav" aria-label="Order sections">
+        {([["order", "Order", 0], ["prod", "Art & production", art.length], ["msg", "Messages", talkN + messages.length], ...(seesMoney ? [["pay", "Payments", payments.length]] : []), ["act", "Activity", 0]] as [Tab, string, number][]).map(([k, l, n]) =>
+          <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)}>{l}{n > 0 && <span className="aa-n">{n}</span>}</button>)}
+      </nav>
+      <div className="ot-panes" inert={(cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>)) || undefined} style={cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) ? { opacity: 0.45 } : undefined}>
+
+        {/* Order: what's being made and what it costs (Oct 15, Nick: "too much information on one page… tabs at the top") */}
+        <div className="ed-grid" hidden={tab !== "order"}>
+          <div className="stack">
+            {isReorder(o) && calc && <ReorderPanel o={o} total={calc.total} patch={patch} save={save}
+              onReload={(groups) => { setO((x) => (x ? { ...x, groups } : x)); if (latest.current) latest.current = { ...latest.current, groups }; }} />}
           <div className="top2">
             <section className="panel">
               <div className="panel-h"><h2>Customer</h2>
@@ -745,8 +790,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </section>
           </div>
-
-          <OrderSeparations o={o} />
           <datalist id="locs">{LOCATIONS.map((x) => <option key={x} value={x} />)}</datalist>
           {o.groups.map((g, gi) => (
             <GroupEditor finishingAt={finPerGroup ? "group" : "order"} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
@@ -760,7 +803,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <span className="faint" style={{ fontSize: 12 }}>Garments in the same group share imprints, and their quantities add up for the price break.</span>
             <FillFromText orderId={o.id} hasContent={o.groups.some((g) => g.lines.some((l) => l.style || Object.keys(l.sizes || {}).length))} onApply={applyProposal} />
           </div>
-
           {orderFinList.length > 0 && (
             <section className="panel fin-panel">
               <div className="panel-h"><h2>Finishing</h2>
@@ -783,8 +825,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </section>
           )}
-
-          <div className="grid g2 fees-notes">
+            <div className="grid g2 fees-notes">
             <section className="panel money-only">
               <div className="panel-h"><h2>Fees & adjustments</h2></div>
               <div className="panel-b stack">
@@ -804,22 +845,79 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </section>
             <section className="panel">
-              <div className="panel-h"><h2>Notes</h2></div>
+              <div className="panel-h"><h2>Customer notes</h2></div>
               <div className="panel-b stack">
                 <div className="field"><label htmlFor="o-notes">Customer notes (shown on quote/invoice)</label><textarea id="o-notes" rows={4} value={o.notes} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
               </div>
             </section>
-            {/* the job's emails and texts (owners only; Oct 15) */}
-            <JobTalk jobRef={`o:${o.id}`} />
-            {/* a reorder: the original job's messages, emails (with their files) and texts (approvals), for whoever re-creates it */}
-            <OriginalJobTalk notes={o.notes} />
+            </div>
           </div>
+          <aside className="ed-aside">
+          {!seesMoney && (
+            <section className="panel">
+              <div className="panel-h"><h2>Quantity</h2></div>
+              <div className="panel-b"><div className="totals"><div className="tr big"><span>Total pieces</span><span className="num">{calc.qty}</span></div></div></div>
+            </section>
+          )}
+          <section className="panel money-only">
+            <div className="panel-h"><h2>Totals</h2><span className="faint num">{calc.qty} pcs</span></div>
+            <div className="panel-b">
+              <div className="totals">
+                <div className="tr"><span>Line items</span><span>{money(calc.items)}</span></div>
+                <div className="tr"><span>Setup (screens, digitizing)</span><span>{money(calc.setup)}</span></div>
+                {calc.materials ? <div className="tr"><span>2XL+ Materials Charge</span><span>{money(calc.materials)}</span></div> : null}
+                {calc.fees ? <div className="tr"><span>Fees</span><span>{money(calc.fees)}</span></div> : null}
+                <div className="tr"><span className="row" style={{ gap: 6 }}>Discount
+                  <input type="number" step="0.01" min="0" aria-label="Discount" style={{ width: 66, padding: "3px 6px" }} placeholder="0"
+                    value={(o.discount_type === "amt" ? o.discount_amt : o.discount_pct) || ""}
+                    onChange={(e) => patch((d) => { const v = Math.max(0, +e.target.value || 0); if (d.discount_type === "amt") d.discount_amt = v; else d.discount_pct = Math.min(100, v); })} />
+                  <select aria-label="Discount type" style={{ width: 52, padding: "3px 4px" }} value={o.discount_type === "amt" ? "amt" : "pct"}
+                    onChange={(e) => patch((d) => { const v = d.discount_type === "amt" ? d.discount_amt || 0 : d.discount_pct || 0; d.discount_type = e.target.value === "amt" ? "amt" : "pct"; if (d.discount_type === "amt") { d.discount_amt = v; d.discount_pct = 0; } else { d.discount_pct = Math.min(100, v); d.discount_amt = 0; } })}>
+                    <option value="pct">%</option><option value="amt">$</option>
+                  </select></span><span>{calc.discount ? `−${money(calc.discount)}` : money(0)}</span></div>
+                <div className="tr"><span className="row" style={{ gap: 6 }}>Tax <input type="number" step="0.01" aria-label="Tax rate percent" style={{ width: 66, padding: "3px 6px" }} placeholder={String(settings.taxRate)} value={o.tax_rate ?? ""} onChange={(e) => patch((d) => { d.tax_rate = e.target.value === "" ? null : +e.target.value; })} />%</span><span>{o.tax_exempt ? "Exempt" : money(calc.tax)}</span></div>
+                <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={o.tax_exempt} onChange={(e) => patch((d) => { d.tax_exempt = e.target.checked; })} /> Tax exempt</label>
+                <div className="tr big"><span>Total</span><span>{money(calc.total)}</span></div>
+                <div className="tr"><span>Paid</span><span>{money(calc.paid)}</span></div>
+                <div className="tr bal"><span>Balance due</span><span style={{ color: calc.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(calc.balance)}</span></div>
+              </div>
+            </div>
+          </section>
+          <ChecksPanel checks={checks} orderId={o.id} save={save} reorder={/Reorder of (Printavo )?#\d+/.test(o.notes || "")} />
+          </aside>
         </div>
 
-        <aside className="ed-aside">
-          <JobLabor orderId={o.id} qty={o.qty} total={+o.total || 0} />
+        {/* Art & production */}
+        <div className="ed-grid" hidden={tab !== "prod"}>
+          <div className="stack">
+            <OrderSeparations o={o} />
+          <ProductionPanel note={prodNotes} onNote={onProdNotes} uploading={artUploading}
+            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name) }))}
+            onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }}>
+            {/* the job's notes & photos (one panel, Oct 15: there were two "Production files & notes") */}
+            <JobFiles job={{ kind: "o", id: o.id }} bump={filesBump} inside />
+          </ProductionPanel>
+          </div>
+          <aside className="ed-aside">
+          {o.price_type === "wholesale" && o.type === "invoice" && (
+            <section className="panel">
+              <div className="panel-h"><h2>Customer supplied goods</h2></div>
+              <div className="panel-b"><ShopGoods orderIds={[o.id]} customerId={o.customer_id} compact /></div>
+            </section>
+          )}
+            <JobLabor orderId={o.id} qty={o.qty} total={+o.total || 0} />
+          </aside>
+        </div>
+
+        {/* Messages: the job's emails and texts, the customer's portal, calls & notes */}
+        <div className="ed-grid" hidden={tab !== "msg"}>
+          <div className="stack">
+            <JobTalk jobRef={`o:${o.id}`} onCount={setTalkN} />
+            <OriginalJobTalk notes={o.notes} />
+          </div>
+          <aside className="ed-aside">
           <section className="panel" id="messages">
-            <div className="panel-h"><h2>Customer communication</h2><Pill status={o.status} portal /></div>
+            <div className="panel-h"><h2>Customer portal</h2><Pill status={o.status} portal /></div>
             <div className="panel-b stack">
               {o.status !== "quote" && <div className="comm-sum">
                 <div><span>Quote</span><b>{o.approved_at ? `Approved by ${o.approved_name || "customer"}` : o.sent_at ? `Sent ${fmtStamp(o.sent_at)}` : "In portal"}</b></div>
@@ -872,27 +970,39 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               )}
             </div>
           </section>
-          {o.price_type === "wholesale" && o.type === "invoice" && (
-            <section className="panel">
-              <div className="panel-h"><h2>Customer supplied goods</h2></div>
-              <div className="panel-b"><ShopGoods orderIds={[o.id]} customerId={o.customer_id} compact /></div>
-            </section>
-          )}
-          <ProductionPanel compact note={prodNotes} onNote={onProdNotes} uploading={artUploading}
-            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name) }))}
-            onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }}>
-            {/* the job's notes & photos (one panel, Oct 15: there were two "Production files & notes") */}
-            <JobFiles job={{ kind: "o", id: o.id }} bump={filesBump} inside />
-          </ProductionPanel>
+          <section className="panel">
+            <div className="panel-h"><h2>Calls &amp; notes</h2><span className="faint" style={{ fontSize: 12 }}>Shop only</span></div>
+            <div className="panel-b"><Timeline customerId={o.customer_id} orderId={o.id} compact /></div>
+          </section>
+          </aside>
+        </div>
 
-          <ChecksPanel checks={checks} orderId={o.id} save={save} reorder={/Reorder of (Printavo )?#\d+/.test(o.notes || "")} />
-
-          {!seesMoney && (
-            <section className="panel">
-              <div className="panel-h"><h2>Quantity</h2></div>
-              <div className="panel-b"><div className="totals"><div className="tr big"><span>Total pieces</span><span className="num">{calc.qty}</span></div></div></div>
-            </section>
-          )}
+        {/* Payments */}
+        {seesMoney && <div className="ed-grid" hidden={tab !== "pay"}>
+          <div className="stack">
+          <section className="panel money-only">
+            <div className="panel-h"><h2>Payments</h2></div>
+            <div className="panel-b stack">
+              {payments.length ? <div>{payments.map((p) => (
+                <div key={p.id} className="pay-row"><span>{fmtDate(p.paid_on)} · {p.method}{p.stripe_session_id ? " (online)" : ""}</span>
+                  <span className="row"><b className="num">{money(p.amount)}</b>{canPay && <button className={"btn icon ghost sm" + (armed === "pay" + p.id ? " danger armed" : "")} type="button" aria-label="Remove payment" onClick={() => delPayment(p.id)}>✕</button>}</span></div>
+              ))}</div> : <div className="faint" style={{ fontSize: 13 }}>No payments recorded.</div>}
+              {canPay && <div className="pay-add">
+                <input type="number" step="0.01" placeholder="Amount" aria-label="Payment amount" value={payAmt} onChange={(e) => setPayAmt(e.target.value)} />
+                <select aria-label="Payment method" value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>{PAY_METHODS.map((m) => <option key={m}>{m}</option>)}</select>
+                <input type="date" aria-label="Payment date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+                <button className="btn" type="button" onClick={addPayment}>Record</button>
+              </div>}
+              {canPay && calc.balance > 0.004 && calc.total > 0 && (
+                <div className="row">
+                  <button className="btn sm" type="button" onClick={() => setPayAmt(((calc.total * settings.depositPct) / 100).toFixed(2))}>{settings.depositPct}% deposit</button>
+                  <button className="btn sm" type="button" onClick={() => setPayAmt(calc.balance.toFixed(2))}>Full balance</button>
+                </div>
+              )}
+            </div>
+          </section>
+          </div>
+          <aside className="ed-aside">
           <section className="panel money-only">
             <div className="panel-h"><h2>Totals</h2><span className="faint num">{calc.qty} pcs</span></div>
             <div className="panel-b">
@@ -917,29 +1027,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
           </section>
+          </aside>
+        </div>}
 
-          <section className="panel money-only">
-            <div className="panel-h"><h2>Payments</h2></div>
-            <div className="panel-b stack">
-              {payments.length ? <div>{payments.map((p) => (
-                <div key={p.id} className="pay-row"><span>{fmtDate(p.paid_on)} · {p.method}{p.stripe_session_id ? " (online)" : ""}</span>
-                  <span className="row"><b className="num">{money(p.amount)}</b>{canPay && <button className={"btn icon ghost sm" + (armed === "pay" + p.id ? " danger armed" : "")} type="button" aria-label="Remove payment" onClick={() => delPayment(p.id)}>✕</button>}</span></div>
-              ))}</div> : <div className="faint" style={{ fontSize: 13 }}>No payments recorded.</div>}
-              {canPay && <div className="pay-add">
-                <input type="number" step="0.01" placeholder="Amount" aria-label="Payment amount" value={payAmt} onChange={(e) => setPayAmt(e.target.value)} />
-                <select aria-label="Payment method" value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>{PAY_METHODS.map((m) => <option key={m}>{m}</option>)}</select>
-                <input type="date" aria-label="Payment date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
-                <button className="btn" type="button" onClick={addPayment}>Record</button>
-              </div>}
-              {canPay && calc.balance > 0.004 && calc.total > 0 && (
-                <div className="row">
-                  <button className="btn sm" type="button" onClick={() => setPayAmt(((calc.total * settings.depositPct) / 100).toFixed(2))}>{settings.depositPct}% deposit</button>
-                  <button className="btn sm" type="button" onClick={() => setPayAmt(calc.balance.toFixed(2))}>Full balance</button>
-                </div>
-              )}
-            </div>
-          </section>
-
+        {/* Activity */}
+        <div className="ot-one" hidden={tab !== "act"}>
           <section className="panel">
             <div className="panel-h"><h2>History</h2></div>
             <div className="panel-b hist">
@@ -948,12 +1040,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               )) : <div>No activity yet.</div>}
             </div>
           </section>
-
-          <section className="panel">
-            <div className="panel-h"><h2>Calls &amp; notes</h2><span className="faint" style={{ fontSize: 12 }}>Shop only</span></div>
-            <div className="panel-b"><Timeline customerId={o.customer_id} orderId={o.id} compact /></div>
-          </section>
-        </aside>
+        </div>
       </div>
     </>
   );
