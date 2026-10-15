@@ -8,6 +8,7 @@ import { needsDetails, type DetailsInput } from "@/lib/productionDetails";
 import { applySpec, latestSpecs, reorderLabel, type DesignSpecs, type SpecEntry } from "@/lib/designSpecs";
 import { confirmDetails } from "@/app/shop/details-actions";
 import { confirmReorderPricing } from "@/app/shop/reorder-actions";
+import HistoryLink from "@/components/HistoryLink";
 import type { PrintSpecs, SpecHistory } from "@/lib/ai/specHistory";
 
 /**
@@ -157,6 +158,7 @@ export default function ReorderPanel({ o, total, patch, save, onReload }: {
       <div className="ro-h">
         <span className="ro-tag">Reorder</span>
         <b>{job ? <>Repeats {job}</> : "Repeats an earlier job"}</b>
+        <HistoryLink customer={o.customer_id} text={o.nickname || ""} className="ro-hist-link" />
         <span className={"ro-state" + (allDone ? " ok" : "")}>{allDone ? "Specs confirmed by production" : `Awaiting production confirmation · ${waiting.length} print${waiting.length === 1 ? "" : "s"}`}</span>
       </div>
 

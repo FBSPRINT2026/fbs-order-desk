@@ -7545,3 +7545,49 @@ a.pdn-tag:hover{text-decoration:underline}
 .ro-ev-d{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:12px}
 .ro-ev-s{font-size:11px;font-weight:700;text-transform:capitalize;color:var(--ink-2);background:var(--surface-2);border-radius:5px;padding:1px 6px;justify-self:start}
 @media (max-width:640px){.ro-ev-l li{grid-template-columns:1fr}}
+/* the way into a design's history (components/HistoryLink.tsx) and the history page (app/shop/history) */
+.hist-link{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--accent);text-decoration:none;white-space:nowrap;min-width:0}
+.hist-link svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.hist-link span:nth-child(2){overflow:hidden;text-overflow:ellipsis}
+.hist-link:hover b{text-decoration:underline}
+.eh .eh-hist{flex:none}
+@media (max-width:760px) and (pointer:coarse){.eh .eh-hist{flex:0 0 100%;order:1;padding:2px 0}.eh .eh-ai-go,.eh .eh-ai-btn{order:2}}
+.ro-hist-link{margin-left:6px}
+.dh-intro{margin-top:4px}
+.dh-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.dh-bar input{flex:1 1 220px;max-width:360px}
+.dh-tabs{margin-left:auto}
+.dh-list{list-style:none;margin:0;padding:0;position:relative}
+.dh-list::before{content:"";position:absolute;left:111px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.dh-item{display:grid;grid-template-columns:96px 30px minmax(0,1fr);align-items:start;margin-bottom:12px}
+.dh-date{font-size:12.5px;color:var(--ink-3);text-align:right;padding-top:12px;font-variant-numeric:tabular-nums}
+.dh-dot{width:12px;height:12px;border-radius:50%;margin:13px auto 0;background:var(--surface);border:2px solid var(--ink-3);position:relative;z-index:1}
+.dh-item.order .dh-dot{background:var(--accent);border-color:var(--accent)}
+.dh-item.confirmed .dh-dot{background:var(--ok);border-color:var(--ok)}
+.dh-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.dh-item.order .dh-card{border-color:color-mix(in srgb,var(--accent) 35%,var(--line));box-shadow:var(--shadow)}
+.dh-item.email.out .dh-card{background:color-mix(in srgb,var(--surface-2) 40%,var(--surface))}
+.dh-h{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;font-size:14px}
+.dh-h .spacer{flex:1}
+.dh-k{font-size:11px;font-weight:700;letter-spacing:.03em;color:var(--ink-3);text-transform:uppercase}
+.dh-k.ok{color:var(--ok)}
+.dh-num{font-weight:700;color:var(--accent);text-decoration:none}
+.dh-total{font-weight:700}
+.dh-o{display:flex;gap:12px;align-items:flex-start}
+.dh-od{font-size:13px;color:var(--ink-2);display:flex;flex-direction:column;gap:2px;min-width:0}
+.dh-print{color:var(--ink)}
+.dh-thumbs{display:flex;gap:6px;flex:none}
+.dh-thumbs img{width:64px;height:64px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
+.dh-subj{font-weight:600;font-size:13.5px}
+.dh-text{font-size:13.5px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere;max-height:5.6em;overflow:hidden}
+.dh-text.open{max-height:none}
+.dh-foot{margin-top:14px;font-size:12.5px}
+@media (max-width:640px){
+  .dh-list::before{left:7px}
+  .dh-item{grid-template-columns:16px minmax(0,1fr);grid-template-areas:"dot date" "dot card"}
+  .dh-date{grid-area:date;text-align:left;padding:0 0 3px}
+  .dh-dot{grid-area:dot;margin:3px 0 0}
+  .dh-card{grid-area:card}
+  .dh-o{flex-direction:column}
+  .dh-tabs{margin-left:0}
+}

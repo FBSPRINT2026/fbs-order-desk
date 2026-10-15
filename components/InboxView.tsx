@@ -1,6 +1,7 @@
 "use client";
 import CcField from "@/components/CcField";
 import Link from "next/link";
+import HistoryLink from "@/components/HistoryLink";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -930,7 +931,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
                   items={orders.slice(0, 40).map((o) => ({ key: o.id, label: <>#{o.number} {o.nickname || ""} <span className="faint">({o.status})</span></>, onClick: () => { close(); void run("onote", () => addEmailToOrderNotes(x.id, o.id), `Added to the notes on #${o.number}.`); } }))} />
               </PSec>}
             </>,
-          }} ai={x.direction === "in" ? <>{/* phones: the AI card's buttons (Oct 14, Nick: "New Order, Reorder, Order goods, then the microphone") */}
+          }} ai={x.direction === "in" ? <>{/* the design's running history (Oct 14, Nick) */}<HistoryLink customer={x.customer_id} text={x.subject || ""} text2={x.meta?.triage?.summary || ""} className="eh-hist" />{/* phones: the AI card's buttons (Oct 14, Nick: "New Order, Reorder, Order goods, then the microphone") */}
             {view !== "order" && (ordering ? <button type="button" className="tb-b primary eh-ai-go" onClick={() => startOrder()}>{TbIcon.order}<span className="tb-l">Back to the order</span></button> : <>
               <button type="button" className={"tb-b eh-ai-go" + (!reorder ? " primary" : "")} disabled={!!busy} onClick={() => startOrder(reorder ? { told: "This is a new order, not a reorder of a past job." } : undefined)}>{TbIcon.order}<span className="tb-l">New order</span></button>
               <button type="button" className={"tb-b eh-ai-go" + (reorder ? " primary" : "")} disabled={!!busy} onClick={() => startOrder(!reorder ? { told: "This is a reorder of a past job: find the job it repeats." } : undefined)}>{TbIcon.repeat}<span className="tb-l">Reorder</span></button>
