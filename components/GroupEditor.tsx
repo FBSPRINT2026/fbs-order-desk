@@ -231,12 +231,12 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
             );
           })}
         </div>
-        <div className="row">
+        <div className={"gl-row grp-total" + (gc.wholesale ? " ws" : "")}>
+          {/* the add buttons on the totals line: one row, not two (Oct 15, Nick: "a lot of wasted space… vertically") */}
+          <span className="a-de gl-foot"><span className="gl-adds">
           <button className="btn sm" type="button" onClick={() => update((x) => { x.lines.push(newGLine()); })}>+ Add garment</button>
           <button className="btn sm ghost" type="button" onClick={() => update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, id: uid(), color: "", sizes: {}, priceOverride: null }); })}>+ Same style, new color</button>
-        </div>
-        <div className={"gl-row grp-total" + (gc.wholesale ? " ws" : "")}>
-          <span className="a-de r"><span className="lbl2">Total pieces</span></span>
+          </span><span className="lbl2">Total pieces</span></span>
           <b className="a-qt c num">{gc.qty}</b>
           <b className="a-to r num">{money(gc.sub)}</b>
         </div>
