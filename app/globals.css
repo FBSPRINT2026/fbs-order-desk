@@ -8275,3 +8275,20 @@ a.pdn-tag:hover{text-decoration:underline}
 /* sub-sections (Garments, Imprints, Screens, Finishing, Fees & adjustments, Customer notes): bold titles, no rainbow */
 .ord .lbl.gsec::after,.ord .sbx-h.gsec::after,.ord .fin-panel .panel-h h2::after,.ord .fees-notes .panel-h h2::after{display:none}
 .ord .lbl.gsec,.ord .sbx-h.gsec,.ord .fin-panel .panel-h h2,.ord .fees-notes .panel-h h2{padding-bottom:0}
+/* Customer supplied goods on the order page, reworked (Oct 15, Nick: "this box looks messy"): the status first, big and
+   on the left; the progress; where it's coming from; the buttons in an even grid; no "View order" (you're on it) */
+.ord .ed-aside .gc{gap:12px}
+.ord .ed-aside .gc-h{display:flex;align-items:center;gap:8px}
+.ord .ed-aside .gc-t{display:none}
+.ord .ed-aside .gc-st{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--gc,var(--ok))}
+.ord .ed-aside .gc-st::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor;flex:none}
+.ord .ed-aside .gc-steps{gap:3px}
+.ord .ed-aside .gc-steps li{font-size:11px;gap:4px}
+.ord .ed-aside .gc-steps li span{height:4px}
+.ord .ed-aside .gc-from{font-size:13px;color:var(--ink-2);padding:8px 0 0;border-top:1px solid var(--line-2)}
+.ord .ed-aside .gc-acts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ord .ed-aside .gc-acts .btn{width:100%;justify-content:center;margin:0}
+.ord .ed-aside .gc-acts .btn:nth-last-of-type(1){grid-column:1/-1}
+.ord .ed-aside .gc-acts .spacer{display:none}
+.ord .ed-aside .gc-acts .gc-link{grid-column:1/-1;justify-self:start;font-size:12.5px}
+.ord .ed-aside .gc-acts .gc-link:last-of-type{display:none}
