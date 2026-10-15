@@ -352,9 +352,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
             ))}
           </div>
           {priceLine}
-          {frozen
-            ? <div className="imp-frozen-note">Set by the mockup. <button type="button" className="linkbtn" onClick={startMockup}>Change prints in the Mockup Creator</button></div>
-            : <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>}
+          {!frozen && <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>}
           </div>
           </div>
         </div>
