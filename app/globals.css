@@ -7832,7 +7832,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .tx-cmd-b{display:flex;gap:8px;margin-bottom:6px}
 
 /* a customer's texts (components/CustomerTexts.tsx) */
-.ctx{max-height:520px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.ctx{max-height:calc(100vh - 260px);min-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
 .ctx-day{text-align:center;font-size:11.5px;color:var(--ink-3);margin:10px 0 4px}
 .ctx-row{display:flex;flex-direction:column;max-width:78%;margin:1px 0}
 .ctx-row.them{align-self:flex-start;align-items:flex-start}.ctx-row.me{align-self:flex-end;align-items:flex-end}

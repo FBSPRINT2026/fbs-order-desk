@@ -19,6 +19,7 @@ import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
 import { PAY_TERMS, payDueDate, type Design, type PayTerms } from "@/lib/pricing";
 import Timeline from "@/components/Timeline";
 import CustomerTexts from "@/components/CustomerTexts";
+import { customerTextCount } from "@/app/shop/texts-actions";
 import { splitCustomer } from "@/lib/crm/private";
 import { fmtStamp } from "@/lib/format";
 import { orderSearchText } from "@/lib/search";
@@ -55,6 +56,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [messages, setMessages] = useState<AMessage[]>([]);
   const [pendingArt, setPendingArt] = useState<Record<string, string>>({});
   const [reload, setReload] = useState(0);
+  // their texts from the Mac (owners only): a Texts tab when there are any (Oct 15)
+  const [textN, setTextN] = useState(0);
+  useEffect(() => { if (id && id !== "new") customerTextCount(id).then(setTextN).catch(() => null); }, [id]);
   const [usedIds, setUsedIds] = useState<string[]>([]);
   // old orders brought over from Printavo: listed with the rest, marked "Archived"
   const [goodsOpen, setGoodsOpen] = useState(0);
@@ -178,6 +182,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} onCount={setProjOpen} />} projectsCount={projOpen}
           programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
           productionPanel={<CustomerProductionFiles customerId={id} />}
+          textsPanel={textN ? <CustomerTexts customerId={id} /> : undefined} textsCount={textN}
           statementHref={`/portal/statement?as=${id}`} onEmailStatement={() => emailStatement(id)}
           onRecordPayment={async (p) => { const r = await recordLumpPayment(id, p); if (r.ok && !p.preview) { reloadShop(); setReload((n) => n + 1); } return r; }}
           goodsPanel={c.price_type === "wholesale" || os.some((o) => o.price_type === "wholesale") ? <ShopGoods orderIds={os.filter(needsGoods).map((o) => o.id)} customerId={id} onCount={setGoodsOpen} /> : undefined}
@@ -262,8 +267,6 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               <div className="panel-h"><h2>Timeline</h2><span className="faint" style={{ fontSize: 12 }}>Calls, notes and emails · shop only</span></div>
               <div className="panel-b"><Timeline customerId={id} orderNumbers={Object.fromEntries(os.map((o) => [o.id, o.number]))} /></div>
             </section>
-            {/* their texts, from the Mac (Oct 15) */}
-            <CustomerTexts customerId={id} />
             <div className="stats" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))", margin: 0 }}>
               <div className="stat" style={{ cursor: "default" }}><span className="v">{os.length + archive.length}</span><span className="k">Orders</span></div>
               <div className="stat" style={{ cursor: "default" }}><span className="v">{money(spent)}</span><span className="k">Invoiced</span></div>

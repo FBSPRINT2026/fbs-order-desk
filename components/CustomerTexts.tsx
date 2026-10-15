@@ -14,7 +14,7 @@ export default function CustomerTexts({ customerId }: { customerId: string }) {
   if (no || !t || !t.length) return null;
   let last = "";
   return (
-    <section className="panel">
+    <section className="panel ctx-panel">
       <div className="panel-h"><h2>Texts</h2><span className="faint" style={{ fontSize: 12 }}>{t.length} from your phone · owners only</span></div>
       <div className="panel-b ctx">
         {t.map((m) => {

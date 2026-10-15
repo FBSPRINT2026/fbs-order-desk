@@ -21,7 +21,7 @@ export type AMockup = { id: string; title: string; url: string; thumb: string; n
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
 export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string; /** overrides the default wording */ label?: string; href?: string };
-export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "receive" | "details" | "projects" | "program";
+export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "texts" | "receive" | "details" | "projects" | "program";
 
 const IN_WORK = ["approved", "art", "blanks", "production", "ready"];
 const WAITING = ["approved", "art", "blanks"];
@@ -38,6 +38,7 @@ const I = {
   payments: "M3 6h18v12H3zM3 10h18M7 15h3",
   artwork: "M4 4h16v16H4zM4 16l5-5 4 4 3-3 4 4M15 9a1.5 1.5 0 1 0 0-.01",
   messages: "M4 5h16v11H9l-5 4z",
+  texts: "M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM11 18h2",
   receive: "M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8",
   details: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 4-6 8-6s8 2 8 6",
   due: "M12 7v5l3 3M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z",
@@ -56,7 +57,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the printable statement (open invoices + aging + pay it all) */
   statementHref?: string;
@@ -68,6 +69,7 @@ export default function AccountAreas({ mode, productionPanel, projectsPanel, pro
   onPaySelect?: (text: string) => Promise<{ ok: boolean; error?: string; filter?: PayFilter; explain?: string; off?: boolean }>;
   /** the Messages hub (the dashboard's centerpiece in the portal, and the Messages area) */
   messagesPanel?: ReactNode;
+  /** the customer's texts from the Mac (owners only; Oct 15) */ textsPanel?: ReactNode; textsCount?: number;
   /** staff only: the customer's production files (separations, digitized files…), under Artwork; never in the portal */
   productionPanel?: ReactNode;
   /** projects (a conference, a season: several orders, dates, tasks, one conversation) */
@@ -172,6 +174,7 @@ export default function AccountAreas({ mode, productionPanel, projectsPanel, pro
     { id: "payments", label: "Payments", icon: I.payments },
     { id: "artwork", label: "Artwork", icon: I.artwork },
     { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
+    { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: mode === "shop" && !!textsPanel },
     { id: "receive", label: goodsPanel ? (mode === "shop" ? "Customer goods" : "Customer supplied goods") : mode === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
     // staff reach Details from the "Customer details" button in the page header
   ];
@@ -632,6 +635,8 @@ export default function AccountAreas({ mode, productionPanel, projectsPanel, pro
       </aside>
       </div>
     </>;
+  } else if (area === "texts" && textsPanel) {
+    body = textsPanel;
   } else if (area === "messages" && messagesPanel) {
     body = messagesPanel;
   } else if (area === "messages") {

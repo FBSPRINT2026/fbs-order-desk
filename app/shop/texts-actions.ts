@@ -65,3 +65,12 @@ export async function getCustomerTexts(customerId: string, limit = 300) {
     return { ok: true as const, texts: rows.map((r) => ({ ...r, files: (r.files || []).map((f) => ({ name: f.name, type: f.type, url: signed.get(f.path) || "" })) })) as TextRow[] };
   } catch (e) { return fail(e); }
 }
+
+/** how many texts a customer has (0 for anyone but the owners): the customer page shows a Texts tab when there are some */
+export async function customerTextCount(customerId: string) {
+  try {
+    const { admin } = await owner();
+    const { count } = await admin.from("text_messages").select("id", { count: "exact", head: true }).eq("customer_id", customerId);
+    return count || 0;
+  } catch { return 0; }
+}
