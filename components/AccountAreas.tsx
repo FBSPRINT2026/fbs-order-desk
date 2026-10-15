@@ -57,7 +57,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the printable statement (open invoices + aging + pay it all) */
   statementHref?: string;
@@ -67,6 +67,8 @@ export default function AccountAreas({ mode, textsPanel, textsCount, productionP
   onRecordPayment?: (p: { amount: number; method: string; paid_on: string; note: string; preview?: boolean }) => Promise<{ ok: boolean; error?: string; applied?: { number: number; amount: number; full: boolean }[]; total?: number }>;
   /** portal: reads "pay all of August"-style requests (AI); without it the built-in phrase reader is used */
   onPaySelect?: (text: string) => Promise<{ ok: boolean; error?: string; filter?: PayFilter; explain?: string; off?: boolean }>;
+  /** portal: the whole dashboard (components/PortalDash.tsx), built on the server */
+  dash?: ReactNode;
   /** the Messages hub (the dashboard's centerpiece in the portal, and the Messages area) */
   messagesPanel?: ReactNode;
   /** the customer's texts from the Mac (owners only; Oct 15) */ textsPanel?: ReactNode; textsCount?: number;
@@ -173,7 +175,7 @@ export default function AccountAreas({ mode, textsPanel, textsCount, productionP
     { id: "program", label: "Program", icon: I.program, show: !!programPanel },
     { id: "payments", label: "Payments", icon: I.payments },
     { id: "artwork", label: "Artwork", icon: I.artwork },
-    { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
+    { id: "messages", label: mode === "portal" ? "Message center" : "Messages", icon: I.messages, n: messages.length },
     { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: mode === "shop" && !!textsPanel },
     { id: "receive", label: goodsPanel ? (mode === "shop" ? "Customer goods" : "Customer supplied goods") : mode === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
     // staff reach Details from the "Customer details" button in the page header
@@ -209,7 +211,9 @@ export default function AccountAreas({ mode, textsPanel, textsCount, productionP
   const tableHead = (title: ReactNode, ph: string) => <div className="aa-bar"><div className="aa-bar-l">{title}</div>{search(ph)}</div>;
 
   let body: ReactNode = null;
-  if (area === "home" && mode === "portal" && messagesPanel) {
+  if (area === "home" && mode === "portal" && dash) {
+    body = dash;
+  } else if (area === "home" && mode === "portal" && messagesPanel) {
     const current = orders.filter((o) => !o.archived && (o.type === "invoice" ? (IN_WORK.includes(o.status) || o.balance > 0.004) : o.status === "request"));
     const past = orders.filter((o) => o.type === "invoice" && !current.includes(o));
     const openQ = quotes.filter((o) => !o.archived && o.status === "quote_sent");

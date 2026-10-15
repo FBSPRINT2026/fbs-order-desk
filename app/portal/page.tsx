@@ -1,7 +1,9 @@
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PAY_TERMS, payDueDate, type Design, type Order } from "@/lib/pricing";
-import { fmtDateLong } from "@/lib/format";
+import { orderGroups, PAY_TERMS, payDueDate, type Design, type Order } from "@/lib/pricing";
+import { fmtDateLong, money } from "@/lib/format";
+import PortalDash, { type DashNeed, type DashPast, type DashThread } from "@/components/PortalDash";
+import { jobFor } from "@/lib/portalJobs";
 import StartPanel from "@/components/StartPanel";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
 import { customerGeneralMessage, starMyDesign, starMyMockup } from "@/app/portal/actions";
@@ -19,7 +21,7 @@ import type { Program, ProgramItem } from "@/lib/programs";
 import { aiPaySelect } from "@/app/portal/pay-select";
 import { needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
-import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
+import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvOrder, type PvTransaction } from "@/lib/archive";
 
 export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string; c?: string }> }) {
   const { as, c: startConvo } = await searchParams;
@@ -30,6 +32,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   let orders: Order[] = [];
   const paid: Record<string, number> = {};
   const pendingProofs: Record<string, number> = {};
+  const firstPending: Record<string, string> = {};
+  const approvedArt: Record<string, boolean> = {};
+  let rawMsgs: { id: string; order_id: string | null; project_id?: string | null; topic?: string | null; author_type: string; author_name: string | null; body: string; created_at: string; read_at: string | null }[] = [];
   let hubMsgs: HubMsg[] = [];
   let payments: APayment[] = [], designs: Design[] = [], mockups: AMockup[] = [], messages: AMessage[] = [];
   const usedIds: string[] = [];
@@ -45,7 +50,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const num = (id: string | null) => orders.find((o) => o.id === id)?.number ?? null;
     const [p, pr, d, m, msg] = await Promise.all([
       ids.length ? ctx.db.from("payments").select("*").in("order_id", ids).order("paid_on", { ascending: false }) : Promise.resolve({ data: [] }),
-      ids.length ? ctx.db.from("proofs").select("order_id").in("order_id", ids).is("archived_at", null).eq("status", "pending") : Promise.resolve({ data: [] }),
+      ids.length ? ctx.db.from("proofs").select("id, order_id, status").in("order_id", ids).is("archived_at", null) : Promise.resolve({ data: [] }),
       ctx.db.from("designs").select("*").in("customer_id", ctx.customerIds).order("number", { ascending: false }),
       ctx.db.from("mockups").select("*").in("customer_id", ctx.customerIds).is("archived_at", null).order("created_at", { ascending: false }),
       ctx.db.from("messages").select("*").or(`customer_id.in.(${ctx.customerIds.join(",")})${ids.length ? `,order_id.in.(${ids.join(",")})` : ""}`).order("created_at"),
@@ -53,7 +58,11 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const pays = (p.data || []) as { id: string; order_id: string; amount: number; method: string; paid_on: string | null; created_at: string }[];
     pays.forEach((x) => { paid[x.order_id] = (paid[x.order_id] || 0) + (+x.amount || 0); });
     payments = pays.map((x) => ({ ...x, amount: +x.amount || 0, number: num(x.order_id) || 0 }));
-    ((pr.data || []) as { order_id: string }[]).forEach((x) => { pendingProofs[x.order_id] = (pendingProofs[x.order_id] || 0) + 1; });
+    ((pr.data || []) as { id: string; order_id: string; status: string }[]).forEach((x) => {
+      if (x.status === "pending") { pendingProofs[x.order_id] = (pendingProofs[x.order_id] || 0) + 1; if (!firstPending[x.order_id]) firstPending[x.order_id] = x.id; }
+      if (x.status === "approved") approvedArt[x.order_id] = true;
+    });
+    rawMsgs = (msg.data || []) as typeof rawMsgs;
     designs = (d.data || []) as Design[];
     for (const cid of ctx.customerIds) { const { data: u } = await ctx.db.rpc("designs_in_use", { p_customer: cid }); usedIds.push(...((u || []) as string[])); }
     const withPv = designs.filter((x) => x.preview_path);
@@ -121,6 +130,95 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const hubOrders = orders.filter((o) => o.status !== "request" || o.submitted_at).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", href: `/portal/orders/${o.id}${qs}` }));
   const company = acct?.company || acct?.name || "";
 
+  // ---------- the dashboard (Oct 15, Nick): the assistant and message center up top, what needs them, their jobs
+  // moving through a timeline, order again, artwork, account ----------
+  const link = (p: string) => (qs ? `${p}${p.includes("?") ? "&" : "?"}${qs.slice(1)}` : p);
+  const msgHref = link("/portal?area=messages");
+  const msgLink = (orderId: string | null) => link(`/portal?area=messages&c=${orderId || "general"}`);
+  const isJob = (o: Order) => o.status !== "completed" && !(o.status === "request" && !o.submitted_at);
+  const doneRecent = orders.filter((o) => o.status === "completed").slice(0, 1);
+  const jobOrders = orders.filter(isJob).slice(0, 6);
+  const pastPortal = orders.filter((o) => o.status === "completed" && !doneRecent.includes(o));
+  // pictures: each order's first mockup (photos only), else the customer's own mockup
+  const picPath = (o: Order) => { const g = orderGroups(o)[0]; return g?.mockupThumbs?.[0] || g?.customerMockups?.[0]?.path || ""; };
+  const picOrders = [...jobOrders, ...doneRecent, ...pastPortal.slice(0, 3)];
+  const picPaths = [...new Set(picOrders.map(picPath).filter(Boolean))];
+  const { data: picSigned } = picPaths.length ? await admin.storage.from("proofs").createSignedUrls(picPaths, 3600) : { data: [] };
+  const picOf = (o: Order) => { const p = picPath(o); const i = picPaths.indexOf(p); return i >= 0 ? picSigned?.[i]?.signedUrl || "" : ""; };
+  // messages by conversation (order or general), newest first; "new" = from us and not read yet
+  const conv = new Map<string, { orderId: string | null; last: (typeof rawMsgs)[number]; unread: number }>();
+  rawMsgs.filter((m) => !m.project_id).forEach((m) => {
+    const k = m.order_id || "general";
+    const c = conv.get(k) || { orderId: m.order_id, last: m, unread: 0 };
+    if (m.created_at >= c.last.created_at) c.last = m;
+    if (m.author_type === "staff" && !m.read_at) c.unread++;
+    conv.set(k, c);
+  });
+  const shopName = ctx.settings.shop.name;
+  const clip = (t: string, n = 90) => { const x = (t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
+  const whenShort = (iso: string) => { const d = new Date(iso); const today = new Date(); return d.toDateString() === today.toDateString() ? "today" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" }); };
+  const threads: DashThread[] = [...conv.entries()].sort((a, b) => b[1].last.created_at.localeCompare(a[1].last.created_at)).slice(0, 3).map(([k, c]) => {
+    const o = c.orderId ? orders.find((x) => x.id === c.orderId) : null;
+    return { key: k, label: o ? `#${o.number}` : "FBS", title: o ? o.nickname || `Order #${o.number}` : "General", from: c.last.author_type === "staff" ? shopName : "You", text: clip(c.last.body, 70), when: whenShort(c.last.created_at), isNew: c.unread > 0, href: msgLink(c.orderId) };
+  });
+  const newMsgs = [...conv.values()].reduce((a, c) => a + c.unread, 0);
+  const goodsOf = new Map(goodsItems.map((g) => [g.order.id, g.goods.status as string]));
+  const jobOf = (o: Order) => {
+    const c = conv.get(o.id);
+    return jobFor(o, { href: link(`/portal/orders/${o.id}`), pic: picOf(o), pendingProof: firstPending[o.id] ? link(`/portal/orders/${o.id}/review/${firstPending[o.id]}`) : undefined,
+      approvedArt: !!approvedArt[o.id], goods: goodsOf.get(o.id) || null, customerGoods: o.price_type === "wholesale", newMsgs: c?.unread || 0,
+      lastMsg: c ? { from: c.last.author_type === "staff" ? shopName : "you", text: clip(c.last.body, 60), href: msgLink(o.id) } : undefined });
+  };
+  const jobs = jobOrders.map(jobOf), pastJobs = doneRecent.map(jobOf);
+  // what's waiting on them, with a picture and one button
+  const due = aOrders.filter((o) => o.type === "invoice" && o.balance > 0.004).reduce((a, o) => a + o.balance, 0);
+  const needs: DashNeed[] = attention.map((a, i) => {
+    const o = orders.find((x) => x.id === a.order_id);
+    const nm = o ? `#${o.number} ${o.nickname || ""}`.trim() : "";
+    if (a.kind === "art") return { key: `a${i}`, kind: a.kind, title: "Approve your artwork", text: `${nm} · proof ready. Printing starts once you approve.`, pic: o ? picOf(o) : "", href: firstPending[a.order_id] ? link(`/portal/orders/${a.order_id}/review/${firstPending[a.order_id]}`) : link(`/portal/orders/${a.order_id}`), cta: "Review art" };
+    if (a.kind === "quote") return { key: `a${i}`, kind: a.kind, title: "Review your quote", text: `${nm} · approve it to get started.`, pic: o ? picOf(o) : "", href: link(`/portal/orders/${a.order_id}`), cta: "Review quote" };
+    if (a.kind === "draft") return { key: `a${i}`, kind: a.kind, title: "Finish your order", text: `${nm} · you started this one but haven't sent it yet.`, pic: o ? picOf(o) : "", href: link(`/portal/request/${a.order_id}`), cta: "Finish it" };
+    return { key: `a${i}`, kind: a.kind, title: a.label || "Customer supplied goods", text: nm ? `${nm}` : "Shipments on your account", pic: o ? picOf(o) : "", href: a.href || goodsHref, cta: "Open" };
+  });
+  if (due > 0.004) needs.push({ key: "pay", kind: "pay", title: "Pay your balance", text: `${money(due)} due on your orders.`, pic: "", href: link("/portal?area=payments"), cta: `Pay ${money(due)}` });
+  // order again: their latest finished jobs (new and from before the portal), with a picture when we have one
+  const archTop = archived.filter((a) => a.kind === "invoice").slice(0, 3);
+  const archPics: Record<string, string> = {};
+  if (archTop.length) {
+    const { data: ad } = await admin.from("archived_orders").select("id, files, data").in("id", archTop.map((a) => a.id));
+    const want: { id: string; path: string }[] = [];
+    ((ad || []) as { id: string; files: Record<string, string> | null; data: PvOrder }[]).forEach((r) => {
+      const f = r.data?.groups?.flatMap((g) => [...g.lines.flatMap((l) => l.mockups), ...g.imprints.flatMap((im) => im.mockups)]) || [];
+      const hit = f.map((x) => (x.thumb && r.files?.[x.thumb]) || (x.full && r.files?.[x.full]) || "").find((p) => p && !["failed", "too-big"].includes(p));
+      if (hit) want.push({ id: r.id, path: hit });
+    });
+    const { data: sg } = want.length ? await admin.storage.from("proofs").createSignedUrls(want.map((w) => w.path), 3600) : { data: [] };
+    want.forEach((w, i) => { if (sg?.[i]?.signedUrl) archPics[w.id] = sg[i].signedUrl!; });
+  }
+  const past: DashPast[] = [
+    ...pastPortal.slice(0, 3).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", when: short(o.completed_at || o.due_date || o.created_at), qty: o.qty, pic: picOf(o), href: link(`/portal/orders/${o.id}`), date: o.completed_at || o.due_date || o.created_at })),
+    ...archTop.map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, date: a.due_date || a.order_date || "" })),
+  ].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 3);
+  const art = designs.filter((d) => !d.archived_at && designUrls[d.id]).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 5).map((d) => ({ id: d.id, url: designUrls[d.id], name: d.name }));
+  const quotesOpen = orders.filter((o) => o.status === "quote_sent").length;
+  const account = [
+    { label: "Balance due", value: money(due), tone: due > 0.004 ? "bad" as const : "ok" as const },
+    { label: "In progress", value: `${jobOrders.length} order${jobOrders.length === 1 ? "" : "s"}` },
+    { label: "Quotes to review", value: quotesOpen ? String(quotesOpen) : "None" },
+    { label: "Payment terms", value: `${PAY_TERMS[acct?.payment_terms || "receipt"] || "Due on receipt"}${acct?.tax_exempt ? " · tax exempt" : ""}` },
+  ];
+  // the assistant's shortcuts, from their own jobs
+  const ideas = [jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?", past[0] ? `Reorder ${past[0].nickname || `#${past[0].number}`}` : "Reorder a past job",
+    ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
+  const dash = (
+    <PortalDash sub={`${company ? `${company} · ` : ""}your orders, art and payments with ${shopName}`}
+      actions={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />}
+      assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare ideas={ideas} personHref={msgLink(null)} />}
+      threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} artHref={link("/portal?area=artwork")}
+      account={account} canAct={!ctx.preview} ordersHref={link("/portal?area=orders")}
+      goods={wholesale && goodsOpen.length ? <section className="pdx-card"><div className="pdx-h"><h2>Customer supplied goods</h2><a className="pd-link" href={goodsHref}>See all</a></div><PortalGoods items={goodsOpen.slice(0, 4)} incoming={incoming} canAct={!ctx.preview} qs={qs} compact hub empty="" /></section> : undefined} />
+  );
+
   return (
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s portal. Buttons are turned off in preview.</div>}
@@ -136,7 +234,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             <p className="muted" style={{ marginBottom: 0 }}>If you were expecting a quote, it may be under a different email address. Contact {ctx.settings.shop.name}{ctx.settings.shop.email ? ` at ${ctx.settings.shop.email}` : ""}{ctx.settings.shop.phone ? ` or ${ctx.settings.shop.phone}` : ""}.</p>
           </div></div>
         ) : (
-          <AccountAreas mode="portal"
+          <AccountAreas mode="portal" dash={dash}
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
             programPanel={<ProgramOrder program={program} items={programItems} images={programImages} projects={projects.filter((p) => p.status !== "closed").map((p) => ({ id: p.id, name: p.name }))} canAct={!ctx.preview} qs={qs} />} hasProgram={!!program && programItems.length > 0}
             assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}

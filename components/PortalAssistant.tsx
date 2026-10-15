@@ -14,7 +14,9 @@ const IDEAS = ["Where's my order?", "Track my shipment", "Pay my bill", "Reorder
  * The dashboard's helper: "What can I help you with today?". The customer types what they need;
  * it answers from their own account and offers buttons. Nothing changes until they press one.
  */
-export default function PortalAssistant({ qs, canAct, wholesale }: { qs: string; canAct: boolean; wholesale: boolean }) {
+/** bare: inside the dashboard's assistant card (no greeting of its own); ideas: shortcuts from their own jobs;
+ *  personHref: "Talk to a person" opens the message center (a message, not a live chat) */
+export default function PortalAssistant({ qs, canAct, wholesale, bare, ideas: ideas0, personHref }: { qs: string; canAct: boolean; wholesale: boolean; bare?: boolean; ideas?: string[]; personHref?: string }) {
   const router = useRouter();
   const [hello, setHello] = useState("Hello");
   useEffect(() => setHello(greeting()), []);
@@ -71,16 +73,16 @@ export default function PortalAssistant({ qs, canAct, wholesale }: { qs: string;
     } finally { setDoing(""); }
   }
 
-  const ideas = wholesale ? [...IDEAS, "Where are my goods?"] : IDEAS;
+  const ideas = ideas0?.length ? ideas0 : wholesale ? [...IDEAS, "Where are my goods?"] : IDEAS;
   return (
-    <section className="pa" aria-label="Help">
-      <h2 className="pa-hello">{hello}</h2>
+    <section className={"pa" + (bare ? " pa-bare" : "")} aria-label="Help">
+      {!bare && <h2 className="pa-hello">{hello}</h2>}
       <form className="pa-in" onSubmit={(e) => { e.preventDefault(); ask(q); }}>
         <span className="pa-spark" aria-hidden="true">✨</span>
-        <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="What can I help you with today?" aria-label="What can I help you with today?" autoComplete="off" />
+        <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={bare ? "Ask about an order, a reorder, a payment, your art…" : "What can I help you with today?"} aria-label="Ask the assistant" autoComplete="off" />
         <button type="submit" className="btn primary" disabled={busy || !q.trim()}>{busy ? "Thinking…" : "Ask"}</button>
       </form>
-      {!turns.length && <div className="pa-ideas">{ideas.map((s) => <button key={s} type="button" onClick={() => ask(s)}>{s}</button>)}</div>}
+      {!turns.length && <div className="pa-ideas">{ideas.map((s) => <button key={s} type="button" onClick={() => ask(s)}>{s}</button>)}{personHref && <a className="pa-person" href={personHref}>Talk to a person →</a>}</div>}
       {turns.length > 0 && (
         <div className="pa-talk" ref={box}>
           {turns.map((t, i) => (
