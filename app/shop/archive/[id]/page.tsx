@@ -3,6 +3,7 @@ import JobLabor from "@/components/team/JobLabor";
 import BackLink from "@/components/BackLink";
 import { bySizeOrder } from "@/lib/sizeOrder";
 import JobFiles from "@/components/job/JobFiles";
+import JobTalk from "@/components/JobTalk";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -57,6 +58,8 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
       <ArchivedGoods id={row.id} groups={(row.data as unknown as { groups?: PvGroup[] }).groups || []} />
       <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
       <div style={{ marginTop: 10 }}><JobFiles job={{ kind: "a", id: row.id }} /></div>
+      {/* the job's emails and texts (owners only; Oct 15) */}
+      <div style={{ marginTop: 10 }}><JobTalk jobRef={`pv:${row.id}`} /></div>
       <div style={{ marginTop: 10 }}>
         <ArchivedOrderView o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} names={names} paths={row.files || {}} actions={row.kind === "invoice" ? <ArchiveReorder archivedId={row.id} small /> : null} />
       </div>

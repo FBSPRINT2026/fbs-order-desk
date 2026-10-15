@@ -52,6 +52,11 @@ export async function POST(req: Request) {
     const { error } = await admin.from("text_messages").upsert(rows, { onConflict: "guid", ignoreDuplicates: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  // file them to jobs where it's clear (the job's dates and name); overlaps wait for the AI when a job is opened
+  if (rows.length) {
+    const { fileCustomerTexts } = await import("@/lib/textJobs");
+    for (const cid of new Set(rows.map((r) => String(r.customer_id)))) await fileCustomerTexts(admin, cid).catch(() => 0);
+  }
   // the pictures not kept yet
   const lines: string[] = [];
   if (files.size) {

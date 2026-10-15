@@ -2,6 +2,7 @@
 import JobLabor from "@/components/team/JobLabor";
 import BackLink from "@/components/BackLink";
 import JobFiles from "@/components/job/JobFiles";
+import JobTalk from "@/components/JobTalk";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import SendToPrintavo, { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
@@ -807,6 +808,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </section>
             <JobFiles job={{ kind: "o", id: o.id }} bump={filesBump} />
+            {/* the job's emails and texts (owners only; Oct 15) */}
+            <JobTalk jobRef={`o:${o.id}`} />
           </div>
         </div>
 

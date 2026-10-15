@@ -7848,3 +7848,29 @@ a.pdn-tag:hover{text-decoration:underline}
 .ctx-chips button small{font-size:11px;color:var(--ink-3);margin-left:2px}
 .ctx-chips button.on{background:var(--ink);border-color:var(--ink);color:#fff}.ctx-chips button.on small{color:rgba(255,255,255,.7)}
 .ctx-who{font-size:11.5px;font-weight:700;color:var(--ink-3);margin:8px 8px 1px}.ctx-who.me{text-align:right}
+
+/* a job's emails and texts (components/JobTalk.tsx) */
+.jt-lock{font-size:11px;font-weight:700;color:var(--ink-3);background:var(--surface-2);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.jt-chips{display:flex;gap:6px;padding:0 16px 4px}
+.jt-chips button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;font:inherit;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer}
+.jt-chips button small{font-size:11px;color:var(--ink-3)}
+.jt-chips button.on{background:var(--ink);border-color:var(--ink);color:#fff}.jt-chips button.on small{color:rgba(255,255,255,.7)}
+.jt-chips button:disabled{opacity:.45;cursor:default}
+.jt-ai{margin:8px 16px 0;padding:9px 12px;border-radius:12px;background:color-mix(in srgb,var(--ai-c,#6A5AE0) 5%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ai-c,#6A5AE0) 14%,transparent);font-size:13.5px;line-height:1.45}
+.jt-ai b{display:block;font-size:11.5px;color:var(--ai-c,#6A5AE0);margin-bottom:2px}
+.jt-tl{max-height:70vh;overflow-y:auto}
+.jt-tl>div{display:flex;flex-direction:column}
+.jt-day{font-size:11.5px;font-weight:700;color:var(--ink-3);margin:14px 0 6px;display:flex;align-items:center;gap:8px}.jt-day::after{content:"";flex:1;border-top:1px solid var(--line-2)}
+.jt-em{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 11px;margin:3px 0;font:inherit;color:var(--ink);cursor:pointer}
+.jt-ic{width:26px;height:26px;border-radius:7px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:13px;flex:none}
+.jt-emb{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:13.5px}.jt-emb .faint{font-size:12px}
+.jt-em1{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jt-emt{font-size:13px;color:var(--ink-2);white-space:pre-wrap;line-height:1.4;margin-top:4px}
+.jt-tx{display:flex;flex-direction:column;margin:2px 0;max-width:72%}
+.jt-tx.me{align-self:flex-end;align-items:flex-end}.jt-tx.them{align-self:flex-start;align-items:flex-start}
+.jt-bb{padding:7px 11px;border-radius:16px;font-size:14px;line-height:1.35;white-space:pre-wrap;word-break:break-word}
+.me .jt-bb{background:#0A84FF;color:#fff}.them .jt-bb{background:var(--surface-2);color:var(--ink)}
+.jt-pics{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0}.jt-pics img{max-width:180px;max-height:180px;border-radius:10px;cursor:zoom-in;display:block}
+.jt-who{font-size:10.5px;color:var(--ink-3);margin:1px 6px 0;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.jt-ok{font-size:10.5px;font-weight:700;color:var(--ok,#0F8C78);background:color-mix(in srgb,var(--ok,#0F8C78) 12%,var(--surface));border-radius:999px;padding:1px 7px;text-transform:none;letter-spacing:0}
+.jt-why{font-size:11px;color:var(--ink-3);margin:2px 6px 0}
