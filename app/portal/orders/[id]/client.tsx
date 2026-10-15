@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Message, Proof } from "@/lib/pricing";
 import { fmtStamp } from "@/lib/format";
-import { approveQuote, customerMessage, decideProof, requestQuoteChanges, startCheckout } from "../../actions";
+import { approveQuote, customerMessage, requestQuoteChanges, startCheckout } from "../../actions";
 import { reorderRequest } from "../../request-actions";
 
 /** "Order this again": copies this order into a new request the customer can change and send in. */
@@ -75,54 +75,23 @@ export function QuoteApproval({ orderId, total, terms, disabled, defaultName }: 
   );
 }
 
-export function ProofCard({ proof, disabled, defaultName }: { proof: Proof & { url: string | null }; disabled: boolean; defaultName: string }) {
-  const router = useRouter();
-  const [mode, setMode] = useState<"" | "approve" | "changes">("");
-  const [name, setName] = useState(defaultName);
-  const [comment, setComment] = useState("");
-  const [err, setErr] = useState("");
-  const [pending, start] = useTransition();
+/** A proof on the order page: the whole mockup, its status, and "Review art" (Oct 15, Nick: one button that opens
+ *  the full review, instead of approve / request changes here). */
+export function ProofCard({ proof, reviewHref }: { proof: Proof & { url: string | null }; reviewHref: string }) {
   const isImg = proof.file_type.startsWith("image/");
-
-  const submit = (decision: "approved" | "changes") => start(async () => {
-    setErr("");
-    const r = await decideProof(proof.id, decision, name, comment);
-    if (!r.ok) return setErr(r.error || "");
-    setMode("");
-    router.refresh();
-  });
-
+  const pending = proof.status === "pending";
   return (
     <div className="proof">
-      <a className="img" href={proof.url || undefined} target="_blank" rel="noreferrer" title="Open full size">
+      <a className="img" href={pending ? reviewHref : proof.url || undefined} target={pending ? undefined : "_blank"} rel="noreferrer" title={pending ? "Review art" : "Open full size"}>
         {isImg && proof.url ? <img src={proof.url} alt={proof.title} /> : <span className="file">{proof.file_type.includes("pdf") ? "PDF proof" : "Proof file"}<br />Tap to open</span>}
       </a>
       <div className="pb">
         <b>{proof.title}</b>
         <span className={"proof-status " + proof.status}>
-          {proof.status === "pending" ? "Waiting for your review" : proof.status === "approved" ? `Approved by ${proof.decided_name} · ${fmtStamp(proof.decided_at)}` : "You asked for changes"}
+          {pending ? "Waiting for your review" : proof.status === "approved" ? `${proof.customer_comment ? "Approved with changes" : "Approved"} by ${proof.decided_name} · ${fmtStamp(proof.decided_at)}` : "You asked for changes"}
         </span>
-        {proof.customer_comment && <span className="muted">“{proof.customer_comment}”</span>}
-        {proof.status === "pending" && (
-          mode === "" ? (
-            <div className="row">
-              <button className="btn primary sm" type="button" disabled={disabled} title={disabled ? PREVIEW : ""} onClick={() => setMode("approve")}>Approve</button>
-              <button className="btn sm" type="button" disabled={disabled} title={disabled ? PREVIEW : ""} onClick={() => setMode("changes")}>Request changes</button>
-            </div>
-          ) : mode === "approve" ? (
-            <div className="stack" style={{ gap: 8 }}>
-              <input type="text" aria-label="Your name" placeholder="Your full name" value={name} onChange={(e) => setName(e.target.value)} />
-              <span className="sub">By approving, you confirm spelling, colors and placement are correct.</span>
-              <div className="row"><button className="btn primary sm" type="button" disabled={pending || name.trim().length < 2} onClick={() => submit("approved")}>{pending ? "Saving…" : "Approve artwork"}</button><button className="btn ghost sm" type="button" onClick={() => setMode("")}>Cancel</button></div>
-            </div>
-          ) : (
-            <div className="stack" style={{ gap: 8 }}>
-              <textarea rows={3} aria-label="What to change" placeholder="What should we change?" value={comment} onChange={(e) => setComment(e.target.value)} />
-              <div className="row"><button className="btn primary sm" type="button" disabled={pending || !comment.trim()} onClick={() => submit("changes")}>{pending ? "Sending…" : "Send changes"}</button><button className="btn ghost sm" type="button" onClick={() => setMode("")}>Cancel</button></div>
-            </div>
-          )
-        )}
-        {err && <div className="err">{err}</div>}
+        {proof.customer_comment && <span className="muted" style={{ whiteSpace: "pre-line" }}>“{proof.customer_comment}”</span>}
+        {pending ? <a className="btn primary sm" href={reviewHref}>Review art</a> : <a className="btn ghost sm" href={reviewHref}>See the review</a>}
       </div>
     </div>
   );

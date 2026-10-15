@@ -20,9 +20,9 @@ const STEPS: { label: string; keys: string[] }[] = [
   { label: "Done", keys: ["completed"] },
 ];
 
-export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string; sent?: string }> }) {
+export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string; sent?: string; reviewed?: string }> }) {
   const { id } = await params;
-  const { as, paid: justPaid, sent: justSent } = await searchParams;
+  const { as, paid: justPaid, sent: justSent, reviewed } = await searchParams;
   const ctx = await getPortalCtx(as, `/portal/orders/${id}`);
   const { data: od } = await ctx.db.from("orders").select("*").eq("id", id).in("customer_id", ctx.customerIds.length ? ctx.customerIds : ["00000000-0000-0000-0000-000000000000"]).neq("status", "quote").maybeSingle();
   if (!od) notFound();
@@ -83,6 +83,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         </div></div>
 
+        {reviewed && <div className="callout good"><h2>{reviewed === "approved" ? "Thanks, your artwork is approved" : reviewed === "approved_changes" ? "Thanks, approved with your changes" : "Thanks, we got your changes"}</h2><div className="muted">{reviewed === "approved" ? "We'll start printing." : reviewed === "approved_changes" ? "We'll make those changes and print. You won't get another proof." : "We'll send you a new proof to look over."}</div></div>}
         {justPaid && <div className="callout good"><h2>Thank you, payment received</h2><div className="muted">It can take a minute to show below. You&apos;ll get a receipt by email from our payment processor.</div></div>}
 
         {isReq && (
@@ -140,7 +141,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-h"><h2>Artwork proofs</h2></div>
               <div className="panel-b">
                 {proofs.length ? (
-                  <div className="proofs">{proofs.map((pf) => <ProofCard key={pf.id} proof={pf} disabled={preview} defaultName={ctx.customers.find((x) => x.id === o.customer_id)?.name || ""} />)}</div>
+                  <div className="proofs">{proofs.map((pf) => <ProofCard key={pf.id} proof={pf} reviewHref={`/portal/orders/${o.id}/review/${pf.id}${preview ? `?as=${ctx.preview!.id}` : ""}`} />)}</div>
                 ) : <div className="muted" style={{ fontSize: 13 }}>{o.type === "quote" ? "Mockups will show up here after you approve the quote." : "We'll post your artwork proof here for approval."}</div>}
               </div>
             </section>

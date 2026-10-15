@@ -1,9 +1,10 @@
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, designOther, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
 import { spotFor } from "@/lib/mockup";
+import { printSize } from "@/lib/groupLook";
 
 /**
  * The invoice / quote PDF and the work order (Oct 15, Nick: "completely reimagine both. The work order will be the
@@ -22,16 +23,7 @@ export type DocData = {
 
 const DELIVERY: Record<string, string> = { pickup: "Pickup", ship: "Ship", deliver: "Delivery" };
 const day = (s: string | null | undefined, f: Intl.DateTimeFormatOptions) => { const d = parseDate(s); return d ? d.toLocaleDateString("en-US", f).replace(",", "") : ""; };
-const fmtIn = (n: number) => (n ? `${+n.toFixed(2)}"` : `?"`);
 
-/** the print's size in inches: the size typed ("8\" wide") and the other side from the art's proportions */
-export function printSize(d: Imprint, des?: Design | null) {
-  const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
-  const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
-  const other = des && val ? designOther(des, val, given) : 0;
-  const w = given === "W" ? val : other, h = given === "W" ? other : val;
-  return { w, h, label: val ? `${fmtIn(w)} × ${fmtIn(h)}` : d.size || "" };
-}
 const colorsLabel = (d: Imprint) => (d.method === "dtf" || d.colors >= FULL_COLOR ? "Full color" : `${d.colors || 1} color${d.colors === 1 || !d.colors ? "" : "s"}`);
 const dropLabel = (d: Imprint) => (d.drop ? `${d.drop}" drop` : "Standard drop");
 const inkLine = (n: string) => (WILFLEX_HEX[n] ? "Wilflex Epic Rio RFU" : isPmsInk(n) ? "PMS match" : "");

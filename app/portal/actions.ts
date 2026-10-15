@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
-import { calcOrder, mergeSettings, type Order, type Payment } from "@/lib/pricing";
+import { calcOrder, mergeSettings, orderGroups, type Order, type Payment } from "@/lib/pricing";
 import { money } from "@/lib/format";
 
 type Result = { ok: boolean; error?: string; url?: string };
@@ -69,24 +69,107 @@ export async function requestQuoteChanges(orderId: string, comment: string): Pro
   } catch (e) { return fail(e); }
 }
 
-export async function decideProof(proofId: string, decision: "approved" | "changes", signature: string, comment: string): Promise<Result> {
+/**
+ * The customer's decision on a proof (Oct 15, Nick: "approve, approve with changes, or make changes"):
+ * - approved: we print it as is.
+ * - approved_changes: approved, with small fixes we make without another proof (the note goes on the work order).
+ * - changes: sent back; they get a new proof. Their own version from the Mockup Creator goes through submitOwnChange.
+ */
+export async function decideProof(proofId: string, decision: "approved" | "approved_changes" | "changes", signature: string, comment: string): Promise<Result> {
   try {
     const { supabase, user } = await getViewer();
     if (!user) return { ok: false, error: "Please sign in again." };
-    const { data: proof } = await supabase.from("proofs").select("id,order_id,title,status").eq("id", proofId).maybeSingle();
+    const { data: proof } = await supabase.from("proofs").select("id,order_id,title,status").eq("id", proofId).is("archived_at", null).maybeSingle();
     if (!proof) return { ok: false, error: "We couldn't find that proof." };
     const { admin, order, email, who, settings } = await customerOrder(proof.order_id);
     if (proof.status !== "pending") return { ok: false, error: "This proof was already reviewed. Refresh the page." };
     const name = signature.trim() || who;
-    if (decision === "approved" && name.length < 2) return { ok: false, error: "Type your name to approve." };
-    if (decision === "changes" && !comment.trim()) return { ok: false, error: "Tell us what to change." };
-    await admin.from("proofs").update({ status: decision, customer_comment: comment.trim().slice(0, 2000), decided_at: new Date().toISOString(), decided_name: name }).eq("id", proofId);
-    await admin.from("order_events").insert({ order_id: order.id, kind: decision === "approved" ? "proof_approved" : "proof_changes", detail: proof.title, actor: email });
+    const note = comment.trim().slice(0, 2000);
+    if (decision !== "changes" && name.length < 2) return { ok: false, error: "Type your name to approve." };
+    if (decision !== "approved" && !note) return { ok: false, error: decision === "changes" ? "Tell us what to change." : "Tell us the changes to make." };
+    const status = decision === "changes" ? "changes" : "approved";
+    await admin.from("proofs").update({ status, customer_comment: note, decided_at: new Date().toISOString(), decided_name: name }).eq("id", proofId);
+    await admin.from("order_events").insert({ order_id: order.id, kind: status === "approved" ? "proof_approved" : "proof_changes", detail: decision === "approved_changes" ? `${proof.title} (with changes)` : proof.title, actor: email });
+    const head = decision === "approved" ? "approved" : decision === "approved_changes" ? "approved with changes" : "wants changes to";
     await notifyShop(
-      decision === "approved" ? `Proof approved on #${order.number}` : `Proof changes on #${order.number}`,
-      decision === "approved" ? `${name} approved "${proof.title}"` : `${name} wants changes to "${proof.title}"`,
-      comment.trim() || "No comment.", order.id, settings.shop.name
+      decision === "approved" ? `Proof approved on #${order.number}` : decision === "approved_changes" ? `Proof approved with changes on #${order.number}` : `Proof changes on #${order.number}`,
+      `${name} ${head} "${proof.title}"`,
+      decision === "approved_changes" ? `Make these changes before printing (no new proof):\n\n${note}` : note || "No comment.", order.id, settings.shop.name
     );
+    revalidatePath(`/portal/orders/${order.id}`);
+    return { ok: true };
+  } catch (e) { return fail(e); }
+}
+
+export type OwnChangeStart = { ok: true; orderId: string; orderNumber: number; groupName: string; lines: { id: string; style: string; brand: string; color: string; garment: string }[];
+  imprints: import("@/lib/pricing").Imprint[]; ordered: string[]; mockupSize: string } | { ok: false; error: string };
+
+/** "Make changes → change it myself": the proof's shirt and prints, to open in the customer's Mockup Creator. */
+export async function proofForChange(proofId: string): Promise<OwnChangeStart> {
+  try {
+    const { supabase, user } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    const { data: proof } = await supabase.from("proofs").select("id,order_id,status").eq("id", proofId).is("archived_at", null).maybeSingle();
+    if (!proof) return { ok: false, error: "We couldn't find that proof." };
+    if (proof.status !== "pending") return { ok: false, error: "This proof was already reviewed." };
+    const { admin, order } = await customerOrder(proof.order_id);
+    const { data: mk } = await admin.from("mockups").select("group_id").eq("proof_id", proofId).maybeSingle();
+    const groups = orderGroups(order);
+    const g = groups.find((x) => x.id === mk?.group_id) || groups[0];
+    if (!g) return { ok: false, error: "This order has no garments yet." };
+    return {
+      ok: true, orderId: order.id, orderNumber: order.number, groupName: g.name || order.nickname || "Mockup",
+      lines: g.lines.filter((l) => l.style || l.color).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })),
+      imprints: g.imprints.map((d) => ({ ...d })),
+      ordered: [...new Set(g.lines.flatMap((l) => Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)))],
+      mockupSize: g.mockupSize || "",
+    };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
+}
+
+/**
+ * The customer changed the art themselves in their Mockup Creator: the proof goes back to the shop with their
+ * version (garments, prints and the mockup they saved). We check it can print and send it back as the new proof.
+ */
+export async function submitOwnChange(proofId: string, change: { lines: { style: string; brand: string; color: string; garment: string }[]; imprints: { location: string; size: string; drop?: string; inks: string; colors: number; method: string; design_id?: string }[]; mockupPaths: string[]; note: string }): Promise<Result> {
+  try {
+    const { supabase, user } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    const { data: proof } = await supabase.from("proofs").select("id,order_id,title,status").eq("id", proofId).is("archived_at", null).maybeSingle();
+    if (!proof) return { ok: false, error: "We couldn't find that proof." };
+    const { admin, order, email, who, settings } = await customerOrder(proof.order_id);
+    if (proof.status !== "pending") return { ok: false, error: "This proof was already reviewed. Refresh the page." };
+    const { data: cu } = await admin.from("customers").select("id").eq("id", order.customer_id).maybeSingle();
+    const paths = (change.mockupPaths || []).filter((x) => cu && x.startsWith(`mockups/${cu.id}/`)).slice(0, 6);
+    const groups = orderGroups(order);
+    const { data: mk } = await admin.from("mockups").select("group_id").eq("proof_id", proofId).maybeSingle();
+    const g = groups.find((x) => x.id === mk?.group_id) || groups[0];
+    // what they changed, in words, for the shop
+    const was = g ? g.imprints : [];
+    const diffs: string[] = [];
+    const colorsNow = [...new Set((change.lines || []).map((l) => l.color).filter(Boolean))].join(", ");
+    const colorsWas = g ? [...new Set(g.lines.map((l) => l.color).filter(Boolean))].join(", ") : "";
+    if (colorsNow && colorsNow !== colorsWas) diffs.push(`Shirt color: ${colorsWas || "—"} → ${colorsNow}`);
+    (change.imprints || []).slice(0, 12).forEach((d) => {
+      const w = was.find((x) => x.location === d.location);
+      if (!w) { diffs.push(`Added a print: ${d.location}${d.size ? `, ${d.size}` : ""}`); return; }
+      if ((w.size || "") !== (d.size || "")) diffs.push(`${d.location} size: ${w.size || "—"} → ${d.size || "—"}`);
+      if ((w.drop || "") !== (d.drop || "")) diffs.push(`${d.location} drop: ${w.drop ? `${w.drop}"` : "standard"} → ${d.drop ? `${d.drop}"` : "standard"}`);
+      if ((w.inks || "") !== (d.inks || "")) diffs.push(`${d.location} ink: ${w.inks || "—"} → ${d.inks || "—"}`);
+      if ((w.design_id || "") !== (d.design_id || "")) diffs.push(`${d.location}: a different logo`);
+    });
+    was.filter((w) => !(change.imprints || []).some((d) => d.location === w.location)).forEach((w) => diffs.push(`Removed the ${w.location} print`));
+    const note = (change.note || "").trim().slice(0, 2000);
+    const text = [`Changed it in the Mockup Creator.`, ...diffs.map((x) => `• ${x}`), note && `Note: ${note}`].filter(Boolean).join("\n");
+    await admin.from("proofs").update({ status: "changes", customer_comment: text.slice(0, 2000), decided_at: new Date().toISOString(), decided_name: who,
+      customer_change: { lines: change.lines, imprints: change.imprints, mockups: paths, group_id: g?.id || null, at: new Date().toISOString() } }).eq("id", proofId);
+    // their mockup goes with the order group, where the shop sees the customer's mockups
+    if (g && paths.length) {
+      const ng = groups.map((x) => x.id === g.id ? { ...x, customerMockups: [...paths.map((p) => ({ path: p, name: "Customer's changes" })), ...(x.customerMockups || [])].slice(0, 8) } : x);
+      await admin.from("orders").update({ groups: ng }).eq("id", order.id);
+    }
+    await admin.from("order_events").insert({ order_id: order.id, kind: "proof_changes", detail: `${proof.title} (changed it themselves)`, actor: email });
+    await notifyShop(`Customer changed the art on #${order.number}`, `${who} made changes to "${proof.title}" in the Mockup Creator`, `${text}\n\nCheck it can print, then send the new proof.`, order.id, settings.shop.name);
     revalidatePath(`/portal/orders/${order.id}`);
     return { ok: true };
   } catch (e) { return fail(e); }
