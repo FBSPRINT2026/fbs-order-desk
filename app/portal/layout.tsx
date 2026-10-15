@@ -17,7 +17,7 @@ export default async function PortalLayout({ children }: { children: React.React
         <div className="p-top-in">
           <Link href="/portal" className="shop p-brand">
             {s.brand.sideLogoUrl ? <img className="logo" src={s.brand.sideLogoUrl} alt={s.shop.name} /> : s.shop.logoUrl ? <img className="logo" src={s.shop.logoUrl} alt={s.shop.name} /> : s.shop.name}
-            <span className="p-brand-t"><span className="p-brand-k">Customer Portal</span>
+            <span className="p-brand-t"><span className="p-brand-k" data-notranslate>{[..."Customer Portal"].map((ch, i) => <span key={i}>{ch === " " ? "\u00a0" : ch}</span>)}</span>
               {/* phones: "On the go" under it, like the shop's top bar (Oct 15, Nick) */}
               <span className="tag-go" aria-hidden><i className="go-lines"><b /><b /><b /></i><em>On the go</em></span>
             </span>

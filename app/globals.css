@@ -8572,3 +8572,8 @@ a.pdn-tag:hover{text-decoration:underline}
   .p-brand-k{font-size:9.5px;letter-spacing:.16em}
   .p-brand .tag-go{display:inline-flex;align-items:flex-end;gap:7px;font-family:var(--display);font-size:18px;letter-spacing:.06em;color:#fff;text-transform:uppercase;line-height:1}
 }
+/* "Customer Portal" spread to exactly the width of the words "On the go" under it (Oct 15, Nick) */
+@media (max-width:820px){
+  .p-brand-t{position:relative;gap:0}
+  .p-brand-k{position:absolute;left:29px;right:0;bottom:calc(100% + 3px);display:flex;justify-content:space-between;font-size:9px;font-weight:600;letter-spacing:0;white-space:nowrap}
+}
