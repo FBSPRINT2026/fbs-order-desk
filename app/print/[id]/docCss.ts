@@ -24,7 +24,7 @@ export const DOC_CSS = `
 .pdoc .hd .who{font-size:13pt;margin-top:6px;color:var(--ink2)}
 .pdoc .hd .who b{color:var(--ink)}
 .pdoc .flags{display:flex;gap:8px;margin:10px 0 0;flex-wrap:wrap}
-.pdoc .flag{white-space:nowrap;font-size:10.5pt;font-weight:800;padding:4px 12px;border-radius:6px;letter-spacing:.04em}
+.pdoc .flag{white-space:nowrap;font-size:9.5pt;font-weight:800;padding:3px 10px;border-radius:6px;letter-spacing:.04em}
 .pdoc .flag.cs{background:#e7f5fc;color:#0a6f9c;border:1.5px solid var(--blue)}
 .pdoc .flag.pv{background:#fff4e0;color:#8a5a00;border:1.5px solid var(--orange)}
 .pdoc .flag.rush{background:#fdeceb;color:#b3261e;border:1.5px solid var(--salmon)}
@@ -40,9 +40,9 @@ export const DOC_CSS = `
 .pdoc h2 span{font-family:"Public Sans",sans-serif;font-size:9.5pt;color:var(--ink3);font-weight:600}
 .pdoc .hero{display:grid;grid-template-columns:4.6in 1fr;gap:18px;margin-top:12px;align-items:stretch}
 .pdoc .mk{background:#f4f5f7;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;height:4.55in}
-.pdoc .mk img{flex:1;min-height:0;width:100%;object-fit:contain}
+.pdoc .mk img.big{flex:1 1 0;min-height:0;width:100%!important;height:100%!important;max-width:none;object-fit:contain;mix-blend-mode:multiply}
 .pdoc .mk .more{display:flex;gap:6px;margin-top:6px}
-.pdoc .mk .more img{flex:none;width:.85in;height:.75in;background:#fff;border-radius:6px}
+.pdoc .mk .more img{flex:none;object-fit:contain;mix-blend-mode:multiply;width:.85in;height:.75in;background:#fff;border-radius:6px}
 .pdoc .mk span{font-size:9pt;color:var(--ink3);margin-top:4px}
 .pdoc .mk .none{flex:1;display:grid;place-items:center;font-size:12pt;color:var(--ink3);border-radius:10px;width:100%}
 .pdoc .hero.h2l .mk{height:3.7in}
@@ -81,9 +81,9 @@ export const DOC_CSS = `
 .pdoc .loc{display:flex;align-items:baseline;gap:14px;margin:12px 0 8px;flex-wrap:wrap}
 .pdoc .loc .n{font-size:30pt;line-height:1}
 .pdoc .loc .m{font-size:15pt;color:var(--ink2)}
-.pdoc .art{position:relative;border-radius:12px;height:4.1in;overflow:hidden}
+.pdoc .art{position:relative;border-radius:12px;height:4.6in;overflow:hidden}
 .pdoc .art .area{position:absolute;left:50%;transform:translateX(-50%);border:2px dashed rgba(0,0,0,.3);border-radius:4px}
-.pdoc .art .area span{position:absolute;right:6px;top:4px;font-size:9pt;color:rgba(0,0,0,.55);white-space:nowrap}
+.pdoc .art .area span{position:absolute;left:0;top:-19px;font-size:9pt;color:rgba(0,0,0,.55);white-space:nowrap}
 .pdoc .art.dark .area{border-color:rgba(255,255,255,.4)}
 .pdoc .art.dark .area span{color:rgba(255,255,255,.7)}
 .pdoc .art .pic{position:absolute;left:50%;transform:translateX(-50%);object-fit:contain}
@@ -127,13 +127,13 @@ export const DOC_CSS = `
 .pdoc .it th{font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:5px 6px;border-bottom:1.5px solid var(--ink)}
 .pdoc .it th.r,.pdoc .it td.r,.pdoc .extra td.r{text-align:right;white-space:nowrap}
 .pdoc .it td{padding:8px 6px;border-bottom:1px solid var(--line2);vertical-align:top}
-.pdoc .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
-.pdoc .chip{border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:9.5pt;color:var(--ink2)}
+.pdoc .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;background:none;padding:0;border:0;border-radius:0;width:auto}
+.pdoc .chip{border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:9.5pt;color:var(--ink2);background:#fff;box-shadow:none;height:auto;line-height:1.4}
 .pdoc .chip b{color:var(--ink)}
 .pdoc .prl{font-size:10pt;color:var(--ink2);margin-top:5px}
 .pdoc .extra{width:100%;border-collapse:collapse;font-size:11pt;margin-top:4px}
 .pdoc .extra td{padding:6px 6px;border-bottom:1px solid var(--line2)}
-.pdoc .others{margin-left:calc(1.45in + 16px);margin-bottom:6px}
+.pdoc .others{margin:-10px 0 6px calc(1.45in + 16px)}
 .pdoc .sumw{display:grid;grid-template-columns:1fr 2.9in;gap:24px;margin-top:10px;align-items:start;break-inside:avoid}
 .pdoc .pay{border-radius:10px;background:#f6f7f9;padding:12px 14px;font-size:10.5pt;line-height:1.45;color:var(--ink2);white-space:pre-wrap}
 .pdoc .pay b{color:var(--ink)}
@@ -150,12 +150,13 @@ export const DOC_CSS = `
 .pdoc .ifoot .fade{height:4px;margin-bottom:8px}
 .pdoc .ifoot div:last-child{display:flex;justify-content:space-between;font-size:9pt;color:var(--ink3)}
 
+@media screen and (max-width:840px){.pdoc{padding:0 8px 16px}.pdoc .print-bar{padding:10px 0}}
 @page{size:letter;margin:.4in .45in}
 @media print{
   html,body{background:#fff!important}
   .pdoc{background:#fff;padding:0;min-height:0;overflow:visible}
   .pdoc .print-bar{display:none}
-  .pdoc .sheet{width:auto;min-height:10.1in;margin:0;padding:0;box-shadow:none;break-after:page}
+  .pdoc .sheet{width:auto;min-height:10.1in;margin:0;padding:0;box-shadow:none;break-after:page;zoom:1!important}
   .pdoc .sheet:last-child{break-after:auto}
 }
 `;

@@ -8427,3 +8427,43 @@ a.pdn-tag:hover{text-decoration:underline}
 .ord .ot-nav{padding:0;overflow:hidden;align-items:stretch}
 .ord .ot-nav .aa-tab{border-radius:0;padding:13px 10px}
 .ord .ot-nav .aa-tab.on{border-radius:0}
+
+/* phone top bar (Oct 15, Nick): the logo lines up with the page (no extra indent), and the tagline says
+   "On the go", leaning forward with speed lines in the brand colors */
+.brand.brand-logo span.tag-go{display:none}
+@media (max-width: 820px){
+  .side{padding-left:14px;padding-right:14px}
+  .brand.brand-logo{padding:0;gap:10px}
+  .brand.brand-logo span.tag-desk{display:none}
+  .brand.brand-logo span.tag-go{display:inline-flex;align-items:center;gap:5px;font-family:var(--display);font-size:15px;letter-spacing:.06em;color:#fff;text-transform:uppercase}
+  .tag-go em{font-style:normal;font-weight:800;font-stretch:90%;display:inline-block;transform:skewX(-10deg);animation:go-lean 2.4s ease-in-out infinite}
+  .tag-go .go-lines{display:flex;flex-direction:column;align-items:flex-end;gap:2px;width:18px}
+  .tag-go .go-lines b{display:block;height:2px;border-radius:2px;animation:go-streak 1.2s linear infinite}
+  .tag-go .go-lines b:nth-child(1){width:12px;background:var(--fbs-blue,#0e9bd8)}
+  .tag-go .go-lines b:nth-child(2){width:18px;background:var(--fbs-salmon,#f26660);animation-delay:.2s}
+  .tag-go .go-lines b:nth-child(3){width:9px;background:var(--fbs-orange,#fcb122);animation-delay:.4s}
+}
+@keyframes go-streak{0%{transform:translateX(8px);opacity:0}25%{opacity:1}100%{transform:translateX(-10px);opacity:0}}
+@keyframes go-lean{0%,100%{transform:skewX(-10deg) translateX(0)}50%{transform:skewX(-14deg) translateX(3px)}}
+@media (prefers-reduced-motion: reduce){.tag-go em,.tag-go .go-lines b{animation:none}}
+
+/* order page on a phone (Oct 15, Nick: "the mobile view got all messed up"): tabs scroll sideways in one row, the
+   mockup sits above the prints (full width), the garment row and the group total fit the screen */
+@media (max-width:760px){
+  .ord .ot-nav{display:flex!important;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .ord .ot-nav::-webkit-scrollbar{display:none}
+  .ord .ot-nav .aa-tab{flex:none;white-space:nowrap;padding:13px 14px}
+  .ord .imp-sec{padding-right:0}
+  .ord .imp-wrap{grid-template-columns:minmax(0,1fr);gap:12px}
+  .ord .imp-mock{justify-content:center}
+  .ord .mk-big{width:min(260px,100%)}
+  .ord .mk-big img{max-height:300px}
+  .ord .gl-list .gl-row:not(.grp-total):not(.gl-head){grid-template-areas:"st st co co" "br br de de" "qt ea to x"}
+  .ord .gl-row.grp-total,.ord .gl-row.grp-total.ws{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"ad ad ad" "lb qt to";row-gap:8px}
+  .ord .gl-row.grp-total>.gl-foot{display:contents}
+  .ord .gl-row.grp-total .gl-adds{grid-area:ad}
+  .ord .gl-row.grp-total .lbl2{grid-area:lb}
+  .ord .gl-row.grp-total>.a-qt{text-align:left}
+  .ord .pr{grid-template-columns:84px minmax(0,1fr);gap:12px}
+  .ord .pr-logo{width:84px;height:84px}
+}

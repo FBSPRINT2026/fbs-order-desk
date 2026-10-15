@@ -232,7 +232,9 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       <div className={sdClass(fit.l)} ref={inRef} style={fit.h ? { zoom: fit.z, minHeight: fit.h / fit.z } : undefined}>
       <Link href="/shop" className="brand brand-logo" title="Home">
         {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}
-        {brand.sideTagline && <span>{brand.sideTagline}</span>}
+        {brand.sideTagline && <span className="tag-desk">{brand.sideTagline}</span>}
+        {/* phones: "On the go", moving (Oct 15, Nick) */}
+        <span className="tag-go" aria-hidden><i className="go-lines"><b /><b /><b /></i><em>On the go</em></span>
       </Link>
       <button type="button" className="side-menu-btn" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen((x) => !x)}>
         {open ? <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg> : <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}

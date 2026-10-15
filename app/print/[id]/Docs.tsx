@@ -98,7 +98,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
               <div className="fade" style={{ margin: "12px 0 4px" }} />
               <div className={"hero" + (lines.length >= 3 ? " h3l" : lines.length === 2 ? " h2l" : "")}>
                 <div className="mk">
-                  {mk[0] ? <img src={mk[0]} alt="Mockup" /> : <div className="none" style={{ background: hex }}>No mockup yet</div>}
+                  {mk[0] ? <img className="big" src={mk[0]} alt="Mockup" /> : <div className="none" style={{ background: hex }}>No mockup yet</div>}
                   {mk.length > 1 && <div className="more">{mk.slice(1, 5).map((u, i) => <img key={i} src={u} alt="" />)}</div>}
                   <span>Mockup{colors ? ` · ${colors}` : ""}</span>
                 </div>
@@ -173,8 +173,8 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
   const sz = printSize(d, des), sc = screensOf(d, allLight), max = p.maxes[gi]?.[di] || null;
   const hex = p.hexes[gi] || "#9aa1ab";
   // the art at 75%: scaled so it fills about three quarters of the panel, with its real measurements drawn on
-  const s = sz.w && sz.h ? Math.min(4.5 / sz.w, 2.85 / sz.h) : sz.w ? 4.5 / sz.w : 0;
-  const aw = s ? sz.w * s : 4.5, ah = s && sz.h ? sz.h * s : 2.85, top = 0.35;
+  const s = sz.w && sz.h ? Math.min(4.8 / sz.w, 3.3 / sz.h) : sz.w ? 4.8 / sz.w : 0;
+  const aw = s ? sz.w * s : 4.8, ah = s && sz.h ? sz.h * s : 3.3, top = 0.42;
   const inks = inkNames(d.inks);
   const fills = d.method === "embroidery" ? ["Machine", "Hoop", "Backing", "Trims"] : d.method === "dtf" ? ["Press temp", "Time", "Pressure", "Peel"] : ["Press", "Platen", "Flash / cure", "Off-contact"];
   const specs: [string, string][] = d.method === "embroidery"
