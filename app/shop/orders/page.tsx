@@ -13,7 +13,8 @@ import { Due, Pill, pvStatusOf } from "@/components/bits";
 import AssistantStrip from "@/components/AssistantStrip";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
-import { useCan, useSeesMoney } from "@/components/RoleContext";
+import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
+import { bulkDeleteOrders } from "@/app/shop/bulk-delete-actions";
 
 /** A Printavo status in our words, so the filters work on Printavo orders too. */
 function pvStatus(a: { kind: string; status_name: string }): string {
@@ -33,7 +34,23 @@ export default function OrdersPage() {
   const router = useRouter();
   const cash = useSeesMoney(), canQuote = useCan("quotes");
   const [creating, setCreating] = useState(false);
-  const { orders, customers, loading, error } = useShopData();
+  const { orders, customers, loading, error, reload } = useShopData();
+  // bulk delete (Oct 15, Nick: "only for me… select a bunch and just click delete at the top"); portal orders only
+  const { email: me } = useRole();
+  const canBulk = (me || "").toLowerCase() === "nicholas@fbsprint.com";
+  const [picking, setPicking] = useState(false), [picked, setPicked] = useState<Set<string>>(new Set()), [bulkArm, setBulkArm] = useState(false), [bulkBusy, setBulkBusy] = useState(false), [bulkMsg, setBulkMsg] = useState("");
+  const togglePick = (id: string) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const stopPicking = () => { setPicking(false); setPicked(new Set()); setBulkArm(false); };
+  async function bulkDelete() {
+    if (!bulkArm) { setBulkArm(true); return; }
+    setBulkBusy(true); setBulkMsg("");
+    const r = await bulkDeleteOrders([...picked]);
+    setBulkBusy(false); setBulkArm(false);
+    if (!r.ok) { setBulkMsg(r.error); return; }
+    setBulkMsg(`${r.deleted.length ? `Deleted ${r.deleted.length} order${r.deleted.length === 1 ? "" : "s"} (#${r.deleted.join(", #")}).` : "Nothing deleted."}${r.skipped.length ? ` Kept: ${r.skipped.join(", ")}.` : ""}`);
+    setPicked(new Set()); setPicking(false);
+    reload();
+  }
   const [type, setType] = useSticky<F>("orders.type", "all");
   const [status, setStatus] = useSticky("orders.status", "");
   const [q, setQ] = useState("");
@@ -159,19 +176,31 @@ export default function OrdersPage() {
           {STATUSES.map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
         </select>
         <SearchInput placeholder="Search #, customer, garment, color, print details… (includes Printavo orders)" value={q} onChange={(e) => setQ(e.target.value)} />
+        {canBulk && !picking && <button type="button" className="btn" onClick={() => { setPicking(true); setBulkMsg(""); }}>Select</button>}
       </div>
+      {canBulk && picking && <div className="bulk-bar" role="toolbar" aria-label="Selected orders">
+        <b>{picked.size} selected</b>
+        <button type="button" className="linkbtn" onClick={() => setPicked(new Set(rows.flatMap((r) => (r.o ? [r.o.id] : []))))}>Select all shown</button>
+        {picked.size > 0 && <button type="button" className="linkbtn" onClick={() => setPicked(new Set())}>Clear</button>}
+        <span className="spacer" />
+        <span className="faint" style={{ fontSize: 12.5 }}>Orders made here only. Printavo history, paid orders and orders sent to Printavo are never deleted.</span>
+        <button type="button" className={"btn danger" + (bulkArm ? " armed" : "")} disabled={!picked.size || bulkBusy} onClick={() => void bulkDelete()}>{bulkBusy ? "Deleting…" : bulkArm ? `Click again to delete ${picked.size} order${picked.size === 1 ? "" : "s"}` : `Delete ${picked.size || ""}`.trim()}</button>
+        <button type="button" className="btn ghost" onClick={stopPicking}>Cancel</button>
+      </div>}
+      {bulkMsg && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--ink)" }}>{bulkMsg}</div>}
       <div className="tbl-wrap">
         <table className="tbl">
-          <thead><tr><th>#</th><th>Job</th><th>Customer</th><th>Status</th><th>Due</th><th className="r">Pcs</th><th className="r money-only">Total</th><th className="r money-only">Balance</th></tr></thead>
+          <thead><tr>{picking && <th style={{ width: 34 }} />}<th>#</th><th>Job</th><th>Customer</th><th>Status</th><th>Due</th><th className="r">Pcs</th><th className="r money-only">Total</th><th className="r money-only">Balance</th></tr></thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr>
+              <tr><td colSpan={picking ? 9 : 8}><div className="empty">Loading…</div></td></tr>
             ) : rows.length ? rows.map(({ o, a }) => {
               if (o) {
                 const c = customers[o.customer_id || ""];
                 const paid = o.balance <= 0.004 && o.total > 0;
                 return (
-                  <tr key={o.id} tabIndex={0} onClick={() => router.push(`/shop/orders/${o.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/orders/${o.id}`)}>
+                  <tr key={o.id} tabIndex={0} className={picking && picked.has(o.id) ? "picked" : undefined} onClick={() => (picking ? togglePick(o.id) : router.push(`/shop/orders/${o.id}`))} onKeyDown={(e) => e.key === "Enter" && (picking ? togglePick(o.id) : router.push(`/shop/orders/${o.id}`))}>
+                    {picking && <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select #${o.number}`} checked={picked.has(o.id)} onChange={() => togglePick(o.id)} /></td>}
                     <td><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{o.unread > 0 && <span className="unread" title="Unread customer message" />}</td>
                     <td><div>{o.nickname || "Untitled Job"}{o.rush && <span className="tag" style={{ marginLeft: 6, background: "var(--danger)", color: "#fff" }}>Rush</span>}</div><div className="sub">{summaryLine(o)}{o.po_number ? ` · PO ${o.po_number}` : ""}</div></td>
                     <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
@@ -185,7 +214,8 @@ export default function OrdersPage() {
               }
               const c = customers[a!.customer_id];
               return (
-                <tr key={a!.id} tabIndex={0} onClick={() => router.push(`/shop/archive/${a!.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/archive/${a!.id}`)}>
+                <tr key={a!.id} tabIndex={0} className={picking ? "nopick" : undefined} onClick={() => router.push(`/shop/archive/${a!.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/archive/${a!.id}`)}>
+                  {picking && <td />}
                   <td><span className="ordno">{a!.visual_id}</span> <span className={"tag " + (a!.kind === "quote" ? "q" : "i")}>{a!.kind === "quote" ? "Quote" : "Inv"}</span></td>
                   <td><div>{a!.nickname || "Untitled Job"}<span className="aa-arch">Printavo</span></div><div className="sub">{a!.order_date ? fmtDateLong(a!.order_date) : ""}</div></td>
                   <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
@@ -197,7 +227,7 @@ export default function OrdersPage() {
                 </tr>
               );
             }) : (
-              <tr><td colSpan={8}><div className="empty">{orders.length || pvAll.length ? "No orders match these filters." : "No orders yet. Start with + New quote."}</div></td></tr>
+              <tr><td colSpan={picking ? 9 : 8}><div className="empty">{orders.length || pvAll.length ? "No orders match these filters." : "No orders yet. Start with + New quote."}</div></td></tr>
             )}
           </tbody>
         </table>

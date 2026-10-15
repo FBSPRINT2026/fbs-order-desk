@@ -1,0 +1,43 @@
+"use server";
+import { getViewer } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * Bulk delete orders from the Orders list (Oct 15, Nick: "a bulk delete button… only for me… select a bunch and
+ * click delete"). Only Nick. Orders made in the portal only (Printavo's history is never touched), and never one
+ * with a payment or one sent to Printavo: those are skipped and named.
+ */
+const BULK_DELETERS = ["nicholas@fbsprint.com"];
+
+export async function bulkDeleteOrders(ids: string[]): Promise<{ ok: true; deleted: number[]; skipped: string[] } | { ok: false; error: string }> {
+  try {
+    const v = await getViewer();
+    if (!v.user || !v.isStaff || !BULK_DELETERS.includes(String(v.email || "").toLowerCase())) return { ok: false, error: "Only Nick can delete orders in bulk." };
+    const want = [...new Set(ids)].filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 200);
+    if (!want.length) return { ok: false, error: "No orders picked." };
+    const admin = createAdminClient();
+    const [{ data: os }, { data: pays }] = await Promise.all([
+      admin.from("orders").select("id, number, printavo_id").in("id", want),
+      admin.from("payments").select("order_id").in("order_id", want),
+    ]);
+    const paid = new Set(((pays || []) as { order_id: string }[]).map((p) => p.order_id));
+    const skipped: string[] = [], go: { id: string; number: number }[] = [];
+    for (const o of (os || []) as { id: string; number: number; printavo_id: string | null }[]) {
+      if (o.printavo_id) skipped.push(`#${o.number} (sent to Printavo)`);
+      else if (paid.has(o.id)) skipped.push(`#${o.number} (has a payment)`);
+      else go.push(o);
+    }
+    if (!go.length) return { ok: true, deleted: [], skipped };
+    const gids = go.map((o) => o.id);
+    // their files (proofs and production files), as the order page's own Delete does
+    const [{ data: pr }, { data: af }] = await Promise.all([
+      admin.from("proofs").select("file_path").in("order_id", gids),
+      admin.from("art_files").select("file_path").in("order_id", gids),
+    ]);
+    const paths = [...((pr || []) as { file_path: string }[]), ...((af || []) as { file_path: string }[])].map((x) => x.file_path).filter(Boolean);
+    for (let i = 0; i < paths.length; i += 100) await admin.storage.from("proofs").remove(paths.slice(i, i + 100));
+    const { error } = await admin.from("orders").delete().in("id", gids);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, deleted: go.map((o) => o.number).sort((a, b) => a - b), skipped };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
+}
