@@ -1,4 +1,5 @@
 "use client";
+import ProofHistory from "@/components/ProofHistory";
 import JobLabor from "@/components/team/JobLabor";
 import BackLink from "@/components/BackLink";
 import JobFiles from "@/components/job/JobFiles";
@@ -940,6 +941,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         {/* Art & production */}
         <div className="ed-grid" hidden={tab !== "prod"}>
           <div className="stack">
+            <ProofHistory orderId={o.id} bump={proofs.length * 1000 + events.length} />
             <OrderSeparations o={o} />
           <ProductionPanel note={prodNotes} onNote={onProdNotes} uploading={artUploading}
             files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name) }))}

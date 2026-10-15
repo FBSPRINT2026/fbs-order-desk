@@ -8673,3 +8673,23 @@ a.pdn-tag:hover{text-decoration:underline}
 .pv-items th.sz,.pv-items td.c.num{min-width:0}
 .pv-items td.num{white-space:nowrap}
 @media (max-width:640px){ .pv-scroll{overflow-x:auto} }
+
+/* proof history on the order's Art & production tab (Oct 15, Nick): every version, its decision, who and when */
+.ph-list{display:flex;flex-direction:column;gap:0}
+.ph-row{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;padding:12px 0;border-bottom:1px solid var(--line-2,var(--line))}
+.ph-row:last-child{border-bottom:0}
+.ph-row.old .ph-pic{opacity:.7}
+.ph-pic{width:96px;height:96px;border:1px solid var(--line);border-radius:10px;background:#fff;display:grid;place-items:center;overflow:hidden;position:relative}
+.ph-pic img{position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px);object-fit:contain}
+.ph-body{display:flex;flex-direction:column;gap:3px;min-width:0;font-size:13px}
+.ph-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ph-cur{font-size:11px;font-weight:700;color:#fff;background:var(--fbs-blue);border-radius:999px;padding:1px 8px}
+.ph-title{color:var(--ink-2)}
+.ph-st{font-weight:700}
+.ph-st.ok{color:var(--ok)}.ph-st.bad{color:var(--danger)}.ph-st.wait{color:var(--warn)}.ph-st.off{color:var(--ink-3)}
+.ph-st b{color:var(--ink)}
+.ph-login{font-size:12px}
+.ph-note{white-space:pre-line;background:var(--surface-2);border-radius:8px;padding:7px 10px;margin-top:3px}
+.ph-own{display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap}
+.ph-own span{font-size:12px;color:var(--ink-3)}
+.ph-own img{width:64px;height:64px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
