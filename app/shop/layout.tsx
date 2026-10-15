@@ -42,12 +42,14 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   // permissions: the role's defaults with the person's own changes (Settings → User Access)
   const access = accessOf(st?.data);
   const perms = permsFor(role, viewAs ? (viewAs.includes("@") ? access[viewAs] : null) : access[email]);
+  // Translate to Spanish: for the crew, not Nick and Amanda (Oct 15, Nick); "View as" a crew member shows it
+  const showSpanish = !["nicholas@fbsprint.com", "amanda@fbsprint.com"].includes((viewAs.includes("@") ? viewAs : email).toLowerCase());
   const people = (team || []).map((t) => ({ email: (t.email as string).toLowerCase(), name: (t.name as string) || "", role: (t.role as string) || "" }));
   return (
     <RoleProvider value={{ role, realRole, viewAs, viewName, perms, email, staffName: (me?.name as string) || "" }}>
       <div className="app">
         <ShopNav email={email} firstName={firstName} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} people={people} />
-        <main className="main"><div className="top-r"><Translate /></div><CrewGuard /><PullRefresh>{children}</PullRefresh></main>
+        <main className="main">{showSpanish && <div className="top-r"><Translate /></div>}<CrewGuard /><PullRefresh>{children}</PullRefresh></main>
         <Cheer on={!viewAs && !!me?.cheer} name={firstName} />
         <MobileTables />
       </div>
