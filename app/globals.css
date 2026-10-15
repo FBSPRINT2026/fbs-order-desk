@@ -7895,3 +7895,8 @@ a.pdn-tag:hover{text-decoration:underline}
 .pv-narrow>.panel{margin-top:14px}
 @media (max-width:1280px){.pv-narrow{display:block}.pv-wide{display:none}}
 @media print{.pv-narrow{display:block}.pv-extra{display:none}}
+/* the email being answered, above the reply box (Oct 15) */
+.mf-quote{border-left:3px solid var(--line);background:var(--surface);border-radius:0 8px 8px 0;padding:8px 10px;margin-bottom:8px;font-size:13.5px;line-height:1.4}
+.mf-quote-h{font-size:12.5px;margin-bottom:3px}
+.mf-quote-t{white-space:pre-wrap;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.mf-quote.open .mf-quote-t{display:block;max-height:45vh;overflow-y:auto}

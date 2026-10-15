@@ -495,8 +495,20 @@ export function Attachments({ m }: { m: FullMsg }) {
 export function ReplyBox({ m, all, start, startCc, onClose, onSent }: { m: FullMsg; all?: boolean; /** a draft to start from (the Assistant's) */ start?: string; /** who the Assistant was told to copy */ startCc?: string[]; onClose: () => void; onSent: (to: string) => void }) {
   const [body, setBody] = useState(start || ""), [busy, setBusy] = useState(false), [err, setErr] = useState(""), [toAll, setToAll] = useState(!!all);
   const [cc, setCc] = useState<string[]>(startCc || []);
+  // the email being answered, above the box (Oct 15, Nick: "on the phone you can't see the original email you're replying to")
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const quote = useMemo(() => {
+    let t = m.text || "";
+    if (!t && m.html && typeof DOMParser !== "undefined") { const d = new DOMParser().parseFromString(m.html, "text/html"); d.querySelectorAll("style,script,head,blockquote,.gmail_quote,#divRplyFwdMsg").forEach((n) => n.remove()); t = d.body?.innerText || d.body?.textContent || ""; }
+    return t.replace(/\r/g, "").split(/\n\s*(?:On .{5,160} wrote:|-----\s*Original Message|From: .{3,200}\n\s*(?:Sent|Date): )/)[0].replace(/\n{3,}/g, "\n\n").trim().slice(0, 4000);
+  }, [m.text, m.html]);
   return (
     <div className="ibx2-compose open mf-reply">
+      {quote && <div className={"mf-quote" + (quoteOpen ? " open" : "")}>
+        <div className="mf-quote-h"><b>{m.fromName || m.fromAddress}</b><span className="faint"> · {new Date(m.date).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></div>
+        <div className="mf-quote-t">{quote}</div>
+        {quote.length > 220 && <button type="button" className="linkbtn" onClick={() => setQuoteOpen(!quoteOpen)}>{quoteOpen ? "Show less" : "Show the whole email"}</button>}
+      </div>}
       <div className="ibx2-to"><span>{toAll ? "Reply all" : "Reply"} to {m.fromName || m.fromAddress}</span><label className="check" style={{ marginLeft: "auto" }}><input type="checkbox" checked={toAll} onChange={(e) => setToAll(e.target.checked)} />Everyone on it</label></div>
       <CcField value={cc} onChange={setCc} text={body} />
       <textarea rows={7} autoFocus value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your reply" aria-label="Reply" />
