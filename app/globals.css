@@ -8423,3 +8423,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .ord .imp-sec{padding-right:36px}
 .ord .pr-each b{margin:0 0 0 3px}
 .ord .grp-sum{padding-right:0}
+/* the current tab's shading fills its whole slot, corners and all (Oct 15, Nick) */
+.ord .ot-nav{padding:0;overflow:hidden;align-items:stretch}
+.ord .ot-nav .aa-tab{border-radius:0;padding:13px 10px}
+.ord .ot-nav .aa-tab.on{border-radius:0}
