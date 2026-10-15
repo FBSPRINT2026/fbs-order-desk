@@ -56,13 +56,14 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
         <a className="btn" href={`/j/${row.visual_id}`} target="_blank" rel="noreferrer" title="The job's phone menu: press setup, notes, photos, Zebra box labels">Phone menu</a>
       </div>
       <ArchivedGoods id={row.id} groups={(row.data as unknown as { groups?: PvGroup[] }).groups || []} />
-      <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
-      <div style={{ marginTop: 10 }}><JobFiles job={{ kind: "a", id: row.id }} /></div>
-      {/* the job's emails and texts (owners only; Oct 15) */}
-      <div style={{ marginTop: 10 }}><JobTalk jobRef={`pv:${row.id}`} /></div>
       <div style={{ marginTop: 10 }}>
         <ArchivedOrderView o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} names={names} paths={row.files || {}} actions={row.kind === "invoice" ? <ArchiveReorder archivedId={row.id} small /> : null} />
       </div>
+      {/* the invoice first, then production files & notes, labor, and the emails & texts (Oct 15, Nick) */}
+      <div style={{ marginTop: 10 }}><JobFiles job={{ kind: "a", id: row.id }} /></div>
+      <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
+      {/* the job's emails and texts (owners only; Oct 15) */}
+      <div style={{ marginTop: 10 }}><JobTalk jobRef={`pv:${row.id}`} /></div>
     </>
   );
 }
