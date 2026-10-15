@@ -8435,7 +8435,7 @@ a.pdn-tag:hover{text-decoration:underline}
   .side{padding-left:14px;padding-right:14px}
   .brand.brand-logo{padding:0;gap:10px}
   .brand.brand-logo span.tag-desk{display:none}
-  .brand.brand-logo span.tag-go{display:inline-flex;align-items:center;gap:5px;font-family:var(--display);font-size:15px;letter-spacing:.06em;color:#fff;text-transform:uppercase}
+  .brand.brand-logo span.tag-go{display:inline-flex;align-items:center;gap:6px;margin-left:10px;font-family:var(--display);font-size:15px;letter-spacing:.06em;color:#fff;text-transform:uppercase}
   .tag-go em{font-style:normal;font-weight:800;font-stretch:90%;display:inline-block;transform:skewX(-10deg);animation:go-lean 2.4s ease-in-out infinite}
   .tag-go .go-lines{display:flex;flex-direction:column;align-items:flex-end;gap:2px;width:18px}
   .tag-go .go-lines b{display:block;height:2px;border-radius:2px;animation:go-streak 1.2s linear infinite}
