@@ -432,7 +432,7 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
         </div>
         ) : <div className="aa-paidup"><b>✓ {mode === "shop" ? "Nothing due." : "You're all paid up."}</b> <span>{mode === "shop" ? "No balance on this customer's portal orders (orders from Printavo aren't counted here)." : "Nothing is due on your orders right now."}</span></div>}
       <div className="aa-card aa-tblcard">
-        <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Open orders</h3>{canPay && open.length > 1 && <span className="faint">Check the ones you want to pay together.</span>}</div>
+        <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>New portal orders</h3>{canPay && open.length > 1 && <span className="faint">Check the ones you want to pay together.</span>}</div>
         {payTable(open, false)}
       </div>
       {oldOwed.length > 0 && (() => {
@@ -440,7 +440,7 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
         const shown = showOldOwed ? list : list.slice(0, 15);
         return (
           <div className="aa-card aa-tblcard">
-            <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Invoices from before the new portal</h3><span className="faint">{oldOwed.length} invoice{oldOwed.length === 1 ? "" : "s"} · {money(oldOwed.reduce((a, o) => a + o.balance, 0))} open{mode === "portal" ? " · pay each one on its invoice for now" : ""}</span></div>
+            <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Printavo orders</h3><span className="faint">{oldOwed.length} invoice{oldOwed.length === 1 ? "" : "s"} · {money(oldOwed.reduce((a, o) => a + o.balance, 0))} open{mode === "portal" ? " · pay each one on its invoice for now" : ""}</span></div>
             <table className="aa-tbl">
               <thead><tr><th>#</th><th>Order</th><th>Status</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th><th /></tr></thead>
               <tbody>
