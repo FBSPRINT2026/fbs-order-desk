@@ -8559,3 +8559,6 @@ a.pdn-tag:hover{text-decoration:underline}
 .tb-wrap{flex-wrap:wrap!important;overflow:visible!important}
 .tb-tight{gap:2px!important}
 .tb-tight > *{padding-left:7px!important;padding-right:7px!important;letter-spacing:0!important}
+/* account tables: order numbers, dates and money stay on one line ("400 / 03", "$1,155 / .89" was breaking) */
+.aa-tbl td.num,.aa-tbl td.dt,.aa-tbl td.r{white-space:nowrap;word-break:normal;overflow-wrap:normal}
+.aa-tbl td.num a{white-space:nowrap}
