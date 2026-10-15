@@ -8505,3 +8505,5 @@ a.pdn-tag:hover{text-decoration:underline}
   .ord .gl-list .gl .a-to{text-align:right}
   .ord .gl-list .gl .a-x:empty{display:none}
 }
+/* "On the go" sits on the logo's bottom line (Oct 15, Nick) */
+@media (max-width:820px){ .brand.brand-logo{align-items:flex-end} .brand.brand-logo span.tag-go{line-height:1} }
