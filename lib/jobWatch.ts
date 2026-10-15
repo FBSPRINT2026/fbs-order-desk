@@ -167,9 +167,33 @@ export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; d
     if (!quote && o.status !== "production" && printBy <= bizAdd(today, -1)) add("print", printBy, `Print ${job}${late(printBy)}`, `Still at "${o.status}". In hands ${nice(due)}${shipped ? `, ships ${nice(shipBy)}` : ""}.`, url, 1);
     if (shipped && o.status === "production" && shipBy <= today) add("ship", shipBy, `Ship ${job}${late(shipBy)}`, `UPS Ground to be there ${nice(due)}.`, url, 0);
   }
+  // a portal job's owner (Oct 15: Amanda's "Needs you today" had Nick's Little Groupies): the customer's account owner
+  // (Settings → Staff), else whoever owns their latest Printavo job; none found = both owners, as before
+  const open = out.filter((x) => !x.archived && !x.owner);
+  if (open.length) {
+    const cidOf = new Map(orders.map((o) => [o.id, (o as { customer_id?: string | null }).customer_id || ""]));
+    const owners = await customerOwners(admin, [...new Set(open.map((x) => cidOf.get(x.orderId) || "").filter(Boolean))]).catch(() => new Map<string, string>());
+    for (const x of open) { const e = owners.get(cidOf.get(x.orderId) || ""); if (e) x.owner = e; }
+  }
   if (opts.deadline && Date.now() > opts.deadline - 8000) opts.cut = true;
   else out.push(...await watchPrintavoJobs(admin, today, lead, opts).catch((e) => { console.error("watchPrintavoJobs", e); opts.cut = true; return [] as JobAction[]; }));
   return out.sort((a, b) => Number(b.today) - Number(a.today) || a.by.localeCompare(b.by));
+}
+
+/** whose customers these are (staff emails): the account owner set here, else the owner of their latest Printavo job */
+export async function customerOwners(admin: SupabaseClient, ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!ids.length) return out;
+  const [{ data: st }, { data: ao }, { data: pv }] = await Promise.all([
+    admin.from("staff").select("email, name"),
+    admin.from("customer_private").select("customer_id, account_owner").in("customer_id", ids).neq("account_owner", ""),
+    admin.from("archived_orders").select("customer_id, order_date, owner:data->>owner").in("customer_id", ids).order("order_date", { ascending: false }).limit(2000),
+  ]);
+  const staff = (st || []) as { email: string; name: string | null }[];
+  const emailOf = (n?: string | null) => { const t = (n || "").trim().toLowerCase(); if (!t) return undefined; const first = t.split(/\s+/)[0]; const m = staff.find((x) => (x.name || "").toLowerCase() === t) || staff.find((x) => (x.name || "").toLowerCase().split(/\s+/)[0] === first) || staff.find((x) => x.email.toLowerCase().split("@")[0] === first); return m?.email.toLowerCase(); };
+  for (const r of (pv || []) as { customer_id: string; owner: string | null }[]) if (!out.has(r.customer_id)) { const e = emailOf(r.owner); if (e) out.set(r.customer_id, e); }
+  for (const r of (ao || []) as { customer_id: string; account_owner: string }[]) { const e = emailOf(r.account_owner); if (e) out.set(r.customer_id, e); }
+  return out;
 }
 
 /**

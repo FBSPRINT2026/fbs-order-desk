@@ -6290,7 +6290,9 @@ a.pdn-tag:hover{text-decoration:underline}
   .md-tabs button b.hot{background:var(--danger);color:#fff}
   .md-tabs button.on{border-color:var(--ink);color:var(--ink)}
   .md-cols{display:block}
-  .md-col{display:none;height:auto;min-height:60vh;border-radius:12px}
+  .md-col{display:none;height:auto;max-height:none;min-height:60vh;border-radius:12px}
+  /* the calendar kept the tablet's 560px cap, so on a phone its last box ran under "Month view" (Oct 15, Amanda's iPhone) */
+  .md-scroll{flex:none}
   .md-cols[data-tab="replies"] .md-replies,.md-cols[data-tab="todo"] .md-todo,.md-cols[data-tab="cal"] .md-cal{display:flex}
   .md-scroll{overflow:visible}
   .md-check{width:24px;height:24px}
