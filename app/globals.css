@@ -7747,3 +7747,5 @@ a.pdn-tag:hover{text-decoration:underline}
 .pt-s{font-size:13px;font-weight:600;color:var(--ink-2)}
 .pt-t{font-size:13.5px;line-height:1.45;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;max-height:16em;overflow:hidden}
 .pt-open{align-self:flex-start;font-size:12.5px}
+/* phones: the top bar has "‹ Inbox" already (Oct 15, Nick) */
+@media (max-width:760px) and (pointer:coarse){ body:has(.pit) .mf-back{display:none} }

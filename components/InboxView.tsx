@@ -497,7 +497,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
           <div className="ibx2-list-h">
             {mode === "mail" && view.kind !== "inbox" ? <div className="mf-lh">
               {view.kind === "folder" ? <><b>{folderLabel(folders?.find((f) => f.path === view.path) || { name: view.path.split("/").pop() || view.path, special: "" })}</b><span className="faint">{folders?.find((f) => f.path === view.path)?.messages ?? ""} emails</span></>
-                : <><b>{view.who?.length ? `With ${view.q}` : `“${view.q}”`}</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link" onClick={backFromSearch}>‹ Back to {beforeName}</button></>}
+                : <><b>{view.who?.length ? `With ${view.q}` : `“${view.q}”`}</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link mf-back" onClick={backFromSearch}>‹ Back to {beforeName}</button></>}
             </div> : <div className="ibx2-tabs" role="tablist">
               {mode === "mail" ? BK.map((b) => (
                 <button key={b.k} type="button" role="tab" aria-selected={bk === b.k} className={bk === b.k ? "on" : ""} onClick={() => { setBk(b.k); setOpen(null); }}>{b.label} <span>{ol ? bkN(b.k) : ""}</span></button>
