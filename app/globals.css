@@ -7591,3 +7591,5 @@ a.pdn-tag:hover{text-decoration:underline}
   .dh-o{flex-direction:column}
   .dh-tabs{margin-left:0}
 }
+/* phone: no empty AI card (an email not summarised yet, with no buttons) */
+@media (max-width:760px) and (pointer:coarse){ .eh .eh-ai:not(:has(.eh-sum)):not(:has(.eh-ai-go)):not(:has(.eh-ai-btn)){display:none} }
