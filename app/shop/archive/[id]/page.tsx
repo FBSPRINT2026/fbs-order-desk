@@ -57,13 +57,12 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
       </div>
       <ArchivedGoods id={row.id} groups={(row.data as unknown as { groups?: PvGroup[] }).groups || []} />
       <div style={{ marginTop: 10 }}>
-        <ArchivedOrderView production={<JobFiles job={{ kind: "a", id: row.id }} inside />} o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} names={names} paths={row.files || {}} actions={row.kind === "invoice" ? <ArchiveReorder archivedId={row.id} small /> : null} />
+        <ArchivedOrderView production={<JobFiles job={{ kind: "a", id: row.id }} inside />}
+          below={<>{/* under the invoice, the width of Production notes & files: labor, then Printavo messages, emails & texts (Oct 15, Nick) */}
+            <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
+            <div className="pv-below"><JobTalk jobRef={`pv:${row.id}`} printavoCount={(row.data.messages?.length || 0) + (row.data.approvals?.length || 0)}
+        printavo={<History o={row.data} fileUrl={(u) => signed[u] || u} dl={(u, name) => downloadUrl(signed[u] || u, name)} paths={row.files || {}} audience="shop" />} /></div></>} o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} names={names} paths={row.files || {}} actions={row.kind === "invoice" ? <ArchiveReorder archivedId={row.id} small /> : null} />
       </div>
-      {/* the invoice first, then labor, and the emails & texts (Oct 15, Nick); the job's notes & photos are in the invoice's Production notes & files */}
-      <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
-      {/* the job's emails and texts (owners only; Oct 15) */}
-      <div style={{ marginTop: 10 }}><JobTalk jobRef={`pv:${row.id}`} printavoCount={(row.data.messages?.length || 0) + (row.data.approvals?.length || 0)}
-        printavo={<History o={row.data} fileUrl={(u) => signed[u] || u} dl={(u, name) => downloadUrl(signed[u] || u, name)} paths={row.files || {}} audience="shop" />} /></div>
     </>
   );
 }

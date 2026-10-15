@@ -33,7 +33,7 @@ export default function JobTalk({ jobRef, printavo, printavoCount = 0 }: { jobRe
   let last = "";
   return (
     <section className="panel jt">
-      <div className="panel-h"><h2>Emails &amp; texts</h2><span className="faint" style={{ fontSize: 12.5 }}>{d ? `everything with ${d.customer} about #${d.number}${d.name ? ` ${d.name}` : ""}` : "Looking through texts and email…"}</span><span className="spacer" /><span className="jt-lock">Shop only · owners</span></div>
+      <div className="panel-h"><h2>{printavo ? "Printavo Messages, Emails, & Texts" : "Emails & Texts"}</h2><span className="faint" style={{ fontSize: 12.5 }}>{d ? `everything with ${d.customer} about #${d.number}${d.name ? ` ${d.name}` : ""}` : "Looking through texts and email…"}</span><span className="spacer" /><span className="jt-lock">Shop only · owners</span></div>
       {err && <div className="pv-err">{err}</div>}
       {d && !all.length && !printavoCount && <div className="panel-b faint">No emails or texts found for this job.</div>}
       {d && (all.length > 0 || printavoCount > 0) && <>

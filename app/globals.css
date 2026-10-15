@@ -7880,3 +7880,4 @@ a.pdn-tag:hover{text-decoration:underline}
 .pv-bottom.solo{grid-template-columns:1fr}.pv-bottom.solo:empty{display:none}
 .pv-main>.prod{margin-top:14px}
 .jt-pv .pvh-panel{border:0;box-shadow:none;margin:0}.jt-pv .pvh-panel>.panel-h{display:none}
+.pv-main .pv-below,.pv-main>div>.panel{margin-top:14px}
