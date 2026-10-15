@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { organizerFor } from "@/lib/mail/mirror";
-import { mailboxToRead } from "@/lib/mail/viewing";
 import { aiState } from "@/lib/ai/claude";
 import { designWords } from "@/lib/ai/specHistory";
 import { designEmails } from "@/lib/designMail";
@@ -89,7 +88,7 @@ export async function GET(req: Request) {
   // ?act=<activity id>: an email kept in the portal, in full (its HTML, as Outlook shows it, and its attachments)
   const actId = u.searchParams.get("act");
   if (actId) {
-    if (!v.boss && !okSig(u.searchParams.get("t"), `act|${actId}|${ref}`)) return NextResponse.json({ error: "Not on this job." }, { status: 403 });
+    if (!okSig(u.searchParams.get("t"), `act|${actId}|${ref}`)) return NextResponse.json({ error: "Not on this job." }, { status: 403 });
     const { data: a } = await admin.from("activities").select("subject, body, from_email, to_email, occurred_at, direction, meta").eq("id", actId).maybeSingle();
     if (!a) return NextResponse.json({ error: "That email isn't here any more." }, { status: 404 });
     const meta = (a.meta || {}) as { html?: string; cc?: string[] | string; from_name?: string; attachments?: { path?: string; name?: string; size?: number; type?: string; signature?: boolean }[] };
@@ -138,14 +137,11 @@ export async function GET(req: Request) {
   const jobs = await customerJobs(admin, job.customer);
   const me = jobs.find((j) => j.ref === ref);
   job.pvMsgs.forEach((m, i) => { if ((m.text || m.subject || "").trim()) items.push({ kind: "email", id: `pv${i}`, date: String(m.at || ""), incoming: !!m.incoming, from: m.incoming ? m.from || c?.name || "Customer" : "FBS (Printavo)", subject: m.subject || "", text: String(m.text || "").slice(0, 3000), src: "Printavo" }); });
-  const { acct } = v.boss ? await mailboxToRead(admin, v) : { acct: null };
-  // Jose and Claudia: the owners' mailboxes (only what's on this job comes back)
-  let boxes: MailAccount[] = acct && acct.enabled ? [acct] : [];
-  if (!v.boss) {
-    const { data: accts } = await admin.from("mail_accounts").select("*").eq("enabled", true);
-    const { data: st2 } = await admin.from("staff").select("email, role");
-    boxes = ((accts || []) as MailAccount[]).filter((x) => { const r = ((st2 || []) as { email: string; role: string }[]).find((y) => y.email.toLowerCase() === x.email.toLowerCase()); return organizerFor(x.email, r?.role || ""); });
-  }
+  // everyone who can see a job's messages sees its emails from every owner's mailbox (Oct 15, Nick: "everybody can
+  // see each other's emails if they pertain to a job… Amanda should see my email on 27166"): only the ones on this job
+  const { data: accts } = await admin.from("mail_accounts").select("*").eq("enabled", true);
+  const { data: st2 } = await admin.from("staff").select("email, role");
+  const boxes = ((accts || []) as MailAccount[]).filter((x) => { const r = ((st2 || []) as { email: string; role: string }[]).find((y) => y.email.toLowerCase() === x.email.toLowerCase()); return organizerFor(x.email, r?.role || ""); });
   const words = [...new Set([...designWords(job.name), job.number])];
   const keys = jobKeys(job.name);
   const signUrls = async (p: string[]) => { if (!p.length) return [] as string[]; const { data } = await admin.storage.from("proofs").createSignedUrls(p, 3600); return (data || []).map((d) => d.signedUrl || "").filter(Boolean); };
