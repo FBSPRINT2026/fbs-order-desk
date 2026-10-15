@@ -8537,3 +8537,14 @@ a.pdn-tag:hover{text-decoration:underline}
   .tag-go .go-arrow .ga-c{stroke-dasharray:30;stroke-dashoffset:30;animation:ga-draw .6s .3s ease-out forwards}
   .tag-go .go-arrow .ga-h{animation:ga-head .25s .85s ease-out forwards}
 }
+/* "On the go": no line or arrow; about every 30 seconds the words shine through the rainbow and back to white (Oct 15, Nick) */
+.brand.brand-logo span.tag-go::after{content:none!important}
+@media (max-width:820px){
+  .brand.brand-logo span.tag-go{padding-right:0}
+  .tag-go em{color:transparent;-webkit-text-fill-color:transparent;-webkit-background-clip:text;background-clip:text;
+    background-image:linear-gradient(100deg,#fff 0 36%,var(--fbs-blue) 43%,var(--fbs-salmon) 50%,var(--fbs-orange) 57%,#fff 64% 100%);
+    background-size:300% 100%;background-position:100% 0;
+    animation:go-lean 2.4s ease-in-out infinite,go-shine 30s 2s ease-in-out infinite}
+}
+@keyframes go-shine{0%{background-position:100% 0;filter:none}2.5%{filter:drop-shadow(0 0 5px rgba(252,177,34,.55))}6%{background-position:0 0;filter:none}100%{background-position:0 0;filter:none}}
+@media (prefers-reduced-motion: reduce){.tag-go em{animation:none;background:none;color:#fff;-webkit-text-fill-color:#fff}}

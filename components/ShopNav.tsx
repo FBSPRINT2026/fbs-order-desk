@@ -234,7 +234,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}
         {brand.sideTagline && <span className="tag-desk">{brand.sideTagline}</span>}
         {/* phones: "On the go", moving (Oct 15, Nick) */}
-        <span className="tag-go" aria-hidden><i className="go-lines"><b /><b /><b /></i><em>On the go</em><svg className="go-arrow" viewBox="0 0 20 24"><path className="ga-c" d="M0 22.5 H9 Q15 22.5 15 16 V4" /><path className="ga-h" d="M11.5 7.5 L15 3.5 L18.5 7.5" /></svg></span>
+        <span className="tag-go" aria-hidden><i className="go-lines"><b /><b /><b /></i><em>On the go</em></span>
       </Link>
       <button type="button" className="side-menu-btn" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen((x) => !x)}>
         {open ? <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg> : <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}
