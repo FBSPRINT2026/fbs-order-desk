@@ -1,17 +1,14 @@
 import { notFound, redirect } from "next/navigation";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import ImprintSpecs from "@/components/ImprintSpecs";
-import { calcOrder, mergeSettings, orderGroups, sizeLabel, SIZES, type ArtFile, type Customer, type Design, type Group, type GroupCalc, type Order, type Payment } from "@/lib/pricing";
-import { fmtDateLong, money, todayISO } from "@/lib/format";
+import { calcOrder, mergeSettings, orderGroups, SIZES, type Customer, type Design, type Garment, type Order, type Payment } from "@/lib/pricing";
+import { guessHex, spotFor } from "@/lib/mockup";
+import { bodyAt, bodyOf, smallestOrdered, sortSizes } from "@/lib/garmentBody";
 import PrintButton from "./PrintButton";
-import { code128Svg } from "@/lib/barcode";
-import { qrSvg } from "@/lib/qr";
-import { jobLink } from "@/lib/zpl";
+import { DOC_CSS } from "./docCss";
+import { InvoiceDoc, WorkOrderDoc, type DocData } from "./Docs";
 
 export const dynamic = "force-dynamic";
-
-const DELIVERY: Record<string, string> = { pickup: "Pickup", ship: "Ship", deliver: "Delivery" };
 
 // Quote/invoice for customers, or (?work=1, shop only) a work order for the press with no prices.
 export default async function PrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ work?: string }> }) {
@@ -33,155 +30,74 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const groups = orderGroups(o);
   const c = calcOrder(o, settings, (pays || []) as Payment[]);
   const cust = (cu || {}) as Partial<Customer>;
-  const sh = settings.shop;
 
-  if (work && isStaff) {
-    const [{ data: inn }, { data: af }, { data: jn }] = await Promise.all([
+  // designs (proportions for the print sizes; previews for the work order), mockup pictures, the shirt colors
+  const dIds = [...new Set(groups.flatMap((g) => g.imprints.map((d) => d.design_id).filter(Boolean) as string[]))];
+  const styles = [...new Set(groups.flatMap((g) => g.lines.map((l) => (l.style || "").trim()).filter(Boolean)))];
+  const [{ data: dz }, { data: gz }] = await Promise.all([
+    dIds.length ? admin.from("designs").select("*").in("id", dIds) : Promise.resolve({ data: [] }),
+    styles.length ? admin.from("garments").select("style, sizes, specs, color_images").in("style", styles) : Promise.resolve({ data: [] }),
+  ]);
+  const designs = Object.fromEntries(((dz || []) as Design[]).map((d) => [d.id, d]));
+  const cat = (gz || []) as Pick<Garment, "style" | "sizes" | "specs" | "color_images">[];
+  const garOf = (style: string) => cat.find((x) => x.style.toLowerCase() === (style || "").trim().toLowerCase()) || null;
+  const work0 = !!work && isStaff;
+  const mkPaths = groups.map((g) => {
+    const all = [...(g.mockupThumbs || []), ...(g.customerMockups || []).map((m) => m.path)];
+    return work0 ? all.slice(0, 5) : all.slice(0, 1);
+  });
+  const dPaths = work0 ? ((dz || []) as Design[]).filter((d) => d.preview_path) : [];
+  const toSign = [...mkPaths.flat(), ...dPaths.map((d) => d.preview_path)];
+  const signed = toSign.length ? (await admin.storage.from("proofs").createSignedUrls(toSign, 3600)).data || [] : [];
+  const urlOf = new Map<string, string>();
+  toSign.forEach((x, i) => { if (signed[i]?.signedUrl) urlOf.set(x, signed[i].signedUrl!); });
+  const mockups = mkPaths.map((ps) => ps.map((x) => urlOf.get(x) || "").filter(Boolean));
+  const designUrls: Record<string, string> = {};
+  dPaths.forEach((d) => { const u = urlOf.get(d.preview_path); if (u) designUrls[d.id] = u; });
+  const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const hexes = groups.map((g) => {
+    const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
+    if (!l) return "#9aa1ab";
+    const ci = Object.entries(garOf(l.style)?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
+    return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? (ci.hex.startsWith("#") ? ci.hex : "#" + ci.hex) : "") || guessHex(l.color) || "#9aa1ab";
+  });
+  // the largest each print can be, on the smallest size ordered (one screen prints every size)
+  const maxes = groups.map((g) => {
+    const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
+    const gar = l ? garOf(l.style) : null;
+    const ordered = [...new Set(g.lines.flatMap((x) => SIZES.filter((z) => x.sizes?.[z])))] as string[];
+    const run = sortSizes(ordered);
+    const shown = g.mockupSize && run.includes(g.mockupSize) ? bodyAt(gar, g.mockupSize) : bodyOf(gar, run);
+    const small = smallestOrdered(gar, ordered, shown);
+    const b = small || shown;
+    return g.imprints.map((d) => {
+      if (!d.location) return null;
+      const sp = spotFor(d.location, b);
+      return sp.maxW && sp.maxH ? { w: sp.maxW, h: sp.maxH, on: b.kind === "adult" ? "" : b.size } : null;
+    });
+  });
+  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, mockups, hexes, maxes, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
+
+  if (work0) {
+    const [{ data: inn }, { data: jn }] = await Promise.all([
       admin.from("order_internal").select("production_notes").eq("order_id", id).maybeSingle(),
-      admin.from("art_files").select("*").eq("order_id", id).order("created_at"),
       admin.from("job_files").select("tag, body, by_name, created_at").eq("order_id", id).eq("kind", "note").eq("archived", false).order("created_at", { ascending: false }).limit(8),
     ]);
-    const shopNotes = (jn || []) as { tag: string; body: string; by_name: string; created_at: string }[];
-    const arts = (af || []) as ArtFile[];
-    // designs printed on this order, with previews for the press crew
-    const dIds = [...new Set(groups.flatMap((g) => g.imprints.map((d) => d.design_id).filter(Boolean) as string[]))];
-    const { data: dz } = dIds.length ? await admin.from("designs").select("*").in("id", dIds) : { data: [] };
-    const dmap = Object.fromEntries(((dz || []) as Design[]).map((d) => [d.id, d]));
-    const dPaths = ((dz || []) as Design[]).filter((d) => d.preview_path);
-    const dSigned = dPaths.length ? (await admin.storage.from("proofs").createSignedUrls(dPaths.map((d) => d.preview_path), 3600)).data || [] : [];
-    const dUrl: Record<string, string> = {};
-    dPaths.forEach((d, i) => { if (dSigned[i]?.signedUrl) dUrl[d.id] = dSigned[i].signedUrl!; });
-    const signed = arts.length ? (await admin.storage.from("proofs").createSignedUrls(arts.map((a) => a.file_path), 3600)).data || [] : [];
+    const printed = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
     return (
-      <div style={{ background: "#fff", minHeight: "100%", color: "#141D2B" }}>
+      <div className="pdoc">
+        <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
         <div className="print-bar"><PrintButton /></div>
-        <div className="print-page wo" style={{ background: "#fff", color: "#141D2B", fontFamily: "Helvetica, Arial, sans-serif", fontSize: 13 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap", borderBottom: "3px solid #141D2B", paddingBottom: 10, marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 12, letterSpacing: ".1em", textTransform: "uppercase", color: "#5A6478" }}>Work order</div>
-              <h1 style={{ margin: 0 }}>#{o.number} {o.nickname}</h1>
-              <div>{cust.company || cust.name}{o.po_number ? ` · PO ${o.po_number}` : ""}</div>
-            </div>
-            {/* the QR opens the job's phone menu (setup, notes, photos, labels, time); the barcode is for scanners */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: "0.95in", height: "0.95in" }} dangerouslySetInnerHTML={{ __html: qrSvg(jobLink(o.number), 2).svg }} />
-              <div style={{ textAlign: "center" }}>
-                <div style={{ width: `${(code128Svg(String(o.number), 40).width * 1.6) / 96}in`, height: "0.5in" }} dangerouslySetInnerHTML={{ __html: code128Svg(String(o.number), 40).svg }} />
-                <div style={{ fontSize: 10.5, letterSpacing: ".06em", maxWidth: "1.9in", lineHeight: 1.25, marginTop: 3 }}>SCAN THE SQUARE WITH A PHONE: SETUP, NOTES, PHOTOS, TIME · #{o.number}</div>
-              </div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              {o.rush && <div className="wo-rush">RUSH</div>}
-              <div><b>Production:</b> {o.production_date ? fmtDateLong(o.production_date) : "not set"}</div>
-              <div><b>In hands:</b> {o.due_date ? fmtDateLong(o.due_date) : "not set"}</div>
-              <div><b>Delivery:</b> {DELIVERY[o.delivery_method] || "Pickup"}{o.ship_method ? ` · ${o.ship_method}` : ""}</div>
-            </div>
-          </div>
-          {o.delivery_method !== "pickup" && o.ship_to && <div className="box"><b>{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}:</b><div style={{ whiteSpace: "pre-line" }}>{o.ship_to}</div></div>}
-          {groups.map((g, gi) => (
-            <div key={g.id} className="box">
-              <b>{g.name?.trim() || `Group ${gi + 1}`} · {c.groups[gi]?.qty || 0} pcs{c.groups[gi]?.wholesale ? " · CUSTOMER SUPPLIED GOODS" : ""}{c.groups[gi]?.finishing.length ? ` · Finishing: ${c.groups[gi].finishing.map((f) => f.name).join(", ")}` : ""}</b>
-              <table>
-                <thead><tr><th>Style</th><th>Color</th><th>Description</th>{SIZES.filter((z) => g.lines.some((l) => l.sizes?.[z])).map((z) => <th key={z} className="c">{sizeLabel(z)}</th>)}<th className="c">Total</th></tr></thead>
-                <tbody>
-                  {g.lines.map((l, li) => (
-                    <tr key={l.id}><td>{l.style}</td><td>{l.color}</td><td>{l.garment}</td>{SIZES.filter((z) => g.lines.some((x) => x.sizes?.[z])).map((z) => <td key={z} className="c">{l.sizes?.[z] || ""}</td>)}<td className="c"><b>{c.groups[gi]?.lines[li]?.qty || 0}</b></td></tr>
-                  ))}
-                </tbody>
-              </table>
-              <table>
-                <thead><tr><th>Design</th><th>Imprint</th><th>Location</th><th className="c">Colors</th><th>Inks / PMS</th><th>Size</th><th>Drop</th><th>Notes</th></tr></thead>
-                <tbody>
-                  {g.imprints.map((d) => (
-                    <tr key={d.id}><td>{d.design_id && dmap[d.design_id] ? <span className="wo-design">{dUrl[d.design_id] && <img src={dUrl[d.design_id]} alt="" />}<b>D-{dmap[d.design_id].number}</b></span> : ""}</td><td>{d.method === "screen" ? "Screen print" : d.method === "embroidery" ? "Embroidery" : "DTF"}</td><td>{d.location}</td><td className="c">{d.method === "screen" ? (d.colors >= 11 ? "Full" : d.colors) : d.method === "embroidery" ? d.colors : "Full"}</td><td>{d.inks}{d.confirm?.ink && <div className="wo-unconf">REORDER: PRODUCTION DETAILS NEEDED (INK)</div>}</td><td>{d.size}{d.confirm?.size && <div className="wo-unconf">REORDER: PRODUCTION DETAILS NEEDED (SIZE &amp; PLACEMENT)</div>}</td><td>{d.drop ? `${d.drop}"` : "Standard"}</td><td>{d.notes}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-          {inn?.production_notes && <div className="box"><b>Production notes</b><div style={{ whiteSpace: "pre-wrap" }}>{inn.production_notes}</div></div>}
-          {shopNotes.length > 0 && <div className="box"><b>Shop notes</b>{shopNotes.map((n, i) => <div key={i} style={{ marginTop: 3 }}>{n.tag ? <b style={{ fontSize: 11 }}>{n.tag.toUpperCase()}: </b> : null}{n.body} <span style={{ color: "#5A6478", fontSize: 11 }}>({n.by_name}, {new Date(n.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })})</span></div>)}</div>}
-          {arts.length > 0 && (
-            <div className="box"><b>Art</b>
-              <div className="artgrid">{arts.map((a, i) => (a.file_type.startsWith("image/") && signed[i]?.signedUrl ? <img key={a.id} src={signed[i].signedUrl!} alt={a.name} /> : <span key={a.id}>{a.name}</span>))}</div>
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 30, marginTop: 20, fontSize: 12, flexWrap: "wrap" }}><span>Printed by: ____________</span><span>Checked by: ____________</span><span>Date: ________</span></div>
-        </div>
+        <WorkOrderDoc {...data} notes={inn?.production_notes || ""} shopNotes={(jn || []) as { tag: string; body: string; by_name: string; created_at: string }[]} printed={printed} />
       </div>
     );
   }
 
-  const isQ = o.type === "quote";
   return (
-    <div style={{ background: "var(--bg)", minHeight: "100%" }}>
+    <div className="pdoc">
+      <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
       <div className="print-bar"><PrintButton /></div>
-      <div className="print-page" style={{ fontFamily: "Helvetica, Arial, sans-serif", fontSize: 13 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 20, borderBottom: "3px solid var(--ink)", paddingBottom: 14, marginBottom: 18, flexWrap: "wrap" }}>
-          <div>
-            {sh.logoUrl ? <img src={sh.logoUrl} alt={sh.name} style={{ maxHeight: 54 }} /> : <div style={{ fontSize: 26, fontWeight: 800 }}>{sh.name}</div>}
-            <div className="sub" style={{ whiteSpace: "pre-line" }}>{sh.address}</div>
-            <div className="sub">{[sh.phone, sh.email].filter(Boolean).join(" · ")}</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="eyebrow">{isQ ? "Quote" : "Invoice"}</div>
-            <div style={{ fontSize: 24, fontWeight: 700 }}>#{o.number}</div>
-            <div className="sub">Date {fmtDateLong(todayISO())}</div>
-            {o.po_number && <div className="sub">PO {o.po_number}</div>}
-            {o.due_date && <div className="sub">In hands {fmtDateLong(o.due_date)}</div>}
-          </div>
-        </div>
-        <div className="grid g2" style={{ marginBottom: 12 }}>
-          <div>
-            <div className="eyebrow">Bill to</div>
-            <b>{cust.company || cust.name}</b>
-            {cust.company && cust.name && <div>{cust.name}</div>}
-            <div className="sub" style={{ whiteSpace: "pre-line" }}>{cust.address}</div>
-            <div className="sub">{[cust.email, cust.phone].filter(Boolean).join(" · ")}</div>
-          </div>
-          <div>
-            <div className="eyebrow">Job</div><b>{o.nickname}</b>
-            {o.delivery_method !== "pickup" && o.ship_to && <div className="sub" style={{ whiteSpace: "pre-line" }}>{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}: {o.ship_to}</div>}
-            {o.approved_at && <div className="sub">Approved by {o.approved_name}, {fmtDateLong(o.approved_at.slice(0, 10))}</div>}
-          </div>
-        </div>
-        <table className="items" style={{ minWidth: 0 }}>
-          <thead><tr><th>Item</th><th className="r">Qty</th><th className="r">Each</th><th className="r">Amount</th></tr></thead>
-          <tbody>
-            {groups.map((g, gi) => <GroupRows key={g.id} g={g} gc={c.groups[gi]} />)}
-            {c.setup > 0 && <tr><td>Setup (screens / digitizing)</td><td /><td /><td className="r">{money(c.setup)}</td></tr>}
-            {c.materials > 0 && <tr><td>2XL+ Materials Charge</td><td /><td /><td className="r">{money(c.materials)}</td></tr>}
-            {o.fees.filter((f) => +f.amount).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td /><td /><td className="r">{money(+f.amount)}</td></tr>)}
-          </tbody>
-        </table>
-        <div className="totals" style={{ marginLeft: "auto", maxWidth: 300, marginTop: 12 }}>
-          <div className="tr"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
-          {c.discount ? <div className="tr"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><span>−{money(c.discount)}</span></div> : null}
-          <div className="tr"><span>Tax{o.tax_exempt ? " (exempt)" : ` (${c.rate}%)`}</span><span>{money(c.tax)}</span></div>
-          <div className="tr big"><span>Total</span><span>{money(c.total)}</span></div>
-          {c.paid > 0 && <><div className="tr"><span>Paid</span><span>−{money(c.paid)}</span></div><div className="tr big"><span>Balance due</span><span>{money(c.balance)}</span></div></>}
-        </div>
-        {o.notes && <p style={{ whiteSpace: "pre-wrap" }}><span className="eyebrow">Notes</span><br />{o.notes}</p>}
-        {sh.terms && <p className="sub">{sh.terms}</p>}
-      </div>
+      <InvoiceDoc {...data} />
     </div>
-  );
-}
-
-function GroupRows({ g, gc }: { g: Group; gc: GroupCalc }) {
-  return (
-    <>
-      {g.lines.map((l, li) => (
-        <tr key={l.id}>
-          <td>
-            <b>{[l.style, l.garment].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{gc?.wholesale ? " (customer supplied)" : ""}
-            <div className="sub">{SIZES.filter((z) => l.sizes?.[z]).map((z) => `${sizeLabel(z)}: ${l.sizes[z]}`).join(", ")}</div>
-            {li === g.lines.length - 1 && g.imprints.length > 0 && <div className="sub">Imprints: <ImprintSpecs list={g.imprints} sep="; " /></div>}
-            {li === g.lines.length - 1 && gc?.finishing.length > 0 && <div className="sub">Finishing: {gc.finishing.map((f) => f.name).join(", ")}</div>}
-          </td>
-          <td className="r">{gc?.lines[li]?.qty}</td><td className="r">{money(gc?.lines[li]?.each)}</td><td className="r">{money(gc?.lines[li]?.sub)}</td>
-        </tr>
-      ))}
-    </>
   );
 }
