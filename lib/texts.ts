@@ -33,7 +33,7 @@ export function handleForms(key: string): string[] {
 export async function customerHandles(admin: SupabaseClient): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const [{ data: cs }, { data: cts }] = await Promise.all([
-    admin.from("customers").select("id, phone, contact2_phone, email, contact2_email").limit(20000),
+    admin.from("customers").select("id, phone, contact2_phone, email, contact2_email, is_test").limit(20000),
     admin.from("customer_contacts").select("customer_id, phone, email").limit(20000),
   ]);
   const add = (v: string | null | undefined, id: string) => {
@@ -43,8 +43,12 @@ export async function customerHandles(admin: SupabaseClient): Promise<Map<string
       if (!out.has(k)) out.set(k, id);
     }
   };
-  for (const c of (cs || []) as { id: string; phone: string | null; contact2_phone: string | null; email: string | null; contact2_email: string | null }[]) { add(c.phone, c.id); add(c.contact2_phone, c.id); add(c.email, c.id); add(c.contact2_email, c.id); }
-  for (const c of (cts || []) as { customer_id: string; phone: string | null; email: string | null }[]) { add(c.phone, c.customer_id); add(c.email, c.customer_id); }
+  // the shop's own "customer" records (FBS Sales, Amanda McCoy: an @fbsprint.com email) and test ones are not
+  // customers: their numbers are family and staff (Oct 15: Nick and Amanda's own texts came in as "Amanda McCoy")
+  const ours = new Set<string>();
+  for (const c of (cs || []) as { id: string; email: string | null; contact2_email: string | null; is_test: boolean | null }[]) if (c.is_test || /@fbsprint\.com\s*$/i.test(c.email || "") || /@fbsprint\.com\s*$/i.test(c.contact2_email || "")) ours.add(c.id);
+  for (const c of (cs || []) as { id: string; phone: string | null; contact2_phone: string | null; email: string | null; contact2_email: string | null }[]) { if (ours.has(c.id)) continue; add(c.phone, c.id); add(c.contact2_phone, c.id); add(c.email, c.id); add(c.contact2_email, c.id); }
+  for (const c of (cts || []) as { customer_id: string; phone: string | null; email: string | null }[]) { if (ours.has(c.customer_id)) continue; add(c.phone, c.customer_id); add(c.email, c.customer_id); }
   return out;
 }
 
