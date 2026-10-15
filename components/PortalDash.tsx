@@ -20,7 +20,7 @@ export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs
 
       <div className="pdx-top">
         <section className="pdx-card pdx-asst">
-          <div className="pdx-h"><h2>✨ Your FBS assistant</h2><span className="faint">Instant answers about your jobs, any time</span></div>
+          <div className="pdx-h"><h2>✨ Your FBS AI Assistant</h2><span className="faint">Instant answers about your jobs, any time</span></div>
           {assistant}
         </section>
         <section className="pdx-card pdx-msgs">
