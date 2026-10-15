@@ -231,7 +231,8 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                 </div>
                 <div className={"imp-body" + (!!onMockup && !g.mockupSkipped ? " has-logo" : "")}>
                 {!!onMockup && !g.mockupSkipped && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
-                <div className="imp-grid" inert={frozen || undefined} title={frozen ? "Set by the mockup: change it in the Mockup Creator" : undefined}>
+                {frozen ? <PrintFacts d={d} designs={designs || []} /> : (
+                <div className="imp-grid">
                   <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                   <div className="f-loc"><span className="imp-l">Location</span>{LOCATIONS.includes(d.location)
                       ? <select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value === "__custom" ? "" : e.target.value; })}>{LOCATIONS.map((z) => <option key={z} value={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
@@ -256,6 +257,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                       </label></div>
                   <div className="f-notes"><span className="imp-l">Notes</span><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></div>
                 </div>
+                )}
                 </div>
                 {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="imp-unconf">
                     <span><b>Reorder - Production Details Needed</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
@@ -588,6 +590,29 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
 /** Under each imprint: which customer design prints here, with its size worked out from the print size. */
 /** a print's logo on the order page: read only, set in the Mockup Creator (Oct 15, Nick: "grey out that section…
  *  see the logo a little larger"), beside the print's fields so it adds no row */
+/** a print as it was set in the Mockup Creator, to read (Oct 15, Nick: "that whole section just needs to be read only and
+ *  automatically filled in from the mockup creator") */
+function PrintFacts({ d, designs }: { d: Group["imprints"][number]; designs: Design[] }) {
+  const cur = designs.find((x) => x.id === d.design_id);
+  const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
+  const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
+  const other = cur && val ? designOther(cur, val, given) : 0;
+  const colors = d.method === "dtf" ? "Full color" : d.colors === FULL_COLOR ? "Full color" : String(d.colors || "");
+  const facts: [string, React.ReactNode, string?][] = [
+    ["Colors", colors],
+    [d.method === "embroidery" ? "Thread" : "Ink", d.inks || <span className="faint">Not set</span>, "wide"],
+    ["Print size", d.size ? <>{d.size}{other ? <span className="faint"> → {other}&quot; {given === "W" ? "tall" : "wide"}</span> : null}{d.sizeFrom === "customer" ? <span className="pf-tag">🔒 Customer&apos;s size</span> : null}</> : <span className="faint">Not set</span>],
+    ["Drop", d.drop ? `${d.drop}"` : "Standard"],
+    ...(d.method === "embroidery" && d.stitches ? [["Stitches", d.stitches.toLocaleString()] as [string, React.ReactNode]] : []),
+    ...(d.notes ? [["Notes", d.notes, "full"] as [string, React.ReactNode, string]] : []),
+  ];
+  return (
+    <dl className="pf">
+      {facts.map(([k, v, w]) => <div key={k} className={w ? "pf-" + w : undefined}><dt>{k}</dt><dd>{v}</dd></div>)}
+    </dl>
+  );
+}
+
 function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?: string; size: string }; designs: Design[]; urls: Record<string, string>; onMockup?: () => void }) {
   const cur = designs.find((x) => x.id === imprint.design_id);
   const m = (imprint.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);

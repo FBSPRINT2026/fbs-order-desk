@@ -8129,3 +8129,13 @@ a.pdn-tag:hover{text-decoration:underline}
 .imp-card.frozen .imp-card-h{background:color-mix(in srgb,var(--surface-2) 70%,var(--surface))}
 .imp-frozen-note{font-size:12.5px;color:var(--ink-3)}
 .imp-frozen-note .linkbtn{font-size:12.5px}
+/* a print, read only (set in the Mockup Creator): label over value, no form boxes (Oct 15, Nick) */
+.pf{display:grid;grid-template-columns:70px minmax(0,1.6fr) minmax(0,1.3fr) 90px;gap:8px 16px;margin:0;padding:10px 14px 10px 4px}
+.pf>div{min-width:0}
+.pf dt{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
+.pf dd{margin:0;font-size:14px;color:var(--ink);overflow-wrap:anywhere}
+.pf .pf-full{grid-column:1/-1}
+.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
+.pf-tag{display:inline-block;margin-left:6px;font-size:11px;color:var(--ink-3)}
+.imp-body:not(.has-logo)>.pf{padding-left:14px}
+@media (max-width:760px){ .pf{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} }
