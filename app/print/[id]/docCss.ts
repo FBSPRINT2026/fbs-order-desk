@@ -150,6 +150,14 @@ export const DOC_CSS = `
 .pdoc .ifoot .fade{height:4px;margin-bottom:8px}
 .pdoc .ifoot div:last-child{display:flex;justify-content:space-between;font-size:9pt;color:var(--ink3)}
 
+.pdoc .mk{background:none;padding:0;border-radius:0}
+.pdoc .hero.wide{grid-template-columns:1fr;gap:10px}
+.pdoc .hero.wide .mk{height:3.8in}
+.pdoc .hero.wide.h2l .mk{height:3.2in}
+.pdoc .hero.wide.h3l .mk{height:2.7in}
+.pdoc .hero.wide .hp{display:grid;grid-template-columns:repeat(auto-fit,minmax(2.2in,1fr));gap:10px}
+.pdoc .hero.wide .hp>.lbl{grid-column:1/-1;margin-bottom:-4px}
+.pdoc .hero.wide .pp .t{font-size:18pt}
 @media screen and (max-width:840px){.pdoc{padding:0 8px 16px}.pdoc .print-bar{padding:10px 0}}
 @page{size:letter;margin:.4in .45in}
 @media print{

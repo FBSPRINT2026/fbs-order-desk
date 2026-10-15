@@ -3,6 +3,7 @@ import { calcOrder, designOther, inkNames, isLightColor, isPmsInk, lineQty, need
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
+import { spotFor } from "@/lib/mockup";
 
 /**
  * The invoice / quote PDF and the work order (Oct 15, Nick: "completely reimagine both. The work order will be the
@@ -96,7 +97,9 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                 <div className="codes"><div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /><small>Scan: setup, notes, photos, time</small></div>
               </div>
               <div className="fade" style={{ margin: "12px 0 4px" }} />
-              <div className={"hero" + (lines.length >= 3 ? " h3l" : lines.length === 2 ? " h2l" : "")}>
+              {/* front and back (or sleeves): the mockup shows both views side by side, so it runs the full width and the
+                  prints sit in a row underneath (Oct 15, Nick: "what will the mockup look like with a two sided print") */}
+              <div className={"hero" + (new Set(g.imprints.map((d) => spotFor(d.location || "").view)).size > 1 ? " wide" : "") + (lines.length >= 3 ? " h3l" : lines.length === 2 ? " h2l" : "")}>
                 <div className="mk">
                   {mk[0] ? <img className="big" src={mk[0]} alt="Mockup" /> : <div className="none" style={{ background: hex }}>No mockup yet</div>}
                   {mk.length > 1 && <div className="more">{mk.slice(1, 5).map((u, i) => <img key={i} src={u} alt="" />)}</div>}
