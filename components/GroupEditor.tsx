@@ -257,6 +257,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                 </div>}
                 <div className="imp-art">
                       <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
+                        readOnly={!!onMockup && !g.mockupSkipped} onMockup={onMockup ? startMockup : undefined}
                         onPick={(des) => update((x) => {
                           const im = x.imprints[di];
                           im.design_id = des?.id || undefined;
@@ -578,8 +579,10 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
 }
 
 /** Under each imprint: which customer design prints here, with its size worked out from the print size. */
-function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onStar }: {
+function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onStar, readOnly, onMockup }: {
   imprint: { design_id?: string; size: string }; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
+  /** the art is set in the Mockup Creator, not here (Oct 15, Nick: "you shouldn't be able to change the logo or upload
+   *  new art from the main order page") */ readOnly?: boolean; onMockup?: () => void;
   onStar?: (d: Design, starred: boolean) => void;
   onPick: (d: Design | null) => void; onUpload: (f: File, name: string) => Promise<void>;
 }) {
@@ -592,8 +595,11 @@ function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onSta
   return (
     <div className="dp">
       <span className="dp-l">Logo</span>
-      <DesignSearch designs={designs} urls={urls} value={imprint.design_id} onPick={onPick} onStar={onStar} placeholder="Choose the customer's logo…" />
-      {canUpload && (
+      {readOnly
+        ? <span className="dp-ro">{cur ? <>{urls[cur.id] && <img src={urls[cur.id]} alt="" />}<b>{designLabel(cur)}</b></> : <span className="faint">No logo yet</span>}
+            {onMockup && <button type="button" className="linkbtn" onClick={onMockup}>{cur ? "Change in the Mockup Creator" : "Pick it in the Mockup Creator"}</button>}</span>
+        : <DesignSearch designs={designs} urls={urls} value={imprint.design_id} onPick={onPick} onStar={onStar} placeholder="Choose the customer's logo…" />}
+      {canUpload && !readOnly && (
         <label className="btn sm ghost" style={{ cursor: "pointer" }}>{busy ? "Uploading…" : "Upload new art"}
           <input type="file" hidden accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; setBusy(true); try { await onUpload(f, f.name.replace(/\.[^.]+$/, "")); } finally { setBusy(false); } }} />
         </label>
