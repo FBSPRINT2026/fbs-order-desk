@@ -56,6 +56,9 @@ const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onSaveToCatalog, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref }: Props) {
   const [askSkip, setAskSkip] = useState(false);
   const [blockMsg, setBlockMsg] = useState("");
+  // once the group has a mockup, its prints are changed in the Mockup Creator only (Oct 15, Nick: "being able to change
+  // any of the imprint information doesn't make sense once a mockup is created")
+  const frozen = !!onMockup && !!g.mockupAt && !g.mockupSkipped;
   const startMockup = () => { if (mockupBlock) { setBlockMsg(mockupBlock); return; } setBlockMsg(""); onMockup?.(); };
   // exact style match; if the same number exists under several brands, only the brand given (or none) counts
   const findStyle = (style: string, brand?: string) => {
@@ -219,16 +222,16 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
               space"): what and where on top, ink and size under it, notes, then the art */}
           <div className="imp-cards">
             {g.imprints.map((d, di) => (
-              <div key={d.id} className="imp-card">
+              <div key={d.id} className={"imp-card" + (frozen ? " frozen" : "")}>
                 <div className="imp-card-h">
                   <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, METHODS[d.method]].filter(Boolean).join(" · ")}</span>
                   <span className="spacer" />
                   {!hidePrices && <span className="imp-each"><b className="num">{money(gc.imprints[di]?.each)}</b> each</span>}
-                  <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>
+                  {!frozen && <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>}
                 </div>
                 <div className={"imp-body" + (!!onMockup && !g.mockupSkipped ? " has-logo" : "")}>
                 {!!onMockup && !g.mockupSkipped && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
-                <div className="imp-grid">
+                <div className="imp-grid" inert={frozen || undefined} title={frozen ? "Set by the mockup: change it in the Mockup Creator" : undefined}>
                   <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                   <div className="f-loc"><span className="imp-l">Location</span>{LOCATIONS.includes(d.location)
                       ? <select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value === "__custom" ? "" : e.target.value; })}>{LOCATIONS.map((z) => <option key={z} value={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
@@ -294,7 +297,9 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
               </div>
             ))}
           </div>
-          <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>
+          {frozen
+            ? <div className="imp-frozen-note">Set by the mockup. <button type="button" className="linkbtn" onClick={startMockup}>Change prints in the Mockup Creator</button></div>
+            : <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>}
           </div>
           </div>
         </div>
