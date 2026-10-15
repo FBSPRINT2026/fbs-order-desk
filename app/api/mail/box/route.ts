@@ -56,7 +56,9 @@ export async function GET(req: Request) {
           // Ong?"): their addresses, and only the conversations they're in (not every email that mentions the name)
           // an address (cheri@furry-feline.com) or a whole company's domain (@peticolasbrewing.com)
           const who = (q.get("who") || "").split(",").map((e) => e.trim().toLowerCase()).filter((e) => /^([^\s@"]+)?@[^\s@"]+\.[a-z]{2,}$/.test(e)).slice(0, 12);
-          const r = await ewsSearch(admin, acct, me, who.length ? who.map((e) => `"${e.replace(/^@/, "")}"`).join(" OR ") : q.get("q") || "");
+          // a recent project of theirs (Oct 15, Nick: "all emails about Mewjira Reprints"): its name, then only their conversations
+          const about = (q.get("about") || "").replace(/[^a-z0-9' ]+/gi, " ").trim().slice(0, 80);
+          const r = await ewsSearch(admin, acct, me, about && who.length ? about : who.length ? who.map((e) => `"${e.replace(/^@/, "")}"`).join(" OR ") : q.get("q") || "");
           if (who.length) {
             const theirs = (m: { from: string; to?: string[]; cc?: string[] }) => [m.from, ...(m.to || []), ...(m.cc || [])].some((x) => { const a = String(x || "").toLowerCase(); return who.some((w) => (w.startsWith("@") ? a.endsWith(w) : a === w)); });
             r.convos = r.convos.filter((c) => c.msgs.some(theirs));

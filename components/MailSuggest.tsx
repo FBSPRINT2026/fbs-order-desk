@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -8,8 +8,13 @@ import { createClient } from "@/lib/supabase/client";
  * whose name or address matches, then "Search all mail for …". Picking a person or customer searches by their email
  * addresses, so only conversations with them come back, not every email that mentions the word.
  */
-export type Pick = { label: string; emails: string[] };
-type Sug = { key: string; kind: "person" | "company"; label: string; sub: string; emails: string[] };
+export type Pick = { label: string; emails: string[]; /** a recent project: the words that name it */ about?: string; cust?: string };
+type Sug = { key: string; kind: "person" | "company" | "project"; label: string; sub: string; emails: string[]; about?: string; cust?: string };
+
+/** the words that name a project ("Mewjira Reprints" → mewjira, "Rice Life Shirts (NEW TAG ART)" → rice life) */
+const GENERIC = new Set("shirt shirts tee tees tshirt tshirts hoodie hoodies crew crewneck crewnecks sweatshirt sweatshirts tank tanks tote totes bag bags hat hats cap caps beanie beanies jacket jackets polo polos sticker stickers patch patches reprint reprints reorder reorders order orders print prints printing new old tag tags art the and for with from again rush sample samples front back left right chest sleeve design designs logo".split(" "));
+const projectWords = (n: string) => [...new Set(n.toLowerCase().replace(/\(.*?\)/g, " ").replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).map((w) => w.replace(/'s$/, "").replace(/'/g, "")).filter((w) => w.length >= 3 && !GENERIC.has(w) && !/^\d+$/.test(w)))].slice(0, 3);
+const md = (d: string) => new Date(d.length === 10 ? d + "T12:00:00" : d).toLocaleDateString("en-US", { month: "short", day: "numeric", ...(Date.now() - Date.parse(d) > 300 * 864e5 ? { year: "numeric" } : {}) });
 
 const clean = (s: string) => s.replace(/[%,()"'\\]/g, " ").trim();
 const FREE = /@(gmail|yahoo|hotmail|outlook|aol|icloud|live|msn|me|comcast|att|sbcglobal)\./i;
@@ -65,7 +70,28 @@ export default function MailSuggest({ q, senders, onPick, onText }: {
         companies.push({ key: "c" + c.id, kind: "company", label: c.company || c.name, sub: [domains.length ? `Anyone ${domains.join(", ")}` : "", free.length ? free.join(", ") : ""].filter(Boolean).join(" · "), emails: [...domains, ...free] });
         if (companies.length >= 2) break;
       }
-      if (live) setList([...people, ...companies]);
+      // their recent projects (Oct 15, Nick: "if I search Cheri Ong, give me the option to find all emails about recent
+      // projects, like Mewjira Reprints"): the newest jobs (portal and Printavo) of the customer at the top, one row per
+      // design, searching their mail for its name
+      const projects: Sug[] = [];
+      const top = companies[0];
+      if (top) {
+        const cid = top.key.slice(1);
+        const [{ data: ords }, { data: arch }] = await Promise.all([
+          sb.from("orders").select("nickname, created_at").eq("customer_id", cid).not("nickname", "is", null).order("created_at", { ascending: false }).limit(40),
+          sb.from("archived_orders").select("nickname, order_date").eq("customer_id", cid).not("nickname", "is", null).order("order_date", { ascending: false }).limit(80),
+        ]);
+        const jobs = [...((ords || []) as { nickname: string; created_at: string }[]).map((o) => ({ n: o.nickname, d: o.created_at })), ...((arch || []) as { nickname: string; order_date: string }[]).map((a) => ({ n: a.nickname, d: a.order_date }))]
+          .filter((j) => j.n?.trim() && j.d).sort((a, b) => b.d.localeCompare(a.d));
+        const by = new Map<string, { label: string; last: string; n: number }>();
+        for (const j of jobs) {
+          const w = projectWords(j.n); if (!w.length) continue;
+          const k = w.join(" "), x = by.get(k);
+          if (x) x.n++; else by.set(k, { label: j.n.trim().replace(/\s+/g, " "), last: j.d, n: 1 });
+        }
+        for (const [k, x] of [...by].slice(0, 3)) projects.push({ key: "j" + cid + k, kind: "project", label: x.label, sub: `${top.label} · ${x.n} order${x.n === 1 ? "" : "s"}, last ${md(x.last)}`, emails: top.emails, about: k, cust: cid });
+      }
+      if (live) setList([...people, ...companies, ...projects]);
     }, 180);
     return () => { live = false; clearTimeout(t); };
   }, [term]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -73,12 +99,13 @@ export default function MailSuggest({ q, senders, onPick, onText }: {
   if (term.length < 2) return null;
   return (
     <div className="msug" role="listbox" aria-label="Search suggestions" onMouseDown={(e) => e.preventDefault()}>
-      {list.map((s) => (
-        <button key={s.key} type="button" role="option" aria-selected={false} className="msug-i" onClick={() => onPick({ label: s.label, emails: s.emails })}>
-          <span className={"msug-av " + s.kind} aria-hidden>{s.kind === "company" ? <svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13M9 21v-6h6v6" /></svg> : s.label.replace(/[^A-Za-z ]/g, " ").trim().split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || "").join("") || "@"}</span>
-          <span className="msug-t"><span>{s.kind === "company" ? <>All emails to or from <b>{s.label}</b></> : <>Emails from or to <b>{s.label}</b></>}</span><small>{s.sub}</small></span>
+      {list.map((s, i) => (<Fragment key={s.key}>
+        {s.kind === "project" && list[i - 1]?.kind !== "project" && <div className="msug-sec">Recent projects</div>}
+        <button type="button" role="option" aria-selected={false} className="msug-i" onClick={() => onPick({ label: s.label, emails: s.emails, ...(s.about ? { about: s.about, cust: s.cust } : {}) })}>
+          <span className={"msug-av " + s.kind} aria-hidden>{s.kind === "company" ? <svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13M9 21v-6h6v6" /></svg> : s.kind === "project" ? <svg viewBox="0 0 24 24"><path d="M8 3 4 6l2 4 2-1v12h8V9l2 1 2-4-4-3a4 4 0 0 1-8 0z" /></svg> : s.label.replace(/[^A-Za-z ]/g, " ").trim().split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || "").join("") || "@"}</span>
+          <span className="msug-t"><span>{s.kind === "company" ? <>All emails to or from <b>{s.label}</b></> : s.kind === "project" ? <>All emails about <b>{s.label}</b></> : <>Emails from or to <b>{s.label}</b></>}</span><small>{s.sub}</small></span>
         </button>
-      ))}
+      </Fragment>))}
       <button type="button" role="option" aria-selected={false} className="msug-i all" onClick={() => onText(q.trim())}>
         <span className="msug-av" aria-hidden><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg></span>
         <span className="msug-t"><span>Search all mail for “<b>{q.trim()}</b>”</span><small>Every email that mentions it</small></span>

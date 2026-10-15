@@ -102,13 +102,13 @@ export default function InboxView({ mode }: { mode: Mode }) {
   // searched over EWS (Oct 14): the whole mailbox, every year, at once — no "last 45 days" / "search older mail"
   const [searchAll, setSearchAll] = useState(false);
   /** `who`: a person or customer picked from the suggestions (their addresses); `term` is then their name, for the heading */
-  const runSearch = async (term: string, who?: string[]) => {
+  const runSearch = async (term: string, who?: string[], about?: { words: string; cust?: string }) => {
     if (term.trim().length < 2) return;
     setSugOpen(false);
     // where Back goes (Oct 15, Nick: "a quick back button to get back to where you were, Inbox or Sent")
     if (view.kind !== "search") setBefore(view);
-    setView({ kind: "search", q: term.trim(), ...(who?.length ? { who } : {}) }); setConvos(null); setCSel(null); setSNote(""); setPicked(false);
-    try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; all?: boolean }>({ do: "search", q: term.trim(), ...(who?.length ? { who: who.join(",") } : {}) }); setConvos(r.convos); setSearchAll(!!r.all); if (r.all && r.partial) setSNote("Some folders didn't answer, so there may be more."); }
+    setView({ kind: "search", q: term.trim(), ...(who?.length ? { who } : {}), ...(about ? { about: about.words, cust: about.cust } : {}) }); setConvos(null); setCSel(null); setSNote(""); setPicked(false);
+    try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; all?: boolean }>({ do: "search", q: term.trim(), ...(who?.length ? { who: who.join(",") } : {}), ...(about ? { about: about.words } : {}) }); setConvos(r.convos); setSearchAll(!!r.all); if (r.all && r.partial) setSNote("Some folders didn't answer, so there may be more."); }
     catch (e) { setConvos([]); setSNote(e instanceof Error ? e.message : String(e)); }
   };
   const backFromSearch = () => { setQ(""); setSugOpen(false); setCSel(null); setPicked(false); if (before.kind === "folder") void openFolder(before.path); else setView({ kind: "inbox" }); };
@@ -462,7 +462,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
             <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
             <input type="search" value={q} onChange={(e) => { setQ(e.target.value); setSugOpen(true); }} onFocus={() => setSugOpen(true)} onBlur={() => setTimeout(() => setSugOpen(false), 150)} placeholder="Search a name, company or anything" aria-label="Search all mail" enterKeyHint="search" />
           </form>
-          {sugOpen && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails); }} onText={(t) => void runSearch(t)} />}
+          {sugOpen && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails, p.about ? { words: p.about, cust: p.cust } : undefined); }} onText={(t) => void runSearch(t)} />}
           {box?.enabled && <div className={"pit-chk" + (boxStuck ? " bad" : "")}><i aria-hidden />{boxStuck ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}</div>}
           {view.kind === "inbox" && <div className="pit-ai">
             <button type="button" className="pit-ai-h" onClick={() => { setQ(""); setBk("all"); setOpen("brief"); setPicked(true); }}><span className="eh-ai-orb" aria-hidden>✦</span>Inbox summary<span className="pit-go" aria-hidden>›</span></button>
@@ -497,7 +497,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
           <div className="ibx2-list-h">
             {mode === "mail" && view.kind !== "inbox" ? <div className="mf-lh">
               {view.kind === "folder" ? <><b>{folderLabel(folders?.find((f) => f.path === view.path) || { name: view.path.split("/").pop() || view.path, special: "" })}</b><span className="faint">{folders?.find((f) => f.path === view.path)?.messages ?? ""} emails</span></>
-                : <><b>{view.who?.length ? `With ${view.q}` : `“${view.q}”`}</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link mf-back" onClick={backFromSearch}>‹ Back to {beforeName}</button></>}
+                : <><b>{view.about ? view.q : view.who?.length ? `With ${view.q}` : `“${view.q}”`}</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link mf-back" onClick={backFromSearch}>‹ Back to {beforeName}</button></>}
             </div> : <div className="ibx2-tabs" role="tablist">
               {mode === "mail" ? BK.map((b) => (
                 <button key={b.k} type="button" role="tab" aria-selected={bk === b.k} className={bk === b.k ? "on" : ""} onClick={() => { setBk(b.k); setOpen(null); }}>{b.label} <span>{ol ? bkN(b.k) : ""}</span></button>
@@ -511,7 +511,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
               <input type="search" value={q} onChange={(e) => { setQ(e.target.value); if (mode === "mail") setSugOpen(true); }} onFocus={() => mode === "mail" && setSugOpen(true)} onBlur={() => setTimeout(() => setSugOpen(false), 150)} onKeyDown={(e) => { if (e.key === "Escape") setSugOpen(false); if (mode === "mail" && e.key === "Enter") { e.preventDefault(); void runSearch(q); } }} placeholder={mode === "mail" ? "Search all mail, then Enter" : "Search"} aria-label="Search email" title={mode === "mail" ? "Type a name, company, email or subject and press Enter: results show as conversations, what they sent and what you sent, in order" : undefined} />
               {mode === "mail" && view.kind === "inbox" && <button type="button" className={"btn sm ghost ibx2-selbtn" + (selMode ? " on" : "")} title={selMode ? "Done selecting" : "Select emails"} aria-label={selMode ? "Done selecting" : "Select emails"} aria-pressed={selMode} onClick={() => (selMode ? endSelect() : setSelMode(true))}><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg></button>}
               
-            {mode === "mail" && sugOpen && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails); }} onText={(t) => void runSearch(t)} />}
+            {mode === "mail" && sugOpen && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails, p.about ? { words: p.about, cust: p.cust } : undefined); }} onText={(t) => void runSearch(t)} />}
             </div>
           </div>
           {/* the Inbox brief: always first, stays put while the list scrolls */}
@@ -549,7 +549,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
             {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={pickFolderRow}
               onSwipe={(r, to) => quickMove(r.folder, r.uid, to, () => { setFRows((x) => (x || []).filter((y) => !(y.uid === r.uid && y.folder === r.folder))); if (fSel?.uid === r.uid && fSel.folder === r.folder) setFSel(null); })} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={!!fMore} loading={fBusy} onMore={() => fMore && void openFolder(view.path, fMore)} /></>
-            : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? (searchAll ? <div className="ibx2-none">Nothing in your mailbox for “{view.q}”.{sNote ? ` ${sNote}` : ""}</div> : <div className="ibx2-none">Nothing in the last 45 days for “{view.q}”.{sNote ? ` ${sNote}` : ""}<div style={{ marginTop: 10 }}><button type="button" className="btn sm" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail…" : "Search older mail"}</button></div></div>) : <><div className="faint mf-note">{searchAll ? "Your whole mailbox, newest first." : "Last 45 days."}</div>{view.who?.length ? <PersonTimeline convos={convos} me={(st?.mine?.email || "").toLowerCase()} onOpen={(c) => { setCSel(c); setPicked(true); }} /> : <ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} />}
+            : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? (searchAll ? <div className="ibx2-none">Nothing in your mailbox for “{view.q}”.{sNote ? ` ${sNote}` : ""}</div> : <div className="ibx2-none">Nothing in the last 45 days for “{view.q}”.{sNote ? ` ${sNote}` : ""}<div style={{ marginTop: 10 }}><button type="button" className="btn sm" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail…" : "Search older mail"}</button></div></div>) : <><div className="faint mf-note">{searchAll ? "Your whole mailbox, newest first." : "Last 45 days."}</div>{view.about && view.cust && <HistoryLink customer={view.cust} q={view.about} className="pt-hist" />}{view.who?.length ? <PersonTimeline convos={convos} me={(st?.mine?.email || "").toLowerCase()} onOpen={(c) => { setCSel(c); setPicked(true); }} /> : <ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} />}
               <div className="mf-older-s">{sNote && <div className="faint">{sNote}</div>}{!searchAll && <button type="button" className="btn sm ghost" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail… (up to a minute)" : "Search older mail too"}</button>}</div></>)
             : tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : <>
               { !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
