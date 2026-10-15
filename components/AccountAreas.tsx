@@ -356,11 +356,10 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
     const openQ = quotes.filter((o) => !o.archived && o.status === "quote_sent").length;
     body = <>
       {tableHead(<span className="aa-sum">{quotes.length > 0 && <>{quotes.length} quote{quotes.length === 1 ? "" : "s"}{openQ ? <> (<b>{openQ} waiting on you</b>)</> : null} · </>}{invoices.length} order{invoices.length === 1 ? "" : "s"} · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span>, "Search quotes and orders: number, name, garment, color, print…")}
-      {quotes.length > 0 && <>
-        <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
-          {olderN > 0 && <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes ({olderN} over 60 days old)</label>}</div>
-        {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">No quotes in the last 60 days.</div>}
-      </>}
+      {/* the Quotes section and its checkbox stay even with no quotes (Oct 15, Nick) */}
+      <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
+        <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes{olderN > 0 ? ` (${olderN} over 60 days old)` : ""}</label></div>
+      {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
       <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(invoices.reduce((a, o) => a + o.total, 0))}</span></div>
       {orderTable(invoices, "invoice")}
     </>;
