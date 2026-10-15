@@ -8213,3 +8213,39 @@ a.pdn-tag:hover{text-decoration:underline}
 /* money: the same weight and size wherever it's a total */
 .ord .pb-r.pb-t b,.ord .totals .tr.big span:last-child,.ord .grp-total b{font-family:var(--body);font-stretch:100%;font-weight:800}
 .ord .pr-top>b,.ord .pr-each b{font-family:var(--body)}
+
+/* ───────── The order page, calmer (Oct 15, Nick: "all the different shading, accent colors… too much going on… sizes
+   filled in weird with blue… customer supplied goods and order check don't fit together"). White panels, one hairline
+   color, grey only for quiet text, the blue only for what you click; no tinted bands or boxes inside panels. ───────── */
+.ord .line-h{background:var(--surface)}
+.ord .cs-banner{background:none;border-bottom:0;color:var(--ink-3);font-weight:600;font-size:12.5px;padding:0 16px 2px;margin-top:-4px}
+.ord .cs-banner::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ink-3);margin-right:7px;vertical-align:1px}
+.ord .lbl.gsec,.ord .sbx-h.gsec{padding-left:0}
+.ord .lbl.gsec::before,.ord .sbx-h.gsec::before{display:none}
+/* sizes: a filled size is just a bold number, no blue box */
+.ord .sizes input.has{background:var(--surface);border-color:var(--line);color:var(--ink);font-weight:700}
+/* the customer, the price box, the Printavo bar: white with a hairline, not grey fills */
+.ord .cust-card{background:var(--surface);border:1px solid var(--line-2)}
+.ord .price-box{background:var(--surface);border:1px solid var(--line-2)}
+.ord .pvx-box>.pvs-strip,.ord .pvx-box>.pvc,.ord .pvs-strip{background:var(--surface)}
+.ord .pvx-box>.pvc{border-top:1px solid var(--line-2)}
+/* tabs: the current one underlined, not a blue block */
+.ord .ot-nav{padding:0 8px;gap:0}
+.ord .ot-nav .aa-tab{border-radius:0;padding:12px 10px;color:var(--ink-3)}
+.ord .ot-nav .aa-tab:hover{background:none;color:var(--ink)}
+.ord .ot-nav .aa-tab.on{background:none;color:var(--ink);box-shadow:inset 0 -2.5px 0 var(--accent)}
+.ord .ot-nav .aa-n{background:var(--surface-2);color:var(--ink-3)}
+/* the side panels speak the same way: Customer supplied goods without its own colored card, Order check without the
+   dashed blue box */
+.ord .ed-aside .gb{display:block}
+.ord .ed-aside .gc{border:0;border-radius:0;padding:0;gap:10px;background:none}
+.ord .ed-aside .gc-h .gc-no,.ord .ed-aside .gc-h .gc-t>b,.ord .ed-aside .gc-sub{display:none}
+.ord .ed-aside .gc-st{background:none;padding:0;color:var(--ok);font-weight:700;font-size:13.5px}
+.ord .ed-aside .gc-steps li span{background:var(--line-2)}
+.ord .ed-aside .gc-steps li.done span,.ord .ed-aside .gc-steps li.now span{background:var(--ink-3)}
+.ord .ed-aside .gc-steps li.now span{background:var(--accent)}
+.ord .ai-box{border:1px solid var(--line-2);background:var(--surface);border-radius:10px}
+.ord .ai-box h3{font-size:13.5px}
+.ord .eo-chip{background:var(--surface);border-color:var(--line)}
+/* prints: the logo tile keeps the shirt color (the one color that means something), everything else stays plain */
+.ord .imp-mock .mk-big{border-color:var(--line-2)}
