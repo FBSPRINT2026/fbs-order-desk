@@ -8176,3 +8176,9 @@ a.pdn-tag:hover{text-decoration:underline}
 .pr-zoom figcaption{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-2)}
 .pr-zoom figcaption .btn{margin-left:auto}
 @media (max-width:760px){ .pr{grid-template-columns:90px minmax(0,1fr)} .pr-logo{width:90px;height:90px} }
+
+/* the print close-up popup (like the Mockup Creator's) and the shirt color behind each small logo (Oct 15, Nick) */
+.pr-logo{border-color:color-mix(in srgb,var(--ink) 12%,transparent)}
+.pr-cu{background:#fff;border-radius:16px;padding:16px 18px 14px;box-shadow:0 24px 60px rgba(0,0,0,.3);cursor:default;max-width:92vw;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.pr-cu-f{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.pr-cu-f .btn{margin-left:auto}
