@@ -10,7 +10,7 @@ import type { Customer } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { pvCountsAsSale, orderCountsAsSale } from "@/lib/sales";
 import { useShopData } from "@/lib/shopData";
-import { Due, Pill } from "@/components/bits";
+import { Due, Pill, pvStatusOf } from "@/components/bits";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type APayment } from "@/components/AccountAreas";
 import { fmtDateLong } from "@/lib/format";
 import { previewUrls } from "@/lib/designs";
@@ -277,7 +277,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
                 <thead><tr><th>#</th><th>Job</th><th>Status</th><th>Due</th><th className="r">Total</th></tr></thead>
                 <tbody>
                   {os.map((o) => (
-                    <tr key={o.id} onClick={() => router.push(`/shop/orders/${o.id}`)}><td><span className="ordno">{o.number}</span></td><td>{o.nickname || "Untitled Job"}</td><td><Pill status={o.status} /></td><td><Due date={o.due_date} status={o.status} /></td><td className="r">{money(o.total)}</td></tr>
+                    <tr key={o.id} onClick={() => router.push(`/shop/orders/${o.id}`)}><td><span className="ordno">{o.number}</span></td><td>{o.nickname || "Untitled Job"}</td><td><Pill status={o.status} pv={pvStatusOf(o as never)} /></td><td><Due date={o.due_date} status={o.status} /></td><td className="r">{money(o.total)}</td></tr>
                   ))}
                   {archive.map((a) => (
                     <tr key={a.id} onClick={() => router.push(`/shop/archive/${a.id}`)}><td><span className="ordno">{a.visual_id}</span></td><td>{a.nickname || "Untitled Job"}<span className="aa-arch">Archived</span></td><td><span className="pv-dot" style={{ ["--sc" as string]: a.status_color || "#888" }}>{a.status_name}</span></td><td>{a.due_date ? fmtDateLong(a.due_date) : "—"}</td><td className="r">{money(a.total)}</td></tr>

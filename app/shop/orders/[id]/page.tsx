@@ -24,7 +24,7 @@ import ReorderPanel, { isReorder } from "@/components/ReorderPanel";
 import { labelFileName } from "@/lib/printavoNames";
 import ShopGoods from "@/components/ShopGoods";
 import ProjectPicker from "@/components/ProjectPicker";
-import { Pill } from "@/components/bits";
+import { Pill, pvStatusOf } from "@/components/bits";
 import { requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import { checkOrder } from "@/lib/orderChecks";
 import { keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
@@ -584,13 +584,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
         <div className="ed-actions">
           <span className="save-state">{saveState}</span>
-          <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={o.status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
+          {/* a 40,000 job sent to Printavo: its status is Printavo's and is changed there (Oct 15, Nick: "just have it mirror back") */}
+          {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
+          : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={o.status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
             <optgroup label="Quote">{STATUSES.filter((s) => s.type === "quote").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
-          </select>
+          </select>}
           {o.number >= 40000 && o.number < 50000 && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
             <SendToPrintavo orderId={o.id} onSaved={save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
-          {o.type === "quote" && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
+          {o.type === "quote" && !pvStatusOf(o as never) && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
           <a className="btn" href={`/print/${o.id}`} target="_blank" rel="noreferrer">{o.type === "quote" ? "Quote PDF" : "Invoice PDF"}</a>
           <a className="btn" href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
           <a className="btn" href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer">Box labels</a>

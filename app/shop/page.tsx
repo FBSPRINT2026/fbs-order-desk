@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import AssistantStrip from "@/components/AssistantStrip";
 import AiSearch from "@/components/AiSearch";
 import SalesAnalytics from "@/components/SalesAnalytics";
-import { Pill } from "@/components/bits";
+import { Pill, pvStatusOf } from "@/components/bits";
 import { money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import { useRole } from "@/components/RoleContext";
@@ -80,7 +80,7 @@ export default function Dashboard() {
       const lastYearTo = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); d.setDate(d.getDate() + 21); return iso(d); })();
       // everything the page needs, asked for at once (each query used to wait for the one before it)
       const [o, a, m, e, ly, recent, sml, bal, sepQ, aoQ] = await Promise.all([
-        sb.from("orders").select("id, number, nickname, customer_id, due_date, status, type, total, delivery_method, submitted_at").not("status", "in", "(completed)").limit(800),
+        sb.from("orders").select("id, number, nickname, customer_id, due_date, status, type, total, delivery_method, submitted_at, printavo_id, pv_status:printavo_state->>status").not("status", "in", "(completed)").limit(800),
         sb.from("archived_orders").select("id, visual_id, nickname, customer_id, due_date, status_name, kind, total, owner:data->>owner").not("status_name", "in", '("Job Completed","Quote - Closed")').limit(800),
         sb.from("messages").select("id, order_id, customer_id, author_name, author_email, body, created_at, topic").eq("author_type", "customer").is("read_at", null).order("created_at", { ascending: false }).limit(30),
         sb.from("activities").select("id, customer_id, order_id, subject, body, from_email, to_email, occurred_at, direction, external_id, thread_id, meta").eq("kind", "email").gte("occurred_at", new Date(Date.now() - 21 * 86400000).toISOString()).order("occurred_at", { ascending: false }).limit(500),
@@ -109,9 +109,9 @@ export default function Dashboard() {
       for (const r of (aoQ.data || []) as { customer_id: string; account_owner: string }[]) own[r.customer_id] = r.account_owner.split(/\s+/)[0].toLowerCase();
       setOwners(own);
       const js: Job[] = [
-        ...((o.data || []) as { id: string; number: number; nickname: string; customer_id: string | null; due_date: string | null; status: string; type: string; total: number; delivery_method: string; submitted_at: string | null }[])
+        ...((o.data || []) as { id: string; number: number; nickname: string; customer_id: string | null; due_date: string | null; status: string; type: string; total: number; delivery_method: string; submitted_at: string | null; printavo_id: string | null; pv_status: string | null }[])
           .filter((x) => !(x.status === "request" && !x.submitted_at))
-          .map((x) => ({ id: x.id, href: `/shop/orders/${x.id}`, number: x.number, nickname: x.nickname, customer_id: x.customer_id, due: x.due_date, status: x.status, statusLabel: "", printavo: false, total: +x.total || 0, owner: own[x.customer_id || ""] || "", ship: x.status === "ready" && x.delivery_method === "ship" })),
+          .map((x) => ({ id: x.id, href: `/shop/orders/${x.id}`, number: x.number, nickname: x.nickname, customer_id: x.customer_id, due: x.due_date, status: x.status, statusLabel: pvStatusOf(x), printavo: false, total: +x.total || 0, owner: own[x.customer_id || ""] || "", ship: x.status === "ready" && x.delivery_method === "ship" })),
         ...((a.data || []) as { id: string; visual_id: string; nickname: string; customer_id: string | null; due_date: string | null; status_name: string; kind: string; total: number; owner: string | null }[])
           .filter((x) => !PV_DONE.test(x.status_name || ""))
           .map((x) => ({ id: x.id, href: `/shop/archive/${x.id}`, number: +x.visual_id || 0, nickname: x.nickname, customer_id: x.customer_id, due: x.due_date, status: x.kind === "quote" ? "quote" : pvKind(x.status_name), statusLabel: x.status_name, printavo: true, total: +x.total || 0, owner: (x.owner || "").split(/\s+/)[0].toLowerCase(), ship: pvKind(x.status_name) === "ship" })),
@@ -198,7 +198,7 @@ export default function Dashboard() {
     <li key={(j.printavo ? "p" : "o") + j.id} className="db-row">
       <Link href={j.href} className="db-num">#{j.number}</Link>
       <span className="db-main"><b>{who(j.customer_id) || "—"}</b><span className="faint">{j.nickname || "Untitled Job"}</span></span>
-      <span className="db-side">{j.printavo ? <span className="db-st">{j.statusLabel}</span> : <Pill status={j.status as never} />}<span className="faint">due {day(j.due)}</span></span>
+      <span className="db-side">{j.statusLabel ? <span className="db-st">{j.statusLabel}</span> : <Pill status={j.status as never} />}<span className="faint">due {day(j.due)}</span></span>
     </li>
   );
   const list = (n: number, body: React.ReactNode, empty = "Nothing here right now.") => (n ? body : <div className="db-empty">{empty}</div>);
@@ -232,7 +232,7 @@ export default function Dashboard() {
   ];
   const pk = prodTab || (buckets.find((b2) => b2.k !== "ship" && b2.jobs.length)?.k ?? "today");
   const cur = buckets.find((b2) => b2.k === pk) || buckets[1];
-  const stageOf = (j: Job) => (j.printavo ? <span className="db-st">{j.statusLabel}</span> : <Pill status={j.status as never} />);
+  const stageOf = (j: Job) => (j.statusLabel ? <span className="db-st">{j.statusLabel}</span> : <Pill status={j.status as never} />);
   const owedMine = owed.filter((b) => isMine(b.customer_id));
   // Production Details Needed: an owner sees only their own customers' orders, always (Oct 15, Nick: "Amanda's dashboard
   // is still showing my reminders like Little Groupies"), plus any with no account owner yet; production sees them all
