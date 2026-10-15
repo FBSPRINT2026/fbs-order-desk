@@ -43,7 +43,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const garOf = (style: string) => cat.find((x) => x.style.toLowerCase() === (style || "").trim().toLowerCase()) || null;
   const work0 = !!work && isStaff;
   const mkPaths = groups.map((g) => {
-    const all = [...(g.mockupThumbs || []), ...(g.customerMockups || []).map((m) => m.path)];
+    // ours first; the customer's own mockup only when we haven't made one
+    const all = g.mockupThumbs?.length ? g.mockupThumbs : (g.customerMockups || []).map((m) => m.path);
     return work0 ? all.slice(0, 5) : all.slice(0, 1);
   });
   const dPaths = work0 ? ((dz || []) as Design[]).filter((d) => d.preview_path) : [];
