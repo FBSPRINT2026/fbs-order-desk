@@ -8109,3 +8109,15 @@ a.pdn-tag:hover{text-decoration:underline}
 .dp-ro .linkbtn{margin-left:auto;font-size:12px;color:var(--ink-3)}
 .dp-ro .linkbtn:hover{color:var(--accent)}
 .dp:has(.dp-ro) .dp-size{color:var(--ink-2)}
+/* the print's logo, read only, at the left of its card: no row of its own (Oct 15, Nick: greyed, a bit bigger, less height) */
+.imp-body.has-logo{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:start}
+.imp-body.has-logo>.imp-grid{padding-left:4px}
+.imp-logo{margin:12px 0 8px 12px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface-2);cursor:pointer;font:inherit;color:var(--ink-3);min-width:0}
+.imp-logo:hover{border-color:var(--accent)}
+.imp-logo img{width:72px;height:72px;object-fit:contain;background:#fff;border-radius:6px;opacity:.92}
+.imp-logo-none{display:grid;place-items:center;width:72px;height:56px;font-size:11.5px}
+.imp-logo small{font-size:10.5px;line-height:1.2;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp-logo .imp-logo-sz{color:var(--ink-2);font-weight:600}
+.imp-card-h{padding:6px 10px 6px 14px}
+.imp-grid{padding:10px 14px 10px;gap:8px 12px}
+.imp-art:empty{display:none}

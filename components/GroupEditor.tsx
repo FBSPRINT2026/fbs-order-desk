@@ -226,6 +226,8 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                   {!hidePrices && <span className="imp-each"><b className="num">{money(gc.imprints[di]?.each)}</b> each</span>}
                   <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>
                 </div>
+                <div className={"imp-body" + (!!onMockup && !g.mockupSkipped ? " has-logo" : "")}>
+                {!!onMockup && !g.mockupSkipped && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
                 <div className="imp-grid">
                   <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                   <div className="f-loc"><span className="imp-l">Location</span>{LOCATIONS.includes(d.location)
@@ -251,13 +253,13 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                       </label></div>
                   <div className="f-notes"><span className="imp-l">Notes</span><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></div>
                 </div>
+                </div>
                 {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="imp-unconf">
                     <span><b>Reorder - Production Details Needed</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
                     {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks we printed before">Production Details</a> : null}
                 </div>}
                 <div className="imp-art">
-                      <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
-                        readOnly={!!onMockup && !g.mockupSkipped} onMockup={onMockup ? startMockup : undefined}
+                      {!(onMockup && !g.mockupSkipped) && <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
                         onPick={(des) => update((x) => {
                           const im = x.imprints[di];
                           im.design_id = des?.id || undefined;
@@ -265,7 +267,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                           if (des && !im.inks.trim() && des.inks) im.inks = des.inks;
                           if (des && (im.method === "screen" || im.method === "embroidery") && des.colors && !im.inks.trim()) im.colors = des.colors;
                         })}
-                        onUpload={async (f, name) => { if (!onUploadDesign) return; const des = await onUploadDesign(f, name); if (des) update((x) => { x.imprints[di].design_id = des.id; }); }} />
+                        onUpload={async (f, name) => { if (!onUploadDesign) return; const des = await onUploadDesign(f, name); if (des) update((x) => { x.imprints[di].design_id = des.id; }); }} />}
                       {gc.wholesale && d.method === "embroidery" && settings.wholesale.embPer1k ? (
                         <div className="row ct-extra">
                           {d.method === "embroidery" && <label>Stitches <input type="number" min={0} step={500} aria-label="Stitch count" placeholder={String(settings.wholesale.embStitches || 6000)} value={d.stitches ?? ""} onChange={(e) => update((x) => { x.imprints[di].stitches = e.target.value ? Math.max(0, Math.round(+e.target.value)) : undefined; })} /><span className="faint">{(settings.wholesale.embStitches || 6000).toLocaleString()} included, {money(settings.wholesale.embPer1k)} each 1,000 over</span></label>}
@@ -579,6 +581,22 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
 }
 
 /** Under each imprint: which customer design prints here, with its size worked out from the print size. */
+/** a print's logo on the order page: read only, set in the Mockup Creator (Oct 15, Nick: "grey out that section…
+ *  see the logo a little larger"), beside the print's fields so it adds no row */
+function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?: string; size: string }; designs: Design[]; urls: Record<string, string>; onMockup?: () => void }) {
+  const cur = designs.find((x) => x.id === imprint.design_id);
+  const m = (imprint.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
+  const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
+  const other = cur && val ? designOther(cur, val, given) : 0;
+  return (
+    <button type="button" className="imp-logo" onClick={onMockup} title={cur ? `${designLabel(cur)}: change it in the Mockup Creator` : "Pick the logo in the Mockup Creator"}>
+      {cur && urls[cur.id] ? <img src={urls[cur.id]} alt="" /> : <span className="imp-logo-none">No logo</span>}
+      <small>{cur ? designLabel(cur) : "Mockup Creator"}</small>
+      {cur && val > 0 && other > 0 && <small className="imp-logo-sz">{val}&quot; {given === "W" ? "wide" : "tall"} → {other}&quot; {given === "W" ? "tall" : "wide"}</small>}
+    </button>
+  );
+}
+
 function DesignPick({ imprint, designs, urls, canUpload, onPick, onUpload, onStar, readOnly, onMockup }: {
   imprint: { design_id?: string; size: string }; designs: Design[]; urls: Record<string, string>; canUpload: boolean;
   /** the art is set in the Mockup Creator, not here (Oct 15, Nick: "you shouldn't be able to change the logo or upload
