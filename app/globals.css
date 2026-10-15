@@ -8477,3 +8477,20 @@ a.pdn-tag:hover{text-decoration:underline}
   .ord .ot-nav .ot-ic{display:block;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   .ord .ot-nav .aa-n{position:absolute;top:5px;left:calc(50% + 8px);min-width:18px;padding:0 5px;font-size:10.5px;line-height:16px}
 }
+
+/* a print on a phone (Oct 15, Nick: "looks a little jumbled together"): logo beside the location, how and price;
+   the specs, art, screens and notes run the full width underneath, no dots starting a wrapped line */
+@media (max-width:760px){
+  .ord .pr{grid-template-columns:72px minmax(0,1fr);column-gap:12px;row-gap:8px;align-items:center;padding:12px 0}
+  .ord .pr-logo{width:72px;height:72px}
+  .ord .pr-main{display:contents}
+  .ord .pr-top{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"n e" "h e";column-gap:10px;row-gap:2px;align-items:center}
+  .ord .pr-top>.pr-n{display:none}
+  .ord .pr-top>b{grid-area:n;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px}
+  .ord .pr-top>.pr-how{grid-area:h;font-size:12.5px}
+  .ord .pr-top>.pr-each{grid-area:e;margin:0;text-align:right}
+  .ord .pr-main>*:not(.pr-top){grid-column:1 / -1}
+  .ord .pr-specs{gap:4px 16px;font-size:13.5px}
+  .ord .pr-specs>span+span::before{display:none}
+  .ord .pr-art{font-size:12px}
+}
