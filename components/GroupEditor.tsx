@@ -1,8 +1,7 @@
 "use client";
 import { inkNames, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
-import { guessHex, smallerSpot, spotFor } from "@/lib/mockup";
-import { colorHex } from "@/lib/inkColors";
+import { guessHex, smallerSpot } from "@/lib/mockup";
 import DesignSearch from "@/components/DesignSearch";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
@@ -622,56 +621,15 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup }: { d
       <button type="button" className="pr-logo" style={{ background: hex }} onClick={() => (pic ? setZoom(true) : onMockup())} title={pic ? "See it bigger" : "Pick the logo in the Mockup Creator"}>
         {pic ? <img src={pic} alt="" /> : <span>No logo</span>}
       </button>
-      {zoom && pic && <div className="pr-zoom" role="dialog" aria-modal="true" aria-label={`${d.location} close-up`} onClick={() => setZoom(false)} onKeyDown={(e) => { if (e.key === "Escape") setZoom(false); }} tabIndex={-1} ref={(el) => el?.focus()}>
-        <div className="pr-cu" onClick={(e) => e.stopPropagation()}>
-          <PrintCloseUp d={d} hex={hex} url={pic} wIn={given === "W" ? val : other} hIn={given === "W" ? other : val} />
-          <div className="pr-cu-f">{cur && <span className="faint">{designLabel(cur)}</span>}<button type="button" className="btn sm" onClick={() => setZoom(false)}>Close</button></div>
-        </div>
+      {zoom && pic && <div className="pr-zoom" role="dialog" aria-modal="true" aria-label={cur ? designLabel(cur) : "Logo"} onClick={() => setZoom(false)} onKeyDown={(e) => { if (e.key === "Escape") setZoom(false); }} tabIndex={-1} ref={(el) => el?.focus()}>
+        <figure onClick={(e) => e.stopPropagation()}>
+          <img src={pic} alt={cur ? designLabel(cur) : ""} style={{ background: hex }} />
+          <figcaption><b>{cur ? designLabel(cur) : ""}</b>{size ? ` · ${size} on the ${d.location}` : ""}<button type="button" className="btn sm" onClick={() => setZoom(false)}>Close</button></figcaption>
+        </figure>
       </div>}
-      <div className="pr-main">
-        <div className="pr-top">
-          {n > 0 && <span className="pr-n">{n}</span>}
-          <b>{d.location || "Print"}</b>
-          <span className="pr-how">{METHODS[d.method]}</span>
-          {each && <span className="pr-each"><b>{each}</b> each</span>}
-        </div>
-        <div className="pr-specs">
-          {colors && <span>{colors}</span>}
-          {d.inks && <span className="pr-ink">{d.inks}</span>}
-          {size && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
-          <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>
-          {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches</span> : null}
-        </div>
-        {cur && <div className="pr-art">{designLabel(cur)}</div>}
         {d.notes && <div className="pr-notes">{d.notes}</div>}
         {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>Production details needed</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>Production Details</a> : null}</div>}
       </div>
-    </div>
-  );
-}
-
-/** one print location close up, as the Mockup Creator shows it (Oct 15, Nick: "when we click it just creates a popup of
- *  the zoomed in part on the mockup creator"): the shirt color, the location's max print area dashed, the logo at its
- *  size (top of the area for a full front / back or a set drop, else centered), its size and inks. Read only. */
-function PrintCloseUp({ d, hex, url, wIn, hIn }: { d: Group["imprints"][number]; hex: string; url: string; wIn: number; hIn: number }) {
-  const sp = spotFor(d.location);
-  const maxW = sp.maxW, maxH = sp.maxH, BOX = 380;
-  const spanW = maxW + 2, spanH = maxH + 2;
-  const PX = Math.min(BOX / spanW, (BOX * 1.25) / spanH);
-  const W = spanW * PX, H = spanH * PX, top0 = (H - maxH * PX) / 2;
-  const w = (wIn || maxW * 0.6) * PX, h = (hIn || (wIn || maxW * 0.6)) * PX;
-  const topAlign = !!sp.top || !!(d.drop && !isNaN(+d.drop));
-  const cy = topAlign ? top0 + h / 2 : H / 2;
-  const inks = inkNames(d.inks);
-  return (
-    <div className="mk-sleeve" style={{ width: W }}>
-      <div className="mk-cu-h"><span className="lbl">{(d.location || "Print").toUpperCase()}</span><span className="mk-cu-max">max {maxW}&quot; × {maxH}&quot;</span></div>
-      <div className="mk-sleeve-box" style={{ width: W, height: H, background: hex }}>
-        <div className="mk-sleeve-max" style={{ width: maxW * PX, height: maxH * PX, left: (W - maxW * PX) / 2, top: top0 }} />
-        <div className="mk-art" style={{ left: W / 2 - w / 2, top: cy - h / 2, width: w, height: h, cursor: "default" }}><img src={url} alt="" draggable={false} /></div>
-      </div>
-      <div className="mk-cu-dim">{wIn && hIn ? <>{wIn.toFixed(2)}&quot; W × {hIn.toFixed(2)}&quot; H</> : d.size || ""}</div>
-      {inks.length > 0 && <div className="mk-cu-colors">{inks.map((n) => <span key={n} className="mk-cu-color"><span className="sw" style={{ background: colorHex(n) || "#ccc" }} />{n}</span>)}</div>}
     </div>
   );
 }

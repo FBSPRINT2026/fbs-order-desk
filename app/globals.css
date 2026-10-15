@@ -8182,3 +8182,5 @@ a.pdn-tag:hover{text-decoration:underline}
 .pr-cu{background:#fff;border-radius:16px;padding:16px 18px 14px;box-shadow:0 24px 60px rgba(0,0,0,.3);cursor:default;max-width:92vw;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:10px}
 .pr-cu-f{display:flex;align-items:center;gap:10px;font-size:12.5px}
 .pr-cu-f .btn{margin-left:auto}
+/* the zoomed logo on the shirt's color (Oct 15, Nick: "liked the way I had it… just the shirt color in the background") */
+.pr-zoom img{padding:24px;box-sizing:border-box}
