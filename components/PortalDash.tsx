@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { PortalJob } from "@/lib/portalJobs";
-import { DashHello, DashReorder } from "./PortalDashBits";
+import { DashReorder } from "./PortalDashBits";
 
 /**
  * The customer's dashboard (Oct 15, Nick: "rethink the dashboard… more visual, jobs moving through… the AI assistant
@@ -11,13 +11,12 @@ export type DashThread = { key: string; label: string; title: string; from: stri
 export type DashNeed = { key: string; kind: string; title: string; text: string; pic: string; href: string; cta: string };
 export type DashPast = { id: string; number: number; nickname: string; when: string; qty: number; pic: string; href: string; archived?: boolean };
 
-export default function PortalDash({ sub, actions, assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, artHref, account, goods, canAct, ordersHref }: {
-  sub: string; actions: ReactNode; assistant: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
+export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, artHref, account, goods, canAct, ordersHref }: {
+  assistant: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
   past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string; account: { label: string; value: string; tone?: "ok" | "bad" }[]; goods?: ReactNode; canAct: boolean; ordersHref: string;
 }) {
   return (
     <div className="pdx">
-      <div className="pdx-hello"><DashHello sub={sub} /><div className="pdx-acts">{actions}</div></div>
 
       <div className="pdx-top">
         <section className="pdx-card pdx-asst">

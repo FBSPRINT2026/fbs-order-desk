@@ -8812,5 +8812,4 @@ a.pdn-tag:hover{text-decoration:underline}
   .pdx-jt .t{font-size:18px}
 }
 
-/* the portal dashboard has its own hello: no Welcome back banner above the tabs there */
-.portal .p-main:has(.pdx) > .p-hero{display:none}
+.p-main > .pdx-hello{margin-bottom:16px}

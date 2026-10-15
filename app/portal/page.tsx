@@ -212,8 +212,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const ideas = [jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?", past[0] ? `Reorder ${past[0].nickname || `#${past[0].number}`}` : "Reorder a past job",
     ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
   const dash = (
-    <PortalDash sub={`${company ? `${company} · ` : ""}your orders, art and payments with ${shopName}`}
-      actions={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />}
+    <PortalDash
       assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare ideas={ideas} personHref={msgLink(null)} />}
       threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} artHref={link("/portal?area=artwork")}
       account={account} canAct={!ctx.preview} ordersHref={link("/portal?area=orders")}
@@ -224,10 +223,10 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s portal. Buttons are turned off in preview.</div>}
       <main className="p-main">
-        <div className="p-hero">
-          <div className="eyebrow">Welcome back</div>
-          <h1>{company || "Your Account"}</h1>
-          <p className="p-hero-sub">Your quotes, orders, artwork and payments with {ctx.settings.shop.name}, all in one place.</p>
+        {/* the customer's name with Start an order / Mockup Creator, above the tabs (Oct 15, Nick) */}
+        <div className="pdx-hello">
+          <div><h1 className="pdx-h1">{company || "Your Account"}</h1><div className="pdx-sub">Your quotes, orders, artwork and payments with {ctx.settings.shop.name}</div></div>
+          {ctx.customerIds.length > 0 && <div className="pdx-acts"><StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} /></div>}
         </div>
         {!ctx.customerIds.length ? (
           <div className="panel"><div className="panel-b">

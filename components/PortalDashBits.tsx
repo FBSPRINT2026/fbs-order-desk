@@ -1,16 +1,8 @@
 "use client";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { greeting } from "@/lib/greeting";
 import { reorderRequest } from "@/app/portal/request-actions";
 import { reorderArchived } from "@/app/portal/assist-actions";
-
-/** "Good evening" by the viewer's own clock (never their name: lib/greeting.ts). */
-export function DashHello({ sub }: { sub: string }) {
-  const [hello, setHello] = useState("Hello");
-  useEffect(() => setHello(greeting()), []);
-  return <div><h1 className="pdx-h1">{hello}</h1><div className="pdx-sub">{sub}</div></div>;
-}
 
 /** Order again: a new order with the same garments, sizes and logos (a past Printavo job becomes a reorder request). */
 export function DashReorder({ id, archived, canAct }: { id: string; archived?: boolean; canAct: boolean }) {
