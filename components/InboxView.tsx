@@ -2,6 +2,7 @@
 import CcField from "@/components/CcField";
 import Link from "next/link";
 import HistoryLink from "@/components/HistoryLink";
+import { AppStartToggle } from "@/components/AppStart";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -381,6 +382,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
       <div className="page-head ibx2-head">
         <div><div className="eyebrow">{mode === "mail" ? "Your mailbox" : "Sales"}</div><h1>{mode === "mail" ? "Email" : "Conversations"}</h1></div>
         <div className="ibx2-status">
+          {mode === "mail" && <AppStartToggle path="/shop/inbox" label="Email" />}
           {box?.enabled && <span className={"ibx2-box" + (boxStuck ? " bad" : "")} title={box.last_error || `${box.email}${st && st.all.length > 1 ? ` · also connected: ${st.all.filter((b) => b.id !== box.id).map((b) => b.email).join(", ")}` : ""}`}>
             <i aria-hidden />{boxStuck ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}
           </span>}

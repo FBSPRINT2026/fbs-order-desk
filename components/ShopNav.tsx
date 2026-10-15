@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { recordVisit, touchCurrent } from "@/lib/navTrail";
+import { AppLaunch } from "@/components/AppStart";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
@@ -209,6 +210,9 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
   );
 
   return (
+    <>
+    {/* the Home Screen app: straight to the page chosen for this phone (Oct 15, Nick: open right to my email) */}
+    <AppLaunch />
     <aside className={"side" + (mini ? " mini" : "")} ref={sideRef}
       onMouseOver={(e) => {
         if (!mini) return;
@@ -308,5 +312,6 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       </div>
       </div>
     </aside>
+    </>
   );
 }
