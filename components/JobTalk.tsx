@@ -1,6 +1,10 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import { MailFrame } from "@/components/MailFolders";
+import { History } from "@/components/ArchivedOrderView";
+import { createClient } from "@/lib/supabase/client";
+import { downloadUrl } from "@/lib/printavoNames";
+import type { PvOrder } from "@/lib/archive";
 
 /**
  * A job's emails and texts in one timeline (Oct 15, Nick, on Printavo invoice 27166: "a shop-side tab that shows the
@@ -16,7 +20,7 @@ type Talk = { customer: string; number: string; name: string; items: Item[]; sum
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 const time = (s: string) => new Date(s).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-export default function JobTalk({ jobRef, printavo, printavoCount = 0 }: { jobRef: string; /** a Printavo job's own messages & approvals (Oct 15, Nick: "add messages and approval to Emails & Texts… call them Printavo Messages") */ printavo?: ReactNode; printavoCount?: number }) {
+export default function JobTalk({ jobRef, printavo, printavoCount = 0, title }: { jobRef: string; /** a header of its own (a reorder: "From the original order #27166") */ title?: string; /** a Printavo job's own messages & approvals (Oct 15, Nick: "add messages and approval to Emails & Texts… call them Printavo Messages") */ printavo?: ReactNode; printavoCount?: number }) {
   const [d, setD] = useState<Talk | null>(null), [no, setNo] = useState(false), [err, setErr] = useState("");
   const [show, setShow] = useState<"all" | "text" | "email" | "pv">("all"), [big, setBig] = useState(""), [open, setOpen] = useState<Record<string, boolean>>({});
   /** an email opened in full: from the mailbox (FullMsg) or kept in the portal; "…" while loading */
@@ -50,7 +54,7 @@ export default function JobTalk({ jobRef, printavo, printavoCount = 0 }: { jobRe
   let last = "";
   return (
     <section className="panel jt">
-      <div className="panel-h"><h2>{printavo ? "Printavo Messages, Emails, & Texts" : "Emails & Texts"}</h2><span className="faint" style={{ fontSize: 12.5 }}>{d ? `everything with ${d.customer} about #${d.number}${d.name ? ` ${d.name}` : ""}` : "Looking through texts and email…"}</span><span className="spacer" /><span className="jt-lock">Shop only</span></div>
+      <div className="panel-h"><h2>{title || (printavo ? "Printavo Messages, Emails, & Texts" : "Emails & Texts")}</h2><span className="faint" style={{ fontSize: 12.5 }}>{d ? `everything with ${d.customer} about #${d.number}${d.name ? ` ${d.name}` : ""}` : "Looking through texts and email…"}</span><span className="spacer" /><span className="jt-lock">Shop only</span></div>
       {err && <div className="pv-err">{err}</div>}
       {d && !all.length && !printavoCount && <div className="panel-b faint">No emails or texts found for this job.</div>}
       {d && (all.length > 0 || printavoCount > 0) && <>
@@ -101,4 +105,35 @@ export default function JobTalk({ jobRef, printavo, printavoCount = 0 }: { jobRe
       {big && <div className="ctx-big" onClick={() => setBig("")}><img src={big} alt="" /></div>}
     </section>
   );
+}
+
+/**
+ * On a reorder: the ORIGINAL job's messages, emails and texts (Oct 15, Nick: "if Jose or Amanda re-create this order
+ * they have the emails with the original files, the texts where I sent an image for approval… that's the whole
+ * point"). The original is read from the order's "Reorder of (Printavo) #27166" note.
+ */
+export function OriginalJobTalk({ notes }: { notes: string | null | undefined }) {
+  const m = String(notes || "").match(/Reorder of (Printavo )?#(\d+)/);
+  const [ref, setRef] = useState<{ ref: string; pv?: PvOrder; files?: Record<string, string> } | null>(null);
+  const [signed, setSigned] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!m) return;
+    const sb = createClient();
+    (async () => {
+      if (m[1]) {
+        const { data } = await sb.from("archived_orders").select("id, data, files").eq("visual_id", m[2]).maybeSingle();
+        if (!data) return;
+        setRef({ ref: `pv:${data.id}`, pv: data.data as PvOrder, files: (data.files || {}) as Record<string, string> });
+        const stored = Object.entries((data.files || {}) as Record<string, string>).filter(([, p]) => p && !["failed", "too-big"].includes(p));
+        if (stored.length) { const { data: s2 } = await sb.storage.from("proofs").createSignedUrls(stored.map(([, p]) => p), 3600); setSigned(Object.fromEntries(stored.map(([u], i) => [u, s2?.[i]?.signedUrl || ""]).filter(([, v]) => v))); }
+      } else {
+        const { data } = await sb.from("orders").select("id").eq("number", Number(m[2])).maybeSingle();
+        if (data) setRef({ ref: `o:${data.id}` });
+      }
+    })();
+  }, [m?.[2]]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!m || !ref) return null;
+  const fu = (u: string) => signed[u] || u;
+  return <JobTalk jobRef={ref.ref} title={`From the original order #${m[2]}: messages, emails & texts`}
+    {...(ref.pv ? { printavoCount: (ref.pv.messages?.length || 0) + (ref.pv.approvals?.length || 0), printavo: <History o={ref.pv} fileUrl={fu} dl={(u, name) => downloadUrl(fu(u), name)} paths={ref.files || {}} audience="shop" /> } : {})} />;
 }

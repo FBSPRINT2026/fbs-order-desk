@@ -2,7 +2,7 @@
 import JobLabor from "@/components/team/JobLabor";
 import BackLink from "@/components/BackLink";
 import JobFiles from "@/components/job/JobFiles";
-import JobTalk from "@/components/JobTalk";
+import JobTalk, { OriginalJobTalk } from "@/components/JobTalk";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import SendToPrintavo, { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
@@ -809,6 +809,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             </section>
             {/* the job's emails and texts (owners only; Oct 15) */}
             <JobTalk jobRef={`o:${o.id}`} />
+            {/* a reorder: the original job's messages, emails (with their files) and texts (approvals), for whoever re-creates it */}
+            <OriginalJobTalk notes={o.notes} />
           </div>
         </div>
 
