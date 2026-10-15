@@ -41,7 +41,7 @@ export async function loadGoodsItems(admin: SupabaseClient, orders: O[], viewer:
     const st = goods.get(o.id);
     return {
       order: { id: o.id, number: o.number, nickname: o.nickname || "", status: o.status, statusLabel: (portal ? ST[o.status as keyof typeof ST]?.portal : ST[o.status as keyof typeof ST]?.label) || o.status, due_date: o.due_date, qty: o.qty, href: href(o.id) },
-      goods: st ? { status: st.status, issue_type: st.issue_type, issue_note: st.issue_note, expected: st.expected, updated_at: st.updated_at, supplier: st.supplier || "", supplier_po: st.supplier_po || "", ship_date: st.ship_date || null } : NO_GOODS,
+      goods: st ? { status: st.status, issue_type: st.issue_type, issue_note: st.issue_note, expected: st.expected, updated_at: st.updated_at, supplier: st.supplier || "", supplier_po: st.supplier_po || "", ship_date: st.ship_date || null, by: (st as { updated_by?: string }).updated_by || "" } : NO_GOODS,
       shipments: ships.filter((x) => x.order_id === o.id).map((x) => ({ id: x.id, carrier: x.carrier, tracking: x.tracking, boxes: x.boxes, eta: x.eta, note: x.note, added_by: x.added_by, author_name: x.author_name, created_at: x.created_at,
         track_status: x.track_status || "", track_detail: x.track_detail || "", est_delivery: x.est_delivery || null, delivered_at: x.delivered_at || null, source: x.source || "",
         files: (x.files || []).map((f) => ({ name: f.name, mime: f.mime, size: f.size, url: url.get(f.path) || "" })) })),

@@ -57,7 +57,7 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
           <b>{it.order.nickname || "Order"}</b>
           <span className="gc-sub">{it.order.statusLabel}{it.order.due_date ? ` · in hands ${when(it.order.due_date)}` : ""}{it.order.qty ? ` · ${it.order.qty} pcs` : ""}</span>
         </div>
-        <span className="gc-st">{needInfo ? (mode === "portal" ? "Tell us where your goods are coming from" : "Waiting on info") : mode === "portal" ? g.portal : g.label}</span>
+        <span className="gc-st">{needInfo ? (mode === "portal" ? "Tell us where your goods are coming from" : "Waiting on info") : mode === "portal" ? g.portal : it.goods.by === "Printavo" && (it.goods.status === "received" || it.goods.status === "partial") ? (it.goods.status === "received" ? "Received in Printavo" : "Partly received in Printavo") : g.label}</span>
       </header>
 
       <ol className="gc-steps" aria-label="Goods progress">

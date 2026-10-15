@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { orderGroups, type Order } from "@/lib/pricing";
 import { sizeKey, PV, mixedBoxes, type MixedBox } from "@/lib/manifest";
+import { goodsFromPrintavo, type PvSnap } from "@/lib/printavoSend";
 
 /**
  * Check-In: receiving counts each job's goods in, size by size.
@@ -87,7 +88,7 @@ const CLOSED = /job\s*completed|quote|cancel|closed/i;
 export async function checkinJobs(admin: SupabaseClient, from: string, to: string, only?: { kind: "o" | "a"; id: string }): Promise<{ jobs: CheckJob[]; problems: CheckJob[] }> {
   const lo = addDays(from, -21), hi = addDays(to, 30);
   const pvQ = admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, po_number, qty, data, customers(company, name)");
-  const oQ = admin.from("orders").select("id, number, nickname, status, due_date, production_date, po_number, qty, groups, lines, customers(company, name)");
+  const oQ = admin.from("orders").select("id, number, nickname, status, due_date, production_date, po_number, qty, groups, lines, customers(company, name), printavo_id, pv:printavo_state->pv, pv_status:printavo_state->>status");
   const [{ data: pv, error: e1 }, { data: os, error: e2 }, { data: open, error: e3 }] = await Promise.all([
     only ? (only.kind === "a" ? pvQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : pvQ.gte("due_date", lo).lte("due_date", hi).limit(1500),
     only ? (only.kind === "o" ? oQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : oQ.not("status", "in", "(completed,quote,quote_sent,request)").limit(800),
@@ -147,6 +148,14 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     const start = ymd(o.production_date), due = ymd(o.due_date);
     jobs.push(build(o.id, { number: o.number, nickname: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", po: o.po_number || "", status: o.status, start, due, day: start || due || "", href: `/shop/orders/${o.id}`, _kind: kindOf("", orderGroups(o as unknown as Order).flatMap((g) => [...(g.imprints || []).map((im) => im.method || ""), ...g.lines.flatMap((l) => ((l as { decorations?: { method: string }[] }).decorations || []).map((d) => d.method))])) } as never,
       +(o.qty || 0), itemsFromOrder(o as unknown as Order), lines.filter((l) => l.order_id === o.id), cks.filter((c) => c.order_id === o.id)));
+    // a 40,000 job run from Printavo: Printavo's status, and its receiving overrides the count here (Oct 15, Nick)
+    const x = o as ORow & { printavo_id?: string | null; pv?: PvSnap | null; pv_status?: string | null };
+    if (x.printavo_id && o.number >= 40000 && o.number < 50000) {
+      const j = jobs[jobs.length - 1];
+      if (x.pv_status) j.status = x.pv_status;
+      const g = x.pv ? goodsFromPrintavo(x.pv) : null;
+      if (g === "received") j.state = "checked"; else if (g === "partial" && j.state !== "issue") j.state = "partial";
+    }
   }
   // mixed boxes: a box that also holds goods for another job
   const mix = await mixedBoxes(admin, lines.map((l) => l.tracking)).catch(() => new Map<string, MixedBox>());

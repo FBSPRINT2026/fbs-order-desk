@@ -29,7 +29,7 @@ export type Shipment = {
   /** live tracking (EasyPost): status, latest scan, estimated delivery */
   track_status?: string; track_detail?: string; est_delivery?: string | null; delivered_at?: string | null; source?: string;
 };
-export type GoodsState = { status: GoodsStatus; issue_type: IssueType; issue_note: string; expected: string; updated_at: string | null; supplier?: string; supplier_po?: string; ship_date?: string | null };
+export type GoodsState = { status: GoodsStatus; issue_type: IssueType; issue_note: string; expected: string; updated_at: string | null; supplier?: string; supplier_po?: string; ship_date?: string | null; /** who set it ("Printavo": checked in in Printavo, a 40,000 job) */ by?: string };
 export type GoodsItem = {
   order: { id: string; number: number; nickname: string; status: string; statusLabel: string; due_date: string | null; qty: number; href: string };
   goods: GoodsState; shipments: Shipment[];

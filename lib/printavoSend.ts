@@ -301,7 +301,7 @@ export type PvSnap = {
   at: string; visualId: string; status: string; total: number; kind: string; productionNote: string;
   customerNote: string; nickname: string; po: string; customerDue: string; productionDue: string; discount: number; discountPct: boolean; salesTax: number;
   imprints: string[][]; payments: { id: string; kind: string; amount: number; category: string; date: string; processing: boolean }[];
-  groups: { lines: { itemNumber: string; color: string; description: string; category: string; sizes: Record<string, number>; price: number; mockups: number }[] }[];
+  groups: { lines: { itemNumber: string; color: string; description: string; category: string; sizes: Record<string, number>; price: number; mockups: number; /** Printavo's goods status: received / partially_received / ordered / "" */ goods?: string }[] }[];
   fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
 };
 const OUR_SIZE: Record<string, string> = Object.fromEntries(Object.entries(PV_SIZE).map(([k, v]) => [v, k]));
@@ -322,6 +322,16 @@ export function ourStatusFor(name: string, kind: string): StatusKey | null {
   if (/press|printing|fulfillment|finishing|production|scheduling|^emb\b|^sp\b|^hp\b|^op\b|^dtf\b|mixed order/.test(s)) return "production";
   return null;
 }
+/** the order's goods from Printavo's line goods statuses: every line received → received; some → partial; else null */
+export function goodsFromPrintavo(snap: Pick<PvSnap, "groups">): "received" | "partial" | null {
+  const lines = snap.groups.flatMap((g) => g.lines).filter((l) => Object.values(l.sizes || {}).some((v) => +v > 0));
+  if (!lines.length) return null;
+  const st = lines.map((l) => String(l.goods || "").toLowerCase());
+  if (st.every((x) => x === "received")) return "received";
+  if (st.some((x) => x === "received" || x === "partially_received")) return "partial";
+  return null;
+}
+
 /**
  * Reads the order back from Printavo (two-way during the move: quantities, prices and fees changed in Printavo come
  * back here to be accepted on the order page; the number and status are taken as they are, our status following
@@ -339,7 +349,7 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
     discount: p.discount || 0, discountPct: !!p.discountAsPercentage, salesTax: p.salesTax || 0,
     imprints: p.groups.map((g) => g.imprints.map((i) => i.details || "")),
     payments: p.transactions.filter((t) => /^(Payment|Refund|Return)$/.test(t.kind)).map((t) => ({ id: t.id, kind: t.kind, amount: t.amount, category: t.category, date: day(t.date) || t.date, processing: t.processing })),
-    groups: p.groups.map((g) => ({ lines: g.lines.map((l) => ({ itemNumber: l.itemNumber, color: l.color, description: l.description, category: l.category, price: l.price, mockups: l.mockups.length,
+    groups: p.groups.map((g) => ({ lines: g.lines.map((l) => ({ itemNumber: l.itemNumber, color: l.color, description: l.description, category: l.category, price: l.price, mockups: l.mockups.length, goods: l.status,
       sizes: Object.fromEntries(Object.entries(l.sizes).map(([k, v]) => [OUR_SIZE[k] || k.replace(/^size_/, "").toUpperCase(), v])) })) })),
     fees: p.fees.map((f) => ({ description: f.description, amount: f.amount, quantity: f.quantity, unitPrice: f.unitPrice, pct: f.pct })),
   };
@@ -380,6 +390,21 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
   if (want && want !== ours) {
     statusPatch.status = want; statusPatch.type = ST[want].type;
     await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: want, actor: `Printavo: ${p.status.name}` });
+  }
+  // the goods: Printavo's receiving (each line's goods status) overrides ours on these jobs (Oct 15, Nick: "the goods
+  // were received in Printavo via their goods status… the receiving status in Printavo should override the new
+  // system for the 40000 series"). Quietly: no message or email to the customer (Printavo talks to them during the
+  // move). Received / partly received there → the same here; nothing received there → back to waiting, if Printavo
+  // had set it.
+  const fromPv = goodsFromPrintavo(snap);
+  {
+    const { data: g } = await admin.from("order_goods").select("status, updated_by").eq("order_id", orderId).maybeSingle();
+    const now = g?.status as string | undefined;
+    const goods = fromPv || (g?.updated_by === "Printavo" && (now === "received" || now === "partial") ? "waiting" : null);
+    if (goods && (g || full?.price_type === "wholesale") && now !== goods) {
+      await admin.from("order_goods").upsert({ order_id: orderId, status: goods, ...(goods === "received" ? { issue_type: "", issue_note: "" } : {}), updated_by: "Printavo", updated_at: new Date().toISOString() });
+      await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: goods === "received" ? "Goods: Received in Printavo" : goods === "partial" ? "Goods: Partly received in Printavo" : "Goods: not received in Printavo", actor: "Printavo" });
+    }
   }
   await admin.from("orders").update({ ...cardPatch, ...statusPatch, printavo_visual_id: p.visualId, printavo_state: { ...st, pv: snap, status: p.status.name, url: p.urls.url || st.url, publicUrl: p.urls.publicUrl || st.publicUrl, ...(fingerprint ? { fp: fingerprint } : {}) } }).eq("id", orderId);
   return snap;
