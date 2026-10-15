@@ -8269,3 +8269,9 @@ a.pdn-tag:hover{text-decoration:underline}
 .page-head h1::after,.portal .p-main h1::after,.md-head h1::after,.ord .ed-head h1::after{margin-top:3px}
 .ord .panel-h h2,.ord .lbl.gsec,.ord .sbx-h.gsec{padding-bottom:5px}
 .portal .aa-sec-h h3{padding-bottom:5px}
+/* the order title: the job first, then "– Order #40003"; its rainbow runs the whole title and a bit past (Oct 15, Nick) */
+.ord .ed-head h1 .ot-no{font-weight:600;color:var(--ink-3);font-size:.82em}
+.ord .ed-head h1::after{max-width:none;width:calc(100% + 60px)}
+/* sub-sections (Garments, Imprints, Screens, Finishing, Fees & adjustments, Customer notes): bold titles, no rainbow */
+.ord .lbl.gsec::after,.ord .sbx-h.gsec::after,.ord .fin-panel .panel-h h2::after,.ord .fees-notes .panel-h h2::after{display:none}
+.ord .lbl.gsec,.ord .sbx-h.gsec,.ord .fin-panel .panel-h h2,.ord .fees-notes .panel-h h2{padding-bottom:0}
