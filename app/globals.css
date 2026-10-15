@@ -8895,3 +8895,5 @@ a.pdn-tag:hover{text-decoration:underline}
   .pdx-rdue{display:none}
   .pdx-row .pdx-pill{grid-row:1;grid-column:3}
 }
+.aa-paidup{background:#e9f6ef;border:1px solid #bfe3cd;border-radius:12px;padding:12px 14px;color:var(--ink-2)}
+.aa-paidup b{color:var(--ok);margin-right:4px}

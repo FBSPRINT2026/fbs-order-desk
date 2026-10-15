@@ -417,13 +417,15 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
       )}
       <div className={canPay ? "aa-home aa-paylay" : ""}><div className="aa-home-main stack">
       {mode === "shop" && onRecordPayment && <RecordPayment record={onRecordPayment} onDone={() => router.refresh()} />}
+      {due > 0.004 ? (
       <div className="aa-aging" aria-label="Aging">
-        {aging.map((b, i) => (
-          <div key={b.k} className={"aa-age" + (i >= 1 && b.amt > 0.004 ? " late" : "") + (i >= 2 && b.amt > 0.004 ? " bad" : "")}>
-            <span>{b.k}</span><b className="num">{money(b.amt)}</b><small>{b.n} order{b.n === 1 ? "" : "s"}</small>
-          </div>
-        ))}
-      </div>
+          {aging.map((b, i) => (
+            <div key={b.k} className={"aa-age" + (i >= 1 && b.amt > 0.004 ? " late" : "") + (i >= 2 && b.amt > 0.004 ? " bad" : "")}>
+              <span>{b.k}</span><b className="num">{money(b.amt)}</b><small>{b.n} order{b.n === 1 ? "" : "s"}</small>
+            </div>
+          ))}
+        </div>
+        ) : <div className="aa-paidup"><b>✓ {mode === "shop" ? "Nothing due." : "You're all paid up."}</b> <span>{mode === "shop" ? "No balance on this customer's portal orders (orders from Printavo aren't counted here)." : "Nothing is due on your orders right now."}</span></div>}
       <div className="aa-card aa-tblcard">
         <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Open orders</h3>{canPay && open.length > 1 && <span className="faint">Check the ones you want to pay together.</span>}</div>
         {payTable(open, false)}

@@ -173,7 +173,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const jobs = jobOrders.map(jobOf), pastJobs = doneRecent.map(jobOf);
   const IDX_AFTER_ART = ["blanks", "production", "ready"];
   // what's waiting on them, with a picture and one button
-  const due = aOrders.filter((o) => o.type === "invoice" && o.balance > 0.004).reduce((a, o) => a + o.balance, 0);
+  // the same balance the Payments tab shows: orders in the portal only (Printavo balances are paid through Printavo / QuickBooks for now)
+  const due = aOrders.filter((o) => o.type === "invoice" && !o.archived && o.balance > 0.004).reduce((a, o) => a + o.balance, 0);
   const needs: DashNeed[] = attention.map((a, i) => {
     const o = orders.find((x) => x.id === a.order_id);
     const nm = o ? `#${o.number} ${o.nickname || ""}`.trim() : "";
