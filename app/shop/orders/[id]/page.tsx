@@ -7,7 +7,7 @@ import { stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import SendToPrintavo, { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
 import { SITE_URL } from "@/lib/config";
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -48,6 +48,16 @@ const EVENT_LABEL: Record<string, string> = {
 };
 
 const GOODS_WORD: Record<string, string> = { waiting: "Waiting on goods", on_way: "On the way", arrived: "Arrived, checking in", partial: "Partly arrived", received: "Received", issue: "Receiving issue" };
+
+// the order tabs' icons: on a phone the tabs show these instead of their names (Oct 15, Nick: "the middle tool bar
+// has a horizontal scroll… just make those icons without words")
+const TAB_ICONS: Record<string, ReactNode> = {
+  order: <><path d="M9 3.5h6v3H9z" /><path d="M7 5H5v15.5h14V5h-2" /><path d="M8.5 11h7M8.5 15h4.5" /></>,
+  prod: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-9 8" /></>,
+  msg: <path d="M4 5h16v11H10l-5 4v-4H4z" />,
+  pay: <><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18M7 15h3" /></>,
+  act: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>,
+};
 
 export default function OrderEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -690,7 +700,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       })()}
       <nav className="aa-nav ot-nav" aria-label="Order sections">
         {([["order", "Order", 0], ["prod", "Art & production", art.length], ["msg", "Messages", talkN + messages.length], ...(seesMoney ? [["pay", "Payments", payments.length]] : []), ["act", "Activity", 0]] as [Tab, string, number][]).map(([k, l, n]) =>
-          <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)}>{l}{n > 0 && <span className="aa-n">{n}</span>}</button>)}
+          <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)} aria-label={l} title={l}><svg className="ot-ic" viewBox="0 0 24 24" aria-hidden>{TAB_ICONS[k]}</svg><span className="ot-l">{l}</span>{n > 0 && <span className="aa-n">{n}</span>}</button>)}
       </nav>
       <div className="ot-panes" inert={(cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>)) || undefined} style={cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) ? { opacity: 0.45 } : undefined}>
 

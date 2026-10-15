@@ -8467,3 +8467,13 @@ a.pdn-tag:hover{text-decoration:underline}
   .ord .pr{grid-template-columns:84px minmax(0,1fr);gap:12px}
   .ord .pr-logo{width:84px;height:84px}
 }
+
+/* order tabs: icons only on a phone, all five fit without scrolling (Oct 15, Nick) */
+.ot-nav .ot-ic{display:none}
+@media (max-width:760px){
+  .ord .ot-nav{display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);overflow:visible}
+  .ord .ot-nav .aa-tab{position:relative;display:grid;place-items:center;padding:12px 0}
+  .ord .ot-nav .ot-l{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .ord .ot-nav .ot-ic{display:block;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .ord .ot-nav .aa-n{position:absolute;top:5px;left:calc(50% + 8px);min-width:18px;padding:0 5px;font-size:10.5px;line-height:16px}
+}
