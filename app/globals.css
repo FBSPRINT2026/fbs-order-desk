@@ -7890,3 +7890,8 @@ a.pdn-tag:hover{text-decoration:underline}
 .jt-em-meta{font-size:13px}.jt-em-meta .faint{font-size:12px}
 .jt-em-body iframe{width:100%;border:0;background:#fff}
 .jt-att{display:inline-flex;align-items:center;gap:6px;margin-right:8px}
+/* Printavo job page: on phones/tablets (one column) and in print, Fees & Totals and Payments come right after the job (Oct 15) */
+.pv-narrow{display:none}
+.pv-narrow>.panel{margin-top:14px}
+@media (max-width:1280px){.pv-narrow{display:block}.pv-wide{display:none}}
+@media print{.pv-narrow{display:block}.pv-extra{display:none}}
