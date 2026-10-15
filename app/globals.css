@@ -8223,9 +8223,10 @@ a.pdn-tag:hover{text-decoration:underline}
 .ord .lbl.gsec,.ord .sbx-h.gsec{padding-left:0}
 .ord .lbl.gsec::before,.ord .sbx-h.gsec::before{display:none}
 /* sizes: a filled size is just a bold number, no blue box */
-.ord .sizes input.has{background:var(--surface);border-color:var(--line);color:var(--ink);font-weight:700}
+.ord .sizes input.has,.ord .szc input.sz.has,.ord .pv-grid input.sz.has{background:var(--surface);border-color:var(--line);color:var(--ink);font-weight:700}
 /* the customer, the price box, the Printavo bar: white with a hairline, not grey fills */
-.ord .cust-card{background:var(--surface);border:1px solid var(--line-2)}
+.ord .cust-row{background:var(--surface);border:1px solid var(--line-2)}
+.ord .cust-row .cust-card{border:0}
 .ord .price-box{background:var(--surface);border:1px solid var(--line-2)}
 .ord .pvx-box>.pvs-strip,.ord .pvx-box>.pvc,.ord .pvs-strip{background:var(--surface)}
 .ord .pvx-box>.pvc{border-top:1px solid var(--line-2)}
