@@ -607,7 +607,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     // art
     const ap = proofs.filter((p) => p.status === "approved").length, ch = proofs.filter((p) => p.status === "changes").length;
     const mock = o.groups.length > 0 && o.groups.every((g) => g.mockupAt || g.mockupSkipped || (g.customerMockups || []).length);
-    out.push(ch ? { tone: "bad", text: "Art changes asked for" } : ap ? { tone: "ok", text: "Art approved" } : pendingProofs ? { tone: "wait", text: "Proof waiting on the customer" }
+    // approved by staff another way (a call, an email: Request separations' "approved another way"), or a Printavo job past art
+    const staffArt = events.find((e) => e.kind === "art_approved");
+    const pvPast = !!pvStatusOf(o as never) && ["blanks", "production", "ready", "completed"].includes(o.status);
+    out.push(ch ? { tone: "bad", text: "Art changes asked for" } : ap ? { tone: "ok", text: "Art approved" } : staffArt ? { tone: "ok", text: "Art approved", sub: staffArt.detail || undefined } : pvPast ? { tone: "ok", text: "Art approved", sub: "In Printavo" } : pendingProofs ? { tone: "wait", text: "Proof waiting on the customer" }
       : mock ? { tone: isQuote ? "info" : "ok", text: "Mockup done", sub: isQuote ? undefined : "No proof sent" } : { tone: "wait", text: "No mockup yet" });
     // approval
     out.push(o.approved_at ? { tone: "ok", text: `Approved by ${o.approved_name || "the customer"}`, sub: fmtDate(o.approved_at.slice(0, 10)) }
