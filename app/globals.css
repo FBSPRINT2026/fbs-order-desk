@@ -8418,3 +8418,8 @@ a.pdn-tag:hover{text-decoration:underline}
 .ord .ot-nav .aa-tab.on{color:var(--ink);background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface));border-radius:10px 10px 0 0;box-shadow:inset 0 -4px 0 var(--fbs-blue);font-weight:800}
 .ord .ot-nav .aa-tab.on::after{content:none}
 .ord .ot-nav .aa-tab.on .aa-n{background:var(--fbs-blue);color:#fff}
+/* every dollar figure in a group ends on the same right edge as the garments' Total column (Oct 15, Nick): the prints
+   and the group total stop where the garment rows' remove (×) column starts; "each" goes before the price */
+.ord .imp-sec{padding-right:36px}
+.ord .pr-each b{margin:0 0 0 3px}
+.ord .grp-sum{padding-right:0}

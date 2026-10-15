@@ -649,7 +649,7 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
           {n > 0 && <span className="pr-n">{n}</span>}
           <b>{d.location || "Print"}</b>
           <span className="pr-how">{METHODS[d.method]}</span>
-          {each && <span className="pr-each"><b>{each}</b> each</span>}
+          {each && <span className="pr-each">each <b>{each}</b></span>}
         </div>
         <div className="pr-specs">
           {colors && <span>{colors}</span>}
