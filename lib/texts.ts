@@ -85,3 +85,21 @@ export function appleDate(v: number | string | null | undefined): string {
   if (n > 1e14) n = n / 1e9;
   return new Date((n + 978307200) * 1000).toISOString();
 }
+
+/**
+ * Texts kept by mistake under the shop's own records (Oct 15: 440 of Nick and Amanda's own texts came in as the
+ * "Amanda McCoy" and "FBS Sales" customers before those were excluded): removed from the portal, pictures too. Nick
+ * said yes to deleting them (only the portal's copies; Messages itself is never touched). Runs when the Mac checks in.
+ */
+export async function purgeOurOwn(admin: SupabaseClient) {
+  const { data: cs } = await admin.from("customers").select("id").or("email.ilike.%@fbsprint.com,contact2_email.ilike.%@fbsprint.com,is_test.eq.true").limit(500);
+  const ids = ((cs || []) as { id: string }[]).map((c) => c.id);
+  if (!ids.length) return 0;
+  const { data: tx } = await admin.from("text_messages").select("id, files").in("customer_id", ids).limit(2000);
+  const rows = (tx || []) as { id: string; files: { path: string }[] }[];
+  if (!rows.length) return 0;
+  const paths = rows.flatMap((r) => (r.files || []).map((f) => f.path)).filter(Boolean);
+  for (let i = 0; i < paths.length; i += 100) await admin.storage.from("proofs").remove(paths.slice(i, i + 100));
+  await admin.from("text_messages").delete().in("id", rows.map((r) => r.id));
+  return rows.length;
+}

@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { customerHandles, deviceFor, handleForms, sha } from "@/lib/texts";
+import { customerHandles, deviceFor, handleForms, purgeOurOwn, sha } from "@/lib/texts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,5 +12,6 @@ export async function GET(req: Request) {
   const keys = [...(await customerHandles(admin)).keys()].sort();
   const forms = [...new Set(keys.flatMap(handleForms))];
   await admin.from("text_devices").update({ last_seen_at: new Date().toISOString() }).eq("id", d.id);
+  await purgeOurOwn(admin).catch(() => 0);
   return new Response(`v ${sha(keys.join(",")).slice(0, 16)}\n${forms.join("\n")}\n`, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
 }
