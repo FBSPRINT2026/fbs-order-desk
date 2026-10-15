@@ -146,9 +146,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const spent = os.filter((o) => orderCountsAsSale(o as { type: string; status: string; source?: string })).reduce((a, o) => a + o.total, 0) + archive.filter((a) => pvCountsAsSale(a.kind, a.status_name)).reduce((s, a) => s + (+a.total || 0), 0);
   const owed = os.filter((o) => o.type === "invoice").reduce((a, o) => a + Math.max(0, o.balance), 0);
 
+  // Delete the whole customer: a small button at the bottom of Customer details, then a confirm (Oct 15, Nick: it sat
+  // beside the order page's Delete in the same spot at the top)
   async function del() {
     if (os.length || archive.length) return;
-    if (!armed) { setArmed(true); setTimeout(() => setArmed(false), 3500); return; }
     if (timer.current) clearTimeout(timer.current);
     await createClient().from("customers").delete().eq("id", id);
     router.push("/shop/customers");
@@ -166,7 +167,6 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           <Link className="btn" href={`/shop/customers/${id}?area=details`} scroll={false}>Customer details</Link>
           <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">View their portal</a>
           <button className="btn primary" type="button" onClick={newQuote}>+ New quote</button>
-          <button className={"btn danger" + (armed ? " armed" : "")} type="button" onClick={del} disabled={os.length > 0 || archive.length > 0} title={os.length ? "Delete this customer's orders first" : archive.length ? "This customer has archived Printavo orders" : ""}>{armed ? "Confirm delete" : "Delete"}</button>
         </div>
       </div>
       {c && "moved_at" in (c as object) && !c.is_test && (() => {
@@ -203,7 +203,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign}
         onStarMockup={async (mid, starred) => { const { error } = await createClient().rpc("set_mockup_star", { p_mockup: mid, p_starred: starred }); return { ok: !error, error: error?.message }; }}
         onStar={async (designId, starred) => { const { error } = await createClient().rpc("set_design_star", { p_design: designId, p_starred: starred }); return { ok: !error, error: error?.message }; }}
-        details={
+        details={<>
       <div className="cust-grid">
           <form className="panel" autoComplete="off" onSubmit={(e) => e.preventDefault()}>
             <div className="panel-h"><h2>Details</h2><span className="faint" style={{ fontSize: 12 }}>{state || "Saves as you type"}</span></div>
@@ -288,7 +288,19 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
             </div>
           </div>
         </div>
-          } />
+        <div className="cu-del">
+          {!armed ? <>
+            <button type="button" className="btn sm ghost cu-del-b" onClick={() => setArmed(true)} disabled={os.length > 0 || archive.length > 0}>Delete</button>
+            {(os.length > 0 || archive.length > 0) && <span className="faint">{os.length ? "Delete or move this customer's orders first." : "This customer has Printavo orders on file, so it can't be deleted."}</span>}
+          </> : <div className="cu-del-ask" role="alertdialog" aria-label="Delete this customer">
+            <span>Delete <b>{c.company || c.name || "this customer"}</b>&apos;s whole customer account? This can&apos;t be undone.</span>
+            <div className="row" style={{ gap: 6 }}>
+              <button type="button" className="btn sm danger" onClick={() => void del()}>Yes, delete the account</button>
+              <button type="button" className="btn sm ghost" onClick={() => setArmed(false)}>Cancel</button>
+            </div>
+          </div>}
+        </div>
+      </>} />
     </>
   );
 }

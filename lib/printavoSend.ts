@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getOrder, pv, transitionWrite, PrintavoError } from "@/lib/printavo";
-import { calcOrder, imprintLabel, mergeSettings, orderGroups, SIZES, type Order } from "@/lib/pricing";
+import { calcOrder, imprintLabel, mergeSettings, orderGroups, SIZES, STATUSES, ST, type Order, type StatusKey } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/config";
 
 /**
@@ -307,8 +307,28 @@ export type PvSnap = {
 const OUR_SIZE: Record<string, string> = Object.fromEntries(Object.entries(PV_SIZE).map(([k, v]) => [v, k]));
 
 /**
+ * Our status for a Printavo status (Oct 15, Nick: "#40003… moved along our old system and you never updated it on the
+ * new portal side, still just shows quote"). null = not ours to guess (an issue or hold): the order keeps its status,
+ * except that an invoice is at least Approved.
+ */
+export function ourStatusFor(name: string, kind: string): StatusKey | null {
+  const s = (name || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const inv = kind === "invoice" ? "approved" : null;
+  if (/^quote/.test(s)) return /paid|approved/.test(s) ? "approved" : /closed/.test(s) ? null : /sent/.test(s) ? "quote_sent" : kind === "invoice" ? "approved" : "quote";
+  if (/complete|picked up|delivered/.test(s)) return "completed";
+  if (/^shipping|ready to ship|ready for pick ?up/.test(s)) return "ready";
+  if (/^issue|on hold|holder|waiting on details/.test(s)) return inv;
+  if (/transfers ordered|blanks|garments ordered|goods ordered|receiving/.test(s)) return "blanks";
+  if (/\bart\b|proof/.test(s)) return "art";
+  if (/press|printing|fulfillment|finishing|production|scheduling|^emb\b|^sp\b|^hp\b|^op\b|^dtf\b|mixed order/.test(s)) return "production";
+  return inv;
+}
+const rank = (k: string) => STATUSES.findIndex((x) => x.k === k);
+
+/**
  * Reads the order back from Printavo (two-way during the move: quantities, prices and fees changed in Printavo come
- * back here to be accepted on the order page; the number and status are taken as they are).
+ * back here to be accepted on the order page; the number and status are taken as they are, our status following
+ * Printavo's: ourStatusFor).
  */
 export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string, fingerprint?: string) {
   const { data: o } = await admin.from("orders").select("number, printavo_id, printavo_state").eq("id", orderId).maybeSingle();
@@ -354,7 +374,15 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
       if (!error) await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Payment from Printavo: ${add.map((x) => `$${x.amount.toFixed(2)} ${x.method}`).join(", ")}`, actor: "Printavo" });
     }
   }
-  await admin.from("orders").update({ ...cardPatch, printavo_visual_id: p.visualId, printavo_state: { ...st, pv: snap, status: p.status.name, url: p.urls.url || st.url, publicUrl: p.urls.publicUrl || st.publicUrl, ...(fingerprint ? { fp: fingerprint } : {}) } }).eq("id", orderId);
+  // the status follows Printavo's: when it changes there, or when ours is behind it (a quote here that Printavo has
+  // moved on to Shipping). Our own steps in between (Art & Proofs, Blanks Ordered) aren't undone by an unchanged Printavo.
+  const want = ourStatusFor(p.status.name, p.kind), ours = String(full?.status || "");
+  const statusPatch: Record<string, unknown> = {};
+  if (want && want !== ours && (p.status.name !== st.status || rank(want) > rank(ours))) {
+    statusPatch.status = want; statusPatch.type = ST[want].type;
+    await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: want, actor: `Printavo: ${p.status.name}` });
+  }
+  await admin.from("orders").update({ ...cardPatch, ...statusPatch, printavo_visual_id: p.visualId, printavo_state: { ...st, pv: snap, status: p.status.name, url: p.urls.url || st.url, publicUrl: p.urls.publicUrl || st.publicUrl, ...(fingerprint ? { fp: fingerprint } : {}) } }).eq("id", orderId);
   return snap;
 }
 
