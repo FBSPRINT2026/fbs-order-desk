@@ -5,6 +5,8 @@ import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { orderBrief } from "@/lib/ai/reorderCheck";
 import { LOCATIONS, type Settings } from "@/lib/pricing";
 import { latestSpecs, type DesignSpecs } from "@/lib/designSpecs";
+import { designEmails } from "@/lib/designMail";
+import type { MailAccount } from "@/lib/mail/config";
 
 /**
  * Spec history (Oct 14, Nick: "any time we place a reorder, scan everything: every email about this design, the text
@@ -13,8 +15,8 @@ import { latestSpecs, type DesignSpecs } from "@/lib/designSpecs";
  * everything we have about the design, oldest first:
  *  - every old Printavo job of this customer that mentions it: the print details, notes and the job's emails, and
  *    its mockups (pictures, dated);
- *  - the mailbox's emails with the customer that mention it (the portal's copy goes back to Aug 28, 2026);
- *  - emails kept in the portal, with their pictures;
+ *  - every email with the customer that mentions it: the whole mailbox through Exchange's search (every year), the
+ *    portal's copy and emails kept in the portal (lib/designMail.ts), and the pictures on kept emails;
  *  - the customer's other portal orders of it, and what production confirmed (designs.specs);
  *  - text messages, once the Mac is linked (not yet).
  * It returns, for each print on the new order, a dated timeline with the exact words, and what the latest decision
@@ -56,7 +58,7 @@ async function pic(admin: SupabaseClient, path: string) {
   return { media_type: media_type as "image/png" | "image/jpeg" | "image/webp", data: buf.toString("base64") };
 }
 
-export async function specHistory(admin: SupabaseClient, s: Settings, orderId: string, by: string): Promise<{ ok: true; history: SpecHistory } | { ok: false; error: string }> {
+export async function specHistory(admin: SupabaseClient, s: Settings, orderId: string, by: string, acct: MailAccount | null = null): Promise<{ ok: true; history: SpecHistory } | { ok: false; error: string }> {
   const b = await orderBrief(admin, orderId);
   if (!b.ok) return b;
   const { o, ims } = b;
@@ -103,29 +105,17 @@ export async function specHistory(admin: SupabaseClient, s: Settings, orderId: s
     }
   }
 
-  // 2. emails with the customer that mention it (the mailbox's copy, both directions)
+  // 2. every email with the customer about it: the whole mailbox (every year), the portal's copy, emails kept here
   const { data: cust } = await admin.from("customers").select("email, company, name").eq("id", o.customer_id).maybeSingle();
-  const { data: cts } = await admin.from("customer_contacts").select("email").eq("customer_id", o.customer_id);
-  const addrs = [cust?.email, ...(cts || []).map((c) => c.email)].map((e) => String(e || "").toLowerCase()).filter((e) => e.includes("@"));
-  const FREE = /@(gmail|yahoo|hotmail|outlook|icloud|aol|live|msn|me)\./;
-  const domains = [...new Set(addrs.filter((e) => !FREE.test(e)).map((e) => e.split("@")[1]))];
-  const ors = words.map((w) => `hay.ilike.%${w}%`).join(",");
-  const { data: mails } = await admin.from("mail_cache").select("subject, from_email, from_name, to_text, sent_at, body_text, folder").or(ors).is("gone_at", null).order("sent_at", { ascending: true }).limit(80);
-  const ours = (mails || []).filter((m) => { const t = `${m.from_email} ${m.to_text}`.toLowerCase(); return addrs.some((a) => t.includes(a)) || domains.some((d) => t.includes("@" + d)); });
-  const seenMail = new Set<string>();
-  for (const m of ours.slice(-30)) {
-    const k = `${m.subject}|${String(m.sent_at).slice(0, 16)}`;
-    if (seenMail.has(k)) continue;
-    seenMail.add(k); counts.emails++;
-    const body = String(m.body_text || "").replace(/\r/g, "").split(/\n(?:On .{5,120} wrote:|From: .{3,200}\nSent: )/)[0].replace(/\s+/g, " ").slice(0, 1200);
-    lines.push(`EMAIL ${String(m.sent_at).slice(0, 10)} from ${m.from_name || m.from_email} to ${String(m.to_text || "").slice(0, 80)}: "${m.subject || ""}" ${body}`);
+  const found = await designEmails(admin, acct, o.customer_id, words);
+  for (const m of found.emails.slice(-40)) {
+    counts.emails++;
+    lines.push(`EMAIL ${m.date.slice(0, 10)} ${m.incoming ? `from ${m.from} (the customer)` : `from ${m.from} (the shop)`}: "${m.subject}" ${m.text.replace(/\s+/g, " ").slice(0, 1200)}`);
   }
 
   // 3. emails kept in the portal (with their pictures)
   const { data: acts } = await admin.from("activities").select("occurred_at, direction, subject, body, from_email, meta").eq("customer_id", o.customer_id).order("occurred_at", { ascending: true }).limit(400);
   for (const a of (acts || []).filter((x) => hit(x.subject) || hit(x.body)).slice(-15)) {
-    counts.kept++;
-    lines.push(`EMAIL (kept) ${String(a.occurred_at).slice(0, 10)} ${a.direction === "in" ? `from ${a.from_email}` : "from the shop"}: "${a.subject || ""}" ${String(a.body || "").replace(/\s+/g, " ").slice(0, 900)}`);
     const att = (((a.meta || {}) as { attachments?: { path?: string; name?: string; signature?: boolean }[] }).attachments || []).filter((f) => f.path && imgType(f.path) && !f.signature);
     for (const f of att.slice(0, 2)) {
       if (images.length >= 12) break;
@@ -149,7 +139,7 @@ export async function specHistory(admin: SupabaseClient, s: Settings, orderId: s
     lines.push(`PRODUCTION CONFIRMED ${e.at.slice(0, 10)} by ${e.by} on #${e.order_number} (design "${d.name}"): ${e.location}, ${e.size || "size blank"}, ${e.drop ? `${e.drop}" drop, ` : ""}${e.inks || "inks blank"}, ${e.colors} colors${e.underbase === true ? ", underbase" : e.underbase === false ? ", no underbase" : ""}`);
   }
 
-  const searched = [`${counts.jobs} old Printavo job${counts.jobs === 1 ? "" : "s"}`, `${counts.emails + counts.kept} email${counts.emails + counts.kept === 1 ? "" : "s"}`, `${counts.pics} picture${counts.pics === 1 ? "" : "s"}`, counts.orders ? `${counts.orders} portal order${counts.orders === 1 ? "" : "s"}` : "", counts.confirmed ? `${counts.confirmed} production confirmation${counts.confirmed === 1 ? "" : "s"}` : "", "text messages: not linked yet"].filter(Boolean).join(", ");
+  const searched = [`${counts.jobs} old Printavo job${counts.jobs === 1 ? "" : "s"}`, `${counts.emails} email${counts.emails === 1 ? "" : "s"}${found.wholeMailbox ? " (whole mailbox)" : ""}`, `${counts.pics} picture${counts.pics === 1 ? "" : "s"}`, counts.orders ? `${counts.orders} portal order${counts.orders === 1 ? "" : "s"}` : "", counts.confirmed ? `${counts.confirmed} production confirmation${counts.confirmed === 1 ? "" : "s"}` : "", "text messages: not linked yet"].filter(Boolean).join(", ");
   const prompt = [
     b.text, "",
     `EVERYTHING WE HAVE ABOUT THIS DESIGN (customer ${cust?.company || cust?.name || ""}; searched for: ${words.join(", ")}), oldest first:`,

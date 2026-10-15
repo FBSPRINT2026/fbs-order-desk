@@ -3,9 +3,12 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { designWords } from "@/lib/ai/specHistory";
 import { latestSpecs, type DesignSpecs } from "@/lib/designSpecs";
+import { designEmails } from "@/lib/designMail";
+import { mailboxToRead } from "@/lib/mail/viewing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 /**
  * Design history (Oct 14, Nick: "when we pull up this email, an option to look back on all communications about this
@@ -67,7 +70,9 @@ export async function GET(req: Request) {
   if (countOnly) {
     const seen = new Set([...mine.map((m) => `${String(m.subject || "").toLowerCase()}|${String(m.sent_at).slice(0, 15)}`)]);
     const keptNew = kept.filter((a) => !seen.has(`${String(a.subject || "").toLowerCase()}|${String(a.occurred_at).slice(0, 15)}`)).length;
-    return NextResponse.json({ words, counts: { orders: jobs.length + ours.length, emails: mine.length + keptNew, jobs: pvMsgs }, customer: cust?.company || cust?.name || "" });
+    // the whole mailbox, when it was searched before (the link never searches it: opening the history does)
+    const { data: c } = await admin.from("design_mail_cache").select("emails").like("key", `${cid}:%:${[...words].sort().join(" ")}`).limit(1).maybeSingle();
+    return NextResponse.json({ words, counts: { orders: jobs.length + ours.length, emails: Math.max(mine.length + keptNew, ((c?.emails as unknown[]) || []).length), jobs: pvMsgs }, customer: cust?.company || cust?.name || "" });
   }
 
   const items: Item[] = [];
@@ -98,24 +103,13 @@ export async function GET(req: Request) {
       thumbs: await sign(groups.flatMap((g) => [...(g.mockupThumbs || []), ...(g.customerMockups || []).map((c) => c.path)]).filter((p) => /\.(jpe?g|png|webp)$/i.test(p)).slice(0, 3)),
     });
   }
-  const seen = new Set<string>();
-  for (const m of mine) {
-    const k = `${String(m.subject || "").toLowerCase()}|${String(m.sent_at).slice(0, 15)}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    const incoming = !/@fbsprint\.com/i.test(String(m.from_email || ""));
-    items.push({ kind: "email", date: String(m.sent_at), from: incoming ? (m.from_name || m.from_email) : (m.from_name || "FBS"), incoming, subject: m.subject || "", text: clean(m.body_text || "").slice(0, 3000) });
-  }
-  for (const a of kept) {
-    const k = `${String(a.subject || "").toLowerCase()}|${String(a.occurred_at).slice(0, 15)}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    const att = (((a.meta || {}) as { attachments?: { path?: string; signature?: boolean }[] }).attachments || []).filter((f) => f.path && /\.(jpe?g|png|webp)$/i.test(f.path) && !f.signature).map((f) => f.path!).slice(0, 3);
-    items.push({ kind: "email", date: String(a.occurred_at), from: a.direction === "in" ? a.from_email : "FBS", incoming: a.direction === "in", subject: a.subject || "", text: clean(a.body || "").slice(0, 3000), pics: await sign(att) });
-  }
+  // emails: the whole mailbox (every year, Exchange's own search), the portal's copy, and emails kept in the portal
+  const { acct } = await mailboxToRead(admin, v);
+  const found = await designEmails(admin, acct && acct.enabled ? acct : null, cid, words, { fresh: u.searchParams.get("fresh") === "1", pics: sign });
+  for (const e of found.emails) items.push({ kind: "email", date: e.date, from: e.from, incoming: e.incoming, subject: e.subject, text: e.text, ...(e.pics?.length ? { pics: e.pics } : {}) });
   for (const d of (dsgs || []).filter((x) => hit(x.name)) as { name: string; specs: DesignSpecs }[]) for (const e of latestSpecs(d.specs)) {
     items.push({ kind: "confirmed", date: e.at, by: e.by, order: `#${e.order_number}`, spec: [e.location, e.size, e.drop ? `${e.drop}" drop` : "", e.inks, `${e.colors} colors`, e.underbase === true ? "underbase" : e.underbase === false ? "no underbase" : ""].filter(Boolean).join(" · ") });
   }
   items.sort((a, b) => a.date.localeCompare(b.date));
-  return NextResponse.json({ words, items, customer: cust?.company || cust?.name || "", counts: { orders: jobs.length + ours.length, emails: items.filter((i) => i.kind === "email").length } });
+  return NextResponse.json({ words, items, wholeMailbox: found.wholeMailbox, customer: cust?.company || cust?.name || "", counts: { orders: jobs.length + ours.length, emails: items.filter((i) => i.kind === "email").length } });
 }

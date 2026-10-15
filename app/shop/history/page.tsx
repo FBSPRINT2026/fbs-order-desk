@@ -22,18 +22,19 @@ export default function DesignHistoryPage() {
   const sp = useSearchParams();
   const customer = sp.get("customer") || "";
   const [q, setQ] = useState(sp.get("q") || ""), [input, setInput] = useState(sp.get("q") || "");
-  const [data, setData] = useState<{ words: string[]; items: Item[]; customer: string } | null>(null), [err, setErr] = useState("");
+  const [data, setData] = useState<{ words: string[]; items: Item[]; customer: string; wholeMailbox?: boolean } | null>(null), [err, setErr] = useState("");
+  const [fresh, setFresh] = useState(0);
   const [show, setShow] = useState<"all" | "orders" | "emails">("all");
   const [open, setOpen] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (!customer) { setErr("Open this from an email or an order."); return; }
     setData(null); setErr("");
-    const p = new URLSearchParams({ customer, ...(q ? { q } : { text: sp.get("text") || "" }) });
+    const p = new URLSearchParams({ customer, ...(q ? { q } : { text: sp.get("text") || "" }), ...(fresh ? { fresh: "1" } : {}) });
     fetch(`/api/history?${p}`).then((r) => r.json()).then((r) => {
       if (r.error) setErr(r.error); else { setData(r); if (!q && r.words?.length) setInput(r.words.join(" ")); }
     }).catch(() => setErr("Couldn't load the history."));
-  }, [customer, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [customer, q, fresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const items = (data?.items || []).filter((i) => show === "all" || (show === "orders" ? i.kind !== "email" : i.kind === "email"));
   const orders = (data?.items || []).filter((i) => i.kind === "order").length, emails = (data?.items || []).filter((i) => i.kind === "email").length;
@@ -57,7 +58,7 @@ export default function DesignHistoryPage() {
         </div>
       </form>
       {err && <div className="err">{err}</div>}
-      {!data && !err && <div className="empty">Searching the old Printavo jobs, the orders and the email…</div>}
+      {!data && !err && <div className="empty">Searching the old Printavo jobs, the orders and your whole mailbox… the first time can take a minute.</div>}
       {data && !items.length && <div className="empty">Nothing found for “{input}”. Try the name the customer uses for the design.</div>}
       {data && items.length > 0 && (
         <ol className="dh-list">
@@ -100,7 +101,7 @@ export default function DesignHistoryPage() {
           ))}
         </ol>
       )}
-      {data && <p className="faint dh-foot">Text messages will show here once your Mac is linked. The portal&apos;s copy of the mailbox starts Aug 28, 2026; older emails come from the Printavo jobs.</p>}
+      {data && <p className="faint dh-foot">{data.wholeMailbox ? "Searched your whole mailbox (every year). " : "Searched the portal's copy of the mailbox (since Aug 28, 2026) and the Printavo jobs' emails. "}Text messages will show here once your Mac is linked. <button type="button" className="linkbtn" onClick={() => setFresh((n) => n + 1)}>Search the mailbox again</button></p>}
     </>
   );
 }

@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState } from "@/lib/ai/claude";
 import { specHistory, type SpecHistory } from "@/lib/ai/specHistory";
+import { mailboxToRead } from "@/lib/mail/viewing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const st = await aiState(admin);
   if (!st.ready) return NextResponse.json({ error: st.reason }, { status: 503 });
-  const r = await specHistory(admin, st.settings, b.order, v.email);
+  const { acct } = await mailboxToRead(admin, v);
+  const r = await specHistory(admin, st.settings, b.order, v.email, acct && acct.enabled ? acct : null);
   return r.ok ? NextResponse.json({ history: r.history }) : NextResponse.json({ error: r.error }, { status: 422 });
 }
