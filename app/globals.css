@@ -7672,3 +7672,39 @@ a.pdn-tag:hover{text-decoration:underline}
 .itag.fyi{background:var(--surface-2);color:var(--ink-3)}
 .itag-sorting{font-size:11.5px;color:var(--ink-3);font-style:italic}
 @media (max-width:760px) and (pointer:coarse){ body:has(.pit) .ibx2-item.ol{padding:11px 16px 11px 26px} body:has(.pit) .ibx2-dot{left:11px;top:17px} }
+/* Inbox: Select (Oct 15, Nick: like the iPhone's Mail) */
+.ibx2-selbtn{flex:none}
+.ibx2-find:has(.ibx2-selbtn){display:flex;gap:6px;align-items:center}
+.ibx2-find:has(.ibx2-selbtn) input{flex:1;min-width:0}
+.ibx2-item.ol.selecting{padding-left:48px}
+.ibx2-item.ol.selecting .ibx2-dot{left:34px}
+.ibx2-chk{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;border:2px solid var(--line);background:var(--surface);display:grid;place-items:center}
+.ibx2-chk.on{background:var(--accent);border-color:var(--accent)}
+.ibx2-chk svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.ibx2-item.ol.selecting.picked{background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+.sel-h{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line-2);background:var(--surface);position:sticky;top:0;z-index:3}
+.sel-all{border:0;background:var(--surface-2);border-radius:999px;padding:7px 14px;font:inherit;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer}
+.sel-n{flex:1;font-size:13px;color:var(--ink-3);text-align:center}
+.sel-x{width:36px;height:36px;border:0;border-radius:50%;background:var(--surface-2);display:grid;place-items:center;cursor:pointer;color:var(--ink)}
+.sel-x svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+.sel-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom));z-index:60;display:flex;gap:8px;align-items:center;padding:6px;border-radius:999px;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:0 8px 28px rgba(20,29,43,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);max-width:calc(100vw - 24px)}
+.sel-bar>button{display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 16px;border:0;border-radius:999px;background:var(--surface-2);font:inherit;font-size:14px;font-weight:600;color:var(--accent);cursor:pointer;white-space:nowrap}
+.sel-bar>button svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.sel-bar>button.danger{color:var(--danger)}
+.sel-bar>button:disabled{opacity:.4;cursor:default}
+.sel-ask{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:18px;font-size:13.5px;max-width:360px}
+.sel-ask div{display:flex;gap:6px;flex-wrap:wrap}
+.sel-ask .btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.sel-bar:has(.sel-ask){border-radius:20px}
+@media (max-width:760px) and (pointer:coarse){
+  .pit-sel{border:0;background:none;font:inherit;font-size:16px;font-weight:600;color:var(--accent);padding:0 6px;height:38px;cursor:pointer}
+  body:has(.pit) .ibx2-item.ol.selecting{padding-left:52px}
+  body:has(.pit) .ibx2-item.ol.selecting .ibx2-dot{left:38px}
+  body:has(.sel-bar) .ibx2-items{padding-bottom:90px}
+}
+.pit-sel{display:none}
+@media (max-width:760px) and (pointer:coarse){ .pit .pit-sel{display:inline-block} body:has(.pit) .ibx2-selbtn{display:none} }
+.ibx2-selbtn{width:34px;padding:0;justify-content:center}
+.ibx2-selbtn svg,.pit-selic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ibx2-selbtn.on,.pit-selic.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+@media (max-width:760px) and (pointer:coarse){ .pit .pit-selic{display:grid} }

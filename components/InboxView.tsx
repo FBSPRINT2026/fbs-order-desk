@@ -122,6 +122,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [settings, setSettings] = useState(false);
   /** phones: the folders-and-settings sheet from "Inbox ▾" (Oct 15, Nick) */
   const [pSheet, setPSheet] = useState(false), [pMore, setPMore] = useState(false);
+  /** Select (Oct 15, Nick: "a quick select like the Mail app, check a bunch of emails and archive or black hole"):
+   *  circles on the Inbox's emails, then one move for all of them */
+  const [selMode, setSelMode] = useState(false), [chosen, setChosen] = useState<Set<string>>(new Set()), [bulk, setBulk] = useState(""), [bhAsk, setBhAsk] = useState(0);
   // the list can be hidden to give the email more room (remembered)
   // the list always shows beside the email (Oct 14: the hide arrow is gone)
   const [listOpen, setListOpen] = useState(true);
@@ -302,6 +305,30 @@ export default function InboxView({ mode }: { mode: Mode }) {
     if (ok && g.length > 1) await moveRest(head, to);
     return ok;
   };
+  const endSelect = () => { setSelMode(false); setChosen(new Set()); setBhAsk(0); };
+  /** the selected conversations moved (Archive / News / Black Hole); `customers`: Black Hole the customers' too */
+  const bulkMove = async (to: "archive" | "news" | "blackhole", customers = false) => {
+    const groups = groupConvos((ol || []).filter((i) => true), inboxKeys, (i) => i.received_at || "").filter((g) => chosen.has(g[0].id));
+    const go = groups.filter((g) => to !== "blackhole" || customers || !g.some((y) => y.activity_id));
+    setBhAsk(0); setBulk(to);
+    let done = 0;
+    const queue = [...go];
+    await Promise.all(Array.from({ length: 3 }, async () => {
+      while (queue.length) {
+        const g = queue.shift()!, head = g[0];
+        try {
+          await boxPost({ do: "move", path: "INBOX", uid: head.uid, to, ...(to === "blackhole" && customers ? { confirmed: true } : {}) });
+          setOl((l) => (l || []).filter((y) => y.id !== head.id));
+          if (g.length > 1) await moveRest(head, to);
+          done++;
+        } catch { /* left in the Inbox; counted below */ }
+      }
+    }));
+    setBulk("");
+    const skipped = groups.length - go.length, failed = go.length - done;
+    flash(`${to === "archive" ? "Archived" : to === "news" ? "Moved to News" : "Black Hole"}: ${done} conversation${done === 1 ? "" : "s"}${skipped ? `. Kept ${skipped} customer${skipped === 1 ? "" : "s"}` : ""}${failed ? `. ${failed} didn't move, try again` : ""}.`);
+    endSelect();
+  };
   const pickFolderRow = (r: MsgRow) => { setFSel(r); setPicked(true); setFRows((x) => (x || []).map((y) => (y.uid === r.uid && y.folder === r.folder ? { ...y, seen: true } : y))); };
   // after sending a reply to an email in my Inbox (Oct 12, Nick): archive it, or keep it in the Inbox?
   type Sent = { to: string; subject: string; body: string; theirs?: string };
@@ -413,6 +440,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
           <div className="pit-top">
             <button type="button" className="pit-fold" onClick={() => setPSheet(true)} aria-haspopup="menu">{curName}{unread > 0 && <span className="pit-n">{unread}</span>}<svg viewBox="0 0 24 24" aria-hidden><path d="M6 9l6 6 6-6" /></svg></button>
             <span className="spacer" />
+            {/* Select: a small check mark beside Check now (Oct 15, Nick) */}
+            {view.kind === "inbox" && <button type="button" className={"pit-ic pit-selic" + (selMode ? " on" : "")} aria-label={selMode ? "Done selecting" : "Select emails"} aria-pressed={selMode} onClick={() => (selMode ? endSelect() : setSelMode(true))}><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg></button>}
             {box?.enabled && <button type="button" className="pit-ic" aria-label="Check for new email" disabled={!!busy} onClick={async () => { setBusy("check"); const r = await checkMailNow(); setBusy(""); if (!r.ok) flash(r.error); else { flash("Checked."); load(); } }}><svg viewBox="0 0 24 24" aria-hidden className={busy === "check" ? "spin" : ""}><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" /></svg></button>}
             <button type="button" className="pit-ic" aria-label="Folders and settings" onClick={() => setPSheet(true)}><svg viewBox="0 0 24 24" aria-hidden><circle cx="5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="19" cy="12" r="1.3" /></svg></button>
           </div>
@@ -466,6 +495,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
             </div>}
             <div className="ibx2-find">
               <input type="search" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (mode === "mail" && e.key === "Enter") { e.preventDefault(); void runSearch(q); } }} placeholder={mode === "mail" ? "Search all mail, then Enter" : "Search"} aria-label="Search email" title={mode === "mail" ? "Type a name, company, email or subject and press Enter: results show as conversations, what they sent and what you sent, in order" : undefined} />
+              {mode === "mail" && view.kind === "inbox" && <button type="button" className={"btn sm ghost ibx2-selbtn" + (selMode ? " on" : "")} title={selMode ? "Done selecting" : "Select emails"} aria-label={selMode ? "Done selecting" : "Select emails"} aria-pressed={selMode} onClick={() => (selMode ? endSelect() : setSelMode(true))}><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg></button>}
               
             </div>
           </div>
@@ -475,6 +505,32 @@ export default function InboxView({ mode }: { mode: Mode }) {
             <span className="ibx2-brieft"><b>Inbox summary</b><span>What&apos;s in your Inbox and what to do first</span></span>
             <span className="ibx2-briefgo" aria-hidden>›</span>
           </button>}
+          {/* Select: Select All / count / Done, and the moves floating at the bottom (like the iPhone's Mail) */}
+          {selMode && mode === "mail" && view.kind === "inbox" && (() => {
+            const heads = olGroups.map((g) => g[0].id), all = heads.length > 0 && heads.every((id) => chosen.has(id));
+            const custN = olGroups.filter((g) => chosen.has(g[0].id) && g.some((y) => y.activity_id)).length;
+            return <>
+              <div className="sel-h">
+                <button type="button" className="sel-all" onClick={() => setChosen(all ? new Set() : new Set(heads))}>{all ? "Deselect All" : "Select All"}</button>
+                <span className="sel-n">{chosen.size ? `${chosen.size} selected` : "Tap emails to select them"}</span>
+                <button type="button" className="sel-x" onClick={endSelect} aria-label="Done selecting"><svg viewBox="0 0 24 24" aria-hidden><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+              </div>
+              <div className="sel-bar" role="toolbar" aria-label="Move the selected emails">
+                {bhAsk > 0 ? <div className="sel-ask" role="alertdialog">
+                  <span><b>{bhAsk} of these {bhAsk === 1 ? "is a customer" : "are customers"}.</b> Black Hole blocks their email from now on.</span>
+                  <div>
+                    <button type="button" className="btn sm" onClick={() => void bulkMove("blackhole", false)}>Skip the customer{bhAsk === 1 ? "" : "s"}</button>
+                    <button type="button" className="btn sm danger" onClick={() => void bulkMove("blackhole", true)}>Black Hole all</button>
+                    <button type="button" className="btn sm ghost" onClick={() => setBhAsk(0)}>Cancel</button>
+                  </div>
+                </div> : <>
+                  <button type="button" disabled={!chosen.size || !!bulk} onClick={() => void bulkMove("archive")}>{TbIcon.archive}<span>{bulk === "archive" ? "Archiving…" : "Archive"}</span></button>
+                  <button type="button" disabled={!chosen.size || !!bulk} onClick={() => void bulkMove("news")}>{TbIcon.news}<span>{bulk === "news" ? "Moving…" : "News"}</span></button>
+                  <button type="button" className="danger" disabled={!chosen.size || !!bulk} onClick={() => (custN ? setBhAsk(custN) : void bulkMove("blackhole"))}>{TbIcon.ban}<span>{bulk === "blackhole" ? "Moving…" : "Black Hole"}</span></button>
+                </>}
+              </div>
+            </>;
+          })()}
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
             {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={pickFolderRow}
               onSwipe={(r, to) => quickMove(r.folder, r.uid, to, () => { setFRows((x) => (x || []).filter((y) => !(y.uid === r.uid && y.folder === r.folder))); if (fSel?.uid === r.uid && fSel.folder === r.folder) setFSel(null); })} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={!!fMore} loading={fBusy} onMore={() => fMore && void openFolder(view.path, fMore)} /></>
@@ -495,8 +551,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
                 return (
                   <div key={i.id} className={"ibx2-cv" + (g.length > 1 ? " multi" : "") + (openG && g.length > 1 ? " open" : "")}>
                   <SwipeRow onAct={(to) => moveGroup(g, to)}>
-                  <button data-id={k} type="button" className={"ibx2-item ol" + (openG ? " on" : "") + (needsG ? " needs" : "") + (urgentG ? " urgent" : "") + (unreadG ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => pickRow(openG && olCur ? olKey(olCur) : k)} onDoubleClick={() => r && pickRow(k, true)} aria-expanded={g.length > 1 ? openG : undefined}>
+                  <button data-id={k} type="button" className={"ibx2-item ol" + (selMode ? " selecting" + (chosen.has(i.id) ? " picked" : "") : "") + (openG && !selMode ? " on" : "") + (needsG ? " needs" : "") + (urgentG ? " urgent" : "") + (unreadG ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => (selMode ? setChosen((x) => { const n = new Set(x); if (n.has(i.id)) n.delete(i.id); else n.add(i.id); return n; }) : pickRow(openG && olCur ? olKey(olCur) : k))} onDoubleClick={() => !selMode && r && pickRow(k, true)} aria-expanded={g.length > 1 ? openG : undefined}>
                     {/* Oct 15, Nick: bold + blue dot = unread, nothing else; what it is goes in colored tags */}
+                    {selMode && <span className={"ibx2-chk" + (chosen.has(i.id) ? " on" : "")} aria-hidden>{chosen.has(i.id) && <svg viewBox="0 0 24 24"><path d="M6 12l4 4 8-8" /></svg>}</span>}
                     {unreadG && <span className="ibx2-dot" aria-label="Unread" />}
                     <span className="ibx2-item-1">
                       <b>{name}</b>
