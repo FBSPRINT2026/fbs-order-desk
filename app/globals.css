@@ -8400,3 +8400,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .pv-panel .pvc>.row>span.row{display:flex;flex-direction:column;align-items:stretch!important;gap:6px!important}
 .pv-panel .pvc>.row .btn{width:100%;justify-content:center}
 .pv-panel .pvc-list li{flex-direction:column;align-items:stretch}
+/* Customer and Job details always the same height (Oct 15, Nick) */
+.ord .top2{align-items:stretch}
+.ord .top2>.panel{display:flex;flex-direction:column}
+.ord .top2>.panel>.panel-b{flex:1}
