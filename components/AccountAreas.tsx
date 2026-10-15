@@ -415,7 +415,7 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
           {stNote && <span className="faint">{stNote}</span>}
         </div>
       )}
-      <div className={canPay ? "aa-home" : ""}><div className="aa-home-main stack">
+      <div className={canPay ? "aa-home aa-paylay" : ""}><div className="aa-home-main stack">
       {mode === "shop" && onRecordPayment && <RecordPayment record={onRecordPayment} onDone={() => router.refresh()} />}
       <div className="aa-aging" aria-label="Aging">
         {aging.map((b, i) => (
@@ -434,7 +434,7 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
           {payTable(waitingQuotes, true)}
         </div>
       )}
-      <div className="aa-card aa-tblcard">
+      <div className="aa-card aa-tblcard aa-ph-card">
         {(() => {
           // one line per payment: an online payment (same processor id) or a check applied to many invoices (same note) groups its invoices
           const groups = new Map<string, { key: string; date: string; method: string; total: number; fee: number; lines: APayment[] }>();

@@ -8817,3 +8817,14 @@ a.pdn-tag:hover{text-decoration:underline}
 .aa-sec-h.aa-sec-pad{padding:16px 4px 6px;display:flex;align-items:baseline;gap:10px}
 .aa-oldq{margin-left:auto;font-size:12.5px;color:var(--ink-2);font-weight:400}
 .aa-none-q{padding:8px 4px 4px;font-size:13px}
+
+/* portal Payments on a phone: the AI payment helper (and pay box) comes before the payment history (Oct 15, Nick) */
+@media (max-width:900px){
+  .aa-home.aa-paylay{display:flex!important;flex-direction:column;gap:14px}
+  .aa-paylay > .aa-home-main{display:contents}
+  .aa-paylay > .aa-payside{order:2}
+  .aa-paylay .aa-ph-card{order:3}
+}
+/* the little rainbow under section titles runs a bit past the words, like everywhere else (Oct 15, Nick) */
+.portal .aa-sec-h h3{width:fit-content}
+.portal .aa-sec-h h3::after{width:calc(100% + 36px);min-width:72px;height:4px;border-radius:4px}
