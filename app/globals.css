@@ -7925,3 +7925,69 @@ a.pdn-tag:hover{text-decoration:underline}
 .pfs-go{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.pfs-go .faint{font-size:12.5px}
 @media (max-width:760px){.pfs-d{grid-template-columns:22px minmax(0,1fr)}.pfs-pics{grid-column:2}.pfs-main,.pfs-price{grid-column:2}}
 .pfs-all{margin-top:6px;font-size:13px}
+
+/* ───────── Email on the computer, the phone's cleaner look (Oct 15, Nick: "I love the email looks on the phone now…
+   make the full web versions match that style") ─────────
+   The toolbar stays (the computer has the room, and it holds New order · Reorder · Order goods). Under it: the subject
+   and one sender line; a light AI card (✦ AI summary, the summary in grey, its tags, the design history and the
+   Assistant as small outline buttons); the conversation folded to one line; the email in one clean font with the
+   earlier emails it quotes folded away ("Show the earlier emails"), no box around it. Everything that isn't a phone. */
+@media (min-width:761px),(pointer:fine),(pointer:none){
+  .eh{display:flex;flex-direction:column;border-bottom:0}
+  .eh-bar{order:0}
+  .eh-bar:has(+ .eh-ai){border-bottom:1px solid var(--line-2);padding-bottom:0}
+  .eh-sec{display:none}
+  /* the subject and the sender */
+  .eh-b{order:1;padding:16px 24px 0;gap:12px}
+  .eh-subj{font-size:21px;line-height:1.25}
+  .eh-from{display:grid;grid-template-columns:36px minmax(0,1fr) auto;column-gap:10px;row-gap:0;align-items:center}
+  .eh-av{width:36px;height:36px;font-size:13px;grid-row:auto}
+  .eh-who{grid-column:2;grid-row:1;font-size:14px;line-height:1.3}
+  .eh-n{display:flex;flex-wrap:nowrap;align-items:baseline;column-gap:6px;min-width:0;overflow:hidden;white-space:nowrap}
+  .eh-n b{font-size:14.5px}
+  .eh-org{margin-left:0;font-size:14px;color:var(--ink-2)}
+  .eh-addr{margin-left:2px;font-size:12.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis}
+  .eh-to{font-size:12.5px;color:var(--ink-3)}
+  .eh-date{grid-column:3;grid-row:1;align-self:start;padding-top:2px;font-size:12.5px;color:var(--ink-3)}
+  /* the AI card */
+  .eh .eh-ai{order:2;flex-wrap:wrap;align-items:center;column-gap:6px;row-gap:6px;margin:14px 24px 0;padding:10px 12px;border:0;border-radius:12px;
+    background:color-mix(in srgb,var(--ai-c) 5%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ai-c) 14%,transparent)}
+  .eh .eh-ai::before{display:none}
+  .eh .eh-ai-l{flex:0 0 100%;flex-direction:row;gap:6px;min-width:0;padding:0;font-size:11.5px}
+  .eh .eh-ai-l::after{content:"summary";margin-left:-2px}
+  .eh .eh-ai-orb{width:16px;height:16px;border-radius:5px;font-size:9px}
+  .eh .eh-ai-b{display:contents}
+  .eh .eh-ai-b .eh-sum{flex:0 0 100%;font-size:13.5px;line-height:1.45;font-weight:400;color:var(--ink-2)}
+  .eh .eh-ai-tags{gap:5px}
+  .eh .eh-ai-tags .eh-tag{font-size:11.5px;padding:2px 9px}
+  .eh .eh-hist{font-size:12.5px;padding:0 4px}
+  .eh .eh-ai-btn,.eh .eh-ai-btn.on{margin-left:auto;height:30px;padding:0 10px;gap:5px;border:0;border-radius:8px;background:var(--surface);
+    box-shadow:inset 0 0 0 1px var(--line);color:var(--accent);font-size:12.5px;font-weight:600;filter:none}
+  .eh .eh-ai-btn:hover:not(:disabled){background:var(--surface-2);filter:none}
+  .eh .eh-ai-btn.on{background:var(--accent-soft);box-shadow:inset 0 0 0 1.5px var(--accent)}
+  .eh .eh-ai-btn svg{width:15px;height:15px}
+  /* the email */
+  .ibx2-read{padding:12px 24px 18px}
+  .ibx2-orig-h{display:none}
+  .ibx-html>.btn{display:none}
+  .ibx2-read .ibx-html iframe{border:0;border-radius:0}
+  .ibx-q{display:block;align-self:flex-start;border:0;background:none;padding:4px 0;font:inherit;font-size:13px;font-weight:600;color:var(--accent);cursor:pointer}
+  .ibx-q:hover{text-decoration:underline}
+  /* the conversation, folded to one line */
+  .cv-strip{border:0;border-radius:0;margin:0;background:none;overflow:visible}
+  .cv-strip:not(.pop)>:not(.cv-sum){display:none!important}
+  .cv-sum{display:flex;align-items:baseline;gap:5px;width:100%;border:0;border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);background:none;padding:9px 0;font:inherit;font-size:13px;color:var(--ink-2);text-align:left;cursor:pointer}
+  .cv-sum b{color:var(--ink);font-weight:600}
+  .cv-sum span{margin-left:auto;color:var(--accent);font-size:12.5px;font-weight:600}
+  .cv-sum:hover span{text-decoration:underline}
+  .cv-strip.pop .cv-sum{border-bottom:0}
+  .cv-strip.pop{border-bottom:1px solid var(--line-2);margin-bottom:4px}
+  .cv-strip.pop .cv-h{display:none}
+  .cv-i{grid-template-columns:auto minmax(0,1fr) auto;align-items:baseline;gap:0 8px;padding:7px 0;border-bottom:0;border-top:1px solid var(--line-2)}
+  .cv-i:hover:not(.on){background:color-mix(in srgb,var(--surface-2) 60%,transparent)}
+  .cv-i.on{background:none;box-shadow:none}
+  .cv-i b{font-size:13px}
+  .cv-i span{grid-column:2;grid-row:1;font-size:12.5px}
+  .cv-i time{grid-column:3;grid-row:1;font-size:11.5px}
+  .cv-more{border-top:1px solid var(--line-2);background:none;padding:8px 0}
+}
