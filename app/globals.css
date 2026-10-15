@@ -7708,3 +7708,4 @@ a.pdn-tag:hover{text-decoration:underline}
 .ibx2-selbtn svg,.pit-selic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .ibx2-selbtn.on,.pit-selic.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 @media (max-width:760px) and (pointer:coarse){ .pit .pit-selic{display:grid} }
+@media (max-width:480px){ .sel-bar{gap:5px;padding:5px} .sel-bar>button{padding:0 12px;font-size:13.5px;gap:5px;height:42px} }
