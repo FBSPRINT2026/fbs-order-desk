@@ -5,8 +5,9 @@ import { createClient } from "@/lib/supabase/client";
 import { mergeSettings } from "@/lib/pricing";
 import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions, type FollowUp } from "@/lib/crm/followups";
 
-/** A one-line "here's what needs you today" bar for the Orders page. */
-export default function AssistantStrip() {
+/** A one-line "here's what needs you today" bar for the Orders page. `keep`: only these customers' (the dashboard's
+ *  Everyone / Mine, Oct 15: "Amanda toggles to Mine and still sees Little Groupies") */
+export default function AssistantStrip({ keep }: { keep?: (customerId: string | null) => boolean } = {}) {
   const [items, setItems] = useState<FollowUp[] | null>(null);
   useEffect(() => {
     (async () => {
@@ -21,12 +22,13 @@ export default function AssistantStrip() {
       } catch { setItems([]); }
     })();
   }, []);
-  if (!items || !items.length) return null;
-  const urgent = items.filter((x) => x.priority === 1);
-  const top = (urgent.length ? urgent : items).slice(0, 3);
+  const shown = items && keep ? items.filter((x) => keep(x.customer_id)) : items;
+  if (!shown || !shown.length) return null;
+  const urgent = shown.filter((x) => x.priority === 1);
+  const top = (urgent.length ? urgent : shown).slice(0, 3);
   return (
     <div className="as-strip">
-      <b>{items.length} follow-up{items.length === 1 ? "" : "s"}</b>
+      <b>{shown.length} follow-up{shown.length === 1 ? "" : "s"}</b>
       {urgent.length > 0 && <span className="as-chip u">{urgent.length} urgent</span>}
       {top.map((x) => <Link key={x.key} href={x.href} className="as-chip">{x.title}</Link>)}
       <span className="spacer" />

@@ -379,7 +379,7 @@ export default function Dashboard() {
       {!v ? <div className="empty">Loading your day…</div> : (
         <div className="dash">
           {/* follow-ups the Assistant found (quotes to chase, approvals…) */}
-          {panel("Follow-ups", "fade", null, <AssistantStrip />, ["/shop/assistant", "All follow-ups"], <span className="faint db-h-note">quotes to chase, approvals and suggestions</span>)}
+          {panel("Follow-ups", "fade", null, <AssistantStrip keep={mine ? (c) => !c || isMine(c) : undefined} />, ["/shop/assistant", "All follow-ups"], <span className="faint db-h-note">quotes to chase, approvals and suggestions</span>)}
 
           {/* sales: the numbers (1/3) beside the charts (2/3) */}
           {boss && <div className="dash-row dash-2-1">
