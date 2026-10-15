@@ -50,13 +50,16 @@ export async function removeTextMac(id: string) {
 }
 
 export type TextRow = { id: string; from_me: boolean; body: string; sent_at: string; handle: string; chat: string; chat_name: string; service: string; files: { name: string; type: string; url: string }[];
-  /** who it's with (the contact's name, or the number) and the conversation's name (a person, or a group text) */ who: string; convo: string };
+  /** who it's with (the contact's name, or the number), whose phone (Nicholas, Amanda), and the conversation ("Nicholas & Michael Peticolas") */ who: string; mine: string; convo: string };
 /** a customer's texts, newest last (owners only); pictures as links good for an hour */
 export async function getCustomerTexts(customerId: string, limit = 300) {
   try {
     const { admin } = await owner();
-    const { data } = await admin.from("text_messages").select("id, from_me, body, sent_at, handle, chat, chat_name, service, files").eq("customer_id", customerId).order("sent_at", { ascending: false }).limit(Math.min(1000, limit));
-    const rows = ((data || []) as (Omit<TextRow, "files" | "who" | "convo"> & { files: { name: string; type: string; path: string }[] })[]).reverse();
+    const { data } = await admin.from("text_messages").select("id, owner, from_me, body, sent_at, handle, chat, chat_name, service, files").eq("customer_id", customerId).order("sent_at", { ascending: false }).limit(Math.min(1000, limit));
+    const rows = ((data || []) as (Omit<TextRow, "files" | "who" | "mine" | "convo"> & { owner: string; files: { name: string; type: string; path: string }[] })[]).reverse();
+    // whose phone: the staff member's first name (Oct 15, Nick: "texts between Nicholas and Michael… we will sync Amanda soon")
+    const { data: st } = await admin.from("staff").select("email, name").in("email", [...new Set(rows.map((r) => r.owner))]);
+    const first = (e: string) => { const n = ((st || []) as { email: string; name: string | null }[]).find((x) => x.email.toLowerCase() === e.toLowerCase())?.name || e.split("@")[0]; return n.split(/\s+/)[0].replace(/^./, (x) => x.toUpperCase()); };
     // their people's names, by number and email (Oct 15, Nick: "Peticolas has texts with Michael and with Kayla")
     const [{ data: c }, { data: cts }] = await Promise.all([
       admin.from("customers").select("name, phone, email, contact2_name, contact2_phone, contact2_email").eq("id", customerId).maybeSingle(),
@@ -75,7 +78,8 @@ export async function getCustomerTexts(customerId: string, limit = 300) {
     }
     return { ok: true as const, texts: rows.map((r) => {
       const group = !!r.chat && !/^(\+?\d+|[^@\s]+@[^@\s]+)$/.test(r.chat);
-      return { ...r, who: nice(r.handle), convo: group ? r.chat_name || "Group text" : nice(r.chat || r.handle), files: (r.files || []).map((f) => ({ name: f.name, type: f.type, url: signed.get(f.path) || "" })) };
+      const mine = first(r.owner);
+      return { ...r, who: nice(r.handle), mine, convo: `${mine} & ${group ? r.chat_name || "group text" : nice(r.chat || r.handle)}`, files: (r.files || []).map((f) => ({ name: f.name, type: f.type, url: signed.get(f.path) || "" })) };
     }) as TextRow[] };
   } catch (e) { return fail(e); }
 }

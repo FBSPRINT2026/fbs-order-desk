@@ -20,10 +20,11 @@ export default function CustomerTexts({ customerId }: { customerId: string }) {
   return (
     <section className="panel ctx-panel">
       <div className="panel-h"><h2>Texts</h2><span className="faint" style={{ fontSize: 12 }}>{t.length} from your phone · owners only</span></div>
-      {convos.length > 1 && <div className="ctx-chips" role="group" aria-label="Conversations">
-        <button type="button" className={!only ? "on" : ""} onClick={() => setOnly("")}>All <small>{t.length}</small></button>
-        {convos.map(([c, n]) => <button key={c} type="button" className={only === c ? "on" : ""} onClick={() => setOnly(c)}>{c} <small>{n}</small></button>)}
-      </div>}
+      {/* always say whose texts these are: "Nicholas & Michael Peticolas" (one chip per conversation) */}
+      <div className="ctx-chips" role="group" aria-label="Conversations">
+        {convos.length > 1 && <button type="button" className={!only ? "on" : ""} onClick={() => setOnly("")}>All <small>{t.length}</small></button>}
+        {convos.map(([c, n]) => <button key={c} type="button" className={only === c || convos.length === 1 ? "on" : ""} onClick={() => convos.length > 1 && setOnly(c)}>Texts between {c.replace(" & ", " and ")} <small>{n}</small></button>)}
+      </div>
       <div className="panel-b ctx">
         {shown.map((m) => {
           const d = day(m.sent_at), sep = d !== last; last = d;
@@ -33,7 +34,7 @@ export default function CustomerTexts({ customerId }: { customerId: string }) {
           return (
             <div key={m.id}>
               {sep && <div className="ctx-day">{d}</div>}
-              {head && <div className={"ctx-who " + (m.from_me ? "me" : "them")}>{m.from_me ? `To ${m.convo}` : m.convo}</div>}
+              {head && <div className={"ctx-who " + (m.from_me ? "me" : "them")}>{m.convo.replace(" & ", " and ")}</div>}
               {group && <div className="ctx-who them">{m.who}</div>}
               <div className={"ctx-row " + (m.from_me ? "me" : "them")}>
                 <div className="ctx-b">
@@ -42,7 +43,7 @@ export default function CustomerTexts({ customerId }: { customerId: string }) {
                     : <a key={f.url} className="ctx-file" href={f.url} target="_blank" rel="noreferrer">{f.name}</a>)}
                   {m.body && <span className="ctx-t">{m.body}</span>}
                 </div>
-                <span className="ctx-time">{m.chat_name ? `${m.chat_name} · ` : ""}{time(m.sent_at)}</span>
+                <span className="ctx-time">{m.from_me ? `${m.mine} · ` : `${m.who} · `}{time(m.sent_at)}</span>
               </div>
             </div>
           );
