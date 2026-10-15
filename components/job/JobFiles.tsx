@@ -49,7 +49,7 @@ export async function addPhoto(job: { kind: "o" | "a"; id: string }, file: File,
 }
 
 /** The panel on the shop's job page: notes and photos, add either, archive (nothing is deleted). */
-export default function JobFiles({ job, staff = true, bump = 0 }: { job: { kind: "o" | "a"; id: string }; staff?: boolean; /** change it to reload (a file was added elsewhere) */ bump?: number }) {
+export default function JobFiles({ job, staff = true, bump = 0, inside = false }: { job: { kind: "o" | "a"; id: string }; staff?: boolean; /** change it to reload (a file was added elsewhere) */ bump?: number; /** inside the Production notes & files panel: no panel of its own */ inside?: boolean }) {
   const { items, err, load } = useJobFiles(job);
   useEffect(() => { if (bump) load(); }, [bump]); // eslint-disable-line react-hooks/exhaustive-deps
   const [note, setNote] = useState(""), [tag, setTag] = useState("General"), [busy, setBusy] = useState(""), [msg, setMsg] = useState("");
@@ -57,9 +57,9 @@ export default function JobFiles({ job, staff = true, bump = 0 }: { job: { kind:
   const file = useRef<HTMLInputElement>(null);
   const photos = (items || []).filter((x) => x.kind !== "note"), notes = (items || []).filter((x) => x.kind === "note");
   return (
-    <section className="panel jf">
-      <div className="panel-h"><h2>Production files &amp; notes</h2><span className="jf-staff">Shop only</span></div>
-      <div className="panel-b stack" style={{ gap: 12 }}>
+    <section className={inside ? "jf jf-inside" : "panel jf"}>
+      {inside ? <div className="lbl jf-inside-h">Notes &amp; photos for next time</div> : <div className="panel-h"><h2>Production files &amp; notes</h2><span className="jf-staff">Shop only</span></div>}
+      <div className={inside ? "stack" : "panel-b stack"} style={{ gap: 12 }}>
         <p className="faint" style={{ margin: 0, fontSize: 13 }}>Photos of the printed piece and notes like press setup or ink changes, for next time. Add them here or by scanning the QR code on the work order or a box label with a phone.</p>
         <div className="jf-add">
           <select value={tag} onChange={(e) => setTag(e.target.value)} aria-label="Kind of note">{NOTE_TAGS.map((t) => <option key={t}>{t}</option>)}</select>

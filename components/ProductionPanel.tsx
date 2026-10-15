@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { downloadUrl } from "@/lib/printavoNames";
 
 /** `fileName`: what a download saves as (defaults to `name`) */
@@ -13,8 +13,8 @@ const ext = (n: string) => (n.split("?")[0].split(".").pop() || "file").slice(0,
  * the notes on top, then the files as a grid of thumbnails you can drop more files onto.
  * Without the edit handlers it's read-only (archived orders).
  */
-export default function ProductionPanel({ note, files, onNote, onUpload, onRemove, uploading = false, compact = false }: {
-  note: string; files: ProdFile[];
+export default function ProductionPanel({ note, files, onNote, onUpload, onRemove, uploading = false, compact = false, children }: {
+  note: string; files: ProdFile[]; /** more below the files: the job's notes & photos added in the portal (Oct 15: was a second "Production files & notes") */ children?: ReactNode;
   onNote?: (v: string) => void; onUpload?: (files: FileList) => void; onRemove?: (f: ProdFile) => void; uploading?: boolean; /** narrow side column */ compact?: boolean;
 }) {
   const [over, setOver] = useState(false);
@@ -60,6 +60,7 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
           {onUpload && <input ref={input} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) onUpload(e.target.files); e.target.value = ""; }} />}
           {onUpload && <div className="faint" style={{ fontSize: 12, marginTop: 6 }}>Separations, vector art, placement sheets, customer files… any file type.</div>}
         </div>
+        {children}
       </div>
       {zoom && (
         <div className="pv-zoom" role="dialog" aria-label={zoom.name} onClick={() => setZoom(null)}>

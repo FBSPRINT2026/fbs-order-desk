@@ -19,7 +19,7 @@ const inkOn = (hex: string) => { const m = hex.replace("#", "").match(/^([0-9a-f
  * header with status, customer and dates, line item groups with size columns and their imprints and mockups,
  * then totals, payments, notes, files, tasks and messages.
  */
-export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref, audience = "shop", actions, names, paths }: { o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string; /** "customer": the portal view (no internal details) */ audience?: "shop" | "customer"; /** buttons next to Print (the shop's Reorder) */ actions?: ReactNode;
+export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref, audience = "shop", actions, names, paths, production }: { /** inside the Production notes & files panel (the job's notes & photos) */ production?: ReactNode; o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string; /** "customer": the portal view (no internal details) */ audience?: "shop" | "customer"; /** buttons next to Print (the shop's Reorder) */ actions?: ReactNode;
   /** the files' original names (Filestack handle → name, printavo_file_names) and our copies' paths (Printavo link → path) */ names?: Record<string, string>; paths?: Record<string, string> }) {
   const [zoom, setZoom] = useState<PvFile | null>(null);
   // a file's original name, and a link that saves it under that name
@@ -122,7 +122,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         <aside className="ed-aside pv-aside">
         {audience === "shop" && (
           <ProductionPanel compact note={plain(o.productionNote)}
-            files={o.files.map((f) => ({ id: f.id, name: nameOf(f), url: fileUrl(f.full) || undefined, thumb: (f.thumb && fileUrl(f.thumb)) || undefined, mime: f.mime }))} />
+            files={o.files.map((f) => ({ id: f.id, name: nameOf(f), url: fileUrl(f.full) || undefined, thumb: (f.thumb && fileUrl(f.thumb)) || undefined, mime: f.mime }))}>{production}</ProductionPanel>
         )}
         {cash && o.transactions.length > 0 && (
           <section className="panel">

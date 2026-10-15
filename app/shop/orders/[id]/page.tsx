@@ -807,7 +807,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div className="field"><label htmlFor="o-notes">Customer notes (shown on quote/invoice)</label><textarea id="o-notes" rows={4} value={o.notes} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
               </div>
             </section>
-            <JobFiles job={{ kind: "o", id: o.id }} bump={filesBump} />
             {/* the job's emails and texts (owners only; Oct 15) */}
             <JobTalk jobRef={`o:${o.id}`} />
           </div>
@@ -877,7 +876,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           )}
           <ProductionPanel compact note={prodNotes} onNote={onProdNotes} uploading={artUploading}
             files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name) }))}
-            onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }} />
+            onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }}>
+            {/* the job's notes & photos (one panel, Oct 15: there were two "Production files & notes") */}
+            <JobFiles job={{ kind: "o", id: o.id }} bump={filesBump} inside />
+          </ProductionPanel>
 
           <ChecksPanel checks={checks} orderId={o.id} save={save} reorder={/Reorder of (Printavo )?#\d+/.test(o.notes || "")} />
 
