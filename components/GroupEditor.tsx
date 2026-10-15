@@ -130,7 +130,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
       </div>
       {gc.wholesale && <div className="cs-banner">Customer supplied goods</div>}
       <div className="line-b">
-        <div className="lbl" style={{ marginBottom: -4 }}>GARMENTS</div>
+        <div className="lbl gsec" style={{ marginBottom: -4 }}>Garments</div>
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head">
             <span className="a-st">Style #</span><span className="a-br">Brand</span><span className="a-co">Color</span><span className="a-de">Description</span>
@@ -191,6 +191,8 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
 
         {/* the mockup big on the left, the imprints beside it (Oct 15, Nick: "make it large and move to the left of the
             imprint… about 3 times larger… all the imprint methods and info to the right") */}
+        <div className="imp-sec">
+        <div className="lbl gsec">Imprints</div>
         <div className="imp-wrap">
         <div className="imp-mock">
           {(g.mockupThumbs || []).filter((p) => thumbUrls?.[p]).length
@@ -202,9 +204,6 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
           {blockMsg && mockupBlock && <span className="ink-warn" style={{ margin: 0 }}>{blockMsg}</span>}
         </div>
         <div className="imprints">
-          <div className="imp-top">
-            <div className="lbl">IMPRINTS</div>
-          </div>
           {locked && askSkip && (
             <div className="confirm-bar">
               <span>You haven&apos;t created a mockup for this group yet. Are you sure you want to fill in the imprints without one?</span>
@@ -302,6 +301,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
           </div>
         </div>
         </div>
+        </div>
 
         <div className="grp-foot">
           <div className={"grp-foot-l mk-lock" + (locked ? " on" : "")}>
@@ -310,7 +310,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
             {(scrImps.length > 0 || embImps.length > 0) && (
               <div className="sbx">
                 {scrImps.length > 0 && <div className="sbx-sec">
-                  <div className="sbx-h"><span>Screens</span></div>
+                  <div className="sbx-h gsec"><span>Screens</span></div>
                   {scrImps.map((d) => {
                     const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake);
                     const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
@@ -328,7 +328,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                   })}
                 </div>}
                 {scrImps.some((d) => pmsInks(d).some((x) => x.auto) || (!inkNames(d.inks).length && wpl.pmsFee)) || g.specialtyInk || g.specialtyInkSet ? <div className="sbx-sec">
-                  <div className="sbx-h"><span>Inks</span></div>
+                  <div className="sbx-h gsec"><span>Inks</span></div>
                   {scrImps.flatMap((d) => {
                     const di = g.imprints.indexOf(d);
                     if (!inkNames(d.inks).length) return wpl.pmsFee ? [
@@ -354,7 +354,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                   ) : null}
                 </div> : null}
                 {embImps.length > 0 && <div className="sbx-sec">
-                  <div className="sbx-h"><span>Digitizing</span></div>
+                  <div className="sbx-h gsec"><span>Digitizing</span></div>
                   {embImps.map((d) => (
                     <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Embroidery"}</span>{d.stitches ? <span className="faint">{d.stitches.toLocaleString()} stitches</span> : null}{!hidePrices && <b className="num">{money(wpl.digitizing)}</b>}</div>
                   ))}
@@ -364,7 +364,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
             )}
             {finishingAt === "group" && finList.length > 0 && (
         <div className="imprints">
-                <div className="lbl" style={{ marginBottom: 6 }}>FINISHING</div>
+                <div className="lbl gsec" style={{ marginBottom: 6 }}>Finishing</div>
                 <div className="row" style={{ gap: 14 }}>
                   {finList.map((f) => (
                     <label key={f.id} className="check" style={{ fontSize: 13 }}>

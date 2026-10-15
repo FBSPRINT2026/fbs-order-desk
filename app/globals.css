@@ -8052,7 +8052,8 @@ a.pdn-tag:hover{text-decoration:underline}
 .tbl tr.picked td{background:color-mix(in srgb,var(--danger) 6%,var(--surface))}
 .tbl tr.nopick{opacity:.55}
 /* a line item group: the mockup big on the left (about 3× the old thumbnail), the imprints to its right (Oct 15, Nick) */
-.imp-wrap{display:grid;grid-template-columns:200px minmax(0,1fr);gap:18px;align-items:start;border-top:1px dashed var(--line);padding-top:12px}
+.imp-sec{border-top:1px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+.imp-wrap{display:grid;grid-template-columns:200px minmax(0,1fr);gap:18px;align-items:start}
 .imp-wrap>.imprints{border-top:0;padding-top:0;min-width:0}
 .imp-mock{display:flex;flex-direction:column;align-items:stretch;gap:8px}
 .mk-big{display:block;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;line-height:0}
@@ -8067,3 +8068,8 @@ a.pdn-tag:hover{text-decoration:underline}
    "ws" rows, so Total pieces stacked under itself (Oct 15, Nick): the rows keep their columns */
 .gl-list.ws{gap:0}
 .gl-row.grp-total.ws{display:grid;gap:6px}
+
+/* a group's section headers stand out (Oct 15, Nick: "Garments, Imprints, Screens… need to stand out some") */
+.lbl.gsec,.sbx-h.gsec{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ink)}
+.lbl.gsec::before,.sbx-h.gsec::before{content:"";flex:none;width:4px;height:15px;border-radius:2px;background:var(--accent)}
+.sbx-h.gsec{margin-bottom:6px}
