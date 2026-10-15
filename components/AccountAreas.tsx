@@ -673,7 +673,7 @@ export default function AccountAreas({ mode, textsPanel, textsCount, productionP
     <div className="aa">
       <nav className="aa-nav" aria-label="Account areas">
         {AREAS.filter((a) => a.show !== false).map((a) => (
-          <button key={a.id} type="button" className={"aa-tab" + (area === a.id ? " on" : "") + (a.id === "program" && !hasProgram ? " off" : "")} title={a.id === "program" && !hasProgram ? (mode === "portal" ? "Program pricing: special flat prices on the items you order often. Ask us about it." : "No program set up yet") : undefined} onClick={() => { go(a.id); setQ(""); }}>
+          <button key={a.id} type="button" className={"aa-tab" + (area === a.id ? " on" : "") + (a.id === "program" && !hasProgram ? " off" : "")} title={a.id === "program" && !hasProgram ? (mode === "portal" ? "Program pricing: special flat prices on the items you order often. Ask us about it." : "No program set up yet") : a.label} onClick={() => { go(a.id); setQ(""); }}>
             <Ico d={a.icon} /><span>{a.label}</span>{a.n ? <span className="aa-n">{a.n}</span> : null}
           </button>
         ))}

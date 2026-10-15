@@ -9,3 +9,7 @@
 - **Spanish toggle.** Every shop and portal page has "Translate to Spanish" at the top right (`components/Translate.tsx`).
   It swaps the page's text in place and saves each phrase's Spanish in `ui_translations`. Put `data-notranslate` on
   anything that must stay exactly as written (codes, a signature, legal text). Inputs, selects and textareas are never touched.
+- **Toolbars never scroll sideways** (Nicholas, Oct 15 2026). A row of tabs or buttons must fit: when it doesn't, the
+  buttons show icons only, then the row wraps. `components/ToolbarFit.tsx` does this for `.aa-nav`, `.ot-nav`,
+  `.ibx2-tabs`, `.mf-bar` and anything with `data-toolbar`; give new toolbars icons and one of those hooks. Tables and
+  calendars may still scroll.

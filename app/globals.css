@@ -8548,3 +8548,14 @@ a.pdn-tag:hover{text-decoration:underline}
 }
 @keyframes go-shine{0%{background-position:100% 0;filter:none}2.5%{filter:drop-shadow(0 0 5px rgba(252,177,34,.55))}6%{background-position:0 0;filter:none}100%{background-position:0 0;filter:none}}
 @media (prefers-reduced-motion: reduce){.tag-go em{animation:none;background:none;color:#fff;-webkit-text-fill-color:#fff}}
+
+/* toolbars never scroll sideways (Oct 15, Nick; components/ToolbarFit.tsx): no scrollbar; when the buttons don't fit
+   they show icons only, and if that still doesn't fit the row wraps */
+.aa-nav,.ot-nav,.ibx2-tabs,.mf-bar,[data-toolbar]{overflow-x:hidden!important;scrollbar-width:none}
+.aa-nav::-webkit-scrollbar,.ot-nav::-webkit-scrollbar,.ibx2-tabs::-webkit-scrollbar,.mf-bar::-webkit-scrollbar{display:none}
+.tb-icons > :has(> svg){position:relative}
+.tb-icons > :has(> svg) > span:not(.aa-n):not([class$="-n"]){display:none}
+.tb-icons > :has(> svg) > .aa-n{position:absolute;top:2px;right:2px;min-width:16px;padding:0 4px;font-size:10px;line-height:15px}
+.tb-wrap{flex-wrap:wrap!important;overflow:visible!important}
+.tb-tight{gap:2px!important}
+.tb-tight > *{padding-left:7px!important;padding-right:7px!important;letter-spacing:0!important}
