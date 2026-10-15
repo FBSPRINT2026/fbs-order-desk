@@ -8389,3 +8389,14 @@ a.pdn-tag:hover{text-decoration:underline}
 .ord .cust-card .cc-co{font-size:14px}
 .ord .cust-card .cc-extra{margin-top:3px;padding-top:3px}
 .ord .pt-box .chip{padding:3px 10px;font-size:12px;min-height:0}
+/* the Printavo box as a side panel on the Order tab (Oct 15, Nick) */
+.pv-panel .panel-b{display:flex;flex-direction:column;gap:10px;padding:10px 14px 12px}
+.pv-panel .pvs-strip{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin:0;padding:0;border:0;background:none;font-size:13px;color:var(--ink-2)}
+.pv-panel .pvs-strip>span:first-child{line-height:1.4}
+.pv-panel .pvs-strip>span.row{display:grid!important;grid-template-columns:1fr 1fr;gap:6px!important}
+.pv-panel .pvs-strip .btn{width:100%;justify-content:center}
+.pv-panel .pvc{margin:0;padding:10px 0 0;border:0;border-top:1px solid var(--line-2);border-radius:0;background:none;font-size:13px}
+.pv-panel .pvc>.row{flex-direction:column;align-items:stretch!important;gap:6px!important}
+.pv-panel .pvc>.row>span.row{display:flex;flex-direction:column;align-items:stretch!important;gap:6px!important}
+.pv-panel .pvc>.row .btn{width:100%;justify-content:center}
+.pv-panel .pvc-list li{flex-direction:column;align-items:stretch}

@@ -659,10 +659,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </details>
         </div>
       </div>
-      <div className="pvx-box">
-      {(() => { const x = o as Order & { printavo_id?: string | null; printavo_visual_id?: string | null; printavo_state?: { url?: string; publicUrl?: string; status?: string } | null }; return x.printavo_id ? <PrintavoLink visualId={x.printavo_visual_id || ""} url={x.printavo_state?.url} publicUrl={x.printavo_state?.publicUrl} status={x.printavo_state?.status} number={o.number} orderId={o.id} onRenumbered={(v) => setO((y) => (y ? ({ ...y, printavo_visual_id: v } as Order) : y))} /> : null; })()}
-      {(o as Order & { printavo_id?: string | null }).printavo_id && o.number >= 40000 && o.number < 50000 && calc && <PrintavoChanges o={o} calc={calc} patch={patch} prodNote={prodNotes} onProdNote={onProdNotes} />}
-      </div>
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
       {o.status === "request" && (
         <div className="callout req-callout">
@@ -921,6 +917,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
           </section>
+          {/* Printavo: a side panel on the Order tab, above the goods (Oct 15, Nick) */}
+          {(o as Order & { printavo_id?: string | null }).printavo_id && <section className="panel pv-panel">
+            <div className="panel-h"><h2>Printavo</h2></div>
+            <div className="panel-b">
+      {(() => { const x = o as Order & { printavo_id?: string | null; printavo_visual_id?: string | null; printavo_state?: { url?: string; publicUrl?: string; status?: string } | null }; return x.printavo_id ? <PrintavoLink visualId={x.printavo_visual_id || ""} url={x.printavo_state?.url} publicUrl={x.printavo_state?.publicUrl} status={x.printavo_state?.status} number={o.number} orderId={o.id} onRenumbered={(v) => setO((y) => (y ? ({ ...y, printavo_visual_id: v } as Order) : y))} /> : null; })()}
+      {(o as Order & { printavo_id?: string | null }).printavo_id && o.number >= 40000 && o.number < 50000 && calc && <PrintavoChanges o={o} calc={calc} patch={patch} prodNote={prodNotes} onProdNote={onProdNotes} />}
+            </div>
+          </section>}
           {o.price_type === "wholesale" && o.type === "invoice" && (
             <section className="panel">
               <div className="panel-h"><h2>Customer supplied goods</h2></div>
