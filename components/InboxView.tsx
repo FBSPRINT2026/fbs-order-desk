@@ -18,7 +18,7 @@ import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
 import { orderGoodsHref, pieceCount } from "@/lib/pieces";
 import { cheerWin } from "@/components/Cheer";
 import { SayButton } from "@/components/VoiceDraft";
-import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, PHONE_MAIL_CSS, QuoteToggle, frameHeight, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
+import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, PhoneNav, PSec, PTile, PPick, PHONE_MAIL_CSS, QuoteToggle, frameHeight, SwipeRow, type PhoneNavT, Toolbar, TbGroup, TbRow, TbBtn, TbMenu, TbIcon, ConvoList, PersonTimeline, FolderBar, FolderList, FolderMail, folderLabel, MailFrame, MoveBar, ThreadView, type Convo, type Folder, type FullMsg, type MailView, type MsgRow } from "@/components/MailFolders";
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
@@ -65,6 +65,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [bk, setBk] = useSticky<Bk>("inbox.bucket", "all");
   // Email: the folder list, another folder's emails, and search as conversations (all live from the mailbox)
   const [view, setView] = useState<MailView>({ kind: "inbox" });
+  const [before, setBefore] = useState<MailView>({ kind: "inbox" });
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [fRows, setFRows] = useState<MsgRow[] | null>(null), [fMore, setFMore] = useState<{ k: "seq"; n: number } | { k: "cache" | "live"; before: string } | null>(null), [fBusy, setFBusy] = useState(false), [fSel, setFSel] = useState<MsgRow | null>(null), [fErr, setFErr] = useState("");
   const [convos, setConvos] = useState<Convo[] | null>(null), [cSel, setCSel] = useState<Convo | null>(null), [sNote, setSNote] = useState("");
@@ -104,10 +105,14 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const runSearch = async (term: string, who?: string[]) => {
     if (term.trim().length < 2) return;
     setSugOpen(false);
+    // where Back goes (Oct 15, Nick: "a quick back button to get back to where you were, Inbox or Sent")
+    if (view.kind !== "search") setBefore(view);
     setView({ kind: "search", q: term.trim(), ...(who?.length ? { who } : {}) }); setConvos(null); setCSel(null); setSNote(""); setPicked(false);
     try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; all?: boolean }>({ do: "search", q: term.trim(), ...(who?.length ? { who: who.join(",") } : {}) }); setConvos(r.convos); setSearchAll(!!r.all); if (r.all && r.partial) setSNote("Some folders didn't answer, so there may be more."); }
     catch (e) { setConvos([]); setSNote(e instanceof Error ? e.message : String(e)); }
   };
+  const backFromSearch = () => { setQ(""); setSugOpen(false); setCSel(null); setPicked(false); if (before.kind === "folder") void openFolder(before.path); else setView({ kind: "inbox" }); };
+  const beforeName = before.kind === "folder" ? folderLabel(folders?.find((f) => f.path === before.path) || { name: before.path.split("/").pop() || before.path, special: "" }) : "Inbox";
   // past the 45 days: searched live on request, added to the list
   const searchOlder = async (term: string) => {
     setOlderBusy(true); setSNote("");
@@ -445,6 +450,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
         const sum = [counts.reply ? `${counts.reply} customer${counts.reply === 1 ? "" : "s"} need${counts.reply === 1 ? "s" : ""} a reply${counts.urgent ? ` (${counts.urgent} urgent)` : ""}` : "No customer waiting on a reply", bkN("todo") ? `${bkN("todo")} to-do${bkN("todo") === 1 ? "" : "s"}` : "", bkN("event") ? `${bkN("event")} event${bkN("event") === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
         return <div className="pit">
           <div className="pit-top">
+            {view.kind === "search" && <button type="button" className="pit-back" onClick={backFromSearch} aria-label={`Back to ${beforeName}`}><svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>{beforeName}</button>}
             <button type="button" className="pit-fold" onClick={() => setPSheet(true)} aria-haspopup="menu">{curName}{unread > 0 && <span className="pit-n">{unread}</span>}<svg viewBox="0 0 24 24" aria-hidden><path d="M6 9l6 6 6-6" /></svg></button>
             <span className="spacer" />
             {/* Select: a small check mark beside Check now (Oct 15, Nick) */}
@@ -491,7 +497,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
           <div className="ibx2-list-h">
             {mode === "mail" && view.kind !== "inbox" ? <div className="mf-lh">
               {view.kind === "folder" ? <><b>{folderLabel(folders?.find((f) => f.path === view.path) || { name: view.path.split("/").pop() || view.path, special: "" })}</b><span className="faint">{folders?.find((f) => f.path === view.path)?.messages ?? ""} emails</span></>
-                : <><b>{view.who?.length ? `With ${view.q}` : `“${view.q}”`}</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link" onClick={() => { setQ(""); setView({ kind: "inbox" }); }}>Clear</button></>}
+                : <><b>{view.who?.length ? `With ${view.q}` : `“${view.q}”`}</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link" onClick={backFromSearch}>‹ Back to {beforeName}</button></>}
             </div> : <div className="ibx2-tabs" role="tablist">
               {mode === "mail" ? BK.map((b) => (
                 <button key={b.k} type="button" role="tab" aria-selected={bk === b.k} className={bk === b.k ? "on" : ""} onClick={() => { setBk(b.k); setOpen(null); }}>{b.label} <span>{ol ? bkN(b.k) : ""}</span></button>
@@ -543,7 +549,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
           <div className="ibx2-items" ref={listRef} onKeyDown={onKeys}>
             {mode === "mail" && view.kind === "folder" ? <>{fErr && <div className="pv-err">{fErr}</div>}<FolderList rows={fRows} sel={fSel ? `${fSel.folder}:${fSel.uid}` : ""} onPick={pickFolderRow}
               onSwipe={(r, to) => quickMove(r.folder, r.uid, to, () => { setFRows((x) => (x || []).filter((y) => !(y.uid === r.uid && y.folder === r.folder))); if (fSel?.uid === r.uid && fSel.folder === r.folder) setFSel(null); })} sentBox={/\\Sent/.test(folders?.find((f) => f.path === view.path)?.special || "")} more={!!fMore} loading={fBusy} onMore={() => fMore && void openFolder(view.path, fMore)} /></>
-            : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? (searchAll ? <div className="ibx2-none">Nothing in your mailbox for “{view.q}”.{sNote ? ` ${sNote}` : ""}</div> : <div className="ibx2-none">Nothing in the last 45 days for “{view.q}”.{sNote ? ` ${sNote}` : ""}<div style={{ marginTop: 10 }}><button type="button" className="btn sm" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail…" : "Search older mail"}</button></div></div>) : <><div className="faint mf-note">{searchAll ? "Your whole mailbox, newest first." : "Last 45 days."}</div><ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} />
+            : mode === "mail" && view.kind === "search" ? (!convos ? <div className="ibx2-none">Searching your mail for “{view.q}”…</div> : !convos.length ? (searchAll ? <div className="ibx2-none">Nothing in your mailbox for “{view.q}”.{sNote ? ` ${sNote}` : ""}</div> : <div className="ibx2-none">Nothing in the last 45 days for “{view.q}”.{sNote ? ` ${sNote}` : ""}<div style={{ marginTop: 10 }}><button type="button" className="btn sm" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail…" : "Search older mail"}</button></div></div>) : <><div className="faint mf-note">{searchAll ? "Your whole mailbox, newest first." : "Last 45 days."}</div>{view.who?.length ? <PersonTimeline convos={convos} me={(st?.mine?.email || "").toLowerCase()} onOpen={(c) => { setCSel(c); setPicked(true); }} /> : <ConvoList convos={convos} sel={cSel?.key || ""} me={(st?.mine?.email || "").toLowerCase()} onPick={(c) => { setCSel(c); setPicked(true); }} />}
               <div className="mf-older-s">{sNote && <div className="faint">{sNote}</div>}{!searchAll && <button type="button" className="btn sm ghost" disabled={olderBusy} onClick={() => void searchOlder(view.q)}>{olderBusy ? "Searching older mail… (up to a minute)" : "Search older mail too"}</button>}</div></>)
             : tab === "outlook" ? (!ol ? <div className="ibx2-none">Loading…</div> : <>
               { !olShown.length ? <div className="ibx2-none">{q ? "Nothing matches." : bk === "all" ? "Your Inbox is empty. Nice." : "Nothing here right now."}</div>
