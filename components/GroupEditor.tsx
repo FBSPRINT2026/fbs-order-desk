@@ -133,6 +133,46 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
   const inkRate = wpl.specialtyInk?.length ? wpl.specialtyInk[Math.min(gc.ti, wpl.specialtyInk.length - 1)] : 0;
   const setPms = (di: number, name: string, v: boolean | undefined) => update((x) => { const m = { ...(x.imprints[di].pmsCharge || {}) }; if (v == null) delete m[name.toLowerCase()]; else m[name.toLowerCase()] = v; x.imprints[di].pmsCharge = Object.keys(m).length ? m : undefined; });
   const tick = (id: string, on: boolean) => update((x) => { const set = new Set(x.finishing || []); if (on) set.add(id); else set.delete(id); x.finishing = [...set]; });
+  // a print's screens, on its own line (Oct 15, Nick: "make the screens incorporate into the imprint lines")
+  const screenCtl = (d: Group["imprints"][number]) => {
+    if (!scrImps.includes(d)) return null;
+    const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake);
+    const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
+    return (
+      <div className="pr-scr">
+        <span className="pr-scr-l">Screens</span>
+        <span>{sc.n} screen{sc.n === 1 ? "" : "s"}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0))}</b></>}</span>
+        {allLight ? <span className="faint">no underbase</span> : <span className={"sbx-ub" + (d.underbase == null ? " auto" : "")}>
+          <label className="check" title={d.underbase == null ? (sc.under ? "Automatic: a light ink needs one. Click to override." : "Automatic: dark inks print without one. Click to override.") : "Set by hand"}><input type="checkbox" checked={sc.under} onChange={(e) => update((x) => { x.imprints[di].underbase = e.target.checked; x.imprints[di].screens = undefined; })} />Underbase</label>
+          {d.underbase != null && <span className="sbx-ovr">override <button type="button" aria-label="Back to automatic" title="Back to automatic" onClick={() => update((x) => { x.imprints[di].underbase = undefined; })}>×</button></span>}
+        </span>}
+        {wpl.remakeFee != null && <label className="check" title="The screens are on file from an earlier order"><input type="checkbox" checked={rm} onChange={(e) => update((x) => { x.imprints[di].remake = e.target.checked; })} />Remake {money(wpl.remakeFee)}</label>}
+      </div>
+    );
+  };
+  const inksSec = scrImps.some((d) => pmsInks(d).some((x) => x.auto) || (!inkNames(d.inks).length && wpl.pmsFee)) || !!g.specialtyInk || !!g.specialtyInkSet;
+  const hasFoot = inksSec || embImps.length > 0 || (finishingAt === "group" && finList.length > 0);
+  // the group's money in one line under its prints (Oct 15, Nick: "move the total up")
+  const priceLine = hidePrices ? null : (() => {
+    const part = (lc: GroupCalc["lines"][number], v: number) => (lc.hasOv ? (lc.calcEach ? (lc.each * v) / lc.calcEach : 0) : v);
+    const imp = gc.lines.reduce((a, lc) => a + lc.qty * part(lc, lc.printEach), 0);
+    const fin = gc.lines.reduce((a, lc) => a + lc.qty * part(lc, gc.finishEach), 0);
+    const gar = Math.round((gc.sub - imp - fin) * 100) / 100;
+    const bits: [string, number, string?][] = [
+      ...(gc.wholesale && Math.abs(gar) < 0.01 ? [] : [["Garments", gar] as [string, number]]),
+      ["Imprints", imp],
+      ...(fin ? [["Finishing", fin] as [string, number]] : []),
+      ...(gc.setup ? [["Setup", gc.setup, gc.minCharge ? `incl. ${money(gc.minCharge)}: under ${settings.wholesale.minQty || 12} pcs is charged as ${settings.wholesale.minQty || 12}` : gc.inkFees ? "incl. ink and PMS fees" : ""] as [string, number, string]] : []),
+      ...(gc.materials ? [["2XL+ materials", gc.materials] as [string, number]] : []),
+    ];
+    return (
+      <div className="grp-sum">
+        {gc.custom ? <span className="ink-warn">9+ colors: custom quote (priced at 8 here)</span> : null}
+        {bits.map(([k, v, t]) => <span key={k} title={t || undefined}>{k} <b className="num">{money(v)}</b></span>)}
+        <span className="grp-sum-t">Group total <b className="num">{money(gc.sub + gc.setup + gc.materials)}</b></span>
+      </div>
+    );
+  })();
   return (
     <section className={"line" + (hidePrices ? " np" : "")}>
       <div className="line-h">
@@ -232,7 +272,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
               space"): what and where on top, ink and size under it, notes, then the art */}
           <div className={"imp-cards" + (frozen ? " ro" : "")}>
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} d={d} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
+              <PrintRow key={d.id} d={d} extra={screenCtl(d)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -271,6 +311,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                 </div>
                 )}
                 </div>
+                {screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
                 {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="imp-unconf">
                     <span><b>Reorder - Production Details Needed</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
                     {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks we printed before">Production Details</a> : null}
@@ -311,6 +352,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
               </div>
             ))}
           </div>
+          {priceLine}
           {frozen
             ? <div className="imp-frozen-note">Set by the mockup. <button type="button" className="linkbtn" onClick={startMockup}>Change prints in the Mockup Creator</button></div>
             : <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>}
@@ -320,31 +362,13 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
         </div>
         </div>
 
-        <div className="grp-foot">
+        {hasFoot && <div className="grp-foot">
           <div className={"grp-foot-l mk-lock" + (locked ? " on" : "")}>
             {locked && <button type="button" className="mk-cover" tabIndex={-1} aria-label="Finishing is locked until a mockup is created" onClick={() => setAskSkip(true)} />}
             <div inert={locked || undefined} className="mk-body">
-            {(scrImps.length > 0 || embImps.length > 0) && (
+            {(inksSec || embImps.length > 0) && (
               <div className="sbx">
-                {scrImps.length > 0 && <div className="sbx-sec">
-                  <div className="sbx-h gsec"><span>Screens</span></div>
-                  {scrImps.map((d) => {
-                    const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake);
-                    const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
-                    return (
-                      <div key={d.id} className="sbx-r">
-                        <span className="sbx-loc">{d.location || "Print"}</span>
-                        {allLight ? <span className="faint">no underbase</span> : <span className={"sbx-ub" + (d.underbase == null ? " auto" : "")}>
-                          <label className="check" title={d.underbase == null ? (sc.under ? "Automatic: a light ink needs one. Click to override." : "Automatic: dark inks print without one. Click to override.") : "Set by hand"}><input type="checkbox" checked={sc.under} onChange={(e) => update((x) => { x.imprints[di].underbase = e.target.checked; x.imprints[di].screens = undefined; })} />Underbase</label>
-                          {d.underbase != null && <span className="sbx-ovr">override <button type="button" aria-label="Back to automatic" title="Back to automatic" onClick={() => update((x) => { x.imprints[di].underbase = undefined; })}>×</button></span>}
-                        </span>}
-                        {!hidePrices && <b className="num">{money(sc.n * (+fee || 0))}</b>}
-                        {wpl.remakeFee != null && <label className="check sbx-end" title="The screens are on file from an earlier order"><input type="checkbox" checked={rm} onChange={(e) => update((x) => { x.imprints[di].remake = e.target.checked; })} />Remake {money(wpl.remakeFee)}</label>}
-                      </div>
-                    );
-                  })}
-                </div>}
-                {scrImps.some((d) => pmsInks(d).some((x) => x.auto) || (!inkNames(d.inks).length && wpl.pmsFee)) || g.specialtyInk || g.specialtyInkSet ? <div className="sbx-sec">
+                {inksSec ? <div className="sbx-sec">
                   <div className="sbx-h gsec"><span>Inks</span></div>
                   {scrImps.flatMap((d) => {
                     const di = g.imprints.indexOf(d);
@@ -394,29 +418,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
             )}
             </div>
           </div>
-          {!hidePrices && <div className="price-box">
-            {(() => {
-              // Split the group's line items into garments / imprints / finishing (overrides land in garments)
-              // a typed price ("Each" override) is shared out in the same proportions as the calculated price, so a
-              // lower typed price never shows as a negative garment charge (customer supplied goods: no garment part)
-              const part = (lc: GroupCalc["lines"][number], v: number) => (lc.hasOv ? (lc.calcEach ? (lc.each * v) / lc.calcEach : 0) : v);
-              const imp = gc.lines.reduce((a, lc) => a + lc.qty * part(lc, lc.printEach), 0);
-              const fin = gc.lines.reduce((a, lc) => a + lc.qty * part(lc, gc.finishEach), 0);
-              const gar = Math.round((gc.sub - imp - fin) * 100) / 100;
-              return (
-                <>
-                  {gc.wholesale && Math.abs(gar) < 0.01 ? null : <div className="pb-r"><span>Garments</span><b>{money(gar)}</b></div>}
-                  <div className="pb-r"><span>Imprints</span><b>{money(imp)}</b></div>
-                  {fin ? <div className="pb-r"><span>Finishing</span><b>{money(fin)}</b></div> : null}
-                  {gc.setup ? <div className="pb-r"><span>Setup{gc.minCharge ? ` (incl. ${money(gc.minCharge)}: under ${settings.wholesale.minQty || 12} pcs is charged as ${settings.wholesale.minQty || 12})` : gc.inkFees ? " (incl. ink and PMS fees)" : ""}</span><b>{money(gc.setup)}</b></div> : null}
-                  {gc.custom ? <div className="pb-r"><span className="ink-warn">9+ colors: custom quote (priced at 8 here)</span></div> : null}
-                  {gc.materials ? <div className="pb-r"><span>2XL+ Materials Charge</span><b>{money(gc.materials)}</b></div> : null}
-                </>
-              );
-            })()}
-            <div className="pb-r pb-t"><span>Group total</span><b>{money(gc.sub + gc.setup + gc.materials)}</b></div>
-          </div>}
-        </div>
+        </div>}
       </div>
     </section>
   );
@@ -607,7 +609,7 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
  * messy, don't like all the grey, rethink the style"): the logo, then where and how it prints and its price, one line
  * of specs, the notes. White, no boxes; a hairline between prints.
  */
-function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup }: { d: Group["imprints"][number]; n: number; hex: string; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
+function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra }: { d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
   const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
   const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
@@ -645,6 +647,7 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup }: { d
           {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches</span> : null}
         </div>
         {cur && <div className="pr-art">{designLabel(cur)}</div>}
+        {extra}
         {d.notes && <div className="pr-notes">{d.notes}</div>}
         {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>Production details needed</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>Production Details</a> : null}</div>}
       </div>
