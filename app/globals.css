@@ -8584,3 +8584,11 @@ a.pdn-tag:hover{text-decoration:underline}
   .brand.brand-logo span.tag-k{display:flex;position:absolute;left:29px;right:0;bottom:calc(100% + 3px);justify-content:space-between;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:0;color:var(--side-ink);white-space:nowrap}
   .brand.brand-logo span.tag-k > span{display:inline;font-size:inherit;letter-spacing:0}
 }
+
+/* proofs: the whole mockup shows, never cropped (Oct 15, Nick: "this should not cut off the image") */
+.proof .img{position:relative}
+.proof .img img{position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px);object-fit:contain}
+/* customer portal panel titles: the order page's style, the rainbow under the words running a bit past them (Oct 15, Nick) */
+.portal .panel-h h2{position:relative;padding-left:0;padding-bottom:5px;width:fit-content;font-family:var(--display);font-stretch:85%;font-weight:700;font-size:16px;letter-spacing:.005em;text-transform:none;color:var(--ink)}
+.portal .panel-h h2::before{display:none}
+.portal .panel-h h2::after{content:"";position:absolute;left:0;bottom:0;width:calc(100% + 36px);min-width:72px;height:4px;border-radius:4px;background:var(--fbs-fade)}
