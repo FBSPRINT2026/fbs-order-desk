@@ -8265,3 +8265,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .ord .panel-h h2::after,.ord .lbl.gsec::after,.ord .sbx-h.gsec::after{width:calc(100% + 36px);min-width:72px;height:4px;border-radius:4px;background:var(--fbs-fade)}
 .ord .ed-head h1::after{content:"";display:block;height:4px;border-radius:4px;margin-top:10px;width:calc(100% + 60px);min-width:140px;max-width:100%;background:var(--fbs-fade)}
 .ord .ed-head .ed-title{min-width:0}
+/* every rainbow underline sits close under its words, like the logo's (Oct 15, Nick: "make it closer… more like our logo") */
+.page-head h1::after,.portal .p-main h1::after,.md-head h1::after,.ord .ed-head h1::after{margin-top:3px}
+.ord .panel-h h2,.ord .lbl.gsec,.ord .sbx-h.gsec{padding-bottom:5px}
+.portal .aa-sec-h h3{padding-bottom:5px}
