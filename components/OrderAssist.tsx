@@ -3,45 +3,31 @@ import { useEffect, useRef, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { Check } from "@/lib/orderChecks";
 import type { ProposedOrder } from "@/lib/ai/normalize";
-import { aiLookUp, aiOrderChat, aiOrderFromText, aiReorderCheck, aiReviewOrder, applyReorderFix, orderChatThread } from "@/app/shop/ai-actions";
+import { aiLookUp, aiOrderChat, aiOrderFromText, aiReorderCheck, applyReorderFix, orderChatThread } from "@/app/shop/ai-actions";
 import type { ChatMsg } from "@/lib/ai/orderChat";
 import { MicButton } from "@/components/SearchInput";
 import type { ReorderCheck, ReorderFix } from "@/lib/ai/reorderCheck";
 
-/** "Order check" panel: rule checks now, plus an optional AI review. */
-export function ChecksPanel({ checks, orderId, save, reorder }: { checks: Check[]; orderId: string; save: () => Promise<void>; /** a reorder of an earlier job: the AI compares it with that job */ reorder?: boolean }) {
-  const [ai, setAi] = useState<null | { summary: string; issues: Check[] }>(null);
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState("");
-  async function review() {
-    setBusy(true); setNote("");
-    await save();
-    const r = await aiReviewOrder(orderId);
-    setBusy(false);
-    if (!r.ok) return setNote(r.error || "The AI review didn't work.");
-    setAi({ summary: r.summary, issues: r.issues.map((x) => ({ level: x.severity, text: x.text })) });
-  }
+/** one line of the order's status: ok (green ✓), wait (amber), bad (red), or info (grey) */
+export type StatusLine = { tone: "ok" | "wait" | "bad" | "info"; text: string; sub?: string };
+
+/**
+ * "Order check": where the job stands, at a glance (Oct 15, Nick: "not an ask about this order… just like: we're on
+ * time, goods have been received, art looks good, approved by customer. Big bullet points… it shouldn't take up some
+ * huge space"). The rule checks only show when something needs a look.
+ */
+export function ChecksPanel({ checks, status, orderId, save, reorder }: { checks: Check[]; status: StatusLine[]; orderId: string; save: () => Promise<void>; /** a reorder of an earlier job: the AI compares it with that job */ reorder?: boolean }) {
   const high = checks.filter((c) => c.level === "high").length;
+  const behind = status.filter((x) => x.tone === "bad").length + high;
   return (
-    <section className="panel">
-      <div className="panel-h"><h2>Order check</h2><span className={"faint num"} style={{ color: high ? "var(--danger)" : undefined }}>{checks.length ? `${checks.length} to look at` : "Looks good"}</span></div>
-      <div className="panel-b stack" style={{ gap: 10 }}>
-        <div className="chk-list">
-          {checks.length ? checks.map((c, i) => <div key={i} className={"chk " + c.level}>{c.text}</div>) : <div className="chk ok">No problems found.</div>}
-        </div>
-        {ai && (
-          <div className="ai-box">
-            <h3>AI review</h3>
-            {ai.summary && <div className="muted" style={{ fontSize: 13 }}>{ai.summary}</div>}
-            <div className="chk-list">{ai.issues.length ? ai.issues.map((c, i) => <div key={i} className={"chk " + c.level}>{c.text}</div>) : <div className="chk ok">Nothing else stood out.</div>}</div>
-          </div>
-        )}
+    <section className="panel oc-panel">
+      <div className="panel-h"><h2>Order check</h2><span className="faint num" style={{ color: behind ? "var(--danger)" : checks.length ? "var(--warn)" : "var(--ok)" }}>{behind ? "Needs a look" : checks.length ? `${checks.length} to look at` : "All good"}</span></div>
+      <div className="panel-b">
+        <ul className="os-list">
+          {status.map((x, i) => <li key={i} className={"os " + x.tone}><i aria-hidden>{x.tone === "ok" ? "✓" : x.tone === "bad" ? "!" : x.tone === "wait" ? "•" : "–"}</i><span><b>{x.text}</b>{x.sub && <small>{x.sub}</small>}</span></li>)}
+        </ul>
+        {checks.length > 0 && <div className="chk-list os-checks">{checks.map((c, i) => <div key={i} className={"chk " + c.level}>{c.text}</div>)}</div>}
         {reorder && <ReorderCheckBox orderId={orderId} save={save} />}
-        <OrderChat orderId={orderId} save={save} reorder={!!reorder} />
-        <div className="row" style={{ gap: 6 }}>
-          <button type="button" className="btn sm ghost" onClick={review} disabled={busy}>{busy ? "Reviewing…" : "✦ AI review"}</button>
-          {note && <span className="ai-off">{note}</span>}
-        </div>
       </div>
     </section>
   );

@@ -30,7 +30,7 @@ import { checkOrder } from "@/lib/orderChecks";
 import { keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
 import { specialtyGarment } from "@/lib/fabric";
 import { withPrivate } from "@/lib/crm/private";
-import { ChecksPanel, FillFromText } from "@/components/OrderAssist";
+import { ChecksPanel, FillFromText, type StatusLine } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
 import { useCan, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
@@ -582,6 +582,41 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const portalLink = typeof window !== "undefined" ? `${SITE_URL || window.location.origin}/portal/orders/${o.id}` : "";
   const pendingProofs = proofs.filter((p) => p.status === "pending").length;
   const checks = checkOrder(o, calc, cust, proofs);
+  // where the job stands, for Order check (Oct 15, Nick: "we're on time, goods have been received, art looks good,
+  // approved by customer… big bullet points")
+  const status: StatusLine[] = (() => {
+    const out: StatusLine[] = [];
+    const day = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    const done = o.status === "completed";
+    const isQuote = o.type === "quote";
+    // on time
+    if (done) out.push({ tone: "ok", text: "Done", sub: o.completed_at ? `Completed ${fmtDate(o.completed_at.slice(0, 10))}` : undefined });
+    else if (!o.due_date) out.push({ tone: "wait", text: "No in-hands date yet" });
+    else {
+      const n = Math.round((new Date(o.due_date + "T12:00:00").getTime() - new Date(new Date().toDateString()).getTime()) / 864e5);
+      const ready = o.status === "ready";
+      out.push(n < 0 && !ready ? { tone: "bad", text: `Late: due ${day(o.due_date)}`, sub: `${-n} day${n === -1 ? "" : "s"} past the in-hands date` }
+        : { tone: "ok", text: ready ? "Ready on time" : "On time", sub: `In hands ${day(o.due_date)}${n === 0 ? " (today)" : n === 1 ? " (tomorrow)" : n > 1 ? ` (${n} days)` : ""}` });
+    }
+    // goods
+    if (o.price_type === "wholesale") {
+      const g = goodsSt?.status || "waiting", pv = goodsSt?.updated_by === "Printavo" ? " in Printavo" : "";
+      out.push(g === "received" ? { tone: "ok", text: "Goods received" + pv } : g === "issue" ? { tone: "bad", text: "Problem with the goods" }
+        : g === "partial" ? { tone: "wait", text: "Goods partly here" + pv } : g === "arrived" ? { tone: "wait", text: "Goods here, checking in" } : { tone: isQuote ? "info" : "wait", text: g === "on_way" ? "Goods on the way" : "Waiting on the customer's goods" });
+    } else if (!isQuote) out.push(["blanks", "production", "ready", "completed"].includes(o.status) ? { tone: "ok", text: "Garments ordered" } : { tone: "wait", text: "Garments not ordered yet" });
+    // art
+    const ap = proofs.filter((p) => p.status === "approved").length, ch = proofs.filter((p) => p.status === "changes").length;
+    const mock = o.groups.length > 0 && o.groups.every((g) => g.mockupAt || g.mockupSkipped || (g.customerMockups || []).length);
+    out.push(ch ? { tone: "bad", text: "Art changes asked for" } : ap ? { tone: "ok", text: "Art approved" } : pendingProofs ? { tone: "wait", text: "Proof waiting on the customer" }
+      : mock ? { tone: isQuote ? "info" : "ok", text: "Mockup done", sub: isQuote ? undefined : "No proof sent" } : { tone: "wait", text: "No mockup yet" });
+    // approval
+    out.push(o.approved_at ? { tone: "ok", text: `Approved by ${o.approved_name || "the customer"}`, sub: fmtDate(o.approved_at.slice(0, 10)) }
+      : !isQuote ? { tone: "ok", text: "Approved", sub: pvStatusOf(o as never) ? "In Printavo as an invoice" : "Invoice" }
+      : o.status === "quote_sent" ? { tone: "wait", text: "Waiting on the customer's approval" } : { tone: "info", text: "Quote not sent yet" });
+    // paid
+    if (seesMoney && calc.total > 0) out.push(calc.balance <= 0.004 ? { tone: "ok", text: "Paid in full" } : calc.paid > 0 ? { tone: "wait", text: `${money(calc.balance)} still due`, sub: `${money(calc.paid)} paid` } : { tone: isQuote ? "info" : "wait", text: `${money(calc.balance)} due`, sub: "Nothing paid yet" });
+    return out;
+  })();
   const tv = { first: firstName(cust?.name), number: o.number, job: o.nickname ? `"${o.nickname}"` : "your order", total: money(calc.total), balance: money(calc.balance),
     due: o.due_date ? fmtDateLong(o.due_date) : "", tracking: o.tracking || "", days: "", dueLine: "", dueText: "", balanceLine: calc.balance > 0.004 ? ` The balance is ${money(calc.balance)}.` : "" };
   const QUICK: TemplateKey[] = ["proof_ready", "ready_pickup", "shipped", "payment_reminder", "deposit_request", "quote_followup", "request_received", "thanks"];
@@ -889,7 +924,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <div className="panel-b"><ShopGoods orderIds={[o.id]} customerId={o.customer_id} compact /></div>
             </section>
           )}
-          <ChecksPanel checks={checks} orderId={o.id} save={save} reorder={/Reorder of (Printavo )?#\d+/.test(o.notes || "")} />
+          <ChecksPanel checks={checks} status={status} orderId={o.id} save={save} reorder={/Reorder of (Printavo )?#\d+/.test(o.notes || "")} />
           </aside>
         </div>
 
