@@ -8259,3 +8259,9 @@ a.pdn-tag:hover{text-decoration:underline}
 .ord .panel-h h2::before{display:none}
 .ord .panel-h h2::after,.ord .lbl.gsec::after,.ord .sbx-h.gsec::after{content:"";position:absolute;left:0;bottom:0;width:28px;height:3px;border-radius:2px;background:linear-gradient(90deg,var(--fbs-blue) 0%,var(--fbs-salmon) 52%,var(--fbs-orange) 100%)}
 .ord .lbl.gsec,.ord .sbx-h.gsec{margin-bottom:6px}
+/* titles: the rainbow under them like the page headers' (Oct 15, Nick: "more like this" — the Email page's) */
+.ord .lbl.gsec,.ord .sbx-h.gsec{width:fit-content}
+.ord .panel-h h2,.ord .lbl.gsec,.ord .sbx-h.gsec{padding-bottom:9px}
+.ord .panel-h h2::after,.ord .lbl.gsec::after,.ord .sbx-h.gsec::after{width:calc(100% + 36px);min-width:72px;height:4px;border-radius:4px;background:var(--fbs-fade)}
+.ord .ed-head h1::after{content:"";display:block;height:4px;border-radius:4px;margin-top:10px;width:calc(100% + 60px);min-width:140px;max-width:100%;background:var(--fbs-fade)}
+.ord .ed-head .ed-title{min-width:0}
