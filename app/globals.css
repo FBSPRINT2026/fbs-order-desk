@@ -7763,3 +7763,14 @@ a.pdn-tag:hover{text-decoration:underline}
 .pt-seg button{border:0;background:none;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink-2);padding:3px 11px;border-radius:6px;cursor:pointer}
 .pt-seg button small{font-size:11px;color:var(--ink-3);font-weight:600;margin-left:2px}
 .pt-seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(20,29,43,.12)}
+
+/* email text size, per phone (Oct 15, Nick: "zoom in or out… smaller type so she can see more emails"): components/MailZoom.tsx */
+@media (max-width:760px) and (pointer:coarse){
+  .ibx2-list .ibx2-item{zoom:var(--mz,1)}
+}
+.mz{display:flex;align-items:center;gap:8px;padding:8px 10px}
+.mz-l{flex:1;display:flex;flex-direction:column;font-size:15px;color:var(--ink)}
+.mz-l small{font-size:11.5px;color:var(--ink-3)}
+.mz-b{width:42px;height:34px;border-radius:9px;border:0;background:var(--surface-2);color:var(--ink);font-family:inherit;font-weight:700;display:grid;place-items:center;cursor:pointer}
+.mz-b.sm{font-size:12px}.mz-b.lg{font-size:19px}
+.mz-b:disabled{opacity:.4}

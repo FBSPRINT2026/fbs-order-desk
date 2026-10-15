@@ -4,6 +4,7 @@ import Link from "next/link";
 import HistoryLink from "@/components/HistoryLink";
 import MailSuggest from "@/components/MailSuggest";
 import { AppStartToggle } from "@/components/AppStart";
+import { MailZoomControl, mzCss, useMailZoom } from "@/components/MailZoom";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -128,6 +129,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
   };
   const [ol, setOl] = useState<InboxItem[] | null>(null); // my Outlook Inbox, mirrored
   const [settings, setSettings] = useState(false);
+  /** phones: this phone's email text size, and pinching the list to change it (components/MailZoom.tsx) */
+  const zoomRef = useRef<HTMLElement | null>(null);
+  useMailZoom(zoomRef);
   /** phones: the folders-and-settings sheet from "Inbox ▾" (Oct 15, Nick) */
   const [pSheet, setPSheet] = useState(false), [pMore, setPMore] = useState(false);
   /** Select (Oct 15, Nick: "a quick select like the Mail app, check a bunch of emails and archive or black hole"):
@@ -483,6 +487,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
               {pMore && rest.map((f) => <button key={f.path} type="button" role="menuitem" className={"pit-f sub" + (view.kind === "folder" && view.path === f.path ? " on" : "")} style={{ paddingLeft: 14 + Math.min(3, f.depth) * 14 }} onClick={() => go(f.path, false)}>{TbIcon.file}<span>{folderLabel(f)}</span>{f.unseen > 0 && <span className="pit-fc">{f.unseen}</span>}</button>)}
               <div className="pbar-t">Settings</div>
               <div className="pit-set"><AppStartToggle path="/shop/inbox" label="Email" /></div>
+              <MailZoomControl />
               {st && !st.viewing && <button type="button" className="pit-f" onClick={() => { setPSheet(false); setSettings(true); }}><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg><span>{box?.enabled ? "Email settings" : "Connect my email"}</span></button>}
               <button type="button" className="pbar-cancel" onClick={() => setPSheet(false)}>Close</button>
             </div>
@@ -493,7 +498,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
       <div className={"ibx2" + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
         {(listOpen || !hasSel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
         {/* 1. the list */}
-        <section className="ibx2-list" aria-label="Emails">
+        <section className="ibx2-list" aria-label="Emails" ref={zoomRef}>
           <div className="ibx2-list-h">
             {mode === "mail" && view.kind !== "inbox" ? <div className="mf-lh">
               {view.kind === "folder" ? <><b>{folderLabel(folders?.find((f) => f.path === view.path) || { name: view.path.split("/").pop() || view.path, special: "" })}</b><span className="faint">{folders?.find((f) => f.path === view.path)?.messages ?? ""} emails</span></>
@@ -764,7 +769,7 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
   }, [i.id, tryN]);
   const doc = useMemo(() => {
     if (!m?.html) return null;
-    const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}${PHONE_MAIL_CSS}table img{max-width:none}table{max-width:100%}</style>`;
+    const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}${PHONE_MAIL_CSS}${mzCss()}table img{max-width:none}table{max-width:100%}</style>`;
     const html = m.html.replace(/<script[\s\S]*?<\/script>/gi, "");
     return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (x) => x + head) : head + html;
   }, [m?.html]);
@@ -1318,7 +1323,7 @@ function EmailBody({ x }: { x: Act }) {
         inline.forEach(([cid, p]) => { const u = urls?.find((r) => r.path === p)?.signedUrl; if (u) html = html.split(`cid:${cid}`).join(u); });
       }
       html = html.replace(/<script[\s\S]*?<\/script>/gi, "");
-      const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}${PHONE_MAIL_CSS}table img{max-width:none}table{max-width:100%}</style>`;
+      const head = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}${PHONE_MAIL_CSS}${mzCss()}table img{max-width:none}table{max-width:100%}</style>`;
       html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + head) : head + html;
       if (live) setDoc(html);
     })().catch(() => null);

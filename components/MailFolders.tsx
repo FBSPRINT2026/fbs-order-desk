@@ -1,4 +1,5 @@
 "use client";
+import { mzCss } from "@/components/MailZoom";
 import CcField from "@/components/CcField";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
@@ -126,22 +127,26 @@ let closeOpenRow: (() => void) | null = null;
  */
 export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct: (to: SwipeTo) => Promise<boolean> }) {
   const ref = useRef<HTMLDivElement | null>(null);
-  const g = useRef<{ x: number; y: number; base: number; on: boolean; off: boolean } | null>(null);
+  /** the touch: where it started, the offset then, and the last few points (for how fast it's moving) */
+  const g = useRef<{ x: number; y: number; base: number; on: boolean; off: boolean; pts: { x: number; t: number }[] } | null>(null);
   const swallow = useRef(false);
-  const [off, setOff] = useState(0), [drag, setDrag] = useState(false), [gone, setGone] = useState(false);
+  const [off, setOffS] = useState(0), [drag, setDrag] = useState(false), [gone, setGone] = useState(false);
+  const cur = useRef(0); // the offset now (a quick flick lets go before React has drawn the last move)
+  const setOff = (v: number) => { cur.current = v; setOffS(v); };
   const OPEN = 222; // three buttons
   const width = () => ref.current?.offsetWidth || 360;
-  const far = () => -Math.max(OPEN + 70, width() * 0.7); // past here, letting go archives it
+  const far = () => -Math.max(OPEN + 90, width() * 0.75); // dragged past here, letting go archives it
   const full = off < far();
-  const [shut] = useState(() => () => setOff(0)); // the same function every render: what's open is remembered by it
+  const [shut] = useState(() => () => { cur.current = 0; setOffS(0); }); // the same function every render: what's open is remembered by it
   const close = () => { shut(); if (closeOpenRow === shut) closeOpenRow = null; };
   useEffect(() => () => { if (closeOpenRow === shut) closeOpenRow = null; }, [shut]);
   const fire = async (to: SwipeTo) => {
-    setGone(true); setOff(to === "archive" ? -width() : off);
+    setGone(true); setOff(to === "archive" ? -width() : cur.current);
     if (closeOpenRow === shut) closeOpenRow = null;
     const ok = await onAct(to);
     if (!ok) { setGone(false); setOff(0); }
   };
+  const openIt = () => { setOff(-OPEN); closeOpenRow = shut; };
   return (
     <div className={"sw" + (gone ? " gone" : "") + (off ? " open" : "")} ref={ref}>
       <div className={"sw-acts" + (full ? " full" : "")} style={{ width: Math.max(0, -off) }} aria-hidden={!off}>
@@ -153,28 +158,39 @@ export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct
         onPointerDown={(e) => {
           if (e.pointerType !== "touch" || gone) return;
           if (closeOpenRow && closeOpenRow !== shut) { closeOpenRow(); closeOpenRow = null; swallow.current = true; }
-          g.current = { x: e.clientX, y: e.clientY, base: off, on: false, off: false };
+          g.current = { x: e.clientX, y: e.clientY, base: cur.current, on: false, off: false, pts: [{ x: e.clientX, t: e.timeStamp }] };
         }}
         onPointerMove={(e) => {
           const s = g.current; if (!s || s.off) return;
           const dx = e.clientX - s.x, dy = e.clientY - s.y;
           if (!s.on) {
-            if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { s.off = true; return; }
-            if (Math.abs(dx) < 10) return;
+            // easier to start (Oct 15, Nick: "sliding is a little difficult… pop open a little quick"): sideways wins
+            // unless it's clearly a scroll
+            if (Math.abs(dy) > 9 && Math.abs(dy) > Math.abs(dx) * 1.3) { s.off = true; return; }
+            if (Math.abs(dx) < 6) return;
             s.on = true; setDrag(true);
             try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* fine */ }
           }
-          setOff(Math.max(-width(), Math.min(0, s.base + dx)));
+          s.pts.push({ x: e.clientX, t: e.timeStamp }); if (s.pts.length > 5) s.pts.shift();
+          // a little resistance past the buttons, so a flick doesn't throw it all the way to Archive
+          let v = s.base + dx;
+          if (v < -OPEN) v = -OPEN + (v + OPEN) * 0.75;
+          setOff(Math.max(-width(), Math.min(0, v)));
         }}
-        onPointerUp={() => {
+        onPointerUp={(e) => {
           const s = g.current; g.current = null; setDrag(false);
           if (!s?.on) { if (s && !s.off && s.base) { swallow.current = true; close(); } return; }
           swallow.current = true;
-          if (off < far()) void fire("archive");
-          else if (off < -OPEN / 2) { setOff(-OPEN); closeOpenRow = shut; }
+          const o = cur.current;
+          // how fast, over the last moment of the touch (px per ms; minus = left)
+          const a = s.pts[0], b = { x: e.clientX, t: e.timeStamp }, speed = b.t > a.t ? (b.x - a.x) / (b.t - a.t) : 0;
+          if (o < far()) void fire("archive");
+          else if (speed < -0.25) openIt(); // a quick flick left opens it, however short
+          else if (speed > 0.25) close(); // a flick right closes it
+          else if (o < -50) openIt(); // or pulled a little way
           else close();
         }}
-        onPointerCancel={() => { g.current = null; setDrag(false); if (off && off > -OPEN / 2) close(); }}
+        onPointerCancel={() => { g.current = null; setDrag(false); if (cur.current > -50) close(); else openIt(); }}
         onClickCapture={(e) => { if (swallow.current) { swallow.current = false; e.preventDefault(); e.stopPropagation(); } }}>
         {children}
       </div>
@@ -393,7 +409,7 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
  * the whole email, no box, and the earlier emails it quotes folded away (they're in the conversation list) until
  * "Show the earlier emails" is tapped (QuoteToggle puts .show-q on the frame's body)
  */
-export const PHONE_MAIL_CSS = `@media (max-width:760px) and (pointer:coarse){html,body{padding:0 0 4px!important;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important;color:#1d2433}body p,body div,body span,body td,body li,body font,body a,body pre,body b,body strong,body i,body em{font-family:inherit!important;font-size:14px!important;line-height:1.5!important}body p{margin:0 0 10px}body.fold-q:not(.show-q) blockquote,body.fold-q:not(.show-q) .gmail_quote,body.fold-q:not(.show-q) .yahoo_quoted,body.fold-q:not(.show-q) #divRplyFwdMsg,body.fold-q:not(.show-q) #divRplyFwdMsg~*,body.fold-q:not(.show-q) #appendonsend~*,body.fold-q:not(.show-q) div[type=cite],body.fold-q:not(.show-q) div:has(+blockquote),body.fold-q:not(.show-q) div:has(+br+blockquote){display:none!important}body.show-q blockquote{margin:8px 0!important;padding:0 0 0 10px!important;border-left:2px solid #d5dbe3!important;color:#5a6577}body.show-q blockquote *{color:#5a6577!important}}`;
+export const PHONE_MAIL_CSS = `@media (max-width:760px) and (pointer:coarse){html,body{padding:0 0 4px!important;font:calc(14px*var(--mz,1))/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important;color:#1d2433}body p,body div,body span,body td,body li,body font,body a,body pre,body b,body strong,body i,body em{font-family:inherit!important;font-size:calc(14px*var(--mz,1))!important;line-height:1.5!important}body p{margin:0 0 10px}body.fold-q:not(.show-q) blockquote,body.fold-q:not(.show-q) .gmail_quote,body.fold-q:not(.show-q) .yahoo_quoted,body.fold-q:not(.show-q) #divRplyFwdMsg,body.fold-q:not(.show-q) #divRplyFwdMsg~*,body.fold-q:not(.show-q) #appendonsend~*,body.fold-q:not(.show-q) div[type=cite],body.fold-q:not(.show-q) div:has(+blockquote),body.fold-q:not(.show-q) div:has(+br+blockquote){display:none!important}body.show-q blockquote{margin:8px 0!important;padding:0 0 0 10px!important;border-left:2px solid #d5dbe3!important;color:#5a6577}body.show-q blockquote *{color:#5a6577!important}}`;
 const HEAD = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}table img{max-width:none}table{max-width:100%}${PHONE_MAIL_CSS}</style>`;
 /** how tall an email's frame needs to be: its content, not the frame's current height (documentElement.scrollHeight
  *  never drops below the frame, so folding the quoted emails away left a blank gap) */
@@ -439,7 +455,7 @@ export function MailFrame({ html, text }: { html: string; text: string }) {
   const doc = useMemo(() => {
     if (!html) return null;
     const x = html.replace(/<script[\s\S]*?<\/script>/gi, "");
-    return /<head[^>]*>/i.test(x) ? x.replace(/<head[^>]*>/i, (m) => m + HEAD) : HEAD + x;
+    return /<head[^>]*>/i.test(x) ? x.replace(/<head[^>]*>/i, (m) => m + HEAD + `<style>${mzCss()}</style>`) : HEAD + `<style>${mzCss()}</style>` + x;
   }, [html]);
   const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(80, frameHeight(d)))); };
   if (!doc || plain) return <div className="lm-text">{text || "(no text)"}{doc && <div><button type="button" className="btn sm ghost" onClick={() => setPlain(false)}>Show as in Outlook</button></div>}</div>;
