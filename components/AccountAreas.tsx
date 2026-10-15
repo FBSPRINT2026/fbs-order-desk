@@ -126,6 +126,8 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
   const [arch, setArch] = useState<Record<string, string | null>>({});
   const [armedDel, setArmedDel] = useState("");
   const [showArch, setShowArch] = useSticky("account.showArchived", false);
+  /** portal Orders: quotes older than 60 days are hidden unless this is ticked (Oct 15, Nick) */
+  const [oldQuotes, setOldQuotes] = useSticky("portal.oldQuotes", false);
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
   // "Pay this statement" arrives with ?pay=all: everything open is checked
@@ -348,10 +350,17 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
   } else if (area === "quotes") body = <>{tableHead(<h2>Quotes</h2>, "Search quotes: number, name, garment, color…")}{orderTable(quotes, "quote")}</>;
   else if ((area === "orders" || area === "invoices") && mode === "portal") {
     // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
+    const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
+    const recentQ = quotes.filter((o) => (o.created_at || "") >= cutoff), olderN = quotes.length - recentQ.length;
+    const shownQ = oldQuotes ? quotes : recentQ;
     const openQ = quotes.filter((o) => !o.archived && o.status === "quote_sent").length;
     body = <>
       {tableHead(<span className="aa-sum">{quotes.length > 0 && <>{quotes.length} quote{quotes.length === 1 ? "" : "s"}{openQ ? <> (<b>{openQ} waiting on you</b>)</> : null} · </>}{invoices.length} order{invoices.length === 1 ? "" : "s"} · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span>, "Search quotes and orders: number, name, garment, color, print…")}
-      {quotes.length > 0 && <><div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}</div>{orderTable(quotes, "quote")}</>}
+      {quotes.length > 0 && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
+          {olderN > 0 && <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes ({olderN} over 60 days old)</label>}</div>
+        {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">No quotes in the last 60 days.</div>}
+      </>}
       <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(invoices.reduce((a, o) => a + o.total, 0))}</span></div>
       {orderTable(invoices, "invoice")}
     </>;

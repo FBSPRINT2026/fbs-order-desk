@@ -8815,3 +8815,5 @@ a.pdn-tag:hover{text-decoration:underline}
 .p-main > .pdx-hello{margin-bottom:16px}
 /* portal Orders: Quotes then Orders under one search line */
 .aa-sec-h.aa-sec-pad{padding:16px 4px 6px;display:flex;align-items:baseline;gap:10px}
+.aa-oldq{margin-left:auto;font-size:12.5px;color:var(--ink-2);font-weight:400}
+.aa-none-q{padding:8px 4px 4px;font-size:13px}
