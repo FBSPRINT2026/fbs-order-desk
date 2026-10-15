@@ -220,9 +220,11 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
           <div inert={locked || undefined} className="mk-body">
           {/* each print as a card beside the mockup (Oct 15, Nick: "rework how this is organized now that you have more
               space"): what and where on top, ink and size under it, notes, then the art */}
-          <div className="imp-cards">
-            {g.imprints.map((d, di) => (
-              <div key={d.id} className={"imp-card" + (frozen ? " frozen" : "")}>
+          <div className={"imp-cards" + (frozen ? " ro" : "")}>
+            {g.imprints.map((d, di) => frozen ? (
+              <PrintRow key={d.id} d={d} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} />
+            ) : (
+              <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
                   <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, METHODS[d.method]].filter(Boolean).join(" · ")}</span>
                   <span className="spacer" />
@@ -231,7 +233,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                 </div>
                 <div className={"imp-body" + (!!onMockup && !g.mockupSkipped ? " has-logo" : "")}>
                 {!!onMockup && !g.mockupSkipped && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
-                {frozen ? <PrintFacts d={d} designs={designs || []} /> : (
+                {(
                 <div className="imp-grid">
                   <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                   <div className="f-loc"><span className="imp-l">Location</span>{LOCATIONS.includes(d.location)
@@ -590,26 +592,42 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
 /** Under each imprint: which customer design prints here, with its size worked out from the print size. */
 /** a print's logo on the order page: read only, set in the Mockup Creator (Oct 15, Nick: "grey out that section…
  *  see the logo a little larger"), beside the print's fields so it adds no row */
-/** a print as it was set in the Mockup Creator, to read (Oct 15, Nick: "that whole section just needs to be read only and
- *  automatically filled in from the mockup creator") */
-function PrintFacts({ d, designs }: { d: Group["imprints"][number]; designs: Design[] }) {
+/**
+ * A print as the Mockup Creator set it, to read (Oct 15, Nick: "read only… filled in from the mockup creator… looks
+ * messy, don't like all the grey, rethink the style"): the logo, then where and how it prints and its price, one line
+ * of specs, the notes. White, no boxes; a hairline between prints.
+ */
+function PrintRow({ d, n, designs, urls, each, detailsHref, onMockup }: { d: Group["imprints"][number]; n: number; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
   const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
   const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
   const other = cur && val ? designOther(cur, val, given) : 0;
-  const colors = d.method === "dtf" ? "Full color" : d.colors === FULL_COLOR ? "Full color" : String(d.colors || "");
-  const facts: [string, React.ReactNode, string?][] = [
-    ["Colors", colors],
-    [d.method === "embroidery" ? "Thread" : "Ink", d.inks || <span className="faint">Not set</span>, "wide"],
-    ["Print size", d.size ? <>{d.size}{other ? <span className="faint"> → {other}&quot; {given === "W" ? "tall" : "wide"}</span> : null}{d.sizeFrom === "customer" ? <span className="pf-tag">🔒 Customer&apos;s size</span> : null}</> : <span className="faint">Not set</span>],
-    ["Drop", d.drop ? `${d.drop}"` : "Standard"],
-    ...(d.method === "embroidery" && d.stitches ? [["Stitches", d.stitches.toLocaleString()] as [string, React.ReactNode]] : []),
-    ...(d.notes ? [["Notes", d.notes, "full"] as [string, React.ReactNode, string]] : []),
-  ];
+  const size = val ? (given === "W" ? `${val}" × ${other || "?"}"` : `${other || "?"}" × ${val}"`) : "";
+  const colors = d.method === "dtf" || d.colors === FULL_COLOR ? "Full color" : d.colors ? `${d.colors} color${d.colors === 1 ? "" : "s"}` : "";
   return (
-    <dl className="pf">
-      {facts.map(([k, v, w]) => <div key={k} className={w ? "pf-" + w : undefined}><dt>{k}</dt><dd>{v}</dd></div>)}
-    </dl>
+    <div className="pr">
+      <button type="button" className="pr-logo" onClick={onMockup} title={cur ? `${designLabel(cur)}: change it in the Mockup Creator` : "Pick the logo in the Mockup Creator"}>
+        {cur && urls[cur.id] ? <img src={urls[cur.id]} alt="" /> : <span>No logo</span>}
+      </button>
+      <div className="pr-main">
+        <div className="pr-top">
+          {n > 0 && <span className="pr-n">{n}</span>}
+          <b>{d.location || "Print"}</b>
+          <span className="pr-how">{METHODS[d.method]}</span>
+          {each && <span className="pr-each"><b>{each}</b> each</span>}
+        </div>
+        <div className="pr-specs">
+          {colors && <span>{colors}</span>}
+          {d.inks && <span className="pr-ink">{d.inks}</span>}
+          {size && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
+          <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>
+          {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches</span> : null}
+        </div>
+        {cur && <div className="pr-art">{designLabel(cur)}</div>}
+        {d.notes && <div className="pr-notes">{d.notes}</div>}
+        {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>Production details needed</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>Production Details</a> : null}</div>}
+      </div>
+    </div>
   );
 }
 

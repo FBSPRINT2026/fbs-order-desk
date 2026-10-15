@@ -8139,3 +8139,27 @@ a.pdn-tag:hover{text-decoration:underline}
 .pf-tag{display:inline-block;margin-left:6px;font-size:11px;color:var(--ink-3)}
 .imp-body:not(.has-logo)>.pf{padding-left:14px}
 @media (max-width:760px){ .pf{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} }
+/* ───────── a group's prints, read only (set in the Mockup Creator), restyled (Oct 15, Nick: "looks messy, don't like
+   all the grey… rethink the style"): white, no boxes; the logo, where and how it prints with its price, one line of
+   specs, the notes; a hairline between prints ───────── */
+.imp-cards.ro{gap:0;border-top:1px solid var(--line-2)}
+.pr{display:grid;grid-template-columns:64px minmax(0,1fr);gap:14px;padding:14px 0;border-bottom:1px solid var(--line-2)}
+.pr-logo{width:64px;height:64px;padding:4px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;display:grid;place-items:center;font:inherit;font-size:11px;color:var(--ink-3)}
+.pr-logo:hover{border-color:var(--accent)}
+.pr-logo img{max-width:100%;max-height:100%;object-fit:contain}
+.pr-main{min-width:0;display:flex;flex-direction:column;gap:4px}
+.pr-top{display:flex;align-items:baseline;gap:8px}
+.pr-top>b{font-size:15.5px;color:var(--ink)}
+.pr-n{flex:none;align-self:center;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:800}
+.pr-how{font-size:13px;color:var(--ink-3)}
+.pr-each{margin-left:auto;font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.pr-each b{font-size:15.5px;color:var(--ink);margin-right:2px}
+.pr-specs{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0;font-size:13.5px;color:var(--ink)}
+.pr-specs>span+span::before{content:"";display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--line);margin:0 10px;vertical-align:middle}
+.pr-ink{font-weight:600}
+.pr-art{font-size:12.5px;color:var(--ink-3)}
+.pr-notes{font-size:12.5px;line-height:1.45;color:var(--ink-2);max-width:72ch}
+.pr-unconf{font-size:12.5px;color:var(--ink-2);border-left:3px solid #d9a400;padding:2px 0 2px 8px;margin-top:2px}
+.pr-unconf b{color:var(--warn);margin-right:4px}
+.pr-unconf a{margin-left:8px}
+.imp-cards.ro+.imp-frozen-note{margin-top:8px}
