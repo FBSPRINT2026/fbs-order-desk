@@ -8,6 +8,8 @@ import { money } from "@/lib/format";
 import { getAiStatus } from "@/app/shop/ai-actions";
 import { useSticky } from "@/lib/useSticky";
 import DropboxSettings from "@/components/DropboxSettings";
+import TextsSetup from "@/components/TextsSetup";
+import { SITE_URL } from "@/lib/config";
 
 export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
@@ -256,6 +258,7 @@ export default function SettingsPage() {
             <div className="row"><input type="email" placeholder="name@fbsprint.com" value={newStaff} onChange={(e) => setNewStaff(e.target.value)} style={{ maxWidth: 280 }} aria-label="New staff email" /><select aria-label="Role for new staff" value={newRole} onChange={(e) => setNewRole(e.target.value)} style={{ width: 240 }}>{Object.entries(ROLES).filter(([k]) => k !== "owner").map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button className="btn" type="button" onClick={addStaff}>Add staff</button></div>
           </div>
         </section>
+        <TextsSetup site={SITE_URL} />
         <section className="panel" id="owners">
           <div className="panel-h"><h2>Account owners</h2><span className="faint" style={{ fontSize: 12 }}>Who handles which customers. &quot;My accounts&quot; views (dashboard, production calendar) use this. Add an email to link an owner to their shop login.</span></div>
           <div className="panel-b stack">
