@@ -549,63 +549,35 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
 
 /** search results as conversations */
 /**
- * Everything with one person or customer as one long list, email by email (Oct 15, Nick: "when I pick a customer, see it
- * as a conversation history: her email, then my reply, all in one list; make sent and received look different").
- * Their emails sit on the left with their initials; mine are indented on the right, tinted blue, "You replied". Each
- * shows what it says (the first ones load by themselves, the rest when tapped), and opens its whole conversation.
+ * Everything with one person or customer, email by email, compact like the Inbox (Oct 15, Nick: "show it like before,
+ * just a from or to indicator"): each row says From (theirs) or To (mine), who, the subject and the date; a tap opens
+ * its conversation.
  */
 export function PersonTimeline({ convos, me, onOpen }: { convos: Convo[]; me: string; onOpen: (c: Convo) => void }) {
   const [newest, setNewest] = useState(true);
-  const [text, setText] = useState<Record<string, string | null>>({});
   const items = useMemo(() => {
     const seen = new Set<string>(), out: { m: MsgRow; c: Convo }[] = [];
     for (const c of convos) for (const m of c.msgs) { const k = m.messageId || `${m.folder}:${m.uid}`; if (seen.has(k)) continue; seen.add(k); out.push({ m, c }); }
     return out.sort((a, b) => (newest ? b.m.date.localeCompare(a.m.date) : a.m.date.localeCompare(b.m.date)));
   }, [convos, newest]);
-  const keyOf = (m: MsgRow) => `${m.folder}:${m.uid}`;
-  const toText = (f: FullMsg) => {
-    let t = f.text || "";
-    if (!t && f.html) { const d = new DOMParser().parseFromString(f.html, "text/html"); d.querySelectorAll("style,script,blockquote,.gmail_quote,#divRplyFwdMsg ~ *").forEach((n) => n.remove()); t = d.body?.innerText || d.body?.textContent || ""; }
-    return t.replace(/\r/g, "").split(/\n(?:On .{5,160} wrote:|-----\s*Original Message|From: .{3,200}\n(?:Sent|Date): )/)[0].replace(/\n{3,}/g, "\n\n").trim().slice(0, 4000);
-  };
-  const load = async (m: MsgRow) => {
-    const k = keyOf(m);
-    if (text[k] !== undefined) return;
-    setText((x) => ({ ...x, [k]: null }));
-    try { const f = await box<FullMsg>({ do: "message", path: m.folder, uid: m.uid }); setText((x) => ({ ...x, [k]: toText(f) || "(no text)" })); }
-    catch { setText((x) => ({ ...x, [k]: "Couldn't open this one. Tap Open to try the whole conversation." })); }
-  };
-  // the first ones read themselves, a few at a time
-  useEffect(() => {
-    let live = true;
-    const queue = items.slice(0, 16).map((x) => x.m);
-    void Promise.all(Array.from({ length: 3 }, async () => { while (live && queue.length) await load(queue.shift()!); }));
-    return () => { live = false; };
-  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
-  const ini = (n: string) => n.replace(/[^A-Za-z ]/g, " ").trim().split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || "").join("") || "@";
   return (
-    <div className="pt">
+    <>
       <div className="pt-bar"><span className="faint">{items.length} email{items.length === 1 ? "" : "s"}, received and sent</span><button type="button" className="linkbtn" onClick={() => setNewest(!newest)}>{newest ? "Newest first ↓" : "Oldest first ↑"}</button></div>
       {items.map(({ m, c }) => {
-        const k = keyOf(m), mine = m.sent || m.from.toLowerCase() === me, t = text[k];
-        const name = mine ? "You" : m.fromName || m.from;
-        const to = (m.toNames?.length ? m.toNames : m.to).filter((x) => x.toLowerCase() !== me).slice(0, 2).join(", ");
+        const mine = m.sent || m.from.toLowerCase() === me;
+        const them = mine ? (m.toNames?.length ? m.toNames : m.to).filter((x) => x.toLowerCase() !== me).slice(0, 2).join(", ") : m.fromName || m.from;
         return (
-          <div key={k} className={"pt-i " + (mine ? "out" : "in")}>
-            {!mine && <span className="pt-av" aria-hidden>{ini(name)}</span>}
-            <div className="pt-b" role="button" tabIndex={0} onClick={() => void load(m)} onKeyDown={(e) => { if (e.key === "Enter") void load(m); }}>
-              <div className="pt-h">
-                {mine ? <span className="pt-who"><svg viewBox="0 0 24 24" aria-hidden><path d="M10 8V4L3 11l7 7v-4c5 0 8 1.5 11 6-1-6-4-11-11-12z" /></svg>You replied{to ? <span className="faint"> to {to}</span> : null}</span> : <b className="pt-who">{name}</b>}
-                <time>{when(m.date)}</time>
-              </div>
-              <div className="pt-s">{m.subject || "(no subject)"}</div>
-              {t === undefined ? <div className="pt-t faint">Tap to read</div> : t === null ? <div className="pt-t faint">Opening…</div> : <div className="pt-t">{t}</div>}
-              <button type="button" className="linkbtn pt-open" onClick={(e) => { e.stopPropagation(); onOpen(c); }}>Open the conversation{c.count > 1 ? ` (${c.count})` : ""} ›</button>
-            </div>
-          </div>
+          <button key={m.messageId || `${m.folder}:${m.uid}`} type="button" className={"ibx2-item ol pt-row " + (mine ? "out" : "in") + (!m.seen && !mine ? " ol-unread" : "")} onClick={() => onOpen(c)}>
+            <span className="ibx2-item-1">
+              <span className={"pt-dir " + (mine ? "out" : "in")}>{mine ? "To" : "From"}</span>
+              <b>{them || (mine ? "—" : m.from)}</b>
+              <time>{when(m.date)}</time>
+            </span>
+            <span className="ibx2-item-s">{m.subject || "(no subject)"}</span>
+          </button>
         );
       })}
-    </div>
+    </>
   );
 }
 

@@ -7749,3 +7749,9 @@ a.pdn-tag:hover{text-decoration:underline}
 .pt-open{align-self:flex-start;font-size:12.5px}
 /* phones: the top bar has "‹ Inbox" already (Oct 15, Nick) */
 @media (max-width:760px) and (pointer:coarse){ body:has(.pit) .mf-back{display:none} }
+/* a person's emails, compact: From / To (Oct 15) */
+.pt-bar{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;padding:8px 14px}
+.pt-dir{flex:none;font-size:10.5px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;border-radius:5px;padding:1px 6px;margin-right:2px}
+.pt-dir.in{background:var(--surface-2);color:var(--ink-2)}
+.pt-dir.out{background:var(--accent-soft);color:var(--accent)}
+.ibx2-item.ol.pt-row.out{background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
