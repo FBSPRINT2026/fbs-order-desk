@@ -594,7 +594,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
           <div className="eyebrow">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
-          <h1>{o.nickname || "Untitled Job"}<span className="ot-no"> – Order #{o.number}</span>{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
+          <h1>{o.nickname || "Untitled Job"}<span className="ot-no"> – #{o.number}</span>{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
         </div>
         <div className="ed-actions">
           <span className="save-state">{saveState}</span>
