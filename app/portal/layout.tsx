@@ -3,7 +3,6 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings } from "@/lib/pricing";
 import MobileTables from "@/components/MobileTables";
-import Translate from "@/components/Translate";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +22,6 @@ export default async function PortalLayout({ children }: { children: React.React
             </span>
           </Link>
           <div className="who">
-            <Translate />
             {email && <span>{email}</span>}
             {email && <form action="/auth/signout" method="post"><button className="btn sm" type="submit">Sign out</button></form>}
           </div>
