@@ -8063,3 +8063,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .mk-when{font-size:12px;text-align:center}
 @media (max-width:1100px){ .imp-wrap{grid-template-columns:140px minmax(0,1fr);gap:12px} }
 @media (max-width:760px){ .imp-wrap{grid-template-columns:1fr} .imp-mock{flex-direction:row;flex-wrap:wrap;align-items:center} .mk-big{width:140px} .mk-none{height:90px;flex:1} }
+/* wholesale garment rows: the settings page's own ".ws" (a stacked column, 18px apart) was also landing on a group's
+   "ws" rows, so Total pieces stacked under itself (Oct 15, Nick): the rows keep their columns */
+.gl-list.ws{gap:0}
+.gl-row.grp-total.ws{display:grid;gap:6px}
