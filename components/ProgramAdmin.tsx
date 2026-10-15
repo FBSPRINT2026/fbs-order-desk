@@ -1,4 +1,5 @@
 "use client";
+import PrintavoSetup from "@/components/PrintavoSetup";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
@@ -52,7 +53,10 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
   if (!loaded) return <div className="gb-empty">Loading…</div>;
   if (!program) return (
     <div className="pga">
+    <>
+    <PrintavoSetup customerId={customerId} onApplied={load} />
     <ProgramAssist customerId={customerId} about={[]} onApplied={load} />
+    </>
     <div className="pg-none">
       <div className="pg-none-ic" aria-hidden="true">★</div>
       <h3>No program yet</h3>
@@ -66,6 +70,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       <div className="aa-bar"><div className="aa-bar-l"><h2>Program pricing</h2><span className="aa-sum">{items.filter((i) => i.active).length} design price{items.filter((i) => i.active).length === 1 ? "" : "s"} · {state || "Saves as you type"}</span></div>
         <label className="check"><input type="checkbox" checked={program.active} onChange={(e) => saveProgram({ active: e.target.checked })} /> Show in their portal</label>
       </div>
+      <PrintavoSetup customerId={customerId} onApplied={load} />
       <ProgramAssist customerId={customerId} about={program.rate_card?.about || []} onApplied={load} />
       <RateCardEditor key={ver} card={program.rate_card || null} onSave={(rate_card) => saveProgram({ rate_card })} />
       <h3 className="pga-sub">Prices by design <span className="faint">(a design's own price at a quantity: on an order set to Program it wins over the rate card; also their portal order form)</span></h3>
