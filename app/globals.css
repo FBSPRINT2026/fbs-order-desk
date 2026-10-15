@@ -8034,11 +8034,11 @@ a.pdn-tag:hover{text-decoration:underline}
 .ot-menu .danger{color:var(--danger);border-top:1px solid var(--line-2);border-radius:0 0 7px 7px;margin-top:2px}
 .ot-menu .danger.armed{background:var(--danger);color:#fff}
 /* the Printavo bar and its check, one block */
-.pv-box{margin:10px 0 12px}
-.pv-box>.pvs-strip{margin:0}
-.pv-box>.pvs-strip:not(:last-child){border-radius:10px 10px 0 0;border-bottom:0}
-.pv-box>.pvc{margin:0;border-radius:0 0 10px 10px;background:var(--surface-2);padding-top:4px}
-.pv-box:empty{display:none}
+.pvx-box{margin:10px 0 12px}
+.pvx-box>.pvs-strip{margin:0}
+.pvx-box>.pvs-strip:not(:last-child){border-radius:10px 10px 0 0;border-bottom:0}
+.pvx-box>.pvc{margin:0;border-radius:0 0 10px 10px;background:var(--surface-2);padding-top:4px}
+.pvx-box:empty{display:none}
 @media (max-width:900px){
   .ot-sum{flex-wrap:wrap}
   .ot-sum>div{flex:1 1 45%;border-top:1px solid var(--line-2)}
