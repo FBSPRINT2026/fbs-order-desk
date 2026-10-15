@@ -207,12 +207,13 @@ export function OrderChat({ orderId, save, reorder }: { orderId: string; save: (
         </div>
       )}
       {!msgs.length && <div className="eo-chips">{starters.map((q) => <button key={q} type="button" className="eo-chip" disabled={!!busy} onClick={() => send(q)}>{q}</button>)}</div>}
-      {busy && <div className="muted" style={{ fontSize: 13 }}>{busy}</div>}
+      {/* like iPhone Messages (Oct 15, Nick): the AI "typing" bubble while it works */}
+      {busy && <div className="oc-typing" title={busy}><i /><i /><i /></div>}
       <form className="oc-form" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-        <textarea ref={boxRef} rows={2} value={text} aria-label="Ask about this order" placeholder='e.g. "Looks good. Did you go into the film folder and pull the previous sizing?"'
+        <textarea ref={boxRef} rows={1} value={text} aria-label="Ask about this order" placeholder="Ask about this order"
           onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
         <MicButton target={() => boxRef.current} append keepListening label="Talk to the AI (microphone)" className="sc-mic oc-mic" />
-        <button type="submit" className="btn sm primary" disabled={!!busy || !text.trim()}>Send</button>
+        <button type="submit" className="oc-send" aria-label="Send" disabled={!!busy || !text.trim()}><svg viewBox="0 0 24 24" aria-hidden><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg></button>
       </form>
       {note && <span className="ai-off">{note}</span>}
     </div>
