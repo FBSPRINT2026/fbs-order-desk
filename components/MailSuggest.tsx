@@ -76,7 +76,7 @@ export default function MailSuggest({ q, senders, onPick, onText }: {
       {list.map((s) => (
         <button key={s.key} type="button" role="option" aria-selected={false} className="msug-i" onClick={() => onPick({ label: s.label, emails: s.emails })}>
           <span className={"msug-av " + s.kind} aria-hidden>{s.kind === "company" ? <svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13M9 21v-6h6v6" /></svg> : s.label.replace(/[^A-Za-z ]/g, " ").trim().split(/\s+/).slice(0, 2).map((x) => x[0]?.toUpperCase() || "").join("") || "@"}</span>
-          <span className="msug-t"><span>{s.kind === "company" ? <>All emails with the customer <b>{s.label}</b></> : <>Emails from or to <b>{s.label}</b></>}</span><small>{s.sub}</small></span>
+          <span className="msug-t"><span>{s.kind === "company" ? <>All emails to or from <b>{s.label}</b></> : <>Emails from or to <b>{s.label}</b></>}</span><small>{s.sub}</small></span>
         </button>
       ))}
       <button type="button" role="option" aria-selected={false} className="msug-i all" onClick={() => onText(q.trim())}>
