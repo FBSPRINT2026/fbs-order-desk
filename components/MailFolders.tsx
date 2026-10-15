@@ -548,32 +548,72 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
 }
 
 /** search results as conversations */
+/** the start of each email's text, kept for the page's life (PersonTimeline previews) */
+const previews = new Map<string, string>();
+const previewOf = (f: FullMsg) => {
+  let t = f.text || "";
+  if (!t && f.html) { const d = new DOMParser().parseFromString(f.html, "text/html"); d.querySelectorAll("style,script,head,blockquote,.gmail_quote").forEach((n) => n.remove()); t = d.body?.textContent || ""; }
+  return t.replace(/\r/g, "").split(/\n\s*(?:On .{5,160} wrote:|-----\s*Original Message|From: .{3,200}\n\s*(?:Sent|Date): )/)[0]
+    .replace(/^(hi|hey|hello|good (morning|afternoon))\b[^\n]{0,40}\n/i, "").replace(/\s+/g, " ").trim().slice(0, 240);
+};
 /**
  * Everything with one person or customer, email by email, compact like the Inbox (Oct 15, Nick: "show it like before,
- * just a from or to indicator"): each row says From (theirs) or To (mine), who, the subject and the date; a tap opens
- * its conversation.
+ * just a from or to indicator… and a little more text so we can see what's in the email"): each row says From (theirs)
+ * or To (mine), who, the date, the subject and the start of what it says (read as the rows come into view); a tap
+ * opens its conversation.
  */
 export function PersonTimeline({ convos, me, onOpen }: { convos: Convo[]; me: string; onOpen: (c: Convo) => void }) {
   const [newest, setNewest] = useState(true);
-  const items = useMemo(() => {
+  const [dir, setDir] = useState<"all" | "in" | "out">("all");
+  const [, bump] = useState(0);
+  const isMine = (m: MsgRow) => m.sent || m.from.toLowerCase() === me;
+  const every = useMemo(() => {
     const seen = new Set<string>(), out: { m: MsgRow; c: Convo }[] = [];
     for (const c of convos) for (const m of c.msgs) { const k = m.messageId || `${m.folder}:${m.uid}`; if (seen.has(k)) continue; seen.add(k); out.push({ m, c }); }
     return out.sort((a, b) => (newest ? b.m.date.localeCompare(a.m.date) : a.m.date.localeCompare(b.m.date)));
   }, [convos, newest]);
+  const nOut = every.filter((x) => isMine(x.m)).length, nIn = every.length - nOut;
+  // the From / To toggle (Oct 15, Nick: "a little toggle above the search results, to and from")
+  const items = useMemo(() => (dir === "all" ? every : every.filter((x) => isMine(x.m) === (dir === "out"))), [every, dir]); // eslint-disable-line react-hooks/exhaustive-deps
+  // previews for the rows on screen (and just below), three at a time
+  const want = useRef<MsgRow[]>([]), busy = useRef(0), asked = useRef(new Set<string>());
+  const pump = () => {
+    while (busy.current < 3 && want.current.length) {
+      const m = want.current.shift()!, k = `${m.folder}:${m.uid}`;
+      busy.current++;
+      box<FullMsg>({ do: "message", path: m.folder, uid: m.uid }).then((f) => { previews.set(k, previewOf(f) || " "); }).catch(() => { previews.set(k, " "); })
+        .finally(() => { busy.current--; bump((n) => n + 1); pump(); });
+    }
+  };
+  const ask = (m: MsgRow) => { const k = `${m.folder}:${m.uid}`; if (previews.has(k) || asked.current.has(k)) return; asked.current.add(k); want.current.push(m); pump(); };
+  const io = useRef<IntersectionObserver | null>(null);
+  useEffect(() => {
+    io.current = new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) { const el = e.target as HTMLElement; const it = items[Number(el.dataset.i)]; if (it) ask(it.m); io.current?.unobserve(el); } }, { rootMargin: "300px 0px" });
+    document.querySelectorAll<HTMLElement>(".pt-row[data-i]").forEach((el) => io.current?.observe(el));
+    return () => io.current?.disconnect();
+  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      <div className="pt-bar"><span className="faint">{items.length} email{items.length === 1 ? "" : "s"}, received and sent</span><button type="button" className="linkbtn" onClick={() => setNewest(!newest)}>{newest ? "Newest first ↓" : "Oldest first ↑"}</button></div>
-      {items.map(({ m, c }) => {
-        const mine = m.sent || m.from.toLowerCase() === me;
+      <div className="pt-bar">
+        <span className="pt-seg" role="group" aria-label="Show">
+          {([["all", "All", every.length], ["in", "From", nIn], ["out", "Sent", nOut]] as const).map(([k, t, n]) => (
+            <button key={k} type="button" aria-pressed={dir === k} className={dir === k ? "on" : ""} onClick={() => setDir(k)}>{t} <small>{n}</small></button>
+          ))}
+        </span>
+        <button type="button" className="linkbtn" onClick={() => setNewest(!newest)}>{newest ? "Newest first ↓" : "Oldest first ↑"}</button></div>
+      {items.map(({ m, c }, i) => {
+        const mine = isMine(m);
         const them = mine ? (m.toNames?.length ? m.toNames : m.to).filter((x) => x.toLowerCase() !== me).slice(0, 2).join(", ") : m.fromName || m.from;
+        const pv = previews.get(`${m.folder}:${m.uid}`);
         return (
-          <button key={m.messageId || `${m.folder}:${m.uid}`} type="button" className={"ibx2-item ol pt-row " + (mine ? "out" : "in") + (!m.seen && !mine ? " ol-unread" : "")} onClick={() => onOpen(c)}>
+          <button key={m.messageId || `${m.folder}:${m.uid}`} data-i={i} type="button" className={"ibx2-item ol pt-row " + (mine ? "out" : "in") + (!m.seen && !mine ? " ol-unread" : "")} onClick={() => onOpen(c)}>
             <span className="ibx2-item-1">
               <span className={"pt-dir " + (mine ? "out" : "in")}>{mine ? "To" : "From"}</span>
               <b>{them || (mine ? "—" : m.from)}</b>
               <time>{when(m.date)}</time>
             </span>
             <span className="ibx2-item-s">{m.subject || "(no subject)"}</span>
+            <span className="ibx2-item-2 pt-pv">{pv === undefined ? "…" : pv.trim() || ""}</span>
           </button>
         );
       })}

@@ -7755,3 +7755,8 @@ a.pdn-tag:hover{text-decoration:underline}
 .pt-dir.in{background:var(--surface-2);color:var(--ink-2)}
 .pt-dir.out{background:var(--accent-soft);color:var(--accent)}
 .ibx2-item.ol.pt-row.out{background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
+.pt-pv{min-height:1.35em}
+.pt-seg{display:inline-flex;background:var(--surface-2);border-radius:8px;padding:2px;gap:2px}
+.pt-seg button{border:0;background:none;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink-2);padding:3px 11px;border-radius:6px;cursor:pointer}
+.pt-seg button small{font-size:11px;color:var(--ink-3);font-weight:600;margin-left:2px}
+.pt-seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(20,29,43,.12)}
