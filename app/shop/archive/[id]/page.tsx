@@ -8,8 +8,8 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { fileUrls, type ArchivedRow } from "@/lib/archive";
-import { pvHandle } from "@/lib/printavoNames";
-import ArchivedOrderView from "@/components/ArchivedOrderView";
+import ArchivedOrderView, { History } from "@/components/ArchivedOrderView";
+import { downloadUrl, pvHandle } from "@/lib/printavoNames";
 import ArchiveReorder from "@/components/ArchiveReorder";
 import { TRACK, trackWord, trackingUrl } from "@/lib/goods";
 
@@ -62,7 +62,8 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
       {/* the invoice first, then labor, and the emails & texts (Oct 15, Nick); the job's notes & photos are in the invoice's Production notes & files */}
       <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
       {/* the job's emails and texts (owners only; Oct 15) */}
-      <div style={{ marginTop: 10 }}><JobTalk jobRef={`pv:${row.id}`} /></div>
+      <div style={{ marginTop: 10 }}><JobTalk jobRef={`pv:${row.id}`} printavoCount={(row.data.messages?.length || 0) + (row.data.approvals?.length || 0)}
+        printavo={<History o={row.data} fileUrl={(u) => signed[u] || u} dl={(u, name) => downloadUrl(signed[u] || u, name)} paths={row.files || {}} audience="shop" />} /></div>
     </>
   );
 }

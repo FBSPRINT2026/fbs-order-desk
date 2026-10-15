@@ -46,6 +46,19 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
   const bill = addressLines(o.billingAddress), ship = addressLines(o.shippingAddress);
   const label = o.kind === "quote" ? "Quote" : "Invoice";
   const approval = approvalBadge(o);
+  // fees & totals: under the line items for customers; at the top of the side column on the shop's page (Oct 15, Nick)
+  const totalsCard = !cash ? <div className="pv-card pv-totals"><div className="pvt-big"><span>Total pieces</span><b>{o.totalQuantity}</b></div></div> : <div className="pv-card pv-totals">
+            <div><span>Item total</span><b>{money(itemTotal)}</b></div>
+            {o.fees.map((f) => <div key={f.id}><span>{plain(f.description) || "Fee"}{f.quantity && f.quantity !== 1 && f.unitPrice != null && !f.pct ? ` (${f.quantity} × ${money(f.unitPrice)})` : f.pct && f.unitPrice != null ? ` (${f.unitPrice}%)` : ""}</span><b>{money(f.amount)}</b></div>)}
+            {o.fees.length > 1 && <div className="pvt-sub"><span>Fees</span><b>{money(feeTotal)}</b></div>}
+            <div className="pvt-line"><span>Subtotal</span><b>{money(o.subtotal)}</b></div>
+            {o.discountAmount > 0.004 && <div><span>Discount{o.discountAsPercentage && o.discount ? ` (${o.discount}%)` : ""}</span><b>−{money(o.discountAmount)}</b></div>}
+            <div><span>Sales tax{o.salesTax ? ` (${o.salesTax}%)` : ""}</span><b>{money(o.salesTaxAmount)}</b></div>
+            <div className="pvt-big"><span>Total</span><b>{money(o.total)}</b></div>
+            <div><span>Amount paid</span><b>{money(o.amountPaid)}</b></div>
+            <div className={"pvt-big" + (o.amountOutstanding > 0.004 ? " pvt-due" : "")}><span>Amount outstanding</span><b>{money(o.amountOutstanding)}</b></div>
+            <div className="faint" style={{ fontSize: 12 }}>{o.totalQuantity} item{o.totalQuantity === 1 ? "" : "s"}{o.paidInFull ? " · Paid in full" : ""}</div>
+          </div>;
 
   return (
     <div className="pv">
@@ -99,31 +112,21 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         {o.groups.map((g, gi) => group(g, gi + 1))}
         {!o.groups.length && <div className="pv-card faint" style={{ padding: 18 }}>No line items on this {label.toLowerCase()}.</div>}
 
-        <div className="pv-bottom">
+        <div className={"pv-bottom" + (audience === "shop" ? " solo" : "")}>
           <div className="pv-stack">
             {plain(o.customerNote) && (
               <div className="pv-card"><h3>{audience === "shop" ? "Customer note" : "Note"}</h3><p className="pv-pre">{plain(o.customerNote)}</p></div>
             )}
           </div>
-          {!cash ? <div className="pv-card pv-totals"><div className="pvt-big"><span>Total pieces</span><b>{o.totalQuantity}</b></div></div> : <div className="pv-card pv-totals">
-            <div><span>Item total</span><b>{money(itemTotal)}</b></div>
-            {o.fees.map((f) => <div key={f.id}><span>{plain(f.description) || "Fee"}{f.quantity && f.quantity !== 1 && f.unitPrice != null && !f.pct ? ` (${f.quantity} × ${money(f.unitPrice)})` : f.pct && f.unitPrice != null ? ` (${f.unitPrice}%)` : ""}</span><b>{money(f.amount)}</b></div>)}
-            {o.fees.length > 1 && <div className="pvt-sub"><span>Fees</span><b>{money(feeTotal)}</b></div>}
-            <div className="pvt-line"><span>Subtotal</span><b>{money(o.subtotal)}</b></div>
-            {o.discountAmount > 0.004 && <div><span>Discount{o.discountAsPercentage && o.discount ? ` (${o.discount}%)` : ""}</span><b>−{money(o.discountAmount)}</b></div>}
-            <div><span>Sales tax{o.salesTax ? ` (${o.salesTax}%)` : ""}</span><b>{money(o.salesTaxAmount)}</b></div>
-            <div className="pvt-big"><span>Total</span><b>{money(o.total)}</b></div>
-            <div><span>Amount paid</span><b>{money(o.amountPaid)}</b></div>
-            <div className={"pvt-big" + (o.amountOutstanding > 0.004 ? " pvt-due" : "")}><span>Amount outstanding</span><b>{money(o.amountOutstanding)}</b></div>
-            <div className="faint" style={{ fontSize: 12 }}>{o.totalQuantity} item{o.totalQuantity === 1 ? "" : "s"}{o.paidInFull ? " · Paid in full" : ""}</div>
-          </div>}
+          {audience !== "shop" && totalsCard}
         </div>
-        </div>
-        <aside className="ed-aside pv-aside">
         {audience === "shop" && (
-          <ProductionPanel compact note={plain(o.productionNote)}
+          <ProductionPanel note={plain(o.productionNote)}
             files={o.files.map((f) => ({ id: f.id, name: nameOf(f), url: fileUrl(f.full) || undefined, thumb: (f.thumb && fileUrl(f.thumb)) || undefined, mime: f.mime }))}>{production}</ProductionPanel>
         )}
+        </div>
+        <aside className="ed-aside pv-aside">
+        {audience === "shop" && <section className="panel pv-tot-panel"><div className="panel-h"><h2>Fees &amp; Totals</h2></div><div className="panel-b">{totalsCard}</div></section>}
         {cash && o.transactions.length > 0 && (
           <section className="panel">
             <div className="panel-h"><h2>Payments</h2><span className="faint" style={{ fontSize: 12 }}>{money(o.amountPaid)} paid</span></div>
@@ -139,7 +142,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             </div>
           </section>
         )}
-        <History o={o} fileUrl={fileUrl} dl={dl} paths={paths} audience={audience} />
+        {audience !== "shop" && <History o={o} fileUrl={fileUrl} dl={dl} paths={paths} audience={audience} />}
 
         {o.tasks.length > 0 && (
           <section className="panel"><div className="panel-h"><h2>Tasks</h2></div><div className="panel-b">
@@ -244,7 +247,7 @@ type Ev = { at: string; key: string; kind: "msg" | "appr"; node: ReactNode };
  * Everything that was said and approved on this order, oldest first: emails and texts (with who sent them, whether they
  * were opened, and their attachments) and each approval request with its answer.
  */
-function History({ o, fileUrl, dl, paths, audience }: { o: PvOrder; fileUrl: (u: string) => string; dl: (u: string, name: string) => string; paths?: Record<string, string>; audience: "shop" | "customer" }) {
+export function History({ o, fileUrl, dl, paths, audience }: { o: PvOrder; fileUrl: (u: string) => string; dl: (u: string, name: string) => string; paths?: Record<string, string>; audience: "shop" | "customer" }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const evs: Ev[] = [];
   for (const a of o.approvals) {

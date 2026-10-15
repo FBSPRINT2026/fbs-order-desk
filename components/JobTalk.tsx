@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 /**
  * A job's emails and texts in one timeline (Oct 15, Nick, on Printavo invoice 27166: "a shop-side tab that shows the
@@ -14,9 +14,9 @@ type Talk = { customer: string; number: string; name: string; items: Item[]; sum
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 const time = (s: string) => new Date(s).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-export default function JobTalk({ jobRef }: { jobRef: string }) {
+export default function JobTalk({ jobRef, printavo, printavoCount = 0 }: { jobRef: string; /** a Printavo job's own messages & approvals (Oct 15, Nick: "add messages and approval to Emails & Texts… call them Printavo Messages") */ printavo?: ReactNode; printavoCount?: number }) {
   const [d, setD] = useState<Talk | null>(null), [no, setNo] = useState(false), [err, setErr] = useState("");
-  const [show, setShow] = useState<"all" | "text" | "email">("all"), [big, setBig] = useState(""), [open, setOpen] = useState<Record<string, boolean>>({});
+  const [show, setShow] = useState<"all" | "text" | "email" | "pv">("all"), [big, setBig] = useState(""), [open, setOpen] = useState<Record<string, boolean>>({});
   const load = () => fetch(`/api/jobs/talk?ref=${encodeURIComponent(jobRef)}`).then(async (r) => { if (r.status === 403) { setNo(true); return; } const j = await r.json(); if (j.error) setErr(j.error); else setD(j); }).catch((e) => setErr(String(e)));
   useEffect(() => { void load(); }, [jobRef]); // eslint-disable-line react-hooks/exhaustive-deps
   if (no) return null;
@@ -25,21 +25,23 @@ export default function JobTalk({ jobRef }: { jobRef: string }) {
     await fetch("/api/jobs/talk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ref: jobRef, not: id }) });
     setD(null); void load();
   };
-  const items = (d?.items || []).filter((i) => show === "all" || i.kind === show);
-  const nT = (d?.items || []).filter((i) => i.kind === "text").length, nE = (d?.items || []).length - nT;
+  const fromPv = (i: Item) => i.kind === "email" && i.src === "Printavo";
+  const all = (d?.items || []).filter((i) => !(printavo && fromPv(i))); // with the Printavo panel, its messages show there
+  const items = all.filter((i) => show === "all" || i.kind === show);
+  const nT = all.filter((i) => i.kind === "text").length, nE = all.length - nT;
   const ok = new Map((d?.approvals || []).map((a) => [a.id, a.what]));
   let last = "";
   return (
     <section className="panel jt">
       <div className="panel-h"><h2>Emails &amp; texts</h2><span className="faint" style={{ fontSize: 12.5 }}>{d ? `everything with ${d.customer} about #${d.number}${d.name ? ` ${d.name}` : ""}` : "Looking through texts and email…"}</span><span className="spacer" /><span className="jt-lock">Shop only · owners</span></div>
       {err && <div className="pv-err">{err}</div>}
-      {d && !d.items.length && <div className="panel-b faint">No emails or texts found for this job.</div>}
-      {d && d.items.length > 0 && <>
+      {d && !all.length && !printavoCount && <div className="panel-b faint">No emails or texts found for this job.</div>}
+      {d && (all.length > 0 || printavoCount > 0) && <>
         <div className="jt-chips" role="group" aria-label="Show">
-          {([["all", "All", d.items.length], ["text", "Texts", nT], ["email", "Emails", nE]] as const).map(([k, t, n]) => <button key={k} type="button" className={show === k ? "on" : ""} onClick={() => setShow(k)} disabled={!n && k !== "all"}>{t} <small>{n}</small></button>)}
+          {([["all", "All", all.length], ["text", "Texts", nT], ["email", "Emails", nE], ...(printavo ? [["pv", "Printavo messages", printavoCount] as const] : [])] as const).map(([k, t, n]) => <button key={k} type="button" className={show === k ? "on" : ""} onClick={() => setShow(k as typeof show)} disabled={!n && k !== "all"}>{t} <small>{n}</small></button>)}
         </div>
-        {d.summary && <div className="jt-ai"><b>✦ What happened</b>{d.summary}</div>}
-        <div className="panel-b jt-tl">
+        {d.summary && show !== "pv" && <div className="jt-ai"><b>✦ What happened</b>{d.summary}</div>}
+        {show === "pv" ? <div className="panel-b jt-pv">{printavo}</div> : <div className="panel-b jt-tl">
           {items.map((i, k) => {
             const dd = day(i.date), sep = dd !== last; last = dd;
             const next = items[k + 1];
@@ -64,7 +66,7 @@ export default function JobTalk({ jobRef }: { jobRef: string }) {
               </div>
             );
           })}
-        </div>
+        </div>}
       </>}
       {big && <div className="ctx-big" onClick={() => setBig("")}><img src={big} alt="" /></div>}
     </section>
