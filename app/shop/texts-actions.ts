@@ -2,7 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { organizerFor } from "@/lib/mail/mirror";
-import { newToken, sha } from "@/lib/texts";
+import { handleKey, newToken, sha } from "@/lib/texts";
 
 /** Settings > Texts: the Macs that send customer texts (owners only, like the texts themselves) */
 async function owner() {
@@ -49,20 +49,34 @@ export async function removeTextMac(id: string) {
   } catch (e) { return fail(e); }
 }
 
-export type TextRow = { id: string; from_me: boolean; body: string; sent_at: string; handle: string; chat_name: string; service: string; files: { name: string; type: string; url: string }[] };
+export type TextRow = { id: string; from_me: boolean; body: string; sent_at: string; handle: string; chat: string; chat_name: string; service: string; files: { name: string; type: string; url: string }[];
+  /** who it's with (the contact's name, or the number) and the conversation's name (a person, or a group text) */ who: string; convo: string };
 /** a customer's texts, newest last (owners only); pictures as links good for an hour */
 export async function getCustomerTexts(customerId: string, limit = 300) {
   try {
     const { admin } = await owner();
-    const { data } = await admin.from("text_messages").select("id, from_me, body, sent_at, handle, chat_name, service, files").eq("customer_id", customerId).order("sent_at", { ascending: false }).limit(Math.min(1000, limit));
-    const rows = ((data || []) as (Omit<TextRow, "files"> & { files: { name: string; type: string; path: string }[] })[]).reverse();
+    const { data } = await admin.from("text_messages").select("id, from_me, body, sent_at, handle, chat, chat_name, service, files").eq("customer_id", customerId).order("sent_at", { ascending: false }).limit(Math.min(1000, limit));
+    const rows = ((data || []) as (Omit<TextRow, "files" | "who" | "convo"> & { files: { name: string; type: string; path: string }[] })[]).reverse();
+    // their people's names, by number and email (Oct 15, Nick: "Peticolas has texts with Michael and with Kayla")
+    const [{ data: c }, { data: cts }] = await Promise.all([
+      admin.from("customers").select("name, phone, email, contact2_name, contact2_phone, contact2_email").eq("id", customerId).maybeSingle(),
+      admin.from("customer_contacts").select("name, phone, email").eq("customer_id", customerId),
+    ]);
+    const names = new Map<string, string>();
+    const put = (n: string | null | undefined, ...hs: (string | null | undefined)[]) => { if (n?.trim()) for (const h of hs) { const k = handleKey(h); if (k && !names.has(k)) names.set(k, n.trim()); } };
+    for (const x of (cts || []) as { name: string; phone: string; email: string }[]) put(x.name, x.phone, x.email);
+    if (c) { put(c.name, c.phone, c.email); put(c.contact2_name, c.contact2_phone, c.contact2_email); }
+    const nice = (h: string) => names.get(handleKey(h)) || (/^\+1\d{10}$/.test(h) ? `(${h.slice(2, 5)}) ${h.slice(5, 8)}-${h.slice(8)}` : h);
     const paths = rows.flatMap((r) => (r.files || []).map((f) => f.path));
     const signed = new Map<string, string>();
     if (paths.length) {
       const { data: s } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
       for (const x of s || []) if (x.path && x.signedUrl) signed.set(x.path, x.signedUrl);
     }
-    return { ok: true as const, texts: rows.map((r) => ({ ...r, files: (r.files || []).map((f) => ({ name: f.name, type: f.type, url: signed.get(f.path) || "" })) })) as TextRow[] };
+    return { ok: true as const, texts: rows.map((r) => {
+      const group = !!r.chat && !/^(\+?\d+|[^@\s]+@[^@\s]+)$/.test(r.chat);
+      return { ...r, who: nice(r.handle), convo: group ? r.chat_name || "Group text" : nice(r.chat || r.handle), files: (r.files || []).map((f) => ({ name: f.name, type: f.type, url: signed.get(f.path) || "" })) };
+    }) as TextRow[] };
   } catch (e) { return fail(e); }
 }
 
