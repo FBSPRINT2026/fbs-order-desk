@@ -191,7 +191,7 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
     return (
       <div className="aa-card aa-tblcard">
         <table className="aa-tbl">
-          <thead><tr><th>#</th><th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th></tr></thead>
+          <thead><tr><th>#</th><th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th></tr></thead>
           <tbody>
             {rows.map((o) => (
               <tr key={o.id} className={!o.archived && o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
@@ -199,7 +199,7 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
                 <td className="m"><div className="aa-t">{o.nickname || (cols === "quote" ? "Quote" : "Order")}{o.archived && <span className="aa-arch" title="A past order from our records (read-only)">Archived</span>}</div><div className="aa-s">{o.qty} pcs</div></td>
                 <td>{pill(o)}</td>
                 <td className="dt" data-l={cols === "quote" ? "Created" : "In hands"}>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
-                {cols !== "quote" && <td className="r num" data-l="Paid">{money(o.paid)}</td>}
+                {cols !== "quote" && <td className="r num paid" data-l="Paid">{money(o.paid)}</td>}
                 {cols !== "quote" && <td data-l="Balance" className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{money(Math.max(0, o.balance))}</td>}
                 <td className="r num b" data-l="Total">{money(o.total)}</td>
               </tr>

@@ -8853,3 +8853,11 @@ a.pdn-tag:hover{text-decoration:underline}
 .aa-tbl .aa-arch{white-space:nowrap;display:inline-block;margin-left:6px;vertical-align:1px}
 .aa-tbl .aa-pill{white-space:normal;max-width:210px;display:inline-block;line-height:1.3}
 .aa-tbl td.dt{white-space:nowrap}
+/* …and the words never break letter by letter; beside the attention panel the table drops Paid (Total − Balance) and
+   tightens so everything fits without scrolling */
+.aa-tbl td,.aa-tbl th{word-break:normal;overflow-wrap:normal}
+.aa-tbl .aa-pill{min-width:120px;overflow-wrap:break-word}
+.aa-home-main .aa-tbl{min-width:0}
+.aa-home-main .aa-tbl .paid{display:none}
+.aa-home-main .aa-tbl td,.aa-home-main .aa-tbl th{padding:10px 8px}
+.aa-home-main .aa-tbl td.m{min-width:160px}
