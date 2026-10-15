@@ -587,7 +587,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const QUICK: TemplateKey[] = ["proof_ready", "ready_pickup", "shipped", "payment_reminder", "deposit_request", "quote_followup", "request_received", "thanks"];
 
   return (
-    <>
+    <div className="ord">
       {fromEmail
         ? <button type="button" className="back back-btn" title="Saves this order, then opens the customer's email to reply or send the quote" onClick={async () => { await save(); router.push(`/shop/conversations?open=${fromEmail}`); }}>← Save &amp; return to the email</button>
         : <BackLink href="/shop/orders" label="Orders" />}
@@ -1043,6 +1043,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </section>
         </div>
       </div>
-    </>
+    </div>
   );
 }
