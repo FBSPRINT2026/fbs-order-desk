@@ -24,10 +24,10 @@ export function ReorderButton({ orderId, disabled }: { orderId: string; disabled
 
 const PREVIEW = "Turned off in preview";
 
-export function QuoteApproval({ orderId, total, terms, disabled, defaultName }: { orderId: string; total: string; terms: string; disabled: boolean; defaultName: string }) {
+export function QuoteApproval({ orderId, total, terms, disabled }: { orderId: string; total: string; terms: string; disabled: boolean; defaultName: string }) {
   const router = useRouter();
   const [mode, setMode] = useState<"approve" | "changes">("approve");
-  const [name, setName] = useState(defaultName);
+  const [name, setName] = useState(""); // typed by the customer, never filled in (Oct 15, Nick)
   const [agree, setAgree] = useState(false);
   const [comment, setComment] = useState("");
   const [err, setErr] = useState("");

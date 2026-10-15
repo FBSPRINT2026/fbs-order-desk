@@ -83,9 +83,10 @@ export async function decideProof(proofId: string, decision: "approved" | "appro
     if (!proof) return { ok: false, error: "We couldn't find that proof." };
     const { admin, order, email, who, settings } = await customerOrder(proof.order_id);
     if (proof.status !== "pending") return { ok: false, error: "This proof was already reviewed. Refresh the page." };
-    const name = signature.trim() || who;
+    // approvals carry the name the customer typed themselves (never filled in for them)
+    const name = decision === "changes" ? signature.trim() || who : signature.trim();
     const note = comment.trim().slice(0, 2000);
-    if (decision !== "changes" && name.length < 2) return { ok: false, error: "Type your name to approve." };
+    if (decision !== "changes" && name.length < 2) return { ok: false, error: "Type your full name to approve." };
     if (decision !== "approved" && !note) return { ok: false, error: decision === "changes" ? "Tell us what to change." : "Tell us the changes to make." };
     const status = decision === "changes" ? "changes" : "approved";
     await admin.from("proofs").update({ status, customer_comment: note, decided_at: new Date().toISOString(), decided_name: name }).eq("id", proofId);
@@ -131,7 +132,7 @@ export async function proofForChange(proofId: string): Promise<OwnChangeStart> {
  * The customer changed the art themselves in their Mockup Creator: the proof goes back to the shop with their
  * version (garments, prints and the mockup they saved). We check it can print and send it back as the new proof.
  */
-export async function submitOwnChange(proofId: string, change: { lines: { style: string; brand: string; color: string; garment: string }[]; imprints: { location: string; size: string; drop?: string; inks: string; colors: number; method: string; design_id?: string }[]; mockupPaths: string[]; note: string }): Promise<Result> {
+export async function submitOwnChange(proofId: string, change: { lines: { id?: string; style: string; brand: string; color: string; garment: string }[]; imprints: import("@/lib/pricing").Imprint[]; mockupPaths: string[]; note: string }): Promise<Result> {
   try {
     const { supabase, user } = await getViewer();
     if (!user) return { ok: false, error: "Please sign in again." };

@@ -6,11 +6,12 @@ import { decideProof } from "@/app/portal/actions";
 type Choice = "approved" | "approved_changes" | "changes";
 
 /** Approve, approve with changes (no new proof), or make changes (tell us, or change it yourself). */
-export default function ReviewDecision({ proofId, orderId, defaultName, disabled, changeHref }: { proofId: string; orderId: string; defaultName: string; disabled: boolean; changeHref: string }) {
+export default function ReviewDecision({ proofId, orderId, disabled, changeHref }: { proofId: string; orderId: string; disabled: boolean; changeHref: string }) {
   const router = useRouter();
   const [pick, setPick] = useState<Choice | "">("");
   const [note, setNote] = useState("");
-  const [name, setName] = useState(defaultName);
+  // the customer types their own name to approve (Oct 15, Nick: "don't automatically fill in the name")
+  const [name, setName] = useState("");
   const [checked, setChecked] = useState(false);
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();

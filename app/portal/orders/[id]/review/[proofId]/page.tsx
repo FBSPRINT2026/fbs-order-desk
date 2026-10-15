@@ -47,7 +47,6 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
   const lines = g.lines.filter((l) => lineQty(l) > 0);
   const total = lines.reduce((a, l) => a + lineQty(l), 0);
   const pending = proof.status === "pending";
-  const who = ctx.customers.find((x) => x.id === o.customer_id)?.name || "";
   const sent = new Date(proof.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
 
   return (
@@ -63,7 +62,7 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
             <div className="panel-h"><h2>Your decision</h2></div>
             <div className="panel-b">
               {pending
-                ? <ReviewDecision proofId={proof.id} orderId={o.id} defaultName={who} disabled={!!ctx.preview} changeHref={`/portal/mockup?change=${proof.id}${as ? `&as=${as}` : ""}`} />
+                ? <ReviewDecision proofId={proof.id} orderId={o.id} disabled={!!ctx.preview} changeHref={`/portal/mockup?change=${proof.id}${as ? `&as=${as}` : ""}`} />
                 : <div className={"ar-done " + proof.status}>
                     <b>{proof.status === "approved" ? (proof.customer_comment ? "Approved with changes" : "Approved") : "Changes requested"}</b>
                     {proof.decided_name && <span>{proof.decided_name}{proof.decided_at ? ` · ${fmtStamp(proof.decided_at)}` : ""}</span>}

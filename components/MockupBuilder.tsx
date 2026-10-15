@@ -1234,8 +1234,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (changeId) {
           // their version goes to the shop with the proof; we check it and send a new proof
           const r2 = await submitOwnChange(changeId, {
-            lines: lines.filter((z) => z.style || z.color).map((z) => ({ style: z.style, brand: z.brand, color: z.color, garment: z.garment })),
-            imprints: imprints.map((d) => ({ location: d.location, size: d.size, drop: d.drop, inks: d.inks, colors: d.colors, method: d.method, design_id: d.design_id })),
+            lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment })),
+            imprints: imprints.map((d) => ({ ...d })),
             mockupPaths: paths, note: "",
           });
           if (!r2.ok) throw new Error(r2.error);
@@ -1252,6 +1252,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     try {
       // this group's earlier mockups: archived once the new ones are saved, so only the current version shows
       // (Oct 15, Nick: "It should only be the one active version... not a history of it along the way")
+      const newMockups: string[] = [];
       const before = orderId && groupId ? ((await sb.from("mockups").select("id, proof_id").eq("order_id", orderId).eq("group_id", groupId).is("archived_at", null)).data || []) as { id: string; proof_id: string | null }[] : [];
       for (const l of lines.filter((z) => z.style || z.color)) {
         const blob = await render(l);
@@ -1264,7 +1265,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const { data: pr } = await sb.from("proofs").insert({ order_id: orderId, title, file_path: path, file_type: "image/png" }).select("id").single();
           proofId = pr?.id || null;
         }
-        await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, group_id: groupId || null, proof_id: proofId, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "" });
+        const { data: nm } = await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, group_id: groupId || null, proof_id: proofId, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "" }).select("id").single();
+        if (nm?.id) newMockups.push(nm.id);
         // a small photos-only picture for the order screen and the customer's artwork lists
         const thumb = await render(l, true);
         const tpath = path.replace(/\.png$/, "-thumb.png");
@@ -1279,6 +1281,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (pids.length) await sb.from("proofs").update({ archived_at: at }).in("id", pids);
       }
       await syncOrder(true, thumbs);
+      // each version keeps the group as it was saved (garments and prints), so the shop can go back to it later
+      // (Oct 15, Nick: "be able to go back in time")
+      if (orderId && newMockups.length) {
+        const { data: od } = await sb.from("orders").select("groups").eq("id", orderId).maybeSingle();
+        const sg = ((od?.groups || []) as Order["groups"]).find((x) => x.id === groupId);
+        if (sg) await sb.from("mockups").update({ snapshot: { lines: sg.lines.map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })), imprints: sg.imprints, mockupSize: sg.mockupSize || null, mockupThumbs: sg.mockupThumbs || [] } }).in("id", newMockups);
+      }
       saveOk.current = true;
       setSaved(out);
       setMsg(orderId ? `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the order as proofs and to the customer's account.` : `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the customer's account.`);
