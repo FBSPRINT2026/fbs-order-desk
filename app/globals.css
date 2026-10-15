@@ -8374,3 +8374,18 @@ a.pdn-tag:hover{text-decoration:underline}
 .ord .pr-main{gap:2px}
 .ord .pr-notes{font-size:12px;line-height:1.4}
 .ord .grp-sum{padding:6px 0 0}
+/* (Oct 15, Nick) the mockup a bit bigger again; Customer and Job details tighter */
+.ord .imp-wrap{grid-template-columns:185px minmax(0,1fr)}
+.ord .mk-big img{max-height:215px}
+.ord .top2 .panel-h{padding:9px 14px}
+.ord .top2 .panel-b{padding:10px 14px 12px;gap:8px}
+.ord .top2 .field{gap:3px}
+.ord .top2 input:not([type=checkbox]),.ord .top2 select{height:34px;padding-top:4px;padding-bottom:4px}
+.ord .jd-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px;align-items:start}
+.ord .jd-grid .check{font-size:12px!important;margin-top:2px!important}
+@media (max-width:1100px){ .ord .jd-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.ord .cust-row{padding:2px 0 0;gap:10px}
+.ord .cust-card{gap:1px;font-size:12.5px;line-height:1.35}
+.ord .cust-card .cc-co{font-size:14px}
+.ord .cust-card .cc-extra{margin-top:3px;padding-top:3px}
+.ord .pt-box .chip{padding:3px 10px;font-size:12px;min-height:0}

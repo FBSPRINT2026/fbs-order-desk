@@ -789,7 +789,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 </span>
               </div>
               <div className="panel-b stack">
-                <div className="grid g2">
+                <div className="grid jd-grid">
                   <div className="field"><label htmlFor="o-nick">Job name</label><input id="o-nick" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
                   <div className="field"><label htmlFor="o-po">Customer PO #</label><input id="o-po" type="text" value={o.po_number || ""} onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
                   <ProjectPicker orderId={o.id} customerId={o.customer_id} value={(o as { project_id?: string | null }).project_id || null} />
