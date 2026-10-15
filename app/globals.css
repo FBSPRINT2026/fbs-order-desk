@@ -8899,5 +8899,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .aa-paidup b{color:var(--ok);margin-right:4px}
 .aa-more-row{display:flex;justify-content:center;padding:10px}
 /* old Printavo order page: the date labels (Created, Invoice date, Production due…) stay whole words, not a letter per line (Oct 15, Nick) */
-.pv-info .pv-dates{min-width:210px}
 .pv-info .pv-dates dt{white-space:nowrap;overflow-wrap:normal}
+/* …and the long values (a PO like "RUSH AOC A73269_IPEA Tee") wrap inside the dates column instead of running out of the box */
+.pv-info .pv-dates dd{white-space:normal;overflow-wrap:anywhere}
+@media (min-width:900px){ .pv-info{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(240px,1.35fr)} }
