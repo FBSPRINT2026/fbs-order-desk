@@ -110,7 +110,7 @@ async function loadAssistantDataNow(sb: SupabaseClient<any, any, any>): Promise<
     fetchAll<O>(() => sb.from("orders").select("id,number,nickname,status,type,due_date,total,customer_id,created_at,updated_at,sent_at,approved_at,submitted_at,completed_at,tracking,delivery_method").order("number", { ascending: false })),
     fetchAll<Customer>(() => sb.from("customers").select("*").order("created_at")),
     fetchAll<{ order_id: string; amount: number }>(() => sb.from("payments").select("order_id,amount").order("created_at")),
-    fetchAll<AssistantData["proofs"][number]>(() => sb.from("proofs").select("order_id,status,created_at,decided_at").order("created_at")),
+    fetchAll<AssistantData["proofs"][number]>(() => sb.from("proofs").select("order_id,status,created_at,decided_at").is("archived_at", null).order("created_at")),
     fetchAll<AssistantData["messages"][number]>(() => sb.from("messages").select("order_id,customer_id,author_type,created_at").gte("created_at", since).order("created_at")),
     fetchAll<AssistantData["readyEvents"][number]>(() => sb.from("order_events").select("order_id,created_at").eq("kind", "status").eq("detail", "ready").gte("created_at", since).order("created_at")),
   ]);

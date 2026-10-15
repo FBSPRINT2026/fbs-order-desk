@@ -26,7 +26,7 @@ export async function orderFacts(admin: SupabaseClient, orderId?: string | null,
       if (o.due_date) lines.push(`In-hands date: ${fmtDateLong(o.due_date)}.`);
       if (o.sent_at) lines.push(`Quote sent: ${fmtDateLong(o.sent_at.slice(0, 10))}.`);
       if (o.delivery_method) lines.push(`Delivery: ${o.delivery_method}${o.tracking ? `, tracking ${o.tracking}` : ""}.`);
-      const { data: pr } = await admin.from("proofs").select("status,title").eq("order_id", orderId);
+      const { data: pr } = await admin.from("proofs").select("status,title").eq("order_id", orderId).is("archived_at", null);
       if (pr?.length) lines.push(`Proofs: ${pr.map((p) => `${p.title} (${p.status})`).join(", ")}.`);
       const { data: msgs } = await admin.from("messages").select("author_type,body,created_at").eq("order_id", orderId).order("created_at", { ascending: false }).limit(6);
       history = (msgs || []).reverse().map((m) => `${m.author_type === "staff" ? "Shop" : "Customer"}: ${m.body.slice(0, 600)}`).join("\n");

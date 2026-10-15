@@ -80,9 +80,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       const [p, d, m, msg, pr] = await Promise.all([
         ids.length ? sb.from("payments").select("*").in("order_id", ids).order("paid_on", { ascending: false }) : Promise.resolve({ data: [] }),
         sb.from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }),
-        sb.from("mockups").select("*").eq("customer_id", id).order("created_at", { ascending: false }),
+        sb.from("mockups").select("*").eq("customer_id", id).is("archived_at", null).order("created_at", { ascending: false }),
         sb.from("messages").select("*").or(ids.length ? `customer_id.eq.${id},order_id.in.(${ids.join(",")})` : `customer_id.eq.${id}`).order("created_at"),
-        ids.length ? sb.from("proofs").select("order_id,created_at").in("order_id", ids).eq("status", "pending") : Promise.resolve({ data: [] }),
+        ids.length ? sb.from("proofs").select("order_id,created_at").in("order_id", ids).is("archived_at", null).eq("status", "pending") : Promise.resolve({ data: [] }),
       ]);
       const pa: Record<string, string> = {};
       ((pr.data || []) as { order_id: string; created_at: string }[]).forEach((x) => { pa[x.order_id] = x.created_at; });

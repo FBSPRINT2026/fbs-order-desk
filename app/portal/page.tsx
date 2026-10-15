@@ -45,9 +45,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const num = (id: string | null) => orders.find((o) => o.id === id)?.number ?? null;
     const [p, pr, d, m, msg] = await Promise.all([
       ids.length ? ctx.db.from("payments").select("*").in("order_id", ids).order("paid_on", { ascending: false }) : Promise.resolve({ data: [] }),
-      ids.length ? ctx.db.from("proofs").select("order_id").in("order_id", ids).eq("status", "pending") : Promise.resolve({ data: [] }),
+      ids.length ? ctx.db.from("proofs").select("order_id").in("order_id", ids).is("archived_at", null).eq("status", "pending") : Promise.resolve({ data: [] }),
       ctx.db.from("designs").select("*").in("customer_id", ctx.customerIds).order("number", { ascending: false }),
-      ctx.db.from("mockups").select("*").in("customer_id", ctx.customerIds).order("created_at", { ascending: false }),
+      ctx.db.from("mockups").select("*").in("customer_id", ctx.customerIds).is("archived_at", null).order("created_at", { ascending: false }),
       ctx.db.from("messages").select("*").or(`customer_id.in.(${ctx.customerIds.join(",")})${ids.length ? `,order_id.in.(${ids.join(",")})` : ""}`).order("created_at"),
     ]);
     const pays = (p.data || []) as { id: string; order_id: string; amount: number; method: string; paid_on: string | null; created_at: string }[];

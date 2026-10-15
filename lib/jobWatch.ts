@@ -105,7 +105,7 @@ export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; d
   const ids = orders.map((o) => o.id), cids = [...new Set(orders.map((o) => o.customer_id).filter(Boolean))] as string[];
   const [{ data: cs }, { data: pf }, { data: bo }, { data: gc }] = await Promise.all([
     cids.length ? admin.from("customers").select("id, company, name, price_type, is_test").in("id", cids) : Promise.resolve({ data: [] }),
-    admin.from("proofs").select("order_id, status, created_at").in("order_id", ids),
+    admin.from("proofs").select("order_id, status, created_at").in("order_id", ids).is("archived_at", null),
     admin.from("blank_orders").select("order_id, status, expected_date, received_at, created_at").in("order_id", ids),
     admin.from("goods_checkins").select("order_id, status, created_at").in("order_id", ids),
   ]);

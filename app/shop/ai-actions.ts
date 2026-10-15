@@ -235,7 +235,7 @@ export async function aiReorderCheck(orderId: string, onlyIfNone = false, told?:
     if (onlyIfNone) {
       const { data: had } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", `reorder_check:${orderId}`).limit(1).maybeSingle();
       // checked already, and no newer mockup since: show that one
-      const { data: mk } = await admin.from("mockups").select("created_at").eq("order_id", orderId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const { data: mk } = await admin.from("mockups").select("created_at").eq("order_id", orderId).is("archived_at", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
       const c = had?.payload as ReorderCheck | undefined;
       if (c && !(mk && c.at && mk.created_at > c.at)) return { ok: true as const, check: c };
     }

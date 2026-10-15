@@ -8577,3 +8577,10 @@ a.pdn-tag:hover{text-decoration:underline}
   .p-brand-t{position:relative;gap:0}
   .p-brand-k{position:absolute;left:29px;right:0;bottom:calc(100% + 3px);display:flex;justify-content:space-between;font-size:9px;font-weight:600;letter-spacing:0;white-space:nowrap}
 }
+/* shop top bar on a phone: "Shop Management" spread over the words "On the go", like the portal (Oct 15, Nick) */
+.brand.brand-logo span.tag-k{display:none}
+@media (max-width:820px){
+  .brand.brand-logo span.tag-go{position:relative}
+  .brand.brand-logo span.tag-k{display:flex;position:absolute;left:29px;right:0;bottom:calc(100% + 3px);justify-content:space-between;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:0;color:var(--side-ink);white-space:nowrap}
+  .brand.brand-logo span.tag-k > span{display:inline;font-size:inherit;letter-spacing:0}
+}

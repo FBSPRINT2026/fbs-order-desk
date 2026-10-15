@@ -120,7 +120,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const loadSide = useCallback(async () => {
     const [p, pr, m, e, a] = await Promise.all([
       sb.from("payments").select("*").eq("order_id", id).order("paid_on"),
-      sb.from("proofs").select("*").eq("order_id", id).order("created_at", { ascending: false }),
+      sb.from("proofs").select("*").eq("order_id", id).is("archived_at", null).order("created_at", { ascending: false }),
       sb.from("messages").select("*").eq("order_id", id).order("created_at"),
       sb.from("order_events").select("*").eq("order_id", id).order("created_at", { ascending: false }),
       sb.from("art_files").select("*").eq("order_id", id).order("created_at"),

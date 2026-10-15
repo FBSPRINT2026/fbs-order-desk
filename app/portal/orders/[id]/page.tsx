@@ -32,7 +32,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const isReq = o.status === "request";
   const [p, pr, m] = await Promise.all([
     ctx.db.from("payments").select("*").eq("order_id", id).order("paid_on"),
-    ctx.db.from("proofs").select("*").eq("order_id", id).order("created_at", { ascending: false }),
+    ctx.db.from("proofs").select("*").eq("order_id", id).is("archived_at", null).order("created_at", { ascending: false }),
     ctx.db.from("messages").select("*").eq("order_id", id).order("created_at"),
   ]);
   const payments = (p.data || []) as Payment[];

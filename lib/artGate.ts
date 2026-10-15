@@ -37,7 +37,7 @@ export async function artGate(admin: SupabaseClient, orderId: string): Promise<{
   if (!o) return { order: null, gate: none };
   const order = o as Order;
   const [{ data: proofs }, { data: marks }, { data: seps }] = await Promise.all([
-    admin.from("proofs").select("id, title, status, created_at, decided_at, decided_name").eq("order_id", orderId).order("created_at"),
+    admin.from("proofs").select("id, title, status, created_at, decided_at, decided_name").eq("order_id", orderId).is("archived_at", null).order("created_at"),
     admin.from("order_events").select("detail, actor, created_at").eq("order_id", orderId).eq("kind", "art_approved").order("created_at", { ascending: false }).limit(1),
     admin.from("separations").select("id, number, status, imprint_id").eq("order_id", orderId).neq("status", "cancelled"),
   ]);

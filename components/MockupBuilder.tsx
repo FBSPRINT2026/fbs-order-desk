@@ -1223,6 +1223,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     const { data: u } = await sb.auth.getUser();
     try {
+      // this group's earlier mockups: archived once the new ones are saved, so only the current version shows
+      // (Oct 15, Nick: "It should only be the one active version... not a history of it along the way")
+      const before = orderId && groupId ? ((await sb.from("mockups").select("id, proof_id").eq("order_id", orderId).eq("group_id", groupId).is("archived_at", null)).data || []) as { id: string; proof_id: string | null }[] : [];
       for (const l of lines.filter((z) => z.style || z.color)) {
         const blob = await render(l);
         const title = `${groupName || "Mockup"} — ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`.trim();
@@ -1241,6 +1244,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const tu = await sb.storage.from("proofs").upload(tpath, thumb, { contentType: "image/png" });
         if (!tu.error) thumbs.push(tpath);
         out.push({ title, url: URL.createObjectURL(blob) });
+      }
+      if (before.length) {
+        const at = new Date().toISOString();
+        await sb.from("mockups").update({ archived_at: at }).in("id", before.map((x) => x.id));
+        const pids = before.map((x) => x.proof_id).filter(Boolean) as string[];
+        if (pids.length) await sb.from("proofs").update({ archived_at: at }).in("id", pids);
       }
       await syncOrder(true, thumbs);
       saveOk.current = true;

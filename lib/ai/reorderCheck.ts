@@ -70,7 +70,7 @@ export async function orderBrief(admin: SupabaseClient, orderId: string, needReo
   const ims = groups.flatMap((g) => g.imprints);
   const { data: inn } = await admin.from("order_internal").select("production_notes").eq("order_id", orderId).maybeSingle();
   const { data: files } = await admin.from("art_files").select("name, file_path, file_type").eq("order_id", orderId).order("created_at");
-  const { data: mks } = await admin.from("mockups").select("title, file_path, created_at").eq("order_id", orderId).order("created_at", { ascending: false }).limit(1);
+  const { data: mks } = await admin.from("mockups").select("title, file_path, created_at").eq("order_id", orderId).is("archived_at", null).order("created_at", { ascending: false }).limit(1);
   const dIds = [...new Set(ims.map((i) => i.design_id).filter(Boolean))] as string[];
   const { data: dsgs } = dIds.length ? await admin.from("designs").select("id, name, file_path, preview_path, notes").in("id", dIds) : { data: [] as { id: string; name: string; file_path: string; preview_path: string | null; notes: string | null }[] };
 
