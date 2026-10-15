@@ -655,5 +655,5 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
   );
 }
 
-export type MailView = { kind: "inbox" } | { kind: "folder"; path: string } | { kind: "search"; q: string };
+export type MailView = { kind: "inbox" } | { kind: "folder"; path: string } | { kind: "search"; q: string; /** a person or customer picked from the suggestions: their addresses */ who?: string[] };
 export const isTyping = (e: React.KeyboardEvent) => e.key === "Enter";

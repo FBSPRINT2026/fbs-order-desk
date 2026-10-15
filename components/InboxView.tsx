@@ -2,6 +2,7 @@
 import CcField from "@/components/CcField";
 import Link from "next/link";
 import HistoryLink from "@/components/HistoryLink";
+import MailSuggest from "@/components/MailSuggest";
 import { AppStartToggle } from "@/components/AppStart";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
@@ -99,10 +100,12 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [olderBusy, setOlderBusy] = useState(false);
   // searched over EWS (Oct 14): the whole mailbox, every year, at once — no "last 45 days" / "search older mail"
   const [searchAll, setSearchAll] = useState(false);
-  const runSearch = async (term: string) => {
+  /** `who`: a person or customer picked from the suggestions (their addresses); `term` is then their name, for the heading */
+  const runSearch = async (term: string, who?: string[]) => {
     if (term.trim().length < 2) return;
-    setView({ kind: "search", q: term.trim() }); setConvos(null); setCSel(null); setSNote(""); setPicked(false);
-    try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; all?: boolean }>({ do: "search", q: term.trim() }); setConvos(r.convos); setSearchAll(!!r.all); if (r.all && r.partial) setSNote("Some folders didn't answer, so there may be more."); }
+    setSugOpen(false);
+    setView({ kind: "search", q: term.trim(), ...(who?.length ? { who } : {}) }); setConvos(null); setCSel(null); setSNote(""); setPicked(false);
+    try { const r = await mailBox<{ convos: Convo[]; folders: number; partial: boolean; all?: boolean }>({ do: "search", q: term.trim(), ...(who?.length ? { who: who.join(",") } : {}) }); setConvos(r.convos); setSearchAll(!!r.all); if (r.all && r.partial) setSNote("Some folders didn't answer, so there may be more."); }
     catch (e) { setConvos([]); setSNote(e instanceof Error ? e.message : String(e)); }
   };
   // past the 45 days: searched live on request, added to the list
@@ -124,6 +127,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [pSheet, setPSheet] = useState(false), [pMore, setPMore] = useState(false);
   /** Select (Oct 15, Nick: "a quick select like the Mail app, check a bunch of emails and archive or black hole"):
    *  circles on the Inbox's emails, then one move for all of them */
+  /** the search suggestions under the search box (components/MailSuggest.tsx) */
+  const [sugOpen, setSugOpen] = useState(false);
   const [selMode, setSelMode] = useState(false), [chosen, setChosen] = useState<Set<string>>(new Set()), [bulk, setBulk] = useState(""), [bhAsk, setBhAsk] = useState(0);
   // the list can be hidden to give the email more room (remembered)
   // the list always shows beside the email (Oct 14: the hide arrow is gone)
@@ -217,6 +222,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
   // the email showing: the one picked, else the first in the list (after sending, the next one)
   const [q, setQ] = useState("");
   const listed = q.trim() ? shown.filter((r) => `${who(r.x)} ${r.x.from_email} ${r.x.subject} ${r.x.meta?.triage?.summary || ""}`.toLowerCase().includes(q.trim().toLowerCase())) : shown;
+  // the people in the Inbox now, for the search suggestions
+  const senders = useMemo(() => { const m = new Map<string, { name: string; email: string }>(); for (const i of ol || []) if (i.from_email && !m.has(i.from_email.toLowerCase())) m.set(i.from_email.toLowerCase(), { name: personName(i.from_name) || "", email: i.from_email }); return [...m.values()]; }, [ol]);
   const bkN = (k: Bk) => (ol || []).filter((i) => k === "all" || bucketOf(i) === k).length;
   const olShown = (ol || []).filter((i) => bk === "all" || bucketOf(i) === bk).filter((i) => {
     const t = q.trim().toLowerCase(), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined;
@@ -447,8 +454,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
           </div>
           <form className="pit-search" onSubmit={(e) => { e.preventDefault(); if (q.trim()) void runSearch(q); }}>
             <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all mail" aria-label="Search all mail" enterKeyHint="search" />
+            <input type="search" value={q} onChange={(e) => { setQ(e.target.value); setSugOpen(true); }} onFocus={() => setSugOpen(true)} onBlur={() => setTimeout(() => setSugOpen(false), 150)} placeholder="Search a name, company or anything" aria-label="Search all mail" enterKeyHint="search" />
           </form>
+          {sugOpen && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails); }} onText={(t) => void runSearch(t)} />}
           {box?.enabled && <div className={"pit-chk" + (boxStuck ? " bad" : "")}><i aria-hidden />{boxStuck ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}</div>}
           {view.kind === "inbox" && <div className="pit-ai">
             <button type="button" className="pit-ai-h" onClick={() => { setQ(""); setBk("all"); setOpen("brief"); setPicked(true); }}><span className="eh-ai-orb" aria-hidden>✦</span>Inbox summary<span className="pit-go" aria-hidden>›</span></button>
@@ -483,7 +491,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
           <div className="ibx2-list-h">
             {mode === "mail" && view.kind !== "inbox" ? <div className="mf-lh">
               {view.kind === "folder" ? <><b>{folderLabel(folders?.find((f) => f.path === view.path) || { name: view.path.split("/").pop() || view.path, special: "" })}</b><span className="faint">{folders?.find((f) => f.path === view.path)?.messages ?? ""} emails</span></>
-                : <><b>“{view.q}”</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link" onClick={() => { setQ(""); setView({ kind: "inbox" }); }}>Clear</button></>}
+                : <><b>{view.who?.length ? `With ${view.q}` : `“${view.q}”`}</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link" onClick={() => { setQ(""); setView({ kind: "inbox" }); }}>Clear</button></>}
             </div> : <div className="ibx2-tabs" role="tablist">
               {mode === "mail" ? BK.map((b) => (
                 <button key={b.k} type="button" role="tab" aria-selected={bk === b.k} className={bk === b.k ? "on" : ""} onClick={() => { setBk(b.k); setOpen(null); }}>{b.label} <span>{ol ? bkN(b.k) : ""}</span></button>
@@ -494,9 +502,10 @@ export default function InboxView({ mode }: { mode: Mode }) {
               </>}
             </div>}
             <div className="ibx2-find">
-              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (mode === "mail" && e.key === "Enter") { e.preventDefault(); void runSearch(q); } }} placeholder={mode === "mail" ? "Search all mail, then Enter" : "Search"} aria-label="Search email" title={mode === "mail" ? "Type a name, company, email or subject and press Enter: results show as conversations, what they sent and what you sent, in order" : undefined} />
+              <input type="search" value={q} onChange={(e) => { setQ(e.target.value); if (mode === "mail") setSugOpen(true); }} onFocus={() => mode === "mail" && setSugOpen(true)} onBlur={() => setTimeout(() => setSugOpen(false), 150)} onKeyDown={(e) => { if (e.key === "Escape") setSugOpen(false); if (mode === "mail" && e.key === "Enter") { e.preventDefault(); void runSearch(q); } }} placeholder={mode === "mail" ? "Search all mail, then Enter" : "Search"} aria-label="Search email" title={mode === "mail" ? "Type a name, company, email or subject and press Enter: results show as conversations, what they sent and what you sent, in order" : undefined} />
               {mode === "mail" && view.kind === "inbox" && <button type="button" className={"btn sm ghost ibx2-selbtn" + (selMode ? " on" : "")} title={selMode ? "Done selecting" : "Select emails"} aria-label={selMode ? "Done selecting" : "Select emails"} aria-pressed={selMode} onClick={() => (selMode ? endSelect() : setSelMode(true))}><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.8" /></svg></button>}
               
+            {mode === "mail" && sugOpen && <MailSuggest q={q} senders={senders} onPick={(p) => { setQ(p.label); void runSearch(p.label, p.emails); }} onText={(t) => void runSearch(t)} />}
             </div>
           </div>
           {/* the Inbox brief: always first, stays put while the list scrolls */}

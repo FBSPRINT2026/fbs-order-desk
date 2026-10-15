@@ -181,7 +181,7 @@ export async function ewsList(admin: SupabaseClient, acct: MailAccount, me: stri
  * folder at once, newest first; grouped into conversations.
  */
 export async function ewsSearch(admin: SupabaseClient, acct: MailAccount, me: string, q: string) {
-  const term = q.trim().replace(/[<>]/g, " ").slice(0, 120);
+  const term = q.trim().replace(/[<>]/g, " ").slice(0, 900);
   if (term.length < 2) return { convos: [] as Convo[], folders: 0, partial: false };
   const t = await ewsTree(acct);
   // the whole mailbox in one search, through Exchange's own "AllItems" folder (one index lookup instead of one per

@@ -52,8 +52,16 @@ export async function GET(req: Request) {
           // the server's own index: every year at once, so "older" has nothing more to add
           if (q.get("older") === "1") return NextResponse.json({ convos: [], folders: 0, partial: false, scope: "older", all: true });
           const t0 = Date.now();
-          const r = await ewsSearch(admin, acct, me, q.get("q") || "");
-          console.info(`mail search ews "${(q.get("q") || "").slice(0, 40)}": ${r.convos.length} conversations, ${r.folders} folders, ${Date.now() - t0}ms`);
+          // a person or customer picked from the suggestions (Oct 15, Nick: "if I search Cheri, ask: all emails from Cheri
+          // Ong?"): their addresses, and only the conversations they're in (not every email that mentions the name)
+          // an address (cheri@furry-feline.com) or a whole company's domain (@peticolasbrewing.com)
+          const who = (q.get("who") || "").split(",").map((e) => e.trim().toLowerCase()).filter((e) => /^([^\s@"]+)?@[^\s@"]+\.[a-z]{2,}$/.test(e)).slice(0, 12);
+          const r = await ewsSearch(admin, acct, me, who.length ? who.map((e) => `"${e.replace(/^@/, "")}"`).join(" OR ") : q.get("q") || "");
+          if (who.length) {
+            const theirs = (m: { from: string; to?: string[]; cc?: string[] }) => [m.from, ...(m.to || []), ...(m.cc || [])].some((x) => { const a = String(x || "").toLowerCase(); return who.some((w) => (w.startsWith("@") ? a.endsWith(w) : a === w)); });
+            r.convos = r.convos.filter((c) => c.msgs.some(theirs));
+          }
+          console.info(`mail search ews "${(q.get("q") || "").slice(0, 40)}"${who.length ? ` (${who.length} addresses)` : ""}: ${r.convos.length} conversations, ${r.folders} folders, ${Date.now() - t0}ms`);
           return NextResponse.json({ ...r, scope: "all", all: true });
         }
         if (what === "message" && (isEwsUid(uid) || q.get("live") === "1")) {
@@ -154,7 +162,8 @@ export async function GET(req: Request) {
     }
     // search: the last 45 days from the cache (instant); older mail on request, live
     if (what === "search") {
-      const term = q.get("q") || "";
+      // a person picked from the suggestions: their (first) address
+      const term = (q.get("who") || "").split(",")[0]?.trim() || q.get("q") || "";
       const addrs = [...(await customerAddrs(admin, term.trim()))];
       const FREE = /@(gmail|yahoo|hotmail|outlook|aol|icloud|live|msn|comcast|att|sbcglobal)\./i;
       const extra = [...new Set([...addrs.filter((a) => FREE.test(a)), ...addrs.filter((a) => !FREE.test(a)).map((a) => "@" + a.split("@")[1])])];
