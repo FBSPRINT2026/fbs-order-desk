@@ -4,6 +4,7 @@ import { orderGroups, PAY_TERMS, payDueDate, type Design, type Order } from "@/l
 import { fmtDateLong, money } from "@/lib/format";
 import PortalDash, { type DashNeed, type DashPast, type DashThread } from "@/components/PortalDash";
 import { jobFor } from "@/lib/portalJobs";
+import { ourStatusFor } from "@/lib/printavoSend";
 import StartPanel from "@/components/StartPanel";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
 import { customerGeneralMessage, starMyDesign, starMyMockup } from "@/app/portal/actions";
@@ -170,6 +171,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       lastMsg: c ? { from: c.last.author_type === "staff" ? shopName : "you", text: clip(c.last.body, 60), href: msgLink(o.id) } : undefined });
   };
   const jobs = jobOrders.map(jobOf), pastJobs = doneRecent.map(jobOf);
+  const IDX_AFTER_ART = ["blanks", "production", "ready"];
   // what's waiting on them, with a picture and one button
   const due = aOrders.filter((o) => o.type === "invoice" && o.balance > 0.004).reduce((a, o) => a + o.balance, 0);
   const needs: DashNeed[] = attention.map((a, i) => {
@@ -182,10 +184,15 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   });
   if (due > 0.004) needs.push({ key: "pay", kind: "pay", title: "Pay your balance", text: `${money(due)} due on your orders.`, pic: "", href: link("/portal?area=payments"), cta: `Pay ${money(due)}` });
   // order again: their latest finished jobs (new and from before the portal), with a picture when we have one
-  const archTop = archived.filter((a) => a.kind === "invoice").slice(0, 3);
+  // jobs still open in Printavo (synced every few minutes until Printavo is turned off) show on the timeline too,
+  // their Printavo status read the way our own orders' statuses are (lib/printavoSend.ts ourStatusFor)
+  const since = new Date(Date.now() - 150 * 86400000).toISOString().slice(0, 10);
+  const pvOpen = archived.filter((a) => a.kind === "invoice" && (a.order_date || "") >= since).map((a) => ({ a, st: ourStatusFor(a.status_name || "", "invoice") }))
+    .filter((x) => x.st !== "completed" && !/complete|picked up|delivered|cancel/i.test(x.a.status_name || "")).slice(0, Math.max(0, 6 - jobs.length));
+  const archTop = archived.filter((a) => a.kind === "invoice" && !pvOpen.some((x) => x.a.id === a.id) && (ourStatusFor(a.status_name || "", "invoice") === "completed" || (a.order_date || "") < since)).slice(0, 3);
   const archPics: Record<string, string> = {};
-  if (archTop.length) {
-    const { data: ad } = await admin.from("archived_orders").select("id, files, data").in("id", archTop.map((a) => a.id));
+  if (archTop.length || pvOpen.length) {
+    const { data: ad } = await admin.from("archived_orders").select("id, files, data").in("id", [...archTop.map((a) => a.id), ...pvOpen.map((x) => x.a.id)]);
     const want: { id: string; path: string }[] = [];
     ((ad || []) as { id: string; files: Record<string, string> | null; data: PvOrder }[]).forEach((r) => {
       // the imprint mockups first (the shirt with the art), pictures only (not barcodes or file icons)
@@ -196,6 +203,11 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const { data: sg } = want.length ? await admin.storage.from("proofs").createSignedUrls(want.map((w) => w.path), 3600) : { data: [] };
     want.forEach((w, i) => { if (sg?.[i]?.signedUrl) archPics[w.id] = sg[i].signedUrl!; });
   }
+  pvOpen.forEach(({ a, st }) => {
+    const o = { id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", status: st || "approved", type: "invoice", due_date: a.due_date, created_at: a.order_date || "", submitted_at: a.order_date || "",
+      production_date: null, delivery_method: "", groups: [], lines: [], qty: a.qty || 0, price_type: "retail", completed_at: null, updated_at: a.order_date || "" } as unknown as Order;
+    jobs.push(jobFor(o, { href: archHref(a.id), pic: archPics[a.id] || "", approvedArt: (IDX_AFTER_ART as string[]).includes(st || ""), goods: null, customerGoods: false, newMsgs: 0 }));
+  });
   const past: DashPast[] = [
     ...pastPortal.slice(0, 3).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", when: short(o.completed_at || o.due_date || o.created_at), qty: o.qty, pic: picOf(o), href: link(`/portal/orders/${o.id}`), date: o.completed_at || o.due_date || o.created_at })),
     ...archTop.map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, date: a.due_date || a.order_date || "" })),

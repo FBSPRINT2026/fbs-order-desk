@@ -31,9 +31,10 @@ export function jobFor(o: Order, x: { href: string; pic: string; pendingProof?: 
   const colors = [...new Set(lines.map((l) => l.color).filter(Boolean))];
   const garment = lines[0]?.garment || "pieces";
   const prints = groups.flatMap((g) => g.imprints).map((d) => d.location).filter(Boolean);
-  const how = o.delivery_method === "ship" ? "Shipped" : o.delivery_method === "deliver" ? "Delivered" : "Picked up";
+  // a job from Printavo has no delivery method here: "Ready" / "Done"
+  const how = !o.delivery_method ? "Done" : o.delivery_method === "ship" ? "Shipped" : o.delivery_method === "deliver" ? "Delivered" : "Picked up";
   const summary = [`${qty} ${qty === 1 ? "piece" : garment.toLowerCase().includes("tee") ? "tees" : "pieces"}`, colors.slice(0, 2).join(", ") + (colors.length > 2 ? ` +${colors.length - 2}` : ""),
-    prints.length ? `${prints.length} print${prints.length === 1 ? "" : "s"} (${prints.slice(0, 2).join(", ")})` : "", o.delivery_method === "ship" ? "shipping" : o.delivery_method === "deliver" ? "delivery" : "pickup"].filter(Boolean).join(" · ");
+    prints.length ? `${prints.length} print${prints.length === 1 ? "" : "s"} (${prints.slice(0, 2).join(", ")})` : "", !o.delivery_method ? "" : o.delivery_method === "ship" ? "shipping" : o.delivery_method === "deliver" ? "delivery" : "pickup"].filter(Boolean).join(" · ");
 
   let at = IDX[o.status] ?? 1;
   // a proof waiting on them holds the job at art approval (unless it's already printing or past it)
@@ -49,7 +50,7 @@ export function jobFor(o: Order, x: { href: string; pic: string; pendingProof?: 
     o.due_date ? day(o.due_date) : "",
     done ? short(o.completed_at || o.updated_at) : "",
   ];
-  const labels = ["Order placed", "Art approved", "Garments in", "Printing", o.delivery_method === "pickup" || !o.delivery_method ? "Ready for pickup" : o.delivery_method === "ship" ? "Ready to ship" : "Ready to deliver", how];
+  const labels = ["Order placed", "Art approved", "Garments in", "Printing", !o.delivery_method ? "Ready" : o.delivery_method === "pickup" ? "Ready for pickup" : o.delivery_method === "ship" ? "Ready to ship" : "Ready to deliver", how];
   const keys = ["placed", "art", "goods", "print", "ready", "out"];
   const steps: JobStep[] = labels.map((label, i) => ({ key: keys[i], label: i === 1 && x.pendingProof && at <= 1 ? "Art approval" : label, state: done || i < at ? "done" : i === at ? "cur" : "todo", sub: sub[i] }));
   // finished: everything done
@@ -60,7 +61,7 @@ export function jobFor(o: Order, x: { href: string; pic: string; pendingProof?: 
     [x.pendingProof ? "Your proof is ready to look over." : "We're working on your artwork.", x.pendingProof ? "Once you approve, we get it on press." : "We'll send you a proof to approve."],
     [x.customerGoods ? "We're waiting on your garments." : "Your garments are on the way to us.", "When they're in and counted, we print."],
     ["Your job is on press.", o.due_date ? `It's ready ${day(o.due_date)}.` : "We'll let you know when it's ready."],
-    [o.delivery_method === "ship" ? "Packed and ready to ship." : o.delivery_method === "deliver" ? "Ready to deliver." : "Ready for pickup!", o.delivery_method === "pickup" || !o.delivery_method ? "Come by anytime during shop hours." : "You'll get tracking when it goes out."],
+    [!o.delivery_method ? "Your order is ready." : o.delivery_method === "ship" ? "Packed and ready to ship." : o.delivery_method === "deliver" ? "Ready to deliver." : "Ready for pickup!", !o.delivery_method ? "We'll be in touch about pickup or shipping." : o.delivery_method === "pickup" ? "Come by anytime during shop hours." : "You'll get tracking when it goes out."],
     ["All done.", "Thanks for printing with us."],
   ];
   const [now, next] = done ? NOW[5] : NOW[Math.min(at, 4)];
