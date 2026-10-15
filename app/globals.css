@@ -7593,3 +7593,59 @@ a.pdn-tag:hover{text-decoration:underline}
 }
 /* phone: no empty AI card (an email not summarised yet, with no buttons) */
 @media (max-width:760px) and (pointer:coarse){ .eh .eh-ai:not(:has(.eh-sum)):not(:has(.eh-ai-go)):not(:has(.eh-ai-btn)){display:none} }
+
+/* ───────── Phone Inbox list (Oct 15, Nick picked the mockup): Inbox ▾, check, search; a light AI card with the
+   summary and the filters; the list edge to edge. The desktop's heading, folder bar, tabs and search are hidden. */
+.pit{display:none}
+@media (max-width:760px) and (pointer:coarse){
+  body:has(.pit) .ibx2-head,body:has(.pit) .mf-bar{display:none!important}
+  body:has(.pit):not(:has(.ibx2.picked)) .main{padding-left:0!important;padding-right:0!important;padding-top:0!important;background:var(--surface)}
+  body:has(.pit):not(:has(.ibx2.picked)){background:var(--surface)}
+  body:has(.ibx2.picked .eh-bar.has-pn) .pit{display:none!important}
+  .pit{display:block;padding:10px 16px 0;background:var(--surface)}
+  .pit-top{display:flex;align-items:center;gap:4px}
+  .pit-top .spacer{flex:1}
+  .pit-fold{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:2px 0;font:inherit;font-family:var(--display);font-size:25px;font-weight:800;letter-spacing:-.01em;color:var(--ink);cursor:pointer}
+  .pit-fold svg{width:18px;height:18px;fill:none;stroke:var(--accent);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  .pit-n{font-family:var(--body);font-size:12px;font-weight:700;color:#fff;background:var(--accent);border-radius:999px;padding:1px 7px;line-height:18px}
+  .pit-ic{width:38px;height:38px;border:0;border-radius:10px;background:none;color:var(--accent);display:grid;place-items:center;cursor:pointer}
+  .pit-ic svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .pit-ic svg.spin{animation:ptr-spin .8s linear infinite}
+  .pit-ic:active{background:var(--surface-2)}
+  .pit-search{margin-top:6px;height:38px;border-radius:10px;background:var(--surface-2);display:flex;align-items:center;gap:8px;padding:0 12px}
+  .pit-search svg{width:17px;height:17px;flex:none;fill:none;stroke:var(--ink-3);stroke-width:2;stroke-linecap:round}
+  .pit-search input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:16px;color:var(--ink);padding:0;outline:none;box-shadow:none;height:100%}
+  .pit-chk{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-3);padding:5px 2px 0}
+  .pit-chk i{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+  .pit-chk.bad i{background:var(--danger)}.pit-chk.bad{color:var(--danger)}
+  .pit-ai{margin:10px 0 10px;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--ai-c,#6A5AE0) 5%,var(--surface));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ai-c,#6A5AE0) 14%,transparent)}
+  .pit-ai-h{display:flex;align-items:center;gap:6px;width:100%;border:0;background:none;padding:0;font:inherit;font-size:11.5px;font-weight:700;color:var(--ai-c,#6A5AE0);cursor:pointer;text-align:left}
+  .pit-ai-h .eh-ai-orb{width:16px;height:16px;border-radius:5px;font-size:9px}
+  .pit-go{margin-left:auto;font-size:18px;line-height:1}
+  .pit-ai p{margin:5px 0 8px;font-size:13px;line-height:1.35;color:var(--ink-2)}
+  .pit-qa{display:flex;gap:6px}
+  .pit-qa button{flex:1 1 auto;min-width:0;height:30px;display:inline-flex;align-items:center;justify-content:center;gap:4px;border:0;border-radius:8px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);color:var(--accent);font:inherit;font-size:11.5px;font-weight:600;white-space:nowrap;padding:0 6px;cursor:pointer}
+  .pit-qa button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .pit-qa button b{font-size:10.5px;color:#fff;background:var(--accent);border-radius:999px;padding:0 5px;line-height:15px}
+  .pit-qa button.on{background:var(--accent);color:#fff;box-shadow:none}
+  .pit-qa button.on b{background:#fff;color:var(--accent)}
+  /* the folders sheet */
+  .pit-bg{z-index:2600}
+  .pit-f{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;padding:11px 10px;border-radius:10px;font:inherit;font-size:16px;color:var(--ink);text-align:left;cursor:pointer}
+  .pit-f svg{width:20px;height:20px;flex:none;fill:none;stroke:var(--accent);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .pit-f span:first-of-type{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pit-f.on{background:var(--accent-soft);font-weight:700}
+  .pit-f.sub{font-size:15px}
+  .pit-fc{font-size:13px;color:var(--ink-3)}
+  .pit-set{padding:4px 10px}
+  .pit-set .app-start{width:100%;justify-content:flex-start;height:44px;font-size:15px;padding:0}
+  /* the list, edge to edge */
+  .ibx2:has(~ * .pit), .pit ~ .ibx2{margin-top:0}
+  body:has(.pit) .ibx2-list{border:0;border-radius:0;border-top:1px solid var(--line-2);background:var(--surface)}
+  body:has(.pit) .ibx2-list-h{padding:0;border:0}
+  body:has(.pit) .ibx2-list-h .ibx2-tabs,body:has(.pit) .ibx2-list-h .ibx2-find,body:has(.pit) .ibx2-briefbtn{display:none}
+  body:has(.pit) .ibx2-list-h .mf-lh{padding:8px 16px}
+  body:has(.pit) .ibx2-item{padding:11px 16px 11px 13px;border-bottom-color:var(--line-2)}
+  body:has(.pit) .ibx2-item-1 b{font-size:15px}
+}
+@media (max-width:420px) and (pointer:coarse){ .pit-qa{gap:4px} .pit-qa button{padding:0 4px;font-size:11px;gap:3px} .pit-qa button svg{display:none} }

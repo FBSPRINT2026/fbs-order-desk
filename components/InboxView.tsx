@@ -120,6 +120,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
   };
   const [ol, setOl] = useState<InboxItem[] | null>(null); // my Outlook Inbox, mirrored
   const [settings, setSettings] = useState(false);
+  /** phones: the folders-and-settings sheet from "Inbox ▾" (Oct 15, Nick) */
+  const [pSheet, setPSheet] = useState(false), [pMore, setPMore] = useState(false);
   // the list can be hidden to give the email more room (remembered)
   // the list always shows beside the email (Oct 14: the hide arrow is gone)
   const [listOpen, setListOpen] = useState(true);
@@ -396,6 +398,54 @@ export default function InboxView({ mode }: { mode: Mode }) {
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
       {afterSend && <AfterSend key={afterSend.msg + (afterSend.sent?.body.length || 0)} a={afterSend} onArchive={() => void afterArchive()} onClose={() => setAfterSend(null)} />}
 
+      {/* phones (Oct 15, Nick: "make the email home page match the message page: folder and search up top, then the
+          quick actions"): Inbox ▾ (folders and settings), check now, search; a light AI card with the summary and the
+          filters; the desktop's heading, folder bar and tabs are hidden there (globals.css .pit) */}
+      {mode === "mail" && (() => {
+        const cur = view.kind === "folder" ? folders?.find((f) => f.path === view.path) : folders?.find((f) => f.special === "\\Inbox");
+        const curName = view.kind === "search" ? "Search" : view.kind === "folder" ? folderLabel(cur || { name: view.path.split("/").pop() || view.path, special: "" }) : "Inbox";
+        const unread = view.kind === "inbox" ? (ol || []).filter((i) => i.unread).length : cur?.unseen || 0;
+        const main = (folders || []).filter((f) => /\\(Inbox|Sent|Archive|Drafts)/.test(f.special));
+        const sane = (folders || []).filter((f) => f.sane), rest = (folders || []).filter((f) => !main.includes(f) && !f.sane && !/\\(Junk|Trash)/.test(f.special));
+        const go = (path: string, inbox: boolean) => { setPSheet(false); setPMore(false); setQ(""); if (inbox) { setView({ kind: "inbox" }); } else void openFolder(path); };
+        const sum = [counts.reply ? `${counts.reply} customer${counts.reply === 1 ? "" : "s"} need${counts.reply === 1 ? "s" : ""} a reply${counts.urgent ? ` (${counts.urgent} urgent)` : ""}` : "No customer waiting on a reply", bkN("todo") ? `${bkN("todo")} to-do${bkN("todo") === 1 ? "" : "s"}` : "", bkN("event") ? `${bkN("event")} event${bkN("event") === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+        return <div className="pit">
+          <div className="pit-top">
+            <button type="button" className="pit-fold" onClick={() => setPSheet(true)} aria-haspopup="menu">{curName}{unread > 0 && <span className="pit-n">{unread}</span>}<svg viewBox="0 0 24 24" aria-hidden><path d="M6 9l6 6 6-6" /></svg></button>
+            <span className="spacer" />
+            {box?.enabled && <button type="button" className="pit-ic" aria-label="Check for new email" disabled={!!busy} onClick={async () => { setBusy("check"); const r = await checkMailNow(); setBusy(""); if (!r.ok) flash(r.error); else { flash("Checked."); load(); } }}><svg viewBox="0 0 24 24" aria-hidden className={busy === "check" ? "spin" : ""}><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5" /></svg></button>}
+            <button type="button" className="pit-ic" aria-label="Folders and settings" onClick={() => setPSheet(true)}><svg viewBox="0 0 24 24" aria-hidden><circle cx="5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="19" cy="12" r="1.3" /></svg></button>
+          </div>
+          <form className="pit-search" onSubmit={(e) => { e.preventDefault(); if (q.trim()) void runSearch(q); }}>
+            <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all mail" aria-label="Search all mail" enterKeyHint="search" />
+          </form>
+          {box?.enabled && <div className={"pit-chk" + (boxStuck ? " bad" : "")}><i aria-hidden />{boxStuck ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}</div>}
+          {view.kind === "inbox" && <div className="pit-ai">
+            <button type="button" className="pit-ai-h" onClick={() => { setQ(""); setBk("all"); setOpen("brief"); setPicked(true); }}><span className="eh-ai-orb" aria-hidden>✦</span>Inbox summary<span className="pit-go" aria-hidden>›</span></button>
+            <p>{ol ? sum : "Loading…"}</p>
+            <div className="pit-qa" role="tablist">
+              {([["customer", "Customers", TbIcon.reply], ["todo", "To-dos", TbIcon.check], ["event", "Events", <svg key="e" viewBox="0 0 24 24" aria-hidden><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></svg>], ["all", "All", null]] as [Bk, string, React.ReactNode][]).map(([k, label, icon]) => (
+                <button key={k} type="button" role="tab" aria-selected={bk === k} className={bk === k ? "on" : ""} onClick={() => { setBk(k); setOpen(null); }}>{icon}{label}{ol && <b>{bkN(k)}</b>}</button>
+              ))}
+            </div>
+          </div>}
+          {pSheet && <div className="pbar-bg pit-bg" onClick={() => setPSheet(false)}>
+            <div className="pbar-sheet" role="menu" onClick={(e) => e.stopPropagation()}>
+              <div className="ps-grab" aria-hidden />
+              <div className="pbar-t">Folders</div>
+              {main.map((f) => <button key={f.path} type="button" role="menuitem" className={"pit-f" + ((f.special === "\\Inbox" ? view.kind === "inbox" : view.kind === "folder" && view.path === f.path) ? " on" : "")} onClick={() => go(f.path, f.special === "\\Inbox")}>{f.special === "\\Sent" ? <svg viewBox="0 0 24 24" aria-hidden><path d="m4 12 16-8-6 16-2-6z" /></svg> : f.special === "\\Archive" ? TbIcon.archive : f.special === "\\Inbox" ? <svg viewBox="0 0 24 24" aria-hidden><path d="M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8v6H4z" /></svg> : TbIcon.file}<span>{f.special === "\\Inbox" ? "Inbox" : folderLabel(f)}</span>{(f.special === "\\Inbox" ? (ol || []).filter((i) => i.unread).length : f.unseen) > 0 && <span className="pit-fc">{f.special === "\\Inbox" ? (ol || []).filter((i) => i.unread).length : f.unseen}</span>}</button>)}
+              {sane.map((f) => <button key={f.path} type="button" role="menuitem" className={"pit-f" + (view.kind === "folder" && view.path === f.path ? " on" : "")} onClick={() => go(f.path, false)}>{TbIcon.news}<span>{folderLabel(f)}</span>{f.unseen > 0 && <span className="pit-fc">{f.unseen}</span>}</button>)}
+              {rest.length > 0 && <button type="button" className="pit-f" onClick={() => setPMore(!pMore)} aria-expanded={pMore}>{TbIcon.file}<span>{pMore ? "Fewer folders" : "More folders…"}</span></button>}
+              {pMore && rest.map((f) => <button key={f.path} type="button" role="menuitem" className={"pit-f sub" + (view.kind === "folder" && view.path === f.path ? " on" : "")} style={{ paddingLeft: 14 + Math.min(3, f.depth) * 14 }} onClick={() => go(f.path, false)}>{TbIcon.file}<span>{folderLabel(f)}</span>{f.unseen > 0 && <span className="pit-fc">{f.unseen}</span>}</button>)}
+              <div className="pbar-t">Settings</div>
+              <div className="pit-set"><AppStartToggle path="/shop/inbox" label="Email" /></div>
+              {st && !st.viewing && <button type="button" className="pit-f" onClick={() => { setPSheet(false); setSettings(true); }}><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg><span>{box?.enabled ? "Email settings" : "Connect my email"}</span></button>}
+              <button type="button" className="pbar-cancel" onClick={() => setPSheet(false)}>Close</button>
+            </div>
+          </div>}
+        </div>;
+      })()}
       {mode === "mail" && <FolderBar folders={folders} current={view.kind === "folder" ? view.path : view.kind === "inbox" ? (folders?.find((f) => f.special === "\\Inbox")?.path || "INBOX") : ""} onPick={(p) => { setQ(""); void openFolder(p); }} />}
       <div className={"ibx2" + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
         {(listOpen || !hasSel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
