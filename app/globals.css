@@ -8250,3 +8250,12 @@ a.pdn-tag:hover{text-decoration:underline}
 .ord .eo-chip{background:var(--surface);border-color:var(--line)}
 /* prints: the logo tile keeps the shirt color (the one color that means something), everything else stays plain */
 .ord .imp-mock .mk-big{border-color:var(--line-2)}
+/* (Oct 15, Nick) the customer's details plain on the panel (no box); "Customer supplied goods" big across the middle of
+   the group again; titles with a short horizontal rainbow under them instead of the little bar on the left */
+.ord .cust-row{background:none;border:0;padding:4px 0 0}
+.ord .cs-banner{display:block;text-align:center;font-family:var(--display);font-stretch:85%;font-size:16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--surface));border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);padding:9px 16px;margin:0}
+.ord .cs-banner::before{display:none}
+.ord .panel-h h2,.ord .lbl.gsec,.ord .sbx-h.gsec{position:relative;padding-left:0;padding-bottom:7px}
+.ord .panel-h h2::before{display:none}
+.ord .panel-h h2::after,.ord .lbl.gsec::after,.ord .sbx-h.gsec::after{content:"";position:absolute;left:0;bottom:0;width:28px;height:3px;border-radius:2px;background:linear-gradient(90deg,var(--fbs-blue) 0%,var(--fbs-salmon) 52%,var(--fbs-orange) 100%)}
+.ord .lbl.gsec,.ord .sbx-h.gsec{margin-bottom:6px}
