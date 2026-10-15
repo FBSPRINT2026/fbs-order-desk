@@ -23,7 +23,13 @@ export type Change = { key: string; what: "Quantities" | "Price" | "Setup fees" 
   /** a production note change: the text to save as the order's production notes (kept outside the order row) */ note?: string };
 // Send to Printavo adds this line to the production note; it isn't a change
 const SENT_LINE = /\s*Entered in the new FBS system as order #\d+\.\s*$/;
-const noteText = (x: string) => (x || "").replace(/\r\n?/g, "\n").replace(SENT_LINE, "").trim();
+/** a note as plain text: Printavo keeps notes as HTML ("<div>…<br>…</div>"), which showed as code in our production
+ *  notes box once accepted (Oct 15, #40003) */
+export const htmlText = (x: string) => !/<[a-z/][^>]*>/i.test(x || "") ? x || "" : (x || "")
+  .replace(/<br\s*\/?>/gi, "\n").replace(/<\/(div|p|li|h\d)>/gi, "\n").replace(/<li[^>]*>/gi, "• ").replace(/<[^>]+>/g, "")
+  .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+  .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+const noteText = (x: string) => htmlText(x || "").replace(/\r\n?/g, "\n").replace(SENT_LINE, "").trim();
 
 export const snapOf = (o: Order) => (o as Order & { printavo_state?: { pv?: PvSnap } | null }).printavo_state?.pv || null;
 

@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getOrder, pv, transitionWrite, PrintavoError } from "@/lib/printavo";
+import { htmlText } from "@/lib/printavoChanges";
 import { calcOrder, imprintLabel, mergeSettings, orderGroups, SIZES, ST, type Order, type StatusKey } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/config";
 
@@ -344,8 +345,8 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
   if (!((o.number as number) >= 40000 && (o.number as number) < 50000)) throw new PrintavoError("Only orders #40000-#49999 sync with Printavo.");
   const p = await getOrder(String(o.printavo_id));
   const snap: PvSnap = {
-    at: new Date().toISOString(), visualId: p.visualId, status: p.status.name, total: p.total, kind: p.kind, productionNote: p.productionNote || "",
-    customerNote: p.customerNote || "", nickname: p.nickname || "", po: p.poNumber || "", customerDue: day(p.customerDueAt), productionDue: centralDay(p.dueAt),
+    at: new Date().toISOString(), visualId: p.visualId, status: p.status.name, total: p.total, kind: p.kind, productionNote: htmlText(p.productionNote || ""),
+    customerNote: htmlText(p.customerNote || ""), nickname: p.nickname || "", po: p.poNumber || "", customerDue: day(p.customerDueAt), productionDue: centralDay(p.dueAt),
     discount: p.discount || 0, discountPct: !!p.discountAsPercentage, salesTax: p.salesTax || 0,
     imprints: p.groups.map((g) => g.imprints.map((i) => i.details || "")),
     payments: p.transactions.filter((t) => /^(Payment|Refund|Return)$/.test(t.kind)).map((t) => ({ id: t.id, kind: t.kind, amount: t.amount, category: t.category, date: day(t.date) || t.date, processing: t.processing })),
