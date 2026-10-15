@@ -189,15 +189,21 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
           <b className="a-to r num">{money(gc.sub)}</b>
         </div>
 
+        {/* the mockup big on the left, the imprints beside it (Oct 15, Nick: "make it large and move to the left of the
+            imprint… about 3 times larger… all the imprint methods and info to the right") */}
+        <div className="imp-wrap">
+        <div className="imp-mock">
+          {(g.mockupThumbs || []).filter((p) => thumbUrls?.[p]).length
+            ? (g.mockupThumbs || []).map((p) => thumbUrls?.[p] ? <a key={p} href={thumbUrls[p]} target="_blank" rel="noreferrer" className="mk-big" title="Open the mockup"><img src={thumbUrls[p]} alt="Mockup" /></a> : null)
+            : <div className="mk-none">{g.mockupSkipped ? "No mockup" : "No mockup yet"}</div>}
+          {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
+          {onMockup && <button className={"btn sm" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
+          {g.mockupAt && <span className="faint mk-when">Saved {new Date(g.mockupAt).toLocaleDateString()}</span>}
+          {blockMsg && mockupBlock && <span className="ink-warn" style={{ margin: 0 }}>{blockMsg}</span>}
+        </div>
         <div className="imprints">
           <div className="imp-top">
             <div className="lbl">IMPRINTS</div>
-            {onMockup && <button className={"btn sm" + (locked ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>{g.mockupAt ? "Edit mockup" : "Create mockup"}</button>}
-            {blockMsg && mockupBlock && <span className="ink-warn" style={{ margin: 0 }}>{blockMsg}</span>}
-            {g.mockupAt && <span className="faint" style={{ fontSize: 12 }}>Mockup saved {new Date(g.mockupAt).toLocaleDateString()}</span>}
-            {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
-            {(g.mockupThumbs || []).map((p) => thumbUrls?.[p] ? <a key={p} href={thumbUrls[p]} target="_blank" rel="noreferrer" className="mk-thumb" title="Open the mockup"><img src={thumbUrls[p]} alt="Mockup" /></a> : null)}
-            {!g.mockupAt && g.mockupSkipped && <span className="faint" style={{ fontSize: 12 }}>No mockup</span>}
           </div>
           {locked && askSkip && (
             <div className="confirm-bar">
@@ -294,6 +300,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
           <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>
           </div>
           </div>
+        </div>
         </div>
 
         <div className="grp-foot">

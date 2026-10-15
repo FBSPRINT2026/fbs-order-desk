@@ -883,6 +883,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
           </section>
+          {o.price_type === "wholesale" && o.type === "invoice" && (
+            <section className="panel">
+              <div className="panel-h"><h2>Customer supplied goods</h2></div>
+              <div className="panel-b"><ShopGoods orderIds={[o.id]} customerId={o.customer_id} compact /></div>
+            </section>
+          )}
           <ChecksPanel checks={checks} orderId={o.id} save={save} reorder={/Reorder of (Printavo )?#\d+/.test(o.notes || "")} />
           </aside>
         </div>
@@ -899,12 +905,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </ProductionPanel>
           </div>
           <aside className="ed-aside">
-          {o.price_type === "wholesale" && o.type === "invoice" && (
-            <section className="panel">
-              <div className="panel-h"><h2>Customer supplied goods</h2></div>
-              <div className="panel-b"><ShopGoods orderIds={[o.id]} customerId={o.customer_id} compact /></div>
-            </section>
-          )}
+          
             <JobLabor orderId={o.id} qty={o.qty} total={+o.total || 0} />
           </aside>
         </div>

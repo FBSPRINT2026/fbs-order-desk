@@ -8051,3 +8051,15 @@ a.pdn-tag:hover{text-decoration:underline}
 .bulk-bar .btn.danger.armed{background:var(--danger);border-color:var(--danger);color:#fff}
 .tbl tr.picked td{background:color-mix(in srgb,var(--danger) 6%,var(--surface))}
 .tbl tr.nopick{opacity:.55}
+/* a line item group: the mockup big on the left (about 3× the old thumbnail), the imprints to its right (Oct 15, Nick) */
+.imp-wrap{display:grid;grid-template-columns:200px minmax(0,1fr);gap:18px;align-items:start;border-top:1px dashed var(--line);padding-top:12px}
+.imp-wrap>.imprints{border-top:0;padding-top:0;min-width:0}
+.imp-mock{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+.mk-big{display:block;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;line-height:0}
+.mk-big img{width:100%;height:auto;max-height:240px;object-fit:contain;display:block}
+.mk-big:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.mk-none{display:grid;place-items:center;height:170px;border:1.5px dashed var(--line);border-radius:12px;color:var(--ink-3);font-size:13px;background:var(--surface-2)}
+.imp-mock .btn{justify-content:center}
+.mk-when{font-size:12px;text-align:center}
+@media (max-width:1100px){ .imp-wrap{grid-template-columns:140px minmax(0,1fr);gap:12px} }
+@media (max-width:760px){ .imp-wrap{grid-template-columns:1fr} .imp-mock{flex-direction:row;flex-wrap:wrap;align-items:center} .mk-big{width:140px} .mk-none{height:90px;flex:1} }
