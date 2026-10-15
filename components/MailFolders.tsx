@@ -393,7 +393,7 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
  * the whole email, no box, and the earlier emails it quotes folded away (they're in the conversation list) until
  * "Show the earlier emails" is tapped (QuoteToggle puts .show-q on the frame's body)
  */
-export const PHONE_MAIL_CSS = `@media (max-width:760px) and (pointer:coarse){html,body{padding:0 0 4px!important;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important;color:#1d2433}body p,body div,body span,body td,body li,body font,body a,body pre,body b,body strong,body i,body em{font-family:inherit!important;font-size:14px!important;line-height:1.5!important}body p{margin:0 0 10px}body:not(.show-q) blockquote,body:not(.show-q) .gmail_quote,body:not(.show-q) .yahoo_quoted,body:not(.show-q) #divRplyFwdMsg,body:not(.show-q) #divRplyFwdMsg~*,body:not(.show-q) #appendonsend~*,body:not(.show-q) div[type=cite],body:not(.show-q) div:has(+blockquote),body:not(.show-q) div:has(+br+blockquote){display:none!important}body.show-q blockquote{margin:8px 0!important;padding:0 0 0 10px!important;border-left:2px solid #d5dbe3!important;color:#5a6577}body.show-q blockquote *{color:#5a6577!important}}`;
+export const PHONE_MAIL_CSS = `@media (max-width:760px) and (pointer:coarse){html,body{padding:0 0 4px!important;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important;color:#1d2433}body p,body div,body span,body td,body li,body font,body a,body pre,body b,body strong,body i,body em{font-family:inherit!important;font-size:14px!important;line-height:1.5!important}body p{margin:0 0 10px}body.fold-q:not(.show-q) blockquote,body.fold-q:not(.show-q) .gmail_quote,body.fold-q:not(.show-q) .yahoo_quoted,body.fold-q:not(.show-q) #divRplyFwdMsg,body.fold-q:not(.show-q) #divRplyFwdMsg~*,body.fold-q:not(.show-q) #appendonsend~*,body.fold-q:not(.show-q) div[type=cite],body.fold-q:not(.show-q) div:has(+blockquote),body.fold-q:not(.show-q) div:has(+br+blockquote){display:none!important}body.show-q blockquote{margin:8px 0!important;padding:0 0 0 10px!important;border-left:2px solid #d5dbe3!important;color:#5a6577}body.show-q blockquote *{color:#5a6577!important}}`;
 const HEAD = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}table img{max-width:none}table{max-width:100%}${PHONE_MAIL_CSS}</style>`;
 /** how tall an email's frame needs to be: its content, not the frame's current height (documentElement.scrollHeight
  *  never drops below the frame, so folding the quoted emails away left a blank gap) */
@@ -405,9 +405,24 @@ export function frameHeight(d: Document) {
 const QUOTED = /<blockquote|gmail_quote|yahoo_quoted|divRplyFwdMsg|appendonsend/i;
 /** phones: "Show the earlier emails" under an email whose quoted replies are folded away (PHONE_MAIL_CSS) */
 export function QuoteToggle({ html, frame, fit }: { html: string | null; frame: React.RefObject<HTMLIFrameElement | null>; fit: () => void }) {
-  const [on, setOn] = useState(false);
-  useEffect(() => { setOn(false); }, [html]);
-  if (!html || !QUOTED.test(html)) return null;
+  const [on, setOn] = useState(false), [folded, setFolded] = useState(false);
+  // only a reply's quoted earlier emails are folded: the email has to say "… wrote:" / "From: … Sent:" / "Original
+  // Message" and have the quote (Oct 15: a marketing email's own layout was folded away as if it were a quote)
+  useEffect(() => {
+    setOn(false); setFolded(false);
+    if (!html || !QUOTED.test(html) || !/wrote:|-----\s*Original Message|From:[\s\S]{1,300}?Sent:|divRplyFwdMsg|gmail_quote/i.test(html)) return;
+    let n = 0;
+    const t = setInterval(() => {
+      const d = frame.current?.contentDocument;
+      if (++n > 25) { clearInterval(t); return; }
+      if (!d?.body || d.readyState !== "complete") return;
+      clearInterval(t);
+      if (!d.querySelector("blockquote, .gmail_quote, .yahoo_quoted, #divRplyFwdMsg, #appendonsend")) return;
+      d.body.classList.add("fold-q"); setFolded(true); setTimeout(fit, 30); setTimeout(fit, 300);
+    }, 200);
+    return () => clearInterval(t);
+  }, [html]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!folded) return null;
   const flip = () => { const b = frame.current?.contentDocument?.body; if (!b) return; b.classList.toggle("show-q", !on); setOn(!on); setTimeout(fit, 30); setTimeout(fit, 300); };
   return <button type="button" className="ibx-q" onClick={flip} aria-expanded={on}>{on ? "Hide the earlier emails" : "··· Show the earlier emails"}</button>;
 }

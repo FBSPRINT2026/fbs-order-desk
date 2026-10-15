@@ -667,7 +667,9 @@ function LiveMail({ i, older, folders, listOpen, toggleList, back, busy, setBusy
               <PTile icon={TbIcon.goods} label="Order goods" disabled={!!busy} onClick={() => { close(); onKeep("goods"); }} />
               <PTile icon={TbIcon.person} label="Match to customer" disabled={!!busy} onClick={() => { close(); onKeep("match"); }} />
             </PSec> : undefined }}
-          ai={onKeep ? <>
+          // the order buttons only on an email that could be one: a customer's, or one the AI sorted as a to-do (Oct 15: not
+          // on a marketing email)
+          ai={onKeep && (older || i.bucket === "todo" || i.bucket === "customer") ? <>
             <button type="button" className="tb-b primary eh-ai-go" disabled={!!busy} onClick={() => onKeep("order")}>{TbIcon.order}<span className="tb-l">{busy === "keep" ? "Opening…" : "New order"}</span></button>
             <button type="button" className="tb-b eh-ai-go" disabled={!!busy} onClick={() => onKeep("order")}>{TbIcon.repeat}<span className="tb-l">Reorder</span></button>
             <button type="button" className="tb-b eh-ai-go" disabled={!!busy} onClick={() => onKeep("goods")}>{TbIcon.goods}<span className="tb-l">Order goods</span></button>
