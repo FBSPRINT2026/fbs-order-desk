@@ -8507,3 +8507,13 @@ a.pdn-tag:hover{text-decoration:underline}
 }
 /* "On the go" sits on the logo's bottom line (Oct 15, Nick) */
 @media (max-width:820px){ .brand.brand-logo{align-items:flex-end} .brand.brand-logo span.tag-go{line-height:1} }
+/* "On the go" a little bigger; the speed lines and the letters sit on the logo's bottom line (Oct 15, Nick) */
+@media (max-width:820px){
+  .brand.brand-logo span.tag-go{font-size:18px;align-items:flex-end;gap:7px}
+  .tag-go em{position:relative;top:2px}
+  .tag-go .go-lines{gap:3px;width:22px}
+  .tag-go .go-lines b{height:2.5px}
+  .tag-go .go-lines b:nth-child(1){width:14px}
+  .tag-go .go-lines b:nth-child(2){width:22px}
+  .tag-go .go-lines b:nth-child(3){width:11px}
+}
