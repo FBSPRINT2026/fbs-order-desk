@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { organizerFor } from "@/lib/mail/mirror";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { designWords } from "@/lib/ai/specHistory";
@@ -107,6 +108,18 @@ export async function GET(req: Request) {
   const { acct } = await mailboxToRead(admin, v);
   const found = await designEmails(admin, acct && acct.enabled ? acct : null, cid, words, { fresh: u.searchParams.get("fresh") === "1", pics: sign });
   for (const e of found.emails) items.push({ kind: "email", date: e.date, from: e.from, incoming: e.incoming, subject: e.subject, text: e.text, ...(e.pics?.length ? { pics: e.pics } : {}) });
+  // texts with them that name the design, and pictures sent around those (Oct 15: the Mac's texts; owners only)
+  if (organizerFor(v.email, v.role)) {
+    const { data: tx } = await admin.from("text_messages").select("from_me, body, sent_at, files").eq("customer_id", cid).order("sent_at").limit(3000);
+    const all = (tx || []) as { from_me: boolean; body: string; sent_at: string; files: { path: string; type: string }[] }[];
+    const near = all.filter((t) => hit(t.body)).map((t) => Date.parse(t.sent_at));
+    for (const t of all) {
+      const at = Date.parse(t.sent_at), named = hit(t.body), pic = (t.files || []).some((f) => /^image\//.test(f.type) || /\.(jpe?g|png|webp)$/i.test(f.path));
+      if (!named && !(pic && near.some((n) => Math.abs(n - at) < 2 * 864e5))) continue;
+      const pics = await sign((t.files || []).map((f) => f.path).filter((p) => /\.(jpe?g|png|webp)$/i.test(p)).slice(0, 4));
+      items.push({ kind: "email", date: t.sent_at, from: t.from_me ? "FBS (text)" : `${cust?.company || cust?.name || "Customer"} (text)`, incoming: !t.from_me, subject: "Text message", text: t.body, ...(pics.length ? { pics } : {}) });
+    }
+  }
   for (const d of (dsgs || []).filter((x) => hit(x.name)) as { name: string; specs: DesignSpecs }[]) for (const e of latestSpecs(d.specs)) {
     items.push({ kind: "confirmed", date: e.at, by: e.by, order: `#${e.order_number}`, spec: [e.location, e.size, e.drop ? `${e.drop}" drop` : "", e.inks, `${e.colors} colors`, e.underbase === true ? "underbase" : e.underbase === false ? "no underbase" : ""].filter(Boolean).join(" · ") });
   }

@@ -18,6 +18,7 @@ import { staffCustomerMessage } from "@/app/shop/actions";
 import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
 import { PAY_TERMS, payDueDate, type Design, type PayTerms } from "@/lib/pricing";
 import Timeline from "@/components/Timeline";
+import CustomerTexts from "@/components/CustomerTexts";
 import { splitCustomer } from "@/lib/crm/private";
 import { fmtStamp } from "@/lib/format";
 import { orderSearchText } from "@/lib/search";
@@ -261,6 +262,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               <div className="panel-h"><h2>Timeline</h2><span className="faint" style={{ fontSize: 12 }}>Calls, notes and emails · shop only</span></div>
               <div className="panel-b"><Timeline customerId={id} orderNumbers={Object.fromEntries(os.map((o) => [o.id, o.number]))} /></div>
             </section>
+            {/* their texts, from the Mac (Oct 15) */}
+            <CustomerTexts customerId={id} />
             <div className="stats" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))", margin: 0 }}>
               <div className="stat" style={{ cursor: "default" }}><span className="v">{os.length + archive.length}</span><span className="k">Orders</span></div>
               <div className="stat" style={{ cursor: "default" }}><span className="v">{money(spent)}</span><span className="k">Invoiced</span></div>

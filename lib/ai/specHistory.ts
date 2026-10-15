@@ -74,7 +74,7 @@ export async function specHistory(admin: SupabaseClient, s: Settings, orderId: s
 
   const lines: string[] = [];
   const images: { media_type: "image/png" | "image/jpeg" | "image/webp"; data: string; label: string }[] = [];
-  const counts = { jobs: 0, emails: 0, kept: 0, orders: 0, pics: 0, confirmed: 0 };
+  const counts = { jobs: 0, emails: 0, kept: 0, orders: 0, pics: 0, confirmed: 0, texts: 0 };
 
   // 1. old Printavo jobs that mention the design (their details, notes, emails and mockups)
   const { data: arch } = await admin.from("archived_orders").select("id, visual_id, nickname, order_date, search_text").eq("customer_id", o.customer_id).order("order_date", { ascending: true }).limit(1000);
@@ -124,6 +124,23 @@ export async function specHistory(admin: SupabaseClient, s: Settings, orderId: s
     }
   }
 
+  // 3b. texts with them (the Mac, Oct 15: "Gateway approved the placement photo by text"): the ones that name the
+  // design, and pictures sent within two days of those
+  const { data: tx } = await admin.from("text_messages").select("from_me, body, sent_at, files").eq("customer_id", o.customer_id).order("sent_at").limit(3000);
+  const texts = (tx || []) as { from_me: boolean; body: string; sent_at: string; files: { path: string; name: string }[] }[];
+  const named = texts.filter((t) => hit(t.body)).map((t) => Date.parse(t.sent_at));
+  for (const t of texts) {
+    const at = Date.parse(t.sent_at), nearby = named.some((n) => Math.abs(n - at) < 2 * 864e5);
+    if (!hit(t.body) && !nearby) continue;
+    counts.texts++;
+    lines.push(`TEXT ${t.sent_at.slice(0, 16).replace("T", " ")} ${t.from_me ? "from the shop" : "from the customer"}: ${t.body.replace(/\s+/g, " ").slice(0, 800) || "(picture only)"}`);
+    for (const f of (t.files || []).filter((x) => imgType(x.path)).slice(0, 2)) {
+      if (images.length >= 16) break;
+      const im = await pic(admin, f.path);
+      if (im) { images.push({ ...im, label: `Picture in a text of ${t.sent_at.slice(0, 10)} ${t.from_me ? "from the shop" : "from the customer"}` }); counts.pics++; }
+    }
+  }
+
   // 4. the customer's other portal orders of it, and what production confirmed
   const { data: prev } = await admin.from("orders").select("id, number, nickname, created_at, groups, notes").eq("customer_id", o.customer_id).neq("id", o.id).order("created_at", { ascending: true }).limit(200);
   for (const p of (prev || []).filter((x) => hit(x.nickname) || hit(x.notes)).slice(-6)) {
@@ -139,7 +156,7 @@ export async function specHistory(admin: SupabaseClient, s: Settings, orderId: s
     lines.push(`PRODUCTION CONFIRMED ${e.at.slice(0, 10)} by ${e.by} on #${e.order_number} (design "${d.name}"): ${e.location}, ${e.size || "size blank"}, ${e.drop ? `${e.drop}" drop, ` : ""}${e.inks || "inks blank"}, ${e.colors} colors${e.underbase === true ? ", underbase" : e.underbase === false ? ", no underbase" : ""}`);
   }
 
-  const searched = [`${counts.jobs} old Printavo job${counts.jobs === 1 ? "" : "s"}`, `${counts.emails} email${counts.emails === 1 ? "" : "s"}${found.wholeMailbox ? " (whole mailbox)" : ""}`, `${counts.pics} picture${counts.pics === 1 ? "" : "s"}`, counts.orders ? `${counts.orders} portal order${counts.orders === 1 ? "" : "s"}` : "", counts.confirmed ? `${counts.confirmed} production confirmation${counts.confirmed === 1 ? "" : "s"}` : "", "text messages: not linked yet"].filter(Boolean).join(", ");
+  const searched = [`${counts.jobs} old Printavo job${counts.jobs === 1 ? "" : "s"}`, `${counts.emails} email${counts.emails === 1 ? "" : "s"}${found.wholeMailbox ? " (whole mailbox)" : ""}`, `${counts.pics} picture${counts.pics === 1 ? "" : "s"}`, ...(counts.texts ? [`${counts.texts} text${counts.texts === 1 ? "" : "s"}`] : []), counts.orders ? `${counts.orders} portal order${counts.orders === 1 ? "" : "s"}` : "", counts.confirmed ? `${counts.confirmed} production confirmation${counts.confirmed === 1 ? "" : "s"}` : "", "text messages: not linked yet"].filter(Boolean).join(", ");
   const prompt = [
     b.text, "",
     `EVERYTHING WE HAVE ABOUT THIS DESIGN (customer ${cust?.company || cust?.name || ""}; searched for: ${words.join(", ")}), oldest first:`,

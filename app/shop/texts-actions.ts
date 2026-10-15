@@ -48,3 +48,20 @@ export async function removeTextMac(id: string) {
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }
+
+export type TextRow = { id: string; from_me: boolean; body: string; sent_at: string; handle: string; chat_name: string; service: string; files: { name: string; type: string; url: string }[] };
+/** a customer's texts, newest last (owners only); pictures as links good for an hour */
+export async function getCustomerTexts(customerId: string, limit = 300) {
+  try {
+    const { admin } = await owner();
+    const { data } = await admin.from("text_messages").select("id, from_me, body, sent_at, handle, chat_name, service, files").eq("customer_id", customerId).order("sent_at", { ascending: false }).limit(Math.min(1000, limit));
+    const rows = ((data || []) as (Omit<TextRow, "files"> & { files: { name: string; type: string; path: string }[] })[]).reverse();
+    const paths = rows.flatMap((r) => (r.files || []).map((f) => f.path));
+    const signed = new Map<string, string>();
+    if (paths.length) {
+      const { data: s } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
+      for (const x of s || []) if (x.path && x.signedUrl) signed.set(x.path, x.signedUrl);
+    }
+    return { ok: true as const, texts: rows.map((r) => ({ ...r, files: (r.files || []).map((f) => ({ name: f.name, type: f.type, url: signed.get(f.path) || "" })) })) as TextRow[] };
+  } catch (e) { return fail(e); }
+}
