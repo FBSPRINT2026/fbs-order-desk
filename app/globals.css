@@ -8073,3 +8073,25 @@ a.pdn-tag:hover{text-decoration:underline}
 .lbl.gsec,.sbx-h.gsec{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ink)}
 .lbl.gsec::before,.sbx-h.gsec::before{content:"";flex:none;width:4px;height:15px;border-radius:2px;background:var(--accent)}
 .sbx-h.gsec{margin-bottom:6px}
+/* a group's prints as cards beside the big mockup (Oct 15, Nick: "rework how this is organized now that you have more
+   space"): Print · location · method and its price on top; method, location, colors, ink; size, drop, notes; the art */
+.imp-cards{display:flex;flex-direction:column;gap:12px}
+.imp-card{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.imp-card-h{display:flex;align-items:center;gap:8px;padding:8px 10px 8px 14px;background:var(--surface-2);border-bottom:1px solid var(--line-2);font-size:13px}
+.imp-card-h>b{font-size:14px}
+.imp-card-h>span:not(.spacer):not(.imp-each){color:var(--ink-2)}
+.imp-card-h .spacer{flex:1}
+.imp-each{font-size:12.5px;color:var(--ink-3)}
+.imp-each b{font-size:15px;color:var(--ink);margin-right:2px}
+.imp-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.2fr) 74px minmax(0,1.8fr);grid-template-areas:"me lo co in" "si dr no no";gap:10px 12px;padding:12px 14px 6px}
+.imp-grid>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.imp-grid input,.imp-grid select{width:100%;min-width:0;box-sizing:border-box}
+.imp-grid .ink-combo input{width:auto}
+.imp-grid .ink-combo select{width:26px}
+.imp-l{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+.f-method{grid-area:me}.f-loc{grid-area:lo}.f-col{grid-area:co}.f-ink{grid-area:in}.f-size{grid-area:si}.f-drop{grid-area:dr}.f-notes{grid-area:no}
+.imp-card .imp-unconf{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin:4px 14px 0;padding:6px 10px;border-left:3px solid #d9a400;background:var(--surface-2);font-size:12.5px;border-radius:0 6px 6px 0}
+.imp-card .imp-unconf b{color:var(--warn)}
+.imp-art{padding:8px 14px 12px;border-top:1px dashed var(--line-2);margin-top:8px}
+@media (max-width:1100px){ .imp-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 70px;grid-template-areas:"me lo co" "in in in" "si dr dr" "no no no"} }
+@media (max-width:760px){ .imp-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"me lo" "co co" "in in" "si dr" "no no"} }

@@ -3,7 +3,7 @@ import { inkNames, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY
 import { money } from "@/lib/format";
 import { smallerSpot } from "@/lib/mockup";
 import DesignSearch from "@/components/DesignSearch";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
   /** where finishing is picked: in this group (default), or once for the whole order below the groups */
@@ -215,23 +215,27 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
           <div className={"mk-lock" + (locked ? " on" : "")}>
           {locked && <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup first — or click here to fill this in without one</span></button>}
           <div inert={locked || undefined} className="mk-body">
-          <div>
-            <table className="pv-grid imp-table">
-              <colgroup><col style={{ width: "13%" }} /><col style={{ width: "14%" }} /><col style={{ width: 56 }} /><col style={{ width: "19%" }} /><col style={{ width: "14%" }} /><col style={{ width: "10%" }} /><col />{!hidePrices && <col style={{ width: 58 }} />}<col style={{ width: 30 }} /></colgroup>
-              <thead><tr><th>Method</th><th>Location</th><th>Colors</th><th>Ink or thread / PMS</th><th>Print size</th><th>Drop</th><th>Notes</th>{!hidePrices && <th className="r">Each</th>}<th /></tr></thead>
-              <tbody>
-                {g.imprints.map((d, di) => (
-                  <Fragment key={d.id}>
-                  <tr className="imp-main">
-                    <td><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>
-                    <td>{LOCATIONS.includes(d.location)
+          {/* each print as a card beside the mockup (Oct 15, Nick: "rework how this is organized now that you have more
+              space"): what and where on top, ink and size under it, notes, then the art */}
+          <div className="imp-cards">
+            {g.imprints.map((d, di) => (
+              <div key={d.id} className="imp-card">
+                <div className="imp-card-h">
+                  <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, METHODS[d.method]].filter(Boolean).join(" · ")}</span>
+                  <span className="spacer" />
+                  {!hidePrices && <span className="imp-each"><b className="num">{money(gc.imprints[di]?.each)}</b> each</span>}
+                  <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>
+                </div>
+                <div className="imp-grid">
+                  <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+                  <div className="f-loc"><span className="imp-l">Location</span>{LOCATIONS.includes(d.location)
                       ? <select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value === "__custom" ? "" : e.target.value; })}>{LOCATIONS.map((z) => <option key={z} value={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
-                      : <div className="loc-custom"><input type="text" autoFocus={!d.location} aria-label="Custom location" placeholder="Custom location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value; })} /><button type="button" className="btn icon ghost" tabIndex={-1} title="Back to the location list" aria-label="Back to the location list" onClick={() => update((x) => { x.imprints[di].location = "Full Front"; })}>▾</button></div>}</td>
-                    <td>{d.method === "screen" || d.method === "embroidery"
+                      : <div className="loc-custom"><input type="text" autoFocus={!d.location} aria-label="Custom location" placeholder="Custom location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value; })} /><button type="button" className="btn icon ghost" tabIndex={-1} title="Back to the location list" aria-label="Back to the location list" onClick={() => update((x) => { x.imprints[di].location = "Full Front"; })}>▾</button></div>}</div>
+                  <div className="f-col"><span className="imp-l">Colors</span>{d.method === "screen" || d.method === "embroidery"
                       ? <select aria-label="Number of colors" value={d.method === "embroidery" ? Math.min(d.colors, 15) : d.colors} onChange={(e) => update((x) => { x.imprints[di].colors = +e.target.value; })}>{(d.method === "embroidery" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((n) => <option key={n} value={n}>{n}</option>)}{d.method === "screen" && <option value={FULL_COLOR}>Full color</option>}</select>
-                      : <span className="faint" style={{ fontSize: 12 }}>Full color</span>}</td>
-                    <td>
-                      <div className={"ink-combo" + (d.confirm?.ink ? " unconf" : "")} title={d.confirm?.ink ? "Reorder - Production Details Needed: our best guess at the ink, production confirms it" : undefined}>
+                      : <span className="faint" style={{ fontSize: 12 }}>Full color</span>}</div>
+                  <div className="f-ink"><span className="imp-l">Ink or thread / PMS</span>
+                    <div className={"ink-combo" + (d.confirm?.ink ? " unconf" : "")} title={d.confirm?.ink ? "Reorder - Production Details Needed: our best guess at the ink, production confirms it" : undefined}>
                         <InkField list={d.method === "embroidery" ? THREAD_COLORS : INK_COLORS} placeholder={d.method === "embroidery" ? "Type a thread color" : "Type a color or PMS"} value={d.inks} bad={!!inkMismatch(d)} title={inkMismatch(d) || ""} onChange={(v) => update((x) => { x.imprints[di].inks = v; })} />
                         <select aria-label={d.method === "embroidery" ? "Add a thread color" : "Add a Wilflex RFU ink"} tabIndex={-1} value="" onChange={(e) => { const v = e.target.value; if (v) update((x) => { const cur = x.imprints[di].inks.trim().replace(/,\s*$/, ""); x.imprints[di].inks = cur ? `${cur}, ${v}` : v; }); }}>
                           <option value="" hidden>▾</option>
@@ -239,25 +243,19 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                         </select>
                       </div>
                       {inkMismatch(d) && <div className="ink-warn">{inkMismatch(d)}</div>}
-                    </td>
-                    <td><div className={d.confirm?.size ? "unconf" : undefined} title={d.confirm?.size ? "Reorder - Production Details Needed: our best guess at the size, production confirms it" : undefined}><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></div>
-                      {d.size.trim() && <button type="button" className={"cs-tag" + (d.sizeFrom === "customer" ? " on" : "")} title={d.sizeFrom === "customer" ? "The customer asked for this size: the Mockup Creator asks before changing it. Click to unmark." : "Did the customer ask for this exact size? Mark it so it isn't changed by accident."} onClick={() => update((x) => { x.imprints[di].sizeFrom = x.imprints[di].sizeFrom === "customer" ? undefined : "customer"; })}>{d.sizeFrom === "customer" ? "🔒 Customer's size" : "Customer's size?"}</button>}
-                    </td>
-                    <td>
-                      <label className="sz-dim">
+                  </div>
+                  <div className="f-size"><span className="imp-l">Print size</span><div className={d.confirm?.size ? "unconf" : undefined} title={d.confirm?.size ? "Reorder - Production Details Needed: our best guess at the size, production confirms it" : undefined}><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></div>
+                      {d.size.trim() && <button type="button" className={"cs-tag" + (d.sizeFrom === "customer" ? " on" : "")} title={d.sizeFrom === "customer" ? "The customer asked for this size: the Mockup Creator asks before changing it. Click to unmark." : "Did the customer ask for this exact size? Mark it so it isn't changed by accident."} onClick={() => update((x) => { x.imprints[di].sizeFrom = x.imprints[di].sizeFrom === "customer" ? undefined : "customer"; })}>{d.sizeFrom === "customer" ? "🔒 Customer's size" : "Customer's size?"}</button>}</div>
+                  <div className="f-drop"><span className="imp-l">Drop</span><label className="sz-dim">
                         <InchInput label="Drop in inches (blank = standard)" placeholder="Standard" num={d.drop || ""} onNum={(v) => update((x) => { x.imprints[di].drop = v; })} />
-                      </label>
-                    </td>
-                    <td><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></td>
-                    {!hidePrices && <td className="r num">{money(gc.imprints[di]?.each)}</td>}
-                    <td><button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button></td>
-                  </tr>
-                  {d.confirm && (d.confirm.size || d.confirm.ink) && <tr className="imp-unconf"><td colSpan={hidePrices ? 8 : 9}>
+                      </label></div>
+                  <div className="f-notes"><span className="imp-l">Notes</span><input type="text" aria-label="Imprint notes" placeholder='3" below collar' value={d.notes} onChange={(e) => update((x) => { x.imprints[di].notes = e.target.value; })} /></div>
+                </div>
+                {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="imp-unconf">
                     <span><b>Reorder - Production Details Needed</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
                     {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks we printed before">Production Details</a> : null}
-                  </td></tr>}
-                  <tr className="imp-design">
-                    <td colSpan={hidePrices ? 8 : 9}>
+                </div>}
+                <div className="imp-art">
                       <DesignPick imprint={d} designs={designs || []} urls={designUrls || {}} canUpload={!!onUploadDesign} onStar={onStarDesign}
                         onPick={(des) => update((x) => {
                           const im = x.imprints[di];
@@ -289,12 +287,9 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                           </div>
                         );
                       })()}
-                    </td>
-                  </tr>
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
+                </div>
+              </div>
+            ))}
           </div>
           <button className="btn sm" type="button" onClick={() => update((x) => { const used = x.imprints.map((d) => d.location); x.imprints.push(newImprint(["Full Back", ...LOCATIONS].find((z) => !used.includes(z)) || "Full Front")); })}>+ Add imprint</button>
           </div>
