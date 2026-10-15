@@ -10,7 +10,16 @@ export type PortalJob = {
   id: string; number: number; nickname: string; href: string; pic: string; dueLabel: string; done: boolean;
   summary: string; badge: { text: string; tone: "wait" | "ok" | "info" }; steps: JobStep[]; now: string; next: string;
   reviewHref?: string; newMsgs: number; lastMsg?: { from: string; text: string; href: string };
+  /** how it's decorated, for the Screen printing / Embroidery tabs */ kind: JobKind;
 };
+export type JobKind = "screen" | "embroidery" | "dtf" | "mixed" | "";
+/** a job's decoration from words (Printavo status, line categories, imprint types, the job name) */
+export function kindFromWords(words: string[]): JobKind {
+  const w = words.join(" ").toLowerCase();
+  const emb = /\bemb(roider(y|ed)?)?\b|\bemb -|stitch/.test(w), scr = /screen|\bsp\b|\bsp -|plastisol|silk/.test(w), dtf = /\bdtf\b|transfer/.test(w);
+  const n = [emb, scr, dtf].filter(Boolean).length;
+  return n > 1 ? "mixed" : emb ? "embroidery" : scr ? "screen" : dtf ? "dtf" : "";
+}
 
 const IDX: Record<string, number> = { request: 0, quote_sent: 0, approved: 1, art: 1, blanks: 2, production: 3, ready: 4, completed: 5 };
 const day = (s?: string | null) => {
@@ -24,7 +33,7 @@ const short = (s?: string | null) => {
   return isNaN(+d) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
 };
 
-export function jobFor(o: Order, x: { href: string; pic: string; pendingProof?: string; approvedArt: boolean; goods?: string | null; customerGoods: boolean; newMsgs: number; lastMsg?: { from: string; text: string; href: string } }): PortalJob {
+export function jobFor(o: Order, x: { href: string; pic: string; pendingProof?: string; approvedArt: boolean; goods?: string | null; customerGoods: boolean; newMsgs: number; lastMsg?: { from: string; text: string; href: string }; kind?: JobKind }): PortalJob {
   const groups = orderGroups(o);
   const lines = groups.flatMap((g) => g.lines).filter((l) => lineQty(l) > 0);
   const qty = lines.reduce((a, l) => a + lineQty(l), 0) || o.qty || 0;
@@ -71,5 +80,6 @@ export function jobFor(o: Order, x: { href: string; pic: string; pendingProof?: 
     id: o.id, number: o.number, nickname: o.nickname || "Your order", href: x.href, pic: x.pic, done,
     dueLabel: done ? `${how}|${short(o.completed_at || o.updated_at)}` : o.due_date ? `In hands|${day(o.due_date).toUpperCase()}` : "",
     summary, badge, steps, now, next, reviewHref: x.pendingProof, newMsgs: x.newMsgs, lastMsg: x.lastMsg,
+    kind: x.kind ?? (() => { const ms = [...new Set(groups.flatMap((g) => g.imprints.map((d) => d.method)))]; return ms.length > 1 ? "mixed" : ms[0] === "embroidery" ? "embroidery" : ms[0] === "dtf" ? "dtf" : ms[0] === "screen" ? "screen" : ""; })(),
   };
 }

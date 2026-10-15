@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { PortalJob } from "@/lib/portalJobs";
-import { DashReorder } from "./PortalDashBits";
+import { DashJobs, DashReorder } from "./PortalDashBits";
 
 /**
  * The customer's dashboard (Oct 15, Nick: "rethink the dashboard… more visual, jobs moving through… the AI assistant
@@ -43,7 +43,7 @@ export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs
           <div className="pdx-needs">
             {needs.map((n) => (
               <div className="pdx-need" key={n.key}>
-                {n.pic ? <img src={n.pic} alt="" /> : <span className="pdx-need-ic" aria-hidden>{n.kind === "quote" ? "$" : n.kind === "receive" ? "📦" : "✎"}</span>}
+                {n.pic ? <img src={n.pic} alt="" /> : <span className="pdx-need-ic" aria-hidden>{n.kind === "quote" || n.kind === "pay" ? "$" : n.kind === "receive" ? "📦" : "✎"}</span>}
                 <div><div className="k">{n.title}</div><div className="t">{n.text}</div></div>
                 <Link className="btn primary" href={n.href}>{n.cta}</Link>
               </div>
@@ -52,35 +52,7 @@ export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs
         </section>
       )}
 
-      <section className="pdx-card">
-        <div className="pdx-h"><h2>Your jobs</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
-        {!jobs.length && !pastJobs.length && <div className="pdx-none">No jobs in progress right now. Start an order, or reorder one below.</div>}
-        {[...jobs, ...pastJobs].map((j) => {
-          const [dk, dv] = j.dueLabel.split("|");
-          const doneCount = j.steps.filter((s) => s.state === "done").length, curI = j.steps.findIndex((s) => s.state === "cur");
-          const fill = j.done ? 100 : ((curI >= 0 ? curI : doneCount) / (j.steps.length - 1)) * 100;
-          return (
-            <div className={"pdx-job" + (j.done ? " quiet" : "")} key={j.id}>
-              <Link href={j.href} className="pdx-pic">{j.pic ? <img src={j.pic} alt="" /> : <span className="pdx-nopic">#{j.number}</span>}{dk && <span className={"pdx-due" + (j.done ? " done" : "")}>{dk}<b>{dv}</b></span>}</Link>
-              <div className="pdx-jb">
-                <div className="pdx-jt"><span className="n">#{j.number}</span><Link href={j.href} className="t">{j.nickname}</Link><span className={"pdx-pill " + j.badge.tone}>{j.badge.text}</span></div>
-                <div className="pdx-js">{j.summary}</div>
-                <div className={"pdx-tl" + (j.done ? " small" : "")} style={{ ["--fill" as string]: String(Math.round(fill)) }}>
-                  {j.steps.map((s) => (
-                    <div key={s.key} className={"pdx-st " + s.state}>
-                      <i aria-hidden>{s.state === "done" ? "✓" : s.key === "art" ? "✎" : s.key === "goods" ? "👕" : s.key === "print" ? "🖨" : s.key === "ready" ? "📦" : s.key === "out" ? "★" : "•"}</i>
-                      {!j.done && <><b>{s.label}</b><small>{s.sub}</small></>}
-                    </div>
-                  ))}
-                </div>
-                {!j.done && <div className="pdx-now"><b>Now:</b> {j.now} <b>Next:</b> {j.next}{j.reviewHref && j.steps.find((s) => s.key === "art")?.state === "cur" && <> <Link href={j.reviewHref} className="pdx-go">Review art ›</Link></>}</div>}
-                {j.lastMsg && <Link href={j.lastMsg.href} className="pdx-jmsg">💬 {j.newMsgs ? <b>{j.newMsgs} new message{j.newMsgs === 1 ? "" : "s"}</b> : <b>Last message</b>} from {j.lastMsg.from}: “{j.lastMsg.text}” <span>Read</span></Link>}
-              </div>
-              {j.done && <div className="pdx-jr"><DashReorder id={j.id} canAct={canAct} /></div>}
-            </div>
-          );
-        })}
-      </section>
+      <DashJobs jobs={jobs} pastJobs={pastJobs} canAct={canAct} ordersHref={ordersHref} />
 
       {goods}
 
