@@ -106,13 +106,14 @@ export type OwnChangeStart = { ok: true; orderId: string; orderNumber: number; g
   imprints: import("@/lib/pricing").Imprint[]; ordered: string[]; mockupSize: string } | { ok: false; error: string };
 
 /** "Make changes → change it myself": the proof's shirt and prints, to open in the customer's Mockup Creator. */
-export async function proofForChange(proofId: string): Promise<OwnChangeStart> {
+/** (view = just to look at it, from "See the full proof": any status) */
+export async function proofForChange(proofId: string, view = false): Promise<OwnChangeStart> {
   try {
     const { supabase, user } = await getViewer();
     if (!user) return { ok: false, error: "Please sign in again." };
     const { data: proof } = await supabase.from("proofs").select("id,order_id,status").eq("id", proofId).is("archived_at", null).maybeSingle();
     if (!proof) return { ok: false, error: "We couldn't find that proof." };
-    if (proof.status !== "pending") return { ok: false, error: "This proof was already reviewed." };
+    if (!view && proof.status !== "pending") return { ok: false, error: "This proof was already reviewed." };
     const { admin, order } = await customerOrder(proof.order_id);
     const { data: mk } = await admin.from("mockups").select("group_id").eq("proof_id", proofId).maybeSingle();
     const groups = orderGroups(order);

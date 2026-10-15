@@ -91,6 +91,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const fromEmail = sp.get("email") || "";
   /** the customer's art review → "Make changes → change it myself": this proof's shirt and prints, saved back to the shop */
   const changeId = portal ? sp.get("change") || "" : "";
+  /** the customer's art review → "See the full proof": the proof's shirt and prints in the Mockup Creator, to look at only */
+  const viewId = portal && !changeId ? sp.get("view") || "" : "";
   const sb = useMemo(() => createClient(), []);
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -253,8 +255,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const mine = (cu.data || []) as Customer[];
         setCustomers(mine);
         if (mine[0]) setCustomerId(mine[0].id);
-        if (changeId) {
-          const r = await proofForChange(changeId);
+        if (changeId || viewId) {
+          const r = await proofForChange(changeId || viewId, !!viewId);
           if (!r.ok) { setMsg(r.error); return; }
           setChange({ orderId: r.orderId, orderNumber: r.orderNumber });
           setGroupName(r.groupName);
@@ -292,7 +294,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         }
       }
     })();
-  }, [sb, orderId, groupId, portal, changeId]);
+  }, [sb, orderId, groupId, portal, changeId, viewId]);
 
   // art saved without a picture to draw (a PDF / AI from an email made into a design on the server): the preview is
   // made here, once, and kept on the design, so the logo shows on the mockup instead of "No logo yet"
@@ -1631,10 +1633,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   return (
     <>
       <Link className="back" href={portal ? backHref || "/portal" : orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {portal ? "Dashboard" : orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
-      {portal && change && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
+      {portal && change && viewId && <div className="callout mk-change"><b>Your proof for order #{change.orderNumber}</b> This is the shirt and prints exactly as we set them up. Turn it, zoom in, look at each print. To change something, go back and choose Make changes. <a href={`/portal/orders/${change.orderId}/review/${viewId}`}>Back to the review</a></div>}
+      {portal && change && !viewId && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
       <div className="page-head mk-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === customerId)) || (portal ? "Your artwork" : "Artwork")}</div><h1>{orderId ? `Mockup · ${groupName}` : "Mockup Creator"}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}<button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button><button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button></div>
+        <div className="row"><span className="save-state">{msg}</span>{orderId && <button className="btn" type="button" disabled={saving} onClick={async () => { if (await syncOrder()) setMsg("Order updated."); }}>Update order only</button>}{orderId && !portal && imprints.some((im) => im.method === "screen") && <button className="btn" type="button" disabled={saving || !ready} title="A separation for each screen-print location (front, back, sleeve), from each logo's print plan; opens the first" onClick={createSeps}>Create Separations</button>}<button className={"btn" + (pdfOpen ? " on" : "")} type="button" disabled={!ready || pdfBusy} title={ready ? "A PDF of the mockup to send the customer" : notReady} onClick={() => setPdfOpen((o) => !o)}>Export PDF</button>{!viewId && <button className="btn primary" type="button" disabled={saving || !ready} title={ready ? undefined : notReady} onClick={() => saveAll()}>{saving ? "Saving…" : orderId ? "Save mockups to order" : "Save mockup"}</button>}</div>
       </div>
 
         {pdfOpen && (

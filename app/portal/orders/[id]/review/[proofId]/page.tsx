@@ -73,7 +73,7 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
           </section>
 
           <section className="panel ar-view">
-            <div className="panel-h"><h2>The shirt</h2>{fullUrl && <a className="btn sm" href={fullUrl} target="_blank" rel="noreferrer">See the full proof</a>}</div>
+            <div className="panel-h"><h2>Proof</h2><a className="btn sm" href={`/portal/mockup?view=${proof.id}${as ? `&as=${as}` : ""}`}>See the full proof</a></div>
             <div className="panel-b">
               <div className="ar-stage">
                 <a className="ar-mk" href={fullUrl || undefined} target="_blank" rel="noreferrer" title="Open full size">{bigUrl ? <img src={bigUrl} alt="Your mockup" /> : <span className="muted">No picture</span>}</a>
