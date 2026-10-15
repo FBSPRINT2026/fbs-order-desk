@@ -125,8 +125,11 @@ let closeOpenRow: (() => void) | null = null;
  * Phones: slide an email left for News, Black Hole and Archive (like the iPhone Mail app); slide it all the way to
  * archive it. Touch only: on a computer the row is a plain row.
  */
-export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct: (to: SwipeTo) => Promise<boolean> }) {
+export function SwipeRow({ children, onAct, onHold }: { children: React.ReactNode; onAct: (to: SwipeTo) => Promise<boolean>; /** pressed and held (Oct 15, Nick): the AI menu */ onHold?: () => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unhold = () => { if (hold.current) { clearTimeout(hold.current); hold.current = null; } };
+  useEffect(() => unhold, []);
   /** the touch: where it started, the offset then, and the last few points (for how fast it's moving) */
   const g = useRef<{ x: number; y: number; base: number; on: boolean; off: boolean; pts: { x: number; t: number }[] } | null>(null);
   const swallow = useRef(false);
@@ -159,10 +162,20 @@ export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct
           if (e.pointerType !== "touch" || gone) return;
           if (closeOpenRow && closeOpenRow !== shut) { closeOpenRow(); closeOpenRow = null; swallow.current = true; }
           g.current = { x: e.clientX, y: e.clientY, base: cur.current, on: false, off: false, pts: [{ x: e.clientX, t: e.timeStamp }] };
+          // held still for half a second: the menu (any movement first is a scroll or a swipe instead)
+          unhold();
+          if (onHold && !cur.current) hold.current = setTimeout(() => {
+            hold.current = null;
+            const s = g.current; if (!s || s.on) return;
+            s.off = true; swallow.current = true;
+            try { navigator.vibrate?.(12); } catch { /* not on iPhone */ }
+            onHold();
+          }, 480);
         }}
         onPointerMove={(e) => {
           const s = g.current; if (!s || s.off) return;
           const dx = e.clientX - s.x, dy = e.clientY - s.y;
+          if (Math.abs(dx) > 8 || Math.abs(dy) > 8) unhold();
           if (!s.on) {
             // easier to start (Oct 15, Nick: "sliding is a little difficult… pop open a little quick"): sideways wins
             // unless it's clearly a scroll
@@ -178,6 +191,7 @@ export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct
           setOff(Math.max(-width(), Math.min(0, v)));
         }}
         onPointerUp={(e) => {
+          unhold();
           const s = g.current; g.current = null; setDrag(false);
           if (!s?.on) { if (s && !s.off && s.base) { swallow.current = true; close(); } return; }
           swallow.current = true;
@@ -190,7 +204,8 @@ export function SwipeRow({ children, onAct }: { children: React.ReactNode; onAct
           else if (o < -50) openIt(); // or pulled a little way
           else close();
         }}
-        onPointerCancel={() => { g.current = null; setDrag(false); if (cur.current > -50) close(); else openIt(); }}
+        onContextMenu={(e) => { if (onHold && (hold.current || swallow.current)) e.preventDefault(); }}
+        onPointerCancel={() => { unhold(); g.current = null; setDrag(false); if (cur.current > -50) close(); else openIt(); }}
         onClickCapture={(e) => { if (swallow.current) { swallow.current = false; e.preventDefault(); e.stopPropagation(); } }}>
         {children}
       </div>

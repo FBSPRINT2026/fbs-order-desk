@@ -266,6 +266,8 @@ export async function archiveInbox(admin: SupabaseClient, acct: MailAccount, row
           const list = Array.isArray(hit) ? hit : [];
           uid = list.length ? (uid && list.includes(uid) ? uid : list[0]) : undefined;
         }
+        // Archive and Black Hole: marked read on the way (Oct 15, Nick)
+        if (uid && (to === "archive" || to === "blackhole")) await client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true }).catch(() => null);
         if (uid) await client.messageMove(String(uid), dest, { uid: true });
       } finally { lock.release(); }
     } finally { await client.logout().catch(() => null); }

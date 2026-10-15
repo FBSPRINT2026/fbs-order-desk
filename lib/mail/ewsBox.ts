@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MailAccount } from "./config";
 import { all, attr, call, esc, ewsFindByMessageId, ewsGetById, one, unesc, type EwsAtt } from "./ews";
-import { afterInboxMove, groupConvos, SKIP, type Convo, type Folder, type FullMsg, type MsgRow } from "./folders";
+import { afterInboxMove, groupConvos, readOnMove, SKIP, type Convo, type Folder, type FullMsg, type MsgRow } from "./folders";
 
 /**
  * Email over EWS (Oct 14, Nick: "how can we make this more like Apple's Mail app… it seems like we're just fighting
@@ -271,6 +271,8 @@ export async function ewsMove(admin: SupabaseClient, acct: MailAccount, path: st
   const id = await itemIdFor(admin, acct, path, uid);
   if (!id) throw new Error("That email isn't there any more.");
   const messageId = isEwsUid(uid) ? mid(unesc(one(await call(acct, `<m:GetItem><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties><t:FieldURI FieldURI="message:InternetMessageId"/></t:AdditionalProperties></m:ItemShape><m:ItemIds><t:ItemId Id="${esc(id)}"/></m:ItemIds></m:GetItem>`), "InternetMessageId"))) : await messageIdOf(admin, acct, path, uid);
+  // Archive and Black Hole: marked read on the way (Oct 15, Nick: "if an email is moved to archive or blackhole it is marked read")
+  if (readOnMove(to, dest.path)) { try { await ewsMarkRead(acct, id); } catch { /* moved either way */ } }
   const x = await call(acct, `<m:MoveItem><m:ToFolderId><t:FolderId Id="${esc(dest.id)}"/></m:ToFolderId><m:ItemIds><t:ItemId Id="${esc(id)}"/></m:ItemIds></m:MoveItem>`);
   // the moved email has a new EWS id: its number follows it
   const newId = attr(all(x, "ItemId")[0]?.attrs || "", "Id");

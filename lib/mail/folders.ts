@@ -165,6 +165,9 @@ export async function resolveFolder(c: ImapFlow, to: string) {
   return list.find((f) => f.path === to)?.path || null;
 }
 
+/** moving to Archive or Black Hole marks the email read (Oct 15, Nick) */
+export const readOnMove = (to: string, dest: string) => /^(archive|blackhole)$/i.test(to) || /(^|\/)archive$/i.test(dest) || /blackhole/i.test(dest.replace(/[^a-z]/gi, ""));
+
 /** move one message; moving out of the Inbox also updates the Inbox mirror and closes the email's to-dos */
 export async function moveMessage(admin: SupabaseClient, acct: MailAccount, c: ImapFlow, path: string, uid: number, to: string, by: string) {
   const dest = await resolveFolder(c, to);
@@ -175,6 +178,8 @@ export async function moveMessage(admin: SupabaseClient, acct: MailAccount, c: I
   try {
     const m = await c.fetchOne(String(uid), { envelope: true }, { uid: true });
     messageId = mid(m && m.envelope ? m.envelope.messageId : "");
+    // Archive and Black Hole: marked read on the way (Oct 15, Nick)
+    if (readOnMove(to, dest)) await c.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true }).catch(() => null);
     await c.messageMove(String(uid), dest, { uid: true });
   } finally { lock.release(); }
   if (/^inbox$/i.test(path) && messageId) await afterInboxMove(admin, acct, messageId, dest, by);
