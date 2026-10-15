@@ -2,6 +2,7 @@
 import { inkNames, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, smallerSpot } from "@/lib/mockup";
+import { colorHex } from "@/lib/inkColors";
 import DesignSearch from "@/components/DesignSearch";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
@@ -624,7 +625,9 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup }: { d
       {zoom && pic && <div className="pr-zoom" role="dialog" aria-modal="true" aria-label={cur ? designLabel(cur) : "Logo"} onClick={() => setZoom(false)} onKeyDown={(e) => { if (e.key === "Escape") setZoom(false); }} tabIndex={-1} ref={(el) => el?.focus()}>
         <figure onClick={(e) => e.stopPropagation()}>
           <img src={pic} alt={cur ? designLabel(cur) : ""} style={{ background: hex }} />
-          <figcaption><b>{cur ? designLabel(cur) : ""}</b>{size ? ` · ${size} on the ${d.location}` : ""}<button type="button" className="btn sm" onClick={() => setZoom(false)}>Close</button></figcaption>
+          <figcaption><span><b>{cur ? designLabel(cur) : ""}</b>{size ? ` · ${size} on the ${d.location}` : ""}</span><button type="button" className="btn sm" onClick={() => setZoom(false)}>Close</button></figcaption>
+          {/* the print's ink (or thread) colors (Oct 15, Nick) */}
+          {inkNames(d.inks).length > 0 && <div className="pr-zoom-inks">{inkNames(d.inks).map((k) => <span key={k}><i style={{ background: colorHex(k) || "#ccc" }} />{k}</span>)}</div>}
         </figure>
       </div>}
       <div className="pr-main">
