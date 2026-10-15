@@ -347,15 +347,13 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
     );
   } else if (area === "quotes") body = <>{tableHead(<h2>Quotes</h2>, "Search quotes: number, name, garment, color…")}{orderTable(quotes, "quote")}</>;
   else if ((area === "orders" || area === "invoices") && mode === "portal") {
+    // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
     const openQ = quotes.filter((o) => !o.archived && o.status === "quote_sent").length;
     body = <>
-      <div className="aa-sub" role="tablist" aria-label="Quotes or orders">
-        <button type="button" role="tab" aria-selected={sub === "quotes"} className={sub === "quotes" ? "on" : ""} onClick={() => { setSub("quotes"); setQ(""); }}>Quotes{openQ ? <span className="aa-n">{openQ}</span> : null}</button>
-        <button type="button" role="tab" aria-selected={sub === "orders"} className={sub === "orders" ? "on" : ""} onClick={() => { setSub("orders"); setQ(""); }}>Orders<span className="aa-n">{invoices.length}</span></button>
-      </div>
-      {sub === "quotes"
-        ? <>{tableHead(<span className="aa-sum">{quotes.length} quote{quotes.length === 1 ? "" : "s"}{openQ ? <> · <b>{openQ} waiting on you</b></> : null}</span>, "Search quotes: number, name, garment, color…")}{orderTable(quotes, "quote")}</>
-        : <>{tableHead(<span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span>, "Search orders: number, name, garment, color, print details…")}{orderTable(invoices, "invoice")}</>}
+      {tableHead(<span className="aa-sum">{quotes.length > 0 && <>{quotes.length} quote{quotes.length === 1 ? "" : "s"}{openQ ? <> (<b>{openQ} waiting on you</b>)</> : null} · </>}{invoices.length} order{invoices.length === 1 ? "" : "s"} · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span>, "Search quotes and orders: number, name, garment, color, print…")}
+      {quotes.length > 0 && <><div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}</div>{orderTable(quotes, "quote")}</>}
+      <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(invoices.reduce((a, o) => a + o.total, 0))}</span></div>
+      {orderTable(invoices, "invoice")}
     </>;
   } else if (area === "orders" || area === "invoices") body = <>
     {tableHead(<><h2>Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders: number, name, garment, color, print details…")}
