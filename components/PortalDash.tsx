@@ -66,7 +66,7 @@ export default function PortalDash({ sub, actions, assistant, threads, newMsgs, 
               <div className="pdx-jb">
                 <div className="pdx-jt"><span className="n">#{j.number}</span><Link href={j.href} className="t">{j.nickname}</Link><span className={"pdx-pill " + j.badge.tone}>{j.badge.text}</span></div>
                 <div className="pdx-js">{j.summary}</div>
-                <div className={"pdx-tl" + (j.done ? " small" : "")} style={{ ["--fill" as string]: `${fill}%` }}>
+                <div className={"pdx-tl" + (j.done ? " small" : "")} style={{ ["--fill" as string]: String(Math.round(fill)) }}>
                   {j.steps.map((s) => (
                     <div key={s.key} className={"pdx-st " + s.state}>
                       <i aria-hidden>{s.state === "done" ? "✓" : s.key === "art" ? "✎" : s.key === "goods" ? "👕" : s.key === "print" ? "🖨" : s.key === "ready" ? "📦" : s.key === "out" ? "★" : "•"}</i>
@@ -74,7 +74,7 @@ export default function PortalDash({ sub, actions, assistant, threads, newMsgs, 
                     </div>
                   ))}
                 </div>
-                {!j.done && <div className="pdx-now"><b>Now:</b> {j.now} <b>Next:</b> {j.next}{j.reviewHref && <> <Link href={j.reviewHref} className="pdx-go">Review art ›</Link></>}</div>}
+                {!j.done && <div className="pdx-now"><b>Now:</b> {j.now} <b>Next:</b> {j.next}{j.reviewHref && j.steps.find((s) => s.key === "art")?.state === "cur" && <> <Link href={j.reviewHref} className="pdx-go">Review art ›</Link></>}</div>}
                 {j.lastMsg && <Link href={j.lastMsg.href} className="pdx-jmsg">💬 {j.newMsgs ? <b>{j.newMsgs} new message{j.newMsgs === 1 ? "" : "s"}</b> : <b>Last message</b>} from {j.lastMsg.from}: “{j.lastMsg.text}” <span>Read</span></Link>}
               </div>
               {j.done && <div className="pdx-jr"><DashReorder id={j.id} canAct={canAct} /></div>}

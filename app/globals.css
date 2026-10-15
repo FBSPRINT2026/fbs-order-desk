@@ -8755,7 +8755,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .pdx-tl{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));margin-top:16px;position:relative}
 .pdx-tl::before,.pdx-tl::after{content:"";position:absolute;left:8.33%;top:17px;height:4px;border-radius:4px}
 .pdx-tl::before{right:8.33%;background:#e6e9ee}
-.pdx-tl::after{width:calc((100% - 16.66%) * var(--fill) / 100);background:var(--fbs-fade)}
+.pdx-tl::after{width:calc((100% - 16.66%) * var(--fill) / 100);background:var(--fbs-fade);z-index:0}
 .pdx-tl.small{max-width:420px;margin-top:10px}
 .pdx-tl.small::before,.pdx-tl.small::after{top:12px}
 .pdx-st{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;position:relative;z-index:1;min-width:0}
@@ -8811,3 +8811,6 @@ a.pdn-tag:hover{text-decoration:underline}
   .pdx-art{grid-template-columns:repeat(4,minmax(0,1fr))}
   .pdx-jt .t{font-size:18px}
 }
+
+/* the portal dashboard has its own hello: no Welcome back banner above the tabs there */
+.portal .p-main:has(.pdx) > .p-hero{display:none}

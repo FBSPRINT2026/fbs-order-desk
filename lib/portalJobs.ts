@@ -43,7 +43,7 @@ export function jobFor(o: Order, x: { href: string; pic: string; pendingProof?: 
   const done = o.status === "completed";
   const sub = [
     short(o.submitted_at || o.created_at),
-    x.pendingProof ? "waiting on you" : x.approvedArt ? "approved" : at > 1 ? "done" : "",
+    x.pendingProof && at <= 1 ? "waiting on you" : x.approvedArt ? "approved" : at > 1 ? "done" : "",
     x.customerGoods ? (x.goods === "received" ? "your garments are here" : "your garments") : at > 2 ? "here" : "",
     o.production_date ? day(o.production_date) : "",
     o.due_date ? day(o.due_date) : "",
@@ -51,7 +51,7 @@ export function jobFor(o: Order, x: { href: string; pic: string; pendingProof?: 
   ];
   const labels = ["Order placed", "Art approved", "Garments in", "Printing", o.delivery_method === "pickup" || !o.delivery_method ? "Ready for pickup" : o.delivery_method === "ship" ? "Ready to ship" : "Ready to deliver", how];
   const keys = ["placed", "art", "goods", "print", "ready", "out"];
-  const steps: JobStep[] = labels.map((label, i) => ({ key: keys[i], label: i === 1 && x.pendingProof ? "Art approval" : label, state: done || i < at ? "done" : i === at ? "cur" : "todo", sub: sub[i] }));
+  const steps: JobStep[] = labels.map((label, i) => ({ key: keys[i], label: i === 1 && x.pendingProof && at <= 1 ? "Art approval" : label, state: done || i < at ? "done" : i === at ? "cur" : "todo", sub: sub[i] }));
   // finished: everything done
   if (done) steps.forEach((s) => { s.state = "done"; });
 
