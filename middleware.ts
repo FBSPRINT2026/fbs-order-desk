@@ -53,7 +53,11 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = start;
     url.search = "";
-    return NextResponse.redirect(url, 307);
+    // carry the session the sign-in check may have just renewed (Oct 15, Nick: "it keeps logging me out of my phone"):
+    // a bare redirect dropped the new tokens, the phone kept the used refresh token, and the next renewal signed it out
+    const go = NextResponse.redirect(url, 307);
+    response.cookies.getAll().forEach((c) => go.cookies.set(c));
+    return go;
   }
   return response;
 }
