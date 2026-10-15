@@ -188,7 +188,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const { data: ad } = await admin.from("archived_orders").select("id, files, data").in("id", archTop.map((a) => a.id));
     const want: { id: string; path: string }[] = [];
     ((ad || []) as { id: string; files: Record<string, string> | null; data: PvOrder }[]).forEach((r) => {
-      const f = r.data?.groups?.flatMap((g) => [...g.lines.flatMap((l) => l.mockups), ...g.imprints.flatMap((im) => im.mockups)]) || [];
+      // the imprint mockups first (the shirt with the art), pictures only (not barcodes or file icons)
+      const f = (r.data?.groups?.flatMap((g) => [...g.imprints.flatMap((im) => im.mockups), ...g.lines.flatMap((l) => l.mockups)]) || []).filter((x) => /^image\//.test(x.mime || "") && !/barcode|label/i.test(x.name || ""));
       const hit = f.map((x) => (x.thumb && r.files?.[x.thumb]) || (x.full && r.files?.[x.full]) || "").find((p) => p && !["failed", "too-big"].includes(p));
       if (hit) want.push({ id: r.id, path: hit });
     });
