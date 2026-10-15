@@ -766,15 +766,17 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
   const confirm = confirm0?.label === "Order confirmation" ? confirm0 : undefined;
-  const [subject, setSubject] = useState(confirm?.subject || draftSubject);
-  const [body, setBody] = useState(confirm?.body || reply?.draft?.body || "");
+  // the old confirmation isn't put in the box just because the email was opened again (Oct 14, Nick: "this still pops up
+  // when I click that email from Cheri"): it comes in only when the order is made (the effect on confirmAt below)
+  const [subject, setSubject] = useState(draftSubject);
+  const [body, setBody] = useState(reply?.draft?.body || "");
   const [err, setErr] = useState("");
-  const [opts, setOpts] = useState<Opt[] | null>(x.meta?.reply_options?.options || null), [picked, setPicked] = useState(confirm ? 0 : reply?.draft?.body ? -2 : -1), [ask, setAsk] = useState("");
+  const [opts, setOpts] = useState<Opt[] | null>(x.meta?.reply_options?.options || null), [picked, setPicked] = useState(reply?.draft?.body ? -2 : -1), [ask, setAsk] = useState("");
   // Cc (Oct 12): who's copied, and what you told the AI ("copy Amanda") so they're added
   const [cc, setCc] = useState<string[]>([]), [told, setTold] = useState("");
   const boxRef = useRef<HTMLTextAreaElement | null>(null), moreRef = useRef<HTMLDetailsElement | null>(null);
   // the answer box: a slim bar until you start answering (an email opened to answer starts open)
-  const [writing, setWriting] = useState(focus || !!confirm);
+  const [writing, setWriting] = useState(focus);
   // the email column shows the email, or the order being made from it
   const [view, setView] = useState<"mail" | "order">("mail"), [orderStart, setOrderStart] = useState<{ told?: string; job?: string; n: number } | null>(null), [ordering, setOrdering] = useState(false);
   // phones: one column at a time
