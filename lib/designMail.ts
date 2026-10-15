@@ -11,7 +11,7 @@ import { ewsOpen, ewsReady, ewsSearch } from "@/lib/mail/ewsBox";
  * so opening the history again is instant; "Search again" looks again. The portal's copy and the emails kept in the
  * portal (with their pictures) are added in, without doubles.
  */
-export type DesignEmail = { date: string; from: string; incoming: boolean; subject: string; text: string; pics?: string[]; folder?: string };
+export type DesignEmail = { date: string; from: string; incoming: boolean; subject: string; text: string; pics?: string[]; folder?: string; /** to open the whole email: in the mailbox (folder + uid) or kept in the portal (activity id) */ uid?: number; act?: string };
 
 const FREE = /@(gmail|yahoo|hotmail|outlook|icloud|aol|live|msn|me|comcast|att|sbcglobal)\./;
 const clean = (t: string) => String(t || "").replace(/\r/g, "").split(/\n(?:On .{5,160} wrote:|-----Original Message-----|From: .{3,200}\n(?:Sent|Date): )/)[0].replace(/\n{3,}/g, "\n\n").trim();
@@ -56,7 +56,7 @@ async function mailboxEmails(admin: SupabaseClient, acct: MailAccount | null, cu
       const full = await ewsOpen(admin, acct, m.folder, m.uid, (id) => id).catch(() => null);
       const text = clean(full?.text || htmlText(full?.html || ""));
       const incoming = !m.sent && !String(m.from).toLowerCase().includes(me) && !/@fbsprint\.com/i.test(m.from);
-      out.push({ date: m.date, from: incoming ? (m.fromName || m.from) : (m.fromName || "FBS"), incoming, subject: m.subject, text: text.slice(0, 3000), folder: m.folder });
+      out.push({ date: m.date, from: incoming ? (m.fromName || m.from) : (m.fromName || "FBS"), incoming, subject: m.subject, text: text.slice(0, 3000), folder: m.folder, uid: m.uid });
     }
   }));
   out.sort((a, b) => a.date.localeCompare(b.date));
@@ -71,16 +71,16 @@ export async function designEmails(admin: SupabaseClient, acct: MailAccount | nu
   const box = await mailboxEmails(admin, acct, customerId, words, !!opts.fresh).catch(() => ({ emails: [] as DesignEmail[], searched: false }));
   const seen = new Set(box.emails.map((e) => key(e.subject, e.date)));
   const out = [...box.emails];
-  const { data: mails } = await admin.from("mail_cache").select("subject, from_email, from_name, to_text, sent_at, body_text").or(words.map((w) => `hay.ilike.%${w}%`).join(",")).is("gone_at", null).order("sent_at").limit(150);
+  const { data: mails } = await admin.from("mail_cache").select("subject, from_email, from_name, to_text, sent_at, body_text, folder, uid").or(words.map((w) => `hay.ilike.%${w}%`).join(",")).is("gone_at", null).order("sent_at").limit(150);
   for (const m of mails || []) {
     if (!who.theirs(`${m.from_email} ${m.to_text}`)) continue;
     const k = key(m.subject || "", String(m.sent_at));
     if (seen.has(k)) continue;
     seen.add(k);
     const incoming = !/@fbsprint\.com/i.test(String(m.from_email || ""));
-    out.push({ date: String(m.sent_at), from: incoming ? (m.from_name || m.from_email) : (m.from_name || "FBS"), incoming, subject: m.subject || "", text: clean(m.body_text || "").slice(0, 3000) });
+    out.push({ date: String(m.sent_at), from: incoming ? (m.from_name || m.from_email) : (m.from_name || "FBS"), incoming, subject: m.subject || "", text: clean(m.body_text || "").slice(0, 3000), ...(m.folder && m.uid ? { folder: String(m.folder), uid: Number(m.uid) } : {}) });
   }
-  const { data: acts } = await admin.from("activities").select("occurred_at, direction, subject, body, from_email, meta").eq("customer_id", customerId).order("occurred_at").limit(600);
+  const { data: acts } = await admin.from("activities").select("id, occurred_at, direction, subject, body, from_email, meta").eq("customer_id", customerId).order("occurred_at").limit(600);
   for (const a of (acts || []).filter((x) => hit(x.subject) || hit(x.body))) {
     const k = key(a.subject || "", String(a.occurred_at));
     const att = (((a.meta || {}) as { attachments?: { path?: string; signature?: boolean }[] }).attachments || []).filter((f) => f.path && /\.(jpe?g|png|webp)$/i.test(f.path) && !f.signature).map((f) => f.path!).slice(0, 3);
@@ -88,10 +88,11 @@ export async function designEmails(admin: SupabaseClient, acct: MailAccount | nu
       // the same email from the mailbox: add its pictures
       const e = out.find((x) => key(x.subject, x.date) === k);
       if (e && att.length && opts.pics) e.pics = await opts.pics(att);
+      if (e && !e.act) e.act = String(a.id);
       continue;
     }
     seen.add(k);
-    out.push({ date: String(a.occurred_at), from: a.direction === "in" ? a.from_email : "FBS", incoming: a.direction === "in", subject: a.subject || "", text: clean(a.body || "").slice(0, 3000), ...(att.length && opts.pics ? { pics: await opts.pics(att) } : {}) });
+    out.push({ date: String(a.occurred_at), from: a.direction === "in" ? a.from_email : "FBS", incoming: a.direction === "in", subject: a.subject || "", text: clean(a.body || "").slice(0, 3000), act: String(a.id), ...(att.length && opts.pics ? { pics: await opts.pics(att) } : {}) });
   }
   out.sort((a, b) => a.date.localeCompare(b.date));
   return { emails: out, wholeMailbox: box.searched };

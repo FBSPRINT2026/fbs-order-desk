@@ -7881,3 +7881,12 @@ a.pdn-tag:hover{text-decoration:underline}
 .pv-main>.prod{margin-top:14px}
 .jt-pv .pvh-panel{border:0;box-shadow:none;margin:0}.jt-pv .pvh-panel>.panel-h{display:none}
 .pv-main .pv-below,.pv-main>div>.panel{margin-top:14px}
+/* job emails in full, like Outlook (Oct 15) */
+.jt-em{display:block;padding:0}
+.jt-em-h{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;border:0;background:none;padding:9px 11px;font:inherit;color:var(--ink);cursor:pointer}
+.jt-em-h .jt-emb{flex:1}
+.jt-chev{color:var(--ink-3);font-size:12px;margin-top:3px}
+.jt-em-body{border-top:1px solid var(--line-2);padding:10px 12px 12px;display:flex;flex-direction:column;gap:8px}
+.jt-em-meta{font-size:13px}.jt-em-meta .faint{font-size:12px}
+.jt-em-body iframe{width:100%;border:0;background:#fff}
+.jt-att{display:inline-flex;align-items:center;gap:6px;margin-right:8px}

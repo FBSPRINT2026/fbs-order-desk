@@ -23,7 +23,7 @@ export const maxDuration = 120;
  */
 type Item =
   | { kind: "text"; id: string; date: string; from_me: boolean; who: string; body: string; files: { name: string; type: string; url: string }[]; how: string }
-  | { kind: "email"; id: string; date: string; incoming: boolean; from: string; subject: string; text: string; pics?: string[]; src: string };
+  | { kind: "email"; id: string; date: string; incoming: boolean; from: string; subject: string; text: string; pics?: string[]; src: string; folder?: string; uid?: number; act?: string };
 type Talk = { sig: string; summary: string; approvals: { id: string; what: string }[] };
 
 /** the owners, Jose and Claudia (lib/texts.ts TEXT_VIEWERS); mailbox emails only for the owners */
@@ -51,6 +51,19 @@ export async function GET(req: Request) {
   if (!v) return NextResponse.json({ error: "Only the owners, Jose and Claudia." }, { status: 403 });
   const u = new URL(req.url), ref = u.searchParams.get("ref") || "";
   const admin = createAdminClient();
+  // ?act=<activity id>: an email kept in the portal, in full (its HTML, as Outlook shows it, and its attachments)
+  const actId = u.searchParams.get("act");
+  if (actId) {
+    if (!v.boss) return NextResponse.json({ error: "Owners only." }, { status: 403 });
+    const { data: a } = await admin.from("activities").select("subject, body, from_email, to_email, occurred_at, direction, meta").eq("id", actId).maybeSingle();
+    if (!a) return NextResponse.json({ error: "That email isn't here any more." }, { status: 404 });
+    const meta = (a.meta || {}) as { html?: string; cc?: string[] | string; from_name?: string; attachments?: { path?: string; name?: string; size?: number; type?: string; signature?: boolean }[] };
+    const atts = (meta.attachments || []).filter((f) => f.path && !f.signature);
+    const { data: s } = atts.length ? await admin.storage.from("proofs").createSignedUrls(atts.map((f) => f.path!), 3600, ) : { data: [] };
+    const { data: dl } = atts.length ? await admin.storage.from("proofs").createSignedUrls(atts.map((f) => f.path!), 3600, { download: true }) : { data: [] };
+    return NextResponse.json({ html: meta.html || "", text: a.body || "", from: meta.from_name ? `${meta.from_name} <${a.from_email}>` : a.from_email, to: a.to_email || "", cc: Array.isArray(meta.cc) ? meta.cc.join(", ") : meta.cc || "", date: a.occurred_at, subject: a.subject || "",
+      attachments: atts.map((f, i) => ({ name: f.name || f.path!.split("/").pop(), size: f.size || 0, type: f.type || "", url: s?.[i]?.signedUrl || "", download: dl?.[i]?.signedUrl || "" })) });
+  }
   const job = await jobOf(admin, ref);
   if (!job?.customer) return NextResponse.json({ error: "No such job." }, { status: 404 });
   const st = await aiState(admin);
@@ -102,7 +115,7 @@ export async function GET(req: Request) {
     const byName = me && at >= me.start && at <= me.end && keys.some((k) => squash(hay).includes(k));
     if (!byNumber && !byName) return;
     const k = `${e.subject}|${e.date.slice(0, 10)}`; if (seen.has(k)) return; seen.add(k);
-    items.push({ kind: "email", id: `m${i}`, date: e.date, incoming: e.incoming, from: e.from, subject: e.subject, text: e.text, ...(e.pics?.length ? { pics: e.pics } : {}), src: byNumber ? `names #${job.number}` : "names the job, while it was open" });
+    items.push({ kind: "email", id: `m${i}`, date: e.date, incoming: e.incoming, from: e.from, subject: e.subject, text: e.text, ...(e.pics?.length ? { pics: e.pics } : {}), ...(e.folder && e.uid ? { folder: e.folder, uid: e.uid } : {}), ...(e.act ? { act: e.act } : {}), src: byNumber ? `names #${job.number}` : "names the job, while it was open" });
   });
   items.sort((a, b) => a.date.localeCompare(b.date));
 

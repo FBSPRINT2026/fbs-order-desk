@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
+import { Attachments, MailFrame, box, type FullMsg } from "@/components/MailFolders";
 
 /**
  * A job's emails and texts in one timeline (Oct 15, Nick, on Printavo invoice 27166: "a shop-side tab that shows the
@@ -8,7 +9,8 @@ import { useEffect, useState, type ReactNode } from "react";
  */
 type Item =
   | { kind: "text"; id: string; date: string; from_me: boolean; who: string; body: string; files: { name: string; type: string; url: string }[]; how: string }
-  | { kind: "email"; id: string; date: string; incoming: boolean; from: string; subject: string; text: string; pics?: string[]; src: string };
+  | { kind: "email"; id: string; date: string; incoming: boolean; from: string; subject: string; text: string; pics?: string[]; src: string; folder?: string; uid?: number; act?: string };
+type Kept = { html: string; text: string; from: string; to: string; cc: string; date: string; subject: string; attachments: { name: string; size: number; type: string; url: string; download: string }[] };
 type Talk = { customer: string; number: string; name: string; items: Item[]; summary: string; approvals: { id: string; what: string }[] };
 
 const day = (s: string) => new Date(s).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
@@ -17,6 +19,20 @@ const time = (s: string) => new Date(s).toLocaleTimeString("en-US", { hour: "num
 export default function JobTalk({ jobRef, printavo, printavoCount = 0 }: { jobRef: string; /** a Printavo job's own messages & approvals (Oct 15, Nick: "add messages and approval to Emails & Texts… call them Printavo Messages") */ printavo?: ReactNode; printavoCount?: number }) {
   const [d, setD] = useState<Talk | null>(null), [no, setNo] = useState(false), [err, setErr] = useState("");
   const [show, setShow] = useState<"all" | "text" | "email" | "pv">("all"), [big, setBig] = useState(""), [open, setOpen] = useState<Record<string, boolean>>({});
+  /** an email opened in full: from the mailbox (FullMsg) or kept in the portal; "…" while loading */
+  const [full, setFull] = useState<Record<string, FullMsg | Kept | "…" | string>>({});
+  const openEmail = async (i: Extract<Item, { kind: "email" }>) => {
+    const was = open[i.id];
+    setOpen((o) => ({ ...o, [i.id]: !was }));
+    if (was || full[i.id]) return;
+    if (!(i.folder && i.uid) && !i.act) return;
+    setFull((f) => ({ ...f, [i.id]: "…" }));
+    try {
+      const m = i.folder && i.uid ? await box<FullMsg>({ do: "message", path: i.folder, uid: i.uid })
+        : await fetch(`/api/jobs/talk?act=${i.act}`).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j as Kept; });
+      setFull((f) => ({ ...f, [i.id]: m }));
+    } catch (e) { setFull((f) => ({ ...f, [i.id]: e instanceof Error ? e.message : "Couldn't open it." })); }
+  };
   const load = () => fetch(`/api/jobs/talk?ref=${encodeURIComponent(jobRef)}`).then(async (r) => { if (r.status === 403) { setNo(true); return; } const j = await r.json(); if (j.error) setErr(j.error); else setD(j); }).catch((e) => setErr(String(e)));
   useEffect(() => { void load(); }, [jobRef]); // eslint-disable-line react-hooks/exhaustive-deps
   if (no) return null;
@@ -49,12 +65,29 @@ export default function JobTalk({ jobRef, printavo, printavoCount = 0 }: { jobRe
               <div key={i.id}>
                 {sep && <div className="jt-day">{dd}</div>}
                 {i.kind === "email" ? (
-                  <button type="button" className={"jt-em" + (open[i.id] ? " open" : "")} onClick={() => setOpen((o) => ({ ...o, [i.id]: !o[i.id] }))}>
-                    <span className="jt-ic" aria-hidden>✉</span>
-                    <span className="jt-emb"><b>{i.subject || "(no subject)"}</b><span className="faint">{i.incoming ? i.from : `${i.from} (us)`} · {time(i.date)} · {i.src}</span>
-                      {open[i.id] ? <span className="jt-emt">{i.text}</span> : <span className="jt-em1">{i.text.replace(/\s+/g, " ").slice(0, 160)}</span>}
-                      {i.pics && i.pics.length > 0 && <span className="jt-pics">{i.pics.map((u) => <img key={u} src={u} alt="" onClick={(e) => { e.stopPropagation(); setBig(u); }} />)}</span>}</span>
-                  </button>
+                  <div className={"jt-em" + (open[i.id] ? " open" : "")}>
+                    <button type="button" className="jt-em-h" onClick={() => void openEmail(i)} aria-expanded={!!open[i.id]}>
+                      <span className="jt-ic" aria-hidden>✉</span>
+                      <span className="jt-emb"><b>{i.subject || "(no subject)"}</b><span className="faint">{i.incoming ? i.from : `${i.from} (us)`} · {time(i.date)} · {i.src}</span>
+                        {!open[i.id] && <span className="jt-em1">{i.text.replace(/\s+/g, " ").slice(0, 160)}</span>}</span>
+                      <span className="jt-chev" aria-hidden>{open[i.id] ? "▴" : "▾"}</span>
+                    </button>
+                    {open[i.id] && (() => {
+                      const f = full[i.id];
+                      if (f === "…") return <div className="jt-em-body faint">Opening…</div>;
+                      if (typeof f === "string") return <div className="jt-em-body"><div className="pv-err">{f}</div><div className="jt-emt">{i.text}</div></div>;
+                      if (f && "uid" in f) {
+                        const m = f as FullMsg;
+                        return <div className="jt-em-body"><div className="jt-em-meta"><b>{m.fromName || m.fromAddress}</b> <span className="faint">{m.fromAddress}</span><div className="faint">To {m.to}{m.cc ? ` · Cc ${m.cc}` : ""}</div></div><MailFrame html={m.html} text={m.text} /><Attachments m={m} /></div>;
+                      }
+                      if (f) {
+                        const k = f as Kept;
+                        return <div className="jt-em-body"><div className="jt-em-meta"><b>{k.from}</b><div className="faint">To {k.to}{k.cc ? ` · Cc ${k.cc}` : ""}</div></div><MailFrame html={k.html} text={k.text} />
+                          {k.attachments.length > 0 && <div className="mf-atts">{k.attachments.map((a) => <span key={a.url} className="jt-att"><a href={a.url} target="_blank" rel="noreferrer" className="mf-att">📎 {a.name}{a.size ? <span> {Math.max(1, Math.round(a.size / 1024))} KB</span> : null}</a>{a.download && <a className="linkbtn" href={a.download}>Download</a>}</span>)}</div>}</div>;
+                      }
+                      return <div className="jt-em-body"><div className="jt-emt">{i.text}</div>{i.pics && i.pics.length > 0 && <span className="jt-pics">{i.pics.map((u) => <img key={u} src={u} alt="" onClick={() => setBig(u)} />)}</span>}</div>;
+                    })()}
+                  </div>
                 ) : (
                   <div className={"jt-tx " + (i.from_me ? "me" : "them")}>
                     {i.files.filter((f) => f.url).length > 0 && <div className="jt-pics">{i.files.filter((f) => f.url).map((f) => /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp)$/i.test(f.name) ? <img key={f.url} src={f.url} alt={f.name} onClick={() => setBig(f.url)} /> : <a key={f.url} href={f.url} target="_blank" rel="noreferrer">{f.name}</a>)}</div>}
