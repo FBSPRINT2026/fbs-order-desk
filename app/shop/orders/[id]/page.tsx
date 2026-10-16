@@ -35,7 +35,7 @@ import { ChecksPanel, FillFromText, type StatusLine } from "@/components/OrderAs
 import Timeline from "@/components/Timeline";
 import { useCan, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
-import { PAY_TERMS, SIZES } from "@/lib/pricing";
+import { PAY_TERMS, SIZES, supplierSizeUp } from "@/lib/pricing";
 import { BIG_SIZES, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
 import { programCard } from "@/app/shop/program-pricing-actions";
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
@@ -268,9 +268,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (missing) patch((d) => { d.groups.forEach((g) => g.lines.forEach((l) => { const gm = find(l); if ((l.cost === "" || l.cost == null) && gm) {
       l.cost = gm.cost;
       // 2XL+ material charge from the supplier's size prices, same as picking the style here
-      const sc = gm.size_costs || {}, up: GLine["sizeUp"] = {};
-      for (const z of ["2XL", "3XL", "4XL", "5XL"] as const) if (sc[z] && gm.cost) up[z] = Math.max(0, Math.round((sc[z] - +gm.cost) * 100) / 100);
-      l.sizeUp = Object.keys(up).length ? up : undefined;
+      Object.assign(l, supplierSizeUp(gm, settings));
     } })); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o, catalog]);
@@ -331,9 +329,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           if (JSON.stringify(l.sizeUp || {}) !== JSON.stringify(up)) l.sizeUp = up;
         } else if (l.prog) {
           delete l.prog; l.priceOverride = null;
-          const gm = findGm(l), sc = gm?.size_costs || {}, up: GLine["sizeUp"] = {};
-          if (gm) for (const z of BIG_SIZES) if (sc[z] && gm.cost) up[z] = Math.max(0, Math.round((sc[z] - +gm.cost) * 100) / 100);
-          l.sizeUp = Object.keys(up).length ? up : undefined;
+          const gm = findGm(l);
+          Object.assign(l, gm ? supplierSizeUp(gm, settings) : { sizeUp: undefined, sizeUpMarkup: undefined });
         }
       }));
       // program rules for every job: the price per screen (Tiger Blue $15) on each group with a screen print
@@ -410,9 +407,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       if (!gm) return;
       l.brand = gm.brand; l.garment = l.garment || gm.description;
       if (o?.price_type !== "wholesale") l.cost = +gm.cost || "";
-      const sc = gm.size_costs || {}, up: GLine["sizeUp"] = {};
-      for (const z of ["2XL", "3XL", "4XL", "5XL"] as const) if (sc[z] && gm.cost) up[z] = Math.max(0, Math.round((sc[z] - +gm.cost) * 100) / 100);
-      l.sizeUp = Object.keys(up).length ? up : undefined;
+      Object.assign(l, supplierSizeUp(gm, settings));
       const run = (gm.sizes || []).filter((z) => (SIZES as readonly string[]).includes(z));
       if (run.length) { l.sizeRun = run; if (run.length === 1 && run[0] === "OS") l.oneSize = true; }
     }));

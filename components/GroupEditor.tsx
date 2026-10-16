@@ -1,5 +1,5 @@
 "use client";
-import { inkNames, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings } from "@/lib/pricing";
+import { inkNames, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, smallerSpot } from "@/lib/mockup";
 import { colorHex } from "@/lib/inkColors";
@@ -84,10 +84,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
       const hit = found || findStyle(style);
       if (hit) {
         // 2XL+ material charge = supplier's size price above the base price
-        const sc = hit.size_costs || {};
-        const up: GLine["sizeUp"] = {};
-        for (const z of ["2XL", "3XL", "4XL", "5XL"] as const) if (sc[z] && hit.cost) up[z] = Math.max(0, Math.round((sc[z] - +hit.cost) * 100) / 100);
-        l.sizeUp = Object.keys(up).length ? up : undefined;
+        Object.assign(l, supplierSizeUp(hit, settings));
         // picking a catalog style always refreshes its details and blank cost
         l.garment = hit.description;
         l.brand = hit.brand;
@@ -225,7 +222,7 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                   <div className="os-note">{l.sizeRun?.length === 1 ? "One size. Enter the quantity in Qty." : "One-size item. Clear the Qty to switch back to sizes."}</div>
                 ) : (
                   <SizeRow cols={colsFor(l) as (keyof GLine["sizes"])[]} sizes={l.sizes || {}} onSet={setQty}
-                    up={(s) => (!gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? l.sizeUp[s] : prices.upcharges[s as keyof typeof prices.upcharges])} />
+                    up={(s) => (!gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? sizeUpEach(l, s as Size) : prices.upcharges[s as keyof typeof prices.upcharges])} />
                 )}
               </div>
             );

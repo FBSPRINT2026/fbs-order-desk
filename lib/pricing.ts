@@ -89,6 +89,9 @@ export type GLine = {
   sizeRun?: string[];
   /** 2XL+ material charge per piece from the supplier's size pricing (S&S). Overrides the settings upcharges on retail. */
   sizeUp?: Partial<Record<Size, number>>;
+  /** what that supplier charge is marked up by on this line (Settings → 2XL+ markup when the style was picked, e.g. 1.2);
+   * stamped on the line so a change to the setting never reprices quotes already sent. None = 1 (lines from before Oct 16). */
+  sizeUpMarkup?: number;
   /** priced by the customer's program rate card (lib/programs.ts): the price put on this line and how it was worked out */
   prog?: { each: number; note: string };
   /** staff typed their own price over the program price: the program leaves this line alone */
@@ -213,6 +216,8 @@ export type Settings = PriceList & {
   /** The logo at the top of the shop's left menu (dark background, so a light version), its width, and the line under it. */
   brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string };
   markup: number; taxRate: number; depositPct: number;
+  /** 2XL+ (2XL–5XL) supplier upcharge markup: the supplier's extra cost for a big size × this (1.2 = +20%) (Oct 16, Nick) */
+  sizeUpMarkup?: number;
   /** online payments: card fee % (credit card only), and where to send Zelle / Venmo */
   pay: { cardFeePct: number; zelle: string; venmo: string };
   wholesale: PriceList;
@@ -266,6 +271,7 @@ export const DEFAULT_SETTINGS: Settings = {
   shop: { name: "FBS Print", address: "", phone: "", email: "", terms: "50% deposit to start production. Balance due at pickup.", logoUrl: "" },
   brand: { sideLogoUrl: "/brand/fbs-logo-white.svg", sideLogoWidth: 64, sideTagline: "Shop management" },
   markup: 50,
+  sizeUpMarkup: 1.2,
   taxRate: 8.25,
   depositPct: 50,
   pay: { cardFeePct: 3.25, zelle: "", venmo: "" },
@@ -369,6 +375,17 @@ export function mergeSettings(data: unknown): Settings {
 }
 
 /** The price list and garment rules for retail or wholesale work. */
+/** A big size's material charge on a line from the supplier's size price: the extra cost × the line's markup (program
+ * lines are priced by their rate card, never marked up). */
+export const sizeUpEach = (l: { sizeUp?: Partial<Record<Size, number>>; sizeUpMarkup?: number; prog?: unknown }, sz: Size) =>
+  Math.round(num(l.sizeUp?.[sz]) * (l.prog ? 1 : num(l.sizeUpMarkup) || 1) * 100) / 100;
+/** The supplier's extra cost for 2XL–5XL over the base size, and the markup to stamp on the line (Settings). */
+export function supplierSizeUp(gm: { size_costs?: Record<string, number> | null; cost?: number | string | null }, s?: Pick<Settings, "sizeUpMarkup"> | null) {
+  const sc = gm.size_costs || {}, up: Partial<Record<Size, number>> = {};
+  for (const z of ["2XL", "3XL", "4XL", "5XL"] as const) if (sc[z] && gm.cost) up[z] = Math.max(0, Math.round((sc[z] - +gm.cost) * 100) / 100);
+  const has = Object.keys(up).length > 0;
+  return { sizeUp: has ? up : undefined, sizeUpMarkup: has ? (s?.sizeUpMarkup ?? DEFAULT_SETTINGS.sizeUpMarkup ?? 1) : undefined };
+}
 export function priceList(s: Settings, type: PriceType = "retail") {
   const pl: PriceList = type === "wholesale" ? s.wholesale : s;
   return { ...pl, markup: s.markup, useGarment: type !== "wholesale" };
@@ -525,7 +542,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     let sub = 0, upTotal = 0;
     SIZES.forEach((sz) => {
       const q = num(l.sizes?.[sz]);
-      const up = pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? num(l.sizeUp[sz]) : num(pl.upcharges?.[sz]);
+      const up = pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? sizeUpEach(l, sz) : num(pl.upcharges?.[sz]);
       sub += q * each; // 2XL+ Materials Charge are billed as their own line
       upTotal += q * up;
     });
