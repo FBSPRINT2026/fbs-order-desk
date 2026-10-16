@@ -42,6 +42,10 @@ export async function POST(req: Request) {
     if (!order) return NextResponse.json({ error: "That order doesn't exist." }, { status: 404 });
     if (gate.approved) return NextResponse.json({ gate });
     await admin.from("order_events").insert({ order_id: b.order, kind: "art_approved", detail: `${me.name}: ${note}`, actor: me.email });
+    // the proof waiting on the customer is approved too, so the proof history and the customer's portal agree
+    // (Oct 16, Nick: Separations said approved while the proof still said "Waiting on the customer")
+    await admin.from("proofs").update({ status: "approved", decided_at: new Date().toISOString(), decided_name: `${me.name} (${note})`.slice(0, 200) })
+      .eq("order_id", b.order).eq("status", "pending").is("archived_at", null);
     return NextResponse.json({ gate: (await artGate(admin, b.order)).gate });
   }
   const r = await requestSeparations(admin, b.order, me.email, Array.isArray(b.only) ? b.only : undefined);
