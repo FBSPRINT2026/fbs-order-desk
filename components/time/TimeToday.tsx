@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { KIND_LABEL, addDays, fullName, hm, localDay, localMinutes, nextKinds, timeLabel, timecard, type Punch, type Shift } from "@/lib/timeclock";
+import { KIND_LABEL, punchLabel, withLunch, addDays, fullName, hm, localDay, localMinutes, nextKinds, timeLabel, timecard, type Punch, type Shift } from "@/lib/timeclock";
 import type { TimeData } from "./types";
 
 /** Right now: who's in, on break, late or missing a punch, plus the signed-in person's own punch buttons (phone punching). */
@@ -33,7 +33,7 @@ export default function TimeToday({ d }: { d: TimeData }) {
     return d.employees.filter((e) => e.active).map((e) => {
       const mine = punches.filter((p) => p.employee_id === e.id);
       const card = timecard(d.settings, e.id, mine, [], today, today);
-      const todays = mine.filter((p) => localDay(p.at) === today);
+      const todays = withLunch(mine.filter((p) => localDay(p.at) === today));
       const shift = shifts.find((s) => s.employee_id === e.id) || null;
       const late = !!shift && !todays.some((p) => p.kind === "in") && card.state === "out" && nowMin > localMinutes(shift.starts_at) + d.settings.graceMin;
       const lateIn = shift && todays.find((p) => p.kind === "in") ? Math.round((Date.parse(todays.find((p) => p.kind === "in")!.at) - Date.parse(shift.starts_at)) / 60000) : 0;
@@ -63,7 +63,7 @@ export default function TimeToday({ d }: { d: TimeData }) {
             <li key={r.e.id} className="db-row tmx-row">
               {r.photo ? <img src={r.photo} alt="" className="tmx-ph" /> : <span className={"tmx-dot " + r.card.state} />}
               <span className="db-main"><b>{fullName(r.e)}</b><span className="faint">{[r.e.department, r.shift ? `scheduled ${timeLabel(r.shift.starts_at)}–${timeLabel(r.shift.ends_at)}` : ""].filter(Boolean).join(" · ") || "—"}</span>
-                <span className="tmx-punches">{r.todays.map((p) => <span key={p.id} className={"tmx-p " + p.kind} title={p.source}>{KIND_LABEL[p.kind].replace("Clock ", "")} {timeLabel(p.at)}</span>)}</span>
+                <span className="tmx-punches">{r.todays.map((p) => <span key={p.id} className={"tmx-p " + p.kind} title={p.source}>{punchLabel(p).replace("Clock ", "")} {timeLabel(p.at)}</span>)}</span>
               </span>
               <span className="db-side">
                 <span className={"tmx-st " + (r.late ? "late" : r.card.state)}>{r.late ? "Late" : r.card.state === "in" ? `In since ${timeLabel(r.card.since!)}` : r.card.state === "break" ? `Break since ${timeLabel(r.card.since!)}` : r.todays.length ? "Clocked out" : "Not in"}{r.lateIn > d.settings.graceMin ? ` · ${r.lateIn} min late` : ""}</span>

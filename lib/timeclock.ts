@@ -101,6 +101,26 @@ export type Card = {
   state: "out" | "in" | "break"; since: string | null;
 };
 
+/**
+ * Lunch from four punches (Oct 16, Nick: "if someone has 4 punches in a day it records the middle two as lunch"): a
+ * day whose punches are exactly in, out, in, out reads as in, lunch out, lunch in, out. Nothing stored changes; every
+ * timecard, the payroll export and the Today list read punches through this, whatever clock they came from.
+ */
+export type LunchPunch<T> = T & { lunch?: boolean };
+export function withLunch<T extends { kind: Punch["kind"]; at: string; voided?: boolean; employee_id?: string }>(ps: T[]): LunchPunch<T>[] {
+  const groups = new Map<string, T[]>();
+  for (const p of ps) { if (p.voided) continue; const k = `${p.employee_id || ""}|${localDay(p.at)}`; (groups.get(k) || groups.set(k, []).get(k)!).push(p); }
+  const swap = new Map<T, LunchPunch<T>>();
+  for (const g of groups.values()) {
+    if (g.length !== 4) continue;
+    const day = [...g].sort((a, b) => a.at.localeCompare(b.at));
+    if (day.map((p) => p.kind).join(",") !== "in,out,in,out") continue;
+    swap.set(day[1], { ...day[1], kind: "break_start", lunch: true });
+    swap.set(day[2], { ...day[2], kind: "break_end", lunch: true });
+  }
+  return ps.map((p) => swap.get(p) || p);
+}
+
 /** What the next punch can be, given the last one. */
 export function nextKinds(last: Punch | null | undefined): Punch["kind"][] {
   if (!last || last.kind === "out") return ["in"];
@@ -115,7 +135,7 @@ export const stateOf = (last: Punch | null | undefined): Card["state"] => (!last
  * `now` closes a shift that's still open (so today's hours show as they accrue).
  */
 export function timecard(s: TimeSettings, employeeId: string, punchesIn: Punch[], offs: TimeOff[], start: string, end: string, now = new Date().toISOString()): Card {
-  const punches = punchesIn.filter((p) => !p.voided && p.employee_id === employeeId).map((p) => ({ ...p, at: round(p.at, s.rounding) })).sort((a, b) => a.at.localeCompare(b.at));
+  const punches = withLunch(punchesIn.filter((p) => !p.voided && p.employee_id === employeeId)).map((p) => ({ ...p, at: round(p.at, s.rounding) })).sort((a, b) => a.at.localeCompare(b.at));
   const days: Record<string, DayHours> = {};
   const dayRec = (d: string) => (days[d] ||= { day: d, worked: 0, breaks: 0, first: null, last: null, issues: [] });
   const issues: Issue[] = [];
@@ -190,6 +210,8 @@ export function meters(a: { lat: number; lng: number }, b: { lat: number; lng: n
 }
 
 export const KIND_LABEL: Record<Punch["kind"], string> = { in: "Clock In", out: "Clock Out", break_start: "Start Break", break_end: "End Break" };
+/** A punch's name, with lunch for the middle two of a four-punch day. */
+export const punchLabel = (p: { kind: Punch["kind"]; lunch?: boolean }) => (p.lunch ? (p.kind === "break_start" ? "Lunch Out" : "Lunch In") : KIND_LABEL[p.kind]);
 
 /* ---------- job time (who worked on which order, doing what, how long) ---------- */
 
