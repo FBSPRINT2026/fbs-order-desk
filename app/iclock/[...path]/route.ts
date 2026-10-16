@@ -21,10 +21,12 @@ async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }
   const what = (path || []).join("/").toLowerCase().replace(/\.aspx$/, "");
   const url = new URL(req.url);
   const sn = url.searchParams.get("SN") || url.searchParams.get("sn") || "";
+  // one line per call while we get the clock connected (Vercel logs: search "iclock")
+  console.log(`iclock ${req.method} /${what} SN=${sn || "-"} ${url.search.slice(0, 200)}`);
   if (what === "ping") return text("OK");
   const admin = createAdminClient();
   const d = await zkDevice(admin, sn);
-  if (!d) return text("Unknown device", 400);
+  if (!d) { console.log(`iclock refused SN=${sn || "-"}`); return text("Unknown device", 400); }
   const body = req.method === "POST" ? await req.text().catch(() => "") : "";
   const lines = body.split(/\r?\n/);
 
