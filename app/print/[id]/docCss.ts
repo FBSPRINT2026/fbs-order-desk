@@ -122,11 +122,14 @@ export const DOC_CSS = `
 .pdoc .parties.two{grid-template-columns:1fr 1fr;gap:28px}
 .pdoc .parties .lbl{margin-bottom:4px}
 .pdoc .parties > div{font-size:11pt;line-height:1.4;white-space:pre-line;overflow-wrap:anywhere}
-.pdoc .job{display:grid;grid-template-columns:1.45in 1fr;gap:6px 16px;border-top:2px solid var(--ink);padding-top:10px;margin-bottom:14px;break-inside:avoid}
+.pdoc .job{display:grid;grid-template-columns:1.45in 1fr;gap:0 16px;border-top:2px solid var(--ink);padding-top:0;margin-bottom:14px;break-inside:avoid}
 .pdoc .job .pic{width:1.45in;border-radius:10px;background:#f6f7f9;padding:6px;align-self:start}
 .pdoc .job .pic.none{height:1.2in;display:grid;place-items:center;font-size:9pt;color:var(--ink3);text-align:center}
-.pdoc .job .t{font-size:16pt;line-height:1.1;grid-column:1/-1;padding-bottom:4px;border-bottom:1.5px solid var(--ink3)}
+.pdoc .job .t{font-size:16pt;line-height:1;grid-column:1/-1;height:.44in;box-sizing:border-box;display:flex;align-items:center;border-bottom:1.5px solid var(--ink3)}
+/* the black line, the gray line under the name and the line under ITEM are evenly spaced (Oct 16, Nick) */
 .pdoc .job .it{margin-top:0}
+.pdoc .job .it th{height:.44in;box-sizing:border-box;padding-top:0;padding-bottom:0;vertical-align:middle}
+.pdoc .job .pic{margin-top:8px}
 .pdoc .it{width:100%;border-collapse:collapse;font-size:11pt;margin-top:6px}
 .pdoc .it th{font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:5px 6px;border-bottom:1.5px solid var(--ink)}
 .pdoc .it th.r,.pdoc .it td.r,.pdoc .extra td.r{text-align:right;white-space:nowrap}
