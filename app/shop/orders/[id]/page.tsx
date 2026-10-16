@@ -35,10 +35,11 @@ import { ChecksPanel, FillFromText, type StatusLine } from "@/components/OrderAs
 import Timeline from "@/components/Timeline";
 import { useCan, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
-import { PAY_TERMS, SIZES, supplierSizeUp } from "@/lib/pricing";
+import { PAY_TERMS, SIZES, lineQty, supplierSizeUp } from "@/lib/pricing";
 import { BIG_SIZES, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
 import { programCard } from "@/app/shop/program-pricing-actions";
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
+import ShipQuote from "@/components/ShipQuote";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -818,6 +819,18 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     <div className="field"><label htmlFor="o-st">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="o-st" rows={3} value={o.ship_to || ""} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>
                     {o.delivery_method === "ship" && <div className="field"><label htmlFor="o-tr">Tracking #</label><input id="o-tr" type="text" value={o.tracking || ""} onChange={(e) => patch((d) => { d.tracking = e.target.value; })} /></div>}
                   </div>
+                )}
+                {/* the shipping charge from live UPS / FedEx rates, onto the invoice (Oct 16, Nick) */}
+                {o.delivery_method === "ship" && seesMoney && calc && (
+                  <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship}
+                    garments={o.groups.flatMap((g) => g.lines.map((l) => ({ desc: `${l.garment || ""} ${l.style || ""}`, qty: lineQty(l) })))}
+                    current={(() => { const f = o.fees.find((x) => /^shipping\b/i.test(x.label || "")); return f ? { label: f.label, amount: +f.amount || 0 } : null; })()}
+                    onAdd={(label, amount, method) => patch((d) => {
+                      const i = d.fees.findIndex((x) => /^shipping\b/i.test(x.label || ""));
+                      const fee = { label, amount: Math.round(amount * 100) / 100 };
+                      if (i >= 0) d.fees[i] = fee; else { d.fees = d.fees.filter((x) => (x.label || "").trim() || x.amount !== ""); d.fees.push(fee); }
+                      d.ship_method = method;
+                    })} />
                 )}
               </div>
             </section>

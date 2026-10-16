@@ -32,7 +32,7 @@ export function deliveredBy(service: string): { rank: number; label: string } {
 }
 const dayKey = (d: Date | null) => (d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : "none");
 const dayName = (d: Date) => d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
-const niceService = (s: string) => {
+export const niceService = (s: string) => {
   let x = s.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Za-z])(\d)/g, "$1 $2").replace(/^(fedex|ups|usps)\s+/i, "").trim();
   if (x === x.toUpperCase()) x = x.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()); // FEDEX_2_DAY → 2 Day
   return x;
