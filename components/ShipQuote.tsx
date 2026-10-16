@@ -4,6 +4,7 @@ import { money } from "@/lib/format";
 import { estimateBoxes, type Rate } from "@/lib/shipping";
 import type { ShipSettings } from "@/lib/pricing";
 import { deliveredBy, niceService } from "@/components/ShipWindow";
+import { matchShipMethod } from "@/lib/pricing";
 
 /**
  * Shipping quote (Oct 16, Nick: "how do we save shipping to an invoice… figure the charge for FedEx or UPS using
@@ -70,10 +71,10 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
     return () => clearTimeout(t);
   }, [want]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const name = (r: Rate) => `${r.carrier} ${niceService(r.service)}`;
+  const name = (r: Rate) => matchShipMethod(`${r.carrier} ${r.service}`) || `${r.carrier} ${niceService(r.service)}`;
   // shorter names in this narrow card only (Oct 16, Nick): Next Day Air → ND Air, 2nd Day Air / 2 Day → 2D Air.
   // The invoice line keeps the full name.
-  const shortService = (svc: string) => niceService(svc).replace(/^Next Day Air/i, "ND Air").replace(/^(2nd Day Air|2 ?Day( Air)?|Two Day)/i, "2D Air");
+  const shortService = (r: Rate) => name(r).slice(r.carrier.length).trim().replace(/^Next Day Air/i, "ND Air").replace(/^(2nd Day Air|2 ?Day( Air)?|Two Day)/i, "2D Air").replace(/^Priority Mail Express$/, "Priority Express");
   const isPicked = (r: Rate) => !!shipMethod && key(name(r)) === key(shipMethod);
   const onInvoice = (r: Rate) => !!current && Math.abs(current.amount - r.price) < 0.005 && key(current.label).includes(key(name(r)));
 
@@ -101,8 +102,10 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
   // the order's method first, then the picks, then the rest on time (cheapest first), then the late ones
   const pickedO = opts.find((o) => isPicked(o.r));
   const order = [pickedO, cheapestOnTime, cheapest, fastest, ...good.filter((o) => !o.late).sort((x, y) => x.r.price - y.r.price), ...good.filter((o) => o.late).sort((x, y) => x.r.price - y.r.price)];
-  const list = order.filter((o, i): o is Opt => !!o && order.indexOf(o) === i);
-  const shown = more ? list : list.slice(0, 4);
+  const best = order.filter((o, i): o is Opt => !!o && order.indexOf(o) === i);
+  // "more options" also lists the ones that cost more and don't get there sooner: a customer may ask for a carrier
+  const list = [...best, ...opts.filter((o) => !best.includes(o)).sort((x, y) => x.r.price - y.r.price)];
+  const shown = more ? list : best.slice(0, 4);
   const add = (r: Rate) => onAdd(`Shipping · ${name(r)} (${nBoxes} box${nBoxes === 1 ? "" : "es"})`, r.price, name(r));
   const dd = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
@@ -128,7 +131,7 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
                   <button key={i} type="button" role="listitem" className={"sqp-r" + (isPicked(r) ? " picked" : "") + (on ? " on" : "") + (o.late ? " late" : "")} onClick={() => add(r)}
                     title={on ? "On the invoice" : `Put ${money(r.price)} on the invoice as ${name(r)} (we pay ${money(r.cost)})`}>
                     <span className={"sqp-c " + r.carrier.toLowerCase()}>{r.carrier}</span>
-                    <span className="sqp-s">{shortService(r.service)}{tag && <em className="sqp-tag">{tag}</em>}
+                    <span className="sqp-s">{shortService(r)}{tag && <em className="sqp-tag">{tag}</em>}
                       <small className={o.late ? "late" : ""}>{o.at ? `${o.late ? "Late · " : "Arrives "}${dd(o.at)}` : "No estimate"}</small></span>
                     <b>{money(r.price)}</b>
                     <span className="sqp-go">{on ? "✓" : "Add"}</span>
@@ -137,7 +140,7 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
               })}
             </div>
           )}
-          {list.length > 4 && <button type="button" className="linkbtn sqp-more" onClick={() => setMore(!more)}>{more ? "Fewer options" : `${list.length - 4} more options`}</button>}
+          {list.length > Math.min(4, best.length) && <button type="button" className="linkbtn sqp-more" onClick={() => setMore(!more)}>{more ? "Fewer options" : `All options (${list.length})`}</button>}
           {current && (
             <label className={"sqp-inv" + (opts.some((o) => onInvoice(o.r)) ? "" : " custom")}>
               <span>On the invoice{opts.some((o) => onInvoice(o.r)) ? "" : <small> (your price)</small>}</span>

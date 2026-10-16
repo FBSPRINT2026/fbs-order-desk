@@ -45,10 +45,22 @@ export type Role = keyof typeof ROLES;
 /** Print locations (match the fbsprint.com order form). */
 export const LOCATIONS = ["Left Chest", "Right Chest", "Full Front", "Medium Front", "Center Chest", "Across Chest", "Full Back", "Medium Back", "Upper Back (Yoke)", "Across Shoulders", "Left Sleeve", "Right Sleeve", "Left Vertical", "Right Vertical", "Front Bottom Left", "Front Bottom Right", "Pocket"];
 export const SHIP_METHODS = [
-  "UPS Ground", "UPS 3 Day Select", "UPS 2nd Day Air", "UPS Next Day Air",
-  "FedEx Ground", "FedEx Home Delivery", "FedEx Express Saver", "FedEx 2Day", "FedEx Standard Overnight",
-  "USPS Priority Mail", "USPS Ground Advantage",
+  "UPS Ground", "UPS 3 Day Select", "UPS 2nd Day Air", "UPS 2nd Day Air A.M.", "UPS Next Day Air Saver", "UPS Next Day Air", "UPS Next Day Air Early A.M.",
+  "FedEx Ground", "FedEx Home Delivery", "FedEx Express Saver", "FedEx 2Day", "FedEx 2Day A.M.", "FedEx Standard Overnight", "FedEx Priority Overnight", "FedEx First Overnight",
+  "USPS Ground Advantage", "USPS Priority Mail", "USPS Priority Mail Express",
 ];
+const shipKey = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/^(fedex|ups|usps)(fedex|ups|usps)/, "$1");
+const SHIP_ALIAS: Record<string, string> = { fedexgroundhomedelivery: "FedEx Home Delivery", fedexhomedelivery: "FedEx Home Delivery", uspspriority: "USPS Priority Mail", uspsexpress: "USPS Priority Mail Express", uspsprioritymailexpress: "USPS Priority Mail Express", upsnextdayairearly: "UPS Next Day Air Early A.M." };
+/**
+ * The ship method list's name for a carrier's service (Oct 16, Nick: a rate picked in the shipping quote has to match
+ * the Ship method dropdown, not land in "Other…"). "UPS" + "NextDayAirEarlyAM" → "UPS Next Day Air Early A.M.",
+ * "FedEx" + "FEDEX_2_DAY" → "FedEx 2Day". Also matches a saved method typed differently. Null when it isn't on the list.
+ */
+export function matchShipMethod(v: string | null | undefined): string | null {
+  const k = shipKey(v || "");
+  if (!k) return null;
+  return SHIP_METHODS.find((m) => shipKey(m) === k) || SHIP_ALIAS[k] || null;
+}
 export const PAY_METHODS = ["Credit card", "ACH", "Zelle", "Venmo", "Cash", "Check", "Card", "Other"];
 
 export type Method = "screen" | "embroidery" | "dtf";
