@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getOrder, pv, transitionWrite, PrintavoError } from "@/lib/printavo";
 import { htmlText } from "@/lib/printavoChanges";
-import { calcOrder, imprintLabel, mergeSettings, orderGroups, SIZES, ST, type Order, type StatusKey } from "@/lib/pricing";
+import { calcOrder, FULL_COLOR, imprintLabel, mergeSettings, orderGroups, SIZES, ST, type Imprint, type Order, type StatusKey } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/config";
 
 /**
@@ -140,18 +140,26 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   if (missingCat.length) await admin.from("orders").update({ printavo_state: { ...(o.printavo_state as object || {}), sending: null } }).eq("id", inp.orderId);
   if (missingCat.length) throw new PrintavoError(`Printavo has no line item category for ${[...new Set(missingCat)].join(", ")} (looked for Screen Printing / Embroidery / Heat Press).`);
 
+  // a print as the customer reads it: location, colors, inks, size (no method: the category says that)
+  const printLine = (d: Imprint) => [d.location,
+    d.method === "screen" || d.method === "embroidery" ? (d.method === "screen" && d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`) : "full color",
+    d.inks, d.size].filter(Boolean).join(" · ");
   const lineItemGroups = groups.map((g, gi) => {
     const c = calc.groups[gi];
     return {
       position: gi + 1,
-      lineItems: g.lines.filter((l) => SIZES.some((z) => +(l.sizes?.[z] || 0) > 0)).map((l, li) => {
+      lineItems: g.lines.filter((l) => SIZES.some((z) => +(l.sizes?.[z] || 0) > 0)).map((l, li, all) => {
+        const lastLine = all.length - 1;
         const lc = c?.lines.find((x) => x.id === l.id);
         const counts: Record<string, number> = {};
         for (const z of SIZES) { const q = +(l.sizes?.[z] || 0); if (q > 0) { const k = PV_SIZE[z] || "size_other"; counts[k] = (counts[k] || 0) + q; } }
         const cat = catFor(g.imprints[0]?.method || "screen");
         return {
           position: li + 1, itemNumber: l.style || undefined, color: l.color || undefined, ...(cat ? { category: { id: cat.id } } : {}), mockups: lineMock(gi, l),
-          description: [l.brand, l.garment].filter(Boolean).join(" ") + (g.name ? ` (${g.name})` : ""),
+          // the prints under the garment on the last line (Oct 16, Nick: the customer can't see Printavo's imprints):
+          // "Full Front · 3 colors · White, PMS Cool Gray 5 C, PMS 199 C · 11.5" wide"
+          description: [[l.brand, l.garment].filter(Boolean).join(" ") + (g.name ? ` (${g.name})` : ""),
+            ...(li === lastLine ? g.imprints.map(printLine) : [])].join("\n"),
           price: lc ? lc.each : 0, taxed,
           sizes: Object.entries(counts).map(([size, count]) => ({ size, count })),
         };
