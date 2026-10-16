@@ -820,26 +820,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     {o.delivery_method === "ship" && <div className="field"><label htmlFor="o-tr">Tracking #</label><input id="o-tr" type="text" value={o.tracking || ""} onChange={(e) => patch((d) => { d.tracking = e.target.value; })} /></div>}
                   </div>
                 )}
-                {/* the shipping charge from live UPS / FedEx rates, onto the invoice (Oct 16, Nick) */}
-                {o.delivery_method === "ship" && seesMoney && calc && (
-                  <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship}
-                    garments={o.groups.flatMap((g) => g.lines.map((l) => {
-                      // the supplier's weight for each size ordered (S&S unitWeight), when the catalog has it
-                      const gm = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || x.brand.toLowerCase() === l.brand.toLowerCase()));
-                      const w = gm?.specs?.weights;
-                      const vals = w ? Object.values(w).filter((v) => v > 0) : [];
-                      const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-                      const lbs = w && avg ? Object.entries(l.sizes || {}).reduce((a, [z, q]) => a + (+q || 0) * (w[z] || avg), 0) || lineQty(l) * avg : undefined;
-                      return { desc: `${l.garment || ""} ${l.style || ""}`, qty: lineQty(l), lbs };
-                    }))}
-                    current={(() => { const f = o.fees.find((x) => /^shipping\b/i.test(x.label || "")); return f ? { label: f.label, amount: +f.amount || 0 } : null; })()}
-                    onAdd={(label, amount, method) => patch((d) => {
-                      const i = d.fees.findIndex((x) => /^shipping\b/i.test(x.label || ""));
-                      const fee = { label, amount: Math.round(amount * 100) / 100 };
-                      if (i >= 0) d.fees[i] = fee; else { d.fees = d.fees.filter((x) => (x.label || "").trim() || x.amount !== ""); d.fees.push(fee); }
-                      d.ship_method = method;
-                    })} />
-                )}
               </div>
             </section>
           </div>
@@ -936,6 +916,26 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
           </section>
+          {/* Shipping quote: live UPS / FedEx rates under Totals when the order ships; a click puts one on the invoice (Oct 16, Nick) */}
+          {o.delivery_method === "ship" && seesMoney && calc && (
+            <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship} shipMethod={o.ship_method || ""}
+              garments={o.groups.flatMap((g) => g.lines.map((l) => {
+                // the supplier's weight for each size ordered (S&S unitWeight), when the catalog has it
+                const gm = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || x.brand.toLowerCase() === l.brand.toLowerCase()));
+                const w = gm?.specs?.weights;
+                const vals = w ? Object.values(w).filter((v) => v > 0) : [];
+                const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+                const lbs = w && avg ? Object.entries(l.sizes || {}).reduce((a, [z, q]) => a + (+q || 0) * (w[z] || avg), 0) || lineQty(l) * avg : undefined;
+                return { desc: `${l.garment || ""} ${l.style || ""}`, qty: lineQty(l), lbs };
+              }))}
+              current={(() => { const f = o.fees.find((x) => /^shipping\b/i.test(x.label || "")); return f ? { label: f.label, amount: +f.amount || 0 } : null; })()}
+              onAdd={(label, amount, method) => patch((d) => {
+                const i = d.fees.findIndex((x) => /^shipping\b/i.test(x.label || ""));
+                const fee = { label, amount: Math.round(amount * 100) / 100 };
+                if (i >= 0) d.fees[i] = fee; else { d.fees = d.fees.filter((x) => (x.label || "").trim() || x.amount !== ""); d.fees.push(fee); }
+                d.ship_method = method;
+              })} />
+          )}
           {/* Printavo: a side panel on the Order tab, above the goods (Oct 15, Nick) */}
           {(o as Order & { printavo_id?: string | null }).printavo_id && <section className="panel pv-panel">
             <div className="panel-h"><h2>Printavo</h2></div>
