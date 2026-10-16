@@ -398,7 +398,7 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
             <tr key={o.id} className={paySel.includes(o.id) ? "sel" : ""} onClick={() => (canPay ? toggle(o.id) : router.push(orderHref(o.id)))}>
               {canPay && <td className="ck" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${isQuote ? "quote" : "order"} ${o.number}`} checked={paySel.includes(o.id)} onChange={(e) => toggle(o.id, e.target.checked)} /></td>}
               <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-              <td className="m"><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{isQuote ? (o.due_date ? `In hands ${when(o.due_date)}` : "") : payDue(o) ? `Payment due ${when(payDue(o))}` : "Due when the order is done"}</div></td>
+              <td className="m"><div className="aa-t">{o.nickname || (isQuote ? "Quote" : "Order")}</div><div className="aa-s">{isQuote ? "" : payDue(o) ? `Payment due ${when(payDue(o))}` : "Due when the order is done"}</div></td>
               <td>{pill(o)}</td>
               <td className="r num" data-l="Total">{money(o.total)}</td>
               {!isQuote && <td className="r num" data-l="Paid">{money(o.paid)}</td>}
@@ -447,7 +447,7 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
                 {shown.map((o) => (
                   <tr key={o.id} onClick={() => router.push(orderHref(o.id))}>
                     <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
-                    <td className="m"><div className="aa-t">{o.nickname || "Order"}</div><div className="aa-s">{payDue(o) ? `${o.due_date ? "In hands" : "Ordered"} ${when(payDue(o))}` : ""}</div></td>
+                    <td className="m"><div className="aa-t">{o.nickname || "Order"}</div></td>
                     <td>{pill(o)}</td>
                     <td className="r num" data-l="Total">{money(o.total)}</td>
                     <td className="r num" data-l="Paid">{money(o.paid)}</td>
