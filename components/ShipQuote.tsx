@@ -71,6 +71,9 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
   }, [want]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const name = (r: Rate) => `${r.carrier} ${niceService(r.service)}`;
+  // shorter names in this narrow card only (Oct 16, Nick): Next Day Air → ND Air, 2nd Day Air / 2 Day → 2D Air.
+  // The invoice line keeps the full name.
+  const shortService = (svc: string) => niceService(svc).replace(/^Next Day Air/i, "ND Air").replace(/^(2nd Day Air|2 ?Day( Air)?|Two Day)/i, "2D Air");
   const isPicked = (r: Rate) => !!shipMethod && key(name(r)) === key(shipMethod);
   const onInvoice = (r: Rate) => !!current && Math.abs(current.amount - r.price) < 0.005 && key(current.label).includes(key(name(r)));
 
@@ -125,7 +128,7 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
                   <button key={i} type="button" role="listitem" className={"sqp-r" + (isPicked(r) ? " picked" : "") + (on ? " on" : "") + (o.late ? " late" : "")} onClick={() => add(r)}
                     title={on ? "On the invoice" : `Put ${money(r.price)} on the invoice as ${name(r)} (we pay ${money(r.cost)})`}>
                     <span className={"sqp-c " + r.carrier.toLowerCase()}>{r.carrier}</span>
-                    <span className="sqp-s">{niceService(r.service)}{tag && <em className="sqp-tag">{tag}</em>}
+                    <span className="sqp-s">{shortService(r.service)}{tag && <em className="sqp-tag">{tag}</em>}
                       <small className={o.late ? "late" : ""}>{o.at ? `${o.late ? "Late · " : "Arrives "}${dd(o.at)}` : "No estimate"}</small></span>
                     <b>{money(r.price)}</b>
                     <span className="sqp-go">{on ? "✓" : "Add"}</span>
