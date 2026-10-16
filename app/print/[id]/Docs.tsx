@@ -249,9 +249,10 @@ export function InvoiceDoc(p: DocData) {
         {/* the order at a glance (Oct 16, Nick): PO, name, summary, balance due and terms. Quiet, not a billboard. */}
         <div className="osum">
           <div className="lbl">Order</div>
+          {/* the job name gets the box's full width, so a long one doesn't wrap (Oct 16, Nick) */}
+          <div className="osum-name">{o.nickname}</div>
           <dl>
             {o.po_number && <><dt>PO</dt><dd>{o.po_number}</dd></>}
-            <dt>Name</dt><dd><b>{o.nickname}</b></dd>
             <dt>Summary</dt><dd className="nw">{c.qty} piece{c.qty === 1 ? "" : "s"} · {prints} print{prints === 1 ? "" : "s"}</dd>
             {o.approved_at && <><dt>Approved</dt><dd>{o.approved_name}, {new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</dd></>}
             <dt className="bd">{isQ ? "Quote total" : paidUp ? "Paid" : "Balance due"}</dt><dd className={"bd" + (paidUp ? " ok" : "")}>{isQ ? money(c.total) : paidUp ? "In full" : money(Math.max(0, c.balance))}</dd>
