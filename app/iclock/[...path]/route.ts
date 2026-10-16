@@ -101,6 +101,14 @@ async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }
       await zkSeen(admin, d, { users: { ...(fresh ? {} : (d.info?.users as Record<string, string>) || {}), ...users }, usersAt: new Date().toISOString() });
       return text(`user=${Object.keys(users).length}`);
     }
+    // its settings (answer to GET OPTIONS): kept on the clock's info, passwords removed
+    if (name === "options" || url.searchParams.get("type") === "options") {
+      const clean = redact(body);
+      console.log(`iclock options ${clean.slice(0, 3500)}`);
+      const kv = Object.fromEntries(clean.split(/[,\t\r\n]+/).map((x) => { const i = x.indexOf("="); return i > 0 ? [x.slice(0, i).trim(), x.slice(i + 1).trim().slice(0, 200)] : null; }).filter((x): x is [string, string] => !!x && x[0].length < 60));
+      await zkSeen(admin, d, { settings: { ...((d.info?.settings as Record<string, string>) || {}), ...kv }, settingsAt: new Date().toISOString() });
+      return text(`options=${Object.keys(kv).length}`);
+    }
     await zkSeen(admin, d);
     return text(`${name || "table"}=${lines.filter(Boolean).length}`);
   }
