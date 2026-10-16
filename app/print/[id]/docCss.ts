@@ -52,6 +52,8 @@ export const DOC_CSS = `
 .pdoc .pp .t{font-size:22pt;line-height:1}
 .pdoc .pp .s{font-size:12.5pt;color:var(--ink2);display:flex;align-items:center;flex-wrap:wrap;gap:0 4px}
 .pdoc .pp .s b{color:var(--ink)}
+.pdoc .pp .s.inks{gap:2px 14px}
+.pdoc .pp .s.inks .ink{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .pdoc .pp .s.f{font-size:10pt;color:var(--ink3);margin-top:3px}
 .pdoc .hp.many .pp{padding:7px 11px;gap:2px}
 .pdoc .hp.many .pp .t{font-size:15pt}

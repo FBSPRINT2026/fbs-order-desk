@@ -106,7 +106,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                       <div className="pp" key={d.id}>
                         <div className="t disp">{(d.location || "Print").toUpperCase()}</div>
                         <div className="s">{METHODS[d.method] || d.method} · <b>{colorsLabel(d)}</b></div>
-                        {inkNames(d.inks).length > 0 && <div className="s">{inkNames(d.inks).map((k, i) => <span key={k}>{i > 0 ? ", " : ""}<Swatch c={colorHex(k) || "#ccc"} /><b>{k}</b></span>)}</div>}
+                        {inkNames(d.inks).length > 0 && <div className="s inks">{inkNames(d.inks).map((k) => <span key={k} className="ink"><Swatch c={colorHex(k) || "#ccc"} /><b>{k}</b></span>)}</div>}
                         <div className="s">{sz.label && <><b>{sz.label}</b> · </>}{dropLabel(d)}</div>
                         {sc && <div className="s">{sc.n ? `${sc.n} screen${sc.n === 1 ? "" : "s"}` : "Screens: see separations"} · {sc.under ? "underbase" : "no underbase"}</div>}
                         {d.method === "embroidery" && d.stitches ? <div className="s">{d.stitches.toLocaleString()} stitches</div> : null}
