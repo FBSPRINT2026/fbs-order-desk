@@ -25,8 +25,9 @@ async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }
   const tbl = (url.searchParams.get("table") || "").toUpperCase();
   if (what === "ping") return text("OK");
   // the SpeedFace (access-control firmware) reports its door state every couple of seconds: nothing to keep
-  if (what === "cdata" && tbl === "RTSTATE") return text("OK");
   const body = req.method === "POST" ? await req.text().catch(() => "") : "";
+  // …but say so in the logs when it reports an alarm (the yellow triangle; alarm=bits, sensor, relay, door)
+  if (what === "cdata" && tbl === "RTSTATE") { if (/alarm=0*[1-9]/i.test(body)) console.log(`iclock rtstate ${body.slice(0, 300)}`); return text("OK"); }
   const lines = body.split(/\r?\n/);
   // real-time events: only the ones with a person in them (a face scan) go further
   const people = tbl === "RTLOG" ? lines.filter((l) => parseAtt(l)) : [];
