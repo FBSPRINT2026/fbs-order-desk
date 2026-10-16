@@ -139,7 +139,7 @@ export type Customer = { id: string; is_test?: boolean; company: string; name: s
   /** shipping: whose carrier account pays (fbs = ours, with markup) */ ship_bill?: "fbs" | "ups" | "fedex"; ship_ups_account?: string; ship_fedex_account?: string; ship_bill_zip?: string;
   /** their brand inks ("Red" = "PMS 199 C"), first in every Mockup Creator ink dropdown for them (Oct 16) */ brand_colors?: BrandColor[] };
 /** One of a customer's brand colors: what they call it and the exact ink. */
-export type BrandColor = { name: string; ink: string };
+export type BrandColor = { name: string; ink: string; /** a wholesaler's client or a second brand ("All My Sons"); none = the account's own */ group?: string };
 /** One entry on a customer's timeline: an email, call, note, meeting or task. */
 export type Activity = { id: string; customer_id: string | null; order_id: string | null; kind: "note" | "call" | "email" | "meeting" | "task" | "sms"; direction: "in" | "out" | "none"; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; ai_processed_at: string | null; meta: Record<string, unknown>; created_by: string; created_at: string };
 /** One item in the Assistant inbox. */

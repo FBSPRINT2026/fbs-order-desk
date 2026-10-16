@@ -9014,3 +9014,18 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
 .bs-t b{font-size:14.5px}
 .bs-t small{font-size:12.5px;color:var(--ink-2);line-height:1.3}
 .bs-t small .faint{display:block;font-size:11.5px}
+
+/* Brand standards in groups (Oct 16): the account's own colors, then one group per wholesaler client */
+.bc{display:flex;flex-direction:column;gap:12px;margin-top:8px}
+.bc-group{display:flex;flex-direction:column;gap:6px}
+.bc-group.sub{border-top:1px dashed var(--line);padding-top:10px}
+.bc-gh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bc-gh b{font-size:14px}
+.bc-gname{font:inherit;font-weight:700;font-size:14px;width:220px}
+.bc-x{margin-left:auto;font-size:12.5px;color:#b3261e}
+.bc-add{align-self:flex-start}
+.bc-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line-2,var(--line));padding-top:10px}
+.bc-foot .faint{font-size:12.5px}
+.bc-row{max-width:620px}
+.bs-group+.bs-group{margin-top:12px}
+.bs-gh{font-weight:800;font-size:13px;color:var(--ink-2);margin-top:6px}

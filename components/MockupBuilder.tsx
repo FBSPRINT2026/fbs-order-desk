@@ -83,9 +83,10 @@ function loadImg(src: string): Promise<HTMLImageElement> {
  * The customer's brand colors (Oct 16, Nick: "a drop down in the mockup creator that has customer colors saved"): first
  * in every ink dropdown, a "Use their colors" button, and new logos snap to them. Set on the customer page.
  */
-type Brand = { label: string; colors: { name: string; ink: string; hex: string }[] };
-const BrandCtx = createContext<Brand>({ label: "", colors: [] });
-const nearestBrand = (hex: string, b: Brand) => b.colors.filter((c) => c.hex).map((c) => ({ c, d: deltaE(hex, c.hex) })).sort((x, y) => x.d - y.d)[0];
+type BrandInk = { name: string; ink: string; hex: string; group?: string };
+type Brand = { label: string; colors: BrandInk[]; groups: { key: string; label: string; colors: BrandInk[] }[] };
+const BrandCtx = createContext<Brand>({ label: "", colors: [], groups: [] });
+const nearestBrand = (hex: string, b: { colors: BrandInk[] }) => b.colors.filter((c) => c.hex).map((c) => ({ c, d: deltaE(hex, c.hex) })).sort((x, y) => x.d - y.d)[0];
 
 /** portal = the customer's own builder: their account only, no order, saved through the portal's server actions. */
 export default function MockupBuilder({ portal = false, backHref }: { portal?: boolean; backHref?: string }) {
@@ -106,18 +107,29 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [order, setOrder] = useState<Order | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerId, setCustomerId] = useState(sp.get("customer") || "");
-  const brand: Brand = useMemo(() => {
-    const c = customers.find((x) => x.id === customerId);
-    const colors = (c?.brand_colors || []).filter((b) => b && b.ink).map((b) => ({ name: b.name || b.ink, ink: b.ink, hex: colorHex(b.ink) || "" }));
-    return { label: portal ? "Your colors" : `${custLabel(c) || "Customer"} colors`, colors };
-  }, [customers, customerId, portal]);
-  const brandRef = useRef(brand); brandRef.current = brand;
   const [catalog, setCatalog] = useState<Garment[]>([]);
   const [designs, setDesigns] = useState<Design[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [lines, setLines] = useState<Line[]>([{ id: uid(), style: "", brand: "", color: "", garment: "" }]);
   const [imprints, setImprints] = useState<Imprint[]>([]);
   const [groupName, setGroupName] = useState("");
+  // brand standards: the account's own colors and any groups (a wholesaler's clients); the group whose name is in the
+  // order or print group ("43090 ALL MY SONS DALLAS - POLO" → All My Sons) comes first and is the one new logos snap to
+  const brand: Brand = useMemo(() => {
+    const c = customers.find((x) => x.id === customerId);
+    const all = (c?.brand_colors || []).filter((b) => b && b.ink).map((b) => ({ name: b.name || b.ink, ink: b.ink, hex: colorHex(b.ink) || "", group: (b.group || "").trim() }));
+    const own = portal ? "Your colors" : `${custLabel(c) || "Customer"} colors`;
+    const names = [...new Set(all.map((x) => x.group))];
+    const hay = `${order?.nickname || ""} ${groupName}`.toLowerCase();
+    const hit = names.filter(Boolean).find((g) => hay.includes(g.toLowerCase())) || "";
+    // a group shows by its own name ("Aubrey ISD PMS Colors", "All My Sons"); the ungrouped colors as "<Customer> colors"
+    const groups = names.map((g) => ({ key: g, label: g || own, colors: all.filter((x) => x.group === g) }))
+      .sort((x, y) => Number(y.key === hit && !!hit) - Number(x.key === hit && !!hit) || Number(!!x.key) - Number(!!y.key));
+    // what new logos snap to: the matched group, else the account's own, else the only group there is
+    const snap = hit ? groups.find((g) => g.key === hit)! : groups.find((g) => !g.key) || (groups.length === 1 ? groups[0] : null);
+    return { label: snap?.label || own, colors: snap?.colors || [], groups };
+  }, [customers, customerId, portal, order?.nickname, groupName]);
+  const brandRef = useRef(brand); brandRef.current = brand;
   const [change, setChange] = useState<{ orderId: string; orderNumber: number } | null>(null);
   const [active, setActive] = useState(0);
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
@@ -499,7 +511,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const unsetColors = (im: Imprint) => { const pt = paints[im.id]; return pt && pt.design === im.design_id ? pt.sources.filter((x) => !pt.map[x.hex]).map((x) => x.hex) : []; };
   const matchStandard = (im: Imprint) => setInks(im.id, Object.fromEntries(unsetColors(im).map((h) => [h, closestInk(h)])));
   /** Every color in the logo to the nearest of the customer's brand colors. */
-  const matchBrand = (im: Imprint) => { const pt = paints[im.id]; if (!pt || !brand.colors.length) return; setInks(im.id, Object.fromEntries(pt.sources.map((x) => { const n = nearestBrand(x.hex, brand); return [x.hex, n ? { name: n.c.ink, hex: n.c.hex } : null]; }))); };
+  const matchBrand = (im: Imprint, key: string) => { const pt = paints[im.id]; const g = brand.groups.find((x) => x.key === key); if (!pt || !g?.colors.length) return; setInks(im.id, Object.fromEntries(pt.sources.map((x) => { const n = nearestBrand(x.hex, g); return [x.hex, n ? { name: n.c.ink, hex: n.c.hex } : null]; }))); };
   /** Resize a sleeve print (sleeves stay a sleeve: capped at the sleeve's max area). */
   const growTo = (im: Imprint, inches: number) => {
     const v = Math.max(0.5, Math.min(maxWidthFor(im.location, ratioOf(designOf(im))), Math.round(inches * 100) / 100));
@@ -1994,7 +2006,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
                         onSplit={() => setUnite(im.id, false)}
                         onMatchAll={unsetColors(im).length > 0 ? () => matchStandard(im) : undefined}
-                        onBrandAll={brand.colors.length ? () => matchBrand(im) : undefined} brandLabel={brand.label} />
+                        brandGroups={brand.groups.filter((g) => g.colors.length).slice(0, 4).map((g) => ({ label: g.label, go: () => matchBrand(im, g.key) }))} />
                     )}
                     </>)}
                     <div className="mk-imp-foot">
@@ -2218,7 +2230,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
 /** Pick the ink a logo color prints as: a Wilflex RFU color, a PMS color, a custom PMS, or drop it. */
 function InkSelect({ value, onChange }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void }) {
   const brand = useContext(BrandCtx);
-  const known = value && (value.name === "none" || WILFLEX_HEX[value.name] || PMS_HEX[value.name] || brand.colors.some((b) => b.ink === value.name));
+  const known = value && (value.name === "none" || WILFLEX_HEX[value.name] || PMS_HEX[value.name] || brand.groups.some((g) => g.colors.some((b) => b.ink === value.name)));
   const [customMode, setCustom] = useState(false);
   // any PMS from the full chart (or a typed one) shows as its name + color instead of the short list
   const custom = customMode || (!!value && !known);
@@ -2241,7 +2253,7 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
       }}>
       <option value="">Keep as uploaded</option>
       <option value="none">Remove (shirt shows through)</option>
-      {brand.colors.length > 0 && <optgroup label={brand.label}>{brand.colors.map((b) => <option key={"b:" + b.ink} value={b.ink}>{b.name === b.ink ? b.ink : `${b.name} · ${b.ink}`}</option>)}</optgroup>}
+      {brand.groups.filter((g) => g.colors.length).map((g) => <optgroup key={"g:" + g.key} label={g.label}>{g.colors.map((b) => <option key={"b:" + g.key + b.ink} value={b.ink}>{b.name === b.ink ? b.ink : `${b.name} · ${b.ink}`}</option>)}</optgroup>)}
       <optgroup label="Wilflex RFU">{Object.keys(WILFLEX_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
       <optgroup label="PMS">{Object.keys(PMS_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
       <option value="__custom">Other PMS / custom…</option>
@@ -2327,13 +2339,13 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
  * (standard ink and PMS, with how close each is); hovering a suggestion previews it on the mockup.
  * Once a color is picked its row folds up to one tight line, so picked colors stack as a short list.
  */
-function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, onBrandAll, brandLabel }: {
+function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = [] }: {
   rows: { hexes: string[]; cur?: { name: string; hex: string } }[];
   onPick: (hexes: string[], v: { name: string; hex: string } | null) => void;
   onHover: (hexes: string[], v: { name: string; hex: string } | null) => void;
   onSplit: () => void;
   onMatchAll?: () => void;
-  onBrandAll?: () => void; brandLabel?: string;
+  brandGroups?: { label: string; go: () => void }[];
 }) {
   const [open, setOpen] = useState(""); // a picked color reopened to change it
   const key = (r: { hexes: string[] }) => r.hexes.join();
@@ -2367,7 +2379,7 @@ function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, onBrandAll, br
           </div>
         );
       })}
-      {onBrandAll && <button type="button" className="btn sm primary" style={{ alignSelf: "flex-start" }} title="Set each color in this logo to the nearest of the customer's saved colors" onClick={onBrandAll}>Use {brandLabel === "Your colors" ? "your colors" : brandLabel}</button>}
+      {brandGroups.length > 0 && <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>{brandGroups.map((g) => <button key={g.label} type="button" className="btn sm primary" title="Set each color in this logo to the nearest of these saved colors" onClick={g.go}>Use {g.label === "Your colors" ? "your colors" : /colou?rs?$/i.test(g.label) ? g.label : `${g.label} colors`}</button>)}</div>}
       {onMatchAll && <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={onMatchAll}>Use closest standard inks</button>}
     </div>
   );
