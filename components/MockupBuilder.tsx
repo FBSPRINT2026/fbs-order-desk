@@ -421,6 +421,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         let plan = (d.print_plan as PrintPlan | null | undefined)?.v === 1 ? d.print_plan as PrintPlan : null;
         if (!plan) {
           plan = planPrint(pxOfImage(img, 1600), { garment: line ? shirtHex(line) : undefined });
+          // the logo's saved ink names use the customer's brand colors when one is close (Oct 16, Nick: Aubrey's gray is
+          // PMS Cool Gray 5 C, but the logo was saved as Cool Gray 4 C and the separation followed it)
+          const bb = brandRef.current;
+          if (bb.colors.length) plan = { ...plan, inks: plan.inks.map((k) => { const n = nearestBrand(k.hex, bb); return n && n.d < 25 ? { ...k, name: n.c.ink } : k; }) };
           const names = [...new Set(plan.inks.map((k) => k.name))];
           if (!portal) sb.from("designs").update({ print_plan: plan, colors: plan.colors, inks: plan.method === "spot" ? names.join(", ") : `Simulated process (${plan.colors})` }).eq("id", d.id).then(() => {});
           const pl = plan; setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, print_plan: pl } : x)));
