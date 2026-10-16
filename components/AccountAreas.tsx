@@ -1,4 +1,6 @@
 "use client";
+import type { BrandColor } from "@/lib/pricing";
+import { colorHex } from "@/lib/inkColors";
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -58,8 +60,10 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
+  /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
+  brandColors?: BrandColor[];
   /** the printable statement (open invoices + aging + pay it all) */
   statementHref?: string;
   /** staff: email the customer their statement link */
@@ -629,6 +633,22 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
       <div className="aa-home">
       <div className="aa-home-main stack">
       {tableHead(<h2>Artwork</h2>, "Search by logo number (D-10004), name, ink or order")}
+      {/* brand standards (Oct 16, Nick): the colors we always print for them */}
+      {(brandColors.length > 0 || mode === "shop") && (
+        <div className="aa-card">
+          <div className="aa-sec-h"><h3>Brand standards</h3><span className="faint">{mode === "shop" ? (brandColors.length ? "Their exact inks. They show first in the Mockup Creator for this customer. Change them on the Details tab." : "No brand colors saved yet. Add them on the Details tab (under Contacts).") : "Your colors, matched to the exact ink every time we print for you. To change one, send us a message."}</span></div>
+          {brandColors.length > 0 && (
+            <div className="bs-list">
+              {brandColors.map((b, i) => { const hex = colorHex(b.ink); return (
+                <div key={i} className="bs-item">
+                  <span className="bs-sw" style={{ background: hex || "transparent" }} />
+                  <span className="bs-t"><b>{b.name || b.ink}</b><small>{b.ink}{hex ? <span className="faint"> · {hex.toUpperCase()}</span> : null}</small></span>
+                </div>
+              ); })}
+            </div>
+          )}
+        </div>
+      )}
       <div className="aa-card">
         <div className="aa-sec-h"><h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
         {dRows.length ? (() => { const P = pageOf("logos", dRows); return <><div className="design-grid aa-grid3">{P.items.map((d) => card(d, false))}{slots(P.pad)}</div>{pager("logos", dRows.length, P.p, P.n)}</>; })()
