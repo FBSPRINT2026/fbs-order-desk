@@ -79,7 +79,9 @@ export const redact = (s: string) => s.replace(/((?:VMS)?Passw(?:or)?d|Password)
 
 /** Keep each line the clock posts, as sent (a line sent twice is kept once). */
 export async function zkKeep(admin: SupabaseClient, d: ZkDevice, kind: "att" | "op" | "user", lines: string[]) {
-  const rows = lines.map((l) => l.replace(/\r/g, "")).filter((l) => l.trim()).slice(0, 2000).map((line) => ({ device_id: d.id, serial: d.serial, kind, line: line.slice(0, 2000) }));
+  // never keep face or fingerprint templates, photos, or anyone's clock password
+  const rows = lines.map((l) => l.replace(/\r/g, "")).filter((l) => l.trim() && !/^(FACE|FP|BIODATA|BIOPHOTO|USERPIC|FVEIN|PALM)\b/i.test(l.trim()))
+    .slice(0, 2000).map((line) => ({ device_id: d.id, serial: d.serial, kind, line: redact(line).slice(0, 2000) }));
   for (let i = 0; i < rows.length; i += 500) await admin.from("timeclock_raw").upsert(rows.slice(i, i + 500), { onConflict: "serial,kind,line", ignoreDuplicates: true });
   return rows.length;
 }
@@ -119,6 +121,8 @@ export async function zkProcess(admin: SupabaseClient, deviceId: string) {
   let added = 0, waiting = 0;
   for (const r of lines) {
     if (!r.p) { await admin.from("timeclock_raw").update({ done: true, note: "not a punch line" }).eq("id", r.id); continue; }
+    // the clock's own clock is off (e.g. it reset to China time after a mode switch): wait until it's fixed
+    if (Date.parse(r.p.at) > Date.now() + 15 * 60000) { await admin.from("timeclock_raw").update({ note: "the clock's time is ahead; set its date and time" }).eq("id", r.id); continue; }
     const e = byCode.get(r.p.pin.replace(/^0+/, ""));
     if (!e) { waiting++; await admin.from("timeclock_raw").update({ note: `no employee with ID ${r.p.pin}` }).eq("id", r.id); continue; }
     const key = `zk:${dev.serial}:${r.p.pin}:${r.p.wall}`;
