@@ -52,8 +52,9 @@ export async function POST(req: Request) {
   if (b.action === "rename") { await admin.from("timeclock_devices").update({ name: String(b.name || "").slice(0, 60) || "ZKTeco clock" }).eq("id", id); return NextResponse.json({ ok: true }); }
   if (b.action === "users") {
     if (!d.active) return NextResponse.json({ error: "Turn the clock on first." }, { status: 400 });
-    const n = await zkQueueUsers(admin, id, v.email || "");
-    return NextResponse.json({ ok: true, message: `Sending ${n} employees to the clock. It picks them up within a minute; then add each face at the clock.` });
+    const r = await zkQueueUsers(admin, id, v.email || "");
+    if (r.waiting) return NextResponse.json({ ok: true, message: "Asking the clock who's already on it (so your admin account is left alone). Press Send Employee List again in a minute." });
+    return NextResponse.json({ ok: true, message: r.sent ? `Sending ${r.sent} employees to the clock. It picks them up within a minute; then add each face at the clock.` : "Everyone is already on the clock." });
   }
   if (b.action === "process") {
     const r = await zkProcess(admin, id);

@@ -65,6 +65,18 @@ function chicagoOffset() {
   return Math.round((local.getTime() - utc.getTime()) / 3600000);
 }
 
+/** The access-control firmware (the SpeedFace-V4L says "DeviceType=acc", push 3.x): its own settings reply and commands. */
+export const isAcc = (d: ZkDevice) => !!d.info?.acc || /DeviceType=acc/i.test(String(d.info?.registry || "")) || String(d.info?.pushver || "").startsWith("3");
+export function zkAccOptions(d: ZkDevice) {
+  return [
+    "ServerVersion=3.1.2", "ServerName=ADMS", "PushVersion=3.1.2", "ErrorDelay=30", "RequestDelay=10",
+    "TransTimes=00:00\t14:00", "TransInterval=1", "TransTables=User\tTransaction", "Realtime=1",
+    `SessionID=${d.id.replace(/-/g, "").slice(0, 16)}`, "TimeoutSec=10",
+  ].join("\n");
+}
+/** Never keep a password the clock mentions about itself (its video login, a user's PIN). */
+export const redact = (s: string) => s.replace(/((?:VMS)?Passw(?:or)?d|Password)=[^,\t\n]*/gi, "$1=…");
+
 /** Keep each line the clock posts, as sent (a line sent twice is kept once). */
 export async function zkKeep(admin: SupabaseClient, d: ZkDevice, kind: "att" | "op" | "user", lines: string[]) {
   const rows = lines.map((l) => l.replace(/\r/g, "")).filter((l) => l.trim()).slice(0, 2000).map((line) => ({ device_id: d.id, serial: d.serial, kind, line: line.slice(0, 2000) }));
@@ -74,6 +86,16 @@ export async function zkKeep(admin: SupabaseClient, d: ZkDevice, kind: "att" | "
 
 /** "101\t2026-10-16 12:45:03\t0\t15\t…" → who, when (shop time) and the clock's state (0 in, 1 out, 2 break out, 3 break in). */
 export function parseAtt(line: string) {
+  // access-control firmware: "time=2026-10-16 13:22:30\tpin=115\tcardno=0\tevent=0\tinoutstatus=0\tverifytype=15…"
+  if (/(^|\t)time=/.test(line)) {
+    const kv = Object.fromEntries(line.split("\t").map((x) => { const i = x.indexOf("="); return [x.slice(0, i).trim().toLowerCase(), x.slice(i + 1).trim()]; }));
+    const pin = (kv.pin || "").replace(/^0+/, "");
+    const m = (kv.time || "").match(/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    // no person (door events) or someone the clock didn't know (event 27): not a punch
+    if (!pin || !m || kv.event === "27") return null;
+    const at = new Date(Date.parse(localToIso(m[1], +m[2] * 60 + +m[3])) + (+(m[4] || 0)) * 1000).toISOString();
+    return { pin, at, wall: `${m[1]} ${m[2].padStart(2, "0")}:${m[3]}:${m[4] || "00"}`, state: +(kv.inoutstatus || 0) || 0, verify: +(kv.verifytype || 0) || 0 };
+  }
   const f = line.split("\t");
   const pin = (f[0] || "").trim();
   const m = (f[1] || "").trim().match(/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -123,13 +145,39 @@ export async function zkProcess(admin: SupabaseClient, deviceId: string) {
 /** Names the clock can show: plain letters, at most 24. */
 export const clockName = (first: string, last: string) => `${first} ${last}`.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9 .'-]/g, "").replace(/\s+/g, " ").trim().slice(0, 24);
 
-/** Ask the clock to add (or rename) everyone on our employee list by their ID. Their face is still added at the clock. */
+/**
+ * Ask the clock to add everyone on our employee list by their ID. Their face is still added at the clock. People
+ * already on the clock (Nick, the admin) are left alone, so their admin rights and password never change. Until the
+ * clock has told us who's on it, we only ask it (the caller says "try again in a minute").
+ */
 export async function zkQueueUsers(admin: SupabaseClient, deviceId: string, by: string) {
+  const { data: dev } = await admin.from("timeclock_devices").select("id, name, active, serial, info, att_stamp, op_stamp, last_seen_at").eq("id", deviceId).maybeSingle();
+  if (!dev) return { sent: 0, waiting: false };
+  const d = dev as ZkDevice, acc = isAcc(d);
+  const onClock = (d.info?.users as Record<string, string>) || null;
+  const ask = acc ? "DATA QUERY tablename=user,fielddesc=*,filter=*" : "DATA QUERY USERINFO";
+  if (!onClock) { await admin.from("timeclock_cmds").insert({ device_id: deviceId, created_by: by, cmd: ask }); return { sent: 0, waiting: true }; }
   const { data: emps } = await admin.from("employees").select("first_name, last_name, code").eq("active", true).not("code", "is", null).order("code");
-  const cmds = ((emps || []) as { first_name: string; last_name: string; code: number }[]).map((e) => ({ device_id: deviceId, created_by: by, cmd: `DATA UPDATE USERINFO PIN=${e.code}\tName=${clockName(e.first_name, e.last_name)}` }));
+  const add = ((emps || []) as { first_name: string; last_name: string; code: number }[]).filter((e) => !onClock[String(e.code)]);
+  const cmds = add.flatMap((e) => acc
+    ? [{ device_id: deviceId, created_by: by, cmd: `DATA UPDATE user Pin=${e.code}\tName=${clockName(e.first_name, e.last_name)}\tPrivilege=0` },
+       { device_id: deviceId, created_by: by, cmd: `DATA UPDATE userauthorize Pin=${e.code}\tAuthorizeTimezoneId=1\tAuthorizeDoorId=1` }]
+    : [{ device_id: deviceId, created_by: by, cmd: `DATA UPDATE USERINFO PIN=${e.code}\tName=${clockName(e.first_name, e.last_name)}` }]);
   if (cmds.length) await admin.from("timeclock_cmds").insert(cmds);
-  await admin.from("timeclock_cmds").insert({ device_id: deviceId, created_by: by, cmd: "DATA QUERY USERINFO" });
-  return cmds.length;
+  await admin.from("timeclock_cmds").insert({ device_id: deviceId, created_by: by, cmd: ask });
+  return { sent: add.length, waiting: false };
+}
+
+/** "user uid=1\tcardno=\tpin=115\tpassword=…\tname=Nicholas McCoy\tprivilege=14…" → { "115": "Nicholas McCoy" } (nothing else kept). */
+export function parseAccUsers(lines: string[]) {
+  const out: Record<string, string> = {};
+  for (const l of lines) {
+    const m = l.match(/^user\s+(.*)$/i);
+    if (!m) continue;
+    const kv = Object.fromEntries(m[1].split("\t").map((x) => { const i = x.indexOf("="); return [x.slice(0, i).trim().toLowerCase(), x.slice(i + 1).trim()]; }));
+    if (kv.pin) out[kv.pin] = kv.name || "";
+  }
+  return out;
 }
 
 /** The next things for the clock to do ("C:<id>:<command>" lines), marked sent. */

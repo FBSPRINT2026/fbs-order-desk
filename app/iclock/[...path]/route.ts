@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { parseUsers, zkCommandResults, zkDevice, zkKeep, zkNextCommands, zkOptions, zkProcess, zkSeen } from "@/lib/zkteco";
+import { isAcc, parseAccUsers, parseAtt, parseUsers, redact, zkAccOptions, zkCommandResults, zkDevice, zkKeep, zkNextCommands, zkOptions, zkProcess, zkSeen } from "@/lib/zkteco";
 
 /**
  * The ZKTeco wall clock talks to us here (its Cloud Server Setting points at portal.fbsprint.com, port 443, HTTPS on).
@@ -22,24 +22,47 @@ async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }
   const url = new URL(req.url);
   const sn = url.searchParams.get("SN") || url.searchParams.get("sn") || "";
   // one line per call while we get the clock connected (Vercel logs: search "iclock")
-  console.log(`iclock ${req.method} /${what} SN=${sn || "-"} ${url.search.slice(0, 200)}`);
+  const tbl = (url.searchParams.get("table") || "").toUpperCase();
   if (what === "ping") return text("OK");
+  // the SpeedFace (access-control firmware) reports its door state every couple of seconds: nothing to keep
+  if (what === "cdata" && tbl === "RTSTATE") return text("OK");
+  const body = req.method === "POST" ? await req.text().catch(() => "") : "";
+  const lines = body.split(/\r?\n/);
+  // real-time events: only the ones with a person in them (a face scan) go further
+  const people = tbl === "RTLOG" ? lines.filter((l) => parseAtt(l)) : [];
+  if (tbl === "RTLOG" && !people.length) return text("OK");
+  if (what !== "getrequest") console.log(`iclock ${req.method} /${what} SN=${sn || "-"} ${url.search.slice(0, 160)}${people.length ? ` ${people.join(" | ").slice(0, 300)}` : ""}`);
   const admin = createAdminClient();
   const d = await zkDevice(admin, sn);
   if (!d) { console.log(`iclock refused SN=${sn || "-"}`); return text("Unknown device", 400); }
-  const body = req.method === "POST" ? await req.text().catch(() => "") : "";
-  const lines = body.split(/\r?\n/);
 
-  // newer firmware registers first
-  if (what === "registry") { await zkSeen(admin, d, { registry: body.slice(0, 2000) }); return text(`RegistryCode=${d.id.replace(/-/g, "").slice(0, 10)}`); }
-  if (what === "push") { await zkSeen(admin, d); return text(zkOptions(d)); }
+  // newer firmware registers first (what it says about itself, minus any passwords)
+  if (what === "registry") { await zkSeen(admin, d, { registry: redact(body).slice(0, 4000), acc: /DeviceType=acc/i.test(body) }); return text(`RegistryCode=${d.id.replace(/-/g, "").slice(0, 10)}`); }
+  if (what === "push") { await zkSeen(admin, d); return text(isAcc(d) ? zkAccOptions(d) : zkOptions(d)); }
 
   if (what === "cdata") {
     if (req.method === "GET") {
       await zkSeen(admin, d, { pushver: url.searchParams.get("pushver") || "", language: url.searchParams.get("language") || "", hello: new Date().toISOString() });
-      return text(zkOptions(d));
+      return text(isAcc(d) ? zkAccOptions(d) : zkOptions(d));
     }
-    const table = (url.searchParams.get("table") || "").toUpperCase();
+    const table = tbl;
+    if (table === "RTLOG") {
+      await zkKeep(admin, d, "att", people);
+      await zkSeen(admin, d);
+      if (d.active) await zkProcess(admin, d.id).catch(() => null);
+      return text("OK");
+    }
+    // the clock's user list (access-control firmware): who's on it by ID and name; their passwords are never kept
+    if (table === "TABLEDATA") {
+      const name = (url.searchParams.get("tablename") || "").toLowerCase();
+      if (name === "user") {
+        const users = parseAccUsers(lines);
+        await zkSeen(admin, d, { users: { ...((d.info?.users as Record<string, string>) || {}), ...users }, usersAt: new Date().toISOString() });
+        return text(`user=${Object.keys(users).length}`);
+      }
+      await zkSeen(admin, d);
+      return text(`${name || "table"}=${lines.filter(Boolean).length}`);
+    }
     const stamp = url.searchParams.get("Stamp") || url.searchParams.get("OpStamp") || "";
     if (table === "ATTLOG") {
       const n = await zkKeep(admin, d, "att", lines);
@@ -56,7 +79,7 @@ async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }
       return text(`OK: ${n}`);
     }
     if (table === "OPTIONS") {
-      const opts = Object.fromEntries(body.split(/[,\n]/).map((kv) => kv.replace(/^~/, "").split("=")).filter((x) => x.length === 2 && x[0].length < 40).map(([k, v]) => [k.trim(), v.trim().slice(0, 120)]));
+      const opts = Object.fromEntries(redact(body).split(/[,\n]/).map((kv) => kv.replace(/^~/, "").split("=")).filter((x) => x.length === 2 && x[0].length < 40).map(([k, v]) => [k.trim(), v.trim().slice(0, 120)]));
       await zkSeen(admin, d, { options: opts });
       return text("OK");
     }
