@@ -8,7 +8,7 @@
 export type Body = { size: string; widthIn: number; lengthIn: number; kind: "adult" | "youth" | "toddler" | "infant"; from: "supplier" | "typical";
   /** a non-shirt (bag, tote): its own max print area (the garment less a margin), which no location can go past */
   cap?: { maxW: number; maxH: number; label: string } };
-export type GarmentSpecs = { sizes: Record<string, { width?: number; length?: number }>; source?: string; at?: string };
+export type GarmentSpecs = { sizes: Record<string, { width?: number; length?: number }>; source?: string; at?: string; /** pounds per piece by size (S&S unitWeight), for shipping quotes */ weights?: Record<string, number> };
 
 /** the reference everything was drawn for: an adult Large (Gildan 5000) */
 export const REF_BODY: Body = { size: "L", widthIn: 22, lengthIn: 30, kind: "adult", from: "typical" };

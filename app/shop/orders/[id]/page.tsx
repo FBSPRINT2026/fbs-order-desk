@@ -823,7 +823,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 {/* the shipping charge from live UPS / FedEx rates, onto the invoice (Oct 16, Nick) */}
                 {o.delivery_method === "ship" && seesMoney && calc && (
                   <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship}
-                    garments={o.groups.flatMap((g) => g.lines.map((l) => ({ desc: `${l.garment || ""} ${l.style || ""}`, qty: lineQty(l) })))}
+                    garments={o.groups.flatMap((g) => g.lines.map((l) => {
+                      // the supplier's weight for each size ordered (S&S unitWeight), when the catalog has it
+                      const gm = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || x.brand.toLowerCase() === l.brand.toLowerCase()));
+                      const w = gm?.specs?.weights;
+                      const vals = w ? Object.values(w).filter((v) => v > 0) : [];
+                      const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+                      const lbs = w && avg ? Object.entries(l.sizes || {}).reduce((a, [z, q]) => a + (+q || 0) * (w[z] || avg), 0) || lineQty(l) * avg : undefined;
+                      return { desc: `${l.garment || ""} ${l.style || ""}`, qty: lineQty(l), lbs };
+                    }))}
                     current={(() => { const f = o.fees.find((x) => /^shipping\b/i.test(x.label || "")); return f ? { label: f.label, amount: +f.amount || 0 } : null; })()}
                     onAdd={(label, amount, method) => patch((d) => {
                       const i = d.fees.findIndex((x) => /^shipping\b/i.test(x.label || ""));

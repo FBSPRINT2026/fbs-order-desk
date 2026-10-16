@@ -20,7 +20,7 @@ async function ssGet<T>(path: string): Promise<T> {
 }
 
 type SSStyle = { styleID: number; partNumber: string; brandName: string; styleName: string; title: string; baseCategory: string; styleImage: string; description?: string };
-type SSProduct = { colorName: string; sizeName: string; sizeOrder: string; customerPrice: number; piecePrice: number; qty: number; colorFrontImage?: string; colorBackImage?: string; colorSideImage?: string; colorSwatchImage?: string; color1?: string };
+type SSProduct = { colorName: string; sizeName: string; sizeOrder: string; customerPrice: number; piecePrice: number; qty: number; /** pounds per piece */ unitWeight?: number; colorFrontImage?: string; colorBackImage?: string; colorSideImage?: string; colorSwatchImage?: string; color1?: string };
 
 // S&S size names -> our size codes
 const SIZE_MAP: Record<string, string> = {
@@ -121,7 +121,7 @@ export async function ssSpecs(styleID: number, youth?: boolean): Promise<Garment
 export async function ssLookup(q: string, styleID?: number): Promise<SSGarment | null> {
   const st = styleID ? (await ssGet<SSStyle[]>(`/styles/?styleid=${styleID}`))[0] : await findStyle(q);
   if (!st) return null;
-  const prods = await ssGet<SSProduct[]>(`/products/?styleid=${st.styleID}&fields=colorName,sizeName,sizeOrder,customerPrice,piecePrice,qty,colorFrontImage,colorBackImage,colorSideImage,color1`);
+  const prods = await ssGet<SSProduct[]>(`/products/?styleid=${st.styleID}&fields=colorName,sizeName,sizeOrder,customerPrice,piecePrice,qty,unitWeight,colorFrontImage,colorBackImage,colorSideImage,color1`);
   if (!Array.isArray(prods) || !prods.length) return null;
   const colors = [...new Set(prods.map((p) => p.colorName).filter(Boolean))];
   // one set of photos per color (large versions), for mockups
@@ -131,7 +131,7 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
     if (!p.colorName || color_images[p.colorName]) continue;
     if (p.colorFrontImage || p.colorBackImage) color_images[p.colorName] = { front: big(p.colorFrontImage), back: big(p.colorBackImage), side: big(p.colorSideImage), hex: p.color1 || "" };
   }
-  const bySize = new Map<string, { order: string; prices: number[] }>();
+  const bySize = new Map<string, { order: string; prices: number[]; lbs: number[] }>();
   // youth styles label sizes XS-XL; ours are YXS-YXL
   const youth = /youth|toddler|kids|infant/i.test(`${st.title} ${st.baseCategory}`);
   const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
@@ -140,14 +140,18 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
     const z = youth && raw && YOUTH[raw] ? YOUTH[raw] : raw;
     if (!z) continue;
     const price = +(p.customerPrice || p.piecePrice || 0);
-    const e = bySize.get(z) || { order: p.sizeOrder, prices: [] };
+    const e = bySize.get(z) || { order: p.sizeOrder, prices: [], lbs: [] };
     if (price) e.prices.push(price);
+    if (+(p.unitWeight || 0) > 0) e.lbs.push(+p.unitWeight!);
     bySize.set(z, e);
   }
   const order = SIZES as readonly string[];
   const sizes = [...bySize.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b));
   const size_costs: Record<string, number> = {};
   bySize.forEach((e, z) => { if (e.prices.length) size_costs[z] = Math.round(mode(e.prices) * 100) / 100; });
+  // what a piece weighs (lb) by size, for shipping quotes (Oct 16, Nick: S&S figures 25 Bella 3001s at 9 lb)
+  const weights: Record<string, number> = {};
+  bySize.forEach((e, z) => { if (e.lbs.length) weights[z] = Math.round(mode(e.lbs) * 1000) / 1000; });
   const baseSizes = sizes.filter((z) => !/^[2-5]XL$/.test(z));
   const cost = Math.min(...(baseSizes.length ? baseSizes : sizes).map((z) => size_costs[z]).filter((v) => v > 0)) || 0;
   return {
@@ -162,7 +166,7 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
     size_costs,
     ss_style_id: st.styleID,
     color_images,
-    specs: await ssSpecs(st.styleID, youth).catch(() => null),
+    specs: await ssSpecs(st.styleID, youth).catch(() => null).then((sp) => (Object.keys(weights).length ? { ...(sp || { sizes: {} }), weights } : sp)),
     image: st.styleImage ? `https://www.ssactivewear.com/${st.styleImage}` : "",
   };
 }
