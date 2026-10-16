@@ -396,6 +396,9 @@ export default function SeparationStudio({ id }: { id: string }) {
     const garment = (saved.garment as string) ?? (row0.garment_color ? shirtHex(row0.garment_color) || colorHex(row0.garment_color) || guessHex(row0.garment_color) || "" : "");
     const im = orderGroups((o as Order) || { groups: [], lines: [] } as never).flatMap((g) => g.imprints).find((x) => x.id === row0.imprint_id);
     const widthIn = saved.widthIn || parseFloat(String(im?.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || 11;
+    // the inks the order names for this print (the mockup's, snapped to the customer's brand colors): a found ink close
+    // to one of them takes its name (Oct 16, Nick: #40070 found PMS 179 C / Cool Gray 4 C for their PMS 199 C / Cool Gray 5 C)
+    orderInks.current = String(im?.inks || "").split(",").map((n) => n.trim()).filter(Boolean).map((name) => ({ name, hex: colorHex(name) || "" })).filter((k) => k.hex);
     setSt((s) => ({ ...s, ...saved, garment, widthIn, method: (saved.method as SepSettings["method"]) || s.method }));
     // a new separation starts from what the coach has learned (Make Separations Better, last 30 days)
     if (!saved.inks?.length) {
@@ -459,7 +462,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   // a picture is cropped to its art (empty see-through space, or the white background when that isn't printed), so the
   // print width, the ppi and the films measure the graphic, not the box around it
   useEffect(() => { if (!artUrl) return; loadImg(artUrl).then((im) => (vart?.ok ? im : cropImgToArt(im, st.removeBg))).then(setImg).catch((e) => setErr(e.message)); }, [artUrl, st.removeBg]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!img) return; pxRef.current = pixelsOf(img, st.removeBg, !!vart); setPxTick((t) => t + 1); }, [img, st.removeBg, vart]);
+  // vector art drawn from its shapes has no white background: flooding near-white from the edges took out white
+  // letters that touch the art's edge (Oct 16, #40070's "C O O" and the MH monogram)
+  useEffect(() => { if (!img) return; pxRef.current = pixelsOf(img, st.removeBg && !vart?.ok, !!vart); setPxTick((t) => t + 1); }, [img, st.removeBg, vart]);
 
   /* ---------- fades (gradients) between inks ---------- */
   // each fade in the art, with its middle color (from the art itself) and whether two inks' halftones can make it:
@@ -563,7 +568,7 @@ export default function SeparationStudio({ id }: { id: string }) {
         if (!plan) plan = planPrint(px, { garment: shirtOf(st), lib: st.lib, method: fromPlan ? undefined : method });
         const spots = (vart?.shapes || []).filter((sh) => sh.ink && !/%$/.test(sh.ink));
         const swatch = (hex: string) => { let best = "", bd = 4; for (const sh of spots) { const dd = deltaE(hex, sh.fill); if (dd < bd) { bd = dd; best = sh.ink!; } } return best; };
-        const list = plan.inks.map((k) => ({ ...k, name: swatch(k.hex) || k.name }));
+        const list = plan.inks.map((k) => ({ ...k, name: swatch(k.hex) || orderName(k.hex) || k.name }));
         setSt((x) => ({ ...x, method: plan!.method, maxColors: Math.max(1, list.length) }));
         setNatural(list.length);
         setInks(list);
@@ -590,7 +595,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       // vector art with spot swatches (.ai / PDF): an ink that is one of the art's swatches takes the swatch's name
       const spots = (vart?.shapes || []).filter((sh) => sh.ink && !/%$/.test(sh.ink));
       const swatch = (hex: string) => { let best = "", bd = 4; for (const sh of spots) { const d = deltaE(hex, sh.fill); if (d < bd) { bd = d; best = sh.ink!; } } return best; };
-      const list: SepInk[] = f.map((x) => ({ hex: x.hex, name: swatch(x.hex) || inkName(x.hex, st.lib), ...("fadeTo" in x && x.fadeTo?.length ? { fadeTo: x.fadeTo } : {}) }));
+      const list: SepInk[] = f.map((x) => ({ hex: x.hex, name: swatch(x.hex) || orderName(x.hex) || inkName(x.hex, st.lib), ...("fadeTo" in x && x.fadeTo?.length ? { fadeTo: x.fadeTo } : {}) }));
       setInks(list);
       setOrderKeys([]); setNames({}); setHidden(new Set()); setMatchAt(null); setBusy("");
     }, 30);
@@ -711,6 +716,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   // at full size: the art's own pixels (up to OUT_PPI at the print width), vector art drawn at OUT_PPI
   const [siblings, setSiblings] = useState<Pick<SepRow, "id" | "location" | "status" | "imprint_id" | "group_id">[]>([]);
   const designRef = useRef<(Design & { print_plan?: PrintPlan | null }) | null>(null);
+  const orderInks = useRef<{ name: string; hex: string }[]>([]);
+  /** the order's own ink name for a found color, when one is close (ΔE under 20) */
+  const orderName = (hex: string) => { let best = "", bd = 20; for (const k of orderInks.current) { const d = deltaE(hex, k.hex); if (d < bd) { bd = d; best = k.name; } } return best; };
   const hiRef = useRef<{ key: string; plates: Plate[]; w: number; h: number; ppi: number } | null>(null);
   const outSize = useCallback(() => {
     if (!img) return { side: MAX_SIDE, ppi: 0 };
@@ -726,7 +734,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     if (!img || !pxRef.current) throw new Error("The art isn't loaded yet.");
     setBusy("Separating at full size…"); await new Promise((r) => setTimeout(r, 40));
     const { side, ppi } = outSize();
-    const px = pixelsOf(img, st.removeBg, !!vart, side);
+    const px = pixelsOf(img, st.removeBg && !vart?.ok, !!vart, side);
     const ks = inks.map((x) => ({ hex: x.hex, name: x.name, fadeTo: x.fadeTo, also: x.also, shirt: x.shirt })), so = sepOpts(st, px.w);
     const r = separate(px, ks, so, vart?.ok && st.method === "spot" ? vectorCover(vart, px, ks, so, st.blackOver ?? true) : undefined);
     r.plates.forEach((p) => { const q = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (q) p.hex = shown(q); });
