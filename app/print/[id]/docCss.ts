@@ -3,7 +3,7 @@
  * Rendered in a <style> tag on the print page only, so the letter-size @page rule never reaches other pages.
  */
 export const DOC_CSS = `
-.pdoc{--ink:#141D2B;--ink2:#3c4658;--ink3:#6b7587;--line:#d6dbe3;--line2:#e8ebf0;--blue:#0e9bd8;--salmon:#f26660;--orange:#fcb122;--fade:linear-gradient(90deg,#0e9bd8 0%,#f26660 52%,#fcb122 100%);--ok:#1a8a5a;
+.pdoc{--row:.44in;--ink:#141D2B;--ink2:#3c4658;--ink3:#6b7587;--line:#d6dbe3;--line2:#e8ebf0;--blue:#0e9bd8;--salmon:#f26660;--orange:#fcb122;--fade:linear-gradient(90deg,#0e9bd8 0%,#f26660 52%,#fcb122 100%);--ok:#1a8a5a;
   background:#c9ced6;min-height:100vh;padding:0 12px 24px;color:var(--ink);font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:11pt;line-height:1.35;
   -webkit-print-color-adjust:exact;print-color-adjust:exact;overflow-x:auto}
 .pdoc *{box-sizing:border-box}
@@ -122,13 +122,14 @@ export const DOC_CSS = `
 .pdoc .parties.two{grid-template-columns:1fr 1fr;gap:28px}
 .pdoc .parties .lbl{margin-bottom:4px}
 .pdoc .parties > div{font-size:11pt;line-height:1.4;white-space:pre-line;overflow-wrap:anywhere}
-.pdoc .job{display:grid;grid-template-columns:1.45in 1fr;gap:0 16px;border-top:2px solid var(--ink);padding-top:0;margin-bottom:14px;break-inside:avoid}
+.pdoc .job{display:grid;grid-template-columns:1.45in 1fr;gap:0 16px;border-top:2px solid var(--ink);padding-top:0;margin-bottom:0;break-inside:avoid}
+.pdoc .job + .job{margin-top:var(--row)}
 .pdoc .job .pic{width:1.45in;border-radius:10px;background:#f6f7f9;padding:6px;align-self:start}
 .pdoc .job .pic.none{height:1.2in;display:grid;place-items:center;font-size:9pt;color:var(--ink3);text-align:center}
-.pdoc .job .t{font-size:16pt;line-height:1;grid-column:1/-1;height:.44in;box-sizing:border-box;display:flex;align-items:center;border-bottom:1.5px solid var(--ink3)}
+.pdoc .job .t{font-size:16pt;line-height:1;grid-column:1/-1;height:var(--row);box-sizing:border-box;display:flex;align-items:center;border-bottom:1.5px solid var(--ink3)}
 /* the black line, the gray line under the name and the line under ITEM are evenly spaced (Oct 16, Nick) */
 .pdoc .job .it{margin-top:0}
-.pdoc .job .it th{height:.44in;box-sizing:border-box;padding-top:0;padding-bottom:0;vertical-align:middle}
+.pdoc .job .it th{height:var(--row);box-sizing:border-box;padding-top:0;padding-bottom:0;vertical-align:middle}
 .pdoc .job .pic{margin-top:8px}
 .pdoc .it{width:100%;border-collapse:collapse;font-size:11pt;margin-top:6px}
 .pdoc .it th{font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:5px 6px;border-bottom:1.5px solid var(--ink)}
@@ -142,17 +143,19 @@ export const DOC_CSS = `
 .pdoc .prl-inks{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:3px}
 .pdoc .prl-ink{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:9.5pt}
 .pdoc .prl-ink i{width:10px;height:10px;border-radius:50%;border:1px solid rgba(0,0,0,.25);display:inline-block;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.pdoc .extra{width:100%;border-collapse:collapse;font-size:11pt;margin-top:4px}
-.pdoc .extra td{padding:6px 6px;border-bottom:1px solid var(--line2)}
-.pdoc .others{margin:-10px 0 6px calc(1.45in + 16px)}
-.pdoc .sumw{display:grid;grid-template-columns:1fr 2.9in;gap:24px;margin-top:10px;align-items:start;break-inside:avoid}
+/* one row height for every lined row on the invoice (Oct 16, Nick: "all the line spaces should be the same") */
+.pdoc .extra{width:100%;border-collapse:collapse;font-size:11pt;margin-top:0}
+.pdoc .extra td{height:var(--row);box-sizing:border-box;padding:0 6px;vertical-align:middle;border-bottom:1px solid var(--line2)}
+.pdoc .others{margin:0 0 0 calc(1.45in + 16px)}
+.pdoc .sumw{display:grid;grid-template-columns:1fr 2.9in;gap:24px;margin-top:0;align-items:start;break-inside:avoid}
 .pdoc .pay{border-radius:10px;background:#f6f7f9;padding:12px 14px;font-size:10.5pt;line-height:1.45;color:var(--ink2);white-space:pre-wrap}
 .pdoc .pay b{color:var(--ink)}
 .pdoc .pay p{margin:0 0 10px}
 .pdoc .pay p:last-child{margin:0}
 .pdoc .tot{font-size:11.5pt}
-.pdoc .tot .r{display:flex;justify-content:space-between;padding:4px 0}
-.pdoc .tot .r.big{border-top:2px solid var(--ink);margin-top:4px;padding-top:8px;font-size:15pt;font-weight:800}
+.pdoc .tot .r{display:flex;justify-content:space-between;align-items:center;height:var(--row);box-sizing:border-box;padding:0}
+.pdoc .tot .r:not(.big):not(.bal2){border-bottom:1px solid var(--line2)}
+.pdoc .tot .r.big{border-top:2px solid var(--ink);margin-top:-1px;font-size:15pt;font-weight:800}
 .pdoc .tot .bal{margin-top:8px;border-radius:10px;padding:10px 12px;background:#e9f6ef;display:flex;justify-content:space-between;align-items:baseline;font-weight:800}
 .pdoc .tot .bal span:last-child{font-size:20pt;color:var(--ok)}
 .pdoc .tot .bal.due{background:#fdeceb}
