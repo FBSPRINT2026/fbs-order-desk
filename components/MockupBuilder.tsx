@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -79,6 +79,14 @@ function loadImg(src: string): Promise<HTMLImageElement> {
 }
 
 /** Mockup builder: garment photos from S&S for each color, the customer's designs placed by location and print size. */
+/**
+ * The customer's brand colors (Oct 16, Nick: "a drop down in the mockup creator that has customer colors saved"): first
+ * in every ink dropdown, a "Use their colors" button, and new logos snap to them. Set on the customer page.
+ */
+type Brand = { label: string; colors: { name: string; ink: string; hex: string }[] };
+const BrandCtx = createContext<Brand>({ label: "", colors: [] });
+const nearestBrand = (hex: string, b: Brand) => b.colors.filter((c) => c.hex).map((c) => ({ c, d: deltaE(hex, c.hex) })).sort((x, y) => x.d - y.d)[0];
+
 /** portal = the customer's own builder: their account only, no order, saved through the portal's server actions. */
 export default function MockupBuilder({ portal = false, backHref }: { portal?: boolean; backHref?: string }) {
   const sp = useSearchParams();
@@ -98,6 +106,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [order, setOrder] = useState<Order | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerId, setCustomerId] = useState(sp.get("customer") || "");
+  const brand: Brand = useMemo(() => {
+    const c = customers.find((x) => x.id === customerId);
+    const colors = (c?.brand_colors || []).filter((b) => b && b.ink).map((b) => ({ name: b.name || b.ink, ink: b.ink, hex: colorHex(b.ink) || "" }));
+    return { label: portal ? "Your colors" : `${custLabel(c) || "Customer"} colors`, colors };
+  }, [customers, customerId, portal]);
+  const brandRef = useRef(brand); brandRef.current = brand;
   const [catalog, setCatalog] = useState<Garment[]>([]);
   const [designs, setDesigns] = useState<Design[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -411,11 +425,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           // only when they name enough inks for every color in the logo: one ink named for a 3-color logo (a guess
           // from an old job, Oct 12 Peticolas) painted the whole logo that one ink, a solid circle on the mockup
           const useAsked = asked.length > 0 && asked.length >= plan.inks.length;
+          // otherwise the customer's brand colors: a red in their logo becomes their PMS red (when it's close)
+          const b = brandRef.current;
+          const snap = (hex: string, guess: string) => { const n = !useAsked && b.colors.length ? nearestBrand(hex, b) : null; return n && n.d < 25 ? n.c.ink : guess; };
+          const chosen: string[] = [];
           for (const k of plan.inks) {
-            const name = useAsked ? nearestAsked(k.hex) : k.name;
+            const name = useAsked ? nearestAsked(k.hex) : snap(k.hex, k.name);
+            chosen.push(name);
             for (const hex of [k.hex, ...(k.also || [])]) map[hex] = { name, hex: colorHex(name) || k.hex };
           }
-          const names = useAsked ? asked : [...new Set(plan.inks.map((k) => k.name))];
+          const names = useAsked ? asked : [...new Set(chosen)];
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map, unite: true, plan: plan! } }));
           setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: useAsked ? asked.length : plan!.colors } : x)));
           return;
@@ -479,6 +498,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Logo colors still printing "as uploaded" (no standard ink picked), per imprint. */
   const unsetColors = (im: Imprint) => { const pt = paints[im.id]; return pt && pt.design === im.design_id ? pt.sources.filter((x) => !pt.map[x.hex]).map((x) => x.hex) : []; };
   const matchStandard = (im: Imprint) => setInks(im.id, Object.fromEntries(unsetColors(im).map((h) => [h, closestInk(h)])));
+  /** Every color in the logo to the nearest of the customer's brand colors. */
+  const matchBrand = (im: Imprint) => { const pt = paints[im.id]; if (!pt || !brand.colors.length) return; setInks(im.id, Object.fromEntries(pt.sources.map((x) => { const n = nearestBrand(x.hex, brand); return [x.hex, n ? { name: n.c.ink, hex: n.c.hex } : null]; }))); };
   /** Resize a sleeve print (sleeves stay a sleeve: capped at the sleeve's max area). */
   const growTo = (im: Imprint, inches: number) => {
     const v = Math.max(0.5, Math.min(maxWidthFor(im.location, ratioOf(designOf(im))), Math.round(inches * 100) / 100));
@@ -1631,7 +1652,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }, [auto, order, ready, saving, imprints, paints, designs, urls]); // eslint-disable-line react-hooks/exhaustive-deps
   const notReady = !customerId ? "Pick a customer first — their designs and mockups live on their account." : "Pick at least one garment to put the art on."
   return (
-    <>
+    <BrandCtx.Provider value={brand}>
       <Link className="back" href={portal ? backHref || "/portal" : orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {portal ? "Dashboard" : orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
       {portal && change && viewId && <div className="callout mk-change"><b>Your proof for order #{change.orderNumber}</b> This is the shirt and prints exactly as we set them up. Turn it, zoom in, look at each print. To change something, go back and choose Make changes. <a href={`/portal/orders/${change.orderId}/review/${viewId}`}>Back to the review</a></div>}
       {portal && change && !viewId && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
@@ -1972,7 +1993,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
                         onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
                         onSplit={() => setUnite(im.id, false)}
-                        onMatchAll={unsetColors(im).length > 0 ? () => matchStandard(im) : undefined} />
+                        onMatchAll={unsetColors(im).length > 0 ? () => matchStandard(im) : undefined}
+                        onBrandAll={brand.colors.length ? () => matchBrand(im) : undefined} brandLabel={brand.label} />
                     )}
                     </>)}
                     <div className="mk-imp-foot">
@@ -2042,7 +2064,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           </section>
         </div>
       </div>
-    </>
+    </BrandCtx.Provider>
   );
 }
 
@@ -2195,7 +2217,8 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
 
 /** Pick the ink a logo color prints as: a Wilflex RFU color, a PMS color, a custom PMS, or drop it. */
 function InkSelect({ value, onChange }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void }) {
-  const known = value && (value.name === "none" || WILFLEX_HEX[value.name] || PMS_HEX[value.name]);
+  const brand = useContext(BrandCtx);
+  const known = value && (value.name === "none" || WILFLEX_HEX[value.name] || PMS_HEX[value.name] || brand.colors.some((b) => b.ink === value.name));
   const [customMode, setCustom] = useState(false);
   // any PMS from the full chart (or a typed one) shows as its name + color instead of the short list
   const custom = customMode || (!!value && !known);
@@ -2218,6 +2241,7 @@ function InkSelect({ value, onChange }: { value?: { name: string; hex: string };
       }}>
       <option value="">Keep as uploaded</option>
       <option value="none">Remove (shirt shows through)</option>
+      {brand.colors.length > 0 && <optgroup label={brand.label}>{brand.colors.map((b) => <option key={"b:" + b.ink} value={b.ink}>{b.name === b.ink ? b.ink : `${b.name} · ${b.ink}`}</option>)}</optgroup>}
       <optgroup label="Wilflex RFU">{Object.keys(WILFLEX_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
       <optgroup label="PMS">{Object.keys(PMS_HEX).map((k) => <option key={k} value={k}>{k}</option>)}</optgroup>
       <option value="__custom">Other PMS / custom…</option>
@@ -2303,12 +2327,13 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
  * (standard ink and PMS, with how close each is); hovering a suggestion previews it on the mockup.
  * Once a color is picked its row folds up to one tight line, so picked colors stack as a short list.
  */
-function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll }: {
+function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, onBrandAll, brandLabel }: {
   rows: { hexes: string[]; cur?: { name: string; hex: string } }[];
   onPick: (hexes: string[], v: { name: string; hex: string } | null) => void;
   onHover: (hexes: string[], v: { name: string; hex: string } | null) => void;
   onSplit: () => void;
   onMatchAll?: () => void;
+  onBrandAll?: () => void; brandLabel?: string;
 }) {
   const [open, setOpen] = useState(""); // a picked color reopened to change it
   const key = (r: { hexes: string[] }) => r.hexes.join();
@@ -2342,6 +2367,7 @@ function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll }: {
           </div>
         );
       })}
+      {onBrandAll && <button type="button" className="btn sm primary" style={{ alignSelf: "flex-start" }} title="Set each color in this logo to the nearest of the customer's saved colors" onClick={onBrandAll}>Use {brandLabel === "Your colors" ? "your colors" : brandLabel}</button>}
       {onMatchAll && <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={onMatchAll}>Use closest standard inks</button>}
     </div>
   );

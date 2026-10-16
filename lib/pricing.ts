@@ -136,7 +136,10 @@ export type ArtFile = { id: string; order_id: string; name: string; file_path: s
 export type Payment = { id: string; order_id: string; amount: number; method: string; paid_on: string; stripe_session_id: string | null; created_at: string; fee?: number; processor_id?: string | null; note?: string | null };
 export type Customer = { id: string; is_test?: boolean; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType; payment_terms?: PayTerms;
   /** CRM */ tags?: string[]; next_follow_up?: string | null; owner_email?: string; /** account owner's name (Settings → Staff) */ account_owner?: string; last_contact_at?: string | null;
-  /** shipping: whose carrier account pays (fbs = ours, with markup) */ ship_bill?: "fbs" | "ups" | "fedex"; ship_ups_account?: string; ship_fedex_account?: string; ship_bill_zip?: string };
+  /** shipping: whose carrier account pays (fbs = ours, with markup) */ ship_bill?: "fbs" | "ups" | "fedex"; ship_ups_account?: string; ship_fedex_account?: string; ship_bill_zip?: string;
+  /** their brand inks ("Red" = "PMS 199 C"), first in every Mockup Creator ink dropdown for them (Oct 16) */ brand_colors?: BrandColor[] };
+/** One of a customer's brand colors: what they call it and the exact ink. */
+export type BrandColor = { name: string; ink: string };
 /** One entry on a customer's timeline: an email, call, note, meeting or task. */
 export type Activity = { id: string; customer_id: string | null; order_id: string | null; kind: "note" | "call" | "email" | "meeting" | "task" | "sms"; direction: "in" | "out" | "none"; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; ai_processed_at: string | null; meta: Record<string, unknown>; created_by: string; created_at: string };
 /** One item in the Assistant inbox. */
