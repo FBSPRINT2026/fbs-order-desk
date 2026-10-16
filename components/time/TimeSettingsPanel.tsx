@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { dayLabel, periodOf, type TimeSettings } from "@/lib/timeclock";
 import type { TimeData } from "./types";
+import ZkClocks from "./ZkClocks";
 
 type Device = { id: string; name: string; active: boolean; created_at: string; last_seen_at: string | null };
 
@@ -16,7 +17,7 @@ export default function TimeSettingsPanel({ d }: { d: TimeData }) {
   const [depts, setDepts] = useState(d.settings.departments.join(", "));
 
   const loadDevices = useCallback(async () => {
-    const { data } = await createClient().from("timeclock_devices").select("id, name, active, created_at, last_seen_at").order("created_at", { ascending: false });
+    const { data } = await createClient().from("timeclock_devices").select("id, name, active, created_at, last_seen_at").eq("kind", "tablet").order("created_at", { ascending: false });
     setDevices((data || []) as Device[]);
     const r = await fetch("/api/time/device", { cache: "no-store" }).then((x) => x.json()).catch(() => ({ device: null }));
     setHere(r.device);
@@ -49,6 +50,7 @@ export default function TimeSettingsPanel({ d }: { d: TimeData }) {
 
   return (
     <div className="tmx">
+      <ZkClocks />
       <section className="db-card db-blue">
         <div className="db-card-h"><h2>Wall Clocks</h2><span className="faint db-h-note">tablets people punch on</span></div>
         <div className="tmx-dev-here">

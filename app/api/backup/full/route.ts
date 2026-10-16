@@ -35,7 +35,7 @@ const TABLES: Record<string, string> = {
   projects: "id", project_tasks: "id", programs: "id", program_items: "id",
   merch_stores: "id", merch_products: "id", merch_orders: "id", merch_order_items: "id",
   employees: "id", employee_pay: "employee_id", employee_pins: "employee_id", shifts: "id", time_punches: "id",
-  time_off: "id", time_periods: "starts_on", timeclock_devices: "id", uattend_sync: "id",
+  time_off: "id", time_periods: "starts_on", timeclock_devices: "id", timeclock_raw: "id", timeclock_cmds: "id", uattend_sync: "id",
   mail_accounts: "id", mail_senders: "email", mail_sync: "id", ui_translations: "lang,src", data_backups: "id",
   printavo_sync: "id", printavo_customers: "printavo_id", printavo_index: "printavo_id", printavo_census: "printavo_id",
   archived_orders: "id",

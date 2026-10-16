@@ -8981,3 +8981,21 @@ a.pdn-tag:hover{text-decoration:underline}
   .pjs-st b{font-size:9.5px}
   .pjf{flex-direction:column}
 }
+
+/* Time Clock → Settings: the ZKTeco face clock (Oct 16) */
+.zk-how{margin:4px 0 10px;font-size:13px}
+.zk-how summary{cursor:pointer;font-weight:700;color:#0a7fb3}
+.zk-how ol{margin:8px 0 6px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.zk-how code{font-family:var(--mono);background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;user-select:all}
+.zk-clock{border-top:1px solid var(--line-2,var(--line));padding:10px 0 4px}
+.zk-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.zk-top .db-main{display:flex;flex-direction:column}
+.zk-top .db-side{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.zk-live{color:var(--ok);font-weight:700}
+.zk-off{color:#a76a00}
+.zk-facts{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);margin:6px 0}
+.zk-warn{color:#b3261e;font-weight:600}
+.zk-scans{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+.zk-scans th{text-align:left;font-weight:700;color:var(--ink-3);font-size:11.5px;padding:4px 6px;border-bottom:1px solid var(--line)}
+.zk-scans td{padding:4px 6px;border-bottom:1px solid var(--line-2,var(--line))}
+.zk-scans td:first-child{font-family:var(--mono);white-space:nowrap}
