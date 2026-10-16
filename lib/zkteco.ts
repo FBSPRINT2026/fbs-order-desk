@@ -66,7 +66,7 @@ function chicagoOffset() {
 }
 
 /** The access-control firmware (the SpeedFace-V4L says "DeviceType=acc", push 3.x): its own settings reply and commands. */
-export const isAcc = (d: ZkDevice) => !!d.info?.acc || /DeviceType=acc/i.test(String(d.info?.registry || "")) || String(d.info?.pushver || "").startsWith("3");
+export const isAcc = (d: ZkDevice) => typeof d.info?.acc === "boolean" ? (d.info.acc as boolean) : /DeviceType=acc/i.test(String(d.info?.registry || ""));
 export function zkAccOptions(d: ZkDevice) {
   return [
     "ServerVersion=3.1.2", "ServerName=ADMS", "PushVersion=3.1.2", "ErrorDelay=30", "RequestDelay=10",

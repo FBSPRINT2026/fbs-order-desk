@@ -43,7 +43,11 @@ async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }
 
   if (what === "cdata") {
     if (req.method === "GET") {
-      await zkSeen(admin, d, { pushver: url.searchParams.get("pushver") || "", language: url.searchParams.get("language") || "", hello: new Date().toISOString() });
+      // a time-attendance clock (push 2.x) checks in here without registering; one switched over from door access
+      // (Oct 16: the SpeedFace went from A&C PUSH to T&A PUSH) stops being treated as a door controller
+      const pv = url.searchParams.get("pushver") || "";
+      await zkSeen(admin, d, { pushver: pv, language: url.searchParams.get("language") || "", hello: new Date().toISOString(), ...(pv && !pv.startsWith("3") ? { acc: false } : {}) });
+      if (pv && !pv.startsWith("3")) d.info = { ...(d.info || {}), acc: false };
       return text(isAcc(d) ? zkAccOptions(d) : zkOptions(d));
     }
     const table = tbl;
