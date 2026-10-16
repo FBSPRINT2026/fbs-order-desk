@@ -4,6 +4,7 @@ import { getOrder, pv, transitionWrite, PrintavoError } from "@/lib/printavo";
 import { htmlText } from "@/lib/printavoChanges";
 import { calcOrder, FULL_COLOR, imprintLabel, mergeSettings, orderGroups, SIZES, ST, type Imprint, type Order, type StatusKey } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/config";
+import { parseAddress } from "@/lib/qbo/map";
 
 /**
  * "Send to Printavo" (the move off Printavo, Oct 7 - Nov 1, 2026): an order entered here in the 40,000 series is made
@@ -27,6 +28,23 @@ const PV_SIZE: Record<string, string> = {
 };
 /** Printavo's card surcharge fee: Printavo-only (customers pay there during the move), never brought back to our order */
 export const CARD_FEE = "Credit Card Processing Surcharge - ACH Available on Request";
+
+/**
+ * Our free-text address as Printavo's parts. A first line that isn't a street (no number: "Tera Murphy") is the
+ * name on it; the company is the customer's. Null when there's nothing to send.
+ */
+function pvAddress(text: string, company: string, person: string) {
+  const lines = text.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  let name = person;
+  if (lines.length >= 2 && company && lines[0].toLowerCase() === company.toLowerCase()) lines.shift();
+  if (lines.length >= 3 && !/\d/.test(lines[0])) name = lines.shift() as string;
+  const a = parseAddress(lines.join("\n"));
+  if (!a) return null;
+  return { companyName: company || undefined, customerName: name || undefined, address1: a.Line1 || undefined,
+    address2: [a.Line2, a.Line3, a.Line4].filter(Boolean).join(", ") || undefined, city: a.City || undefined,
+    stateIso: a.CountrySubDivisionCode || undefined, zipCode: a.PostalCode || undefined, countryIso: "US" };
+}
 const CARD_RE = /credit card processing surcharge/i;
 const day = (d: string | null | undefined) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : "");
 /** a Printavo date-time as the shop's calendar day (Central) */
@@ -101,7 +119,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   if (!status) throw new PrintavoError("Pick a Printavo status.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(inp.customerDue) || !/^\d{4}-\d{2}-\d{2}$/.test(inp.productionDue)) throw new PrintavoError("Pick the production date and the customer's due date.");
 
-  const { o, settings } = await load(admin, inp.orderId);
+  const { o, cust, settings } = await load(admin, inp.orderId);
   const number = o.number as number;
   // one send at a time: a second click while the first is still working is turned away
   const was = (o.printavo_state || {}) as { sending?: string | null };
@@ -200,6 +218,9 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   const { data: ds } = designIds.length ? await admin.from("designs").select("file_path").in("id", designIds) : { data: [] };
   const fileUrls = await sign([...(af || []).map((x) => x.file_path as string), ...((ds || []).map((x) => x.file_path as string).filter(Boolean))]).then((u) => u.filter(Boolean));
 
+  const company = String(cust?.company || ""), person = String(cust?.name || "");
+  const billingAddress = pvAddress(String(cust?.address || ""), company, person);
+  const shippingAddress = o.delivery_method !== "pickup" ? pvAddress(String(o.ship_to || ""), company, person) || pvAddress(String(cust?.ship_address || cust?.address || ""), company, person) : null;
   const discount = o.discount_type === "amt" ? +(o.discount_amt || 0) : +(o.discount_pct || 0);
   const input = {
     contact: { id: pre.contact.id },
@@ -217,6 +238,8 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
     salesTax: taxed ? calc.rate : 0,
     ...(discount ? { discount, discountAsPercentage: o.discount_type !== "amt" } : {}),
     tags: [`#FBS${number}`], // Printavo tags start with # and have no spaces
+    // the customer's billing and shipping addresses (Oct 16, Nick: they came over blank)
+    ...(billingAddress ? { billingAddress } : {}), ...(shippingAddress ? { shippingAddress } : {}),
     lineItemGroups, fees,
     productionFiles: fileUrls.map((u) => ({ publicFileUrl: u })),
   };
