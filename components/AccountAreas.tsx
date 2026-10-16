@@ -642,7 +642,7 @@ export default function AccountAreas({ brandColors = [], dash, mode, textsPanel,
               {brandColors.map((b, i) => { const hex = colorHex(b.ink); return (
                 <div key={i} className="bs-item">
                   <span className="bs-sw" style={{ background: hex || "transparent" }} />
-                  <span className="bs-t"><b>{b.name || b.ink}</b><small>{b.ink}{hex ? <span className="faint"> · {hex.toUpperCase()}</span> : null}</small></span>
+                  <span className="bs-t"><b>{b.name || b.ink}</b><small>{b.ink}{hex ? <span className="faint">{hex.toUpperCase()}</span> : null}</small></span>
                 </div>
               ); })}
             </div>
