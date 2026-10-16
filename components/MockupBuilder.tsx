@@ -82,7 +82,8 @@ function loadImg(src: string): Promise<HTMLImageElement> {
 /** Mockup builder: garment photos from S&S for each color, the customer's designs placed by location and print size. */
 /**
  * The customer's brand colors (Oct 16, Nick: "a drop down in the mockup creator that has customer colors saved"): first
- * in every ink dropdown, a "Use their colors" button, and new logos snap to them. Set on the customer page.
+ * in every ink dropdown, and an "Apply brand standards" pick (a pop-up when a logo's colors come up, and a dropdown under
+ * them). Never applied on their own: a customer can have several sets. Set on the customer page.
  */
 type BrandInk = { name: string; ink: string; hex: string; group?: string };
 type Brand = { label: string; colors: BrandInk[]; groups: { key: string; label: string; colors: BrandInk[] }[] };
@@ -131,6 +132,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return { label: snap?.label || own, colors: snap?.colors || [], groups };
   }, [customers, customerId, portal, order?.nickname, groupName]);
   const brandRef = useRef(brand); brandRef.current = brand;
+  /** the print whose logo colors just came up for a customer with brand standards: the pop-up asks which set to apply */
+  const [brandAsk, setBrandAsk] = useState<string | null>(null);
+  const brandAsked = useRef(new Set<string>());
   const [change, setChange] = useState<{ orderId: string; orderNumber: number } | null>(null);
   const [active, setActive] = useState(0);
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
@@ -421,10 +425,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         let plan = (d.print_plan as PrintPlan | null | undefined)?.v === 1 ? d.print_plan as PrintPlan : null;
         if (!plan) {
           plan = planPrint(pxOfImage(img, 1600), { garment: line ? shirtHex(line) : undefined });
-          // the logo's saved ink names use the customer's brand colors when one is close (Oct 16, Nick: Aubrey's gray is
-          // PMS Cool Gray 5 C, but the logo was saved as Cool Gray 4 C and the separation followed it)
-          const bb = brandRef.current;
-          if (bb.colors.length) plan = { ...plan, inks: plan.inks.map((k) => { const n = nearestBrand(k.hex, bb); return n && n.d < 25 ? { ...k, name: n.c.ink } : k; }) };
           const names = [...new Set(plan.inks.map((k) => k.name))];
           if (!portal) sb.from("designs").update({ print_plan: plan, colors: plan.colors, inks: plan.method === "spot" ? names.join(", ") : `Simulated process (${plan.colors})` }).eq("id", d.id).then(() => {});
           const pl = plan; setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, print_plan: pl } : x)));
@@ -444,7 +444,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const useAsked = asked.length > 0 && asked.length >= plan.inks.length;
           // otherwise the customer's brand colors: a red in their logo becomes their PMS red (when it's close)
           const b = brandRef.current;
-          const snap = (hex: string, guess: string) => { const n = !useAsked && b.colors.length ? nearestBrand(hex, b) : null; return n && n.d < 25 ? n.c.ink : guess; };
+          // brand standards aren't applied on their own (Oct 16, Nick: a customer can have several sets): the "Apply brand
+          // standards" pop-up asks which, when this logo's colors come up
+          const snap = (_hex: string, guess: string) => guess;
+          if (!useAsked && b.groups.some((g) => g.colors.length) && !brandAsked.current.has(im.id)) { brandAsked.current.add(im.id); setBrandAsk(im.id); }
           const chosen: string[] = [];
           for (const k of plan.inks) {
             const name = useAsked ? nearestAsked(k.hex) : snap(k.hex, k.name);
@@ -1665,6 +1668,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const notReady = !customerId ? "Pick a customer first — their designs and mockups live on their account." : "Pick at least one garment to put the art on."
   return (
     <BrandCtx.Provider value={brand}>
+      {/* a logo's colors came up for a customer with brand standards: which set, or not now (Oct 16, Nick) */}
+      {brandAsk && paints[brandAsk] && (() => {
+        const im = imprints.find((x) => x.id === brandAsk);
+        const gs = brand.groups.filter((g) => g.colors.length);
+        if (!im || !gs.length) return null;
+        return (
+          <div className="bs-overlay" onClick={(e) => { if (e.target === e.currentTarget) setBrandAsk(null); }}>
+            <BrandPick modal groups={gs.map((g) => ({ label: g.label, colors: g.colors, go: () => matchBrand(im, g.key) }))} onPick={(g) => { g.go(); setBrandAsk(null); }} onClose={() => setBrandAsk(null)} />
+          </div>
+        );
+      })()}
       <Link className="back" href={portal ? backHref || "/portal" : orderId ? `/shop/orders/${orderId}` : "/shop/artwork"}>← {portal ? "Dashboard" : orderId ? `Order #${order?.number || ""}` : "Artwork"}</Link>
       {portal && change && viewId && <div className="callout mk-change"><b>Your proof for order #{change.orderNumber}</b> This is the shirt and prints exactly as we set them up. Turn it, zoom in, look at each print. To change something, go back and choose Make changes. <a href={`/portal/orders/${change.orderId}/review/${viewId}`}>Back to the review</a></div>}
       {portal && change && !viewId && <div className="callout mk-change"><b>Changing the art for order #{change.orderNumber}</b> Change the shirt color, the size or where it sits, then press Save. It comes to us: we&apos;ll check it can print and send you a new proof. <a href={`/portal/orders/${change.orderId}`}>Cancel</a></div>}
@@ -2006,7 +2020,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
                         onSplit={() => setUnite(im.id, false)}
                         onMatchAll={unsetColors(im).length > 0 ? () => matchStandard(im) : undefined}
-                        brandGroups={brand.groups.filter((g) => g.colors.length).slice(0, 4).map((g) => ({ label: g.label, go: () => matchBrand(im, g.key) }))} />
+                        brandGroups={brand.groups.filter((g) => g.colors.length).map((g) => ({ label: g.label, colors: g.colors, go: () => matchBrand(im, g.key) }))} />
                     )}
                     </>)}
                     <div className="mk-imp-foot">
@@ -2339,15 +2353,34 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, topAlign, 
  * (standard ink and PMS, with how close each is); hovering a suggestion previews it on the mockup.
  * Once a color is picked its row folds up to one tight line, so picked colors stack as a short list.
  */
+/** The customer's brand standard sets: pick one and each color in the logo becomes the closest ink in it. */
+function BrandPick({ groups, onPick, onClose, modal = false }: { groups: { label: string; colors: BrandInk[]; go: () => void }[]; onPick: (g: { go: () => void }) => void; onClose: () => void; modal?: boolean }) {
+  return (
+    <div className={"bs-pop" + (modal ? " modal" : "")} role="dialog" aria-label="Apply brand standards">
+      <div className="bs-h">{modal ? "This customer has brand standards" : "Apply brand standards"}</div>
+      {modal && <div className="bs-sub">Apply a set to this logo? Each color in it becomes the closest ink in the set.</div>}
+      {groups.map((g) => (
+        <button key={g.label} type="button" className="bs-opt" onClick={() => onPick(g)}>
+          <b>{g.label}</b>
+          <small>{g.colors.map((c) => (c.name && c.name !== c.ink ? `${c.name} ${c.ink.replace(/^PMS\s+/, "")}` : c.ink)).join(" · ")}</small>
+          <span className="bs-sws">{g.colors.map((c, i) => <span key={i} className="sw" style={{ background: c.hex || "transparent" }} title={c.ink} />)}</span>
+        </button>
+      ))}
+      <div className="bs-note">{modal ? <button type="button" className="btn sm ghost" onClick={onClose}>Not now</button> : null}<span>Edit sets on the customer&apos;s Artwork tab.</span></div>
+    </div>
+  );
+}
+
 function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = [] }: {
   rows: { hexes: string[]; cur?: { name: string; hex: string } }[];
   onPick: (hexes: string[], v: { name: string; hex: string } | null) => void;
   onHover: (hexes: string[], v: { name: string; hex: string } | null) => void;
   onSplit: () => void;
   onMatchAll?: () => void;
-  brandGroups?: { label: string; go: () => void }[];
+  brandGroups?: { label: string; colors: BrandInk[]; go: () => void }[];
 }) {
   const [open, setOpen] = useState(""); // a picked color reopened to change it
+  const [bsOpen, setBsOpen] = useState(false);
   const key = (r: { hexes: string[] }) => r.hexes.join();
   const pick = (r: { hexes: string[] }, v: { name: string; hex: string } | null) => { onPick(r.hexes, v); setOpen(""); };
   return (
@@ -2379,8 +2412,20 @@ function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = 
           </div>
         );
       })}
-      {brandGroups.length > 0 && <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>{brandGroups.map((g) => <button key={g.label} type="button" className="btn sm primary" title="Set each color in this logo to the nearest of these saved colors" onClick={g.go}>Use {g.label === "Your colors" ? "your colors" : /colou?rs?$/i.test(g.label) ? g.label : `${g.label} colors`}</button>)}</div>}
-      {onMatchAll && <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={onMatchAll}>Use closest standard inks</button>}
+      {(brandGroups.length > 0 || onMatchAll) && (
+        <div className="bs-foot">
+          {brandGroups.length > 0 && (
+            <div className="bs-dd">
+              <button type="button" className="bs-btn" aria-expanded={bsOpen} onClick={() => setBsOpen(!bsOpen)}>
+                <span className="bs-mini">{brandGroups[0].colors.slice(0, 4).map((c, i) => <i key={i} style={{ background: c.hex }} />)}</span>
+                Apply brand standards <span className="bs-car">{bsOpen ? "▴" : "▾"}</span>
+              </button>
+              {bsOpen && <BrandPick groups={brandGroups} onPick={(g) => { g.go(); setBsOpen(false); }} onClose={() => setBsOpen(false)} />}
+            </div>
+          )}
+          {onMatchAll && <button type="button" className="linkbtn bs-std" title="Set each color that's still as uploaded to the closest Wilflex RFU ink" onClick={onMatchAll}>Closest standard inks</button>}
+        </div>
+      )}
     </div>
   );
 }

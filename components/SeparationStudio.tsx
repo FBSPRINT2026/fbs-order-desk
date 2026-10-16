@@ -399,8 +399,8 @@ export default function SeparationStudio({ id }: { id: string }) {
     // the inks the order names for this print (the mockup's, snapped to the customer's brand colors): a found ink close
     // to one of them takes its name (Oct 16, Nick: #40070 found PMS 179 C / Cool Gray 4 C for their PMS 199 C / Cool Gray 5 C)
     orderInks.current = String(im?.inks || "").split(",").map((n) => n.trim()).filter(Boolean).map((name) => ({ name, hex: colorHex(name) || "" })).filter((k) => k.hex);
-    // and the customer's brand colors (Aubrey ISD: PMS Cool Gray 5 C, PMS 199 C…)
-    if (row0.customer_id) {
+    // the customer's brand colors only when the order names no inks for this print (several sets can't be guessed between)
+    if (row0.customer_id && !orderInks.current.length) {
       const { data: cb } = await sb.from("customers").select("brand_colors").eq("id", row0.customer_id).maybeSingle();
       for (const bc of ((cb?.brand_colors || []) as { ink: string }[])) { const hx = colorHex(bc.ink); if (hx && !orderInks.current.some((k) => k.name === bc.ink)) orderInks.current.push({ name: bc.ink, hex: hx }); }
     }
