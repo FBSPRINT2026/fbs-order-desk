@@ -440,7 +440,9 @@ export default function AccountAreas({ dash, mode, textsPanel, textsCount, produ
         const shown = showOldOwed ? list : list.slice(0, 15);
         return (
           <div className="aa-card aa-tblcard">
-            <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Printavo orders</h3><span className="faint">{oldOwed.length} invoice{oldOwed.length === 1 ? "" : "s"} · {money(oldOwed.reduce((a, o) => a + o.balance, 0))} open{mode === "portal" ? " · pay each one on its invoice for now" : ""}</span></div>
+            <div className="aa-sec-h" style={{ padding: "14px 16px 0" }}><h3>Printavo orders</h3><span className="faint">{oldOwed.length} invoice{oldOwed.length === 1 ? "" : "s"} · {money(oldOwed.reduce((a, o) => a + o.balance, 0))} open</span></div>
+            {/* until the account moves over from Printavo, these are paid on their Printavo invoice (Oct 15, Nick) */}
+            <div className="aa-pvnote"><b>{mode === "portal" ? "Your account hasn't moved over from our old system yet." : "This account hasn't moved over from Printavo yet."}</b> {mode === "portal" ? "Paying these orders here is coming soon. For now, pay each one on its own invoice: the Pay button opens it." : "Customers pay these on their Printavo invoice for now. Paying them in the portal is coming soon."}</div>
             <table className="aa-tbl">
               <thead><tr><th>#</th><th>Order</th><th>Status</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th><th /></tr></thead>
               <tbody>
