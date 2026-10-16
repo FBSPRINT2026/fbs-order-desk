@@ -120,8 +120,6 @@ export const DOC_CSS = `
 .pdoc .stamp{display:inline-block;margin-top:8px;border:2.5px solid var(--ok);color:var(--ok);font-weight:800;font-size:13pt;letter-spacing:.12em;padding:3px 12px;border-radius:6px;transform:rotate(-3deg)}
 .pdoc .parties{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin:22px 0 18px}
 .pdoc .parties.two{grid-template-columns:1fr 1fr;gap:28px}
-.pdoc .doc .djob{margin-top:10px;font-size:11pt;line-height:1.4;color:var(--ink2)}
-.pdoc .doc .djob b{color:var(--ink);font-size:12pt}
 .pdoc .parties .lbl{margin-bottom:4px}
 .pdoc .parties > div{font-size:11pt;line-height:1.4;white-space:pre-line;overflow-wrap:anywhere}
 .pdoc .job{display:grid;grid-template-columns:1.45in 1fr;gap:16px;border-top:2px solid var(--ink);padding-top:12px;margin-bottom:14px;break-inside:avoid}
@@ -156,17 +154,15 @@ export const DOC_CSS = `
 .pdoc .tot .bal.due{background:#fdeceb}
 .pdoc .tot .bal.due span:last-child{color:#b3261e}
 .pdoc .tot .bal2{font-weight:800}
-.pdoc .due-card{margin:12px 0 0 auto;width:2.9in;text-align:left;border:2px solid var(--ink);border-radius:12px;overflow:hidden;break-inside:avoid}
-.pdoc .due-card .dc-amt{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 14px;background:#fdeceb}
-.pdoc .due-card .dc-amt span{font-weight:800;font-size:11pt;color:var(--ink)}
-.pdoc .due-card .dc-amt b{font-size:21pt;line-height:1.1;color:#b3261e;font-variant-numeric:tabular-nums}
-.pdoc .due-card.paid .dc-amt{background:#e9f6ef}
-.pdoc .due-card.paid .dc-amt b{color:var(--ok)}
-.pdoc .due-card.q .dc-amt{background:#f2f4f7}
-.pdoc .due-card.q .dc-amt b{color:var(--ink)}
-.pdoc .due-card .dc-terms{padding:7px 14px 9px;border-top:1px solid #e3e6eb;font-size:9.5pt;line-height:1.4;color:var(--ink2)}
-.pdoc .due-card .dc-dep{display:block;margin-top:2px}
-.pdoc .due-card .dc-dep b{color:var(--ink)}
+.pdoc .parties.three{grid-template-columns:1fr 1fr 3.1in;gap:22px}
+.pdoc .parties .osum{background:#f6f7f9;border-radius:10px;padding:10px 14px 11px;white-space:normal}
+.pdoc .osum dl{display:grid;grid-template-columns:auto 1fr;gap:3px 0;margin:4px 0 0;font-size:10.5pt;line-height:1.35}
+.pdoc .osum dt{color:var(--ink3)}
+.pdoc .osum dd{margin:0;padding-left:14px;text-align:right;color:var(--ink);overflow-wrap:anywhere}
+.pdoc .osum dt.bd,.pdoc .osum dd.bd{border-top:1px solid #dfe3e8;padding-top:6px;margin-top:3px;font-weight:800;color:var(--ink)}
+.pdoc .osum dd.bd.ok{color:var(--ok)}
+.pdoc .osum dd.nw{white-space:nowrap}
+.pdoc .osum-terms{margin-top:4px;font-size:9pt;line-height:1.4;color:var(--ink3)}
 .pdoc .pay.empty{background:none;padding:0}
 .pdoc .ifoot{margin-top:auto;padding-top:18px}
 .pdoc .ifoot .fade{height:4px;margin-bottom:8px}

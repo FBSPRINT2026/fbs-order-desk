@@ -238,21 +238,27 @@ export function InvoiceDoc(p: DocData) {
         <div className="doc">
           <div className="k disp">{kind}</div>
           <div className="n">#{o.number}</div>
-          <div className="meta">Issued {issued}{o.po_number ? ` · PO ${o.po_number}` : ""}{due && <><br />In hands {due} · {DELIVERY[o.delivery_method] || "Pickup"}</>}</div>
-          {/* what they owe and when, right under the invoice header (Oct 16, Nick) */}
-          <div className={"due-card" + (isQ ? " q" : paidUp ? " paid" : "")}>
-            <div className="dc-amt"><span>{isQ ? "Quote total" : paidUp ? "Paid in full" : "Balance due"}</span><b>{money(isQ ? c.total : Math.max(0, c.balance))}</b></div>
-            {(cust.id || sh.terms) && <div className="dc-terms">{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}
-              {cust.payment_terms === "deposit" && !paidUp && c.paid < c.total / 2 - 0.005 && <span className="dc-dep">50% down to start: <b>{money(c.total / 2)}</b></span>}</div>}
-          </div>
-          <div className="djob"><b>{o.nickname}</b><br />{c.qty} piece{c.qty === 1 ? "" : "s"} · {prints} print{prints === 1 ? "" : "s"}{o.approved_at && <><br /><span className="faint">Approved by {o.approved_name}, {new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</span></>}</div>
+          <div className="meta">Issued {issued}{due && <><br />In hands {due} · {DELIVERY[o.delivery_method] || "Pickup"}</>}</div>
         </div>
       </div>
-      <div className="parties two">
+      <div className="parties three">
         <div><div className="lbl">Bill to</div><b>{cust.company || cust.name || "—"}</b>{contact && `\n${contact}`}{cust.email && <><br /><span className="faint">{cust.email}</span></>}{cust.phone && <><br /><span className="faint">{fmtPhone(cust.phone)}</span></>}</div>
         {o.delivery_method === "pickup"
           ? <div><div className="lbl">Pickup</div>Pickup at {sh.name}{due && <><br /><span className="faint">{due}</span></>}</div>
           : <div><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</div>{o.ship_to || "—"}{o.ship_method && <><br /><span className="faint">{o.ship_method}</span></>}</div>}
+        {/* the order at a glance (Oct 16, Nick): PO, name, summary, balance due and terms. Quiet, not a billboard. */}
+        <div className="osum">
+          <div className="lbl">Order</div>
+          <dl>
+            {o.po_number && <><dt>PO</dt><dd>{o.po_number}</dd></>}
+            <dt>Name</dt><dd><b>{o.nickname}</b></dd>
+            <dt>Summary</dt><dd className="nw">{c.qty} piece{c.qty === 1 ? "" : "s"} · {prints} print{prints === 1 ? "" : "s"}</dd>
+            {o.approved_at && <><dt>Approved</dt><dd>{o.approved_name}, {new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</dd></>}
+            <dt className="bd">{isQ ? "Quote total" : paidUp ? "Paid" : "Balance due"}</dt><dd className={"bd" + (paidUp ? " ok" : "")}>{isQ ? money(c.total) : paidUp ? "In full" : money(Math.max(0, c.balance))}</dd>
+          </dl>
+          {(cust.id || sh.terms) && <div className="osum-terms">{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}
+            {cust.payment_terms === "deposit" && !paidUp && c.paid < c.total / 2 - 0.005 && <> 50% down to start: <b>{money(c.total / 2)}</b>.</>}</div>}
+        </div>
       </div>
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
