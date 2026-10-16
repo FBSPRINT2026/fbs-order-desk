@@ -10,7 +10,7 @@ import { stopJob } from "@/lib/timeclockServer";
  *
  * A new clock shows up Off. Lines it sends are kept as sent (timeclock_raw) and only become punches once an owner or
  * admin turns it on, so a stranger can't add time. Face scans don't say in or out: the next punch follows the
- * person's last one (out → in, in → out, on break → back from break), a second scan within 2 minutes is ignored, and
+ * person's last one (out → in, in → out, on break → back from break), a scan within 10 minutes of their last punch is ignored (the clock repeats itself while someone stands there; Nick, Oct 16), and
  * a clock-in left open from an earlier day starts a new day with a clock-in.
  */
 export type ZkDevice = { id: string; name: string; active: boolean; serial: string; info: Record<string, unknown>; att_stamp: string | null; op_stamp: string | null; last_seen_at: string | null };
@@ -125,7 +125,7 @@ export async function zkProcess(admin: SupabaseClient, deviceId: string) {
     const { data: lastRow } = await admin.from("time_punches").select("kind, at").eq("employee_id", e.id).eq("voided", false).lt("at", r.p.at).order("at", { ascending: false }).limit(1).maybeSingle();
     const last = (lastRow || null) as Last;
     const gapMin = last ? (Date.parse(r.p.at) - Date.parse(last.at)) / 60000 : Infinity;
-    if (last && gapMin < 2) { await admin.from("timeclock_raw").update({ done: true, note: "second scan within 2 minutes" }).eq("id", r.id); continue; }
+    if (last && gapMin < 10) { await admin.from("timeclock_raw").update({ done: true, note: "repeat scan (within 10 minutes)" }).eq("id", r.id); continue; }
     const open = last && last.kind !== "out" && localDay(last.at) === localDay(r.p.at) && gapMin < 16 * 60;
     let kind: NonNullable<Last>["kind"];
     if (!open) kind = "in";
@@ -143,7 +143,12 @@ export async function zkProcess(admin: SupabaseClient, deviceId: string) {
 }
 
 /** Names the clock can show: plain letters, at most 24. */
-export const clockName = (first: string, last: string) => `${first} ${last}`.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9 .'-]/g, "").replace(/\s+/g, " ").trim().slice(0, 24);
+export const clockName = (first: string, last: string) => {
+  const plain = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9 .'-]/g, "").replace(/\s+/g, " ").trim();
+  const full = plain(`${first} ${last}`);
+  // too long for the clock: the first first name and the first last name ("Vanessa Chirinos")
+  return (full.length <= 24 ? full : plain(`${first.split(/\s+/)[0]} ${last.split(/\s+/)[0]}`)).slice(0, 24);
+};
 
 /**
  * Ask the clock to add everyone on our employee list by their ID. Their face is still added at the clock. People

@@ -50,7 +50,7 @@ export default function ZkClocks() {
           <li>Save. Within a minute the clock shows up below as <b>Off</b> with its serial number. Turn it on, then <b>Send Employee List</b>.</li>
           <li>At the clock: <b>User Mgt → All Users</b>, pick each person (their ID is their employee number, 101–130) → <b>Face</b> to add their face.</li>
         </ol>
-        <p className="faint">Scans don&apos;t pick in or out: each one follows the person&apos;s last punch (out → in, in → out, on break → back). A second scan within 2 minutes is ignored. Someone who forgot to clock out yesterday starts today with a clock-in.</p>
+        <p className="faint">Scans don&apos;t pick in or out: each one follows the person&apos;s last punch (out → in, in → out, on break → back). Any scan within 10 minutes of their last punch is ignored, so the clock repeating itself never adds punches. Someone who forgot to clock out yesterday starts today with a clock-in.</p>
       </details>
       {clocks === null ? <p className="faint">Loading…</p> : !clocks.length ? <p className="faint" style={{ margin: "8px 0 0" }}>No face clock has checked in yet.</p> : clocks.map((c) => {
         const live = c.last_seen_at && Date.now() - Date.parse(c.last_seen_at) < 5 * 60000;
