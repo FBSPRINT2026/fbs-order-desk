@@ -24,6 +24,7 @@ import { aiPaySelect } from "@/app/portal/pay-select";
 import { needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvOrder, type PvTransaction } from "@/lib/archive";
+import { fmtPhone } from "@/lib/phone";
 
 export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string; c?: string }> }) {
   const { as, c: startConvo } = await searchParams;
@@ -273,7 +274,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         {!ctx.customerIds.length ? (
           <div className="panel"><div className="panel-b">
             <p style={{ margin: 0 }}>We couldn&apos;t find any orders for <b>{ctx.email}</b>.</p>
-            <p className="muted" style={{ marginBottom: 0 }}>If you were expecting a quote, it may be under a different email address. Contact {ctx.settings.shop.name}{ctx.settings.shop.email ? ` at ${ctx.settings.shop.email}` : ""}{ctx.settings.shop.phone ? ` or ${ctx.settings.shop.phone}` : ""}.</p>
+            <p className="muted" style={{ marginBottom: 0 }}>If you were expecting a quote, it may be under a different email address. Contact {ctx.settings.shop.name}{ctx.settings.shop.email ? ` at ${ctx.settings.shop.email}` : ""}{ctx.settings.shop.phone ? ` or ${fmtPhone(ctx.settings.shop.phone)}` : ""}.</p>
           </div></div>
         ) : (
           <AccountAreas mode="portal" dash={dash} brandColors={acct?.brand_colors || []}

@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings } from "@/lib/pricing";
 import MobileTables from "@/components/MobileTables";
+import { fmtPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function PortalLayout({ children }: { children: React.React
       <footer className="p-foot">
         <div className="p-foot-in">
           {s.brand.sideLogoUrl && <img src={s.brand.sideLogoUrl} alt="" className="p-foot-logo" />}
-          <span>{[s.shop.name, s.shop.phone, s.shop.email].filter(Boolean).join(" · ")}</span>
+          <span>{[s.shop.name, fmtPhone(s.shop.phone), s.shop.email].filter(Boolean).join(" · ")}</span>
         </div>
       </footer>
     </div>

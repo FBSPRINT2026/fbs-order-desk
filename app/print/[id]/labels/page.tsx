@@ -7,6 +7,7 @@ import LabelControls from "./LabelControls";
 import { code128Svg } from "@/lib/barcode";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
+import { fmtPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
 
@@ -184,7 +185,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
                 <div className="addr">
                   <div className="co">{cust.company || cust.name || "No customer"}</div>
                   {cust.company && cust.name && <div className="attn">{cust.name}</div>}
-                  {cust.phone && <div className="attn">{cust.phone}</div>}
+                  {cust.phone && <div className="attn">{fmtPhone(cust.phone)}</div>}
                 </div>
               </div>
             )}

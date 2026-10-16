@@ -28,6 +28,7 @@ import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
 import { planPrint, pxOfImage, type PrintPlan } from "@/lib/printPlan";
 import { ColorPicker, StylePicker } from "@/components/GroupEditor";
+import { fmtPhone } from "@/lib/phone";
 
 type Line = { id: string; style: string; brand: string; color: string; garment: string };
 type Offset = { dx: number; dy: number };
@@ -1094,7 +1095,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (o.ours) {
           x.fillStyle = rule; x.fillRect(M, PH - M - 52, PW - 2 * M, 2);
           x.fillStyle = soft; x.font = font(600, 19);
-          x.fillText([shop.name, shop.phone, shop.email].filter(Boolean).join("  ·  "), M, PH - M - 8);
+          x.fillText([shop.name, fmtPhone(shop.phone), shop.email].filter(Boolean).join("  ·  "), M, PH - M - 8);
         }
         x.fillStyle = faint; x.font = font(400, 17); x.textAlign = "right";
         x.fillText("Please check spelling, size, placement and colors.", PW - M, PH - M - 28);

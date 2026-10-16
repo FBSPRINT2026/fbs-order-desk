@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { fmtPhone } from "@/lib/phone";
 
 type Contact = { id: string; name: string; email: string; phone: string; title: string; is_primary: boolean; portal_access: boolean; printavo_id: string | null };
 
@@ -31,7 +32,7 @@ export default function CustomerContacts({ customerId }: { customerId: string })
         <div key={c.id} className="cc-row">
           <input type="text" aria-label="Name" placeholder="Name" value={c.name} onChange={(e) => save(c.id, { name: e.target.value })} />
           <input type="email" aria-label="Email" placeholder="Email" value={c.email} onChange={(e) => save(c.id, { email: e.target.value })} />
-          <input type="tel" aria-label="Phone" placeholder="Phone" value={c.phone} onChange={(e) => save(c.id, { phone: e.target.value })} />
+          <input type="tel" aria-label="Phone" placeholder="Phone" value={c.phone} onChange={(e) => save(c.id, { phone: e.target.value })} onBlur={(e) => { const f = fmtPhone(e.target.value); if (f !== e.target.value) save(c.id, { phone: f }); }} />
           <label className="check" title="Can sign in to the portal"><input type="checkbox" checked={c.portal_access} onChange={(e) => save(c.id, { portal_access: e.target.checked })} /> Portal</label>
           {c.is_primary ? <span className="cc-tag">Main</span> : <button type="button" className="btn icon ghost sm" aria-label="Remove contact" title="Remove contact" onClick={async () => { await sb.from("customer_contacts").delete().eq("id", c.id); load(); }}>✕</button>}
         </div>

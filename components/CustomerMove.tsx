@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { PAY_TERMS, type Customer, type PayTerms } from "@/lib/pricing";
 import CustomerContacts from "@/components/CustomerContacts";
+import { fmtPhone } from "@/lib/phone";
 
 /**
  * Moving a customer to the new system (Nick, Oct 7, 2026): a short checklist filled in once, before their first
@@ -101,7 +102,7 @@ export default function CustomerMove({ customerId, onClose, onMoved }: { custome
             <div className="field"><label htmlFor="mv-nm">Main contact name</label><input id="mv-nm" type="text" value={c.name} onChange={(e) => set("name", e.target.value)} /></div>
             <div className="grid g2">
               <div className="field"><label htmlFor="mv-em">Main email</label><input id="mv-em" type="email" value={c.email} onChange={(e) => set("email", e.target.value)} /></div>
-              <div className="field"><label htmlFor="mv-ph">Phone</label><input id="mv-ph" type="tel" value={c.phone} onChange={(e) => set("phone", e.target.value)} /></div>
+              <div className="field"><label htmlFor="mv-ph">Phone</label><input id="mv-ph" type="tel" value={c.phone} onChange={(e) => set("phone", e.target.value)} onBlur={(e) => { const f = fmtPhone(e.target.value); if (f !== e.target.value) set("phone", f); }} /></div>
             </div>
           </div>}
           {s.k === "contacts" && <CustomerContacts customerId={c.id} />}

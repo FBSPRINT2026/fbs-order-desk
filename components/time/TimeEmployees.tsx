@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { fullName, type Employee } from "@/lib/timeclock";
 import { isBoss, seesPay, type TimeData } from "./types";
 import { useSticky } from "@/lib/useSticky";
+import { fmtPhone } from "@/lib/phone";
 
 const COLORS = ["#0E9BD8", "#F26660", "#FCB122", "#0F8C78", "#7C5CD6", "#D0487A", "#3F7F2E", "#B8621B"];
 const blank = (): Partial<Employee> => ({ first_name: "", last_name: "", email: "", phone: "", staff_email: null, department: "", title: "", pay_type: "hourly", color: "", active: true, hire_date: null, notes: "" });
@@ -48,7 +49,7 @@ export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Par
     if (pay && e.id) sb.from("employee_pay").select("rate, salary").eq("employee_id", e.id).maybeSingle().then(({ data }) => { setRate(data?.rate != null ? String(data.rate) : ""); setSalary(data?.salary != null ? String(data.salary) : ""); });
   }, [pay, e.id]);
   const set = <K extends keyof Employee>(k: K, x: Employee[K]) => setV({ ...v, [k]: x });
-  const f = (k: "first_name" | "last_name" | "email" | "phone" | "title", label: string, type = "text") => <label>{label}<input type={type} value={(v[k] as string) || ""} onChange={(ev) => set(k, ev.target.value)} /></label>;
+  const f = (k: "first_name" | "last_name" | "email" | "phone" | "title", label: string, type = "text") => <label>{label}<input type={type} value={(v[k] as string) || ""} onChange={(ev) => set(k, ev.target.value)} onBlur={type === "tel" ? (ev) => { const p = fmtPhone(ev.target.value); if (p !== ev.target.value) set(k, p); } : undefined} /></label>;
 
   async function save() {
     if (!(v.first_name || "").trim()) return setErr("Enter a first name.");

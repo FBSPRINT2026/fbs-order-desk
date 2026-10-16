@@ -10,6 +10,7 @@ import { useSticky } from "@/lib/useSticky";
 import DropboxSettings from "@/components/DropboxSettings";
 import TextsSetup from "@/components/TextsSetup";
 import { SITE_URL } from "@/lib/config";
+import { fmtPhone } from "@/lib/phone";
 
 export default function SettingsPage() {
   const [s, setS] = useState<Settings | null>(null);
@@ -167,7 +168,7 @@ export default function SettingsPage() {
             <div className="field"><label htmlFor="s-name">Shop name</label><input id="s-name" type="text" value={s.shop.name} onChange={(e) => upd((d) => { d.shop.name = e.target.value; })} /></div>
             <div className="field"><label htmlFor="s-logo">Logo image link (optional)</label><input id="s-logo" type="text" placeholder="https://…/logo.png" value={s.shop.logoUrl} onChange={(e) => upd((d) => { d.shop.logoUrl = e.target.value; })} /></div>
             <div className="field"><label htmlFor="s-email">Email</label><input id="s-email" type="email" value={s.shop.email} onChange={(e) => upd((d) => { d.shop.email = e.target.value; })} /></div>
-            <div className="field"><label htmlFor="s-phone">Phone</label><input id="s-phone" type="tel" value={s.shop.phone} onChange={(e) => upd((d) => { d.shop.phone = e.target.value; })} /></div>
+            <div className="field"><label htmlFor="s-phone">Phone</label><input id="s-phone" type="tel" value={s.shop.phone} onChange={(e) => upd((d) => { d.shop.phone = e.target.value; })} onBlur={(e) => { const f = fmtPhone(e.target.value); if (f !== e.target.value) upd((d) => { d.shop.phone = f; }); }} /></div>
             <div className="field"><label htmlFor="s-addr">Address</label><textarea id="s-addr" rows={2} value={s.shop.address} onChange={(e) => upd((d) => { d.shop.address = e.target.value; })} /></div>
             <div className="field"><label htmlFor="s-terms">Terms (customers agree to these when approving)</label><textarea id="s-terms" rows={2} value={s.shop.terms} onChange={(e) => upd((d) => { d.shop.terms = e.target.value; })} /></div>
           </div>

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { editOrder, makeJob, setItemPack, setOrderStatus, setStoreStatus, type StoreBundle } from "@/app/merch-actions";
 import { bySize, fmtDateTime, isYouthSize, orderCode, packingKey, r2, sizeName, type Field, type MerchOrder } from "@/lib/merch";
 import { useSticky } from "@/lib/useSticky";
+import { fmtPhone } from "@/lib/phone";
 
 const money = (n: number) => (+n || 0).toLocaleString("en-US", { style: "currency", currency: "USD" });
 const LIVE = (o: MerchOrder) => !["cancelled", "refunded", "pending"].includes(o.status);
@@ -75,7 +76,7 @@ function OrderSheet({ b, o, onClose, onChanged }: { b: StoreBundle; o: MerchOrde
                 : <input value={ans[f.key] || ""} onChange={(e) => setAns({ ...ans, [f.key]: e.target.value })} />}</div>
             ))}
           </div>
-          <div className="faint" style={{ fontSize: 13 }}>{o.shopper.name} · <a href={`mailto:${o.shopper.email}`}>{o.shopper.email}</a>{o.shopper.phone ? ` · ${o.shopper.phone}` : ""} · {o.delivery === "org" ? "deliver to school" : o.delivery === "pickup" ? "pick up at FBS" : `ship to ${[o.ship_to.street1, o.ship_to.city, o.ship_to.state, o.ship_to.zip].filter(Boolean).join(", ")}`}</div>
+          <div className="faint" style={{ fontSize: 13 }}>{o.shopper.name} · <a href={`mailto:${o.shopper.email}`}>{o.shopper.email}</a>{o.shopper.phone ? ` · ${fmtPhone(o.shopper.phone)}` : ""} · {o.delivery === "org" ? "deliver to school" : o.delivery === "pickup" ? "pick up at FBS" : `ship to ${[o.ship_to.street1, o.ship_to.city, o.ship_to.state, o.ship_to.zip].filter(Boolean).join(", ")}`}</div>
           {o.checkout_id && (() => {
             const sibs = b.orders.filter((x) => x.checkout_id === o.checkout_id && x.id !== o.id);
             return sibs.length ? <div className="faint" style={{ fontSize: 13 }}>Same checkout (one payment, separate bags): {sibs.map((x) => `${orderCode(b.store, x.number)}${x.answers?.student ? ` (${x.answers.student})` : ""}`).join(", ")}</div> : null;

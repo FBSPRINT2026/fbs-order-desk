@@ -5,6 +5,7 @@ import { openInvoices } from "@/lib/statementServer";
 import { fmtDateLong, money } from "@/lib/format";
 import { PAY_TERMS } from "@/lib/pricing";
 import PrintButton from "./print";
+import { fmtPhone } from "@/lib/phone";
 
 /** A statement: every open invoice with what's still owed, aging, and one button to pay it all. Printable. */
 export default async function Statement({ searchParams }: { searchParams: Promise<{ as?: string }> }) {
@@ -39,7 +40,7 @@ export default async function Statement({ searchParams }: { searchParams: Promis
           <header className="st-h">
             <div>
               {shop.logoUrl ? <img src={shop.logoUrl} alt={shop.name} className="st-logo" /> : <b className="st-shop">{shop.name}</b>}
-              <div className="st-small">{[shop.phone, shop.email].filter(Boolean).join(" · ")}</div>
+              <div className="st-small">{[fmtPhone(shop.phone), shop.email].filter(Boolean).join(" · ")}</div>
             </div>
             <div className="st-title"><h1>Statement</h1><div>{fmtDateLong(today)}</div></div>
           </header>

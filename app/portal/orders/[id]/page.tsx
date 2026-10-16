@@ -8,6 +8,7 @@ import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill } from "@/components/bits";
 import { MessageThread, ProofCard, QuoteApproval, ReorderButton } from "./client";
 import PayPanel from "@/components/PayPanel";
+import { fmtPhone } from "@/lib/phone";
 
 const STEPS: { label: string; keys: string[] }[] = [
   { label: "Requested", keys: ["request"] },
@@ -190,7 +191,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-h"><h2>Questions?</h2></div>
               <div className="panel-b stack" style={{ fontSize: 13 }}>
                 <span className="muted">Send us a message on this page, or reach {ctx.settings.shop.name} directly:</span>
-                {ctx.settings.shop.phone && <span>{ctx.settings.shop.phone}</span>}
+                {ctx.settings.shop.phone && <span>{fmtPhone(ctx.settings.shop.phone)}</span>}
                 {ctx.settings.shop.email && <span>{ctx.settings.shop.email}</span>}
               </div>
             </section>

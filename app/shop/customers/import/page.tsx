@@ -5,6 +5,7 @@ import PrintavoSync from "@/components/PrintavoSync";
 import { PrintavoBackup, PrintavoMissedFiles } from "@/components/PrintavoKeep";
 import RestorePoint from "@/components/RestorePoint";
 import SearchInput from "@/components/SearchInput";
+import { fmtPhone } from "@/lib/phone";
 
 type Hit = { id: string; companyName: string; contact: string; email: string; phone: string; orderCount: number; customerId: string | null };
 type Step = { at: string; text: string; bad?: boolean };
@@ -117,7 +118,7 @@ export default function ImportPage() {
               {hits.length ? hits.map((h) => (
                 <tr key={h.id} style={{ cursor: "default" }}>
                   <td><b>{h.companyName || h.contact || "(no name)"}</b></td>
-                  <td>{h.contact}<div className="faint" style={{ fontSize: 12.5 }}>{[h.email, h.phone].filter(Boolean).join(" · ")}</div></td>
+                  <td>{h.contact}<div className="faint" style={{ fontSize: 12.5 }}>{[h.email, fmtPhone(h.phone)].filter(Boolean).join(" · ")}</div></td>
                   <td className="r">{h.orderCount}</td>
                   <td className="r" style={{ whiteSpace: "nowrap" }}>
                     {h.customerId && <Link className="btn ghost" href={`/shop/customers/${h.customerId}?area=orders`}>Open</Link>}{" "}

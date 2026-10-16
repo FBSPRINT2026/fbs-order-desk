@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { blanksNeeded, loadOrders } from "@/lib/merchServer";
 import { bySize, fmtDate, labelAnswers, orderCode, packingKey, r2, sizeName, type Field, type MerchOrder, type Product, type Store } from "@/lib/merch";
 import PrintBar from "@/components/merch/PrintBar";
+import { fmtPhone } from "@/lib/phone";
 
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ id: string }>; searchParams: Promise<{ what?: string; order?: string; group?: string; over?: string; by?: string }> };
@@ -72,7 +73,7 @@ export default async function PrintPage({ params, searchParams }: P) {
       <section key={o.id} className="pg letter">
         <div className="hd"><div><h1>{school}</h1><div className="sub">{st.name}{st.deliver_by ? ` · delivery around ${fmtDate(st.deliver_by, false)}` : ""}</div></div><div className="code">{orderCode(st, o.number)}<div style={{ fontSize: 12, fontWeight: 400 }}>{pcs(o)} item{pcs(o) === 1 ? "" : "s"}</div></div></div>
         <div className="who">{labelAnswers(fields, o.answers || {}).map((a) => <div key={a.label}><small>{a.label}</small><b>{a.value}</b></div>)}{!labelAnswers(fields, o.answers || {}).length && <div><small>For</small><b>{o.shopper.name}</b></div>}</div>
-        <div style={{ fontSize: 13, marginBottom: 10 }}>Ordered by <b>{o.shopper.name}</b> · {o.shopper.email}{o.shopper.phone ? ` · ${o.shopper.phone}` : ""} · {o.delivery === "org" ? `Deliver to ${st.delivery?.org?.label || school}` : o.delivery === "pickup" ? "Pick up at FBS Print" : `Ship to ${[o.ship_to.name, o.ship_to.street1, o.ship_to.street2, o.ship_to.city, o.ship_to.state, o.ship_to.zip].filter(Boolean).join(", ")}`}</div>
+        <div style={{ fontSize: 13, marginBottom: 10 }}>Ordered by <b>{o.shopper.name}</b> · {o.shopper.email}{o.shopper.phone ? ` · ${fmtPhone(o.shopper.phone)}` : ""} · {o.delivery === "org" ? `Deliver to ${st.delivery?.org?.label || school}` : o.delivery === "pickup" ? "Pick up at FBS Print" : `Ship to ${[o.ship_to.name, o.ship_to.street1, o.ship_to.street2, o.ship_to.city, o.ship_to.state, o.ship_to.zip].filter(Boolean).join(", ")}`}</div>
         <table><thead><tr><th>Item</th><th>Color</th><th>Size</th><th className="c">Qty</th><th className="c">In bag</th><th className="c">Back-ordered</th></tr></thead>
           <tbody>{(o.items || []).map((it) => <tr key={it.id}><td><b>{it.name}</b>{Object.values(it.personalization || {}).length ? <div>Personalized: {Object.entries(it.personalization).map(([k, v]) => `${k}: ${v}`).join(", ")}</div> : null}</td><td>{it.color}</td><td><b>{sizeName(it.size)}</b></td><td className="c"><b>{it.qty}</b></td><td className="c"><span className="box" /></td><td className="c"><span className="box" /></td></tr>)}</tbody></table>
         {o.note && <p style={{ fontSize: 13 }}><b>Note:</b> {o.note}</p>}

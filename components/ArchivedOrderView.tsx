@@ -5,6 +5,7 @@ import { fmtDateLong, money } from "@/lib/format";
 import ProductionPanel from "@/components/ProductionPanel";
 import { useSeesMoney } from "@/components/RoleContext";
 import { downloadUrl, pvFileName } from "@/lib/printavoNames";
+import { fmtPhone } from "@/lib/phone";
 
 const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "—");
 const stamp = (x?: string | null) => (x ? new Date(x).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
@@ -108,7 +109,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             {customerHref ? <a className="pv-strong" href={customerHref}>{o.customer.companyName || o.contact.fullName}</a> : <div className="pv-strong">{o.customer.companyName || o.contact.fullName}</div>}
             {o.customer.companyName && o.contact.fullName && <div>{o.contact.fullName}</div>}
             {o.contact.email && <div><a href={`mailto:${o.contact.email}`}>{o.contact.email}</a></div>}
-            {o.contact.phone && <div>{o.contact.phone}</div>}
+            {o.contact.phone && <div>{fmtPhone(o.contact.phone)}</div>}
           </div>
           <div><h4>Billing address</h4>{bill.length ? bill.map((l, i) => <div key={i}>{l}</div>) : <div className="faint">—</div>}</div>
           <div><h4>Shipping address</h4>{ship.length ? ship.map((l, i) => <div key={i}>{l}</div>) : <div className="faint">—</div>}</div>

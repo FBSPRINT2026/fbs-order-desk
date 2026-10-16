@@ -5,6 +5,7 @@ import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
 import { spotFor } from "@/lib/mockup";
 import { printSize } from "@/lib/groupLook";
+import { fmtPhone } from "@/lib/phone";
 
 /**
  * The invoice / quote PDF and the work order (Oct 15, Nick: "completely reimagine both. The work order will be the
@@ -232,7 +233,7 @@ export function InvoiceDoc(p: DocData) {
       <div className="top">
         <div className="brand">
           <img src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
-          {(sh.address || sh.phone || sh.email) && <div className="sub">{[sh.address, [sh.phone, sh.email].filter(Boolean).join(" · ")].filter(Boolean).join("\n")}</div>}
+          {(sh.address || sh.phone || sh.email) && <div className="sub">{[sh.address, [fmtPhone(sh.phone), sh.email].filter(Boolean).join(" · ")].filter(Boolean).join("\n")}</div>}
         </div>
         <div className="doc">
           <div className="k disp">{kind}</div>
@@ -242,7 +243,7 @@ export function InvoiceDoc(p: DocData) {
         </div>
       </div>
       <div className="parties">
-        <div><div className="lbl">Bill to</div><b>{cust.company || cust.name || "—"}</b>{contact && `\n${contact}`}{cust.email && <><br /><span className="faint">{cust.email}</span></>}{cust.phone && <><br /><span className="faint">{cust.phone}</span></>}</div>
+        <div><div className="lbl">Bill to</div><b>{cust.company || cust.name || "—"}</b>{contact && `\n${contact}`}{cust.email && <><br /><span className="faint">{cust.email}</span></>}{cust.phone && <><br /><span className="faint">{fmtPhone(cust.phone)}</span></>}</div>
         <div><div className="lbl">Job</div><b>{o.nickname}</b>{`\n${c.qty} piece${c.qty === 1 ? "" : "s"} · ${prints} print${prints === 1 ? "" : "s"}`}{o.approved_at && <><br /><span className="faint">Approved by {o.approved_name}, {new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</span></>}</div>
         {o.delivery_method === "pickup"
           ? <div><div className="lbl">Pickup</div>Pickup at {sh.name}{due && <><br /><span className="faint">{due}</span></>}</div>

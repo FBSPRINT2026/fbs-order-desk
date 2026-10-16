@@ -7,6 +7,7 @@ import { daysUntil, fmtDate, fmtStamp, money } from "@/lib/format";
 import { useShopData } from "@/lib/shopData";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
+import { fmtPhone } from "@/lib/phone";
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -67,7 +68,7 @@ export default function CustomersPage() {
                 head ? <tr key={"h" + c.id} className="cu-grp"><td colSpan={6}>{head}{head === "Test companies" ? <span className="faint"> · fake accounts for trying things out; their jobs can be cleared</span> : null}</td></tr> : null,
                 <tr key={c.id} tabIndex={0} className={c.is_test ? "cu-test" : undefined} onClick={() => router.push(`/shop/customers/${c.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/customers/${c.id}`)}>
                   <td><div><b>{c.company || c.name || "Unnamed"}</b>{c.is_test && <span className="ta-tag">Test</span>}{c.price_type === "wholesale" && <span className="tag i" style={{ marginLeft: 6 }}>Wholesale</span>}</div><div className="sub">{c.company ? c.name : ""}{(c.tags || []).length ? <>{c.company && c.name ? " · " : ""}{(c.tags || []).join(", ")}</> : null}</div></td>
-                  <td><div>{c.email}</div><div className="sub">{c.phone}</div></td>
+                  <td><div>{c.email}</div><div className="sub">{fmtPhone(c.phone)}</div></td>
                   <td>{c.next_follow_up ? <span className={(daysUntil(c.next_follow_up) ?? 1) <= 0 ? "due-late" : ""}>{fmtDate(c.next_follow_up)}</span> : <span className="faint">—</span>}<div className="sub">{c.last_contact_at ? `Last ${fmtStamp(c.last_contact_at).split(",")[0]}` : ""}</div></td>
                   <td className="r">{s.n}</td>
                   <td className="r">{money(s.spent)}</td>

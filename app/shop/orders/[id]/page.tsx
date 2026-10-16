@@ -40,6 +40,7 @@ import { BIG_SIZES, programForGroup, type DesignCtx, type DesignPrice, type Rate
 import { programCard } from "@/app/shop/program-pricing-actions";
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 import ShipQuote from "@/components/ShipQuote";
+import { fmtPhone } from "@/lib/phone";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -740,7 +741,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                           {cust.name && <div>{cust.name}</div>}
                           {cust.address && <div style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
                           {cust.email && <div className="sub">{cust.email}</div>}
-                          {cust.phone && <div className="sub">{cust.phone}</div>}
+                          {cust.phone && <div className="sub">{fmtPhone(cust.phone)}</div>}
                           <div className="cc-extra">
                             <div className="sub money-only">{PAY_TERMS[cust.payment_terms || "receipt"]}{cust.tax_exempt ? " · tax exempt" : ""}{custOwed?.n ? <> · <b style={{ color: "var(--danger)" }}>owes {money(custOwed.owed)}</b> on {custOwed.n} other order{custOwed.n === 1 ? "" : "s"}</> : null}</div>
                             {(cust.tags || []).length > 0 && <div className="row" style={{ gap: 4 }}>{(cust.tags || []).map((t) => <span key={t} className="tag">{t}</span>)}</div>}

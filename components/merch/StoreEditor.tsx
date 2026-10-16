@@ -6,6 +6,7 @@ import { DEFAULT_FIELDS, STORE_STEPS, fmtDate, fmtDateTime, orderCode, r2, slugi
 import { useSticky } from "@/lib/useSticky";
 import ProductsTab from "@/components/merch/ProductsTab";
 import { GoodsTab, OrdersTab, PackingTab, ReportTab } from "@/components/merch/OrdersTabs";
+import { fmtPhone } from "@/lib/phone";
 
 const money = (n: number) => (+n || 0).toLocaleString("en-US", { style: "currency", currency: "USD" });
 export type Tab = "overview" | "setup" | "products" | "orders" | "goods" | "packing" | "report";
@@ -121,7 +122,7 @@ function Overview({ b, reload, go }: { b: StoreBundle; reload: () => void; go: (
           <div>Opens: {st.opens_at ? fmtDateTime(st.opens_at) : "when you open it"}</div>
           <div>Closes: {st.closes_at ? fmtDateTime(st.closes_at) : <b style={{ color: "var(--danger)" }}>not set</b>}</div>
           <div>Delivered around: {st.deliver_by ? fmtDate(st.deliver_by) : <span className="faint">not set (shoppers see no date)</span>}</div>
-          <div>Contact: {contact.name || "—"}{contact.email ? ` · ${contact.email}` : ""}{contact.phone ? ` · ${contact.phone}` : ""}</div>
+          <div>Contact: {contact.name || "—"}{contact.email ? ` · ${contact.email}` : ""}{contact.phone ? ` · ${fmtPhone(contact.phone)}` : ""}</div>
           {b.job && <div>Production job: <Link href={`/shop/orders/${b.job.id}`}>#{b.job.number}</Link></div>}
         </div></div>
         <div className="panel"><div className="panel-h"><b>Best sellers</b></div><div className="panel-b">

@@ -34,6 +34,7 @@ import { emailStatement, recordLumpPayment } from "@/app/shop/pay-actions";
 import { needsGoods } from "@/lib/goods";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 import CustomerMove, { needsMove } from "@/components/CustomerMove";
+import { fmtPhone } from "@/lib/phone";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -213,7 +214,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               <div className="field"><label htmlFor="cu-name">Contact name</label><input type="text" id="cu-name" value={c.name} onChange={(e) => set("name", e.target.value)} /></div>
               <div className="grid g2">
                 <div className="field"><label htmlFor="cu-email">Email (their portal login)</label><input type="email" id="cu-email" value={c.email} onChange={(e) => set("email", e.target.value)} /></div>
-                <div className="field"><label htmlFor="cu-phone">Phone</label><input type="tel" id="cu-phone" value={c.phone} onChange={(e) => set("phone", e.target.value)} /></div>
+                <div className="field"><label htmlFor="cu-phone">Phone</label><input type="tel" id="cu-phone" value={c.phone} onChange={(e) => set("phone", e.target.value)} onBlur={(e) => { const f = fmtPhone(e.target.value); if (f !== e.target.value) set("phone", f); }} /></div>
               </div>
               <div className="grid g2">
                 <div className="field"><label htmlFor="cu-address">Billing address</label><textarea id="cu-address" rows={3} value={c.address} onChange={(e) => set("address", e.target.value)} /></div>
@@ -223,7 +224,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               <div className="grid g3">
                 <div className="field"><label htmlFor="cu-c2n">Name</label><input id="cu-c2n" type="text" value={c.contact2_name || ""} onChange={(e) => set("contact2_name", e.target.value)} /></div>
                 <div className="field"><label htmlFor="cu-c2e">Email</label><input id="cu-c2e" type="email" value={c.contact2_email || ""} onChange={(e) => set("contact2_email", e.target.value)} /></div>
-                <div className="field"><label htmlFor="cu-c2p">Phone</label><input id="cu-c2p" type="tel" value={c.contact2_phone || ""} onChange={(e) => set("contact2_phone", e.target.value)} /></div>
+                <div className="field"><label htmlFor="cu-c2p">Phone</label><input id="cu-c2p" type="tel" value={c.contact2_phone || ""} onChange={(e) => set("contact2_phone", e.target.value)} onBlur={(e) => { const f = fmtPhone(e.target.value); if (f !== e.target.value) set("contact2_phone", f); }} /></div>
               </div>
               <CustomerContacts customerId={id} />
               <FilmFolder customerId={id} />
