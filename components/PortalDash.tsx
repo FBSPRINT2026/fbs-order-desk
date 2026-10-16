@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { money } from "@/lib/format";
 import type { PortalJob } from "@/lib/portalJobs";
 import { DashJobs, DashReorder } from "./PortalDashBits";
 
@@ -11,9 +12,11 @@ export type DashThread = { key: string; label: string; title: string; from: stri
 export type DashNeed = { key: string; kind: string; title: string; text: string; pic: string; href: string; cta: string };
 export type DashPast = { id: string; number: number; nickname: string; when: string; qty: number; pic: string; href: string; archived?: boolean };
 
-export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, artHref, account, goods, canAct, ordersHref }: {
+export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string };
+
+export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, artHref, pay, goods, canAct, ordersHref }: {
   assistant: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
-  past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string; account: { label: string; value: string; tone?: "ok" | "bad" }[]; goods?: ReactNode; canAct: boolean; ordersHref: string;
+  past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string; pay: DashPay; goods?: ReactNode; canAct: boolean; ordersHref: string;
 }) {
   return (
     <div className="pdx">
@@ -36,6 +39,24 @@ export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs
           <div className="pdx-mc"><Link className="btn primary" href={msgHref}>New message</Link><Link className="btn" href={msgHref}>Open message center</Link></div>
         </section>
       </div>
+
+      {/* payments: their own box (Oct 15, Nick) */}
+      <section className="pdx-card pdx-pay">
+        <div className="pdx-h"><h2>Payments</h2><Link href={pay.href} className="pd-link">Payment history</Link></div>
+        <div className="pdx-pay-row">
+          <div className={"pdx-pay-big" + (pay.due > 0.004 ? " owe" : " ok")}><small>Balance due</small><b>{money(pay.due)}</b>{pay.due <= 0.004 && <span>All paid up</span>}</div>
+          {pay.due > 0.004 && <div className="pdx-pay-parts">
+            {pay.portalDue > 0.004 && <div><span>New portal orders</span><b>{money(pay.portalDue)}</b><small>{pay.portalCount} order{pay.portalCount === 1 ? "" : "s"}</small></div>}
+            {pay.pvDue > 0.004 && <div><span>Printavo orders</span><b>{money(pay.pvDue)}</b><small>{pay.pvCount} invoice{pay.pvCount === 1 ? "" : "s"}</small></div>}
+            {pay.pastDue > 0.004 && <div className="late"><span>Past due</span><b>{money(pay.pastDue)}</b><small>included above</small></div>}
+          </div>}
+          <div className="pdx-pay-meta">
+            <div><span>Payment terms</span><b>{pay.terms}</b></div>
+            {pay.last && <div><span>Last payment</span><b>{pay.last}</b></div>}
+          </div>
+          <div className="pdx-pay-acts">{pay.due > 0.004 && <Link className="btn primary" href={pay.href}>Pay now</Link>}<a className="btn" href={pay.statementHref}>Statement</a></div>
+        </div>
+      </section>
 
       {needs.length > 0 && (
         <section className="pdx-card">
@@ -76,10 +97,6 @@ export default function PortalDash({ assistant, threads, newMsgs, msgHref, needs
             {art.map((a) => <Link key={a.id} href={artHref} title={a.name}><img src={a.url} alt={a.name} loading="lazy" /></Link>)}
             <Link href={artHref} className="add">＋ Upload<br />a logo</Link>
           </div>
-        </section>
-        <section className="pdx-card pdx-acct">
-          <div className="pdx-h"><h2>Your account</h2></div>
-          {account.map((r) => <div className="pdx-kv" key={r.label}><span>{r.label}</span><b className={r.tone || ""}>{r.value}</b></div>)}
         </section>
       </div>
     </div>

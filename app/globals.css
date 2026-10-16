@@ -8905,3 +8905,25 @@ a.pdn-tag:hover{text-decoration:underline}
 @media (min-width:900px){ .pv-info{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(240px,1.35fr)} }
 .aa-pvnote{margin:10px 16px 6px;background:#fff6e5;border:1px solid #f4d9a6;color:#6b4a00;border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.4}
 .aa-pvnote b{color:#4d3500}
+
+/* dashboard Payments box (Oct 15, Nick: payments get their own box, not a "Needs you" item) */
+.pdx-bottom{grid-template-columns:minmax(0,1fr)}
+.pdx-pay-row{display:flex;align-items:stretch;gap:14px;flex-wrap:wrap}
+.pdx-pay-big{display:flex;flex-direction:column;justify-content:center;min-width:180px;padding:12px 16px;border-radius:12px;background:var(--surface-2)}
+.pdx-pay-big small{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:700}
+.pdx-pay-big b{font-family:var(--display);font-stretch:85%;font-weight:800;font-size:30px;line-height:1.1}
+.pdx-pay-big.owe b{color:var(--danger)}
+.pdx-pay-big.ok{background:#e9f6ef}.pdx-pay-big.ok b{color:var(--ok)}
+.pdx-pay-big span{font-size:12.5px;color:var(--ok);font-weight:700}
+.pdx-pay-parts{display:flex;gap:10px;flex-wrap:wrap}
+.pdx-pay-parts > div{display:flex;flex-direction:column;justify-content:center;padding:10px 14px;border:1px solid var(--line-2,var(--line));border-radius:12px;min-width:150px}
+.pdx-pay-parts span{font-size:12px;color:var(--ink-3);font-weight:700}
+.pdx-pay-parts b{font-size:18px}
+.pdx-pay-parts small{font-size:11.5px;color:var(--ink-3)}
+.pdx-pay-parts .late{border-color:#f3c3c0;background:#fdf1f0}.pdx-pay-parts .late b{color:var(--danger)}
+.pdx-pay-meta{display:flex;flex-direction:column;justify-content:center;gap:6px;font-size:13px;min-width:200px;flex:1}
+.pdx-pay-meta div{display:flex;justify-content:space-between;gap:10px}
+.pdx-pay-meta span{color:var(--ink-3)}
+.pdx-pay-acts{display:flex;flex-direction:column;justify-content:center;gap:8px}
+.pdx-pay-acts .btn{justify-content:center;text-align:center}
+@media (max-width:900px){ .pdx-pay-big,.pdx-pay-parts > div{flex:1} .pdx-pay-acts{flex-direction:row;width:100%} .pdx-pay-acts .btn{flex:1} }

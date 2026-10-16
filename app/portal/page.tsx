@@ -189,7 +189,6 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     if (a.kind === "draft") return { key: `a${i}`, kind: a.kind, title: "Finish your order", text: `${nm} · you started this one but haven't sent it yet.`, pic: o ? picOf(o) : "", href: link(`/portal/request/${a.order_id}`), cta: "Finish it" };
     return { key: `a${i}`, kind: a.kind, title: a.label || "Customer supplied goods", text: nm ? `${nm}` : "Shipments on your account", pic: o ? picOf(o) : "", href: a.href || goodsHref, cta: "Open" };
   });
-  if (due > 0.004) needs.push({ key: "pay", kind: "pay", title: "Pay your balance", text: `${money(due)} due on your orders.`, pic: "", href: link("/portal?area=payments"), cta: `Pay ${money(due)}` });
   // order again: their latest finished jobs (new and from before the portal), with a picture when we have one
   // jobs still open in Printavo (synced every few minutes until Printavo is turned off) show on the timeline too,
   // their Printavo status read the way our own orders' statuses are (lib/printavoSend.ts ourStatusFor)
@@ -223,13 +222,18 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     ...archTop.map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, date: a.due_date || a.order_date || "" })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 3);
   const art = designs.filter((d) => !d.archived_at && designUrls[d.id]).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 5).map((d) => ({ id: d.id, url: designUrls[d.id], name: d.name }));
-  const quotesOpen = orders.filter((o) => o.status === "quote_sent").length;
-  const account = [
-    { label: "Balance due", value: money(due), tone: due > 0.004 ? "bad" as const : "ok" as const },
-    { label: "In progress", value: `${jobOrders.length} order${jobOrders.length === 1 ? "" : "s"}` },
-    { label: "Quotes to review", value: quotesOpen ? String(quotesOpen) : "None" },
-    { label: "Payment terms", value: `${PAY_TERMS[acct?.payment_terms || "receipt"] || "Due on receipt"}${acct?.tax_exempt ? " · tax exempt" : ""}` },
-  ];
+  // payments get their own box on the dashboard (Oct 15, Nick: not a "Needs you" item)
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const owedList = aOrders.filter((o) => o.type === "invoice" && o.balance > 0.004);
+  const lastPay = payments.find((p) => +p.amount > 0);
+  const pay = {
+    due, portalDue: owedList.filter((o) => !o.archived).reduce((a, o) => a + o.balance, 0), pvDue: owedList.filter((o) => o.archived).reduce((a, o) => a + o.balance, 0),
+    pvCount: owedList.filter((o) => o.archived).length, portalCount: owedList.filter((o) => !o.archived).length,
+    pastDue: owedList.filter((o) => { const d = o.archived ? o.due_date || o.created_at?.slice(0, 10) : o.pay_due; return !!d && d < todayIso; }).reduce((a, o) => a + o.balance, 0),
+    last: lastPay ? `${short(lastPay.paid_on || lastPay.created_at)} · ${money(+lastPay.amount)}` : "",
+    terms: `${PAY_TERMS[acct?.payment_terms || "receipt"] || "Due on receipt"}${acct?.tax_exempt ? " · tax exempt" : ""}`,
+    href: link("/portal?area=payments"), statementHref: link("/portal/statement"),
+  };
   // the assistant's shortcuts, from their own jobs
   const ideas = [jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?", past[0] ? `Reorder ${past[0].nickname || `#${past[0].number}`}` : "Reorder a past job",
     ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
@@ -237,7 +241,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     <PortalDash
       assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare ideas={ideas} personHref={msgLink(null)} />}
       threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} artHref={link("/portal?area=artwork")}
-      account={account} canAct={!ctx.preview} ordersHref={link("/portal?area=orders")}
+      pay={pay} canAct={!ctx.preview} ordersHref={link("/portal?area=orders")}
       goods={wholesale && goodsOpen.length ? <section className="pdx-card"><div className="pdx-h"><h2>Customer supplied goods</h2><a className="pd-link" href={goodsHref}>See all</a></div><PortalGoods items={goodsOpen.slice(0, 4)} incoming={incoming} canAct={!ctx.preview} qs={qs} compact hub empty="" /></section> : undefined} />
   );
 
