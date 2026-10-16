@@ -92,6 +92,18 @@ async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }
     await zkSeen(admin, d, inf ? { about: inf.slice(0, 300) } : undefined);
     return text(d.active ? await zkNextCommands(admin, d.id) : "OK");
   }
+  // answers to "who's on the clock" (access-control firmware posts them here)
+  if (what === "querydata") {
+    const name = (url.searchParams.get("tablename") || "").toLowerCase();
+    if (name === "user") {
+      const users = parseAccUsers(lines);
+      const fresh = url.searchParams.get("packidx") === "1" || !url.searchParams.get("packidx");
+      await zkSeen(admin, d, { users: { ...(fresh ? {} : (d.info?.users as Record<string, string>) || {}), ...users }, usersAt: new Date().toISOString() });
+      return text(`user=${Object.keys(users).length}`);
+    }
+    await zkSeen(admin, d);
+    return text(`${name || "table"}=${lines.filter(Boolean).length}`);
+  }
   if (what === "devicecmd") { await zkCommandResults(admin, d.id, body); await zkSeen(admin, d); return text("OK"); }
   await zkSeen(admin, d);
   return text("OK");
