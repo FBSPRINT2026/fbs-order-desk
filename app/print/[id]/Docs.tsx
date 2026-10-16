@@ -267,9 +267,10 @@ export function InvoiceDoc(p: DocData) {
         const pic = p.mockups[gi]?.[0];
         return (
           <div className="job" key={g.id}>
+            {/* the group's name across the top, the mockup level with the items table (Oct 16, Nick) */}
+            <div className="t disp">{g.name?.trim() || (groups.length > 1 ? `Group ${gi + 1}` : o.nickname)}</div>
             {pic ? <img className="pic" src={pic} alt="Mockup" /> : <div className="pic none">Mockup coming</div>}
             <div>
-              <div className="t disp">{g.name?.trim() || (groups.length > 1 ? `Group ${gi + 1}` : o.nickname)}</div>
               <table className="it">
                 <thead><tr><th>Item</th><th className="r">Qty</th><th className="r">Each</th><th className="r">Amount</th></tr></thead>
                 <tbody>

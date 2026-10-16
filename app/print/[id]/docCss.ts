@@ -122,10 +122,11 @@ export const DOC_CSS = `
 .pdoc .parties.two{grid-template-columns:1fr 1fr;gap:28px}
 .pdoc .parties .lbl{margin-bottom:4px}
 .pdoc .parties > div{font-size:11pt;line-height:1.4;white-space:pre-line;overflow-wrap:anywhere}
-.pdoc .job{display:grid;grid-template-columns:1.45in 1fr;gap:16px;border-top:2px solid var(--ink);padding-top:12px;margin-bottom:14px;break-inside:avoid}
+.pdoc .job{display:grid;grid-template-columns:1.45in 1fr;gap:8px 16px;border-top:2px solid var(--ink);padding-top:12px;margin-bottom:14px;break-inside:avoid}
 .pdoc .job .pic{width:1.45in;border-radius:10px;background:#f6f7f9;padding:6px;align-self:start}
 .pdoc .job .pic.none{height:1.2in;display:grid;place-items:center;font-size:9pt;color:var(--ink3);text-align:center}
-.pdoc .job .t{font-size:16pt}
+.pdoc .job .t{font-size:16pt;grid-column:1/-1}
+.pdoc .job .it{margin-top:0}
 .pdoc .it{width:100%;border-collapse:collapse;font-size:11pt;margin-top:6px}
 .pdoc .it th{font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:5px 6px;border-bottom:1.5px solid var(--ink)}
 .pdoc .it th.r,.pdoc .it td.r,.pdoc .extra td.r{text-align:right;white-space:nowrap}
