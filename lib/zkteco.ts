@@ -199,7 +199,31 @@ export async function zkNextCommands(admin: SupabaseClient, deviceId: string) {
   const rows = (data || []) as { id: number; cmd: string }[];
   if (!rows.length) return "OK";
   await admin.from("timeclock_cmds").update({ sent_at: new Date().toISOString() }).in("id", rows.map((r) => r.id));
-  return rows.map((r) => `C:${r.id}:${r.cmd}`).join("\n");
+  // "DateTime=NOW" is filled in as it's handed over, so the clock gets the time to the second
+  return rows.map((r) => `C:${r.id}:${r.cmd.replace("DateTime=NOW", `DateTime=${zkNow()}`)}`).join("\n");
+}
+
+/** Shop time now in ZKTeco's packed form (seconds from 2000 counting 31-day months), for SET OPTIONS DateTime. */
+export function zkNow(t = Date.now()) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric", hourCycle: "h23" }).formatToParts(new Date(t)).map((x) => [x.type, +x.value || 0]));
+  return (((p.year % 100) * 12 * 31 + (p.month - 1) * 31 + p.day - 1) * 86400) + (p.hour * 60 + p.minute) * 60 + p.second;
+}
+
+/**
+ * Keep the clock on Central time (Oct 16: switching it to time attendance reset it to China time, TZAdj=8). Its own
+ * daylight-saving switch is off; we set its offset (-5 summer, -6 winter) and the time whenever they don't match, so
+ * the November and March changes happen on their own. Checked at most once an hour.
+ */
+export async function zkKeepTime(admin: SupabaseClient, d: ZkDevice) {
+  const off = String(chicagoOffset());
+  const s = (d.info?.settings as Record<string, string>) || {};
+  const checked = d.info?.tzCheckedAt ? Date.parse(String(d.info.tzCheckedAt)) : 0;
+  if (s.TZAdj === off && s["~DSTF"] === "0" && Date.now() - checked < 3600000) return;
+  const { count } = await admin.from("timeclock_cmds").select("id", { count: "exact", head: true }).eq("device_id", d.id).is("done_at", null).like("cmd", "SET OPTIONS TZAdj%");
+  if (count) return;
+  const cmds = s.TZAdj === off && s["~DSTF"] === "0" ? ["GET OPTIONS TZAdj,~DSTF"] : [`SET OPTIONS TZAdj=${off}`, "SET OPTIONS ~DSTF=0", "SET OPTIONS DateTime=NOW", "GET OPTIONS TZAdj,~DSTF"];
+  await admin.from("timeclock_cmds").insert(cmds.map((cmd) => ({ device_id: d.id, created_by: "keep the clock on Central time", cmd })));
+  await admin.from("timeclock_devices").update({ info: { ...(d.info || {}), tzCheckedAt: new Date().toISOString() } }).eq("id", d.id);
 }
 
 /** The clock's answers: "ID=12&Return=0&CMD=DATA" lines. */

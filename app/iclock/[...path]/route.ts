@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isAcc, parseAccUsers, parseAtt, parseUsers, redact, zkAccOptions, zkCommandResults, zkDevice, zkKeep, zkNextCommands, zkOptions, zkProcess, zkSeen } from "@/lib/zkteco";
+import { isAcc, parseAccUsers, parseAtt, parseUsers, redact, zkAccOptions, zkCommandResults, zkDevice, zkKeepTime, zkKeep, zkNextCommands, zkOptions, zkProcess, zkSeen } from "@/lib/zkteco";
 
 /**
  * The ZKTeco wall clock talks to us here (its Cloud Server Setting points at portal.fbsprint.com, port 443, HTTPS on).
@@ -95,6 +95,7 @@ async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }
   if (what === "getrequest") {
     const inf = url.searchParams.get("INFO");
     await zkSeen(admin, d, inf ? { about: inf.slice(0, 300) } : undefined);
+    if (d.active && !isAcc(d)) await zkKeepTime(admin, d).catch(() => null);
     return text(d.active ? await zkNextCommands(admin, d.id) : "OK");
   }
   // answers to "who's on the clock" (access-control firmware posts them here)
