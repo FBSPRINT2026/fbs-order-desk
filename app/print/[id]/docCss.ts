@@ -119,6 +119,9 @@ export const DOC_CSS = `
 .pdoc .doc .meta{font-size:10.5pt;color:var(--ink3);margin-top:6px;line-height:1.45}
 .pdoc .stamp{display:inline-block;margin-top:8px;border:2.5px solid var(--ok);color:var(--ok);font-weight:800;font-size:13pt;letter-spacing:.12em;padding:3px 12px;border-radius:6px;transform:rotate(-3deg)}
 .pdoc .parties{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:18px;margin:22px 0 18px}
+.pdoc .parties.two{grid-template-columns:1fr 1fr;gap:28px}
+.pdoc .doc .djob{margin-top:10px;font-size:11pt;line-height:1.4;color:var(--ink2)}
+.pdoc .doc .djob b{color:var(--ink);font-size:12pt}
 .pdoc .parties .lbl{margin-bottom:4px}
 .pdoc .parties > div{font-size:11pt;line-height:1.4;white-space:pre-line;overflow-wrap:anywhere}
 .pdoc .job{display:grid;grid-template-columns:1.45in 1fr;gap:16px;border-top:2px solid var(--ink);padding-top:12px;margin-bottom:14px;break-inside:avoid}

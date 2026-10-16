@@ -239,12 +239,13 @@ export function InvoiceDoc(p: DocData) {
           <div className="k disp">{kind}</div>
           <div className="n">#{o.number}</div>
           <div className="meta">Issued {issued}{o.po_number ? ` · PO ${o.po_number}` : ""}{due && <><br />In hands {due} · {DELIVERY[o.delivery_method] || "Pickup"}</>}</div>
+          {/* the job, on the right under the invoice header (Oct 16, Nick) */}
+          <div className="djob"><b>{o.nickname}</b><br />{c.qty} piece{c.qty === 1 ? "" : "s"} · {prints} print{prints === 1 ? "" : "s"}{o.approved_at && <><br /><span className="faint">Approved by {o.approved_name}, {new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</span></>}</div>
           {paidUp && <div className="stamp">PAID</div>}
         </div>
       </div>
-      <div className="parties">
+      <div className="parties two">
         <div><div className="lbl">Bill to</div><b>{cust.company || cust.name || "—"}</b>{contact && `\n${contact}`}{cust.email && <><br /><span className="faint">{cust.email}</span></>}{cust.phone && <><br /><span className="faint">{fmtPhone(cust.phone)}</span></>}</div>
-        <div><div className="lbl">Job</div><b>{o.nickname}</b>{`\n${c.qty} piece${c.qty === 1 ? "" : "s"} · ${prints} print${prints === 1 ? "" : "s"}`}{o.approved_at && <><br /><span className="faint">Approved by {o.approved_name}, {new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</span></>}</div>
         {o.delivery_method === "pickup"
           ? <div><div className="lbl">Pickup</div>Pickup at {sh.name}{due && <><br /><span className="faint">{due}</span></>}</div>
           : <div><div className="lbl">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</div>{o.ship_to || "—"}{o.ship_method && <><br /><span className="faint">{o.ship_method}</span></>}</div>}
