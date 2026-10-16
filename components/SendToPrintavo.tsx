@@ -86,7 +86,7 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
                   {done.statusError && <div className="err">The status didn&apos;t change in Printavo ({done.statusError}). Set it there by hand.</div>}
                   {done.numberError && <div className="err">Printavo kept its own number ({done.numberError}). Use &quot;Make it #{p?.number}&quot; on the order to try again.</div>}
                   {done.warnings && <div className="faint">Printavo noted: {done.warnings}</div>}
-                  {done.sentTotal != null && done.ourTotal != null && Math.abs(done.sentTotal - done.ourTotal - (done.cardFee || 0)) > 0.05 && <div className="err">Printavo&apos;s total is {money(done.sentTotal)}; ours is {money(done.ourTotal)} plus the 3% card surcharge ({money(done.cardFee || 0)}). Check the prices in Printavo.</div>}
+                  {done.sentTotal != null && done.ourTotal != null && Math.abs(done.sentTotal - done.ourTotal - (done.cardFee || 0)) > 0.05 && <div className="err">Printavo&apos;s total is {money(done.sentTotal)}; ours is {money(done.ourTotal)}. Check the prices in Printavo.</div>}
                   <div className="faint">The &quot;Order confirmation&quot; reply in the Inbox now links to Printavo&apos;s invoice page.</div>
                   <PrintavoLink visualId={done.visualId} url={done.url} publicUrl={done.publicUrl} status={done.status} />
                   <div className="row" style={{ justifyContent: "flex-end" }}><button type="button" className="btn" onClick={() => setOpen(false)}>Done</button></div>
@@ -108,7 +108,7 @@ export default function SendToPrintavo({ orderId, onSaved, onSent }: { orderId: 
                     <div className="field" style={{ flex: "1 1 120px" }}><label htmlFor="pvs-po">PO</label><input id="pvs-po" value={f.po} onChange={set("po")} /></div>
                   </div>
                   <div className="field"><label htmlFor="pvs-note">Production note</label><textarea id="pvs-note" rows={3} value={f.productionNote} onChange={set("productionNote")} /></div>
-                  <div className="faint" style={{ fontSize: 12.5 }}>Goes over: garments and sizes, each print with its details, {p.mockups} mockup{p.mockups === 1 ? "" : "s"}, {p.files} production file{p.files === 1 ? "" : "s"} plus the art, setup as New/Repeat Screen Fees, and the 3% card surcharge. Total {money(p.total)}. It gets the same number in Printavo: #{p.number}.</div>
+                  <div className="faint" style={{ fontSize: 12.5 }}>Goes over: garments and sizes, each print with its details, {p.mockups} mockup{p.mockups === 1 ? "" : "s"}, {p.files} production file{p.files === 1 ? "" : "s"} plus the art, setup as New/Repeat Screen Fees, the addresses, and a link back to this order. No card surcharge: add CC Fees in Printavo if they pay by card. Total {money(p.total)}. It gets the same number in Printavo: #{p.number}.</div>
                   <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
                     <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
                     <button type="button" className="btn primary" onClick={send} disabled={busy || !f.statusId || !f.productionDue || !f.customerDue}>{busy ? "Sending…" : "Send to Printavo"}</button>

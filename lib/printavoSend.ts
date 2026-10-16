@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getOrder, pv, transitionWrite, PrintavoError } from "@/lib/printavo";
-import { htmlText } from "@/lib/printavoChanges";
+import { CARD, htmlText } from "@/lib/printavoChanges";
 import { calcOrder, FULL_COLOR, imprintLabel, mergeSettings, orderGroups, SIZES, ST, type Group, type Imprint, type Order, type StatusKey } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/config";
 import { parseAddress } from "@/lib/qbo/map";
@@ -64,7 +64,7 @@ function orderAddresses(o: Record<string, unknown>, cust: Record<string, unknown
   const shippingAddress = o.delivery_method !== "pickup" ? pvAddress(String(o.ship_to || ""), company, person) || pvAddress(String(cust?.ship_address || cust?.address || ""), company, person) : null;
   return { billingAddress, shippingAddress };
 }
-const CARD_RE = /credit card processing surcharge/i;
+const CARD_RE = CARD;
 const day = (d: string | null | undefined) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : "");
 /** a Printavo date-time as the shop's calendar day (Central) */
 const centralDay = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString("en-CA", { timeZone: "America/Chicago" }) : "");
@@ -208,7 +208,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   }).filter((g) => g.lineItems.length);
 
   // setup as Printavo's own fee names (their reports and syncs go by them): New / Repeat Screen Fee per screen,
-  // Digitize File, PMS MATCH, Color Change; 2XL+ as Sizes Above XL; the order's own fees; the 3% card surcharge
+  // Digitize File, PMS MATCH, Color Change; 2XL+ as Sizes Above XL; the order's own fees (no card surcharge: added in Printavo when they pay by card)
   type PvFee = { description: string; amount?: number; quantity?: number; unitPrice?: number; unitPriceAsPercentage?: boolean; taxable: boolean };
   const FEE_NAME = { screens: "New Screen Fee ", remake: "Repeat Screen Fee ", digitize: "Digitize File", pms: "PMS MATCH", inkchange: "Color Change", min: "Minimum Order Charge" } as const;
   const sum = new Map<string, PvFee>();
@@ -224,7 +224,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   // (a card surcharge already on our order is Printavo's, brought back: the percentage one below replaces it)
   for (const f of (o.fees || []) as { label: string; amount: number | ""; free?: boolean }[]) if (+f.amount && !f.free && !/credit card processing surcharge/i.test(f.label)) fees.push({ description: f.label || "Fee", amount: +f.amount, quantity: 1, unitPrice: +f.amount, taxable: taxed });
   // customers pay through Printavo during the move: the usual 3% card surcharge goes on every order, as on Printavo's own
-  fees.push({ description: CARD_FEE, quantity: 1, unitPrice: 3, unitPriceAsPercentage: true, taxable: false });
+  // no card surcharge (Oct 16, Nick): it's added in Printavo only for a customer paying by card, and comes back here then
 
   // production files: the customer's files and mockup copies on the order, and each print's art
   const { data: af } = await admin.from("art_files").select("file_path").eq("order_id", inp.orderId);
@@ -284,7 +284,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   // Printavo numbers it from its own counter: give it our number so both systems match (#40003 is #40003)
   let visualId = String(made.visualId || ""), numberError = "", total = made.total;
   try { const m = await matchPrintavoNumber(admin, inp.orderId, inp.by); visualId = m.visualId; total = m.total; } catch (e) { numberError = e instanceof Error ? e.message : String(e); }
-  return { printavoId: made.id, visualId, publicUrl: made.publicUrl, url: made.url, status: String(state.status || ""), statusError: statusErr, numberError, warnings: warn, sentTotal: total, ourTotal: calc.total, cardFee: Math.round(calc.total * 3) / 100 };
+  return { printavoId: made.id, visualId, publicUrl: made.publicUrl, url: made.url, status: String(state.status || ""), statusError: statusErr, numberError, warnings: warn, sentTotal: total, ourTotal: calc.total, cardFee: 0 };
 }
 
 type PvNow = { __typename: "Invoice" | "Quote"; visualId: string; total: number; status: { name: string } | null };
