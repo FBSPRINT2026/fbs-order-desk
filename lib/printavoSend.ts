@@ -117,7 +117,7 @@ export async function sendPreview(admin: SupabaseClient, orderId: string): Promi
   const calc = calcOrder(o, settings);
   const ps = o.printavo_state as Record<string, string> | null;
   const { count: files } = await admin.from("art_files").select("id", { count: "exact", head: true }).eq("order_id", orderId);
-  const { count: mockups } = await admin.from("proofs").select("id", { count: "exact", head: true }).eq("order_id", orderId).is("archived_at", null);
+  const { count: mockups } = await admin.from("mockups").select("id", { count: "exact", head: true }).eq("order_id", orderId).is("archived_at", null);
   return {
     number, nickname: String(o.nickname || "").trim(), po: String(o.po_number || ""),
     customerDue: day(o.due_date as string), productionDue: day((o.production_date as string) || (o.due_date as string)), productionNote: prodNote,
@@ -155,7 +155,8 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
     return (data || []).map((x) => x.signedUrl || "");
   };
   // our mockups, by group (the title starts with the group's name), else on the first group
-  const { data: proofs } = await admin.from("proofs").select("title, file_path, created_at").eq("order_id", inp.orderId).is("archived_at", null).order("created_at");
+  // the current mockups (Oct 16: Mockup Creator saves are mockups; proofs are only what the customer was sent)
+  const { data: proofs } = await admin.from("mockups").select("title, file_path, created_at").eq("order_id", inp.orderId).is("archived_at", null).order("created_at");
   const proofUrls = await sign((proofs || []).map((p) => p.file_path as string));
   const named = (t: string) => groups.findIndex((g) => !!g.name && t.startsWith(g.name));
   const mockFor = (gi: number) => (proofs || []).map((p, i) => ({ gi: named(String(p.title || "")), u: proofUrls[i] }))
@@ -465,7 +466,7 @@ export async function pushLineMockups(admin: SupabaseClient, orderId: string) {
   if (!(number >= 40000 && number < 50000)) throw new PrintavoError("Only orders #40000-#49999 sync with Printavo.");
   const p = await getOrder(String(o.printavo_id));
   const groups = orderGroups(o as Pick<Order, "groups" | "lines">);
-  const { data: proofs } = await admin.from("proofs").select("title, file_path").eq("order_id", orderId).is("archived_at", null).order("created_at");
+  const { data: proofs } = await admin.from("mockups").select("title, file_path").eq("order_id", orderId).is("archived_at", null).order("created_at");
   if (!proofs?.length) throw new PrintavoError("This order has no mockup yet. Make one in the Mockup Creator first.");
   const { data: su } = await admin.storage.from("proofs").createSignedUrls(proofs.map((x) => x.file_path as string), 60 * 60 * 24 * 3);
   const urls = (su || []).map((x) => x.signedUrl || "");

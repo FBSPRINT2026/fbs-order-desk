@@ -1,5 +1,6 @@
 "use client";
 import ProofHistory from "@/components/ProofHistory";
+import ProofSide from "@/components/ProofSide";
 import JobLabor from "@/components/team/JobLabor";
 import BackLink from "@/components/BackLink";
 import JobFiles from "@/components/job/JobFiles";
@@ -975,7 +976,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </ProductionPanel>
           </div>
           <aside className="ed-aside">
-          
+            {/* every mockup save, and the customer's approval: opened?, remind, approved another way (Oct 16, Nick) */}
+            <ProofSide orderId={o.id} bump={proofs.length * 1000 + events.length} onChanged={loadSide} customer={cust?.name || cust?.company || ""} email={cust?.email || ""} />
             <JobLabor orderId={o.id} qty={o.qty} total={+o.total || 0} />
           </aside>
         </div>

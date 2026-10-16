@@ -1,3 +1,4 @@
+import { proofViewed } from "@/lib/proofs";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
@@ -26,7 +27,10 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
   if (!pf) notFound();
   const proof = pf as Proof;
   const admin = createAdminClient();
-  const { data: mk } = await admin.from("mockups").select("group_id").eq("proof_id", proofId).maybeSingle();
+  const { data: mk } = (proof as Proof & { mockup_id?: string | null }).mockup_id
+    ? await admin.from("mockups").select("group_id").eq("id", (proof as Proof & { mockup_id?: string | null }).mockup_id!).maybeSingle()
+    : await admin.from("mockups").select("group_id").eq("proof_id", proofId).maybeSingle();
+  if (!ctx.isStaff) await proofViewed(admin, id, proofId).catch(() => null);
   const groups = orderGroups(o);
   const g = groups.find((x) => x.id === mk?.group_id) || groups[0];
   if (!g) notFound();

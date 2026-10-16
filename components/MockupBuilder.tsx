@@ -1296,12 +1296,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const path = orderId ? `${orderId}/mockup-${Date.now()}-${uid().slice(0, 6)}.png` : `mockups/${customerId}/${Date.now()}-${uid().slice(0, 6)}.png`;
         const up = await sb.storage.from("proofs").upload(path, blob, { contentType: "image/png" });
         if (up.error) throw new Error(up.error.message);
-        let proofId: string | null = null;
-        if (orderId) {
-          const { data: pr } = await sb.from("proofs").insert({ order_id: orderId, title, file_path: path, file_type: "image/png" }).select("id").single();
-          proofId = pr?.id || null;
-        }
-        const { data: nm } = await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, group_id: groupId || null, proof_id: proofId, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "" }).select("id").single();
+        // a save is a mockup, not a proof (Oct 16, Nick): proofs are only the versions sent to the customer (lib/proofs.ts)
+        const { data: nm } = await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, group_id: groupId || null, proof_id: null, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "" }).select("id").single();
         if (nm?.id) newMockups.push(nm.id);
         // a small photos-only picture for the order screen and the customer's artwork lists
         const thumb = await render(l, true);
@@ -1312,9 +1308,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }
       if (before.length) {
         const at = new Date().toISOString();
+        // the group's earlier saves step aside; a proof already sent stays with the customer until the next version is sent
         await sb.from("mockups").update({ archived_at: at }).in("id", before.map((x) => x.id));
-        const pids = before.map((x) => x.proof_id).filter(Boolean) as string[];
-        if (pids.length) await sb.from("proofs").update({ archived_at: at }).in("id", pids);
       }
       await syncOrder(true, thumbs);
       // each version keeps the group as it was saved (garments and prints), so the shop can go back to it later
@@ -1326,7 +1321,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }
       saveOk.current = true;
       setSaved(out);
-      setMsg(orderId ? `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the order as proofs and to the customer's account.` : `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the customer's account.`);
+      setMsg(orderId ? `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the order. Send it to the customer from the order's Art & production tab.` : `Saved ${out.length} mockup${out.length > 1 ? "s" : ""} to the customer's account.`);
     } catch (e) { setMsg("Couldn't save: " + (e instanceof Error ? e.message : String(e))); }
     setSaving(false);
   }

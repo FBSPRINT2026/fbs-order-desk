@@ -2,6 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, type GLine, type Imprint, type Order } from "@/lib/pricing";
+import { approveAnotherWay, remindProofs, sendProofs } from "@/lib/proofs";
 
 /**
  * Going back in time on a group's mockups (Oct 15, Nick: "if the customer makes their own changes… have the history
@@ -14,17 +15,20 @@ import { orderGroups, type GLine, type Imprint, type Order } from "@/lib/pricing
  */
 type Snap = { lines: (Pick<GLine, "style" | "brand" | "color" | "garment"> & { id?: string })[]; imprints: Imprint[]; mockupSize?: string | null; mockupThumbs?: string[] };
 
-export async function restoreVersion(proofId: string, which: "ours" | "theirs"): Promise<{ ok: true; open?: string } | { ok: false; error: string }> {
+export async function restoreVersion(proofId: string, which: "ours" | "theirs", mockupId?: string): Promise<{ ok: true; open?: string } | { ok: false; error: string }> {
   try {
     const { user, isStaff, email } = await getViewer();
     if (!user || !isStaff) return { ok: false, error: "Only shop staff can do that." };
     const admin = createAdminClient();
-    const { data: pf } = await admin.from("proofs").select("*").eq("id", proofId).maybeSingle();
+    // going back to a mockup save (the Mockup history), or to a proof's mockup
+    const { data: pf0 } = proofId ? await admin.from("proofs").select("*").eq("id", proofId).maybeSingle() : { data: null };
+    const { data: mk0 } = mockupId ? await admin.from("mockups").select("*").eq("id", mockupId).maybeSingle() : { data: null };
+    const pf = pf0 || (mk0 ? { order_id: mk0.order_id, title: mk0.title, file_path: mk0.file_path, file_type: "image/png", customer_change: null } : null);
     if (!pf) return { ok: false, error: "Proof not found." };
     const { data: od } = await admin.from("orders").select("*").eq("id", pf.order_id).maybeSingle();
     if (!od) return { ok: false, error: "Order not found." };
     const o = od as Order;
-    const { data: mk } = await admin.from("mockups").select("*").eq("proof_id", proofId).maybeSingle();
+    const mk = mk0 || (pf0?.mockup_id ? (await admin.from("mockups").select("*").eq("id", pf0.mockup_id).maybeSingle()).data : (await admin.from("mockups").select("*").eq("proof_id", proofId).maybeSingle()).data);
     const groups = orderGroups(o);
     const gid = (which === "theirs" ? (pf.customer_change as { group_id?: string } | null)?.group_id : null) || mk?.group_id;
     const g = groups.find((x) => x.id === gid) || (groups.length === 1 ? groups[0] : null);
@@ -52,14 +56,28 @@ export async function restoreVersion(proofId: string, which: "ours" | "theirs"):
         const pids = ids.map((x) => x.proof_id).filter(Boolean) as string[];
         if (pids.length) await admin.from("proofs").update({ archived_at: at }).in("id", pids);
       }
-      // a copy of that version is the current proof again, waiting on the customer
-      const { data: np } = await admin.from("proofs").insert({ order_id: o.id, title: pf.title, file_path: pf.file_path, file_type: pf.file_type }).select("id").single();
-      await admin.from("mockups").insert({ customer_id: mk.customer_id, order_id: o.id, group_id: g.id, proof_id: np?.id || null, title: mk.title, file_path: mk.file_path, design_ids: mk.design_ids || [], created_by: email, snapshot: snap });
+      // that mockup is the current one again (a new mockup row); it goes to the customer when they're sent the next version
+      await admin.from("mockups").insert({ customer_id: mk.customer_id, order_id: o.id, group_id: g.id, proof_id: null, title: mk.title, file_path: mk.file_path, design_ids: mk.design_ids || [], created_by: email, snapshot: snap });
     }
     const all = groups.map((x) => (x.id === g.id ? ng : x));
     const { error } = await admin.from("orders").update({ groups: all, updated_at: at }).eq("id", o.id);
     if (error) return { ok: false, error: error.message };
-    await admin.from("order_events").insert({ order_id: o.id, kind: "proof_restored", detail: which === "ours" ? `Went back to an earlier proof: ${pf.title}` : `Used the customer's own version: ${pf.title}`, actor: email });
+    await admin.from("order_events").insert({ order_id: o.id, kind: "proof_restored", detail: which === "ours" ? `Went back to an earlier mockup: ${pf.title}` : `Used the customer's own version: ${pf.title}`, actor: email });
     return which === "theirs" ? { ok: true, open: `/shop/artwork/mockup?order=${o.id}&group=${g.id}` } : { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
 }
+
+async function me() {
+  const v = await getViewer();
+  if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");
+  const { data } = await v.supabase.from("staff").select("name").eq("email", v.email).maybeSingle();
+  return { email: v.email, name: (data?.name as string) || v.email.split("@")[0] };
+}
+const run = async <T,>(f: () => Promise<T>) => { try { return await f(); } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." }; } };
+
+/** Send the current mockups to the customer as the next proof version (emailed). */
+export async function sendProofVersion(orderId: string) { return run(async () => sendProofs(createAdminClient(), orderId, await me())); }
+/** Remind the customer to review the proof waiting on them (emailed). */
+export async function remindProof(orderId: string) { return run(async () => remindProofs(createAdminClient(), orderId, await me())); }
+/** The customer approved another way: overrides every other approval. */
+export async function approveArtAnotherWay(orderId: string, note: string) { return run(async () => approveAnotherWay(createAdminClient(), orderId, await me(), note)); }

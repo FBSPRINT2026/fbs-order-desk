@@ -165,7 +165,10 @@ export type BrandColor = { name: string; ink: string; /** a wholesaler's client 
 export type Activity = { id: string; customer_id: string | null; order_id: string | null; kind: "note" | "call" | "email" | "meeting" | "task" | "sms"; direction: "in" | "out" | "none"; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; ai_processed_at: string | null; meta: Record<string, unknown>; created_by: string; created_at: string };
 /** One item in the Assistant inbox. */
 export type Suggestion = { id: string; kind: string; source: "rules" | "ai" | "staff"; status: "open" | "snoozed" | "done" | "dismissed"; priority: 1 | 2 | 3; dedupe_key: string | null; customer_id: string | null; order_id: string | null; activity_id: string | null; title: string; body: string; draft: { channel?: "portal" | "email"; subject?: string; body?: string }; payload: Record<string, unknown>; due_at: string | null; snoozed_until: string | null; model: string | null; decided_at: string | null; decided_by: string | null; created_at: string; updated_at: string };
-export type Proof = { id: string; order_id: string; title: string; file_path: string; file_type: string; status: "pending" | "approved" | "changes"; customer_comment: string; decided_at: string | null; decided_name: string | null; created_at: string };
+export type Proof = { id: string; order_id: string; title: string; file_path: string; file_type: string; status: "pending" | "approved" | "changes"; customer_comment: string; decided_at: string | null; decided_name: string | null; created_at: string;
+  /** Oct 16: proofs are only versions sent to the customer (lib/proofs.ts) */
+  version?: number | null; sent_at?: string | null; sent_to?: string | null; viewed_at?: string | null; last_viewed_at?: string | null; view_count?: number;
+  reminded_at?: string | null; approved_via?: "staff" | null; mockup_id?: string | null; archived_at?: string | null };
 export type Message = { id: string; order_id: string; author_type: "staff" | "customer"; author_email: string; author_name: string; body: string; read_at: string | null; created_at: string };
 export type OrderEvent = { id: number; order_id: string; kind: string; detail: string; actor: string; created_at: string };
 
