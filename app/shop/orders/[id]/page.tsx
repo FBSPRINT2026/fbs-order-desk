@@ -35,7 +35,7 @@ import { ChecksPanel, FillFromText, type StatusLine } from "@/components/OrderAs
 import Timeline from "@/components/Timeline";
 import { useCan, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
-import { PAY_TERMS, SIZES, lineQty, supplierSizeUp } from "@/lib/pricing";
+import { PAY_TERMS, SIZES, isShipFee, lineQty, supplierSizeUp } from "@/lib/pricing";
 import { BIG_SIZES, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
 import { programCard } from "@/app/shop/program-pricing-actions";
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
@@ -863,18 +863,19 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <div className="panel-h"><h2>Fees & adjustments</h2></div>
               <div className="panel-b stack">
                 <div className="fee-row fee-head"><span>Description</span><span>Amount</span><span /></div>
-                {(o.fees.length ? o.fees : [{ label: "", amount: "" as number | "" }]).map((f, i) => {
+                {(o.fees.some((f) => !isShipFee(f)) ? o.fees : [...o.fees, { label: "", amount: "" as number | "" }]).map((f, i) => {
+                  if (isShipFee(f)) return null; // shipping: the Shipping quote card and Totals
                   // an order with no fees still shows one blank row to type into
                   const edit = (fn: (x: { label: string; amount: number | "" }) => void) => patch((d) => { if (!d.fees[i]) d.fees[i] = { label: "", amount: "" }; fn(d.fees[i]); });
                   return (
                     <div key={i} className="fee-row">
                       <input type="text" aria-label="Fee description" placeholder="Rush fee, art time, shipping…" value={f.label} onChange={(e) => edit((x) => { x.label = e.target.value; })} />
                       <input type="number" step="0.01" aria-label="Fee amount" placeholder="0.00" value={f.amount} onChange={(e) => edit((x) => { x.amount = numOr(e.target.value); })} />
-                      {o.fees.length ? <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove fee" onClick={() => patch((d) => { d.fees.splice(i, 1); })}>✕</button> : <span />}
+                      {o.fees[i] ? <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove fee" onClick={() => patch((d) => { d.fees.splice(i, 1); })}>✕</button> : <span />}
                     </div>
                   );
                 })}
-                <button className="btn sm add-wide" type="button" onClick={() => patch((d) => { if (!d.fees.length) d.fees.push({ label: "", amount: "" }); d.fees.push({ label: "", amount: "" }); })}>+ Add fee</button>
+                <button className="btn sm add-wide" type="button" onClick={() => patch((d) => { if (!d.fees.some((f) => !isShipFee(f))) d.fees.push({ label: "", amount: "" }); d.fees.push({ label: "", amount: "" }); })}>+ Add fee</button>
               </div>
             </section>
             <section className="panel">
@@ -899,7 +900,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div className="tr"><span>Line items</span><span>{money(calc.items)}</span></div>
                 <div className="tr"><span>Setup (screens, digitizing)</span><span>{money(calc.setup)}</span></div>
                 {calc.materials ? <div className="tr"><span>2XL+ Materials Charge</span><span>{money(calc.materials)}</span></div> : null}
-                {calc.fees ? <div className="tr"><span>Fees</span><span>{money(calc.fees)}</span></div> : null}
+                {calc.fees - calc.shipping ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping)}</span></div> : null}
+                {(calc.hasShipping || o.delivery_method === "ship") && (
+                  <div className="tr"><span className="row" style={{ gap: 8 }}>Shipping
+                    {calc.hasShipping && <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={calc.freeShipping} onChange={(e) => patch((d) => { const f = d.fees.find(isShipFee); if (f) f.free = e.target.checked || undefined; })} /> Free shipping</label>}</span>
+                    <span>{!calc.hasShipping ? <span className="faint">not added</span> : calc.freeShipping ? "Free" : money(calc.shipping)}</span></div>
+                )}
                 <div className="tr"><span className="row" style={{ gap: 6 }}>Discount
                   <input type="number" step="0.01" min="0" aria-label="Discount" style={{ width: 66, padding: "3px 6px" }} placeholder="0"
                     value={(o.discount_type === "amt" ? o.discount_amt : o.discount_pct) || ""}
@@ -928,14 +934,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 const lbs = w && avg ? Object.entries(l.sizes || {}).reduce((a, [z, q]) => a + (+q || 0) * (w[z] || avg), 0) || lineQty(l) * avg : undefined;
                 return { desc: `${l.garment || ""} ${l.style || ""}`, qty: lineQty(l), lbs };
               }))}
-              current={(() => { const f = o.fees.find((x) => /^shipping\b/i.test(x.label || "")); return f ? { label: f.label, amount: +f.amount || 0 } : null; })()}
+              current={(() => { const f = o.fees.find(isShipFee); return f ? { label: f.label, amount: +f.amount || 0 } : null; })()}
               onAdd={(label, amount, method) => patch((d) => {
-                const i = d.fees.findIndex((x) => /^shipping\b/i.test(x.label || ""));
-                const fee = { label, amount: Math.round(amount * 100) / 100 };
+                const i = d.fees.findIndex(isShipFee);
+                const fee = { label, amount: Math.round(amount * 100) / 100, ship: true, ...(i >= 0 && d.fees[i].free ? { free: true } : {}) };
                 if (i >= 0) d.fees[i] = fee; else { d.fees = d.fees.filter((x) => (x.label || "").trim() || x.amount !== ""); d.fees.push(fee); }
                 d.ship_method = method;
               })}
-              onSet={(amount) => patch((d) => { const f = d.fees.find((x) => /^shipping\b/i.test(x.label || "")); if (f) f.amount = amount; })} />
+              onSet={(amount) => patch((d) => { const f = d.fees.find(isShipFee); if (f) f.amount = amount; })} />
           )}
           {/* Printavo: a side panel on the Order tab, above the goods (Oct 15, Nick) */}
           {(o as Order & { printavo_id?: string | null }).printavo_id && <section className="panel pv-panel">
@@ -1074,7 +1080,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div className="tr"><span>Line items</span><span>{money(calc.items)}</span></div>
                 <div className="tr"><span>Setup (screens, digitizing)</span><span>{money(calc.setup)}</span></div>
                 {calc.materials ? <div className="tr"><span>2XL+ Materials Charge</span><span>{money(calc.materials)}</span></div> : null}
-                {calc.fees ? <div className="tr"><span>Fees</span><span>{money(calc.fees)}</span></div> : null}
+                {calc.fees - calc.shipping ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping)}</span></div> : null}
+                {calc.hasShipping ? <div className="tr"><span>Shipping</span><span>{calc.freeShipping ? "Free" : money(calc.shipping)}</span></div> : null}
                 <div className="tr"><span className="row" style={{ gap: 6 }}>Discount
                   <input type="number" step="0.01" min="0" aria-label="Discount" style={{ width: 66, padding: "3px 6px" }} placeholder="0"
                     value={(o.discount_type === "amt" ? o.discount_amt : o.discount_pct) || ""}

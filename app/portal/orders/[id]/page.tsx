@@ -129,7 +129,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                     }))}
                     {!isReq && c.setup > 0 && <tr><td>Setup (screens / digitizing)</td><td /><td /><td className="r">{money(c.setup)}</td></tr>}
             {!isReq && c.materials > 0 && <tr><td>2XL+ Materials Charge</td><td /><td /><td className="r">{money(c.materials)}</td></tr>}
-                    {!isReq && o.fees.filter((f) => +f.amount).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td /><td /><td className="r">{money(+f.amount)}</td></tr>)}
+                    {!isReq && o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td /><td /><td className="r">{(f as { free?: boolean }).free ? "Free" : money(+f.amount)}</td></tr>)}
                   </tbody>
                 </table>
               </div>

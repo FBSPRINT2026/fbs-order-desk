@@ -124,7 +124,13 @@ export type Line = {
   id: string; garment: string; style: string; color: string; cost: number | "";
   sizes: Partial<Record<Size, number>>; decorations: Decoration[]; priceOverride: number | null;
 };
-export type Fee = { label: string; amount: number | "" };
+export type Fee = { label: string; amount: number | "";
+  /** the order's shipping charge (from the Shipping quote; shown as "Shipping", not a fee) (Oct 16, Nick) */ ship?: boolean;
+  /** free shipping: the quoted price stays on the line but isn't charged */ free?: boolean };
+/** The shipping line among an order's fees (marked, or an older "Shipping…" fee). */
+export const isShipFee = (f: { label?: string; ship?: boolean }) => !!f.ship || /^shipping\b/i.test(f.label || "");
+/** What a fee adds to the total (free shipping adds nothing). */
+export const feeAmount = (f: { amount: number | ""; free?: boolean }) => (f.free ? 0 : +f.amount || 0);
 export type Delivery = "pickup" | "ship" | "deliver";
 
 export type Order = {
@@ -589,7 +595,10 @@ export function calcOrder(
   const items = r2(groups.reduce((a, g) => a + g.sub, 0));
   const setup = r2(groups.reduce((a, g) => a + g.setup, 0));
   const materials = r2(groups.reduce((a, g) => a + g.materials, 0)); // 2XL+ Materials Charge
-  const fees = r2((o.fees || []).reduce((a, f) => a + num(f.amount), 0));
+  const fees = r2((o.fees || []).reduce((a, f) => a + feeAmount(f), 0));
+  // shipping is its own line (Totals, invoice), inside the fees total so every sum stays the same
+  const shipFee = (o.fees || []).find(isShipFee);
+  const shipping = r2((o.fees || []).filter(isShipFee).reduce((a, f) => a + feeAmount(f), 0));
   const pre = items + setup + materials + fees;
   const discount = o.discount_type === "amt" ? r2(Math.min(pre, Math.max(0, num(o.discount_amt)))) : r2((pre * num(o.discount_pct)) / 100);
   const rate = o.tax_rate === null || o.tax_rate === undefined || (o.tax_rate as unknown) === "" ? num(s.taxRate) : num(o.tax_rate);
@@ -597,7 +606,7 @@ export function calcOrder(
   const total = r2(pre - discount + tax);
   const paid = r2(payments.reduce((a, p) => a + num(p.amount), 0));
   const qty = groups.reduce((a, g) => a + g.qty, 0);
-  return { groups, lines, items, setup, materials, fees, discount, rate, tax, total, paid, balance: r2(total - paid), qty };
+  return { groups, lines, items, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, discount, rate, tax, total, paid, balance: r2(total - paid), qty };
 }
 
 export const uid = () =>

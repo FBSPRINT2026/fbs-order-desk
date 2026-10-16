@@ -295,9 +295,9 @@ export function InvoiceDoc(p: DocData) {
           </div>
         );
       })}
-      {o.fees.some((f) => +f.amount) && (
+      {o.fees.some((f) => +f.amount || (f as { free?: boolean }).free) && (
         <div className="others"><table className="extra"><tbody>
-          {o.fees.filter((f) => +f.amount).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td className="r">{money(+f.amount)}</td></tr>)}
+          {o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td className="r">{(f as { free?: boolean }).free ? "Free" : money(+f.amount)}</td></tr>)}
         </tbody></table></div>
       )}
       <div className="sumw">
