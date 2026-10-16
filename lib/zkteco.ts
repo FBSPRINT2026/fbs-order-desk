@@ -200,6 +200,12 @@ export async function zkCommandResults(admin: SupabaseClient, deviceId: string, 
     const q = new URLSearchParams(line);
     const id = +(q.get("ID") || 0);
     if (id) await admin.from("timeclock_cmds").update({ done_at: new Date().toISOString(), result: `${q.get("Return") ?? ""} ${q.get("CMD") ?? ""}`.trim() }).eq("id", id).eq("device_id", deviceId);
+    // settings the clock reports back (GET OPTIONS): kept on the clock's info, minus passwords
+    else if (/^[~A-Za-z][\w~]*=/.test(line) && !/^(ID|Return|CMD)=/.test(line)) {
+      const { data } = await admin.from("timeclock_devices").select("info").eq("id", deviceId).maybeSingle();
+      const kv = Object.fromEntries(redact(line).split(/[,&]/).map((x) => x.split("=")).filter((x) => x.length === 2).map(([k, v]) => [k.trim(), v.trim().slice(0, 200)]));
+      await admin.from("timeclock_devices").update({ info: { ...((data?.info as Record<string, unknown>) || {}), settings: { ...(((data?.info as Record<string, unknown>)?.settings as Record<string, string>) || {}), ...kv } } }).eq("id", deviceId);
+    }
   }
 }
 

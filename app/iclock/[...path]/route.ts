@@ -104,7 +104,7 @@ async function handle(req: Request, ctx: { params: Promise<{ path: string[] }> }
     await zkSeen(admin, d);
     return text(`${name || "table"}=${lines.filter(Boolean).length}`);
   }
-  if (what === "devicecmd") { await zkCommandResults(admin, d.id, body); await zkSeen(admin, d); return text("OK"); }
+  if (what === "devicecmd") { if (/GET OPTIONS|INFO/i.test(body)) console.log(`iclock devicecmd ${redact(body).slice(0, 3000)}`); await zkCommandResults(admin, d.id, body); await zkSeen(admin, d); return text("OK"); }
   await zkSeen(admin, d);
   return text("OK");
 }
