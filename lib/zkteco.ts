@@ -10,7 +10,9 @@ import { stopJob } from "@/lib/timeclockServer";
  *
  * A new clock shows up Off. Lines it sends are kept as sent (timeclock_raw) and only become punches once an owner or
  * admin turns it on, so a stranger can't add time. Face scans don't say in or out: the next punch follows the
- * person's last one (out → in, in → out, on break → back from break), a scan within 10 minutes of their last punch is ignored (the clock repeats itself while someone stands there; Nick, Oct 16), and
+ * person's last one (out → in, in → out, on break → back from break) unless they tapped a type first (Check-Out, Break-Out,
+ * Break-In), a repeat within 10 minutes of their last punch is ignored (the clock repeats itself while someone stands there;
+ * Nick, Oct 16), and
  * a clock-in left open from an earlier day starts a new day with a clock-in.
  */
 export type ZkDevice = { id: string; name: string; active: boolean; serial: string; info: Record<string, unknown>; att_stamp: string | null; op_stamp: string | null; last_seen_at: string | null };
@@ -129,13 +131,15 @@ export async function zkProcess(admin: SupabaseClient, deviceId: string) {
     const { data: lastRow } = await admin.from("time_punches").select("kind, at").eq("employee_id", e.id).eq("voided", false).lt("at", r.p.at).order("at", { ascending: false }).limit(1).maybeSingle();
     const last = (lastRow || null) as Last;
     const gapMin = last ? (Date.parse(r.p.at) - Date.parse(last.at)) / 60000 : Infinity;
-    if (last && gapMin < 10) { await admin.from("timeclock_raw").update({ done: true, note: "repeat scan (within 10 minutes)" }).eq("id", r.id); continue; }
+    // the type they tapped on the clock before scanning (Oct 16, Nick: "set the type like break, lunch or in/out"):
+    // 1 Check-Out, 2 Break-Out (lunch), 3 Break-In, 4/5 overtime in/out. 0 Check-In is also what the clock sends when
+    // nobody taps anything, so it follows their last punch: out → in, in → out, on break → back from break.
+    const st = r.p.state;
+    const tapped: NonNullable<Last>["kind"] | null = st === 1 || st === 5 ? "out" : st === 2 ? "break_start" : st === 3 ? "break_end" : st === 4 ? "in" : null;
     const open = last && last.kind !== "out" && localDay(last.at) === localDay(r.p.at) && gapMin < 16 * 60;
-    let kind: NonNullable<Last>["kind"];
-    if (!open) kind = "in";
-    else if (last!.kind === "break_start") kind = "break_end";
-    else if (r.p.state === 2) kind = "break_start";
-    else kind = "out";
+    const kind: NonNullable<Last>["kind"] = tapped ?? (!open ? "in" : last!.kind === "break_start" ? "break_end" : "out");
+    // a repeat: the same punch again within 10 minutes. A different type they tapped (back from a 5-minute break) counts.
+    if (last && gapMin < 10 && (!tapped || tapped === last.kind)) { await admin.from("timeclock_raw").update({ done: true, note: "repeat scan (within 10 minutes)" }).eq("id", r.id); continue; }
     const { data: ins, error } = await admin.from("time_punches").upsert({ employee_id: e.id, kind, at: r.p.at, source: "zkteco", device_id: deviceId, note: "", uattend_id: key }, { onConflict: "uattend_id", ignoreDuplicates: true }).select("id").maybeSingle();
     if (error) { await admin.from("timeclock_raw").update({ note: error.message.slice(0, 200) }).eq("id", r.id); continue; }
     await admin.from("timeclock_raw").update({ done: true, punch_id: ins?.id || null, note: kind }).eq("id", r.id);
