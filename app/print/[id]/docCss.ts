@@ -152,6 +152,11 @@ export const DOC_CSS = `
 .pdoc .tot .bal span:last-child{font-size:20pt;color:var(--ok)}
 .pdoc .tot .bal.due{background:#fdeceb}
 .pdoc .tot .bal.due span:last-child{color:#b3261e}
+.pdoc .tot .terms{margin-top:10px;font-size:10pt;line-height:1.45;color:var(--ink2)}
+.pdoc .tot .terms b{display:block;color:var(--ink);font-size:9pt;text-transform:uppercase;letter-spacing:.04em}
+.pdoc .tot .terms .dep{display:block;margin-top:2px}
+.pdoc .tot .terms .dep b{display:inline;font-size:10pt;text-transform:none;letter-spacing:0}
+.pdoc .pay.empty{background:none;padding:0}
 .pdoc .ifoot{margin-top:auto;padding-top:18px}
 .pdoc .ifoot .fade{height:4px;margin-bottom:8px}
 .pdoc .ifoot div:last-child{display:flex;justify-content:space-between;font-size:9pt;color:var(--ink3)}

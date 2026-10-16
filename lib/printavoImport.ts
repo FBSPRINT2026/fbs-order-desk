@@ -15,7 +15,7 @@ const addr = (a: PvAddress) => !a ? "" : [a.address1, a.address2, [[a.city, a.st
 /** "theMcKennagroup", "The McKenna Group, LLC" and "the  mckenna group" are the same company. */
 export const companyKey = (name: string) => name.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ")
   .replace(/\b(inc|llc|ltd|co|corp|corporation|company|pllc|pc)\b/g, " ").replace(/^\s*the/, "").replace(/\bthe\s*$/, "").replace(/\s+/g, "");
-const terms = (t: PvCustomer["defaultPaymentTerm"]) => !t ? "receipt" : /prepa|up ?front|in advance|before/i.test(t.name) ? "prepay" : t.days >= 15 || /net/i.test(t.name) ? "net30" : "receipt";
+const terms = (t: PvCustomer["defaultPaymentTerm"]) => !t ? "receipt" : /50 ?\/ ?50|50 ?%|deposit/i.test(t.name) ? "deposit" : /prepa|up ?front|in advance|before/i.test(t.name) ? "prepay" : t.days >= 15 || /net/i.test(t.name) ? "net30" : "receipt";
 
 /**
  * A Printavo customer becomes (or is linked to) one of our customers. An existing customer's details are never overwritten;

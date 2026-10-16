@@ -1,5 +1,5 @@
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
@@ -301,10 +301,9 @@ export function InvoiceDoc(p: DocData) {
         </tbody></table></div>
       )}
       <div className="sumw">
-        <div className="pay">
+        <div className={"pay" + (pays.length || o.notes ? "" : " empty")}>
           {pays.length > 0 && <p><b>Payments</b>{pays.slice().sort((a, b) => (a.paid_on || "").localeCompare(b.paid_on || "")).map((x) => `\n${day(x.paid_on, { month: "short", day: "numeric" })} · ${x.method} · ${money(x.amount)}`).join("")}</p>}
           {o.notes && <p><b>Notes</b>{`\n${o.notes}`}</p>}
-          {sh.terms && <p><b>Terms</b>{`\n${sh.terms}`}</p>}
         </div>
         <div className="tot">
           <div className="r"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
@@ -313,6 +312,9 @@ export function InvoiceDoc(p: DocData) {
           <div className="r big"><span>Total</span><span>{money(c.total)}</span></div>
           {c.paid > 0 && <div className="r"><span>Paid</span><span>−{money(c.paid)}</span></div>}
           {!isQ && <div className={"bal" + (c.balance > 0.005 ? " due" : "")}><span>Balance due</span><span>{money(Math.max(0, c.balance))}</span></div>}
+          {/* the customer's own terms, under the balance (Oct 16, Nick) */}
+          {(cust.id || sh.terms) && <div className="terms"><b>Terms</b>{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}
+            {cust.payment_terms === "deposit" && c.paid < c.total / 2 - 0.005 && <span className="dep">50% down: <b>{money(c.total / 2)}</b></span>}</div>}
         </div>
       </div>
       <div className="ifoot"><div className="fade" /><div><span>Thank you for printing with {sh.name}!</span><span>{kind} #{o.number}</span></div></div>

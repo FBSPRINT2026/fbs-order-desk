@@ -669,8 +669,21 @@ export function requestHints(groups: Group[]): string[] {
 
 
 /** Customer payment terms. */
-export type PayTerms = "prepay" | "receipt" | "net30";
-export const PAY_TERMS: Record<PayTerms, string> = { prepay: "Pre-pay", receipt: "Due on receipt", net30: "Net 30 days" };
+export type PayTerms = "prepay" | "receipt" | "net30" | "deposit";
+export const PAY_TERMS: Record<PayTerms, string> = { prepay: "Pre-pay", receipt: "Due on receipt", deposit: "50/50", net30: "Net 30 days" };
+/**
+ * What the terms mean, for the invoice (Oct 16, Nick): due on receipt = due when they get it (at delivery, or at pickup);
+ * 50/50 = half down to start production and half at delivery.
+ */
+export function termsText(terms: PayTerms | null | undefined, pickup = false) {
+  const at = pickup ? "at pickup" : "at delivery";
+  switch (terms || "receipt") {
+    case "prepay": return "Pre-pay: paid in full before production starts.";
+    case "deposit": return `50/50: 50% down to start production, 50% due ${at}.`;
+    case "net30": return `Net 30: due 30 days after ${pickup ? "pickup" : "delivery"}.`;
+    default: return `Due on receipt: paid in full ${at}.`;
+  }
+}
 /**
  * When an order's payment is due under the customer's terms:
  * pre-pay = when the order is approved; due on receipt = when the order is closed (completed);
