@@ -155,10 +155,18 @@ export const DOC_CSS = `
 .pdoc .tot .bal span:last-child{font-size:20pt;color:var(--ok)}
 .pdoc .tot .bal.due{background:#fdeceb}
 .pdoc .tot .bal.due span:last-child{color:#b3261e}
-.pdoc .tot .terms{margin-top:10px;font-size:10pt;line-height:1.45;color:var(--ink2)}
-.pdoc .tot .terms b{display:block;color:var(--ink);font-size:9pt;text-transform:uppercase;letter-spacing:.04em}
-.pdoc .tot .terms .dep{display:block;margin-top:2px}
-.pdoc .tot .terms .dep b{display:inline;font-size:10pt;text-transform:none;letter-spacing:0}
+.pdoc .tot .bal2{font-weight:800}
+.pdoc .due-card{margin:12px 0 0 auto;width:2.9in;text-align:left;border:2px solid var(--ink);border-radius:12px;overflow:hidden;break-inside:avoid}
+.pdoc .due-card .dc-amt{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 14px;background:#fdeceb}
+.pdoc .due-card .dc-amt span{font-weight:800;font-size:11pt;color:var(--ink)}
+.pdoc .due-card .dc-amt b{font-size:21pt;line-height:1.1;color:#b3261e;font-variant-numeric:tabular-nums}
+.pdoc .due-card.paid .dc-amt{background:#e9f6ef}
+.pdoc .due-card.paid .dc-amt b{color:var(--ok)}
+.pdoc .due-card.q .dc-amt{background:#f2f4f7}
+.pdoc .due-card.q .dc-amt b{color:var(--ink)}
+.pdoc .due-card .dc-terms{padding:7px 14px 9px;border-top:1px solid #e3e6eb;font-size:9.5pt;line-height:1.4;color:var(--ink2)}
+.pdoc .due-card .dc-dep{display:block;margin-top:2px}
+.pdoc .due-card .dc-dep b{color:var(--ink)}
 .pdoc .pay.empty{background:none;padding:0}
 .pdoc .ifoot{margin-top:auto;padding-top:18px}
 .pdoc .ifoot .fade{height:4px;margin-bottom:8px}

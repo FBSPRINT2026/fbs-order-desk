@@ -239,9 +239,13 @@ export function InvoiceDoc(p: DocData) {
           <div className="k disp">{kind}</div>
           <div className="n">#{o.number}</div>
           <div className="meta">Issued {issued}{o.po_number ? ` · PO ${o.po_number}` : ""}{due && <><br />In hands {due} · {DELIVERY[o.delivery_method] || "Pickup"}</>}</div>
-          {/* the job, on the right under the invoice header (Oct 16, Nick) */}
+          {/* what they owe and when, right under the invoice header (Oct 16, Nick) */}
+          <div className={"due-card" + (isQ ? " q" : paidUp ? " paid" : "")}>
+            <div className="dc-amt"><span>{isQ ? "Quote total" : paidUp ? "Paid in full" : "Balance due"}</span><b>{money(isQ ? c.total : Math.max(0, c.balance))}</b></div>
+            {(cust.id || sh.terms) && <div className="dc-terms">{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}
+              {cust.payment_terms === "deposit" && !paidUp && c.paid < c.total / 2 - 0.005 && <span className="dc-dep">50% down to start: <b>{money(c.total / 2)}</b></span>}</div>}
+          </div>
           <div className="djob"><b>{o.nickname}</b><br />{c.qty} piece{c.qty === 1 ? "" : "s"} · {prints} print{prints === 1 ? "" : "s"}{o.approved_at && <><br /><span className="faint">Approved by {o.approved_name}, {new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })}</span></>}</div>
-          {paidUp && <div className="stamp">PAID</div>}
         </div>
       </div>
       <div className="parties two">
@@ -313,10 +317,7 @@ export function InvoiceDoc(p: DocData) {
           <div className="r"><span>Tax{o.tax_exempt ? "" : ` (${c.rate}%)`}</span><span>{o.tax_exempt ? "Exempt" : money(c.tax)}</span></div>
           <div className="r big"><span>Total</span><span>{money(c.total)}</span></div>
           {c.paid > 0 && <div className="r"><span>Paid</span><span>−{money(c.paid)}</span></div>}
-          {!isQ && <div className={"bal" + (c.balance > 0.005 ? " due" : "")}><span>Balance due</span><span>{money(Math.max(0, c.balance))}</span></div>}
-          {/* the customer's own terms, under the balance (Oct 16, Nick) */}
-          {(cust.id || sh.terms) && <div className="terms"><b>Terms</b>{cust.id ? termsText(cust.payment_terms, o.delivery_method !== "ship") : sh.terms}
-            {cust.payment_terms === "deposit" && c.paid < c.total / 2 - 0.005 && <span className="dep">50% down: <b>{money(c.total / 2)}</b></span>}</div>}
+          {!isQ && <div className="r bal2"><span>Balance due</span><span>{money(Math.max(0, c.balance))}</span></div>}
         </div>
       </div>
       <div className="ifoot"><div className="fade" /><div><span>Thank you for printing with {sh.name}!</span><span>{kind} #{o.number}</span></div></div>
