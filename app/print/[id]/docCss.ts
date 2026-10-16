@@ -131,6 +131,10 @@ export const DOC_CSS = `
 .pdoc .chip{border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:9.5pt;color:var(--ink2);background:#fff;box-shadow:none;height:auto;line-height:1.4}
 .pdoc .chip b{color:var(--ink)}
 .pdoc .prl{font-size:10pt;color:var(--ink2);margin-top:5px}
+.pdoc .prl b{color:var(--ink);font-weight:600}
+.pdoc .prl-inks{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:3px}
+.pdoc .prl-ink{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:9.5pt}
+.pdoc .prl-ink i{width:10px;height:10px;border-radius:50%;border:1px solid rgba(0,0,0,.25);display:inline-block;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .pdoc .extra{width:100%;border-collapse:collapse;font-size:11pt;margin-top:4px}
 .pdoc .extra td{padding:6px 6px;border-bottom:1px solid var(--line2)}
 .pdoc .others{margin:-10px 0 6px calc(1.45in + 16px)}

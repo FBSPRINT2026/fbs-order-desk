@@ -269,7 +269,14 @@ export function InvoiceDoc(p: DocData) {
                         {i === lines.length - 1 && g.imprints.map((d) => {
                           const sz = printSize(d, d.design_id ? p.designs[d.design_id] : null), ink = inkNames(d.inks);
                           const how = d.method === "screen" ? (d.colors >= FULL_COLOR ? "full color screen print" : `${d.colors || 1}-color screen print`) : d.method === "embroidery" ? "embroidery" : "full color DTF transfer";
-                          return <div className="prl" key={d.id}>Print: {d.location}, {how}{ink.length ? ` (${ink.join(", ")})` : ""}{sz.label ? `, ${sz.label}` : ""}</div>;
+                          // the print on one line, its inks as small swatches under it (Oct 16, Nick: the ink names wrapped
+                          // across the line and looked messy)
+                          return (
+                            <div className="prl" key={d.id}>
+                              <div><b>{d.location}</b> · {how}{sz.label ? ` · ${sz.label}` : ""}</div>
+                              {ink.length > 0 && <div className="prl-inks">{ink.map((n) => { const hx = colorHex(n); return <span className="prl-ink" key={n}><i style={{ background: hx || "transparent" }} />{n}</span>; })}</div>}
+                            </div>
+                          );
                         })}
                         {i === lines.length - 1 && gc.finishing.length > 0 && <div className="prl">Finishing: {gc.finishing.map((f) => f.name).join(", ")}</div>}
                       </td>
