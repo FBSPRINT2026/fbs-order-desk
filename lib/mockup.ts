@@ -111,7 +111,13 @@ export function measureGarment(img: HTMLImageElement, view: View): Fit | null {
   const bodyW = R[yy] - L[yy];
   if (bodyW < 300) return null;
   const ref = REF[view];
-  const s = (bodyW / ref.bodyW + (B - T) / ref.h) / 2;
+  // how big the photo is drawn, against the reference Gildan 5000: its height and its body width, averaged. When they
+  // disagree by more than 10% the garment's cut is different, not the photo's zoom: a fitted Bella 3001 is ~16% narrower
+  // at the same height (Oct 16, Nick: "why isn't the 3001 centered like a 5000"; it was blown up 8%), and a long sleeve
+  // or hoodie's arms hang beside the body and read as width. Then the height alone sets the scale (unless the photo
+  // cuts the garment off at the top or bottom, when the height can't be trusted).
+  const sw = bodyW / ref.bodyW, sh = (B - T) / ref.h, cut = T <= 2 || B >= H - 3;
+  const s = Math.abs(sw - sh) > 0.1 && !cut ? sh : (sw + sh) / 2;
   const cx = (L[yy] + R[yy]) / 2;
   const sleeve = (side: "left" | "right") => {
     const edge = side === "right" ? R : L;
