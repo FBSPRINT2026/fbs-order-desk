@@ -3,7 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, PAY_TERMS, payDueDate, type Design, type Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import PortalDash, { type DashNeed, type DashPast, type DashThread } from "@/components/PortalDash";
-import { jobFor, kindFromWords, type JobKind } from "@/lib/portalJobs";
+import { jobFor, kindFromWords, type JobKind, type JobShip } from "@/lib/portalJobs";
+import { carrierOf, trackingLink, type Box } from "@/lib/shipping";
 import { ourStatusFor } from "@/lib/printavoSend";
 import StartPanel from "@/components/StartPanel";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
@@ -144,7 +145,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const msgLink = (orderId: string | null) => link(`/portal?area=messages&c=${orderId || "general"}`);
   const isJob = (o: Order) => o.status !== "completed" && !(o.status === "request" && !o.submitted_at);
   const doneRecent = orders.filter((o) => o.status === "completed").slice(0, 1);
-  const jobOrders = orders.filter(isJob).slice(0, 6);
+  const jobOrders = orders.filter(isJob).slice(0, 20);
   const pastPortal = orders.filter((o) => o.status === "completed" && !doneRecent.includes(o));
   // pictures: each order's first mockup (photos only), else the customer's own mockup
   const picPath = (o: Order) => { const g = orderGroups(o)[0]; return g?.mockupThumbs?.[0] || g?.customerMockups?.[0]?.path || ""; };
@@ -170,11 +171,25 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   });
   const newMsgs = [...conv.values()].reduce((a, c) => a + c.unread, 0);
   const goodsOf = new Map(goodsItems.map((g) => [g.order.id, g.goods.status as string]));
+  // shipments with tracking (Shipping Center), for "Track package" on the job (Oct 15, Nick)
+  const shipOf = new Map<string, JobShip>();
+  if (ctx.customerIds.length) {
+    const { data: sh } = await admin.from("shipments").select("order_id, archived_order_id, status, carrier, service, boxes, shipped_at, updated_at")
+      .in("customer_id", ctx.customerIds).in("status", ["labeled", "shipped"]).order("updated_at", { ascending: false }).limit(100);
+    ((sh || []) as { order_id: string | null; archived_order_id: string | null; carrier: string; service: string; boxes: Box[] | null; shipped_at: string | null; updated_at: string }[]).forEach((r) => {
+      const k = r.order_id || r.archived_order_id; const t = (r.boxes || []).find((b) => b.tracking)?.tracking;
+      if (!k || !t || shipOf.has(k)) return;
+      shipOf.set(k, { carrier: r.carrier || carrierOf(t), service: r.service || "", tracking: t, url: trackingLink(t), boxes: (r.boxes || []).length, when: whenShort(r.shipped_at || r.updated_at) });
+    });
+  }
+  const shopAddr = (ctx.settings.shop.address || "").replace(/\s*\n\s*/g, ", ").trim();
+  const pickupHref = shopAddr ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shopAddr)}` : "";
   const jobOf = (o: Order) => {
     const c = conv.get(o.id);
     return jobFor(o, { href: link(`/portal/orders/${o.id}`), pic: picOf(o), pendingProof: firstPending[o.id] ? link(`/portal/orders/${o.id}/review/${firstPending[o.id]}`) : undefined,
       approvedArt: !!approvedArt[o.id], goods: goodsOf.get(o.id) || null, customerGoods: o.price_type === "wholesale", newMsgs: c?.unread || 0,
-      lastMsg: c ? { from: c.last.author_type === "staff" ? shopName : "you", text: clip(c.last.body, 60), href: msgLink(o.id) } : undefined });
+      lastMsg: c ? { from: c.last.author_type === "staff" ? shopName : "you", text: clip(c.last.body, 60), href: msgLink(o.id) } : undefined,
+      goodsHref, ship: shipOf.get(o.id) || null, balance: o.type === "invoice" ? bal(o) : 0, payHref: link("/portal?area=payments"), pickup: shopAddr, pickupHref });
   };
   const jobs = jobOrders.map(jobOf), pastJobs = doneRecent.map(jobOf);
   const IDX_AFTER_ART = ["blanks", "production", "ready"];
@@ -215,7 +230,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const o = { id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", status: st || "approved", type: "invoice", due_date: a.due_date, created_at: a.order_date || "", submitted_at: a.order_date || "",
       production_date: null, delivery_method: "", groups: [], lines: [], qty: a.qty || 0, price_type: "retail", completed_at: null, updated_at: a.order_date || "" } as unknown as Order;
     jobs.push(jobFor(o, { href: archHref(a.id), pic: archPics[a.id] || "", approvedArt: (IDX_AFTER_ART as string[]).includes(st || ""), goods: null, customerGoods: false, newMsgs: 0,
-      kind: kindFromWords([a.status_name || "", a.nickname || ""]) || pvKind[a.id] || "" }));
+      kind: kindFromWords([a.status_name || "", a.nickname || ""]) || pvKind[a.id] || "",
+      ship: shipOf.get(a.id) || null, balance: +a.balance || 0, payHref: payUrls[a.id] || link("/portal?area=payments"), payExternal: !!payUrls[a.id], pickup: shopAddr, pickupHref }));
   });
   const past: DashPast[] = [
     ...pastPortal.slice(0, 3).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", when: short(o.completed_at || o.due_date || o.created_at), qty: o.qty, pic: picOf(o), href: link(`/portal/orders/${o.id}`), date: o.completed_at || o.due_date || o.created_at })),
