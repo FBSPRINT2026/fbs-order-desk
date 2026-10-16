@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getOrder, pv, transitionWrite, PrintavoError } from "@/lib/printavo";
 import { htmlText } from "@/lib/printavoChanges";
-import { calcOrder, FULL_COLOR, imprintLabel, mergeSettings, orderGroups, SIZES, ST, type Imprint, type Order, type StatusKey } from "@/lib/pricing";
+import { calcOrder, FULL_COLOR, imprintLabel, mergeSettings, orderGroups, SIZES, ST, type Group, type Imprint, type Order, type StatusKey } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/config";
 import { parseAddress } from "@/lib/qbo/map";
 
@@ -44,6 +44,23 @@ function pvAddress(text: string, company: string, person: string) {
   return { companyName: company || undefined, customerName: name || undefined, address1: a.Line1 || undefined,
     address2: [a.Line2, a.Line3, a.Line4].filter(Boolean).join(", ") || undefined, city: a.City || undefined,
     stateIso: a.CountrySubDivisionCode || undefined, zipCode: a.PostalCode || undefined, countryIso: "US" };
+}
+
+/** A print as the customer reads it: location, colors, inks, size (no method: the line's category says that). */
+const printLine = (d: Imprint) => [d.location,
+  d.method === "screen" || d.method === "embroidery" ? (d.method === "screen" && d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`) : "full color",
+  d.inks, d.size].filter(Boolean).join(" · ");
+/** A Printavo line's description: the garment, and on a group's last line its prints, one per line (Oct 16, Nick). */
+const lineDescription = (g: Group, l: { brand?: string; garment?: string }, last: boolean) =>
+  [[l.brand, l.garment].filter(Boolean).join(" ") + (g.name ? ` (${g.name})` : ""), ...(last ? g.imprints.map(printLine) : [])].join("\n");
+/** The lines of a group that go to Printavo (any size has a quantity). */
+const sentLines = (g: Group) => g.lines.filter((l) => SIZES.some((z) => +(l.sizes?.[z] || 0) > 0));
+/** The billing and shipping addresses sent with an order. */
+function orderAddresses(o: Record<string, unknown>, cust: Record<string, unknown> | null) {
+  const company = String(cust?.company || ""), person = String(cust?.name || "");
+  const billingAddress = pvAddress(String(cust?.address || ""), company, person);
+  const shippingAddress = o.delivery_method !== "pickup" ? pvAddress(String(o.ship_to || ""), company, person) || pvAddress(String(cust?.ship_address || cust?.address || ""), company, person) : null;
+  return { billingAddress, shippingAddress };
 }
 const CARD_RE = /credit card processing surcharge/i;
 const day = (d: string | null | undefined) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : "");
@@ -158,15 +175,11 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   if (missingCat.length) await admin.from("orders").update({ printavo_state: { ...(o.printavo_state as object || {}), sending: null } }).eq("id", inp.orderId);
   if (missingCat.length) throw new PrintavoError(`Printavo has no line item category for ${[...new Set(missingCat)].join(", ")} (looked for Screen Printing / Embroidery / Heat Press).`);
 
-  // a print as the customer reads it: location, colors, inks, size (no method: the category says that)
-  const printLine = (d: Imprint) => [d.location,
-    d.method === "screen" || d.method === "embroidery" ? (d.method === "screen" && d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`) : "full color",
-    d.inks, d.size].filter(Boolean).join(" · ");
   const lineItemGroups = groups.map((g, gi) => {
     const c = calc.groups[gi];
     return {
       position: gi + 1,
-      lineItems: g.lines.filter((l) => SIZES.some((z) => +(l.sizes?.[z] || 0) > 0)).map((l, li, all) => {
+      lineItems: sentLines(g).map((l, li, all) => {
         const lastLine = all.length - 1;
         const lc = c?.lines.find((x) => x.id === l.id);
         const counts: Record<string, number> = {};
@@ -176,8 +189,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
           position: li + 1, itemNumber: l.style || undefined, color: l.color || undefined, ...(cat ? { category: { id: cat.id } } : {}), mockups: lineMock(gi, l),
           // the prints under the garment on the last line (Oct 16, Nick: the customer can't see Printavo's imprints):
           // "Full Front · 3 colors · White, PMS Cool Gray 5 C, PMS 199 C · 11.5" wide"
-          description: [[l.brand, l.garment].filter(Boolean).join(" ") + (g.name ? ` (${g.name})` : ""),
-            ...(li === lastLine ? g.imprints.map(printLine) : [])].join("\n"),
+          description: lineDescription(g, l, li === lastLine),
           price: lc ? lc.each : 0, taxed,
           sizes: Object.entries(counts).map(([size, count]) => ({ size, count })),
         };
@@ -218,9 +230,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   const { data: ds } = designIds.length ? await admin.from("designs").select("file_path").in("id", designIds) : { data: [] };
   const fileUrls = await sign([...(af || []).map((x) => x.file_path as string), ...((ds || []).map((x) => x.file_path as string).filter(Boolean))]).then((u) => u.filter(Boolean));
 
-  const company = String(cust?.company || ""), person = String(cust?.name || "");
-  const billingAddress = pvAddress(String(cust?.address || ""), company, person);
-  const shippingAddress = o.delivery_method !== "pickup" ? pvAddress(String(o.ship_to || ""), company, person) || pvAddress(String(cust?.ship_address || cust?.address || ""), company, person) : null;
+  const { billingAddress, shippingAddress } = orderAddresses(o, cust);
   const discount = o.discount_type === "amt" ? +(o.discount_amt || 0) : +(o.discount_pct || 0);
   const input = {
     contact: { id: pre.contact.id },
@@ -473,4 +483,43 @@ export async function pushLineMockups(admin: SupabaseClient, orderId: string) {
   }
   await refreshFromPrintavo(admin, orderId).catch(() => null);
   return { added };
+}
+
+/**
+ * An order already in Printavo gets what the send now includes (Oct 16, Nick: "resync 40070 with the changes"): the
+ * prints under the garment in each line's description, and the billing and shipping addresses. Lines are matched by
+ * position within each group. Nothing else in Printavo is touched (fees, prices, sizes stay as they are there).
+ */
+export async function resyncDetails(admin: SupabaseClient, orderId: string) {
+  const { o, cust } = await load(admin, orderId);
+  if (!o.printavo_id) throw new PrintavoError("This order hasn't been sent to Printavo.");
+  const number = o.number as number;
+  if (!(number >= 40000 && number < 50000)) throw new PrintavoError("Only orders #40000-#49999 sync with Printavo.");
+  const p = await getOrder(String(o.printavo_id));
+  const groups = orderGroups(o as Order).filter((g) => sentLines(g).length);
+  let lines = 0;
+  for (const [gi, g] of groups.entries()) {
+    const pg = p.groups[gi];
+    if (!pg) break;
+    const ours = sentLines(g);
+    for (const [li, l] of ours.entries()) {
+      const pl = pg.lines[li];
+      if (!pl) break;
+      const want = lineDescription(g, l, li === ours.length - 1);
+      if ((pl.description || "").trim() === want.trim()) continue;
+      await transitionWrite(`mutation($id:ID!,$input:LineItemInput!){ lineItemUpdate(id:$id, input:$input){ id } }`, { id: pl.id, input: { position: pl.position, description: want } }, number);
+      lines++;
+    }
+  }
+  const { billingAddress, shippingAddress } = orderAddresses(o, cust);
+  let addresses = false;
+  if (billingAddress || shippingAddress) {
+    const now = await readNow(String(o.printavo_id));
+    const inv = now?.__typename === "Invoice";
+    const kind = inv ? "invoiceUpdate" : "quoteUpdate", type = inv ? "InvoiceInput" : "QuoteInput";
+    await transitionWrite(`mutation($id:ID!,$input:${type}!){ ${kind}(id:$id, input:$input){ id } }`, { id: String(o.printavo_id), input: { ...(billingAddress ? { billingAddress } : {}), ...(shippingAddress ? { shippingAddress } : {}) } }, number);
+    addresses = true;
+  }
+  await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Resynced to Printavo: ${lines} line description${lines === 1 ? "" : "s"}${addresses ? ", billing and shipping addresses" : ""}` });
+  return { lines, addresses };
 }

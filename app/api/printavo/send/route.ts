@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { matchPrintavoNumber, pushLineMockups, refreshFromPrintavo, sendPreview, sendToPrintavo } from "@/lib/printavoSend";
+import { matchPrintavoNumber, pushLineMockups, refreshFromPrintavo, resyncDetails, sendPreview, sendToPrintavo } from "@/lib/printavoSend";
 import { fail, holdSync, staffOnly } from "../guard";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +34,8 @@ export async function POST(req: Request) {
     // what changed in Printavo since it was sent (quantities, prices, fees, number, status)
     // our mockups onto the Printavo product lines that have none (what the customer's invoice page shows)
     if (b.action === "mockups") { const r = await pushLineMockups(createAdminClient(), orderId); return NextResponse.json({ ...r, pv: await refreshFromPrintavo(createAdminClient(), orderId) }); }
+    // an order sent before the send included them: the prints in the line descriptions and the addresses
+    if (b.action === "resync") return NextResponse.json({ ...(await resyncDetails(createAdminClient(), orderId)), pv: await refreshFromPrintavo(createAdminClient(), orderId) });
     if (b.action === "refresh") return NextResponse.json({ pv: await refreshFromPrintavo(createAdminClient(), orderId) });
     const r = await sendToPrintavo(createAdminClient(), { orderId, statusId: s(b.statusId, 64), customerDue: s(b.customerDue, 10), productionDue: s(b.productionDue, 10), nickname: s(b.nickname, 200), po: s(b.po, 100), productionNote: s(b.productionNote, 4000), by: g.email });
     return NextResponse.json(r);
