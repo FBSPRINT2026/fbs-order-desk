@@ -924,7 +924,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </section>
           {/* Shipping quote: live UPS / FedEx rates under Totals when the order ships; a click puts one on the invoice (Oct 16, Nick) */}
           {o.delivery_method === "ship" && seesMoney && calc && (
-            <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship} shipMethod={o.ship_method || ""}
+            <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship} shipMethod={o.ship_method || ""} due={o.due_date} shipOn={o.production_date}
               garments={o.groups.flatMap((g) => g.lines.map((l) => {
                 // the supplier's weight for each size ordered (S&S unitWeight), when the catalog has it
                 const gm = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || x.brand.toLowerCase() === l.brand.toLowerCase()));

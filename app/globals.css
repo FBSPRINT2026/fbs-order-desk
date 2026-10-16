@@ -9053,3 +9053,12 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
 .sqp-amt{display:inline-flex;align-items:center;gap:2px;font-weight:700}
 .sqp-amt input{width:84px;padding:4px 6px;text-align:right;font-weight:700}
 .sqp-inv.custom .sqp-amt input{border-color:#f0a500}
+.sqp-when{font-size:12px;color:var(--ink-3);margin:-4px 0 8px}
+.sqp-when b{color:var(--ink-2)}
+.sqp-warn{font-size:12.5px;color:#8a5a00;background:#fff7e8;border:1px solid #f4c46b;border-radius:8px;padding:6px 8px;margin-bottom:6px}
+.sqp-s{display:flex;flex-direction:column;line-height:1.2}
+.sqp-s small{margin-left:0 !important}
+.sqp-s small.late{color:#b3261e;font-weight:600}
+.sqp-tag{font-style:normal;font-size:10px;font-weight:800;color:var(--ok);text-transform:uppercase;letter-spacing:.03em}
+.sqp-r.late{opacity:.75}
+.sqp-r.late b{color:var(--ink-3)}

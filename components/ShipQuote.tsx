@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { money } from "@/lib/format";
 import { estimateBoxes, type Rate } from "@/lib/shipping";
 import type { ShipSettings } from "@/lib/pricing";
-import { niceService } from "@/components/ShipWindow";
+import { deliveredBy, niceService } from "@/components/ShipWindow";
 
 /**
  * Shipping quote (Oct 16, Nick: "how do we save shipping to an invoice… figure the charge for FedEx or UPS using
@@ -24,12 +24,14 @@ const lbEach = (desc: string) => {
 };
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-export default function ShipQuote({ pieces, garments, shipTo, settings, shipMethod, current, onAdd, onSet }: {
+export default function ShipQuote({ pieces, garments, shipTo, settings, shipMethod, current, onAdd, onSet, due, shipOn }: {
   pieces: number; garments: { desc: string; qty: number; /** the supplier's weight for this line (lb), when known */ lbs?: number }[]; shipTo: string; settings: ShipSettings;
   /** the order's ship method ("FedEx Ground"), highlighted */ shipMethod: string;
   /** the order's shipping fee now, if any */ current?: { label: string; amount: number } | null;
   onAdd: (label: string, amount: number, method: string) => void;
   /** a different shipping price typed in (override; 0 = free shipping) */ onSet: (amount: number) => void;
+  /** the in-hands date (YYYY-MM-DD): a rate that gets there later is marked late */ due?: string | null;
+  /** the day it ships (the production date; today when it's past or not set) */ shipOn?: string | null;
 }) {
   const [rates, setRates] = useState<Rate[] | null>(null);
   const [err, setErr] = useState("");
@@ -69,16 +71,37 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
   }, [want]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const name = (r: Rate) => `${r.carrier} ${niceService(r.service)}`;
-  const days = (r: Rate) => (r.days ? `${r.days}d` : "");
   const isPicked = (r: Rate) => !!shipMethod && key(name(r)) === key(shipMethod);
   const onInvoice = (r: Rate) => !!current && Math.abs(current.amount - r.price) < 0.005 && key(current.label).includes(key(name(r)));
-  // the order's method first, then the cheapest ground of each carrier, then the rest (cheapest first)
-  const picked = (rates || []).find(isPicked);
-  const ground = (rates || []).filter((r) => r !== picked && /ground|home|advantage/i.test(r.service));
-  const rest = (rates || []).filter((r) => r !== picked && !ground.includes(r));
-  const list = [...(picked ? [picked] : []), ...ground, ...rest];
+
+  // the Shipping Center's rules (Oct 16, Nick): when each one gets there, counted from the day the job ships (the
+  // production date, or today), late when that's after the in-hands date, options that cost more and don't get there
+  // sooner left out, and the pick: the cheapest that arrives in time
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  const ship0 = shipOn ? new Date(shipOn.slice(0, 10) + "T12:00") : null;
+  const ships = ship0 && ship0 > today ? ship0 : today;
+  const need = due ? new Date(due.slice(0, 10) + "T23:59") : null;
+  const arrive = (r: Rate): Date | null => {
+    if (r.days) { const d = new Date(ships); let n = r.days; while (n > 0) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) n--; } return d; }
+    if (r.deliveryDate) { const d = new Date(r.deliveryDate.slice(0, 10) + "T12:00"); if (!isNaN(+d)) { d.setDate(d.getDate() + Math.round((+ships - +today) / 864e5)); return d; } }
+    return null;
+  };
+  type Opt = { r: Rate; at: Date | null; late: boolean; rank: number; beaten: boolean };
+  const opts: Opt[] = (rates || []).map((r) => { const at = arrive(r); return { r, at, late: !!(need && at && at > need), rank: deliveredBy(r.service).rank, beaten: false }; });
+  const when = (o: Opt) => (o.at ? +new Date(o.at.getFullYear(), o.at.getMonth(), o.at.getDate()) : 9e15) + o.rank;
+  for (const o of opts) o.beaten = opts.some((x) => x !== o && x.r.price <= o.r.price && when(x) <= when(o) && (x.r.price < o.r.price || when(x) < when(o)));
+  const good = opts.filter((o) => !o.beaten);
+  const cheapestOnTime = good.filter((o) => !o.late).sort((x, y) => x.r.price - y.r.price)[0] || null;
+  const cheapest = [...good].sort((x, y) => x.r.price - y.r.price)[0] || null;
+  const fastest = [...good].sort((x, y) => when(x) - when(y) || x.r.price - y.r.price)[0] || null;
+  const tagOf = (o: Opt) => (o === cheapestOnTime && need ? "Cheapest on time" : o === cheapest ? "Cheapest" : o === fastest ? "Fastest" : "");
+  // the order's method first, then the picks, then the rest on time (cheapest first), then the late ones
+  const pickedO = opts.find((o) => isPicked(o.r));
+  const order = [pickedO, cheapestOnTime, cheapest, fastest, ...good.filter((o) => !o.late).sort((x, y) => x.r.price - y.r.price), ...good.filter((o) => o.late).sort((x, y) => x.r.price - y.r.price)];
+  const list = order.filter((o, i): o is Opt => !!o && order.indexOf(o) === i);
   const shown = more ? list : list.slice(0, 4);
   const add = (r: Rate) => onAdd(`Shipping · ${name(r)} (${nBoxes} box${nBoxes === 1 ? "" : "es"})`, r.price, name(r));
+  const dd = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   return (
     <section className="panel money-only sqp">
@@ -90,16 +113,20 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
             {!editW ? <button type="button" className="linkbtn" onClick={() => setEditW(true)} title={`${pieces} pieces × ${per} lb${known && !each ? " (S&S weights)" : " (estimate)"} + 1 lb a box`}>{known && !each ? "S&S weight" : "est. weight"}</button>
               : <span className="sqp-w"><input type="number" step="0.01" min="0.05" aria-label="Pounds per piece" placeholder={String(per)} value={each} autoFocus onChange={(e) => setEach(e.target.value)} onBlur={() => setEditW(false)} /> lb a piece</span>}
           </div>
+          {(need || ship0) && <div className="sqp-when">Ships {dd(ships)}{need ? <> · in hands <b>{dd(need)}</b></> : null}</div>}
           {err && <div className="pv-err">{err}</div>}
+          {rates && need && good.length > 0 && !cheapestOnTime && <div className="sqp-warn">Nothing gets there by {dd(need)}. Move the production date up or call the customer.</div>}
+          {rates && cheapestOnTime && !isPicked(cheapestOnTime.r) && shipMethod && pickedO?.late && <div className="sqp-warn">{shipMethod} won&apos;t arrive in time. {name(cheapestOnTime.r)} gets there {dd(cheapestOnTime.at!)} for {money(cheapestOnTime.r.price)}.</div>}
           {shown.length > 0 && (
             <div className="sqp-list" role="list">
-              {shown.map((r, i) => {
-                const on = onInvoice(r);
+              {shown.map((o, i) => {
+                const r = o.r, on = onInvoice(r), tag = tagOf(o);
                 return (
-                  <button key={i} type="button" role="listitem" className={"sqp-r" + (isPicked(r) ? " picked" : "") + (on ? " on" : "")} onClick={() => add(r)}
+                  <button key={i} type="button" role="listitem" className={"sqp-r" + (isPicked(r) ? " picked" : "") + (on ? " on" : "") + (o.late ? " late" : "")} onClick={() => add(r)}
                     title={on ? "On the invoice" : `Put ${money(r.price)} on the invoice as ${name(r)} (we pay ${money(r.cost)})`}>
-                    <span className={"sqp-c " + r.carrier.toLowerCase()}>{r.carrier === "FedEx" ? "FedEx" : r.carrier}</span>
-                    <span className="sqp-s">{niceService(r.service)}{days(r) && <small>{days(r)}</small>}</span>
+                    <span className={"sqp-c " + r.carrier.toLowerCase()}>{r.carrier}</span>
+                    <span className="sqp-s">{niceService(r.service)}{tag && <em className="sqp-tag">{tag}</em>}
+                      <small className={o.late ? "late" : ""}>{o.at ? `${o.late ? "Late · " : "Arrives "}${dd(o.at)}` : "No estimate"}</small></span>
                     <b>{money(r.price)}</b>
                     <span className="sqp-go">{on ? "✓" : "Add"}</span>
                   </button>
@@ -109,8 +136,8 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
           )}
           {list.length > 4 && <button type="button" className="linkbtn sqp-more" onClick={() => setMore(!more)}>{more ? "Fewer options" : `${list.length - 4} more options`}</button>}
           {current && (
-            <label className={"sqp-inv" + (list.some(onInvoice) ? "" : " custom")}>
-              <span>On the invoice{list.some(onInvoice) ? "" : <small> (your price)</small>}</span>
+            <label className={"sqp-inv" + (opts.some((o) => onInvoice(o.r)) ? "" : " custom")}>
+              <span>On the invoice{opts.some((o) => onInvoice(o.r)) ? "" : <small> (your price)</small>}</span>
               <span className="sqp-amt">$<input type="number" step="0.01" min="0" aria-label="Shipping charge on the invoice" key={current.amount} defaultValue={current.amount.toFixed(2)}
                 onBlur={(e) => { const v = Math.max(0, Math.round((+e.target.value || 0) * 100) / 100); if (Math.abs(v - current.amount) >= 0.005) onSet(v); }}
                 onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></span>
