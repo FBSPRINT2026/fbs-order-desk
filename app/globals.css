@@ -9048,3 +9048,8 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
 .sqp-r.on .sqp-go{color:var(--ok);font-size:14px}
 .sqp-more{font-size:12px;margin-top:6px}
 .sqp-note{font-size:12px;color:var(--ink-3);margin-top:6px}
+.sqp-inv{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line-2,var(--line));font-size:13px;font-weight:600}
+.sqp-inv small{font-weight:500;color:#a76a00}
+.sqp-amt{display:inline-flex;align-items:center;gap:2px;font-weight:700}
+.sqp-amt input{width:84px;padding:4px 6px;text-align:right;font-weight:700}
+.sqp-inv.custom .sqp-amt input{border-color:#f0a500}

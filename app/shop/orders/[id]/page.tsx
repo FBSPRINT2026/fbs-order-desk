@@ -934,7 +934,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 const fee = { label, amount: Math.round(amount * 100) / 100 };
                 if (i >= 0) d.fees[i] = fee; else { d.fees = d.fees.filter((x) => (x.label || "").trim() || x.amount !== ""); d.fees.push(fee); }
                 d.ship_method = method;
-              })} />
+              })}
+              onSet={(amount) => patch((d) => { const f = d.fees.find((x) => /^shipping\b/i.test(x.label || "")); if (f) f.amount = amount; })} />
           )}
           {/* Printavo: a side panel on the Order tab, above the goods (Oct 15, Nick) */}
           {(o as Order & { printavo_id?: string | null }).printavo_id && <section className="panel pv-panel">

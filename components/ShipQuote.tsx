@@ -24,11 +24,12 @@ const lbEach = (desc: string) => {
 };
 const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-export default function ShipQuote({ pieces, garments, shipTo, settings, shipMethod, current, onAdd }: {
+export default function ShipQuote({ pieces, garments, shipTo, settings, shipMethod, current, onAdd, onSet }: {
   pieces: number; garments: { desc: string; qty: number; /** the supplier's weight for this line (lb), when known */ lbs?: number }[]; shipTo: string; settings: ShipSettings;
   /** the order's ship method ("FedEx Ground"), highlighted */ shipMethod: string;
   /** the order's shipping fee now, if any */ current?: { label: string; amount: number } | null;
   onAdd: (label: string, amount: number, method: string) => void;
+  /** a different shipping price typed in (override; 0 = free shipping) */ onSet: (amount: number) => void;
 }) {
   const [rates, setRates] = useState<Rate[] | null>(null);
   const [err, setErr] = useState("");
@@ -107,7 +108,14 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
             </div>
           )}
           {list.length > 4 && <button type="button" className="linkbtn sqp-more" onClick={() => setMore(!more)}>{more ? "Fewer options" : `${list.length - 4} more options`}</button>}
-          {current && !list.some(onInvoice) && <div className="sqp-note">On the invoice: {current.label} · {money(current.amount)}</div>}
+          {current && (
+            <label className={"sqp-inv" + (list.some(onInvoice) ? "" : " custom")}>
+              <span>On the invoice{list.some(onInvoice) ? "" : <small> (your price)</small>}</span>
+              <span className="sqp-amt">$<input type="number" step="0.01" min="0" aria-label="Shipping charge on the invoice" key={current.amount} defaultValue={current.amount.toFixed(2)}
+                onBlur={(e) => { const v = Math.max(0, Math.round((+e.target.value || 0) * 100) / 100); if (Math.abs(v - current.amount) >= 0.005) onSet(v); }}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></span>
+            </label>
+          )}
         </>)}
       </div>
     </section>
