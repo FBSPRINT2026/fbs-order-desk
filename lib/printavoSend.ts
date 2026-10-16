@@ -53,6 +53,8 @@ const printLine = (d: Imprint) => [d.location,
 /** A Printavo line's description: the garment, and on a group's last line its prints, one per line (Oct 16, Nick). */
 const lineDescription = (g: Group, l: { brand?: string; garment?: string }, last: boolean) =>
   [[l.brand, l.garment].filter(Boolean).join(" ") + (g.name ? ` (${g.name})` : ""), ...(last ? g.imprints.map(printLine) : [])].join("\n");
+/** A production file in Printavo that opens the order here (Oct 16, Nick): app/pv/[n]/[file]/route.ts */
+const orderLink = (number: number) => `${SITE_URL}/pv/${number}/Open-in-FBS-Order-Desk-${number}.html`;
 /** The lines of a group that go to Printavo (any size has a quantity). */
 const sentLines = (g: Group) => g.lines.filter((l) => SIZES.some((z) => +(l.sizes?.[z] || 0) > 0));
 /** The billing and shipping addresses sent with an order. */
@@ -251,7 +253,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
     // the customer's billing and shipping addresses (Oct 16, Nick: they came over blank)
     ...(billingAddress ? { billingAddress } : {}), ...(shippingAddress ? { shippingAddress } : {}),
     lineItemGroups, fees,
-    productionFiles: fileUrls.map((u) => ({ publicFileUrl: u })),
+    productionFiles: [...fileUrls.map((u) => ({ publicFileUrl: u })), { publicFileUrl: orderLink(number) }],
   };
   type Made = { id: string; visualId: string; publicUrl: string; url: string; total: number; status: { name: string } };
   let made: Made | null = null, warn = "";
@@ -520,6 +522,12 @@ export async function resyncDetails(admin: SupabaseClient, orderId: string) {
     await transitionWrite(`mutation($id:ID!,$input:${type}!){ ${kind}(id:$id, input:$input){ id } }`, { id: String(o.printavo_id), input: { ...(billingAddress ? { billingAddress } : {}), ...(shippingAddress ? { shippingAddress } : {}) } }, number);
     addresses = true;
   }
-  await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Resynced to Printavo: ${lines} line description${lines === 1 ? "" : "s"}${addresses ? ", billing and shipping addresses" : ""}` });
-  return { lines, addresses };
+  // the link that opens the order here, when it isn't in the production files yet
+  let link = false;
+  if (!p.files.some((f) => /Open-in-FBS-Order-Desk/i.test(`${f.name || ""} ${f.full}`))) {
+    await transitionWrite(`mutation($p:ID!,$u:String!){ productionFileCreate(parentId:$p, publicFileUrl:$u){ id } }`, { p: String(o.printavo_id), u: orderLink(number) }, number);
+    link = true;
+  }
+  await admin.from("order_events").insert({ order_id: orderId, kind: "printavo", detail: `Resynced to Printavo: ${lines} line description${lines === 1 ? "" : "s"}${addresses ? ", billing and shipping addresses" : ""}${link ? ", the link to this order" : ""}` });
+  return { lines, addresses, link };
 }

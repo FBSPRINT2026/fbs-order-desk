@@ -41,7 +41,7 @@ export async function pv<T = Record<string, unknown>>(query: string, variables: 
 }
 
 /** The only Printavo changes the portal makes: what "Send to Printavo" needs for a 40,000-series order. */
-const TRANSITION_WRITES = new Set(["quoteCreate", "statusUpdate", "quoteUpdate", "invoiceUpdate", "lineItemMockupCreate", "lineItemUpdate"]);
+const TRANSITION_WRITES = new Set(["quoteCreate", "statusUpdate", "quoteUpdate", "invoiceUpdate", "lineItemMockupCreate", "lineItemUpdate", "productionFileCreate"]);
 /**
  * Sends one change to Printavo for a 40,000-series order (40,000-49,999: entered here during the move, produced from
  * Printavo until Nov 2). Anything else is refused before it leaves our server. Not retried: a write that may have
@@ -59,6 +59,9 @@ export async function transitionWrite<T = Record<string, unknown>>(query: string
   if (/^(quote|invoice)Update$/.test(m[1]) && Object.keys((variables.input || {}) as object).some((k) => !["visualId", "billingAddress", "shippingAddress"].includes(k)))
     throw new PrintavoError("Blocked: only the order number and addresses can be changed in Printavo.");
   // a product line: only its description (the prints under the garment); position is required by Printavo's input
+  // a production file: only our own link back to the order (app/pv)
+  if (m[1] === "productionFileCreate" && !/^https:\/\/[^/]+\/pv\/\d+\/[\w.-]+$/.test(String(variables.u || "")))
+    throw new PrintavoError("Blocked: only the link to the order can be added to Printavo's files.");
   if (m[1] === "lineItemUpdate" && Object.keys((variables.input || {}) as object).some((k) => !["position", "description"].includes(k)))
     throw new PrintavoError("Blocked: only a line's description can be changed in Printavo.");
   return request<T>(query, variables, false);
