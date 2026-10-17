@@ -9499,3 +9499,18 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
   .eh-av{width:30px!important;height:30px!important;font-size:11.5px!important}
   .eh-from{gap:8px!important}
 }
+/* the toolbar's buttons keep their size (they were squeezing into each other); a narrow pane wraps to two lines */
+@media (min-width:761px){
+  .eh-bar .tb{flex-wrap:wrap!important}
+  .eh-bar .tb-row{flex:0 0 auto!important}
+  .eh-bar .tb-b,.eh-bar .tb-m,.eh-bar .tb-g{flex:none!important}
+  /* the AI summary on one line: ✦ AI ▾ · the summary… · Assistant */
+  .eh .eh-ai.mini{flex-wrap:nowrap!important;row-gap:0!important;padding:4px 8px 4px 10px!important;margin:4px 12px 0!important}
+  .eh .eh-ai.mini .eh-ai-l{flex:none!important;min-width:0!important}
+  .eh .eh-ai.mini .eh-ai-l::after{content:none!important}
+  .eh .eh-ai.mini .eh-ai-b{display:flex!important;flex:1 1 auto!important;min-width:0;overflow:hidden}
+  .eh .eh-ai.mini .eh-ai-b .eh-sum{flex:1 1 auto!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px!important}
+  .eh .eh-ai.mini .eh-ai-tags{display:none!important}
+  .eh .eh-ai.mini > :not(.eh-ai-l):not(.eh-ai-b){flex:none!important;height:26px;font-size:12px}
+  .eh .eh-ai.mini .eh-hist{display:none}
+}
