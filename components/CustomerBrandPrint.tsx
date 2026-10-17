@@ -69,6 +69,19 @@ export default function CustomerBrandPrint({ customerId }: { customerId: string 
         <label className="check"><input type="checkbox" checked={!!bp.soft} onChange={(e) => save({ ...bp, soft: e.target.checked })} /> Soft hand additive</label>
         {hit === "fashion" && <label className="check"><input type="checkbox" checked={!!bp.distressedOnly} onChange={(e) => save({ ...bp, distressedOnly: e.target.checked })} /> Only for distressed logos <span className="faint">(marked on each logo)</span></label>}
       </div>
+      <div className="bp-sec">Other rules</div>
+      {(bp.rules || []).map((r, i) => (
+        <div className="bp-rule" key={i + ":" + r}>
+          <input type="text" aria-label="Rule" defaultValue={r} onBlur={(e) => { const v = e.target.value.trim(); if (v === r) return; save({ ...bp, rules: (bp.rules || []).map((x, j) => (j === i ? v : x)).filter(Boolean) }); }} />
+          <button type="button" className="btn icon ghost sm" aria-label="Remove rule" title="Remove" onClick={() => save({ ...bp, rules: (bp.rules || []).filter((_, j) => j !== i) })}>✕</button>
+        </div>
+      ))}
+      <form className="bp-rule" onSubmit={(e) => { e.preventDefault(); const f = e.currentTarget.elements.namedItem("rule") as HTMLInputElement; const v = f.value.trim(); if (!v) return; save({ ...bp, rules: [...(bp.rules || []), v.slice(0, 240)] }); f.value = ""; }}>
+        <input name="rule" type="text" placeholder="e.g. Never put the circle logo on red shirts" aria-label="New rule" />
+        <button type="submit" className="btn sm ghost">Add</button>
+      </form>
+      <p className="faint bp-hint">Anything a box above doesn&apos;t cover. Shown in the Mockup Creator and on the work order.</p>
+
       <p className="faint bp-hint">Fashion hit: no white underbase; each color is printed, flashed and printed again through the same screen. Softer and more worn-in, less bright. Priced the same as with an underbase. {state}</p>
     </div>
   );

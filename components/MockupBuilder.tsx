@@ -2002,6 +2002,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               {SIDES.map((t) => { const n = imprints.filter((im) => sideOf(im.location) === t.id).length; return <button key={t.id} type="button" className={"chip" + (curTab === t.id ? " on" : "")} onClick={() => setTab(t.id)}>{t.label}{n ? ` (${n})` : ""}</button>; })}
             </div>
             <div className="panel-b stack">
+              {/* their other brand rules, in plain words (Brand standards → Other rules), Oct 16 */}
+              {!portal && (brandPrint?.rules || []).length > 0 && <div className="mk-brand-rules"><b>Their brand rules</b><ul>{brandPrint!.rules!.map((r, i) => <li key={i}>{r}</li>)}</ul></div>}
               {imprints.every((im) => sideOf(im.location) !== curTab) && <div className="faint" style={{ fontSize: 13 }}>No {curTab === "sleeve" ? "sleeve" : curTab} prints yet.</div>}
               {imprints.filter((im) => sideOf(im.location) === curTab).map((im) => {
                 const p = place(im);

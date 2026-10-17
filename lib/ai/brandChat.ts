@@ -143,12 +143,12 @@ Keep the reply to a few sentences, no headings.`,
   const lastAi = messages.length - 1;
   messages.forEach((m, i) => { if (i < lastAi && m.status === "open" && messages[lastAi].proposal) m.status = "dismissed"; });
   await saveThread(admin, customerId, cur.name, messages, { model: r.model, run_id: r.runId });
-  return { ok: true, messages };
+  return { ok: true, messages: messages.slice(-60) };
 }
 
 /** Apply a proposal (an admin clicked Apply): customers.brand_colors / brand_print and the logos' specs. */
 export async function applyBrand(admin: SupabaseClient, customerId: string, index: number, by: string): Promise<{ ok: true; messages: BrandMsg[] } | { ok: false; error: string }> {
-  const thread = await brandThread(admin, customerId);
+  const thread = (await brandThread(admin, customerId)).slice(-60);
   const m = thread[index];
   if (!m?.proposal || m.status !== "open") return { ok: false, error: "That proposal isn't open any more." };
   const cur = await current(admin, customerId);
@@ -182,7 +182,7 @@ export async function applyBrand(admin: SupabaseClient, customerId: string, inde
 }
 
 export async function dismissBrand(admin: SupabaseClient, customerId: string, index: number, by: string) {
-  const thread = await brandThread(admin, customerId);
+  const thread = (await brandThread(admin, customerId)).slice(-60);
   if (!thread[index] || thread[index].status !== "open") return { ok: true as const, messages: thread };
   thread[index] = { ...thread[index], status: "dismissed", done_by: by, done_at: new Date().toISOString() };
   const cur = await current(admin, customerId);

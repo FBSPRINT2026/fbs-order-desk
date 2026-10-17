@@ -131,6 +131,7 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
               <h2>Notes</h2>
               <div className="notes">
                 {noteParts.join("\n\n")}
+                {first && (p.cust.brand_print?.rules || []).length > 0 && <div className="sn"><b>BRAND RULES: </b>{p.cust.brand_print!.rules!.join(" · ")}</div>}
                 {first && p.shopNotes.map((n, i) => <div className="sn" key={i}>{n.tag ? <b>{n.tag.toUpperCase()}: </b> : null}{n.body} <small>({n.by_name}, {new Date(n.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })})</small></div>)}
               </div>
               <div className="foot"><span>{footL}</span><span>Page {pg} of {total} · printed {p.printed}</span></div>

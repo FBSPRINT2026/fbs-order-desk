@@ -9209,3 +9209,45 @@ img.lv-art{width:76%;height:76%;object-fit:contain}
 .dc-views .lv{width:44px;height:44px}
 .dc-views button.on{outline:2px solid var(--fbs-blue,#0e9bd8)}
 .dc-views .orig{width:44px;height:44px;display:grid;place-items:center;font-size:10px;color:var(--ink-3);border:1px solid var(--line);border-radius:8px;background:#fff}
+
+/* Brand standards: other rules, and "Set up with AI" (owners and admins, Oct 16) */
+.bp-rule{display:flex;gap:6px;align-items:center;margin:4px 0}
+.bp-rule input{flex:1;min-width:0}
+.bai-top{display:flex;justify-content:flex-end;margin:-6px 0 8px}
+.bai-btn{border:1px solid var(--fbs-blue,#0e9bd8);color:var(--fbs-blue,#0e9bd8);background:var(--accent-soft,#eef8fd);border-radius:8px;padding:5px 12px;font-weight:600;font-size:12.5px;cursor:pointer}
+.bai-btn.on,.bai-btn:hover{background:var(--fbs-blue,#0e9bd8);color:#fff}
+.bai-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
+.bai.open .bai-wrap{grid-template-columns:minmax(0,1fr) minmax(340px,440px)}
+.bai-ed{min-width:0}
+.bai-chat{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);display:flex;flex-direction:column;max-height:78vh;position:sticky;top:12px;min-width:0}
+.bai-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px}
+.bai-h .faint{font-size:12px}
+.bai-msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:13px;min-height:200px}
+.bai-hint{color:var(--ink-2);background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;line-height:1.5}
+.bai-me{align-self:flex-end;background:var(--fbs-blue,#0e9bd8);color:#fff;border-radius:12px 12px 2px 12px;padding:8px 11px;max-width:90%;white-space:pre-wrap;overflow-wrap:anywhere}
+.bai-me small{display:block;opacity:.75;font-size:11px;margin-top:4px}
+.bai-files{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.bai-files span{background:rgba(255,255,255,.2);border-radius:6px;padding:2px 7px;font-size:12px}
+.bai-ai{align-self:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:12px 12px 12px 2px;padding:9px 11px;max-width:96%;white-space:pre-wrap;overflow-wrap:anywhere}
+.bai-ai.busy{color:var(--ink-3);font-style:italic}
+.bai-prop{white-space:normal;border:1px solid #cfe7f4;background:#f3fafe;border-radius:10px;padding:9px 11px;margin-top:8px}
+.bai-prop.applied{border-color:#bfe3c9;background:#f1faf3}
+.bai-prop.dismissed{opacity:.6}
+.bai-prop .t{display:block;margin-bottom:4px}
+.bai-line{display:flex;gap:6px;align-items:baseline;padding:2px 0;font-size:12.5px}
+.bai-line .op{width:12px;font-weight:700;flex:none;text-align:center}
+.bai-line .op.add{color:#1a7f37}.bai-line .op.chg{color:#b26b00}.bai-line .op.del{color:#c0392b}
+.bai-line .what{color:var(--ink-3);width:82px;flex:none}
+.bai-line .txt{min-width:0}
+.bai-line .dot{display:inline-block;width:11px;height:11px;border-radius:3px;border:1px solid rgba(0,0,0,.2);margin-right:5px;vertical-align:-1px}
+.bai-acts{display:flex;gap:8px;margin-top:8px}
+.bai-q{white-space:normal;background:#fff7e6;border:1px solid #f3d27a;border-radius:8px;padding:6px 9px;margin-top:8px}
+.bai-staged{display:flex;flex-wrap:wrap;gap:6px;padding:6px 12px 0;font-size:12px}
+.bai-staged span{display:inline-flex;gap:4px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:2px 4px 2px 7px}
+.bai-staged button{border:0;background:none;cursor:pointer;color:var(--ink-3)}
+.bai-in{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border-top:1px solid var(--line)}
+.bai-in textarea{flex:1;min-width:0;resize:vertical}
+.bai-clip{border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--surface);cursor:pointer;line-height:1}
+@media (max-width:1000px){.bai.open .bai-wrap{grid-template-columns:minmax(0,1fr)}.bai-chat{position:static;max-height:none}}
+.mk-brand-rules{font-size:12.5px;background:#fff8e1;border:1px solid #f3d27a;border-radius:8px;padding:7px 10px}
+.mk-brand-rules ul{margin:4px 0 0;padding-left:18px}
