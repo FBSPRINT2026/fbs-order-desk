@@ -9342,11 +9342,11 @@ fieldset.bs-lock{border:0;padding:0;margin:0;min-width:0}
 
 /* Shop Tools as small icons with their name on hover, like Illustrator's toolbar (Oct 16, Nick) */
 @media (min-width:821px){
-.side:not(.mini) .nav-tools{display:flex;flex-wrap:wrap;gap:2px;padding:2px 0 0}
-.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc){all:unset;box-sizing:border-box;width:36px;height:36px;display:flex;align-items:center;justify-content:center;position:relative;border-radius:9px;cursor:pointer;color:var(--side-ink)}
+.side:not(.mini) .nav-tools{display:flex;flex-wrap:wrap;gap:1px;padding:2px 0 0 2px}
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc){all:unset;box-sizing:border-box;width:32px;height:32px;display:flex;align-items:center;justify-content:center;position:relative;border-radius:9px;cursor:pointer;color:var(--side-ink)}
 .side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc):hover{background:rgba(255,255,255,.08);color:#fff}
 .side:not(.mini) .nav-tools a.on{background:var(--accent);color:#fff}
-.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc) svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc) svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc) :is(.lbl-t,.lbl-s){display:none}
 .side:not(.mini) .nav-tools a svg{width:19px;height:19px}
 .side:not(.mini) .nav-tools .badge{position:absolute;top:1px;right:1px;margin:0;font-size:9.5px;padding:0 4px}
