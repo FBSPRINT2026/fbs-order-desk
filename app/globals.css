@@ -9648,3 +9648,22 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
   .ibx2-item.ol{height:46px!important}
 }
 @media (min-width:761px) and (max-width:1300px){.ibx2-item.ol .ibx2-item-s{font-size:11.5px!important}}
+/* Delete order: the art that goes with it (Oct 17) */
+.dla-bg{position:fixed;inset:0;z-index:3000;background:rgba(15,23,42,.42);display:grid;place-items:center;padding:16px}
+.dla{background:var(--surface);border-radius:14px;box-shadow:0 20px 50px rgba(15,23,42,.28);width:min(640px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:18px 20px 16px}
+.dla h3{margin:0 0 4px;font-size:18px}
+.dla-sub{margin:0 0 12px;color:var(--ink-2);font-size:13.5px}
+.dla-sec{margin-bottom:12px}
+.dla-h{font-size:12px;font-weight:700;color:var(--ink-3);margin-bottom:6px}
+.dla-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
+.dla-it{position:relative;display:flex;flex-direction:column;gap:3px;border:1px solid var(--line);border-radius:10px;padding:6px;cursor:pointer;background:var(--surface)}
+.dla-it.on{border-color:var(--danger);box-shadow:inset 0 0 0 1px var(--danger)}
+.dla-it.off{opacity:.55;cursor:default}
+.dla-it input{position:absolute;top:8px;left:8px;margin:0;accent-color:var(--danger)}
+.dla-pic{aspect-ratio:1;border-radius:7px;background:#f4f5f7;display:grid;place-items:center;overflow:hidden}
+.dla-pic img{max-width:88%;max-height:88%;object-fit:contain}
+.dla-t{font-size:12px;font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.dla-it small{font-size:11px;color:var(--ink-3)}
+.dla-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.draft-note{display:flex;align-items:center;gap:12px;justify-content:space-between;border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--line));background:color-mix(in srgb,var(--accent) 6%,var(--surface));border-radius:10px;padding:8px 12px;font-size:13px;margin:0 0 10px}
+.draft-note .btn{flex:none}

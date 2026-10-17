@@ -17,7 +17,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   const admin = createAdminClient();
   const [{ data: g }, { data: d }, { data: m }, { data: gd }] = await Promise.all([
     admin.from("garments").select("*").order("style"),
-    ctx.db.from("designs").select("*").eq("customer_id", order.customer_id).is("archived_at", null).order("number", { ascending: false }),
+    ctx.db.from("designs").select("*").eq("customer_id", order.customer_id).is("archived_at", null).eq("draft", false).order("number", { ascending: false }),
     ctx.db.from("messages").select("*").eq("order_id", id).order("created_at"),
     ctx.db.from("order_goods").select("supplier, supplier_po, ship_date").eq("order_id", id).maybeSingle(),
   ]);
@@ -31,7 +31,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
     withPv.forEach((x, i) => { if (sg?.[i]?.signedUrl) urls[x.id] = sg[i].signedUrl!; });
   }
   // mockups: ones already attached to this order, and the customer's saved ones they can attach
-  const { data: saved } = await admin.from("mockups").select("id,title,file_path,created_at").eq("customer_id", order.customer_id).is("archived_at", null).order("created_at", { ascending: false }).limit(40);
+  const { data: saved } = await admin.from("mockups").select("id,title,file_path,created_at").eq("customer_id", order.customer_id).is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }).limit(40);
   const savedList = (saved || []) as { id: string; title: string; file_path: string; created_at: string }[];
   const paths = [...new Set([...order.groups.flatMap((g) => (g.customerMockups || []).map((m) => m.path)), ...savedList.map((m) => m.file_path)])];
   const mockupUrls: Record<string, string> = {};

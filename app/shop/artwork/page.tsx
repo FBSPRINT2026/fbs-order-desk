@@ -33,9 +33,9 @@ export default function ArtworkPage() {
 
   async function load() {
     const [d, c, m] = await Promise.all([
-      sb.from("designs").select("*").order("number", { ascending: false }),
+      sb.from("designs").select("*").eq("draft", false).order("number", { ascending: false }),
       sb.from("customers").select("*"),
-      sb.from("mockups").select("id,title,file_path,customer_id,order_id,created_at,starred,design_ids").is("archived_at", null).order("created_at", { ascending: false }),
+      sb.from("mockups").select("id,title,file_path,customer_id,order_id,created_at,starred,design_ids").is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
     ]);
     const list = (d.data || []) as Design[];
     const ml = (m.data || []) as Mock[];

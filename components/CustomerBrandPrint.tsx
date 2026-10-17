@@ -21,7 +21,7 @@ export default function CustomerBrandPrint({ customerId }: { customerId: string 
   const [state, setState] = useState("");
   useEffect(() => {
     sb.from("customers").select("brand_print").eq("id", customerId).maybeSingle().then(({ data }) => setBp(((data?.brand_print || {}) as BrandPrint)));
-    sb.from("designs").select("id, name, number").eq("customer_id", customerId).is("archived_at", null).order("number", { ascending: false }).limit(200)
+    sb.from("designs").select("id, name, number").eq("customer_id", customerId).is("archived_at", null).eq("draft", false).order("number", { ascending: false }).limit(200)
       .then(({ data }) => setLogos((data || []) as { id: string; name: string; number: number }[]));
   }, [customerId]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!bp) return null;

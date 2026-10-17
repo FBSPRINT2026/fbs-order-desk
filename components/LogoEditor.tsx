@@ -178,7 +178,7 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
       const onShirts = outBgs;
       // only the backgrounds changed: keep the file as it is
       if (!Object.values(acts).some((a) => a.kind !== "keep")) {
-        const { data, error } = await sb.from("designs").update({ specs: { ...((d.specs || {}) as object), onShirts } }).eq("id", d.id).select("*").single();
+        const { data, error } = await sb.from("designs").update({ specs: { ...((d.specs || {}) as object), onShirts }, draft: false }).eq("id", d.id).select("*").single();
         if (error) throw new Error(error.message);
         setBusy(""); onSaved(data as Design); return;
       }
@@ -226,7 +226,8 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
         original: (d.specs as { original?: unknown } | null)?.original || { path: d.file_path, name: d.file_name, type: d.file_type, preview: d.preview_path } };
       const patch = { file_path: fp, file_name: fileName, file_type: fileType, preview_path: pp, width_px: w, height_px: h, art_box: null, print_plan: null,
         colors: Math.max(1, inks.length + kept), ...(inks.length && !kept ? { inks: inks.join(", ") } : {}), specs };
-      const { data, error } = await sb.from("designs").update(patch).eq("id", d.id).select("*").single();
+      // saved in Edit logo: it's real art now, in the customer's library (Oct 17: draft art)
+      const { data, error } = await sb.from("designs").update({ ...patch, draft: false }).eq("id", d.id).select("*").single();
       if (error) throw new Error(error.message);
       setBusy("");
       onSaved(data as Design);

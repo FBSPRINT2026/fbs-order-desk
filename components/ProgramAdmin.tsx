@@ -26,7 +26,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
   const load = useCallback(async () => {
     const [{ data: ps }, { data: ds }] = await Promise.all([
       sb.from("programs").select("*").eq("customer_id", customerId).order("created_at").limit(1),
-      sb.from("designs").select("id, name").eq("customer_id", customerId).is("archived_at", null).order("number", { ascending: false }),
+      sb.from("designs").select("id, name").eq("customer_id", customerId).is("archived_at", null).eq("draft", false).order("number", { ascending: false }),
     ]);
     const p = ((ps || [])[0] || null) as Program | null;
     setProgram(p); setDesigns((ds || []) as never);

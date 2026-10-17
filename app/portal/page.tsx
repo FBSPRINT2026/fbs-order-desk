@@ -54,8 +54,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const [p, pr, d, m, msg] = await Promise.all([
       ids.length ? ctx.db.from("payments").select("*").in("order_id", ids).order("paid_on", { ascending: false }) : Promise.resolve({ data: [] }),
       ids.length ? ctx.db.from("proofs").select("id, order_id, status").in("order_id", ids).is("archived_at", null) : Promise.resolve({ data: [] }),
-      ctx.db.from("designs").select("*").in("customer_id", ctx.customerIds).order("number", { ascending: false }),
-      ctx.db.from("mockups").select("*").in("customer_id", ctx.customerIds).is("archived_at", null).order("created_at", { ascending: false }),
+      ctx.db.from("designs").select("*").in("customer_id", ctx.customerIds).eq("draft", false).order("number", { ascending: false }),
+      ctx.db.from("mockups").select("*").in("customer_id", ctx.customerIds).is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
       ctx.db.from("messages").select("*").or(`customer_id.in.(${ctx.customerIds.join(",")})${ids.length ? `,order_id.in.(${ids.join(",")})` : ""}`).order("created_at"),
     ]);
     const pays = (p.data || []) as { id: string; order_id: string; amount: number; method: string; paid_on: string | null; created_at: string }[];

@@ -215,7 +215,7 @@ export async function portalCatalog() {
 export async function myLogos() {
   try {
     const { admin, cust } = await me();
-    const { data } = await admin.from("designs").select("*").eq("customer_id", cust.id).is("archived_at", null).order("number", { ascending: false });
+    const { data } = await admin.from("designs").select("*").eq("customer_id", cust.id).is("archived_at", null).eq("draft", false).order("number", { ascending: false });
     const list = (data || []) as { id: string; preview_path: string }[];
     const withPv = list.filter((d) => d.preview_path);
     const urls: Record<string, string> = {};

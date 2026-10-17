@@ -253,7 +253,7 @@ export async function storeDesigns(storeId: string): Promise<R<{ id: string; num
   try {
     const a = await merchAccess();
     const st = await storeFor(a, storeId);
-    let q = a.admin.from("designs").select("id, number, name, preview_path, width_px, height_px, colors, inks, starred, customer_id, archived_at").is("archived_at", null).order("starred", { ascending: false }).order("created_at", { ascending: false }).limit(200);
+    let q = a.admin.from("designs").select("id, number, name, preview_path, width_px, height_px, colors, inks, starred, customer_id, archived_at").is("archived_at", null).eq("draft", false).order("starred", { ascending: false }).order("created_at", { ascending: false }).limit(200);
     q = st.customer_id ? q.eq("customer_id", st.customer_id) : q;
     const { data } = await q;
     const ds = (data || []) as { id: string; number: number; name: string; preview_path: string; width_px: number | null; height_px: number | null; colors: number; inks: string }[];

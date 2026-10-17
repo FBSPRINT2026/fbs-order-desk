@@ -20,7 +20,7 @@ function imageSize(f: File): Promise<{ w: number; h: number } | null> {
 const safe = (n: string) => n.replace(/[^\w.\-]+/g, "_");
 
 /** Upload customer art as a new design (original file + preview) and return the saved record. */
-export async function uploadDesign(sb: SupabaseClient, opts: { file: File; preview?: File | null; customer_id: string | null; name?: string; colors?: number; inks?: string; notes?: string; method?: string; by?: string }): Promise<Design> {
+export async function uploadDesign(sb: SupabaseClient, opts: { file: File; preview?: File | null; customer_id: string | null; name?: string; colors?: number; inks?: string; notes?: string; method?: string; by?: string; /** made by the portal for an order: kept out of the customer's library until the order is sent or approved (migration 166) */ draft?: boolean }): Promise<Design> {
   // a see-through logo with empty space around it is saved cropped to the art, so it scales to its real print size
   if (!opts.preview) { const cropped = await cropFileToArt(opts.file); if (cropped) opts = { ...opts, file: cropped }; }
   const key = crypto.randomUUID();
@@ -60,7 +60,7 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
     customer_id: opts.customer_id, name: (opts.name || opts.file.name.replace(/\.[^.]+$/, "")).trim(),
     file_path: orig, file_name: opts.file.name, file_type: opts.file.type || "", preview_path,
     width_px: dims?.w || null, height_px: dims?.h || null, method: opts.method || "screen",
-    colors: opts.colors || 1, inks: opts.inks || "", notes: opts.notes || "", created_by: opts.by || "",
+    colors: opts.colors || 1, inks: opts.inks || "", notes: opts.notes || "", created_by: opts.by || "", draft: !!opts.draft,
     ...(distressed ? { specs: { distressed: true, distressLayer: true, ...(cleanPreview ? { cleanPreview } : {}) } } : {}),
   }).select("*").single();
   if (error) throw new Error(error.message);

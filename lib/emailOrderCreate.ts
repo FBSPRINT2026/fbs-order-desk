@@ -99,7 +99,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
       const { data: des } = await admin.from("designs").insert({
         customer_id: custId, name: (d.nickname || name.replace(/\.[^.]+$/, "")).slice(0, 120), file_path: to, file_name: name, file_type: f?.type || "",
         preview_path: pvPath, width_px: wh?.w || null, height_px: wh?.h || null, method: im.method || "screen",
-        colors: im.colors || 1, inks: im.inks || "", notes: a ? `From ${a.subject ? `the email "${String(a.subject).slice(0, 80)}"` : "an email"}` : input.via ? `From ${input.via}` : "From an older job", created_by: by,
+        draft: true, colors: im.colors || 1, inks: im.inks || "", notes: a ? `From ${a.subject ? `the email "${String(a.subject).slice(0, 80)}"` : "an email"}` : input.via ? `From ${input.via}` : "From an older job", created_by: by,
       }).select("id").single();
       if (des) madeFor.set(path, des.id as string);
     }

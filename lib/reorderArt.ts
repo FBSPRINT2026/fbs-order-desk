@@ -35,7 +35,7 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
       if (!blob || !shape) continue;
       const im = open.shift()!, job = f.name.replace(/ mockup\.\w+$/i, "");
       const file = new File([blob], `${y.nickname || "Art"}.${(blob.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: blob.type || "image/png" });
-      const dsg = await uploadDesign(sb, { file, customer_id: o.customerId, name: y.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `The original art from ${job}`, method: im.method });
+      const dsg = await uploadDesign(sb, { draft: true, file, customer_id: o.customerId, name: y.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `The original art from ${job}`, method: im.method });
       im.design_id = dsg.id;
       im.notes = [im.notes, `Art: the original from ${job}`].filter(Boolean).join(". ").slice(0, 300);
       im.confirm = { size: true, ink: true, why: `Reorder of ${job}: the art is the original; no size or ink on file` };
@@ -67,7 +67,7 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
         const art = await artFromArtPdf(buf, y.nickname || "Art").catch(() => null);
         if (!art) continue;
         const im = open.shift()!, job = f.name.replace(/ mockup\.\w+$/i, "");
-        const dsg = await uploadDesign(sb, { file: art.file, customer_id: o.customerId, name: y.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `The original art from ${job}`, method: im.method });
+        const dsg = await uploadDesign(sb, { draft: true, file: art.file, customer_id: o.customerId, name: y.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `The original art from ${job}`, method: im.method });
         im.design_id = dsg.id;
         im.notes = [im.notes, `Art: the original from ${job}`].filter(Boolean).join(". ").slice(0, 300);
         im.confirm = { size: true, ink: true, why: `Reorder of ${job}: the art is the original; no size or ink on file` };
@@ -88,7 +88,7 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
       const pc = got.filter((p) => !used.has(p) && p.side === side).sort((a, b) => b.widthIn - a.widthIn)[0];
       if (!pc) continue;
       used.add(pc);
-      const dsg = await uploadDesign(sb, { file: pc.file, customer_id: o.customerId, name: `${y.nickname || "Art"} ${side}`, colors: im.colors || 1, inks: "", notes: `Pulled from ${from}`, method: im.method });
+      const dsg = await uploadDesign(sb, { draft: true, file: pc.file, customer_id: o.customerId, name: `${y.nickname || "Art"} ${side}`, colors: im.colors || 1, inks: "", notes: `Pulled from ${from}`, method: im.method });
       im.design_id = dsg.id;
       im.size = `${pc.widthIn}" wide`;
       im.location = side === "back" ? (pc.widthIn <= 4.5 && pc.dropIn < 3.5 ? "Upper Back (Yoke)" : pc.widthIn <= 8 ? "Medium Back" : "Full Back")
@@ -146,7 +146,7 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
       for (const { g, im } of bare.sort((a, b) => Number(/back|yoke/i.test(a.im.location)) - Number(/back|yoke/i.test(b.im.location)))) {
         const p = left.shift(); if (!p?.file) break;
         hit = true;
-        const dsg = await uploadDesign(sb, { file: p.file, customer_id: o.customerId, name: `${y.nickname || "Art"} (from film)`, colors: im.colors || 1, inks: im.inks || "", notes: `From the film ${f.name}`, method: im.method });
+        const dsg = await uploadDesign(sb, { draft: true, file: p.file, customer_id: o.customerId, name: `${y.nickname || "Art"} (from film)`, colors: im.colors || 1, inks: im.inks || "", notes: `From the film ${f.name}`, method: im.method });
         im.design_id = dsg.id;
         im.size = `${Math.round(p.widthIn * 4) / 4}" wide`; im.sizeFrom = "film";
         // the location by size, judged as on an adult tee (a 5" print on a onesie is its full front)

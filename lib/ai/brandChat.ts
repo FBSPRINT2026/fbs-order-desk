@@ -39,7 +39,7 @@ async function saveThread(admin: SupabaseClient, customerId: string, title: stri
 async function current(admin: SupabaseClient, customerId: string) {
   const [{ data: c }, { data: ds }] = await Promise.all([
     admin.from("customers").select("id, name, company, brand_colors, brand_print, style_guides").eq("id", customerId).maybeSingle(),
-    admin.from("designs").select("id, number, name, inks, colors, specs, width_px, height_px, preview_path, starred").eq("customer_id", customerId).is("archived_at", null).order("starred", { ascending: false }).order("number", { ascending: false }).limit(60),
+    admin.from("designs").select("id, number, name, inks, colors, specs, width_px, height_px, preview_path, starred").eq("customer_id", customerId).is("archived_at", null).eq("draft", false).order("starred", { ascending: false }).order("number", { ascending: false }).limit(60),
   ]);
   if (!c) return null;
   const designs = (ds || []) as (Design & { starred?: boolean })[];

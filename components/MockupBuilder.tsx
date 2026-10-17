@@ -1336,6 +1336,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // this group's earlier mockups: archived once the new ones are saved, so only the current version shows
       // (Oct 15, Nick: "It should only be the one active version... not a history of it along the way")
       const newMockups: string[] = [];
+      // on an order that's still a quote, a mockup is a draft: on the order, not in the customer's library until the
+      // order is sent or approved (Oct 17, Nick; the database makes it real then: migration 166)
+      const draft = orderId ? ["quote", "request"].includes(String((await sb.from("orders").select("status").eq("id", orderId).maybeSingle()).data?.status || "")) : false;
       const before = orderId && groupId ? ((await sb.from("mockups").select("id, proof_id").eq("order_id", orderId).eq("group_id", groupId).is("archived_at", null)).data || []) as { id: string; proof_id: string | null }[] : [];
       for (const l of lines.filter((z) => z.style || z.color)) {
         const blob = await render(l);
@@ -1344,7 +1347,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const up = await sb.storage.from("proofs").upload(path, blob, { contentType: "image/png" });
         if (up.error) throw new Error(up.error.message);
         // a save is a mockup, not a proof (Oct 16, Nick): proofs are only the versions sent to the customer (lib/proofs.ts)
-        const { data: nm } = await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, group_id: groupId || null, proof_id: null, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "" }).select("id").single();
+        const { data: nm } = await sb.from("mockups").insert({ customer_id: customerId, order_id: orderId || null, group_id: groupId || null, proof_id: null, title, file_path: path, design_ids: [...new Set(imprints.map((i) => i.design_id).filter(Boolean))], created_by: u.user?.email || "", draft }).select("id").single();
         if (nm?.id) newMockups.push(nm.id);
         // a small photos-only picture for the order screen and the customer's artwork lists
         const thumb = await render(l, true);

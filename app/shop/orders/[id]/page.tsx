@@ -42,6 +42,7 @@ import { programCard } from "@/app/shop/program-pricing-actions";
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
+import { archiveOrderArt, draftArtCount, keepOrderArt, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -501,9 +502,37 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     router.push(`/shop/orders/${data.id}`);
   }
 
+  // Delete asks first, showing the art that goes with the order (Oct 17, Nick: "when we delete an order can we delete
+  // the art that goes with it"): the drafts made for it and its mockups are ticked, library logos are offered unticked,
+  // and a logo another order uses is never taken. Taken off = archived (kept, can be put back).
+  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean }>(null);
   async function del() {
     if (!o) return;
-    if (armed !== "del") return arm("del");
+    setDelAsk({ loading: true, logos: [], mockups: [], pick: new Set() });
+    const r = await orderArtForDelete(o.id);
+    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set() });
+    const pick = new Set<string>([...r.logos.filter((l) => l.draft && !l.elsewhere).map((l) => l.id), ...r.mockups.map((m) => m.id)]);
+    setDelAsk({ logos: r.logos, mockups: r.mockups, pick });
+  }
+  async function confirmDel() {
+    if (!o || !delAsk) return;
+    setDelAsk({ ...delAsk, busy: true });
+    const lg = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).map((l) => l.id), mk = delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).map((m) => m.id);
+    if (lg.length || mk.length) { const r = await archiveOrderArt(o.id, lg, mk); if (!r.ok) { setDelAsk({ ...delAsk, busy: false, error: r.error }); return; } }
+    await reallyDel();
+  }
+  // this order's art that's still a draft (not in the customer's library until the order goes out)
+  const [drafts, setDrafts] = useState({ logos: 0, mockups: 0 });
+  useEffect(() => { if (o?.id) draftArtCount(o.id).then((r) => setDrafts({ logos: r.logos, mockups: r.mockups })); }, [o?.id, o?.status]);
+  async function keepDrafts() {
+    if (!o) return;
+    const r = await keepOrderArt(o.id);
+    if (!r.ok) return say(r.error || "Couldn't keep the art.");
+    setDrafts({ logos: 0, mockups: 0 });
+    say("The art is in the customer's library now.");
+  }
+  async function reallyDel() {
+    if (!o) return;
     if (timer.current) clearTimeout(timer.current);
     latest.current = null;
     const paths = [...proofs.map((p) => p.file_path), ...art.map((a) => a.file_path)];
@@ -663,12 +692,53 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer">Box labels</a>
               <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)">Phone menu</a>
               <button type="button" onClick={duplicate}>Duplicate</button>
-              <button type="button" className={"danger" + (armed === "del" ? " armed" : "")} onClick={del}>{armed === "del" ? "Click again to delete" : "Delete order"}</button>
+              <button type="button" className="danger" onClick={del}>Delete order</button>
             </div>
           </details>
         </div>
       </div>
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
+      {(drafts.logos > 0 || drafts.mockups > 0) && ["quote", "request"].includes(o.status) && (
+        <div className="draft-note" role="note">
+          <span><b>Draft art.</b> {[drafts.logos ? `${drafts.logos} logo${drafts.logos === 1 ? "" : "s"}` : "", drafts.mockups ? `${drafts.mockups} mockup${drafts.mockups === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ")} made for this order {drafts.logos + drafts.mockups === 1 ? "isn't" : "aren't"} in the customer&apos;s library yet. {drafts.logos + drafts.mockups === 1 ? "It joins" : "They join"} when the order is sent or approved, and go away if it&apos;s deleted.</span>
+          <button type="button" className="btn sm" onClick={keepDrafts}>Keep in their library</button>
+        </div>
+      )}
+      {delAsk && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Delete order" onClick={() => !delAsk.busy && setDelAsk(null)} onKeyDown={(e) => { if (e.key === "Escape" && !delAsk.busy) setDelAsk(null); }}>
+          <div className="dla" onClick={(e) => e.stopPropagation()}>
+            <h3>Delete order #{o.number}?</h3>
+            {delAsk.loading ? <p className="faint">Looking at the order&apos;s art…</p> : delAsk.error && !delAsk.logos.length && !delAsk.mockups.length ? <p className="err">{delAsk.error}</p> : (
+              <>
+                {delAsk.logos.length + delAsk.mockups.length > 0 ? <p className="dla-sub">Also take off the art that goes with it? Ticked items are archived (they can be put back).</p> : <p className="dla-sub">This order has no art to take off.</p>}
+                {[{ t: "Logos", list: delAsk.logos }, { t: "Mockups", list: delAsk.mockups }].filter((x) => x.list.length).map((x) => (
+                  <div key={x.t} className="dla-sec">
+                    <div className="dla-h">{x.t}</div>
+                    <div className="dla-grid">
+                      {x.list.map((a) => {
+                        const on = delAsk.pick.has(a.id) && !a.elsewhere;
+                        return (
+                          <label key={a.id} className={"dla-it" + (on ? " on" : "") + (a.elsewhere ? " off" : "")} title={a.elsewhere ? "Used on another order: it stays" : a.label}>
+                            <input type="checkbox" checked={on} disabled={!!a.elsewhere || delAsk.busy} onChange={() => setDelAsk((d) => { if (!d) return d; const p = new Set(d.pick); if (p.has(a.id)) p.delete(a.id); else p.add(a.id); return { ...d, pick: p }; })} />
+                            <span className="dla-pic">{a.url ? <img src={a.url} alt="" /> : null}</span>
+                            <span className="dla-t">{a.label}</span>
+                            <small>{a.elsewhere ? "On another order: stays" : a.draft ? "Made for this order" : "In their library"}</small>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {delAsk.error && <p className="err">{delAsk.error}</p>}
+              </>
+            )}
+            <div className="dla-acts">
+              <button type="button" className="btn ghost" disabled={delAsk.busy} onClick={() => setDelAsk(null)}>Cancel</button>
+              <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.busy ? "Deleting…" : (() => { const n = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).length + delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).length; return n ? `Delete order and ${n} item${n === 1 ? "" : "s"}` : "Delete order"; })()}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {o.status === "request" && (
         <div className="callout req-callout">
           <h2>Order request from the customer{o.submitted_at ? ` · sent ${new Date(o.submitted_at).toLocaleDateString()}` : " · still being built by the customer"}</h2>
