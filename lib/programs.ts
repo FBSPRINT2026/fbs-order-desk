@@ -53,6 +53,9 @@ export type RateCard = {
   screenFee?: number | null;
   /** no setup (screens, digitizing, PMS…) on any job (Furry Feline: they supply everything and pay a flat price) */
   noSetupEver?: boolean;
+  /** finishing that's part of the price (Oct 17, Nick: Peticolas's price includes roll & rubber band and printing the
+   *  neck labels): no charge for these on Program; any other finishing on the job is added on top */
+  included?: string[];
   /** parts of the deal the card can't hold yet, in plain words: shown on every order set to Program */
   extras?: string[];
   /** the deal in the account manager's words, newest first (kept from the Program tab's AI box) */
@@ -197,3 +200,10 @@ export function suggestDesignPrice(g: Group, d: DesignCtx, s: Settings): PriceSu
   if (Math.abs(price - ref.price) < 0.01) return null;
   return { itemId: orig.id, name: orig.name, qty, refQty: ref.min, refPrice: ref.price, retailRef: r2(a), retailNow: r2(b), price: r2(price), above: !!dp.item };
 }
+
+/** finishing that's often part of a program price (the shop's own finishing list is offered too) */
+export const COMMON_INCLUDED = ["Roll & rubber band", "Neck label print", "Fold & bag", "Hang tag", "Remove tag & relabel", "Individual poly bag", "Sticker in the bag"];
+const finNorm = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
+/** is this finishing item part of the card's price? */
+export const finishingIncluded = (card: Pick<RateCard, "included"> | null | undefined, f: { id?: string; name: string }) =>
+  !!card?.included?.some((x) => finNorm(x) === finNorm(f.name) || (!!f.id && finNorm(x) === finNorm(f.id)));

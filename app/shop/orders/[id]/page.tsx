@@ -37,7 +37,7 @@ import Timeline from "@/components/Timeline";
 import { useCan, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
 import { PAY_TERMS, SIZES, isShipFee, lineQty, supplierSizeUp } from "@/lib/pricing";
-import { BIG_SIZES, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
+import { BIG_SIZES, finishingIncluded, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
 import { programCard } from "@/app/shop/program-pricing-actions";
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 import ShipQuote from "@/components/ShipQuote";
@@ -319,12 +319,22 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!o || ["production", "ready", "completed"].includes(o.status)) return;
     const on = !!o.use_program && !!prog;
     const findGm = (l: GLine) => catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || c.brand.toLowerCase() === l.brand.toLowerCase()));
+    const finishingExtra = (d: Order, g: Group) => {
+      const pl = priceList(settings, d.price_type || "retail");
+      const list = [...(pl.finishing?.length ? pl.finishing : settings.finishing), ...(pl.embExtras || [])];
+      const fs = (g.finishing || []).map((id) => list.find((f) => f.id === id)).filter((f): f is NonNullable<typeof f> => !!f && !finishingIncluded(prog!.card, f));
+      return fs.length ? { each: fs.reduce((a, f) => a + (+f.price || 0), 0), names: fs.map((f) => f.name).join(", ") } : null;
+    };
     const apply = (d: Order) => {
       const plans = on ? d.groups.map((g) => programForGroup(g, prog!.card, prog!.baseCost, designCtx(d, g))) : [];
       d.groups.forEach((g, gi) => g.lines.forEach((l) => {
         if (l.progOff) { if (l.priceOverride == null) delete l.progOff; else return; }
         if (l.prog && l.priceOverride !== l.prog.each) { l.progOff = true; delete l.prog; return; }
-        const want = on ? plans[gi]?.lines[l.id] || null : null;
+        const want0 = on ? plans[gi]?.lines[l.id] || null : null;
+        // finishing on this job that isn't part of their program price is added on top (Oct 17: the card says what's
+        // included, e.g. Peticolas's roll & rubber band and neck labels); a design's flat price is everything in
+        const extra = want0 && !plans[gi]?.flat ? finishingExtra(d, g) : null;
+        const want = want0 && extra && extra.each ? { each: Math.round((want0.each + extra.each) * 100) / 100, note: `${want0.note} + ${extra.names} ${extra.each.toFixed(2)} (not in the program)` } : want0;
         if (want) {
           const up: GLine["sizeUp"] = {};
           // a design's flat price is everything in: no 2XL+ charge; else the card's

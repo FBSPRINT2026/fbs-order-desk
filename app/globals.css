@@ -9694,3 +9694,8 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .prc-terms li::before{content:"";position:absolute;left:2px;top:5px;width:9px;height:9px;border-radius:50%;background:var(--fbs-fade,var(--accent))}
 .prc-h{font-size:15px;margin:4px 0 10px}
 @media (max-width:760px){.prc{grid-template-columns:1fr;padding:12px}}
+.rc-inc{align-items:flex-start}
+.rc-inc>span{font-size:13px;font-weight:600;color:var(--ink-2);padding-top:6px;white-space:nowrap}
+.rc-inc-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.rc-inc-chips .chip.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.prc-off{margin:0 0 12px}

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { applyProgramProposal, programAssist, type ProgramProposal } from "@/app/shop/program-pricing-actions";
 import { LOCATIONS } from "@/lib/pricing";
-import { BIG_SIZES, BACKS, FRONTS, cardHasPrices, newRateCard, PROGRAM_SIZES, tiersOf, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
+import { BIG_SIZES, BACKS, COMMON_INCLUDED, FRONTS, cardHasPrices, newRateCard, PROGRAM_SIZES, tiersOf, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
 
 const blankItem = (programId: string, position: number): Omit<ProgramItem, "id"> => ({ program_id: programId, name: "", style: "", brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"], price: 0, min_qty: 0, imprints: [{ location: "Full Front", method: "screen", colors: 1, inks: "", size: "", notes: "" }], design_id: null, image_path: "", notes: "", active: true, position });
 
@@ -194,6 +194,13 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
   const money2 = (v: string) => Math.round((+v.replace(/[^\d.]/g, "") || 0) * 100) / 100;
   const set = (patch: Partial<RateCard>) => save({ ...c, ...patch });
   const gridOn = c.gridOn ?? cardHasPrices(c);
+  // finishing included in the price: the common ones and the shop's own finishing list, plus anything typed
+  const [shopFin, setShopFin] = useState<string[]>([]);
+  useEffect(() => { sb.from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setShopFin(((data?.data as { finishing?: { name: string }[] } | null)?.finishing || []).map((f) => f.name).filter(Boolean))); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const inc = c.included || [];
+  const finChoices = [...new Set([...COMMON_INCLUDED, ...shopFin, ...inc])];
+  const toggleInc = (x: string) => set({ included: inc.includes(x) ? inc.filter((y) => y !== x) : [...inc, x] });
+  const [incDraft, setIncDraft] = useState("");
   const ex = c.garmentIncluded && cost != null ? c.prices["1/1"] || Object.values(c.prices).find((x) => x > 0) : null;
   return (
     <>
@@ -228,6 +235,13 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
       <div className="pga-row rc-up">
         <span>Big sizes, per piece</span>
         {BIG_SIZES.map((z) => <label key={z}>{z}<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={c.sizeUp?.[z] != null ? String(c.sizeUp[z]) : ""} onBlur={(e) => set({ sizeUp: { ...c.sizeUp, [z]: money2(e.target.value) } })} placeholder="0.00" /></div></label>)}
+      </div>
+      <div className="pga-row rc-inc">
+        <span>Finishing included in the price</span>
+        <div className="rc-inc-chips">
+          {finChoices.map((x) => <button key={x} type="button" className={"chip" + (inc.includes(x) ? " on" : "")} aria-pressed={inc.includes(x)} onClick={() => toggleInc(x)}>{inc.includes(x) ? "✓ " : ""}{x}</button>)}
+          <input type="text" value={incDraft} placeholder="Add another…" aria-label="Add included finishing" onChange={(e) => setIncDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && incDraft.trim()) { e.preventDefault(); if (!inc.includes(incDraft.trim())) set({ included: [...inc, incDraft.trim()] }); setIncDraft(""); } }} style={{ width: 150 }} />
+        </div>
       </div>
       <div className="rc-grid-wrap">
         <table className="rc-grid">
