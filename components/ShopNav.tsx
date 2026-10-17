@@ -299,14 +299,11 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         {realRole === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
         <SupportButton email={email} />
         {realRole === "owner" && link(["/shop/support", "support", "Support"])}
-        {link(["/shop/settings", "settings", "Settings"])}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} data-tip="Add a shortcut" aria-label="Add a shortcut: your own quick links"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /><path d="M12 7v6M9 10h6" /></svg><span className="lbl-t">Add a shortcut</span></button>}</nav>
-      </div>
-      <div className="side-user">
-        {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
-        {(() => { const full = (people.find((p) => p.email === email)?.name || firstName || email.split("@")[0]).trim(); const ini = full.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"; return <span className="side-who" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}>{ini}</span>; })()}
-        <div className="side-user-r">
-          <form action="/auth/signout" method="post"><button className="side-out" type="submit" title="Sign out"><svg viewBox="0 0 24 24" aria-hidden><path d="M12 3v8" /><path d="M6.3 6.8a8 8 0 1 0 11.4 0" /></svg>Sign out</button></form>
-          {realRole === "owner" && (
+        {link(["/shop/settings", "settings", "Settings"])}
+        {/* View as: binoculars (Oct 16, Nick); the list opens from the icon */}
+        {realRole === "owner" && (
+          <span className={"nav-viewas" + (viewAs ? " on" : "")} data-tip={viewAs ? "Viewing as someone else: pick My view to go back" : "View as"}>
+            <svg viewBox="0 0 24 24" aria-hidden><circle cx="6.5" cy="16" r="3.5" /><circle cx="17.5" cy="16" r="3.5" /><path d="M3.3 14.6 5 7a2 2 0 0 1 2-1.6h1A2 2 0 0 1 10 7.4v6.4" /><path d="M20.7 14.6 19 7a2 2 0 0 0-2-1.6h-1a2 2 0 0 0-2 2v6.4" /><path d="M10 11.5h4" /></svg>
             <select className={"side-viewas" + (viewAs ? " on" : "")} value={viewAs} title="View as: see the shop the way someone else does (you stay signed in as you)" aria-label="View as"
               onChange={async (e) => { await setViewAs(e.target.value); window.location.reload(); }} data-notranslate>
               <option value="">View as…</option>
@@ -314,7 +311,15 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
               <optgroup label="Roles">{ROLES.filter((r) => r.v !== "owner").map((r) => <option key={r.v} value={r.v}>{r.label}</option>)}</optgroup>
               {viewAs && <option value="">← My view (Owner)</option>}
             </select>
-          )}
+          </span>
+        )}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} data-tip="Add a shortcut" aria-label="Add a shortcut: your own quick links"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /><path d="M12 7v6M9 10h6" /></svg><span className="lbl-t">Add a shortcut</span></button>}</nav>
+      </div>
+      <div className="side-user">
+        {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
+        {(() => { const full = (people.find((p) => p.email === email)?.name || firstName || email.split("@")[0]).trim(); const ini = full.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"; return <span className="side-who" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}>{ini}</span>; })()}
+        <div className="side-user-r">
+          {/* sign out: a door with an arrow going out (Oct 16, Nick) */}
+          <form action="/auth/signout" method="post"><button className="side-out" type="submit" title="Sign out" aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden><path d="M13 12v.01" /><path d="M3 21h18" /><path d="M5 21V5a2 2 0 0 1 2-2h7.5" /><path d="M17 13.5V21" /><path d="M14 7h7" /><path d="M18 4l3 3-3 3" /></svg></button></form>
         </div>
       </div>
       </div>

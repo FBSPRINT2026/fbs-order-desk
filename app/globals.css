@@ -9346,11 +9346,11 @@ fieldset.bs-lock{border:0;padding:0;margin:0;min-width:0}
 /* Shop Tools as small icons with their name on hover, like Illustrator's toolbar (Oct 16, Nick) */
 @media (min-width:821px){
 .side:not(.mini) .nav-tools{display:flex;flex-direction:row;flex-wrap:wrap;gap:1px;padding:2px 0 0 2px}
-.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc){all:unset;box-sizing:border-box;width:32px;height:32px;display:flex;align-items:center;justify-content:center;position:relative;border-radius:9px;cursor:pointer;color:var(--side-ink)}
-.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc):hover{background:rgba(255,255,255,.08);color:#fff}
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas){all:unset;box-sizing:border-box;width:32px;height:32px;display:flex;align-items:center;justify-content:center;position:relative;border-radius:9px;cursor:pointer;color:var(--side-ink)}
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas):hover{background:rgba(255,255,255,.08);color:#fff}
 .side:not(.mini) .nav-tools a.on{background:var(--accent);color:#fff}
-.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc) svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc) :is(.lbl-t,.lbl-s){display:none}
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) :is(.lbl-t,.lbl-s){display:none}
 .side:not(.mini) .nav-tools a svg{width:19px;height:19px}
 .side:not(.mini) .nav-tools .badge{position:absolute;top:1px;right:1px;margin:0;font-size:9.5px;padding:0 4px}
 }
@@ -9377,3 +9377,13 @@ a.pit-f{text-decoration:none}
 /* Admin Tools: the menu's bottom group (Oct 16) */
 .nav-h-admintools{color:#b8c0cc}
 .nav-g-admintools a.on{background:#5b6472;color:#fff}
+
+/* View as in Admin Tools: the binoculars, with its list over them (see-through), lit while viewing as someone */
+.nav-viewas .side-viewas{position:absolute!important;inset:0;width:100%!important;height:100%;opacity:0;cursor:pointer;margin:0;padding:0;border:0}
+.side:not(.mini) .nav-tools .nav-viewas.on{background:#f0c75e;color:#3d2c00}
+.side .side-out{all:unset;cursor:pointer;width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--side-ink);border:0;padding:0;gap:0}
+.side .side-out:hover{background:rgba(255,255,255,.1);color:#fff}
+.side .side-out svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.side.mini .nav-viewas,.nav-viewas{position:relative;display:flex;align-items:center;justify-content:center;color:var(--side-ink)}
+.side.mini .nav-viewas{padding:8px 0}
+.nav-viewas svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
