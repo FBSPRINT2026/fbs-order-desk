@@ -9407,3 +9407,10 @@ a.pit-f{text-decoration:none}
 .design-card.starred:not(:hover):not(:focus-within) .dc-tools > :not(.dc-star){visibility:hidden}
 @media (hover:none){.design-card .dc-tools{opacity:1}.design-card.starred .dc-tools > *{visibility:visible!important}}
 .aa-fav-pic .lv.main{position:absolute;inset:0;width:100%;height:100%;border-radius:0;border:0}
+
+/* Add a shortcut beside Report an issue: the same small icon button */
+.side .side-user .nav-add-sc{all:unset;cursor:pointer;width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--side-ink);margin:0}
+.side .side-user .nav-add-sc:hover{background:rgba(255,255,255,.1);color:#fff}
+.side .side-user .nav-add-sc svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.side .side-user .nav-add-sc .lbl-t{display:none}
+.side.mini .side-user .nav-add-sc{display:grid!important}

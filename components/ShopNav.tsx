@@ -311,12 +311,14 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
               {viewAs && <option value="">← My view (Owner)</option>}
             </select>
           </span>
-        )}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} data-tip="Add a shortcut" aria-label="Add a shortcut: your own quick links"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /><path d="M12 7v6M9 10h6" /></svg><span className="lbl-t">Add a shortcut</span></button>}</nav>
+        )}</nav>
       </div>
       <div className="side-user">
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
         {(() => { const full = (people.find((p) => p.email === email)?.name || firstName || email.split("@")[0]).trim(); const ini = full.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"; return <span className="side-who" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}>{ini}</span>; })()}
         <div className="side-user-r">
+          {/* add a shortcut: everyone, left of Report an issue (Oct 16, Nick) */}
+          <button type="button" className="nav-add-sc" onClick={() => { setAddOpen(true); setAdding(null); }} data-tip="Add a shortcut" aria-label="Add a shortcut: your own quick links"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /><path d="M12 7v6M9 10h6" /></svg><span className="lbl-t">Add a shortcut</span></button>
           {/* report a problem with a screenshot: everyone, beside Sign out (Oct 16, Nick) */}
           <SupportButton email={email} />
           {/* sign out: a door with an arrow going out (Oct 16, Nick) */}
