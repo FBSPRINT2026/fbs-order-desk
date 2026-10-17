@@ -291,16 +291,17 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         )}
       </div>
       )}
-      <nav className="nav nav-foot">
+      {/* the bottom of the menu: small icons with their names on hover, like Shop Tools (Oct 16, Nick: "a mess") */}
+      <nav className="nav nav-foot nav-tools">
         {/* everyone: report a problem with a screenshot; the owner: the Support page with everyone's reports */}
         {realRole === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
         <SupportButton email={email} />
         {realRole === "owner" && link(["/shop/support", "support", "Support"])}
-        {link(["/shop/settings", "settings", "Settings"])}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} title="Your own quick links: customers, reports, anything you open all the time">+ Add Shortcut</button>}</nav>
+        {link(["/shop/settings", "settings", "Settings"])}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} data-tip="Add a shortcut" aria-label="Add a shortcut: your own quick links"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /><path d="M12 7v6M9 10h6" /></svg><span className="lbl-t">Add a shortcut</span></button>}</nav>
       <div className="side-user">
-        <span>{email}</span>
+        <span className="side-who" title={email}><i aria-hidden>{(firstName || email || "?").slice(0, 1).toUpperCase()}</i><span>{firstName || email.split("@")[0]}</span></span>
         <div className="side-user-r">
-          <form action="/auth/signout" method="post"><button className="btn ghost sm" style={{ color: "inherit", padding: 0 }} type="submit">Sign out</button></form>
+          <form action="/auth/signout" method="post"><button className="side-out" type="submit" title={`Sign out (${email})`} aria-label="Sign out"><svg viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10" /></svg></button></form>
           {realRole === "owner" && (
             <select className={"side-viewas" + (viewAs ? " on" : "")} value={viewAs} title="View as: see the shop the way someone else does (you stay signed in as you)" aria-label="View as"
               onChange={async (e) => { await setViewAs(e.target.value); window.location.reload(); }} data-notranslate>
