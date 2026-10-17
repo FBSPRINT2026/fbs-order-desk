@@ -171,5 +171,10 @@ export function vartSvg(v: VArt): string {
     }
     return `<path fill="${fill}"${s.evenodd ? ' fill-rule="evenodd"' : ""} d="${d(s.ops)}"/>`;
   }).join("");
+  // a distress layer knocks the art out where it's solid (the shirt shows through)
+  if (v.distress?.length) {
+    defs += `<mask id="dk" maskUnits="userSpaceOnUse" x="${v.x}" y="${v.y}" width="${v.w}" height="${v.h}"><rect x="${v.x}" y="${v.y}" width="${v.w}" height="${v.h}" fill="#fff"/>${v.distress.map((d) => `<image href="${d.href}" x="${f(d.x)}" y="${f(d.y)}" width="${f(d.w)}" height="${f(d.h)}" preserveAspectRatio="none"/>`).join("")}</mask>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.x} ${v.y} ${v.w} ${v.h}" width="${v.w}" height="${v.h}"><defs>${defs}</defs><g mask="url(#dk)">${body}</g></svg>`;
+  }
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.x} ${v.y} ${v.w} ${v.h}" width="${v.w}" height="${v.h}">${defs ? `<defs>${defs}</defs>` : ""}${body}</svg>`;
 }

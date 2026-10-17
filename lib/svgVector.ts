@@ -13,7 +13,9 @@ export type VShape = { fill: string; evenodd: boolean; ops: string; /** the spot
   grad?: VGrad };
 export type VArt = { ok: boolean; why?: string; x: number; y: number; w: number; h: number; shapes: VShape[];
   /** a customer mockup: what was left out to get the art off the shirt (PDF / .ai) */
-  mockup?: string };
+  mockup?: string;
+  /** distress layers: knockout masks over the art (PDF / .ai): where, and a gray PNG (white = keep, black = knock out) */
+  distress?: { x: number; y: number; w: number; h: number; href: string }[] };
 
 type M = [number, number, number, number, number, number];
 const mul = (a: M, b: M): M => [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3], a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];

@@ -195,6 +195,23 @@ export async function makePreview(file: File, maxPx = 2400): Promise<File | null
       return blobToFile(Array.isArray(out) ? out[0] : out, `${base}.png`);
     }
     if (/pdf/i.test(file.type) || /\.(pdf|ai)$/i.test(file.name)) {
+      // art with a distress layer (Oct 16): drawn from its shapes with the grunge knocked out, so the shirt shows
+      // through the way it prints (drawn as-is, the grunge is a light haze over the art that doesn't print)
+      try {
+        const { parsePdf, browserInflate } = await import("./pdfVector");
+        const v = await parsePdf(new Uint8Array(await file.arrayBuffer()), browserInflate);
+        if (v.distress?.length && v.shapes.length) {
+          const { vartSvg } = await import("./epsVector");
+          const url = URL.createObjectURL(new Blob([vartSvg(v)], { type: "image/svg+xml" }));
+          try {
+            const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+            const k = maxPx / Math.max(v.w, v.h), c = document.createElement("canvas");
+            c.width = Math.round(v.w * k); c.height = Math.round(v.h * k);
+            c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+            return canvasToFile(c, `${base}.png`);
+          } finally { URL.revokeObjectURL(url); }
+        }
+      } catch { /* drawn by pdf.js below */ }
       // Illustrator files are usually saved PDF-compatible, so the same reader works for most of them
       const pdfjs = (await import(/* webpackIgnore: true */ PDFJS)) as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<{ getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> } }> }> } };
       pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;

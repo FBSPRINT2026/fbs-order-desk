@@ -41,11 +41,17 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
     if (u2.error) preview_path = "";
   }
   const dims = pv ? await imageSize(pv) : null;
+  // a distress layer in the file (Oct 16): the logo is marked distressed (brand standards can print those as a fashion hit)
+  let distressed = false;
+  if (/pdf/i.test(opts.file.type) || /\.(pdf|ai)$/i.test(opts.file.name)) {
+    try { const { parsePdf, browserInflate } = await import("./pdfVector"); distressed = !!(await parsePdf(new Uint8Array(await opts.file.arrayBuffer()), browserInflate)).distress?.length; } catch { /* not readable as shapes */ }
+  }
   const { data, error } = await sb.from("designs").insert({
     customer_id: opts.customer_id, name: (opts.name || opts.file.name.replace(/\.[^.]+$/, "")).trim(),
     file_path: orig, file_name: opts.file.name, file_type: opts.file.type || "", preview_path,
     width_px: dims?.w || null, height_px: dims?.h || null, method: opts.method || "screen",
     colors: opts.colors || 1, inks: opts.inks || "", notes: opts.notes || "", created_by: opts.by || "",
+    ...(distressed ? { specs: { distressed: true, distressLayer: true } } : {}),
   }).select("*").single();
   if (error) throw new Error(error.message);
   return data as Design;

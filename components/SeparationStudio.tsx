@@ -262,7 +262,9 @@ export async function prepareSepArt(f: File): Promise<{ file: File; original?: F
   const kind = isEps(f.name, f.type) ? "EPS" : /\.ai$/i.test(f.name) ? "Illustrator file" : "PDF";
   if (isPdf(f.name, f.type) && !/PostScript|isn't a PDF/i.test(v.why || "")) {
     const png = await makePreview(new File([f], f.name, { type: f.type || "application/pdf" }), 5000).catch(() => null);
-    if (png) return { file: new File([png], f.name.replace(/\.[^.]+$/, "") + ".png", { type: "image/png" }), original: f, note: `This ${kind} ${v.why}, so it's separated as a picture drawn from the file at high resolution. For crisp vector films, fix that in Illustrator and upload it again.` };
+    if (png) return { file: new File([png], f.name.replace(/\.[^.]+$/, "") + ".png", { type: "image/png" }), original: f, note: v.distress?.length
+      ? `This ${kind} has a distress layer: it's knocked out of the art (it doesn't print, the shirt shows through), and the art is separated as a picture at high resolution with the distress in it.`
+      : `This ${kind} ${v.why}, so it's separated as a picture drawn from the file at high resolution. For crisp vector films, fix that in Illustrator and upload it again.` };
   }
   return { error: `This ${kind} ${v.why}. Fix that in Illustrator, or save it as PNG (at the print size) to separate it as a picture.` };
 }

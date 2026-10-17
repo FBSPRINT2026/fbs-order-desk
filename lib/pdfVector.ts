@@ -13,6 +13,10 @@
  *     page is the shirt: it's left out, with anything drawn under it (hidden in the mockup anyway, e.g. a "BG" box),
  *     and the art is read as shapes (`mockup` says what was left out). A picture inside the art still can't be.
  *   - Lab colors (Illustrator writes PANTONE swatches' look in Lab, as /Lab or an ICC Lab profile)
+ *   - distress layers (Oct 16, Nick: "a large layer of distress… it doesn't print, we lay it over the art and it
+ *     creates a distressed effect; these colors don't print and we knock out"): a near-white picture with see-through
+ *     parts (a soft mask) drawn over the art is the grunge. It's kept as a knockout mask (`distress`): where it's
+ *     solid, the ink under it is taken out so the shirt shows through, in the preview, the mockups and the films.
  * Coordinates come out like SVG: y down, from the top-left of the crop box.
  */
 import type { VArt, VShape } from "./svgVector";
@@ -110,6 +114,7 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
   const note = (w: string) => { why ||= w; };
   // placed pictures: where in the drawing order (how many shapes were drawn before) and how much of the page they cover
   const pics: { at: number; cover: number }[] = [];
+  const imgs: { at: number; m: M; xo: { stream: Uint8Array; dict: Dict } }[] = [];
   const pageArea = Math.max(1, (urx - llx) * (ury - lly));
   const picAt = (m: M) => {
     const xs = [m[4], m[0] + m[4], m[2] + m[4], m[0] + m[2] + m[4]], ys = [m[5], m[1] + m[5], m[3] + m[5], m[1] + m[3] + m[5]];
@@ -210,7 +215,7 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
           if (isStream(xo) && isName(xo.dict.Subtype) && xo.dict.Subtype.n === "Form") {
             const mtx = ((get(xo.dict.Matrix) as number[]) || [1, 0, 0, 1, 0, 0]).map((v) => get(v) as number) as M;
             await run(latin1(await decode(xo)), (get(xo.dict.Resources) as Dict) || res, mul(mtx, ctm), depth + 1);
-          } else if (isStream(xo)) picAt(ctm);
+          } else if (isStream(xo)) { picAt(ctm); imgs.push({ at: shapes.length, m: ctm, xo }); }
           break;
         }
         case "BT": note("has live text (outline it: Type → Create Outlines)"); { const e = code.indexOf("ET", lx.i); lx.i = e < 0 ? code.length : e + 2; } break;
@@ -223,6 +228,18 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
   };
   await run(content, (inh("Resources") as Dict) || null, [1, 0, 0, 1, 0, 0], 0);
   const W = urx - llx, H = ury - lly;
+  // distress: near-white pictures with a soft mask, drawn over (most of) the art
+  const distress: NonNullable<VArt["distress"]> = [];
+  for (const im of imgs) {
+    if (!shapes.length || im.at < shapes.length * 0.5) continue;
+    const d = await distressOf(im.xo, get, decode).catch(() => null);
+    const [a, b, c, dd, e, f] = im.m;
+    if (!d || Math.abs(b) > 1e-6 || Math.abs(c) > 1e-6 || a <= 0 || dd <= 0) continue;
+    distress.push({ x: e - llx, y: ury - (f + dd), w: a, h: dd, href: d });
+    const k = pics.findIndex((p) => p.at === im.at);
+    if (k >= 0) pics.splice(k, 1);
+  }
+  if (distress.length) note("has a distress layer (it's knocked out of the art, not printed)");
   // a customer mockup: every picture is drawn before the art, and one covers most of the page (the shirt photo)
   let mockup: string | undefined, art = shapes;
   if (pics.length) {
@@ -235,7 +252,94 @@ export async function parsePdf(bytes: Uint8Array, inflate: Inflate): Promise<VAr
     } else note("has a placed image");
   }
   if (!art.length) return fail(why || "has no filled shapes");
-  return { ok: !why, ...(why ? { why } : {}), x: 0, y: 0, w: W, h: H, shapes: art, ...(mockup ? { mockup } : {}) };
+  return { ok: !why, ...(why ? { why } : {}), x: 0, y: 0, w: W, h: H, shapes: art, ...(mockup ? { mockup } : {}), ...(distress.length ? { distress } : {}) };
+}
+
+/**
+ * A distress layer's knockout as a PNG data URL (gray: white = keep the ink, black = knock it out), or null when the
+ * picture isn't one: it has to be near-white (paper color) everywhere and have a soft mask (the grunge's see-through).
+ */
+async function distressOf(xo: { stream: Uint8Array; dict: Dict }, get: (o: Obj) => Obj, decode: (st: { stream: Uint8Array; dict: Dict }) => Promise<Uint8Array>): Promise<string | null> {
+  const D = xo.dict, w = get(D.Width) as number, h = get(D.Height) as number, bpc = get(D.BitsPerComponent) as number;
+  const sm = get(D.SMask ?? null);
+  if (!isStream(sm) || !w || !h || bpc !== 8) return null;
+  // the picture's colors: near-white
+  const cs = get(D.ColorSpace ?? null);
+  const nm = isName(cs) ? cs.n : Array.isArray(cs) && isName(get(cs[0])) ? (get(cs[0]) as { n: string }).n : "";
+  const light = (base: string, v: number[]) => (base === "DeviceCMYK" ? v.every((x) => x <= 0.1) : base === "DeviceGray" ? v[0] >= 0.9 : base === "DeviceRGB" ? v.every((x) => x >= 0.9) : false);
+  if (nm === "Indexed" && Array.isArray(cs)) {
+    const baseO = get(cs[1]), base = isName(baseO) ? baseO.n : "", n = base === "DeviceCMYK" ? 4 : base === "DeviceRGB" ? 3 : base === "DeviceGray" ? 1 : 0;
+    const lk = get(cs[3]);
+    const tbl = isStream(lk) ? await decode(lk) : typeof lk === "string" ? Uint8Array.from(lk, (ch) => ch.charCodeAt(0)) : null;
+    if (!n || !tbl) return null;
+    for (let i = 0; i + n <= tbl.length; i += n) if (!light(base, Array.from(tbl.subarray(i, i + n), (x) => x / 255))) return null;
+  } else if (["DeviceCMYK", "DeviceRGB", "DeviceGray"].includes(nm)) {
+    const px = await decode(xo), n = nm === "DeviceCMYK" ? 4 : nm === "DeviceRGB" ? 3 : 1;
+    if (px.length < w * h * n) return null;
+    let bad = 0, seen = 0;
+    for (let i = 0; i < w * h; i += 37) { seen++; if (!light(nm, Array.from(px.subarray(i * n, i * n + n), (x) => x / 255))) bad++; }
+    if (bad > seen * 0.02) return null;
+  } else return null;
+  // the soft mask: 8-bit gray, how solid the grunge is
+  const SD = sm.dict;
+  if ((get(SD.BitsPerComponent) as number) !== 8 || (get(SD.Width) as number) !== w || (get(SD.Height) as number) !== h) return null;
+  let a = await decode(sm);
+  const parms = get(SD.DecodeParms ?? null) as Dict | null, pred = parms ? (get(parms.Predictor ?? null) as number) || 1 : 1;
+  if (pred >= 10) a = unPng(a, w, h);
+  if (a.length < w * h) return null;
+  const keep = new Uint8Array(w * h);
+  let any = 0;
+  for (let i = 0; i < w * h; i++) { keep[i] = 255 - a[i]; if (a[i] > 24) any++; }
+  if (any < w * h * 0.01) return null;
+  return pngGray(w, h, keep);
+}
+/** undo PNG row filters (Predictor 10–15), one gray byte per pixel */
+function unPng(d: Uint8Array, w: number, h: number) {
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const t = d[y * (w + 1)], src = y * (w + 1) + 1;
+    for (let x = 0; x < w; x++) {
+      const raw = d[src + x], left = x ? out[y * w + x - 1] : 0, up = y ? out[(y - 1) * w + x] : 0, ul = x && y ? out[(y - 1) * w + x - 1] : 0;
+      let v = raw;
+      if (t === 1) v = raw + left; else if (t === 2) v = raw + up; else if (t === 3) v = raw + ((left + up) >> 1);
+      else if (t === 4) { const p = left + up - ul, pa = Math.abs(p - left), pb = Math.abs(p - up), pc = Math.abs(p - ul); v = raw + (pa <= pb && pa <= pc ? left : pb <= pc ? up : ul); }
+      out[y * w + x] = v & 255;
+    }
+  }
+  return out;
+}
+/** a gray PNG as a data URL, stored without compression (small enough, and works anywhere without a zlib) */
+function pngGray(w: number, h: number, px: Uint8Array): string {
+  const raw = new Uint8Array((w + 1) * h);
+  for (let y = 0; y < h; y++) raw.set(px.subarray(y * w, y * w + w), y * (w + 1) + 1);
+  // zlib with stored blocks
+  const blocks = Math.ceil(raw.length / 65535) || 1, z = new Uint8Array(2 + raw.length + blocks * 5 + 4);
+  z[0] = 0x78; z[1] = 0x01;
+  let o = 2;
+  for (let i = 0; i < blocks; i++) {
+    const part = raw.subarray(i * 65535, Math.min(raw.length, (i + 1) * 65535)), n = part.length;
+    z[o++] = i === blocks - 1 ? 1 : 0; z[o++] = n & 255; z[o++] = n >> 8; z[o++] = ~n & 255; z[o++] = (~n >> 8) & 255;
+    z.set(part, o); o += n;
+  }
+  let s1 = 1, s2 = 0;
+  for (let i = 0; i < raw.length; i++) { s1 = (s1 + raw[i]) % 65521; s2 = (s2 + s1) % 65521; }
+  const ad = ((s2 << 16) | s1) >>> 0;
+  z[o++] = ad >>> 24; z[o++] = (ad >>> 16) & 255; z[o++] = (ad >>> 8) & 255; z[o++] = ad & 255;
+  const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const chunk = (type: string, data: Uint8Array) => {
+    const b = new Uint8Array(12 + data.length), dv = new DataView(b.buffer);
+    dv.setUint32(0, data.length); for (let i = 0; i < 4; i++) b[4 + i] = type.charCodeAt(i);
+    b.set(data, 8);
+    let c = 0xffffffff; for (let i = 4; i < 8 + data.length; i++) c = crcT[(c ^ b[i]) & 255] ^ (c >>> 8);
+    dv.setUint32(8 + data.length, (c ^ 0xffffffff) >>> 0);
+    return b;
+  };
+  const ihdr = new Uint8Array(13), hv = new DataView(ihdr.buffer);
+  hv.setUint32(0, w); hv.setUint32(4, h); ihdr[8] = 8; ihdr[9] = 0; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+  const parts = [Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", z.subarray(0, o)), chunk("IEND", new Uint8Array(0))];
+  let bin = "";
+  for (const pt of parts) for (let i = 0; i < pt.length; i += 8192) bin += String.fromCharCode(...pt.subarray(i, i + 8192));
+  return "data:image/png;base64," + btoa(bin);
 }
 
 /** CIE Lab (D50, as PDF and ICC use it) → sRGB hex: XYZ, Bradford to D65, then sRGB */
