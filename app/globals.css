@@ -9387,3 +9387,10 @@ a.pit-f{text-decoration:none}
 .side.mini .nav-viewas,.nav-viewas{position:relative;display:flex;align-items:center;justify-content:center;color:var(--side-ink)}
 .side.mini .nav-viewas{padding:8px 0}
 .nav-viewas svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* Report an issue beside Sign out: the same small icon button */
+.side .side-user .nav-support{all:unset;cursor:pointer;width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--side-ink)}
+.side .side-user .nav-support:hover{background:rgba(255,255,255,.1);color:#fff}
+.side .side-user .nav-support svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.side .side-user .nav-support .lbl-t{display:none}
+.side-user-r{display:flex;align-items:center}

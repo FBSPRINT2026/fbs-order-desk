@@ -217,7 +217,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       onMouseOver={(e) => {
         const el = (e.target as HTMLElement).closest?.("[data-tip]") as HTMLElement | null;
         // the folded menu, and the Shop Tools icons (always icons now): their name pops up beside them
-        if (!el || (!mini && !el.closest(".nav-tools"))) { setTip(null); return; }
+        if (!el || (!mini && !el.closest(".nav-tools, .side-user"))) { setTip(null); return; }
         const r = el.getBoundingClientRect();
         setTip({ text: el.dataset.tip || "", top: r.top + r.height / 2, left: r.right + 10 });
       }}
@@ -295,9 +295,8 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       <div className="nav-g nav-g-admintools nav-foot-g">
       <div className="nav-h nav-h-admintools">{realRole === "owner" || realRole === "admin" ? "Admin Tools" : "More"}</div>
       <nav className="nav nav-foot nav-tools">
-        {/* everyone: report a problem with a screenshot; the owner: the Support page with everyone's reports */}
+        {/* the owner: the Support page with everyone's reports (Report an issue is down by Sign out, for everyone) */}
         {realRole === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
-        <SupportButton email={email} />
         {realRole === "owner" && link(["/shop/support", "support", "Support"])}
         {link(["/shop/settings", "settings", "Settings"])}
         {/* View as: binoculars (Oct 16, Nick); the list opens from the icon */}
@@ -318,8 +317,10 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
         {(() => { const full = (people.find((p) => p.email === email)?.name || firstName || email.split("@")[0]).trim(); const ini = full.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"; return <span className="side-who" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}>{ini}</span>; })()}
         <div className="side-user-r">
+          {/* report a problem with a screenshot: everyone, beside Sign out (Oct 16, Nick) */}
+          <SupportButton email={email} />
           {/* sign out: a door with an arrow going out (Oct 16, Nick) */}
-          <form action="/auth/signout" method="post"><button className="side-out" type="submit" title="Sign out" aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden><path d="M13 12v.01" /><path d="M3 21h18" /><path d="M5 21V5a2 2 0 0 1 2-2h7.5" /><path d="M17 13.5V21" /><path d="M14 7h7" /><path d="M18 4l3 3-3 3" /></svg></button></form>
+          <form action="/auth/signout" method="post"><button className="side-out" type="submit" data-tip="Sign out" aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden><path d="M13 12v.01" /><path d="M3 21h18" /><path d="M5 21V5a2 2 0 0 1 2-2h7.5" /><path d="M17 13.5V21" /><path d="M14 7h7" /><path d="M18 4l3 3-3 3" /></svg></button></form>
         </div>
       </div>
       </div>
