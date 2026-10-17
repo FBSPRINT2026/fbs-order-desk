@@ -49,6 +49,7 @@ function pvAddress(text: string, company: string, person: string) {
 /** A print as the customer reads it: location, colors, inks, size (no method: the line's category says that). */
 const printLine = (d: Imprint) => [d.location,
   d.method === "screen" || d.method === "embroidery" ? (d.method === "screen" && d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`) : "full color",
+  d.method === "screen" && d.printStyle === "fashion" ? (d.softHand ? "fashion print (soft, no underbase)" : "fashion print (no underbase)") : d.method === "screen" && d.softHand ? "soft hand" : "",
   d.inks, d.size].filter(Boolean).join(" · ");
 /** A Printavo line's description: the garment, and on a group's last line its prints, one per line (Oct 16, Nick). */
 const lineDescription = (g: Group, l: { brand?: string; garment?: string }, last: boolean) =>

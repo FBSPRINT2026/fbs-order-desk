@@ -1,5 +1,5 @@
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
@@ -109,7 +109,8 @@ export function WorkOrderDoc(p: DocData & { notes: string; shopNotes: { tag: str
                         <div className="s">{METHODS[d.method] || d.method} · <b>{colorsLabel(d)}</b></div>
                         {inkNames(d.inks).length > 0 && <div className="s inks">{inkNames(d.inks).map((k) => <span key={k} className="ink"><Swatch c={colorHex(k) || "#ccc"} /><b>{k}</b></span>)}</div>}
                         <div className="s">{sz.label && <><b>{sz.label}</b> · </>}{dropLabel(d)}</div>
-                        {sc && <div className="s">{sc.n ? `${sc.n} screen${sc.n === 1 ? "" : "s"}` : "Screens: see separations"} · {sc.under ? "underbase" : "no underbase"}</div>}
+                        {sc && <div className="s">{sc.n ? `${sc.n} screen${sc.n === 1 ? "" : "s"}` : "Screens: see separations"} · {d.printStyle === "fashion" ? <b>FASHION HIT: no underbase</b> : sc.under ? "underbase" : "no underbase"}</div>}
+                        {(d.printStyle === "fashion" || d.softHand) && <div className="s hitf">{d.printStyle === "fashion" && <span className="flag">FASHION HIT</span>}{d.softHand && <span className="flag">SOFT HAND</span>}</div>}
                         {d.method === "embroidery" && d.stitches ? <div className="s">{d.stitches.toLocaleString()} stitches</div> : null}
                         {(d.confirm?.size || d.confirm?.ink) && <div className="warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING</div>}
                         <div className="s f">Close-up on page {pg + 1 + di} ›</div>
@@ -177,7 +178,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
     ? [["Size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Stitches", d.stitches ? d.stitches.toLocaleString() : "—"], ["Threads", String(d.colors || inks.length || "—")]]
     : d.method === "dtf"
       ? [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Transfer", "Full color"], ["Pieces", String(qty)]]
-      : [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Screens", sc?.n ? String(sc.n) : "—"], ["Underbase", sc?.under ? "Yes" : "No"]];
+      : [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Screens", sc?.n ? String(sc.n) : "—"], ["Underbase", d.printStyle === "fashion" ? "NO · fashion hit" : sc?.under ? "Yes" : "No"]];
   const inkRows = d.method === "dtf" ? [] : inks.length ? inks : Array.from({ length: d.colors >= FULL_COLOR ? 0 : Math.max(1, d.colors || 1) }, () => "");
   return (
     <section className="sheet">
@@ -203,10 +204,12 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
           <thead><tr><th style={{ width: ".4in" }}>#</th><th>Ink</th><th className="w">Mesh</th><th className="w">Squeegee</th><th className="w">Strokes</th><th style={{ width: ".7in" }}>Mixed</th></tr></thead>
           <tbody>
             {sc?.under && <tr><td><b>UB</b></td><td><Swatch c="#ffffff" /><b>White underbase</b><small>flash after</small></td><td /><td /><td /><td><span className="cb" /></td></tr>}
-            {inkRows.map((k, i) => <tr key={i}><td><b>{i + 1}</b></td><td>{k ? <><Swatch c={colorHex(k) || "#ccc"} /><b>{k}</b>{inkLine(k) && <small>{inkLine(k)}</small>}</> : null}</td><td /><td /><td /><td><span className="cb" /></td></tr>)}
+            {inkRows.map((k, i) => <tr key={i}><td><b>{i + 1}</b></td><td>{k ? <><Swatch c={colorHex(k) || "#ccc"} /><b>{k}</b>{inkLine(k) && <small>{inkLine(k)}</small>}{d.printStyle === "fashion" && <small>print · flash · print</small>}</> : null}</td><td /><td /><td /><td><span className="cb" /></td></tr>)}
           </tbody>
         </table>
       ) : null}
+      {/* a fashion hit / soft hand: what the press does differently (Oct 16, Nick) */}
+      {(d.printStyle === "fashion" || d.softHand) && <div className="n2 hit">{d.printStyle === "fashion" && <><span className="flag">FASHION HIT</span> No underbase. Print, flash, print each color through the same screen (2 hits).</>}{d.softHand && <>{d.printStyle === "fashion" ? " " : ""}<span className="flag">SOFT HAND</span> Mix soft hand additive into each ink.</>}</div>}
       {(d.confirm?.size || d.confirm?.ink) && <div className="n2 warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING{d.confirm.why ? `: ${d.confirm.why}` : ""}</div>}
       {d.notes && <div className="n2"><b>Notes:</b> {d.notes}</div>}
       <div className="foot"><span>{footL}</span><span>Page {page} of {total}</span></div>
@@ -282,7 +285,7 @@ export function InvoiceDoc(p: DocData) {
                         <div className="chips">{SIZES.filter((z) => l.sizes?.[z]).map((z) => <span className="chip" key={z}>{sizeLabel(z)} <b>{l.sizes[z]}</b></span>)}</div>
                         {i === lines.length - 1 && g.imprints.map((d) => {
                           const sz = printSize(d, d.design_id ? p.designs[d.design_id] : null), ink = inkNames(d.inks);
-                          const how = d.method === "screen" ? (d.colors >= FULL_COLOR ? "full color screen print" : `${d.colors || 1}-color screen print`) : d.method === "embroidery" ? "embroidery" : "full color DTF transfer";
+                          const how = printHow(d);
                           // the print on one line, its inks as small swatches under it (Oct 16, Nick: the ink names wrapped
                           // across the line and looked messy)
                           return (

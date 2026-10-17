@@ -107,6 +107,9 @@ export const DOC_CSS = `
 .pdoc .ink td{padding:7px 8px;border-bottom:1px solid var(--line)}
 .pdoc .ink .w{width:.9in}
 .pdoc .ink small{color:var(--ink3);font-size:9.5pt;margin-left:4px}
+.pdoc .hitf{margin-top:4px}
+.pdoc .hitf .flag,.pdoc .n2.hit .flag{display:inline-block;background:#141D2B;color:#fff;font-weight:800;font-size:9pt;border-radius:4px;padding:1px 6px;margin-right:6px;letter-spacing:.03em}
+.pdoc .n2.hit{font-weight:600;color:var(--ink)}
 .pdoc .n2{font-size:10.5pt;color:var(--ink2);margin-top:8px;line-height:1.35;white-space:pre-wrap}
 
 /* invoice / quote */

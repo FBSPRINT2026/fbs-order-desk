@@ -404,7 +404,10 @@ export default function SeparationStudio({ id }: { id: string }) {
       const { data: cb } = await sb.from("customers").select("brand_colors").eq("id", row0.customer_id).maybeSingle();
       for (const bc of ((cb?.brand_colors || []) as { ink: string }[])) { const hx = colorHex(bc.ink); if (hx && !orderInks.current.some((k) => k.name === bc.ink)) orderInks.current.push({ name: bc.ink, hex: hx }); }
     }
-    setSt((s) => ({ ...s, ...saved, garment, widthIn, method: (saved.method as SepSettings["method"]) || s.method }));
+    // a fashion hit on the order (Oct 16, Nick): no underbase unless the separation was already set otherwise
+    const fashion = im?.printStyle === "fashion";
+    setSt((s) => ({ ...s, ...saved, garment, widthIn, method: (saved.method as SepSettings["method"]) || s.method, ...(fashion && !saved.underbase ? { underbase: "off" as const } : {}) }));
+    if (fashion) setMsg(`Fashion hit on the order: no underbase. Each color prints, flashes and prints again through the same screen${im?.softHand ? ", with soft hand additive" : ""}.`);
     // a new separation starts from what the coach has learned (Make Separations Better, last 30 days)
     if (!saved.inks?.length) {
       const { data: ls } = await sb.from("sep_lessons").select("lesson, default_setting").eq("active", true).gt("expires_at", new Date().toISOString()).not("default_setting", "is", null).order("created_at");

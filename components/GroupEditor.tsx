@@ -137,8 +137,11 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
     const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
     return (
       <ScreensLine key={d.id} summary={<>{sc.n} screen{sc.n === 1 ? "" : "s"}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0))}</b></>}
-        {sc.under && !allLight ? <span className="pr-scr-tag">underbase</span> : null}{rm ? <span className="pr-scr-tag">remake</span> : null}</>}>
-        {allLight ? <span className="faint">no underbase</span> : <span className={"sbx-ub" + (d.underbase == null ? " auto" : "")}>
+        {sc.under && !allLight ? <span className="pr-scr-tag">underbase</span> : null}{d.printStyle === "fashion" ? <span className="pr-scr-tag fashion">fashion hit</span> : null}{d.softHand ? <span className="pr-scr-tag">soft hand</span> : null}{rm ? <span className="pr-scr-tag">remake</span> : null}</>}>
+        {/* a fashion hit: no underbase, each color printed, flashed and printed again (Oct 16, Nick); priced the same */}
+        <label className="check" title="No underbase: each color printed, flashed and printed again through the same screen. Priced the same as with an underbase (two rounds on press)."><input type="checkbox" checked={d.printStyle === "fashion"} onChange={(e) => update((x) => { x.imprints[di].printStyle = e.target.checked ? "fashion" : undefined; if (e.target.checked) x.imprints[di].underbase = undefined; x.imprints[di].screens = undefined; })} />Fashion hit</label>
+        <label className="check" title="Soft hand additive mixed into the inks"><input type="checkbox" checked={!!d.softHand} onChange={(e) => update((x) => { x.imprints[di].softHand = e.target.checked || undefined; })} />Soft hand</label>
+        {d.printStyle === "fashion" ? null : allLight ? <span className="faint">no underbase</span> : <span className={"sbx-ub" + (d.underbase == null ? " auto" : "")}>
           <label className="check" title={d.underbase == null ? (sc.under ? "Automatic: a light ink needs one. Click to override." : "Automatic: dark inks print without one. Click to override.") : "Set by hand"}><input type="checkbox" checked={sc.under} onChange={(e) => update((x) => { x.imprints[di].underbase = e.target.checked; x.imprints[di].screens = undefined; })} />Underbase</label>
           {d.underbase != null && <span className="sbx-ovr">override <button type="button" aria-label="Back to automatic" title="Back to automatic" onClick={() => update((x) => { x.imprints[di].underbase = undefined; })}>×</button></span>}
         </span>}
@@ -308,6 +311,13 @@ export default function GroupEditor({ finishingAt = "group", gi, g, gc, settings
                 )}
                 </div>
                 {screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
+                {/* retail prints have no screens line: the fashion hit / soft hand choice on its own (Oct 16, Nick) */}
+                {d.method === "screen" && d.colors < FULL_COLOR && !scrImps.includes(d) && (
+                  <div className="imp-hit">
+                    <label className="check" title="No underbase: each color printed, flashed and printed again through the same screen. Priced the same."><input type="checkbox" checked={d.printStyle === "fashion"} onChange={(e) => update((x) => { x.imprints[di].printStyle = e.target.checked ? "fashion" : undefined; if (e.target.checked) x.imprints[di].underbase = undefined; })} />Fashion hit (no underbase)</label>
+                    <label className="check" title="Soft hand additive mixed into the inks"><input type="checkbox" checked={!!d.softHand} onChange={(e) => update((x) => { x.imprints[di].softHand = e.target.checked || undefined; })} />Soft hand</label>
+                  </div>
+                )}
                 {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="imp-unconf">
                     <span><b>Reorder - Production Details Needed</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
                     {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks we printed before">Production Details</a> : null}

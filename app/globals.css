@@ -9135,3 +9135,12 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
 .bp-seg button.on{background:var(--fbs-blue,#0e9bd8);color:#fff;font-weight:600}
 .bp-opts{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
 @media (max-width:640px){.bp-head{display:none}.bp-row{grid-template-columns:1fr 1fr;padding:8px 0;border-bottom:1px solid var(--line)}}
+.mk-cust-size.brand{background:#eef7fc;border-color:#bfe0f2;color:#0b5f86}
+.mk-hit{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0;font-size:13px}
+.mk-hit-seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.mk-hit-seg button{border:0;border-right:1px solid var(--line);background:var(--surface,#fff);padding:4px 10px;font-size:12.5px;cursor:pointer;color:var(--ink)}
+.mk-hit-seg button:last-child{border-right:0}
+.mk-hit-seg button.on{background:var(--fbs-blue,#0e9bd8);color:#fff;font-weight:600}
+.mk-hit .faint{font-size:12px}
+.imp-hit{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;margin:4px 0 2px}
+.pr-scr-tag.fashion{background:#1a1f2b;color:#fff}

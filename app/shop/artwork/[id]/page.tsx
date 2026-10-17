@@ -78,6 +78,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
               <div className="field"><label htmlFor="d-c">Customer</label><select id="d-c" value={d.customer_id || ""} onChange={(e) => patch({ customer_id: e.target.value || null })}><option value="">No customer</option>{customers.map((c) => <option key={c.id} value={c.id}>{custLabel(c)}</option>)}</select></div>
               <div className="field"><label htmlFor="d-k">Ink colors</label><input id="d-k" type="number" min="1" max="15" value={d.colors} onChange={(e) => patch({ colors: Math.max(1, +e.target.value || 1) })} /></div>
               <div className="field"><label htmlFor="d-i">Inks / PMS</label><input id="d-i" type="text" value={d.inks} onChange={(e) => setD({ ...d, inks: e.target.value })} onBlur={(e) => patch({ inks: e.target.value })} /></div>
+              {/* a distressed logo: customers whose brand standards say "fashion hit for distressed logos" print it without an underbase (Oct 16) */}
+              <label className="check" style={{ gridColumn: "1 / -1" }} title="Worn / cracked texture in the art. A customer's brand standard can print distressed logos as a fashion hit (no underbase)."><input type="checkbox" checked={!!(d.specs as { distressed?: boolean } | null)?.distressed} onChange={(e) => patch({ specs: { ...((d.specs || {}) as object), distressed: e.target.checked || undefined } as Design["specs"] })} /> Distressed logo</label>
               <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="d-no">Notes</label><textarea id="d-no" rows={3} value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} onBlur={(e) => patch({ notes: e.target.value })} /></div>
             </div>
           </section>

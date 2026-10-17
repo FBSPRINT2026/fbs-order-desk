@@ -680,6 +680,9 @@ export const isYouth = (z: string) => (YOUTH_SIZES as readonly string[]).include
 export function imprintLabel(d: Imprint) {
   const parts = [`${METHODS[d.method] || d.method} ${d.location}`.trim()];
   if (d.method === "screen" || d.method === "embroidery") parts.push(d.method === "screen" && d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`);
+  // a fashion hit / soft hand (Oct 16): said so wherever the print is described, so no one expects an underbase
+  if (d.method === "screen" && d.printStyle === "fashion") parts.push(d.softHand ? "fashion print (soft, no underbase)" : "fashion print (no underbase)");
+  else if (d.method === "screen" && d.softHand) parts.push("soft hand");
   if (d.inks) parts.push(d.inks);
   if (d.size) parts.push(d.size);
   if (d.drop) parts.push(`${d.drop}" drop`);

@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { brandHitFor, brandSizeFor } from "@/lib/pricing";
 import { Suspense, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
@@ -699,6 +700,28 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (t?.w && t.h) return t.h / t.w;
     return d?.width_px && d?.height_px ? d.height_px / d.width_px : 0;
   };
+  // brand standards for prints (Oct 16, Nick): the customer's standard size for this logo here ("Peticolas' round logo
+  // is always 10.5" on the front"), applied on its own; and how it prints (fashion hit, soft hand), each new print's start
+  const brandPrint = useMemo(() => (customers.find((c) => c.id === customerId)?.brand_print || null), [customers, customerId]);
+  const brandSized = useRef<Record<string, string>>({}), brandHit = useRef<Record<string, string>>({});
+  const brandRule = (im: Imprint) => { const d = designOf(im); if (!d || !brandPrint) return null; const r = ratioOf(d); return brandSizeFor(brandPrint, d.id, r ? 1 / r : 0, im.location); };
+  useEffect(() => {
+    if (!brandPrint || viewId) return;
+    const sizes: Record<string, string> = {}, hits: Record<string, { printStyle?: "fashion"; softHand?: boolean }> = {};
+    for (const im of imprints) {
+      const d = designOf(im); if (!d) continue;
+      const rule = brandRule(im), k = `${d.id}|${im.location}`;
+      if (rule && brandSized.current[im.id] !== k && im.sizeFrom !== "customer" && im.sizeFrom !== "film") { brandSized.current[im.id] = k; if (!(im.size || "").startsWith(`${rule.width}"`)) sizes[im.id] = `${rule.width}" wide`; }
+      if (im.method === "screen" && brandHit.current[im.id] !== d.id) {
+        brandHit.current[im.id] = d.id;
+        const h = brandHitFor(brandPrint, !!(d.specs as { distressed?: boolean } | null)?.distressed);
+        if (h && im.printStyle == null && im.softHand == null) hits[im.id] = h;
+      }
+    }
+    if (Object.keys(sizes).length || Object.keys(hits).length)
+      setImprints((xs) => xs.map((x) => (sizes[x.id] || hits[x.id] ? { ...x, ...(sizes[x.id] ? { size: sizes[x.id], sizeFrom: "brand" as const } : {}), ...(hits[x.id] || {}) } : x)));
+  }, [imprints, designs, brandPrint, trims]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** where a print sits on a photo; `on` = draw it on that garment line (its own size and print areas), else the one shown */
   const place = (im: Imprint, view?: View, fit?: Fit | null, on?: Line) => {
     const d = designOf(im);
@@ -1873,6 +1896,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   {sizer.pick == null ? <>
                     <div className="mk-sizer-now"><b>{fmt(cur)}</b> wide<span>× {(p.hIn || 0).toFixed(2)}&quot; tall</span></div>
                     {im.sizeFrom === "customer" && <div className="mk-cust-size">The customer asked for this size.</div>}
+                    {(() => { const r = brandRule(im); return r ? <div className="mk-cust-size brand">{(im.size || "").startsWith(`${r.width}"`) ? "Brand standard" : `Their standard is ${r.width}"`}: {r.note || `${r.which === "design" ? "this logo" : r.which === "any" ? "logos" : `${r.which} logos`} on the ${r.location.toLowerCase()}`} at {r.width}&quot;.</div> : null; })()}
                     {im.sizeFrom === "film" && <div className="mk-cust-size">Printed at this size before (from the job&apos;s film).</div>}
                     <div className="mk-sizer-b">
                       <button type="button" className="btn" onClick={() => setSizer({ ...sizer, pick: String(Math.min(cap, Math.max(0.5, cur))) })}>Change size</button>
@@ -2016,6 +2040,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       }} />
                     {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one{portal ? " of your logos" : " of the customer's logos"}, or upload new art.</div>}
                     {p.d && paints[im.id]?.plan && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {paints[im.id].plan!.why}</div>}
+                    {p.d && im.method === "screen" && !portal && (
+                      <div className="mk-hit">
+                        <span className="mk-hit-seg" role="radiogroup" aria-label="Underbase or fashion hit">
+                          <button type="button" role="radio" aria-checked={im.printStyle !== "fashion"} className={im.printStyle !== "fashion" ? "on" : ""} onClick={() => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, printStyle: undefined } : x)))}>Standard</button>
+                          <button type="button" role="radio" aria-checked={im.printStyle === "fashion"} className={im.printStyle === "fashion" ? "on" : ""} title="No underbase: each color printed, flashed and printed again through the same screen" onClick={() => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, printStyle: "fashion", underbase: undefined } : x)))}>Fashion hit</button>
+                        </span>
+                        <label className="check"><input type="checkbox" checked={!!im.softHand} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, softHand: e.target.checked || undefined } : x)))} /> Soft hand</label>
+                        {brandPrint?.hit && brandPrint.hit !== "standard" && <span className="faint">{brandPrint.hit === "ask" ? "Ask: this customer's prints vary" : "From their brand standards"}</span>}
+                      </div>
+                    )}
                     {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <LogoColors rows={colorRows(paints[im.id])}
                         onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
