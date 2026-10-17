@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { colorHex, deltaE } from "@/lib/inkColors";
 import { INK_COLORS, type BrandColor, type Design } from "@/lib/pricing";
-import { guessHex, SHIRT_COLORS } from "@/lib/mockup";
+import { guessHex, shirtBg, SHIRT_COLORS } from "@/lib/mockup";
 import { AS_IS, onShirtsOf, type OnShirt } from "@/components/LogoOnShirts";
 import { parseSvg, type VArt, type VShape } from "@/lib/svgVector";
 import { vartSvg } from "@/lib/epsVector";
@@ -216,7 +216,7 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
       <div className="le" role="dialog" aria-label="Edit logo">
         <div className="le-h"><h2>Edit {d.number ? `D-${d.number}` : "logo"}</h2><span className="faint">{vec ? `Vector art · ${vec.shapes.length} shapes · saved as a vector SVG` : img ? "A picture · edited pixel by pixel" : ""}</span></div>
         <div className="le-b">
-          <div className="le-pic" style={{ background: cur ? guessHex(cur.shirt) : undefined }} data-check={!cur || undefined}>
+          <div className="le-pic" style={{ background: cur ? shirtBg(cur.shirt) : undefined }} data-check={!cur || undefined}>
             {cur && !cur.dirty && cur.path && bgUrls[cur.path] ? <img src={bgUrls[cur.path]} alt={`The logo on ${cur.shirt}`} /> : preview ? <img src={preview} alt="The edited logo" /> : <span className="faint">{busy || err}</span>}
             {cur && <span className="le-pic-tag">On {cur.shirt}</span>}
           </div>
@@ -255,7 +255,7 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
   );
 }
 
-const QUICK = ["White", "Black", "Navy", "Charcoal", "Red", "Royal", "Sport Grey", "Maroon", "Forest Green", "Natural"];
+const QUICK = ["White", "Black", "Navy", "Charcoal", "Red", "Royal", "Sport Grey", "Athletic Heather", "Dark Heather", "Maroon", "Forest Green", "Natural"];
 
 /** Backgrounds: see-through (the logo itself), then each shirt color added, each with its own version; ✕ removes one */
 function Backgrounds({ bgs, sel, onSel, onAdd, onRemove }: { bgs: Bg[]; sel: number; onSel: (i: number) => void; onAdd: (shirt: string) => void; onRemove: (i: number) => void }) {
@@ -268,7 +268,7 @@ function Backgrounds({ bgs, sel, onSel, onAdd, onRemove }: { bgs: Bg[]; sel: num
         <button type="button" className={"le-chip" + (sel === -1 ? " on" : "")} onClick={() => onSel(-1)}><i data-check="" />See-through</button>
         {bgs.map((b, i) => (
           <span key={i} className={"le-chip" + (sel === i ? " on" : "")}>
-            <button type="button" className="le-chip-b" onClick={() => onSel(i)} aria-pressed={sel === i}><i style={{ background: guessHex(b.shirt) }} />{b.shirt}{b.dirty ? <small>edited</small> : null}</button>
+            <button type="button" className="le-chip-b" onClick={() => onSel(i)} aria-pressed={sel === i}><i style={{ background: shirtBg(b.shirt) }} />{b.shirt}{b.dirty ? <small>edited</small> : null}</button>
             <button type="button" className="le-chip-x" aria-label={`Remove the ${b.shirt} background`} title={`Remove ${b.shirt}`} onClick={() => onRemove(i)}>✕</button>
           </span>
         ))}
@@ -276,7 +276,7 @@ function Backgrounds({ bgs, sel, onSel, onAdd, onRemove }: { bgs: Bg[]; sel: num
       </div>
       {adding && (
         <div className="le-add">
-          {QUICK.filter((q) => !used.has(q.toLowerCase())).map((q) => <button key={q} type="button" className="le-chip" onClick={() => { onAdd(q); setAdding(false); }}><i style={{ background: guessHex(q) }} />{q}</button>)}
+          {QUICK.filter((q) => !used.has(q.toLowerCase())).map((q) => <button key={q} type="button" className="le-chip" onClick={() => { onAdd(q); setAdding(false); }}><i style={{ background: shirtBg(q) }} />{q}</button>)}
           <select aria-label="Another shirt color" value="" onChange={(e) => { if (e.target.value) { onAdd(e.target.value); setAdding(false); } }}>
             <option value="">More colors…</option>
             {SHIRT_COLORS.map((g) => <optgroup key={g.group} label={g.group}>{g.colors.filter(([n]) => !used.has(n.toLowerCase())).map(([n]) => <option key={n} value={n}>{n}</option>)}</optgroup>)}

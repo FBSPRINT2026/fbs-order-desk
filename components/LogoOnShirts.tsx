@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { colorHex, deltaE } from "@/lib/inkColors";
-import { guessHex } from "@/lib/mockup";
+import { guessHex, shirtBg } from "@/lib/mockup";
 import type { Design } from "@/lib/pricing";
 
 /**
@@ -115,7 +115,7 @@ function ArtIn({ url, art, ink, className }: { url: string; art: Art | null | un
 export function ShirtView({ url, shirt, ink, size, title, className }: { url: string; shirt: string; ink: string; size?: number; title?: string; className?: string }) {
   const art = useArt(url);
   return (
-    <span className={"lv" + (className ? " " + className : "")} style={{ background: guessHex(shirt), ...(size ? { width: size, height: size } : {}) }} title={title || `${ink} on a ${shirt} shirt`}>
+    <span className={"lv" + (className ? " " + className : "")} style={{ background: shirtBg(shirt), ...(size ? { width: size, height: size } : {}) }} title={title || `${ink} on a ${shirt} shirt`}>
       <ArtIn url={url} art={art} ink={ink} className="lv-art" />
     </span>
   );

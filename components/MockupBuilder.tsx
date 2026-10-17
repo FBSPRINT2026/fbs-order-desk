@@ -24,7 +24,7 @@ import { FONTS, type DesignDoc } from "@/lib/designerArt";
 import { loadShirtFonts, quickTextDoc, renderQuickText, type QuickText } from "@/lib/quickText";
 import type { DesignerOut, LabShirt } from "@/components/ShirtDesigner";
 import { PMS_HEX, WILFLEX_HEX, closestInk, colorHex, deltaE, detectColors, recolor } from "@/lib/inkColors";
-import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, measureBag, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View } from "@/lib/mockup";
+import { CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, measureBag, normOf, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, teeSvg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage, imagePdf } from "@/lib/imagePdf";
@@ -616,7 +616,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
     // a bag with no back photo: its back looks like its front (same bag, other side), never a drawn tee
     const p = ci ? (view === "front" ? ci.front : ci.back || (isBag(l) ? ci.front : "")) : "";
-    return p ? ssImg(p) : teeSvg(guessHex(l.color), view);
+    return p ? ssImg(p) : teeSvg(guessHex(l.color), view, isHeather(l.color));
   };
 
   // bags and totes: flat, no collar; measured as a bag and printed centered on the body at real size (Oct 9: totes)
@@ -925,7 +925,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (crop) main.translate(-crop.x * k, -crop.y * k);
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], ox = i * (pw + gap), oy = 0;
-      const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
+      const bg = await loadImg(photo(l, v)).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
       const u = photo(l, v), fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
       // the shirt at the same size as on screen (every photo zoomed to fill the frame like the reference tee); kept to its own cell
       const nm = normOf(fit, v);
@@ -993,7 +993,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   async function closeUpCanvas(l: Line, im: Imprint, size: number): Promise<HTMLCanvasElement | null> {
     const v = viewsFor(im.location)[0]; if (!v) return null;
     const u = photo(l, v);
-    const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
+    const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
     const fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
     const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
@@ -1541,7 +1541,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     try {
       const W = PHOTO_W * BD_K, H = PHOTO_H * BD_K;
       const u = photo(l, v);
-      const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v)));
+      const bg = await loadImg(u).catch(() => loadImg(teeSvg(guessHex(l.color), v, isHeather(l.color))));
       const fit = u.startsWith("data:") ? null : fits[u] || measureFor(l, bg, v);
       const nm = normOf(fit, v);
       const c = document.createElement("canvas"); c.width = W; c.height = H;

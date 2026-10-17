@@ -391,10 +391,29 @@ export const guessHex = (color: string) => {
 /** a shirt color name's color, when it's one we know (else null) */
 export const shirtHex = (color: string): string | null => NAMED[(color || "").toLowerCase().trim()] || null;
 
-/** Plain tee outline for garments without S&S photos. */
-export function teeSvg(hex: string, view: View) {
+/**
+ * Heathered shirt colors (Oct 16, Nick: "athletic heather should look like it's heathered"): blends of white or dark
+ * fibers with the color (Athletic Heather, Sport Grey, Ash, Heather Navy, tri-blends, oatmeal…). Drawn with fine
+ * light and dark flecks over the color, the way the knit looks.
+ */
+export const isHeather = (color: string) => /heather|\bhthr\b|athletic|sport gr[ae]y|\bash\b|ice gr[ae]y|tri-?blend|triblend|marble|melange|oatmeal|\bcvc\b|vintage (black|navy|royal|red)/i.test(color || "");
+/** the flecks: an SVG filter (light fibers from one noise channel, dark ones from another), `k` = fleck size scale */
+const heatherFx = (id: string, k = 1) => `<filter id="${id}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="${(0.12 / k).toFixed(3)} ${(1.4 / k).toFixed(3)}" numOctaves="2" seed="11" stitchTiles="stitch" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  2.6 0 0 0 -1.25" result="lite"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 -2.6 0 0 1.2" result="dark"/><feMerge><feMergeNode in="dark"/><feMergeNode in="lite"/></feMerge></filter>`;
+/** a heather tile (CSS background-image) for a color; light colors get darker flecks, dark ones lighter */
+export function heatherTile(hex: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><defs>${heatherFx("h")}</defs><rect width="140" height="140" fill="${hex}"/><rect width="140" height="140" filter="url(#h)" opacity=".4"/></svg>`;
+  return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
+}
+/** CSS background for a shirt color: flat, or heathered */
+export const shirtBg = (color: string, hex = guessHex(color)) => (isHeather(color) ? `${heatherTile(hex)} 0 0 / 140px 140px, ${hex}` : hex);
+
+/** Plain tee outline for garments without S&S photos (heathered when the color is a heather). */
+export function teeSvg(hex: string, view: View, heather = false) {
   const neck = view === "front" ? "M420 110 Q500 175 580 110" : "M430 100 Q500 130 570 100";
-  return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1250"><rect width="1000" height="1250" fill="#ffffff"/><path d="M405 105 L250 150 L60 390 L180 470 L245 410 L245 1120 L755 1120 L755 410 L820 470 L940 390 L750 150 L595 105 Q500 ${view === "front" ? 175 : 130} 405 105 Z" fill="${hex}" stroke="#00000033" stroke-width="4"/><path d="${neck}" fill="none" stroke="#00000044" stroke-width="6"/></svg>`)}`;
+  const body = `M405 105 L250 150 L60 390 L180 470 L245 410 L245 1120 L755 1120 L755 410 L820 470 L940 390 L750 150 L595 105 Q500 ${view === "front" ? 175 : 130} 405 105 Z`;
+  const fx = heather ? `<defs>${heatherFx("h", 2)}<clipPath id="t"><path d="${body}"/></clipPath></defs>` : "";
+  const flecks = heather ? `<rect width="1000" height="1250" filter="url(#h)" opacity=".4" clip-path="url(#t)"/>` : "";
+  return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1250">${fx}<rect width="1000" height="1250" fill="#ffffff"/><path d="${body}" fill="${hex}"/>${flecks}<path d="${body}" fill="none" stroke="#00000033" stroke-width="4"/><path d="${neck}" fill="none" stroke="#00000044" stroke-width="6"/></svg>`)}`;
 }
 
 /** Same-origin link to an S&S photo (so it can be drawn into the saved mockup). */
