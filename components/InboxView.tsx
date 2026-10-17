@@ -145,6 +145,29 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [listOpen, setListOpen] = useState(true);
   // pane sizes, dragged like Outlook (remembered)
   const [listW, setListW] = useSticky<number>("inbox.listW", 300);
+  // the email screen fills the window exactly, so only the list and the email scroll, never the page too
+  // (Oct 16, Nick: "the triple scroll bars is too much")
+  const fitRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = fitRef.current;
+    if (!el) return;
+    let raf = 0;
+    const fit = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (window.innerWidth <= 760) { el.style.removeProperty("height"); return; }
+        const r = el.getBoundingClientRect(), doc = document.documentElement;
+        const below = Math.max(0, doc.scrollHeight - (r.bottom + window.scrollY));
+        const h = Math.max(420, Math.floor(window.innerHeight - (r.top + window.scrollY) - below - 1));
+        if (Math.abs(h - r.height) > 1) el.style.height = h + "px";
+      });
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(document.body);
+    window.addEventListener("resize", fit);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener("resize", fit); };
+  }, []);
   const [open, setOpen] = useState<string | null>(null), [focus, setFocus] = useState<string | null>(null), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
 
   const load = useCallback(async () => {
@@ -528,7 +551,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
         </div>;
       })()}
       {mode === "mail" && <FolderBar folders={folders} current={view.kind === "folder" ? view.path : view.kind === "inbox" ? (folders?.find((f) => f.special === "\\Inbox")?.path || "INBOX") : ""} onPick={(p) => { setQ(""); void openFolder(p); }} />}
-      <div className={"ibx2" + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
+      <div ref={fitRef} className={"ibx2" + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
         {(listOpen || !hasSel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
         {/* 1. the list */}
         <section className="ibx2-list" aria-label="Emails" ref={zoomRef}>
