@@ -9596,3 +9596,10 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .side.mini .side-user{padding-top:3px!important;gap:2px!important}
 .side.mini .side-user-r{gap:0!important}
 .side.mini .side-user-r>*{margin:0!important}
+/* email screen: the list and the email both run to the bottom of the window and end at the same line (Oct 16, Nick) */
+@media (min-width:761px){.main:has(.ibx2){padding-bottom:14px}}
+@media (min-width:761px) and (max-width:1080px){
+  .ibx2-work{display:flex!important;flex-direction:column;gap:8px}
+  .ibx2-work>.ibx2-sw{flex:none}
+  .ibx2-work>.ibx2-mail,.ibx2-work>.ibx2-ai{flex:1 1 0;min-height:0}
+}
