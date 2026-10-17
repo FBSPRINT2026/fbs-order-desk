@@ -9435,3 +9435,11 @@ a.pit-f{text-decoration:none}
 .aa-fav .aa-fav-pic .lp img{width:auto;height:auto;max-width:76%;max-height:76%;background:none;border-radius:0}
 .aa-favs .aa-attn-h{color:var(--ink)}
 .aa-favs .aa-attn-h::first-letter{color:#E0A100}
+
+/* you: initials with Settings under them (opens Settings) */
+.side .side-who{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;width:auto;height:auto;background:none;color:var(--side-ink);font-size:inherit}
+.side .side-who .side-who-c{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--fbs-blue),#0b6fa0);color:#fff;display:grid;place-items:center;font-size:11.5px;font-weight:800;letter-spacing:.04em}
+.side .side-who small{font-size:9.5px;font-weight:600;letter-spacing:.02em;opacity:.8;line-height:1}
+.side .side-who:hover .side-who-c,.side .side-who.on .side-who-c{box-shadow:0 0 0 2px rgba(255,255,255,.55)}
+.side .side-who:hover small{opacity:1;color:#fff}
+span.side-who{cursor:default}

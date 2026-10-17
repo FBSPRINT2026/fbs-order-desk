@@ -312,13 +312,20 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         {/* the owner: the Support page with everyone's reports (Report an issue is down by Sign out, for everyone) */}
         {role === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
         {role === "owner" && link(["/shop/support", "support", "Support"])}
-        {link(["/shop/settings", "settings", "Settings"])}
         {/* View as (binoculars): here in my own view; while viewing as someone it moves to the bottom row */}
         {realRole === "owner" && !viewAs && viewAsEl}</nav>
       </div>
       <div className="side-user">
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
-        {(() => { const full = (people.find((p) => p.email === email)?.name || firstName || email.split("@")[0]).trim(); const ini = full.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"; return <span className="side-who" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}>{ini}</span>; })()}
+        {/* you: your initials, and Settings under them; clicking opens Settings (Oct 16, Nick) */}
+        {(() => {
+          const full = (people.find((p) => p.email === email)?.name || firstName || email.split("@")[0]).trim();
+          const ini = full.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+          const inner = <><span className="side-who-c">{ini}</span><small>Settings</small></>;
+          return canOpen("/shop/settings", perms)
+            ? <Link href="/shop/settings" className={"side-who" + (active("/shop/settings") ? " on" : "")} title={`${full} · ${email}: Settings`} aria-label={`Settings (signed in as ${full})`}>{inner}</Link>
+            : <span className="side-who" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}><span className="side-who-c">{ini}</span></span>;
+        })()}
         <div className="side-user-r">
           {realRole === "owner" && viewAs && viewAsEl}
           {/* add a shortcut: everyone, left of Report an issue (Oct 16, Nick) */}
