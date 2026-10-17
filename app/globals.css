@@ -9294,7 +9294,10 @@ img.lv-art{width:76%;height:76%;object-fit:contain}
 .im-in{display:flex;gap:8px;align-items:flex-end;padding:8px 12px 10px;border-top:1px solid #f0f0f3}
 .im-plus{width:32px;height:32px;border-radius:50%;background:#e9e9eb;color:#6c6c70;display:grid;place-items:center;font-size:20px;line-height:1;cursor:pointer;flex:none}
 .im-field{flex:1;min-width:0;display:flex;align-items:flex-end;border:1px solid #d1d1d6;border-radius:18px;padding:3px 3px 3px 12px;background:#fff}
-.im-field textarea{flex:1;min-width:0;border:0;outline:0;resize:none;font:inherit;font-size:14px;line-height:1.35;padding:5px 0;max-height:140px;background:none;box-shadow:none}
+.im .im-field textarea{flex:1;min-width:0;border:0;outline:0;resize:none;font:inherit;font-size:14px;line-height:1.35;padding:5px 0;min-height:0;height:29px;max-height:140px;background:none;box-shadow:none;border-radius:0}
+.im .im-field textarea:focus{box-shadow:none;outline:0}
+.im-field{align-items:center}
+.im-field:focus-within{border-color:#a7a7ad}
 .im-send{width:28px;height:28px;border-radius:50%;border:0;background:var(--im-blue);color:#fff;font-size:16px;font-weight:700;cursor:pointer;flex:none}
 .im-send:disabled{background:#c7c7cc;cursor:default}
 .mk-brand-rules{font-size:12.5px;background:#fff8e1;border:1px solid #f3d27a;border-radius:8px;padding:7px 10px}
