@@ -74,7 +74,10 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   /** underbase on a dark garment: set by hand (true / false); not set = decided from the inks (black, navy, dark reds don't need one) */ underbase?: boolean;
   /** screens set by hand (else colors + underbase) */ screens?: number;
   /** this print's screens are on file from an earlier order: remake price per screen (else group.remake) */ remake?: boolean;
-  /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film";
+  /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film" | "brand";
+  /** a fashion hit (Oct 16, Nick): no underbase on a dark shirt, each color printed, flashed and printed again through
+   *  the same screen. Priced the same as with the underbase (two rounds on press) */ printStyle?: "fashion";
+  /** soft hand additive mixed into the inks */ softHand?: boolean;
   /** not known for sure (a reorder of an old Printavo job with no film found): production confirms before printing */
   confirm?: { size?: boolean; ink?: boolean; why: string; /** staff filled in what they think (still not confirmed): who and when */ filled?: { by: string; at: string } };
   /** production (Jose) confirmed this print's details on a reorder: who and when (Production Details); `from` = taken
@@ -158,8 +161,39 @@ export type Payment = { id: string; order_id: string; amount: number; method: st
 export type Customer = { id: string; is_test?: boolean; company: string; name: string; email: string; phone: string; address: string; notes: string; tax_exempt: boolean; created_at: string; contact2_name: string; contact2_email: string; contact2_phone: string; ship_address: string; price_type: PriceType; payment_terms?: PayTerms;
   /** CRM */ tags?: string[]; next_follow_up?: string | null; owner_email?: string; /** account owner's name (Settings → Staff) */ account_owner?: string; last_contact_at?: string | null;
   /** shipping: whose carrier account pays (fbs = ours, with markup) */ ship_bill?: "fbs" | "ups" | "fedex"; ship_ups_account?: string; ship_fedex_account?: string; ship_bill_zip?: string;
-  /** their brand inks ("Red" = "PMS 199 C"), first in every Mockup Creator ink dropdown for them (Oct 16) */ brand_colors?: BrandColor[] };
+  /** their brand inks ("Red" = "PMS 199 C"), first in every Mockup Creator ink dropdown for them (Oct 16) */ brand_colors?: BrandColor[];
+  /** their print sizes and how their prints are made (Oct 16) */ brand_print?: BrandPrint };
 /** One of a customer's brand colors: what they call it and the exact ink. */
+/**
+ * Brand standards beyond colors (Oct 16, Nick): "Peticolas' circle logo is always 10.5" on the front and 3" on the nape";
+ * "we never underbase their distressed logos, we hit it twice with one screen". Sizes are applied in the Mockup Creator
+ * on their own (that's what the customer always wants); how it prints sets each new print's Standard / Fashion hit.
+ */
+export type BrandSize = { id: string; which: "any" | "round" | "wide" | "tall" | "design"; design_id?: string; location: string; width: number; note?: string };
+export type BrandPrint = { sizes?: BrandSize[]; hit?: "standard" | "fashion" | "ask"; soft?: boolean; distressedOnly?: boolean };
+/** a logo's shape by its width ÷ height: round (about as tall as wide), wide or tall */
+export const logoShape = (ratio: number | null | undefined): "round" | "wide" | "tall" | "" => (!ratio ? "" : ratio > 1.18 ? "wide" : ratio < 0.85 ? "tall" : "round");
+/** the customer's size for this logo on this location: a rule for that logo first, then its shape, then any logo */
+export function brandSizeFor(bp: BrandPrint | null | undefined, designId: string | undefined, ratio: number | null | undefined, location: string): BrandSize | null {
+  const here = (bp?.sizes || []).filter((r) => r.width > 0 && r.location === location);
+  const shape = logoShape(ratio);
+  return here.find((r) => r.which === "design" && !!designId && r.design_id === designId) || here.find((r) => r.which !== "design" && r.which !== "any" && r.which === shape) || here.find((r) => r.which === "any") || null;
+}
+/** how a new print for this customer prints on a dark shirt: a fashion hit (and soft hand), standard, or null = ask */
+export function brandHitFor(bp: BrandPrint | null | undefined, distressed: boolean): { printStyle?: "fashion"; softHand?: boolean } | null {
+  if (!bp?.hit || bp.hit === "ask") return null;
+  if (bp.hit === "fashion" && (!bp.distressedOnly || distressed)) return { printStyle: "fashion", softHand: !!bp.soft };
+  return { softHand: bp.hit === "standard" && !!bp.soft && !bp.distressedOnly ? true : undefined };
+}
+/** a screen print as the customer reads it: "3-color screen print", "2-color fashion print (soft, no underbase)" */
+export function printHow(d: Pick<Imprint, "method" | "colors" | "printStyle" | "softHand">): string {
+  if (d.method !== "screen") return d.method === "embroidery" ? "embroidery" : "full color DTF transfer";
+  if (d.colors >= FULL_COLOR) return "full color screen print";
+  const n = `${d.colors || 1}-color`;
+  if (d.printStyle === "fashion") return `${n} fashion print (${d.softHand ? "soft, " : ""}no underbase)`;
+  return `${n} screen print${d.softHand ? " (soft hand)" : ""}`;
+}
+
 export type BrandColor = { name: string; ink: string; /** a wholesaler's client or a second brand ("All My Sons"); none = the account's own */ group?: string };
 /** One entry on a customer's timeline: an email, call, note, meeting or task. */
 export type Activity = { id: string; customer_id: string | null; order_id: string | null; kind: "note" | "call" | "email" | "meeting" | "task" | "sms"; direction: "in" | "out" | "none"; subject: string; body: string; from_email: string; to_email: string; external_id: string | null; thread_id: string | null; occurred_at: string; ai_processed_at: string | null; meta: Record<string, unknown>; created_by: string; created_at: string };
@@ -468,18 +502,21 @@ export function pmsInks(d: Pick<Imprint, "inks" | "pmsCharge">): { name: string;
 export function pmsCount(d: Pick<Imprint, "inks" | "pmsCharge" | "pms">): number {
   return inkNames(d.inks).length ? pmsInks(d).filter((x) => x.charge).length : num(d.pms);
 }
-export function needsUnderbase(d: Pick<Imprint, "inks" | "underbase" | "method" | "colors">): boolean {
+export function needsUnderbase(d: Pick<Imprint, "inks" | "underbase" | "method" | "colors"> & { printStyle?: Imprint["printStyle"] }): boolean {
+  if (d.printStyle === "fashion") return false; // a fashion hit never gets one
   if (d.underbase != null) return d.underbase;
   const names = inkNames(d.inks);
   if (!names.length) return true;
   return names.some((n) => { const L = inkL(n); return L == null || L > 40; });
 }
 /** screens for a screen print: set by hand, else its colors plus the underbase when it gets one */
-export function screensFor(d: Imprint, s: Pick<PriceList, "darkAddsColor">, light: boolean): { n: number; under: boolean; auto: number } {
+export function screensFor(d: Imprint, s: Pick<PriceList, "darkAddsColor">, light: boolean): { n: number; under: boolean; auto: number; hit2: boolean } {
   const k0 = Math.max(1, num(d.colors) || 1);
   const under = !!s.darkAddsColor && !light && k0 < FULL_COLOR && needsUnderbase(d);
+  // a fashion hit on a dark shirt: no underbase screen, but the second round on press is priced like the underbase color
+  const hit2 = d.printStyle === "fashion" && !!s.darkAddsColor && !light && k0 < FULL_COLOR && needsUnderbase({ ...d, printStyle: undefined });
   const auto = k0 + (under ? 1 : 0);
-  return { n: d.screens != null && d.screens > 0 ? d.screens : auto, under, auto };
+  return { n: d.screens != null && d.screens > 0 ? d.screens : auto, under, auto, hit2 };
 }
 
 function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light, x: { eti?: number; remake?: boolean; screenFee?: number } = {}) {
@@ -494,7 +531,7 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
     // the underbase on a dark garment is one more color (not under black, navy, dark reds; or as set by hand)
     const sc = screensFor(d, s, light);
     const under = sc.under ? 1 : 0;
-    const k = k0 + under;
+    const k = k0 + under + (sc.hit2 ? 1 : 0);
     const row = (light && s.screenLight ? s.screenLight : s.screen)[ti] || [];
     const n = Math.min(row.length || 6, k);
     const dtg = s.dtg ? num((dtgLight && s.dtgLight ? s.dtgLight : s.dtg)[ti]) : 0;

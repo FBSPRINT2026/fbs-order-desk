@@ -9118,3 +9118,20 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
 .bs-sws{display:flex;gap:3px;margin-top:4px}.bs-sws .sw{width:16px;height:16px;border-radius:4px;border:1px solid rgba(0,0,0,.15)}
 .bs-note{display:flex;align-items:center;gap:8px;justify-content:space-between;font-size:12px;color:var(--ink-3);padding:6px 8px 2px;border-top:1px solid var(--line);margin-top:4px}
 .bs-overlay{position:fixed;inset:0;z-index:300;background:rgba(20,29,43,.35);display:grid;place-items:center;padding:16px}
+/* Brand standards: print sizes and how their prints are made (Oct 16, Nick) */
+.bp{margin-top:16px;padding-top:12px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:8px}
+.bp-sec{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+.bp-table{display:flex;flex-direction:column;gap:6px}
+.bp-head,.bp-row{display:grid;grid-template-columns:minmax(120px,1.2fr) minmax(120px,1fr) 80px minmax(80px,1fr) 30px;gap:6px;align-items:center}
+.bp-head span{font-size:11.5px;font-weight:700;color:var(--ink-3)}
+.bp-row select,.bp-row input{min-width:0;width:100%}
+.bp-which{display:flex;flex-direction:column;gap:4px}
+.bp-w{display:flex;align-items:center;gap:3px}
+.bp-add{align-self:flex-start}
+.bp-hint{font-size:12.5px;margin:0}
+.bp-seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:9px;overflow:hidden;align-self:flex-start}
+.bp-seg button{border:0;border-right:1px solid var(--line);background:var(--surface,#fff);padding:6px 12px;font-size:13px;cursor:pointer;color:var(--ink)}
+.bp-seg button:last-child{border-right:0}
+.bp-seg button.on{background:var(--fbs-blue,#0e9bd8);color:#fff;font-weight:600}
+.bp-opts{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+@media (max-width:640px){.bp-head{display:none}.bp-row{grid-template-columns:1fr 1fr;padding:8px 0;border-bottom:1px solid var(--line)}}

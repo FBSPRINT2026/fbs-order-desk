@@ -27,6 +27,7 @@ import ShopMessages from "@/components/ShopMessages";
 import ShopGoods from "@/components/ShopGoods";
 import CustomerContacts from "@/components/CustomerContacts";
 import CustomerBrandColors from "@/components/CustomerBrandColors";
+import CustomerBrandPrint from "@/components/CustomerBrandPrint";
 import FilmFolder from "@/components/FilmFolder";
 import ShopCustomerProjects from "@/components/ShopCustomerProjects";
 import ProgramAdmin from "@/components/ProgramAdmin";
@@ -180,7 +181,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       })()}
       {moveOpen && <CustomerMove customerId={id} onClose={() => setMoveOpen("")} onMoved={async () => { const go = moveOpen === "quote"; await reloadShop(); const { data: fresh } = await createClient().from("customers").select("*").eq("id", id).maybeSingle(); if (fresh) setC((x) => (x ? { ...x, ...(fresh as object) } : x)); setMoveOpen(""); if (go) setTimeout(() => newQuote(), 300); }} />}
       <TestAccount key={id} customerId={id} isTest={!!c.is_test} jobs={os.length} onChange={(v) => { reloadShop(); if (v !== undefined) setC((x) => (x ? { ...x, is_test: v } : x)); }} />
-      <AccountAreas mode="shop" brandColors={c?.brand_colors || []} brandEditor={<CustomerBrandColors customerId={id} company={c?.company || c?.name || ""} />} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
+      <AccountAreas mode="shop" brandColors={c?.brand_colors || []} brandEditor={<><CustomerBrandColors customerId={id} company={c?.company || c?.name || ""} /><CustomerBrandPrint customerId={id} /></>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} onCount={setProjOpen} />} projectsCount={projOpen}
           programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
           productionPanel={<CustomerProductionFiles customerId={id} />}
