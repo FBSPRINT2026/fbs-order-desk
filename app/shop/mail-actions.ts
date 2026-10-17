@@ -354,6 +354,21 @@ export async function getOutlookInbox() {
   } catch (e) { return fail(e); }
 }
 
+/**
+ * Just the unread count for the menu's Email badge (Oct 16): a count, no Outlook check and no list. The menu used to call
+ * getOutlookInbox on every page, which talked to Outlook for up to 4 s and sent back 500 emails, and server actions
+ * run one at a time, so every page's own loading waited behind it.
+ */
+export async function getInboxUnread() {
+  try {
+    const v = await staff(), { admin } = v;
+    const { acct: a } = await mailboxToRead(admin, v);
+    if (!a || !a.enabled) return { ok: true as const, unread: 0 };
+    const { count } = await admin.from("mail_inbox").select("id", { count: "exact", head: true }).eq("account_id", a.id).is("gone_at", null).eq("unread", true);
+    return { ok: true as const, unread: count || 0 };
+  } catch (e) { return fail(e); }
+}
+
 /** Archive: moves the email to Archive in your Outlook, the same as Outlook's Archive button (by row, or by the customer email on file) */
 export async function archiveOutlookEmail(input: { id?: string; activityId?: string; to?: MoveTo; /** Black Hole on a customer, after the page asked */ confirmed?: boolean }) {
   try {

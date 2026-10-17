@@ -14,7 +14,7 @@ import SearchInput from "@/components/SearchInput";
 import { useRole } from "@/components/RoleContext";
 import { canOpen, ROLES } from "@/lib/roles";
 import { ordersNeedingDetails } from "@/lib/productionDetails";
-import { getOutlookInbox } from "@/app/shop/mail-actions";
+import { getInboxUnread } from "@/app/shop/mail-actions";
 import { setViewAs } from "@/app/shop/view-as-actions";
 import SupportButton from "@/components/SupportButton";
 import { useSticky } from "@/lib/useSticky";
@@ -85,6 +85,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const [pvWaiting, setPvWaiting] = useState(0);
   const [details, setDetails] = useState(0); // reorders waiting on production details
   const [mailNew, setMailNew] = useState(0); // unread email in my Inbox
+  const slowAt = useRef(0); // when the slower badges (email, Printavo) were last counted
   // the menu folds to a strip of icons (a label pops up beside the one you point at); the arrow at the top opens it
   // back up to the full menu and folds it again
   const [mini, setMini] = useSticky<boolean>("nav.mini", true);
@@ -161,9 +162,10 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         if (live) setTodo({ all: open.length + extra.length, urgent: open.filter((x) => x.priority === 1).length + extra.filter((x) => x.priority === 1).length });
       } catch { /* the badge is a nice-to-have */ }
     };
-    run();
+    // first count a few seconds in, so the page's own data loads first (it reads every customer)
+    const first = setTimeout(run, 4000);
     const t = setInterval(run, 5 * 60 * 1000);
-    return () => { live = false; clearInterval(t); };
+    return () => { live = false; clearTimeout(first); clearInterval(t); };
   }, []);
 
   useEffect(() => {
@@ -173,7 +175,12 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     sb.from("orders").select("id", { count: "exact", head: true }).eq("status", "request").not("submitted_at", "is", null)
       .then(({ count }) => setIncoming(count || 0));
     ordersNeedingDetails(sb, "id").then((r) => setDetails(r.length), () => null);
-    getOutlookInbox().then((r) => { if (r.ok) setMailNew(r.items.filter((i) => i.unread).length); }, () => null);
+    // the slower badges at most once a minute, and after the page's own loading has had its turn (Oct 16: speed)
+    const now = Date.now();
+    if (now - slowAt.current < 60_000) return;
+    const later = setTimeout(() => {
+    slowAt.current = Date.now();
+    getInboxUnread().then((r) => { if (r.ok) setMailNew(r.unread); }, () => null);
     // 40,000-series orders with Printavo changes waiting to be accepted (the owner's view only)
     if (realRole === "owner") Promise.all([sb.from("orders").select("*").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000), sb.from("settings").select("data").eq("id", 1).maybeSingle()])
       .then(async ([{ data }, { data: st }]) => {
@@ -183,6 +190,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         setPvWaiting(os.filter((o) => { const snap = snapOf(o); return printavoChanges(o, calcOrder(o, s), snap, nt[o.id] ?? "").changes.length > 0 || !!cardFix(o, snap); }).length);
       })
       .then(undefined, () => null);
+    }, 1200);
+    return () => clearTimeout(later);
   }, [path, realRole]);
 
   // the menu, in groups — each group's items are kept in alphabetical order
