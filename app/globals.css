@@ -9414,3 +9414,9 @@ a.pit-f{text-decoration:none}
 .side .side-user .nav-add-sc svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .side .side-user .nav-add-sc .lbl-t{display:none}
 .side.mini .side-user .nav-add-sc{display:grid!important}
+
+/* binoculars on the bottom row while viewing as someone */
+.side .side-user .nav-viewas{width:30px;height:30px;border-radius:8px;flex:none}
+.side .side-user .nav-viewas.on{background:#f0c75e;color:#3d2c00}
+/* the menu's text a touch smaller, so everything sits higher (Oct 16, Nick) */
+@media (min-width:821px){.side:not(.mini) .nav:not(.nav-tools) a{font-size:13px;padding-top:6px!important;padding-bottom:6px!important}.side:not(.mini) .nav:not(.nav-tools) a svg{width:16px;height:16px}.side .nav-h{font-size:10px;padding-top:5px;padding-bottom:3px}.side-hello{font-size:13.5px}}

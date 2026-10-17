@@ -77,7 +77,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
     window.addEventListener("pagehide", keep);
     return () => { document.removeEventListener("click", keep, true); window.removeEventListener("pagehide", keep); };
   }, []);
-  const { realRole, viewAs, perms } = useRole();
+  const { realRole, role, viewAs, perms } = useRole();
   const crew = !perms.money;
   const router = useRouter();
   const [unread, setUnread] = useState(0);
@@ -209,6 +209,20 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
     </Link>
   );
 
+  // View as: binoculars, the list opens from the icon (Oct 16, Nick). In my own view it's in Admin Tools; while viewing
+  // as someone the menu is exactly theirs, with the binoculars beside Add a shortcut to come back
+  const viewAsEl = (
+          <span className={"nav-viewas" + (viewAs ? " on" : "")} data-tip={viewAs ? "Viewing as someone else: pick My view to go back" : "View as"}>
+            <svg viewBox="0 0 24 24" aria-hidden><circle cx="6.5" cy="16" r="3.5" /><circle cx="17.5" cy="16" r="3.5" /><path d="M3.3 14.6 5 7a2 2 0 0 1 2-1.6h1A2 2 0 0 1 10 7.4v6.4" /><path d="M20.7 14.6 19 7a2 2 0 0 0-2-1.6h-1a2 2 0 0 0-2 2v6.4" /><path d="M10 11.5h4" /></svg>
+            <select className={"side-viewas" + (viewAs ? " on" : "")} value={viewAs} title="View as: see the shop the way someone else does (you stay signed in as you)" aria-label="View as"
+              onChange={async (e) => { await setViewAs(e.target.value); window.location.reload(); }} data-notranslate>
+              <option value="">View as…</option>
+              {people.filter((p) => p.email !== email).length > 0 && <optgroup label="People">{people.filter((p) => p.email !== email).map((p) => <option key={p.email} value={p.email}>{p.name || p.email} · {ROLES.find((r) => r.v === p.role)?.label || p.role}</option>)}</optgroup>}
+              <optgroup label="Roles">{ROLES.filter((r) => r.v !== "owner").map((r) => <option key={r.v} value={r.v}>{r.label}</option>)}</optgroup>
+              {viewAs && <option value="">← My view (Owner)</option>}
+            </select>
+          </span>
+  );
   return (
     <>
     {/* the Home Screen app: straight to the page chosen for this phone (Oct 15, Nick: open right to my email) */}
@@ -293,30 +307,20 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
       )}
       {/* the bottom of the menu: Admin Tools, small icons with their names on hover like Shop Tools (Oct 16, Nick) */}
       <div className="nav-g nav-g-admintools nav-foot-g">
-      <div className="nav-h nav-h-admintools">{realRole === "owner" || realRole === "admin" ? "Admin Tools" : "More"}</div>
+      <div className="nav-h nav-h-admintools">{role === "owner" || role === "admin" ? "Admin Tools" : "More"}</div>
       <nav className="nav nav-foot nav-tools">
         {/* the owner: the Support page with everyone's reports (Report an issue is down by Sign out, for everyone) */}
-        {realRole === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
-        {realRole === "owner" && link(["/shop/support", "support", "Support"])}
+        {role === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
+        {role === "owner" && link(["/shop/support", "support", "Support"])}
         {link(["/shop/settings", "settings", "Settings"])}
-        {/* View as: binoculars (Oct 16, Nick); the list opens from the icon */}
-        {realRole === "owner" && (
-          <span className={"nav-viewas" + (viewAs ? " on" : "")} data-tip={viewAs ? "Viewing as someone else: pick My view to go back" : "View as"}>
-            <svg viewBox="0 0 24 24" aria-hidden><circle cx="6.5" cy="16" r="3.5" /><circle cx="17.5" cy="16" r="3.5" /><path d="M3.3 14.6 5 7a2 2 0 0 1 2-1.6h1A2 2 0 0 1 10 7.4v6.4" /><path d="M20.7 14.6 19 7a2 2 0 0 0-2-1.6h-1a2 2 0 0 0-2 2v6.4" /><path d="M10 11.5h4" /></svg>
-            <select className={"side-viewas" + (viewAs ? " on" : "")} value={viewAs} title="View as: see the shop the way someone else does (you stay signed in as you)" aria-label="View as"
-              onChange={async (e) => { await setViewAs(e.target.value); window.location.reload(); }} data-notranslate>
-              <option value="">View as…</option>
-              {people.filter((p) => p.email !== email).length > 0 && <optgroup label="People">{people.filter((p) => p.email !== email).map((p) => <option key={p.email} value={p.email}>{p.name || p.email} · {ROLES.find((r) => r.v === p.role)?.label || p.role}</option>)}</optgroup>}
-              <optgroup label="Roles">{ROLES.filter((r) => r.v !== "owner").map((r) => <option key={r.v} value={r.v}>{r.label}</option>)}</optgroup>
-              {viewAs && <option value="">← My view (Owner)</option>}
-            </select>
-          </span>
-        )}</nav>
+        {/* View as (binoculars): here in my own view; while viewing as someone it moves to the bottom row */}
+        {realRole === "owner" && !viewAs && viewAsEl}</nav>
       </div>
       <div className="side-user">
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
         {(() => { const full = (people.find((p) => p.email === email)?.name || firstName || email.split("@")[0]).trim(); const ini = full.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?"; return <span className="side-who" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}>{ini}</span>; })()}
         <div className="side-user-r">
+          {realRole === "owner" && viewAs && viewAsEl}
           {/* add a shortcut: everyone, left of Report an issue (Oct 16, Nick) */}
           <button type="button" className="nav-add-sc" onClick={() => { setAddOpen(true); setAdding(null); }} data-tip="Add a shortcut" aria-label="Add a shortcut: your own quick links"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /><path d="M12 7v6M9 10h6" /></svg><span className="lbl-t">Add a shortcut</span></button>
           {/* report a problem with a screenshot: everyone, beside Sign out (Oct 16, Nick) */}
