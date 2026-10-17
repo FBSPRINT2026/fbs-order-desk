@@ -38,7 +38,7 @@ async function saveThread(admin: SupabaseClient, customerId: string, title: stri
 /** what's saved now: the customer, their brand colors and print standards, their logos */
 async function current(admin: SupabaseClient, customerId: string) {
   const [{ data: c }, { data: ds }] = await Promise.all([
-    admin.from("customers").select("id, name, company, brand_colors, brand_print").eq("id", customerId).maybeSingle(),
+    admin.from("customers").select("id, name, company, brand_colors, brand_print, style_guides").eq("id", customerId).maybeSingle(),
     admin.from("designs").select("id, number, name, inks, colors, specs, width_px, height_px, preview_path, starred").eq("customer_id", customerId).is("archived_at", null).order("starred", { ascending: false }).order("number", { ascending: false }).limit(60),
   ]);
   if (!c) return null;
@@ -60,7 +60,9 @@ export async function brandChat(admin: SupabaseClient, s: Settings, customerId: 
   // what to look at: files from this conversation (newest first), then their logos
   const documents: { data: string; label?: string }[] = [];
   const images: { media_type: "image/png" | "image/jpeg" | "image/gif" | "image/webp"; data: string; label?: string }[] = [];
-  const allFiles = [...files, ...thread.flatMap((m) => m.files || []).reverse()].filter((f, i, a) => a.findIndex((x) => x.path === f.path) === i).slice(0, 4);
+  // what's attached now, then their style guides on file (Brand standards → Style guides), then earlier attachments
+  const guides = ((cur.c.style_guides || []) as { name: string; path: string; type: string; archived?: boolean }[]).filter((g) => g?.path && !g.archived).map((g) => ({ name: `${g.name} (their style guide on file)`, path: g.path, type: g.type }));
+  const allFiles = [...files, ...guides, ...thread.flatMap((m) => m.files || []).reverse()].filter((f, i, a) => a.findIndex((x) => x.path === f.path) === i).slice(0, 5);
   const skipped: string[] = [];
   for (const f of allFiles) {
     if (/\.pdf$/i.test(f.path) || f.type === "application/pdf") {
