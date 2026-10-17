@@ -9517,3 +9517,5 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 @media (min-width:761px){.eh-bar .tb-row{container-type:normal!important}}
 @media (min-width:761px){.eh-bar .tb-b{padding:0 5px!important}.eh-bar .tb-caret{margin-left:-2px;font-size:9px}.eh-bar .tb-g+.tb-g{margin-left:2px!important;padding-left:2px!important}.eh-bar .tb-row{padding:2px 2px!important}}
 @media (min-width:761px){.eh-bar .tb-b{padding:0 4px!important}.eh-bar .tb-row{padding:2px 0!important}.eh-bar .tb-row+.tb-row{padding-left:3px!important;margin-left:3px}}
+/* Create reorder: an icon like the rest (still blue, its name on hover) */
+@media (min-width:761px){.eh-bar .tb-b.primary .tb-l{display:none}.eh-bar .tb-b.primary{width:30px;justify-content:center}}
