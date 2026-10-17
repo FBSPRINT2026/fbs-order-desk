@@ -1,4 +1,5 @@
 "use client";
+import { useSticky } from "@/lib/useSticky";
 import { mzCss } from "@/components/MailZoom";
 import CcField from "@/components/CcField";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -374,6 +375,8 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
   listOpen: boolean; toggleList: () => void; back?: () => void;
 }) {
   const [full, setFull] = useState(false);
+  // the AI summary: one line until clicked (Oct 16, Nick: "the AI suggestions is huge"), remembered
+  const [aiFull, setAiFull] = useSticky("mail.aiFull", false);
   void listOpen; void toggleList; // the list's hide arrow is gone (Oct 14): the list always shows beside the email
   const nav = useContext(PhoneNav);
   const name = fromName || fromEmail;
@@ -396,9 +399,9 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
         {nav && <PhoneBar a={phone || {}} />}
       </div>
       {/* AI: the summary and the Assistant button, right under the toolbar, above the email (Oct 14, Nick) */}
-      {(summary || tags || ai) && <div className="eh-ai" role="group" aria-label="AI">
-        <span className="eh-ai-l" aria-hidden><span className="eh-ai-orb">✦</span>AI</span>
-        <div className="eh-ai-b">{summary && <span className="eh-sum">{summary}</span>}{tags && <span className="eh-ai-tags">{tags}</span>}</div>
+      {(summary || tags || ai) && <div className={"eh-ai" + (aiFull ? "" : " mini")} role="group" aria-label="AI">
+        <button type="button" className="eh-ai-l" onClick={() => setAiFull(!aiFull)} aria-expanded={aiFull} title={aiFull ? "Show the AI summary on one line" : "Show the whole AI summary and its tags"}><span className="eh-ai-orb">✦</span>AI<span className="eh-ai-car" aria-hidden>{aiFull ? "▴" : "▾"}</span></button>
+        <div className="eh-ai-b" onClick={() => { if (!aiFull) setAiFull(true); }}>{summary && <span className="eh-sum">{summary}</span>}{tags && <span className="eh-ai-tags">{tags}</span>}</div>
         {ai}
       </div>}
       {/* Oct 14, Nick: a section header over the email itself, like the toolbar's */}
@@ -425,7 +428,7 @@ export function MailHead({ toolbar, phone, subject, tags, fromName, org, fromEma
  * earlier emails" is tapped (QuoteToggle puts .show-q on the frame's body). Phones first; the computer too since Oct 15
  * (Nick: "make the full web versions match that style")
  */
-export const PHONE_MAIL_CSS = `html,body{padding:0 0 4px!important;font:calc(14px*var(--mz,1))/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif!important;color:#1d2433}body p,body div,body span,body td,body li,body font,body a,body pre,body b,body strong,body i,body em{font-family:inherit!important;font-size:calc(14px*var(--mz,1))!important;line-height:1.5!important}body p{margin:0 0 10px}body.fold-q:not(.show-q) blockquote,body.fold-q:not(.show-q) .gmail_quote,body.fold-q:not(.show-q) .yahoo_quoted,body.fold-q:not(.show-q) #divRplyFwdMsg,body.fold-q:not(.show-q) #divRplyFwdMsg~*,body.fold-q:not(.show-q) #appendonsend~*,body.fold-q:not(.show-q) div[type=cite],body.fold-q:not(.show-q) div:has(+blockquote),body.fold-q:not(.show-q) div:has(+br+blockquote){display:none!important}body.show-q blockquote{margin:8px 0!important;padding:0 0 0 10px!important;border-left:2px solid #d5dbe3!important;color:#5a6577}body.show-q blockquote *{color:#5a6577!important}`;
+export const PHONE_MAIL_CSS = `html,body{padding:0 0 4px!important;font:calc(14.5px*var(--mz,1))/1.32 Aptos,Calibri,"Segoe UI",-apple-system,BlinkMacSystemFont,Arial,sans-serif!important;color:#1d2433}body p,body div,body span,body td,body li,body font,body a,body pre,body b,body strong,body i,body em{font-family:inherit!important;font-size:calc(14.5px*var(--mz,1))!important;line-height:1.32!important}body.fold-q:not(.show-q) blockquote,body.fold-q:not(.show-q) .gmail_quote,body.fold-q:not(.show-q) .yahoo_quoted,body.fold-q:not(.show-q) #divRplyFwdMsg,body.fold-q:not(.show-q) #divRplyFwdMsg~*,body.fold-q:not(.show-q) #appendonsend~*,body.fold-q:not(.show-q) div[type=cite],body.fold-q:not(.show-q) div:has(+blockquote),body.fold-q:not(.show-q) div:has(+br+blockquote){display:none!important}body.show-q blockquote{margin:8px 0!important;padding:0 0 0 10px!important;border-left:2px solid #d5dbe3!important;color:#5a6577}body.show-q blockquote *{color:#5a6577!important}`;
 const HEAD = `<base target="_blank"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; form-action 'none'"><style>html,body{margin:0;padding:10px 12px;font:14px/1.45 Calibri,Segoe UI,Arial,sans-serif;color:#222;background:#fff;overflow-x:auto}img{max-width:100%;height:auto}table img{max-width:none}table{max-width:100%}${PHONE_MAIL_CSS}</style>`;
 /** how tall an email's frame needs to be: its content, not the frame's current height (documentElement.scrollHeight
  *  never drops below the frame, so folding the quoted emails away left a blank gap) */
