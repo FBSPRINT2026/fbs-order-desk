@@ -2,7 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewerPerms } from "@/lib/access";
-import { cardSetsAnything, tiersOf, type DesignPrice, type RateCard } from "@/lib/programs";
+import { cardSetsAnything, cardsOf, tiersOf, type DesignPrice, type Program, type RateCard } from "@/lib/programs";
 
 /**
  * Program pricing on the order page (Oct 14, Nick): the customer's rate card (with the base shirt's blank cost now),
@@ -20,22 +20,24 @@ const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? 
 
 /** the customer's program: the rate card (with the base shirt's S–XL blank cost from the catalog) and the designs'
  *  own prices (program items); null when they have neither */
+export type ProgramCardOpt = { id: string; name: string; match: string[]; card: RateCard; baseCost: number | null };
 export async function programCard(customerId: string) {
   try {
     const { admin } = await me();
-    const { data: p } = await admin.from("programs").select("id, name, rate_card").eq("customer_id", customerId).order("created_at").limit(1).maybeSingle();
-    if (!p) return { ok: true as const, card: null, baseCost: null, items: [] as DesignPrice[] };
+    const { data: p } = await admin.from("programs").select("id, name, rate_card, rate_cards, apply_mode").eq("customer_id", customerId).order("created_at").limit(1).maybeSingle();
+    if (!p) return { ok: true as const, card: null, baseCost: null, items: [] as DesignPrice[], cards: [] as ProgramCardOpt[], applyMode: "auto" as const };
     const { data: its } = await admin.from("program_items").select("id, name, style, price, min_qty, design_id, active, tiers, price_mode, supplied").eq("program_id", p.id).eq("active", true).is("archived_at", null);
     const items = ((its || []) as DesignPrice[]).filter((x) => tiersOf(x).length);
-    let card = (p.rate_card || null) as RateCard | null;
-    if (!cardSetsAnything(card)) card = null;
-    let baseCost: number | null = null;
-    if (card) {
-      const { data: g } = await admin.from("garments").select("cost, brand").ilike("style", card.base.style.trim()).limit(5);
-      const hit = ((g || []) as { cost: number; brand: string }[]).find((x) => !card!.base.brand || x.brand.toLowerCase() === card!.base.brand.toLowerCase()) || (g || [])[0];
-      baseCost = hit?.cost ? +hit.cost : card.base.cost ?? null;
+    // every card (Oct 17: Nine18 has one per location or brand), each with its base shirt's cost now
+    const cards: ProgramCardOpt[] = [];
+    for (const c of cardsOf(p as Program)) {
+      if (!cardSetsAnything(c)) continue;
+      const { data: g } = await admin.from("garments").select("cost, brand").ilike("style", (c.base?.style || "").trim() || "-").limit(5);
+      const hit = ((g || []) as { cost: number; brand: string }[]).find((x) => !c.base?.brand || x.brand.toLowerCase() === c.base.brand.toLowerCase()) || (g || [])[0];
+      cards.push({ id: c.id, name: c.name || (p.name as string) || "Program", match: c.match || [], card: c, baseCost: hit?.cost ? +hit.cost : c.base?.cost ?? null });
     }
-    return { ok: true as const, card, baseCost, items };
+    const first = cards[0] || null;
+    return { ok: true as const, card: first?.card || null, baseCost: first?.baseCost ?? null, items, cards, applyMode: ((p.apply_mode as string) === "ask" ? "ask" : "auto") as "auto" | "ask" };
   } catch (e) { return fail(e); }
 }
 

@@ -37,8 +37,8 @@ import Timeline from "@/components/Timeline";
 import { useCan, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
 import { PAY_TERMS, SIZES, isShipFee, lineQty, supplierSizeUp } from "@/lib/pricing";
-import { BIG_SIZES, finishingIncluded, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
-import { programCard } from "@/app/shop/program-pricing-actions";
+import { BIG_SIZES, cardForOrder, finishingIncluded, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
+import { programCard, type ProgramCardOpt } from "@/app/shop/program-pricing-actions";
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
@@ -106,7 +106,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [armed, setArmed] = useState("");
   const [confirmRetail, setConfirmRetail] = useState(false);
   /** the customer's program rate card (Program chip), and the base shirt's blank cost now */
-  const [prog, setProg] = useState<{ card: RateCard | null; baseCost: number | null; items: DesignPrice[] } | null>(null);
+  // the customer's program: every rate card (Nine18 has one per location or brand), the design prices and whether new
+  // orders take it by themselves; prog = the card this order uses (picked on the order, else guessed from its name)
+  const [progAll, setProgAll] = useState<{ cards: ProgramCardOpt[]; items: DesignPrice[]; applyMode: "auto" | "ask" } | null>(null);
+  const progCard = progAll ? cardForOrder(progAll.cards, { program_card: o?.program_card, nickname: o?.nickname, po_number: o?.po_number, ship_to: o?.ship_to }) : null;
+  const prog = useMemo(() => (progAll ? { card: progCard?.card || null, baseCost: progCard?.baseCost ?? null, items: progAll.items } : null), [progAll, progCard]);
   const [custOwed, setCustOwed] = useState<{ n: number; owed: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -246,7 +250,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const c = calcOrder(d, settings);
     const { error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
-      price_type: d.price_type || "retail", use_program: !!d.use_program, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
+      price_type: d.price_type || "retail", use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
       ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "",
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, total: c.total, qty: c.qty,
@@ -296,9 +300,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
   // program pricing (Oct 14, Nick: Peticolas, Nine18, Furry Feline): the customer's rate card, for the Program chip
   useEffect(() => {
-    if (!custId || !seesMoney) { setProg(null); return; }
+    if (!custId || !seesMoney) { setProgAll(null); return; }
     let live = true;
-    programCard(custId).then((r) => { if (live) setProg(r.ok && (r.card || r.items.length) ? { card: r.card, baseCost: r.baseCost, items: r.items } : null); }, () => live && setProg(null));
+    programCard(custId).then((r) => { if (live) setProgAll(r.ok && (r.cards.length || r.items.length) ? { cards: r.cards, items: r.items, applyMode: r.applyMode } : null); }, () => live && setProgAll(null));
     return () => { live = false; };
   }, [custId, seesMoney]);
   // a new order for a program customer starts on Program (once per order: switching to Retail / Wholesale stays)
@@ -307,7 +311,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!o || !prog || autoProg.current === o.id) return;
     autoProg.current = o.id;
     const empty = !o.groups.some((g) => g.lines.some((l) => Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
-    if (!o.use_program && empty && ["quote", "request"].includes(o.status)) patch((d) => { d.use_program = true; });
+    // "Ask" customers get an Apply button instead (Oct 17)
+    if (!o.use_program && empty && progAll?.applyMode !== "ask" && ["quote", "request"].includes(o.status)) patch((d) => { d.use_program = true; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o?.id, prog]);
   /** what a group's design is called, for the designs' own program prices: the order's name and its prints' designs */
@@ -839,12 +844,23 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                         </div>
                         {cust && !o.use_program && o.price_type !== (cust.price_type || "retail") && <div className="faint" style={{ fontSize: 11.5 }}>Changed for this order</div>}
                         {o.use_program && !prog && <div className="faint" style={{ fontSize: 11.5 }}>No rate card on their Program tab</div>}
+                        {o.use_program && progAll && progAll.cards.length > 1 && (
+                          <label className="prg-pick">Rate card
+                            <select value={progCard?.id || ""} onChange={(e) => patch((d) => { d.program_card = e.target.value; })}>
+                              {progAll.cards.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            {!o.program_card && <small className="faint">picked from the order&apos;s name</small>}
+                          </label>
+                        )}
                       </div>
                     </div>
+                    {!o.use_program && progAll && progAll.applyMode === "ask" && progAll.cards.length > 0 && ["quote", "request"].includes(o.status) && (
+                      <div className="prg-ask"><span><b>{cust ? custLabel(cust) : "This customer"}</b> has program pricing.</span><button type="button" className="btn sm primary" onClick={() => { setConfirmRetail(false); patch((d) => { d.use_program = true; }); }}>Apply program pricing</button></div>
+                    )}
                     {o.use_program && prog && <ProgramNotes groups={o.groups} card={prog.card} baseCost={prog.baseCost} ctx={(g) => designCtx(o, g)} />}
                     {o.use_program && prog && !["production", "ready", "completed"].includes(o.status) && <PriceSuggestions groups={o.groups} ctx={(g) => designCtx(o, g)} settings={settings}
                       onUse={(gid, price) => { patch((d) => { const g = d.groups.find((x) => x.id === gid); g?.lines.forEach((l) => { if (Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)) { l.priceOverride = price; delete l.prog; l.progOff = true; } }); }); say(`Price set to ${money(price)}.`); }}
-                      onSaved={() => { if (custId) programCard(custId).then((r) => { if (r.ok && (r.card || r.items.length)) setProg({ card: r.card, baseCost: r.baseCost, items: r.items }); }); }} />}
+                      onSaved={() => { if (custId) programCard(custId).then((r) => { if (r.ok && (r.cards.length || r.items.length)) setProgAll({ cards: r.cards, items: r.items, applyMode: r.applyMode }); }); }} />}
                     {/* the "Last time…" past-price line is gone (Oct 15, Nick: it matched a job they had never printed) */}
                     {confirmRetail && cust && (
                       <div className="confirm-bar">

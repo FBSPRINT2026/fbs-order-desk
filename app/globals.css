@@ -9712,3 +9712,15 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .prc-big>div{display:flex;flex-wrap:wrap;gap:6px}
 .prc-big b{font-weight:600;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:3px 9px;background:var(--surface)}
 .prc-big em{font-style:normal;color:var(--accent)}
+.prg-pick{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);margin-top:6px}
+.prg-pick select{font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:7px}
+.prg-ask{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid color-mix(in srgb,var(--accent) 40%,var(--line));background:var(--accent-soft);border-radius:10px;padding:7px 10px;font-size:13px;margin:6px 0}
+.pga-apply{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:0 0 10px;font-size:13px}
+.pga-apply>span{font-weight:600;color:var(--ink-2)}
+.pga-cards{margin:0 0 8px}
+.pga-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.pga-tabs .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pga-cardh{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-bottom:8px}
+.pga-cardh label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-2)}
+.pga-cardh label.wide{flex:1;min-width:260px}
+.prc-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}.prc-tabs .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}

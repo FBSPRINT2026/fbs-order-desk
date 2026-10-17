@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { applyProgramProposal, programAssist, type ProgramProposal } from "@/app/shop/program-pricing-actions";
 import { LOCATIONS } from "@/lib/pricing";
-import { BIG_SIZES, BACKS, COMMON_INCLUDED, FRONTS, cardHasPrices, newRateCard, PROGRAM_SIZES, tiersOf, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
+import { BIG_SIZES, BACKS, COMMON_INCLUDED, FRONTS, cardHasPrices, cardsOf, newRateCard, PROGRAM_SIZES, tiersOf, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
 
 const blankItem = (programId: string, position: number): Omit<ProgramItem, "id"> => ({ program_id: programId, name: "", style: "", brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"], price: 0, min_qty: 0, imprints: [{ location: "Full Front", method: "screen", colors: 1, inks: "", size: "", notes: "" }], design_id: null, image_path: "", notes: "", active: true, position });
 
@@ -23,6 +23,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
   const [loaded, setLoaded] = useState(false);
   const [state, setState] = useState("");
   const [ver, setVer] = useState(0);
+  const [cardSel, setCardSel] = useState("main");
   const load = useCallback(async () => {
     const [{ data: ps }, { data: ds }] = await Promise.all([
       sb.from("programs").select("*").eq("customer_id", customerId).order("created_at").limit(1),
@@ -72,7 +73,21 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       </div>
       <PrintavoSetup customerId={customerId} onApplied={load} />
       <ProgramAssist customerId={customerId} about={program.rate_card?.about || []} onApplied={load} />
-      <RateCardEditor key={ver} card={program.rate_card || null} onSave={(rate_card) => saveProgram({ rate_card })} />
+      {/* how program pricing gets onto their orders, and their rate cards (Oct 17, Nick: Nine18 has one per location or brand) */}
+      <div className="pga-apply">
+        <span>New orders</span>
+        <label className="check"><input type="radio" name="pg-apply" checked={(program.apply_mode || "auto") === "auto"} onChange={() => saveProgram({ apply_mode: "auto" })} /> Use program pricing automatically</label>
+        <label className="check"><input type="radio" name="pg-apply" checked={program.apply_mode === "ask"} onChange={() => saveProgram({ apply_mode: "ask" })} /> Ask: show an Apply button on the order</label>
+      </div>
+      <CardTabs program={program} sel={cardSel} onSel={setCardSel} onSave={saveProgram} />
+      {(() => {
+        const cards = cardsOf(program), cur = cards.find((x) => x.id === cardSel) || cards[0] || null;
+        const saveCard = (c: RateCard) => {
+          if (!cur || cur.id === "main") return saveProgram({ rate_card: { ...c, id: undefined } as RateCard });
+          saveProgram({ rate_cards: (program.rate_cards || []).map((x) => (x.id === cur.id ? { ...c, id: cur.id, name: x.name, match: x.match } : x)) });
+        };
+        return <RateCardEditor key={`${ver}-${cur?.id || "main"}`} card={cur || program.rate_card || null} onSave={saveCard} />;
+      })()}
       <h3 className="pga-sub">Prices by design <span className="faint">(a design's own price at a quantity: on an order set to Program it wins over the rate card; also their portal order form)</span></h3>
       <div className="pga-head">
         <label>Program name<input type="text" value={program.name} onChange={(e) => saveProgram({ name: e.target.value })} placeholder="e.g. Two Men Moving: crew apparel" /></label>
@@ -335,5 +350,56 @@ function ProgramAssist({ customerId, about, onApplied }: { customerId: string; a
         </details>
       )}
     </section>
+  );
+}
+
+/**
+ * The customer's rate cards as tabs (Oct 17, Nick: "Nine18 will have multiple rate cards"; theirs differ by location or
+ * brand). The first card is their main one. Each card has a name and words that pick it for an order (found in the
+ * order's name, PO or ship-to); the order can also pick one by hand.
+ */
+function CardTabs({ program, sel, onSel, onSave }: { program: Program; sel: string; onSel: (id: string) => void; onSave: (p: Partial<Program>) => void }) {
+  const cards = cardsOf(program);
+  const cur = cards.find((c) => c.id === sel) || cards[0];
+  const [armed, setArmed] = useState("");
+  const rename = (name: string) => {
+    if (!cur) return;
+    if (cur.id === "main") onSave({ rate_card: { ...(program.rate_card as RateCard), name } });
+    else onSave({ rate_cards: (program.rate_cards || []).map((x) => (x.id === cur.id ? { ...x, name } : x)) });
+  };
+  const setMatch = (raw: string) => {
+    const match = raw.split(",").map((w) => w.trim()).filter(Boolean);
+    if (!cur) return;
+    if (cur.id === "main") onSave({ rate_card: { ...(program.rate_card as RateCard), match } });
+    else onSave({ rate_cards: (program.rate_cards || []).map((x) => (x.id === cur.id ? { ...x, match } : x)) });
+  };
+  const add = () => {
+    // a copy of the card being looked at, to change what's different
+    const base = (cur ? { ...cur } : newRateCard()) as RateCard;
+    const id = Math.random().toString(36).slice(2, 9);
+    const next = [...(program.rate_cards || []), { ...base, id, name: `Card ${cards.length + 1}`, match: [], about: [] }];
+    onSave(program.rate_card ? { rate_cards: next } : { rate_card: { ...base, name: base.name || "Main" }, rate_cards: next });
+    onSel(id);
+  };
+  const remove = () => {
+    if (!cur || cur.id === "main") return;
+    if (armed !== cur.id) { setArmed(cur.id); setTimeout(() => setArmed((x) => (x === cur.id ? "" : x)), 3500); return; }
+    onSave({ rate_cards: (program.rate_cards || []).filter((x) => x.id !== cur.id) });
+    onSel("main");
+  };
+  return (
+    <div className="pga-cards">
+      <div className="pga-tabs" role="tablist">
+        {cards.map((c, i) => <button key={c.id} type="button" role="tab" aria-selected={cur?.id === c.id} className={"chip" + (cur?.id === c.id ? " on" : "")} onClick={() => onSel(c.id)}>{c.name || (i === 0 ? "Main card" : `Card ${i + 1}`)}</button>)}
+        <button type="button" className="chip ghost" onClick={add} title="Another rate card: a copy of this one to change">+ Rate card</button>
+      </div>
+      {cards.length > 1 && cur && (
+        <div className="pga-cardh">
+          <label>Card name<input type="text" defaultValue={cur.name || ""} key={cur.id + "n"} placeholder="Fort Worth" onBlur={(e) => e.target.value !== (cur.name || "") && rename(e.target.value.trim())} /></label>
+          <label className="wide">Picks this card when the order&apos;s name, PO or ship-to has<input type="text" key={cur.id + "m"} defaultValue={(cur.match || []).join(", ")} placeholder="Fort Worth, FW, Magnolia" onBlur={(e) => setMatch(e.target.value)} /></label>
+          {cur.id !== "main" && <button type="button" className={"btn sm ghost" + (armed === cur.id ? " danger" : "")} onClick={remove}>{armed === cur.id ? "Remove this card?" : "Remove card"}</button>}
+        </div>
+      )}
+    </div>
   );
 }

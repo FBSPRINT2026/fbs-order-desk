@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
-import { cardHasPrices, cardSetsAnything, PROGRAM_SIZES, type Program, type ProgramItem } from "@/lib/programs";
+import { cardHasPrices, cardSetsAnything, cardsOf, PROGRAM_SIZES, type Program, type ProgramItem } from "@/lib/programs";
 import ProgramRateCard from "@/components/ProgramRateCard";
 import { placeProgramOrder } from "@/app/portal/program-actions";
 
@@ -20,7 +20,10 @@ export default function ProgramOrder({ program, items, images, projects, canAct,
   const [due, setDue] = useState(""), [po, setPo] = useState(""), [notes, setNotes] = useState(""), [proj, setProj] = useState("");
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState<{ ok: boolean; text: string; id?: string } | null>(null);
   // the program shows with its price grid even before it has design prices (Oct 17: Peticolas has a grid only)
-  const card = program?.rate_card && (cardHasPrices(program.rate_card) || cardSetsAnything(program.rate_card)) ? program.rate_card : null;
+  // every rate card that says something; more than one shows as tabs (Oct 17: Nine18, one per location or brand)
+  const cards = cardsOf(program).filter((c) => cardHasPrices(c) || cardSetsAnything(c));
+  const [cardTab, setCardTab] = useState(0);
+  const card = cards[Math.min(cardTab, cards.length - 1)] || null;
   if (!program || (!items.length && !card)) return (
     <div className="pg-none">
       <div className="pg-none-ic" aria-hidden="true">★</div>
@@ -51,6 +54,7 @@ export default function ProgramOrder({ program, items, images, projects, canAct,
       <div className="aa-bar"><div className="aa-bar-l"><h2>{program.name || "Your program"}</h2><span className="aa-sum">{items.length ? "Your program prices, and a quick order form for your regular items." : "The prices we agreed for your printing."}</span></div></div>
       {program.notes && <div className="pg-notes">{program.notes}</div>}
       {!program.active && <div className="banner prc-off">Preview only: this program is off, so the customer doesn&apos;t see it yet. Turn on &quot;Show in their portal&quot; on their Program tab.</div>}
+      {cards.length > 1 && <div className="prc-tabs" role="tablist">{cards.map((c, i) => <button key={c.id} type="button" role="tab" aria-selected={card?.id === c.id} className={"chip" + (card?.id === c.id ? " on" : "")} onClick={() => setCardTab(i)}>{c.name || `Card ${i + 1}`}</button>)}</div>}
       {card && <ProgramRateCard card={card} />}
       {items.length > 0 && card && <h3 className="prc-h">Your regular items</h3>}
       {items.length > 0 && <div className="pg-wrap">
