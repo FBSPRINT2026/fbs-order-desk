@@ -9528,3 +9528,4 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
   .ibx2-item.ol .ibx2-item-1 time{font-size:11.5px}
   .ibx2-item.ol .ibx2-item-s{font-size:12.5px!important}
 }
+@media (min-width:761px) and (max-width:1300px){.ibx2-item.ol{padding-left:16px!important}.ibx2-item.ol .ibx2-dot{left:5px!important;top:12px!important}}
