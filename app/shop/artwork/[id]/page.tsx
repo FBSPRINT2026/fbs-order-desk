@@ -91,7 +91,12 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
           </section>
           <section className="panel">
             <div className="panel-h"><h2>On shirts</h2><span className="faint">how it prints on each shirt color</span></div>
-            <div className="panel-b"><LogoOnShirts d={d} url={pv} onSave={(onShirts) => patch({ specs: { ...(d.specs || {}), onShirts } })} /></div>
+            <div className="panel-b"><LogoOnShirts d={d} url={pv} brandColors={customers.find((c) => c.id === d.customer_id)?.brand_colors || []} onSave={async (onShirts) => {
+              const specs = { ...(d.specs || {}), onShirts };
+              const { error } = await sb.from("designs").update({ specs }).eq("id", d.id);
+              if (!error) { setD({ ...d, specs }); setMsg("Saved"); }
+              return { ok: !error, error: error?.message };
+            }} /></div>
           </section>
           <section className="panel">
             <div className="panel-h"><h2>Used on</h2></div>

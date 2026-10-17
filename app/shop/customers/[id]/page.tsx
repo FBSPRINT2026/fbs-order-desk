@@ -229,6 +229,12 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           if (made.length) { setDesigns((ds) => [...made, ...ds]); const urls = await previewUrls(sb, made); setDesignUrls((m) => ({ ...m, ...urls })); }
           return bad.length ? `Couldn't add ${bad.join("; ")}` : undefined;
         }}
+        onSaveShirts={async (d, onShirts) => {
+          const specs = { ...(d.specs || {}), onShirts };
+          const { error } = await createClient().from("designs").update({ specs }).eq("id", d.id);
+          if (!error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, specs } : x)));
+          return { ok: !error, error: error?.message };
+        }}
         onStar={async (designId, starred) => { const { error } = await createClient().rpc("set_design_star", { p_design: designId, p_starred: starred }); return { ok: !error, error: error?.message }; }}
         details={<>
       <div className="cust-grid">
