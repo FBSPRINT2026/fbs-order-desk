@@ -77,6 +77,7 @@ export type Imprint = { id: string; method: Method; location: string; colors: nu
   /** the customer told us this size ("12 inches wide on the front"), or it's off the job's film (printed at this size before): changing it in the Mockup Creator asks first */ sizeFrom?: "customer" | "film" | "brand";
   /** a fashion hit (Oct 16, Nick): no underbase on a dark shirt, each color printed, flashed and printed again through
    *  the same screen. Priced the same as with the underbase (two rounds on press) */ printStyle?: "fashion";
+  /** a logo with a distress layer printed clean, without it (Oct 16: the distress is a layer, on unless turned off) */ distress?: "off";
   /** soft hand additive mixed into the inks */ softHand?: boolean;
   /** not known for sure (a reorder of an old Printavo job with no film found): production confirms before printing */
   confirm?: { size?: boolean; ink?: boolean; why: string; /** staff filled in what they think (still not confirmed): who and when */ filled?: { by: string; at: string } };

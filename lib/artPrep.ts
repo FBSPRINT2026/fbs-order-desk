@@ -186,6 +186,19 @@ const canvasToFile = (c: HTMLCanvasElement, name: string) => new Promise<File | 
  * HEIC/HEIF (iPhone photos), PDF and AI (first page), TIFF/BMP where the browser can decode them.
  * Returns null when no preview can be made (e.g. EPS, PSD) — staff can add a preview image by hand.
  */
+/** vector art (with its distress knocked out, when it has one) drawn as a PNG file */
+export async function vartFile(v: import("./svgVector").VArt, maxPx: number, name: string): Promise<File | null> {
+  const { vartSvg } = await import("./epsVector");
+  const url = URL.createObjectURL(new Blob([vartSvg(v)], { type: "image/svg+xml" }));
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const k = maxPx / Math.max(v.w, v.h), c = document.createElement("canvas");
+    c.width = Math.round(v.w * k); c.height = Math.round(v.h * k);
+    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+    return canvasToFile(c, name);
+  } finally { URL.revokeObjectURL(url); }
+}
+
 export async function makePreview(file: File, maxPx = 2400): Promise<File | null> {
   const base = file.name.replace(/\.[^.]+$/, "") || "logo";
   try {
@@ -200,17 +213,7 @@ export async function makePreview(file: File, maxPx = 2400): Promise<File | null
       try {
         const { parsePdf, browserInflate } = await import("./pdfVector");
         const v = await parsePdf(new Uint8Array(await file.arrayBuffer()), browserInflate);
-        if (v.distress?.length && v.shapes.length) {
-          const { vartSvg } = await import("./epsVector");
-          const url = URL.createObjectURL(new Blob([vartSvg(v)], { type: "image/svg+xml" }));
-          try {
-            const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-            const k = maxPx / Math.max(v.w, v.h), c = document.createElement("canvas");
-            c.width = Math.round(v.w * k); c.height = Math.round(v.h * k);
-            c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
-            return canvasToFile(c, `${base}.png`);
-          } finally { URL.revokeObjectURL(url); }
-        }
+        if (v.distress?.length && v.shapes.length) return await vartFile(v, maxPx, `${base}.png`);
       } catch { /* drawn by pdf.js below */ }
       // Illustrator files are usually saved PDF-compatible, so the same reader works for most of them
       const pdfjs = (await import(/* webpackIgnore: true */ PDFJS)) as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<{ getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> } }> }> } };

@@ -39,7 +39,8 @@ type Side = "front" | "back" | "sleeve";
 const SIDES: { id: Side; label: string }[] = [{ id: "front", label: "Front" }, { id: "back", label: "Back" }, { id: "sleeve", label: "Sleeves" }];
 type Paint = { /** the shirt color it was set up for, when the logo has its own ink per shirt color */ shirt?: string; design: string; sources: { hex: string; share: number }[]; map: Record<string, { name: string; hex: string }>;
   /** how this logo prints (the same plan the Separation Studio starts from) */ plan?: PrintPlan;
-  /** several logo colors set to the same ink: true = print them as one color (one screen), false = keep separate */ unite?: boolean };
+  /** several logo colors set to the same ink: true = print them as one color (one screen), false = keep separate */ unite?: boolean;
+  /** drawn from the clean picture: the logo's distress layer turned off */ off?: boolean };
 /** Ink names for the imprint from the logo's color choices (same ink twice counts once when the colors are united). */
 const inkNames = (pt: Paint, map = pt.map) => {
   const names = pt.sources.map((x) => map[x.hex]).filter((x) => x && x.name !== "none").map((x) => x!.name);
@@ -196,7 +197,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // logo is sized on the shirt by that, not by the old box around it
   const [trims, setTrims] = useState<Record<string, { w: number; h: number }>>({});
   /** The logo image to draw and read colors from: the cleaned-up version when its background was removed. */
-  async function logoImg(d: Design): Promise<HTMLImageElement> {
+  async function logoImg(d: Design, clean0 = false): Promise<HTMLImageElement> {
+    // a distressed logo printed without its distress: its clean picture (cached apart)
+    if (clean0 && urls[d.id + ":clean"]) {
+      const k = d.id + ":clean", h = imgCache.current.get(k);
+      if (h) return h;
+      const im = await loadImg(urls[d.id + ":clean"]);
+      imgCache.current.set(k, im);
+      return im;
+    }
     const hit = imgCache.current.get(d.id);
     if (hit) return hit;
     let img = await loadImg(urls[d.id]);
@@ -422,9 +431,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!d || !urls[d.id] || isQuick(d.id)) return;
       // a logo with its own ink per shirt color is set up again when the shirt color changes
       const sh = onShirtsOf(d).length ? (line?.color || "") : "";
-      if (paints[im.id]?.design === d.id && (paints[im.id]?.shirt || "") === sh) return;
+      const off = im.distress === "off" && !!urls[d.id + ":clean"];
+      if (paints[im.id]?.design === d.id && (paints[im.id]?.shirt || "") === sh && !!paints[im.id]?.off === off) return;
       try {
-        const img = await logoImg(d);
+        const img = await logoImg(d, off);
         // the print plan: saved on the logo (the separation reads the same one), else worked out now and saved
         let plan = (d.print_plan as PrintPlan | null | undefined)?.v === 1 ? d.print_plan as PrintPlan : null;
         if (!plan) {
@@ -461,12 +471,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             for (const hex of [k.hex, ...(k.also || [])]) map[hex] = { name, hex: colorHex(name) || k.hex };
           }
           const names = useAsked ? asked : [...new Set(chosen)];
-          setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan! } }));
+          setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off } }));
           setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: useAsked ? asked.length : plan!.colors } : x)));
           return;
         }
         const sources = detectColors(img);
-        setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map: {}, plan: plan! } }));
+        setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map: {}, plan: plan!, off } }));
         setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, colors: plan!.colors, inks: x.inks || `Simulated process (${plan!.colors})` } : x)));
       } catch { /* preview not loadable */ }
     });
@@ -482,7 +492,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!pt) continue;
       const map = hover && hover.id === im.id ? { ...pt.map, ...Object.fromEntries(hover.hexes.map((h) => [h, hover.v])) } : pt.map;
       if (!Object.keys(map).length) continue;
-      const img = imgCache.current.get(pt.design);
+      const img = imgCache.current.get(pt.design + (pt.off ? ":clean" : ""));
       if (!img) continue;
       const targets: Record<string, string> = {};
       Object.entries(map).forEach(([src, v]) => { targets[src] = v.name === "none" ? "none" : v.hex; });
@@ -579,7 +589,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       return np;
     });
   }
-  const artUrl = (im: Imprint) => { const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? clean[d.id] || urls[d.id] : ""); };
+  const artUrl = (im: Imprint) => { const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
 
   const garmentFor = (l: Line) => catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase() && (!l.brand || g.brand.toLowerCase() === l.brand.toLowerCase()))
     || catalog.find((g) => g.style.toLowerCase() === l.style.trim().toLowerCase());
@@ -2059,6 +2069,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     )}
                     {p.d && paints[im.id] && paints[im.id].sources.length > 0 && (
                       <LogoColors rows={colorRows(paints[im.id])}
+                        distress={p.d && (p.d.specs as { distressLayer?: boolean } | null)?.distressLayer ? { on: im.distress !== "off", canOff: !!urls[p.d.id + ":clean"], set: (on: boolean) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, distress: on ? undefined : "off" } : x))) } : undefined}
                         onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
                         onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
                         onSplit={() => setUnite(im.id, false)}
@@ -2414,7 +2425,10 @@ function BrandPick({ groups, onPick, onClose, modal = false }: { groups: { label
   );
 }
 
-function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = [] }: {
+function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = [], distress }: {
+  /** the logo's distress layer (Oct 16, Nick: "set that to distress instead of color… it would knock out"): on = the
+   *  shirt shows through it; off = printed clean (when there's a clean picture) */
+  distress?: { on: boolean; canOff: boolean; set: (on: boolean) => void };
   rows: { hexes: string[]; cur?: { name: string; hex: string } }[];
   onPick: (hexes: string[], v: { name: string; hex: string } | null) => void;
   onHover: (hexes: string[], v: { name: string; hex: string } | null) => void;
@@ -2429,6 +2443,15 @@ function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = 
   return (
     <div className="mk-colors">
       <div className="lbl">COLORS IN THIS LOGO</div>
+      {distress && (
+        <div className="mk-color tight mk-distress" title="The distress layer doesn't print: it knocks the inks out, so the shirt shows through">
+          <span className="mk-srcs"><span className="sw dz" /></span><span className="arrow">→</span>
+          <select aria-label="Distress layer" value={distress.on ? "on" : "off"} onChange={(e) => distress.set(e.target.value === "on")}>
+            <option value="on">Distress (shirt shows through)</option>
+            {distress.canOff && <option value="off">Off: print it clean</option>}
+          </select>
+        </div>
+      )}
       {rows.map((r) => {
         const cur = r.cur, k = key(r), folded = !!cur && open !== k;
         const swatches = <span className="mk-srcs">{r.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} title={h} />)}</span>;

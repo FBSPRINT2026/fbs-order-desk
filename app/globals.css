@@ -9252,3 +9252,7 @@ img.lv-art{width:76%;height:76%;object-fit:contain}
 @media (max-width:1000px){.bai .bai-wrap,.bai.open .bai-wrap{grid-template-columns:minmax(0,1fr)}.bai-chat{position:static;max-height:none}.bai-tab{writing-mode:horizontal-tb;position:static;justify-self:start}}
 .mk-brand-rules{font-size:12.5px;background:#fff8e1;border:1px solid #f3d27a;border-radius:8px;padding:7px 10px}
 .mk-brand-rules ul{margin:4px 0 0;padding-left:18px}
+
+/* the distress layer's row in the Mockup Creator: a grunge swatch */
+.mk-distress select{flex:1;min-width:0}
+.sw.dz{background:#8a8f99 radial-gradient(circle at 30% 40%,#fff6 0 2px,transparent 3px),radial-gradient(circle at 70% 65%,#fff8 0 1.5px,transparent 2.5px);background-size:100%,100%}

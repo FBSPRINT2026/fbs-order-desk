@@ -20,7 +20,10 @@ import { readVector } from "@/components/SeparationStudio";
  * would this logo appear on this color?"): each background is a shirt color with the ink the logo prints in on it,
  * saved on the logo (specs.onShirts), shown on its logo card and used by the Mockup Creator.
  */
-type Act = { kind: "keep" } | { kind: "remove" } | { kind: "ink"; name: string; hex: string };
+type Act = { kind: "keep" } | { kind: "remove" } | { kind: "ink"; name: string; hex: string } | { kind: "distress" };
+/** the distress layer's switch in a version's color changes: keep = on (knocks out), remove = off */
+const DZ = "DISTRESS";
+const gone = (a?: Act) => a?.kind === "remove" || a?.kind === "distress";
 type Bg = OnShirt & { map?: Record<string, Act>; path?: string; dirty?: boolean };
 type Src = { hex: string; share: number };
 const isWhite = (hex: string) => { const v = parseInt(hex.slice(1), 16); return ((v >> 16) & 255) > 238 && ((v >> 8) & 255) > 238 && (v & 255) > 238; };
@@ -63,7 +66,8 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
           if (/svg/i.test(d.file_type) || /\.svg$/i.test(d.file_name)) v = parseSvg(await blob.text());
           else v = await readVector(blob, d.file_name, d.file_type);
         }
-        if (v?.ok && v.shapes.length) {
+        // vector art; with a distress layer it stays vector, the distress a layer on top (Oct 16)
+        if (v && v.shapes.length && (v.ok || (v.distress?.length && /distress/i.test(v.why || "")))) {
           setVec(v);
           const area = new Map<string, number>();
           for (const s of v.shapes) area.set(s.fill.toUpperCase(), (area.get(s.fill.toUpperCase()) || 0) + 1);
@@ -97,11 +101,11 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
     if (vec) {
       const shapes = vec.shapes.flatMap((s): VShape[] => {
         const a = A[s.fill.toUpperCase()] || { kind: "keep" as const };
-        return a.kind === "remove" ? [] : a.kind === "ink" ? [{ ...s, fill: a.hex, grad: undefined, ink: a.name }] : [s];
+        return gone(a) ? [] : a.kind === "ink" ? [{ ...s, fill: a.hex, grad: undefined, ink: a.name }] : [s];
       });
       const b = bbox(shapes);
       const pad = b ? Math.max(b.w, b.h) * 0.005 : 0;
-      return { kind: "vec" as const, art: { ...vec, shapes, ...(b ? { x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 } : {}) } };
+      return { kind: "vec" as const, art: { ...vec, shapes, distress: A[DZ]?.kind === "remove" ? undefined : vec.distress, ...(b ? { x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 } : {}) } };
     }
     return img ? { kind: "img" as const } : null;
   };
@@ -121,7 +125,7 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
     return new Promise<Blob>((r, j) => c.toBlob((b) => (b ? r(b) : j(new Error("Couldn't draw it."))), "image/png"));
   };
   /** one ink when every color left prints in it, else "its colors" */
-  const inkOf = (A: Record<string, Act>) => { const outs = [...new Set(srcs.filter((x) => (A[x.hex]?.kind || "keep") !== "remove").map((x) => { const a = A[x.hex]; return a?.kind === "ink" ? a.name : "keep:" + x.hex; }))]; return outs.length === 1 && !outs[0].startsWith("keep:") ? outs[0] : AS_IS; };
+  const inkOf = (A: Record<string, Act>) => { const outs = [...new Set(srcs.filter((x) => !gone(A[x.hex])).map((x) => { const a = A[x.hex]; return a?.kind === "ink" ? a.name : "keep:" + x.hex; }))]; return outs.length === 1 && !outs[0].startsWith("keep:") ? outs[0] : AS_IS; };
 
   useEffect(() => {
     let url = "";
@@ -181,7 +185,18 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
       const stamp = Date.now().toString(36), base = (d.name || "logo").replace(/[^\w.\-]+/g, "_");
       let fileBlob: Blob, fileName: string, fileType: string, pvBlob: Blob, w: number, h: number;
       const edited = base0;
-      if (edited.kind === "vec") {
+      let cleanPath = "";
+      const dir0 = `designs/${d.id}-${stamp}`;
+      if (edited.kind === "vec" && edited.art.distress?.length) {
+        // distress on: saved as a sharp picture with the distress knocked out (that's how it separates), and a clean
+        // picture without it for "Distress: off" in the Mockup Creator; the original file keeps the layer as it was
+        const big = await pngFor(acts, 3600), clean = await pngFor({ ...acts, [DZ]: { kind: "remove" } }, 2400);
+        cleanPath = `${dir0}/clean-${base}.png`;
+        const u0 = await sb.storage.from("proofs").upload(cleanPath, clean, { contentType: "image/png" });
+        if (u0.error) throw new Error(u0.error.message);
+        const dims0 = await new Promise<{ w: number; h: number }>((r) => { const i = new Image(); i.onload = () => r({ w: i.naturalWidth, h: i.naturalHeight }); i.onerror = () => r({ w: 0, h: 0 }); i.src = URL.createObjectURL(big); });
+        fileBlob = big; pvBlob = big; fileName = `${base}-edited.png`; fileType = "image/png"; w = dims0.w; h = dims0.h;
+      } else if (edited.kind === "vec") {
         const svg = vartSvg(edited.art);
         fileBlob = new Blob([svg], { type: "image/svg+xml" }); fileName = `${base}-edited.svg`; fileType = "image/svg+xml";
         const im = await loadImg(URL.createObjectURL(fileBlob));
@@ -195,15 +210,20 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
         pvBlob = await new Promise<Blob>((r, j) => c.toBlob((b) => (b ? r(b) : j(new Error("Couldn't draw it."))), "image/png"));
         fileBlob = pvBlob; fileName = `${base}-edited.png`; fileType = "image/png";
       }
-      const dir = `designs/${d.id}-${stamp}`;
-      const fp = `${dir}/${fileName}`, pp = edited.kind === "vec" ? `${dir}/preview-${base}.png` : fp;
+      const dir = dir0;
+      const fp = `${dir}/${fileName}`, pp = edited.kind === "vec" && fileType !== "image/png" ? `${dir}/preview-${base}.png` : fp;
       const u1 = await sb.storage.from("proofs").upload(fp, fileBlob, { contentType: fileType });
       if (u1.error) throw new Error(u1.error.message);
       if (pp !== fp) { const u2 = await sb.storage.from("proofs").upload(pp, pvBlob, { contentType: "image/png" }); if (u2.error) throw new Error(u2.error.message); }
       // the inks it prints in now: the inks picked, plus the colors kept
-      const inks = [...new Set(srcs.flatMap((s) => { const a = baseAct(s.hex); return a.kind === "remove" ? [] : a.kind === "ink" ? [a.name] : []; }))];
+      const inks = [...new Set(srcs.flatMap((s) => { const a = baseAct(s.hex); return gone(a) ? [] : a.kind === "ink" ? [a.name] : []; }))];
       const kept = srcs.filter((s) => baseAct(s.hex).kind === "keep").length;
-      const specs = { ...((d.specs || {}) as object), onShirts, original: (d.specs as { original?: unknown } | null)?.original || { path: d.file_path, name: d.file_name, type: d.file_type, preview: d.preview_path } };
+      // the distress layer: on (kept, with a clean picture) or taken off in this edit; a color set to Distress marks it too
+      const dzOn = edited.kind === "vec" ? !!edited.art.distress?.length : false, dzColor = srcs.some((x) => baseAct(x.hex).kind === "distress");
+      const specs = { ...((d.specs || {}) as object), onShirts,
+        ...(vec?.distress?.length ? { distressLayer: dzOn, cleanPreview: cleanPath || undefined, ...(dzOn ? { distressed: true } : {}) } : {}),
+        ...(dzColor ? { distressed: true } : {}),
+        original: (d.specs as { original?: unknown } | null)?.original || { path: d.file_path, name: d.file_name, type: d.file_type, preview: d.preview_path } };
       const patch = { file_path: fp, file_name: fileName, file_type: fileType, preview_path: pp, width_px: w, height_px: h, art_box: null, print_plan: null,
         colors: Math.max(1, inks.length + kept), ...(inks.length && !kept ? { inks: inks.join(", ") } : {}), specs };
       const { data, error } = await sb.from("designs").update(patch).eq("id", d.id).select("*").single();
@@ -237,16 +257,28 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
                 <div key={s.hex} className="le-row">
                   <span className="sw" style={{ background: s.hex }} title={s.hex} />
                   <span className="arrow">→</span>
-                  {a.kind === "remove" ? <span className="le-gone">Removed</span> : <span className="sw" style={{ background: a.kind === "ink" ? a.hex : s.hex }} />}
-                  <select aria-label="What to do with this color" value={a.kind === "ink" ? "ink:" + a.name : a.kind} onChange={(e) => { const v = e.target.value; if (v === "keep" || v === "remove") setAct(s.hex, { kind: v }); else if (v.startsWith("ink:")) { const n = v.slice(4); setAct(s.hex, { kind: "ink", name: n, hex: colorHex(n) || s.hex }); } }}>
+                  {a.kind === "distress" ? <span className="le-gone">Distress</span> : a.kind === "remove" ? <span className="le-gone">Removed</span> : <span className="sw" style={{ background: a.kind === "ink" ? a.hex : s.hex }} />}
+                  <select aria-label="What to do with this color" value={a.kind === "ink" ? "ink:" + a.name : a.kind} onChange={(e) => { const v = e.target.value; if (v === "keep" || v === "remove" || v === "distress") setAct(s.hex, { kind: v }); else if (v.startsWith("ink:")) { const n = v.slice(4); setAct(s.hex, { kind: "ink", name: n, hex: colorHex(n) || s.hex }); } }}>
                     <option value="keep">Keep as is</option>
                     <option value="remove">Remove (see-through)</option>
+                    <option value="distress">Distress (shirt shows through)</option>
                     {a.kind === "ink" && !inkChoices.includes(a.name) && <option value={"ink:" + a.name}>{a.name}</option>}
                     {inkChoices.map((n) => { const b = brand.find((x) => x.ink === n); return <option key={n} value={"ink:" + n}>Change to {b && b.name !== n ? `${b.name} (${n})` : n}</option>; })}
                   </select>
                 </div>
               );
             })}
+            {vec?.distress?.length ? (
+              <div className="le-row" title="The distress layer doesn't print: it knocks the inks out so the shirt shows through. It stays a layer: on or off.">
+                <span className="sw dz" />
+                <span className="arrow">→</span>
+                {act(DZ).kind === "remove" ? <span className="le-gone">Off</span> : <span className="sw dz" />}
+                <select aria-label="Distress layer" value={act(DZ).kind === "remove" ? "off" : "on"} onChange={(e) => setAct(DZ, e.target.value === "off" ? { kind: "remove" } : { kind: "keep" })}>
+                  <option value="on">Distress (shirt shows through)</option>
+                  <option value="off">Off: no distress{cur ? ` on ${cur.shirt}` : ""}</option>
+                </select>
+              </div>
+            ) : null}
             {err && <div className="err">{err}</div>}
             <p className="faint le-note">{cur ? <>Changes here make the {cur.shirt} version; the logo&apos;s file doesn&apos;t change. Pick See-through to edit the logo itself.</> : <>Saved as this logo&apos;s file, cropped to the art. The original stays on the logo. Orders already using it keep their saved mockups.</>}</p>
           </div>
@@ -339,7 +371,7 @@ function rasterEdit(im: HTMLImageElement, srcs: Src[], acts: Record<string, Act>
     let best = 0, bd = Infinity;
     for (let j = 0; j < S.length; j++) { const d = (p[i] - S[j].c[0]) ** 2 + (p[i + 1] - S[j].c[1]) ** 2 + (p[i + 2] - S[j].c[2]) ** 2; if (d < bd) { bd = d; best = j; } }
     const a = S[best].a;
-    if (a.kind === "remove") p[i + 3] = 0;
+    if (a.kind === "remove" || a.kind === "distress") p[i + 3] = 0;
     else if (a.kind === "ink") { const t = rgb(a.hex); p[i] = t[0]; p[i + 1] = t[1]; p[i + 2] = t[2]; }
   }
   x.putImageData(data, 0, 0);

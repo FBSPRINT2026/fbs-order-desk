@@ -42,16 +42,26 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
   }
   const dims = pv ? await imageSize(pv) : null;
   // a distress layer in the file (Oct 16): the logo is marked distressed (brand standards can print those as a fashion hit)
-  let distressed = false;
+  // and a clean picture without it, for "Distress: off" in the Mockup Creator (the distress stays a layer, on or off)
+  let distressed = false, cleanPreview = "";
   if (/pdf/i.test(opts.file.type) || /\.(pdf|ai)$/i.test(opts.file.name)) {
-    try { const { parsePdf, browserInflate } = await import("./pdfVector"); distressed = !!(await parsePdf(new Uint8Array(await opts.file.arrayBuffer()), browserInflate)).distress?.length; } catch { /* not readable as shapes */ }
+    try {
+      const { parsePdf, browserInflate } = await import("./pdfVector");
+      const v = await parsePdf(new Uint8Array(await opts.file.arrayBuffer()), browserInflate);
+      distressed = !!v.distress?.length;
+      if (distressed && v.shapes.length) {
+        const { vartFile } = await import("./artPrep");
+        const f0 = await vartFile({ ...v, distress: undefined }, 2400, "clean.png"), f = f0 ? (await cropFileToArt(f0)) || f0 : null;
+        if (f) { const path = `designs/${key}/clean-${safe(opts.file.name.replace(/\.[^.]+$/, ""))}.png`; const u = await sb.storage.from("proofs").upload(path, f, { contentType: "image/png" }); if (!u.error) cleanPreview = path; }
+      }
+    } catch { /* not readable as shapes */ }
   }
   const { data, error } = await sb.from("designs").insert({
     customer_id: opts.customer_id, name: (opts.name || opts.file.name.replace(/\.[^.]+$/, "")).trim(),
     file_path: orig, file_name: opts.file.name, file_type: opts.file.type || "", preview_path,
     width_px: dims?.w || null, height_px: dims?.h || null, method: opts.method || "screen",
     colors: opts.colors || 1, inks: opts.inks || "", notes: opts.notes || "", created_by: opts.by || "",
-    ...(distressed ? { specs: { distressed: true, distressLayer: true } } : {}),
+    ...(distressed ? { specs: { distressed: true, distressLayer: true, ...(cleanPreview ? { cleanPreview } : {}) } } : {}),
   }).select("*").single();
   if (error) throw new Error(error.message);
   return data as Design;
@@ -72,11 +82,14 @@ export async function setDesignPreview(sb: SupabaseClient, d: Design, f: File): 
 export async function previewUrls(sb: SupabaseClient, list: Design[]): Promise<Record<string, string>> {
   const withPv = list.filter((d) => d.preview_path);
   // and each background's own picture (Edit logo → Backgrounds), keyed by its path
-  const bgPaths = list.flatMap((d) => ((d.specs?.onShirts || []) as { path?: string }[]).map((b) => b.path || "").filter(Boolean));
+  const bgPaths = [...list.flatMap((d) => ((d.specs?.onShirts || []) as { path?: string }[]).map((b) => b.path || "").filter(Boolean)),
+    // and the clean picture of a distressed logo (Distress: off)
+    ...list.map((d) => (d.specs?.cleanPreview as string | undefined) || "").filter(Boolean)];
   if (!withPv.length && !bgPaths.length) return {};
   const { data } = await sb.storage.from("proofs").createSignedUrls([...withPv.map((d) => d.preview_path), ...bgPaths], 3600);
   const out: Record<string, string> = {};
   (data || []).forEach((r, i) => { if (r.signedUrl) out[i < withPv.length ? withPv[i].id : bgPaths[i - withPv.length]] = r.signedUrl; });
+  for (const d of list) { const cp = d.specs?.cleanPreview as string | undefined; if (cp && out[cp]) out[d.id + ":clean"] = out[cp]; }
   return out;
 }
 
