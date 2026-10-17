@@ -156,9 +156,10 @@ export default function InboxView({ mode }: { mode: Mode }) {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         if (window.innerWidth <= 760) { el.style.removeProperty("height"); return; }
-        const r = el.getBoundingClientRect(), doc = document.documentElement;
-        const below = Math.max(0, doc.scrollHeight - (r.bottom + window.scrollY));
-        const h = Math.max(420, Math.floor(window.innerHeight - (r.top + window.scrollY) - below - 1));
+        // down to the window's bottom, less the page's bottom margin
+        const r = el.getBoundingClientRect(), main = el.closest(".main") || document.body;
+        const below = parseFloat(getComputedStyle(main).paddingBottom) || 14;
+        const h = Math.max(420, Math.floor(window.innerHeight - (r.top + window.scrollY) - below));
         if (Math.abs(h - r.height) > 1) el.style.height = h + "px";
       });
     };
