@@ -154,12 +154,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const [payNow, setPayNow] = useState<PayItem[] | null>(null);
   const [payAmt, setPayAmt] = useState<number | undefined>(undefined);
   const PER = 6;
-  const pageOf = <T,>(key: string, list: T[]) => { const n = Math.max(1, Math.ceil(list.length / PER)), p = Math.min(pg[key] || 0, n - 1); const items = list.slice(p * PER, p * PER + PER); return { items, p, n, pad: n > 1 ? PER - items.length : 0 }; };
+  const pageOf = <T,>(key: string, list: T[], per = PER) => { const n = Math.max(1, Math.ceil(list.length / per)), p = Math.min(pg[key] || 0, n - 1); const items = list.slice(p * per, p * per + per); return { items, p, n, pad: n > 1 ? per - items.length : 0 }; };
   // empty places keep a short last page the same height, so the page buttons don't move
   const slots = (k: number) => Array.from({ length: k }, (_, i) => <div key={"slot" + i} className="design-card aa-slot" aria-hidden="true" />);
-  const pager = (key: string, total: number, p: number, n: number) => n <= 1 ? null : (
+  const pager = (key: string, total: number, p: number, n: number, per = PER) => n <= 1 ? null : (
     <div className="aa-pager">
-      <span className="faint">Showing {p * PER + 1}–{Math.min(total, p * PER + PER)} of {total}</span>
+      <span className="faint">Showing {p * per + 1}–{Math.min(total, p * per + per)} of {total}</span>
       <span className="spacer" />
       <button type="button" className="aa-pg" disabled={p === 0} aria-label="Previous page" onClick={() => setPg((x) => ({ ...x, [key]: p - 1 }))}>‹</button>
       {Array.from({ length: n }, (_, i) => i).filter((i) => n <= 7 || i === 0 || i === n - 1 || Math.abs(i - p) <= 1).map((i, k, arr) => (
@@ -681,12 +681,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       )}
       <div className="aa-card">
         <div className="aa-sec-h aa-logos-h">{onUploadLogos && <LogoUpload onUpload={onUploadLogos} />}<h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
-        {dRows.length ? (() => { const P = pageOf("logos", dRows); return <><div className="design-grid aa-grid3">{P.items.map((d) => card(d, false))}{slots(P.pad)}</div>{pager("logos", dRows.length, P.p, P.n)}</>; })()
+        {dRows.length ? (() => { const P = pageOf("logos", dRows, 12); return <><div className="design-grid aa-grid6">{P.items.map((d) => card(d, false))}{slots(P.pad)}</div>{pager("logos", dRows.length, P.p, P.n, 12)}</>; })()
           : <div className="aa-empty">{live.length ? `No logos match “${q}”.` : "No logos on file yet."}</div>}
         {archived.length > 0 && (
           <div className="aa-arch">
             <button type="button" className="btn sm ghost" onClick={() => setShowArch(!showArch)}>{showArch ? "Hide archived logos" : `View archived logos (${archived.length})`}</button>
-            {showArch && (aRows.length ? (() => { const P = pageOf("arch", aRows); return <><div className="design-grid aa-grid3" style={{ marginTop: 10 }}>{P.items.map((d) => card(d, true))}{slots(P.pad)}</div>{pager("arch", aRows.length, P.p, P.n)}<button type="button" className="btn sm" style={{ marginTop: 10 }} onClick={() => { setShowArch(false); document.querySelector(".aa-logos-h")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>← Back to logos (hide archived)</button></>; })() : <div className="aa-empty">No archived logos match “{q}”.</div>)}
+            {showArch && (aRows.length ? (() => { const P = pageOf("arch", aRows, 12); return <><div className="design-grid aa-grid6" style={{ marginTop: 10 }}>{P.items.map((d) => card(d, true))}{slots(P.pad)}</div>{pager("arch", aRows.length, P.p, P.n, 12)}<button type="button" className="btn sm" style={{ marginTop: 10 }} onClick={() => { setShowArch(false); document.querySelector(".aa-logos-h")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>← Back to logos (hide archived)</button></>; })() : <div className="aa-empty">No archived logos match “{q}”.</div>)}
           </div>
         )}
       </div>

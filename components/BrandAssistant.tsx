@@ -20,8 +20,8 @@ const OP = { "+": "add", "~": "chg", "-": "del" } as const;
 export default function BrandAssistant({ customerId, customerName, children, onApplied }: { customerId: string; customerName: string; children: ReactNode; onApplied?: () => void }) {
   const { role, realRole } = useRole();
   const can = ["owner", "admin"].includes(realRole || role);
-  // a pane on the right of Brand standards (Oct 16, Nick), open unless closed; remembered on this browser
-  const [open, setOpen] = useSticky("brand.aiPane", true);
+  // a pane on the right of Brand standards, opened from the button on its title line (Oct 16, Nick); remembered
+  const [open, setOpen] = useSticky("brand.aiOpen", false);
   const [msgs, setMsgs] = useState<BrandMsg[] | null>(null);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -70,45 +70,69 @@ export default function BrandAssistant({ customerId, customerName, children, onA
   }
 
   if (!can) return <>{children}</>;
+  const showTime = (k: number) => { const l = msgs || []; return k === 0 || new Date(l[k].at).getTime() - new Date(l[k - 1].at).getTime() > 30 * 60_000; };
   return (
     <div className={"bai" + (open ? " open" : "")}>
+      {/* even with the Brand standards title, at the right (Oct 16, Nick) */}
+      <button type="button" className={"bai-btn" + (open ? " on" : "")} onClick={() => setOpen((x) => !x)} aria-expanded={open}>✦ {open ? "Close AI" : "Set up with AI"}</button>
       <div className="bai-wrap">
         <div className="bai-ed" key={ver}>{children}</div>
-        {!open && <button type="button" className="bai-tab" onClick={() => setOpen(true)} aria-expanded={false} title="Set up their brand standards by talking them through with the AI">✦ Set up with AI</button>}
         {open && (
-          <section className="bai-chat" aria-label="Brand standards assistant">
-            <div className="bai-h"><b>✦ Set up with AI</b><span className="faint">{customerName} · owners and admins</span><button type="button" className="bai-x" aria-label="Close the AI pane" title="Close" onClick={() => setOpen(false)}>✕</button></div>
-            <div className="bai-msgs">
-              {msgs && !msgs.length && <div className="bai-hint">Tell me their standards in your own words, or attach their brand guide (PDF or pictures). For example: <i>&quot;Their navy is 289 C and gray is Cool Gray 5 C. Distressed logos are a fashion hit with soft hand. On navy shirts the logos print white.&quot;</i> I&apos;ll propose the setup; nothing changes until you click Apply.</div>}
-              {!msgs && !err && <div className="faint">Loading…</div>}
-              {(msgs || []).map((m, i) => m.role === "staff" ? (
-                <div key={i} className="bai-me">{m.text}{m.files?.length ? <div className="bai-files">{m.files.map((f) => <span key={f.path}>📄 {f.name}</span>)}</div> : null}<small>{m.by ? m.by.split("@")[0] + " · " : ""}{fmtStamp(m.at)}</small></div>
-              ) : (
-                <div key={i} className="bai-ai">
-                  <div>{m.text}</div>
-                  {m.lines?.length ? (
-                    <div className={"bai-prop " + (m.status || "")}>
-                      <b className="t">{m.status === "applied" ? "Applied" : m.status === "dismissed" ? "Not applied" : "Changes"}</b>
-                      {m.lines.map((l, k) => (
-                        <div key={k} className="bai-line"><span className={"op " + OP[l.op]}>{l.op === "-" ? "−" : l.op}</span><span className="what">{l.what}</span><span className="txt">{l.hex && <i className="dot" style={{ background: l.hex }} />}{l.text}</span></div>
-                      ))}
-                      {m.status === "open" ? (
-                        <div className="bai-acts"><button type="button" className="btn sm primary" disabled={!!busy} onClick={() => decide(i, "apply")}>{busy === "Applying…" ? "Applying…" : "Apply these changes"}</button><button type="button" className="btn sm ghost" disabled={!!busy} onClick={() => decide(i, "dismiss")}>Not yet</button></div>
-                      ) : m.done_at ? <small className="faint">{m.status === "applied" ? "Applied" : "Set aside"} by {(m.done_by || "").split("@")[0]}, {fmtStamp(m.done_at)}</small> : null}
-                    </div>
-                  ) : null}
-                  {m.question && <div className="bai-q">{m.question}</div>}
+          // looks like Apple Messages (Oct 16, Nick): blue bubbles for us, gray for the AI, a rounded message field
+          <section className="im" aria-label="Set up brand standards with AI">
+            <div className="im-h">
+              <span className="im-av" aria-hidden="true">✦</span>
+              <span className="im-who"><b>Brand standards AI</b><small>{customerName}</small></span>
+              <button type="button" className="im-done" onClick={() => setOpen(false)}>Done</button>
+            </div>
+            <div className="im-msgs">
+              {msgs && !msgs.length && (
+                <div className="im-row them"><div className="im-b them">Tell me their standards the way you&apos;d say them, or tap + to attach their brand guide. Like: &quot;Their navy is 289 C and gray is Cool Gray 5 C. Distressed logos are a fashion hit with soft hand. On navy shirts the logos print white.&quot; I&apos;ll show you the changes first; nothing is saved until you tap Apply.</div></div>
+              )}
+              {!msgs && !err && <div className="im-time">Loading…</div>}
+              {(msgs || []).map((m, i) => (
+                <div key={i} className="im-grp">
+                  {showTime(i) && <div className="im-time">{fmtStamp(m.at)}</div>}
+                  {m.role === "staff" ? (
+                    <>
+                      {m.files?.map((f) => <div key={f.path} className="im-row me"><div className="im-file">📄 <span>{f.name}</span></div></div>)}
+                      {m.text && <div className="im-row me"><div className="im-b me">{m.text}</div></div>}
+                      {m.by && <div className="im-by me">{m.by.split("@")[0]}</div>}
+                    </>
+                  ) : (
+                    <>
+                      {m.text && <div className="im-row them"><div className="im-b them">{m.text}</div></div>}
+                      {m.lines?.length ? (
+                        <div className="im-row them">
+                          <div className={"im-card " + (m.status || "")}>
+                            <div className="im-card-h">{m.status === "applied" ? "✓ Applied" : m.status === "dismissed" ? "Not applied" : "Changes to make"}</div>
+                            {m.lines.map((l, k) => (
+                              <div key={k} className="im-line"><span className={"op " + OP[l.op]}>{l.op === "-" ? "−" : l.op}</span><span className="what">{l.what}</span><span className="txt">{l.hex && <i className="dot" style={{ background: l.hex }} />}{l.text}</span></div>
+                            ))}
+                            {m.status === "open" ? (
+                              <div className="im-acts"><button type="button" className="im-apply" disabled={!!busy} onClick={() => decide(i, "apply")}>{busy === "Applying…" ? "Applying…" : "Apply"}</button><button type="button" className="im-later" disabled={!!busy} onClick={() => decide(i, "dismiss")}>Not yet</button></div>
+                            ) : m.done_at ? <div className="im-card-f">{m.status === "applied" ? "Applied" : "Set aside"} by {(m.done_by || "").split("@")[0]} · {fmtStamp(m.done_at)}</div> : null}
+                          </div>
+                        </div>
+                      ) : null}
+                      {m.question && <div className="im-row them"><div className="im-b them">{m.question}</div></div>}
+                    </>
+                  )}
                 </div>
               ))}
-              {busy && busy !== "Applying…" && <div className="bai-ai busy">{busy}</div>}
+              {busy && busy !== "Applying…" && (
+                <div className="im-row them"><div className="im-b them typing" title={busy} aria-label={busy}><i /><i /><i /></div>{/pdf|guide/i.test(busy) && <span className="im-note">{busy}</span>}</div>
+              )}
               <div ref={end} />
             </div>
-            {err && <div className="err" style={{ margin: "0 12px" }}>{err}</div>}
-            {files.length > 0 && <div className="bai-staged">{files.map((f, i) => <span key={i}>📄 {f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
-            <div className="bai-in">
-              <label className="bai-clip" title="Attach their brand guide (PDF) or pictures">📎<input type="file" hidden multiple accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; setFiles((x) => [...x, ...l].slice(0, 4)); e.target.value = ""; }} /></label>
-              <textarea rows={2} value={text} placeholder="Describe their standards, or attach a brand guide…" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
-              <button type="button" className="btn primary" disabled={!!busy || (!text.trim() && !files.length)} onClick={send}>Send</button>
+            {err && <div className="im-err">{err}</div>}
+            {files.length > 0 && <div className="im-staged">{files.map((f, i) => <span key={i}>📄 {f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
+            <div className="im-in">
+              <label className="im-plus" title="Attach their brand guide (PDF) or pictures" aria-label="Attach files">+<input type="file" hidden multiple accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; setFiles((x) => [...x, ...l].slice(0, 4)); e.target.value = ""; }} /></label>
+              <div className="im-field">
+                <textarea rows={1} value={text} placeholder="Message" aria-label="Message" onChange={(e) => { setText(e.target.value); const t = e.target; t.style.height = "auto"; t.style.height = Math.min(140, t.scrollHeight) + "px"; }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
+                <button type="button" className="im-send" aria-label="Send" disabled={!!busy || (!text.trim() && !files.length)} onClick={send}>↑</button>
+              </div>
             </div>
           </section>
         )}
