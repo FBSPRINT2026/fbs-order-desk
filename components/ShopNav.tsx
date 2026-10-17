@@ -187,7 +187,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
 
   // the menu, in groups — each group's items are kept in alphabetical order
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
-    { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/conversations", "chat", "Conversations"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
+    { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
     { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Production Details"], ["/shop/separations", "seps", "Separations"]] },
     { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
@@ -215,9 +215,9 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
     <AppLaunch />
     <aside className={"side" + (mini ? " mini" : "")} ref={sideRef}
       onMouseOver={(e) => {
-        if (!mini) return;
         const el = (e.target as HTMLElement).closest?.("[data-tip]") as HTMLElement | null;
-        if (!el) { setTip(null); return; }
+        // the folded menu, and the Shop Tools icons (always icons now): their name pops up beside them
+        if (!el || (!mini && !el.closest(".nav-tools"))) { setTip(null); return; }
         const r = el.getBoundingClientRect();
         setTip({ text: el.dataset.tip || "", top: r.top + r.height / 2, left: r.right + 10 });
       }}
@@ -228,7 +228,7 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         <span className="side-edge-k" aria-hidden><svg viewBox="0 0 24 24">{mini ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}</svg></span>
       </button>
       {/* drawn on the page itself (not inside the menu), so nothing on the page can cover it */}
-      {mini && tip && tip.text && typeof document !== "undefined" && createPortal(<div className="side-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.text}</div>, document.body)}
+      {tip && tip.text && typeof document !== "undefined" && createPortal(<div className="side-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.text}</div>, document.body)}
       <div className={sdClass(fit.l)} ref={inRef} style={fit.h ? { zoom: fit.z, minHeight: fit.h / fit.z } : undefined}>
       <Link href="/shop" className="brand brand-logo" title="Home">
         {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}
@@ -250,11 +250,12 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         {link(["/shop", "home", "My Day"])}
         {link(["/shop/inbox", "inbox", "Email"])}
         {link(["/shop/my-calendar", "cal", "Calendar"])}
-        {link(["/shop/alerts", "bell", "Alerts & Away"])}
         {(crew ? [GROUPS[1], GROUPS[2], GROUPS[0]] : GROUPS).map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title}</div>
-            {g.items.map(link)}
+            {g.title === "Shop Tools"
+              ? <div className="nav-tools">{g.items.map(link)}</div>
+              : g.items.filter(([href]) => href !== "/shop/details" || details > 0 || path.startsWith("/shop/details")).map(link)}
           </div>
         ))}
       </nav>

@@ -456,6 +456,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
           </span>}
           {box?.enabled && <button type="button" className="btn sm" disabled={!!busy} onClick={async () => { setBusy("check"); const r = await checkMailNow(); setBusy(""); if (!r.ok) flash(r.error); else { flash("Checked."); load(); } }}>{busy === "check" ? "Checking…" : "Check now"}</button>}
           {st && !st.viewing && <button type="button" className="btn sm ghost" onClick={() => setSettings(!settings)}>{box?.enabled ? (settings ? "Close settings" : "⚙ Email settings") : "Connect my email"}</button>}
+          {/* Alerts & Away lives here now, not in the left menu (Oct 16, Nick) */}
+          <Link className="btn sm ghost" href="/shop/alerts" title="Alerts and away: who gets told about what, and when you're out">🔔 Alerts &amp; Away</Link>
         </div>
       </div>
       {st && !box?.enabled && <Connect st={st} onDone={(t) => { setSettings(false); flash(t); load(); }} />}
@@ -519,6 +521,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
               <div className="pit-set"><AppStartToggle path="/shop/inbox" label="Email" /></div>
               <MailZoomControl />
               {st && !st.viewing && <button type="button" className="pit-f" onClick={() => { setPSheet(false); setSettings(true); }}><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg><span>{box?.enabled ? "Email settings" : "Connect my email"}</span></button>}
+              <Link className="pit-f" href="/shop/alerts" onClick={() => setPSheet(false)}>🔔<span>Alerts &amp; Away</span></Link>
               <button type="button" className="pbar-cancel" onClick={() => setPSheet(false)}>Close</button>
             </div>
           </div>}

@@ -9339,3 +9339,13 @@ fieldset.bs-lock{border:0;padding:0;margin:0;min-width:0}
 .bs-lock[data-locked] input::placeholder{color:transparent}
 .bs-lock[data-locked] [role="radio"]:not([aria-checked="true"]){opacity:.55}
 .bs-lock[data-locked] [role="radio"]{cursor:default}
+
+/* Shop Tools as small icons with their name on hover, like Illustrator's toolbar (Oct 16, Nick) */
+.side:not(.mini) .nav-tools{display:flex;flex-wrap:wrap;gap:4px;padding:2px 2px 0}
+.side:not(.mini) .nav-tools a{width:40px;height:38px;padding:0!important;justify-content:center;position:relative;border-radius:9px}
+.side:not(.mini) .nav-tools a .lbl-t,.side:not(.mini) .nav-tools a .lbl-s{display:none}
+.side:not(.mini) .nav-tools a svg{width:19px;height:19px}
+.side:not(.mini) .nav-tools .badge{position:absolute;top:1px;right:1px;margin:0;font-size:9.5px;padding:0 4px}
+.side.mini .nav-tools{display:flex;flex-direction:column}
+@media (max-width:820px){.side .nav-tools{display:flex;flex-direction:column}.side .nav-tools a{width:auto;height:auto;justify-content:flex-start}.side .nav-tools a .lbl-t{display:inline}}
+a.pit-f{text-decoration:none}
