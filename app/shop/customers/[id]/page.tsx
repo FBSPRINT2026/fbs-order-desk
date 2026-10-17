@@ -15,7 +15,7 @@ import AccountAreas, { type AAttn, type AMessage, type AMockup, type APayment } 
 import { fmtDateLong } from "@/lib/format";
 import { previewUrls } from "@/lib/designs";
 import { staffCustomerMessage } from "@/app/shop/actions";
-import { archiveDesign, deleteDesign } from "@/app/artwork-actions";
+import { archiveDesign, deleteDesign, deleteDesignForever } from "@/app/artwork-actions";
 import { PAY_TERMS, payDueDate, type Design, type PayTerms } from "@/lib/pricing";
 import Timeline from "@/components/Timeline";
 import CustomerTexts from "@/components/CustomerTexts";
@@ -204,7 +204,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           ...archive.map((a) => archiveAsOrder(a, `/shop/archive/${a.id}`))]} terms={PAY_TERMS[c.payment_terms || "receipt"]} payments={[...payments, ...archive.flatMap((a) => archivePayments(a, `/shop/archive/${a.id}`))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at))} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
         hrefBase="/shop/orders/"
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
-        usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign}
+        usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onDeleteForever={async (did) => { const r = await deleteDesignForever(did); if (r.ok) setDesigns((ds) => ds.filter((x) => x.id !== did)); return r; }}
         onStarMockup={async (mid, starred) => { const { error } = await createClient().rpc("set_mockup_star", { p_mockup: mid, p_starred: starred }); return { ok: !error, error: error?.message }; }}
         onUploadLogos={async (files, star, progress) => {
           const sb = createClient();

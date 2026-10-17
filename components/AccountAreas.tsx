@@ -60,7 +60,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onUploadLogos, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onUploadLogos, onDeleteForever, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -108,6 +108,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
   onStarMockup?: (mockupId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
   onArchive?: (designId: string, archived: boolean) => Promise<{ ok: boolean; error?: string }>;
+  /** shop: an archived logo deleted for good (its orders keep their mockups) */
+  onDeleteForever?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
   /** the customer's payment terms, e.g. "Net 30 days" */
   terms?: string;
   /** portal: online payments (card fee %, Zelle/Venmo details, Stax web payments token, deposit %) */
@@ -628,7 +630,16 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
           </div>
         </div>
         <div className="dc-b">{mode === "shop" ? <Link href={`/shop/artwork/${d.id}`}><b>D-{d.number}</b></Link> : <b>D-{d.number}</b>}<span>{d.name || "Logo"}</span>{d.inks && <span className="faint">{d.inks}</span>}
-          {isArchived && <button type="button" className="btn sm" style={{ marginTop: 6, alignSelf: "flex-start" }} onClick={() => restore(d)}>Restore</button>}
+          {isArchived && <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+            <button type="button" className="btn sm" onClick={() => restore(d)}>Restore</button>
+            {onDeleteForever && <button type="button" className={"btn sm " + (armedDel === "forever" + d.id ? "danger" : "ghost")} title="Delete this logo and its file for good. Orders that used it keep their mockup pictures."
+              onClick={async () => {
+                if (armedDel !== "forever" + d.id) { setArmedDel("forever" + d.id); setTimeout(() => setArmedDel((x) => (x === "forever" + d.id ? "" : x)), 4000); return; }
+                setArmedDel(""); setGone((g) => ({ ...g, [d.id]: true }));
+                const r = await onDeleteForever(d.id);
+                if (!r.ok) { setGone((g) => ({ ...g, [d.id]: false })); setStarErr(r.error || "Couldn't delete the logo."); }
+              }}>{armedDel === "forever" + d.id ? "Delete for good?" : "Delete forever"}</button>}
+          </div>}
         </div>
       </div>
     );
@@ -658,13 +669,13 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       )}
       <div className="aa-card">
         {onUploadLogos && <LogoUpload onUpload={onUploadLogos} />}
-        <div className="aa-sec-h"><h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
+        <div className="aa-sec-h aa-logos-h"><h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
         {dRows.length ? (() => { const P = pageOf("logos", dRows); return <><div className="design-grid aa-grid3">{P.items.map((d) => card(d, false))}{slots(P.pad)}</div>{pager("logos", dRows.length, P.p, P.n)}</>; })()
           : <div className="aa-empty">{live.length ? `No logos match “${q}”.` : "No logos on file yet."}</div>}
         {archived.length > 0 && (
           <div className="aa-arch">
             <button type="button" className="btn sm ghost" onClick={() => setShowArch(!showArch)}>{showArch ? "Hide archived logos" : `View archived logos (${archived.length})`}</button>
-            {showArch && (aRows.length ? (() => { const P = pageOf("arch", aRows); return <><div className="design-grid aa-grid3" style={{ marginTop: 10 }}>{P.items.map((d) => card(d, true))}{slots(P.pad)}</div>{pager("arch", aRows.length, P.p, P.n)}</>; })() : <div className="aa-empty">No archived logos match “{q}”.</div>)}
+            {showArch && (aRows.length ? (() => { const P = pageOf("arch", aRows); return <><div className="design-grid aa-grid3" style={{ marginTop: 10 }}>{P.items.map((d) => card(d, true))}{slots(P.pad)}</div>{pager("arch", aRows.length, P.p, P.n)}<button type="button" className="btn sm" style={{ marginTop: 10 }} onClick={() => { setShowArch(false); document.querySelector(".aa-logos-h")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>← Back to logos (hide archived)</button></>; })() : <div className="aa-empty">No archived logos match “{q}”.</div>)}
           </div>
         )}
       </div>

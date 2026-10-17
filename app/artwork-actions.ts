@@ -44,3 +44,34 @@ export async function archiveDesign(id: string, archived: boolean): Promise<Resu
     return done();
   } catch (e) { return fail(e); }
 }
+
+/**
+ * Delete an archived logo for good, even one that was used (Oct 16, Nick: "permanently delete those… I don't want to
+ * even let it be referenced"). Staff only, archived logos only (two clicks in the archived view). Orders that used it keep
+ * their mockup pictures; their prints just no longer point at this logo. Separations lose the link too.
+ */
+export async function deleteDesignForever(id: string): Promise<Result> {
+  try {
+    const { isStaff } = await getViewer();
+    if (!isStaff) return { ok: false, error: "Only shop staff can delete a logo for good." };
+    const admin = createAdminClient();
+    const { data: d } = await admin.from("designs").select("id, customer_id, file_path, preview_path, archived_at").eq("id", id).maybeSingle();
+    if (!d) return { ok: false, error: "We couldn't find that logo." };
+    if (!d.archived_at) return { ok: false, error: "Archive the logo first; only archived logos are deleted for good." };
+    // the customer's orders that point at it: the print keeps everything but the link
+    const { data: os } = d.customer_id ? await admin.from("orders").select("id, groups").eq("customer_id", d.customer_id) : { data: [] };
+    for (const o of (os || []) as { id: string; groups: { imprints?: { design_id?: string }[] }[] | null }[]) {
+      if (!JSON.stringify(o.groups || []).includes(id)) continue;
+      const groups = (o.groups || []).map((g) => ({ ...g, imprints: (g.imprints || []).map((im) => (im.design_id === id ? { ...im, design_id: undefined } : im)) }));
+      await admin.from("orders").update({ groups }).eq("id", o.id);
+    }
+    await admin.from("separations").update({ design_id: null }).eq("design_id", id);
+    const { data: ms } = await admin.from("mockups").select("id, design_ids").contains("design_ids", [id]);
+    for (const m of (ms || []) as { id: string; design_ids: string[] }[]) await admin.from("mockups").update({ design_ids: m.design_ids.filter((x) => x !== id) }).eq("id", m.id);
+    const files = [d.file_path, d.preview_path].filter(Boolean) as string[];
+    if (files.length) await admin.storage.from("proofs").remove([...new Set(files)]);
+    const { error } = await admin.from("designs").delete().eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    return done();
+  } catch (e) { return fail(e); }
+}
