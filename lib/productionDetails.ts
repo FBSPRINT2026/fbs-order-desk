@@ -16,10 +16,11 @@ export const needsDetails = (im: Pick<Imprint, "confirm"> | null | undefined) =>
 export const orderNeedsDetails = (groups: Pick<Group, "imprints">[] | null | undefined) => (groups || []).some((g) => (g.imprints || []).some(needsDetails));
 export const detailsCount = (groups: Pick<Group, "imprints">[] | null | undefined) => (groups || []).reduce((n, g) => n + (g.imprints || []).filter(needsDetails).length, 0);
 
-/** the orders with a print waiting on production details (jsonb contains: one query per flag, merged) */
+/** the orders with a print waiting on production details (jsonb contains: one query per flag, merged). The filter goes
+ *  as JSON text: an array of objects was sent as `{[object Object]}` and every lookup failed (found Oct 16). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function ordersNeedingDetails<T extends { id: string }>(sb: any, cols: string): Promise<T[]> {
-  const q = (flag: "size" | "ink") => sb.from("orders").select(cols).neq("status", "completed").contains("groups", [{ imprints: [{ confirm: { [flag]: true } }] }]).limit(300);
+  const q = (flag: "size" | "ink") => sb.from("orders").select(cols).neq("status", "completed").contains("groups", JSON.stringify([{ imprints: [{ confirm: { [flag]: true } }] }])).limit(300);
   const [a, b] = await Promise.all([q("size"), q("ink")]);
   const seen = new Set<string>(), out: T[] = [];
   for (const r of [...((a.data || []) as T[]), ...((b.data || []) as T[])]) if (!seen.has(r.id)) { seen.add(r.id); out.push(r); }
