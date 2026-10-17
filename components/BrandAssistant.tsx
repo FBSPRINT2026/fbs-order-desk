@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/RoleContext";
+import { useSticky } from "@/lib/useSticky";
 import { fmtStamp } from "@/lib/format";
 import type { BrandFile, BrandMsg } from "@/lib/brandStandards";
 
@@ -19,7 +20,8 @@ const OP = { "+": "add", "~": "chg", "-": "del" } as const;
 export default function BrandAssistant({ customerId, customerName, children, onApplied }: { customerId: string; customerName: string; children: ReactNode; onApplied?: () => void }) {
   const { role, realRole } = useRole();
   const can = ["owner", "admin"].includes(realRole || role);
-  const [open, setOpen] = useState(false);
+  // a pane on the right of Brand standards (Oct 16, Nick), open unless closed; remembered on this browser
+  const [open, setOpen] = useSticky("brand.aiPane", true);
   const [msgs, setMsgs] = useState<BrandMsg[] | null>(null);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -70,12 +72,12 @@ export default function BrandAssistant({ customerId, customerName, children, onA
   if (!can) return <>{children}</>;
   return (
     <div className={"bai" + (open ? " open" : "")}>
-      <div className="bai-top"><button type="button" className={"bai-btn" + (open ? " on" : "")} onClick={() => setOpen((x) => !x)} aria-expanded={open}>✦ {open ? "Close the AI" : "Set up with AI"}</button></div>
       <div className="bai-wrap">
         <div className="bai-ed" key={ver}>{children}</div>
+        {!open && <button type="button" className="bai-tab" onClick={() => setOpen(true)} aria-expanded={false} title="Set up their brand standards by talking them through with the AI">✦ Set up with AI</button>}
         {open && (
           <section className="bai-chat" aria-label="Brand standards assistant">
-            <div className="bai-h"><b>✦ Brand standards assistant</b><span className="faint">{customerName} · owners and admins</span></div>
+            <div className="bai-h"><b>✦ Set up with AI</b><span className="faint">{customerName} · owners and admins</span><button type="button" className="bai-x" aria-label="Close the AI pane" title="Close" onClick={() => setOpen(false)}>✕</button></div>
             <div className="bai-msgs">
               {msgs && !msgs.length && <div className="bai-hint">Tell me their standards in your own words, or attach their brand guide (PDF or pictures). For example: <i>&quot;Their navy is 289 C and gray is Cool Gray 5 C. Distressed logos are a fashion hit with soft hand. On navy shirts the logos print white.&quot;</i> I&apos;ll propose the setup; nothing changes until you click Apply.</div>}
               {!msgs && !err && <div className="faint">Loading…</div>}

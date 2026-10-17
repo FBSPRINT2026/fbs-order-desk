@@ -9213,19 +9213,15 @@ img.lv-art{width:76%;height:76%;object-fit:contain}
 /* Brand standards: other rules, and "Set up with AI" (owners and admins, Oct 16) */
 .bp-rule{display:flex;gap:6px;align-items:center;margin:4px 0}
 .bp-rule input{flex:1;min-width:0}
-.bai-top{display:flex;justify-content:flex-end;margin:0 0 8px}
-/* on the "Brand standards" title line, at the right (Oct 16, Nick: the button was in a weird spot) */
-.aa-card:has(> .bai > .bai-top){position:relative}
-.aa-card:has(> .bai > .bai-top) > .aa-sec-h{padding-right:150px}
-.aa-card > .bai > .bai-top{position:absolute;top:12px;right:16px;margin:0}
-@media (max-width:640px){.aa-card:has(> .bai > .bai-top) > .aa-sec-h{padding-right:0}.aa-card > .bai > .bai-top{position:static;margin:0 0 8px}}
-.bai-btn{border:1px solid var(--fbs-blue,#0e9bd8);color:var(--fbs-blue,#0e9bd8);background:var(--accent-soft,#eef8fd);border-radius:8px;padding:5px 12px;font-weight:600;font-size:12.5px;cursor:pointer}
-.bai-btn.on,.bai-btn:hover{background:var(--fbs-blue,#0e9bd8);color:#fff}
-.bai-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
+.bai-wrap{display:grid;grid-template-columns:minmax(0,1fr) 34px;gap:16px;align-items:start}
 .bai.open .bai-wrap{grid-template-columns:minmax(0,1fr) minmax(340px,440px)}
 .bai-ed{min-width:0}
 .bai-chat{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);display:flex;flex-direction:column;max-height:78vh;position:sticky;top:12px;min-width:0}
 .bai-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px}
+.bai-x{margin-left:auto;border:0;background:none;cursor:pointer;color:var(--ink-3);font-size:13px;padding:2px 4px}
+.bai-x:hover{color:var(--ink)}
+.bai-tab{writing-mode:vertical-rl;border:1px solid var(--fbs-blue,#0e9bd8);color:var(--fbs-blue,#0e9bd8);background:var(--accent-soft,#eef8fd);border-radius:10px;padding:12px 6px;font-weight:600;font-size:12.5px;cursor:pointer;position:sticky;top:12px}
+.bai-tab:hover{background:var(--fbs-blue,#0e9bd8);color:#fff}
 .bai-h .faint{font-size:12px}
 .bai-msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:13px;min-height:200px}
 .bai-hint{color:var(--ink-2);background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;line-height:1.5}
@@ -9253,6 +9249,6 @@ img.lv-art{width:76%;height:76%;object-fit:contain}
 .bai-in{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border-top:1px solid var(--line)}
 .bai-in textarea{flex:1;min-width:0;resize:vertical}
 .bai-clip{border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--surface);cursor:pointer;line-height:1}
-@media (max-width:1000px){.bai.open .bai-wrap{grid-template-columns:minmax(0,1fr)}.bai-chat{position:static;max-height:none}}
+@media (max-width:1000px){.bai .bai-wrap,.bai.open .bai-wrap{grid-template-columns:minmax(0,1fr)}.bai-chat{position:static;max-height:none}.bai-tab{writing-mode:horizontal-tb;position:static;justify-self:start}}
 .mk-brand-rules{font-size:12.5px;background:#fff8e1;border:1px solid #f3d27a;border-radius:8px;padding:7px 10px}
 .mk-brand-rules ul{margin:4px 0 0;padding-left:18px}
