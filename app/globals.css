@@ -9227,14 +9227,18 @@ img.lv-art{width:76%;height:76%;object-fit:contain}
 .bp-rule input{flex:1;min-width:0}
 .bai{position:static}
 .aa-card:has(> .bai){position:relative}
-.aa-card:has(> .bai) > .aa-sec-h{padding-right:140px}
-.bai-btn{position:absolute;top:12px;right:16px;border:1px solid var(--fbs-blue,#0e9bd8);color:var(--fbs-blue,#0e9bd8);background:var(--accent-soft,#eef8fd);border-radius:999px;padding:5px 13px;font-weight:600;font-size:12.5px;cursor:pointer}
+.aa-card:has(> .bai) > .aa-sec-h{padding-right:250px}
+.bai-btns{position:absolute;top:12px;right:16px;display:flex;gap:8px;align-items:center}
+.bai-edit{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:5px 13px;font-weight:600;font-size:12.5px;cursor:pointer}
+.bai-edit:hover{border-color:var(--ink-3);color:var(--ink)}
+.bai-edit.on{background:#1f9a4f;border-color:#1f9a4f;color:#fff}
+.bai-btn{border:1px solid var(--fbs-blue,#0e9bd8);color:var(--fbs-blue,#0e9bd8);background:var(--accent-soft,#eef8fd);border-radius:999px;padding:5px 13px;font-weight:600;font-size:12.5px;cursor:pointer}
 .bai-btn.on,.bai-btn:hover{background:var(--fbs-blue,#0e9bd8);color:#fff}
 .bai-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
 .bai.open .bai-wrap{grid-template-columns:minmax(0,1fr) minmax(320px,400px)}
 .bai-ed{min-width:0}
 @media (max-width:1000px){.bai.open .bai-wrap{grid-template-columns:minmax(0,1fr)}.im{position:static;max-height:none}}
-@media (max-width:640px){.aa-card:has(> .bai) > .aa-sec-h{padding-right:0}.bai-btn{position:static;margin-bottom:8px}}
+@media (max-width:640px){.aa-card:has(> .bai) > .aa-sec-h{padding-right:0}.bai-btns{position:static;margin-bottom:8px}}
 /* Apple Messages look (Oct 16, Nick) */
 .im{--im-blue:#0a84ff;--im-gray:#e9e9eb;--im-bg:#fff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;background:var(--im-bg);border:1px solid #e5e5ea;border-radius:16px;display:flex;flex-direction:column;max-height:78vh;position:sticky;top:12px;min-width:0;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .im-h{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(246,246,248,.92);border-bottom:1px solid #e5e5ea}
@@ -9327,3 +9331,11 @@ img.lv-art{width:76%;height:76%;object-fit:contain}
 .csep .dc-img{position:relative}
 .csep .dc-img img{position:absolute;inset:8%;width:84%;height:84%;object-fit:contain}
 .aa-grid6 .dc-b b{font-size:12.5px}
+
+/* Brand standards locked (not editing): plain text, no remove / add buttons */
+fieldset.bs-lock{border:0;padding:0;margin:0;min-width:0}
+.bs-lock[data-locked] button:not([role="radio"]),.bs-lock[data-locked] label.btn,.bs-lock[data-locked] form.bp-rule,.bs-lock[data-locked] .linkbtn{display:none !important}
+.bs-lock[data-locked] input:not([type="checkbox"]):not([type="radio"]),.bs-lock[data-locked] select,.bs-lock[data-locked] textarea{border-color:transparent !important;background:transparent !important;box-shadow:none !important;color:var(--ink) !important;-webkit-text-fill-color:var(--ink);opacity:1;appearance:none;-webkit-appearance:none;cursor:default;padding-left:2px}
+.bs-lock[data-locked] input::placeholder{color:transparent}
+.bs-lock[data-locked] [role="radio"]:not([aria-checked="true"]){opacity:.55}
+.bs-lock[data-locked] [role="radio"]{cursor:default}

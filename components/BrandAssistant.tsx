@@ -28,6 +28,9 @@ export default function BrandAssistant({ customerId, customerName, children, onA
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [ver, setVer] = useState(0);
+  // locked unless Edit is clicked (Oct 16, Nick: "you can just X delete something easily… locked, click to edit");
+  // starts locked every visit on purpose
+  const [editing, setEditing] = useState(false);
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -69,15 +72,17 @@ export default function BrandAssistant({ customerId, customerName, children, onA
     if (action === "apply") { setVer((v) => v + 1); onApplied?.(); }
   }
 
-  if (!can) return <>{children}</>;
   const showTime = (k: number) => { const l = msgs || []; return k === 0 || new Date(l[k].at).getTime() - new Date(l[k - 1].at).getTime() > 30 * 60_000; };
   return (
     <div className={"bai" + (open ? " open" : "")}>
       {/* even with the Brand standards title, at the right (Oct 16, Nick) */}
-      <button type="button" className={"bai-btn" + (open ? " on" : "")} onClick={() => setOpen((x) => !x)} aria-expanded={open}>✦ {open ? "Close AI" : "Set up with AI"}</button>
+      <div className="bai-btns">
+        <button type="button" className={"bai-edit" + (editing ? " on" : "")} onClick={() => setEditing((x) => !x)} aria-pressed={editing} title={editing ? "Lock brand standards again" : "Brand standards are locked. Click to change them."}>{editing ? "✓ Done" : "✎ Edit"}</button>
+        {can && <button type="button" className={"bai-btn" + (open ? " on" : "")} onClick={() => setOpen((x) => !x)} aria-expanded={open}>✦ {open ? "Close AI" : "Set up with AI"}</button>}
+      </div>
       <div className="bai-wrap">
-        <div className="bai-ed" key={ver}>{children}</div>
-        {open && (
+        <div className="bai-ed" key={ver}><fieldset className="bs-lock" disabled={!editing} data-locked={!editing || undefined}>{children}</fieldset></div>
+        {can && open && (
           // looks like Apple Messages (Oct 16, Nick): blue bubbles for us, gray for the AI, a rounded message field
           <section className="im" aria-label="Set up brand standards with AI">
             <div className="im-h">
