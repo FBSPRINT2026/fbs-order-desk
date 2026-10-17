@@ -540,7 +540,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
                 : <><b>{view.about ? view.q : view.who?.length ? `With ${view.q}` : `“${view.q}”`}</b><span className="faint">{convos ? `${convos.length} conversation${convos.length === 1 ? "" : "s"}` : "Searching…"}</span><button type="button" className="md-link mf-back" onClick={backFromSearch}>‹ Back to {beforeName}</button></>}
             </div> : <div className="ibx2-tabs" role="tablist">
               {mode === "mail" ? BK.map((b) => (
-                <button key={b.k} type="button" role="tab" aria-selected={bk === b.k} className={bk === b.k ? "on" : ""} onClick={() => { setBk(b.k); setOpen(null); }}>{b.label} <span>{ol ? bkN(b.k) : ""}</span></button>
+                <button key={b.k} type="button" role="tab" aria-selected={bk === b.k} className={bk === b.k ? "on" : ""} onClick={() => { setBk(b.k); setOpen(null); }}>{b.label} <span className={ol && !bkN(b.k) ? "zero" : ""}>{ol ? bkN(b.k) : ""}</span></button>
               )) : <>
               <button type="button" role="tab" aria-selected={tab === "reply"} className={tab === "reply" ? "on" : ""} onClick={() => setTab("reply")}>Needs reply <span className={counts.urgent ? "hot" : ""} title={counts.urgent ? `${counts.urgent} urgent` : undefined}>{counts.reply}</span></button>
               <button type="button" role="tab" aria-selected={tab === "leads"} className={tab === "leads" ? "on" : ""} onClick={() => setTab("leads")}>Leads <span>{counts.leads}</span></button>
