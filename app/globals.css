@@ -9451,3 +9451,5 @@ span.side-who{cursor:default}
 .side .side-who small{display:none}
 .side .side-who:hover .side-gear,.side .side-who.on .side-gear{stroke:#fff}
 .side .side-who:hover .side-who-c,.side .side-who.on .side-who-c{box-shadow:none}
+/* the fold / open tab sits beside the logo, where there's never a line or a selected item (Oct 16, Nick) */
+@media (min-width:821px){.side-edge-k{top:18px!important;transform:none!important}}
