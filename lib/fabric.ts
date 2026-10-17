@@ -38,28 +38,40 @@ function makeTile(src: string): Promise<string | null> {
     im.onload = () => {
       try {
         const W = im.naturalWidth, H = im.naturalHeight;
-        // a patch from the middle of the body (flat-lay photos: the shirt fills the frame, the chest is clear)
-        const P = Math.max(24, Math.round(W * 0.07)), x = Math.round(W * 0.5 - P / 2), y = Math.round(H * 0.56 - P / 2);
-        const S = P * 2; // blown up 2x
-        const c = document.createElement("canvas"); c.width = S * 2; c.height = S * 2;
-        const g = c.getContext("2d")!;
-        g.imageSmoothingQuality = "high";
-        // mirrored four ways, so the tile repeats without seams
-        for (const [fx, fy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
-          g.save(); g.translate(fx < 0 ? S * 2 : 0, fy < 0 ? S * 2 : 0); g.scale(fx, fy);
-          g.drawImage(im, x, y, P, P, 0, 0, S, S);
-          g.restore();
-        }
+        // a patch from the middle of the body (flat-lay photos: the shirt fills the frame, the chest is clear),
+        // blown up 1.5x
+        const P = Math.max(32, Math.round(W * 0.13)), x = Math.round(W * 0.5 - P / 2), y = Math.round(H * 0.55 - P / 2);
+        const S = Math.round(P * 1.5);
+        const a = document.createElement("canvas"); a.width = S; a.height = S;
+        const ga = a.getContext("2d", { willReadFrequently: true })!;
+        ga.imageSmoothingQuality = "high";
+        ga.drawImage(im, x, y, P, P, 0, 0, S, S);
         // even out the photo's shading (folds, light falloff): keep the knit's fine texture on one even tone
-        const blur = document.createElement("canvas"); blur.width = c.width; blur.height = c.height;
-        const bg = blur.getContext("2d")!; bg.filter = `blur(${Math.max(3, Math.round(S / 8))}px)`; bg.drawImage(c, 0, 0);
-        const d = g.getImageData(0, 0, c.width, c.height), p = d.data, q = bg.getImageData(0, 0, c.width, c.height).data;
-        const n = p.length / 4, avg = [0, 0, 0];
-        for (let i = 0; i < p.length; i += 4) { avg[0] += p[i]; avg[1] += p[i + 1]; avg[2] += p[i + 2]; }
-        if (!n) return res(null);
-        avg.forEach((v, j) => { avg[j] = v / n; });
-        for (let i = 0; i < p.length; i += 4) for (let j = 0; j < 3; j++) p[i + j] = Math.max(0, Math.min(255, avg[j] + (p[i + j] - q[i + j]) * 1.15));
-        g.putImageData(d, 0, 0);
+        const blur = document.createElement("canvas"); blur.width = S; blur.height = S;
+        const gb = blur.getContext("2d")!; gb.filter = `blur(${Math.max(4, Math.round(S / 7))}px)`; gb.drawImage(a, 0, 0);
+        const src = ga.getImageData(0, 0, S, S).data, low = gb.getImageData(0, 0, S, S).data;
+        const avg = [0, 0, 0], n = S * S;
+        for (let i2 = 0; i2 < src.length; i2 += 4) { avg[0] += src[i2]; avg[1] += src[i2 + 1]; avg[2] += src[i2 + 2]; }
+        avg.forEach((v, k) => { avg[k] = v / n; });
+        const flat = new Float32Array(n * 3);
+        for (let q = 0; q < n; q++) for (let k = 0; k < 3; k++) flat[q * 3 + k] = avg[k] + (src[q * 4 + k] - low[q * 4 + k]) * 1.1;
+        // seamless without mirroring: cross-fade with itself shifted half a tile, so every edge meets its own
+        // continuation (mirroring made a kaleidoscope pattern, Oct 16)
+        const h = Math.floor(S / 2), wt = (d: number) => Math.min(1, Math.max(0, (1 - Math.abs(d - h) / h) * 2.2));
+        // across first, then down: each pass hides the other's seam
+        const pass = (A: Float32Array, dx: number, dy: number) => {
+          const B = new Float32Array(n * 3);
+          for (let yy = 0; yy < S; yy++) for (let xx = 0; xx < S; xx++) {
+            const w = wt(dx ? xx : yy), q = yy * S + xx, q2 = ((yy + dy) % S) * S + ((xx + dx) % S);
+            for (let k = 0; k < 3; k++) B[q * 3 + k] = A[q * 3 + k] * w + A[q2 * 3 + k] * (1 - w);
+          }
+          return B;
+        };
+        const fin = pass(pass(flat, h, 0), 0, h);
+        const c = document.createElement("canvas"); c.width = S; c.height = S;
+        const g = c.getContext("2d")!, out = g.createImageData(S, S), o = out.data;
+        for (let q = 0; q < n; q++) { for (let k = 0; k < 3; k++) o[q * 4 + k] = Math.max(0, Math.min(255, fin[q * 3 + k])); o[q * 4 + 3] = 255; }
+        g.putImageData(out, 0, 0);
         res(c.toDataURL("image/jpeg", 0.9));
       } catch { res(null); }
     };

@@ -9366,3 +9366,8 @@ a.pit-f{text-decoration:none}
 .side-out:hover{background:rgba(255,255,255,.1);color:#fff}
 .side-out svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .side-user .side-viewas{width:78px!important}
+
+/* favorite logos: on their shirt color too, no checkerboard */
+.aa-fav-pic{position:relative;width:48px;height:48px;flex:none;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.aa-fav-pic .lp{position:absolute;inset:0;display:grid;place-items:center}
+.aa-fav-pic .lp img{max-width:84%;max-height:84%;object-fit:contain;width:auto;height:auto;background:none;border:0}
