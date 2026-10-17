@@ -6,6 +6,7 @@ import { designLabel, type Customer, type Design } from "@/lib/pricing";
 import { custLabel, fmtDateLong } from "@/lib/format";
 import { DESIGN_ACCEPT, PREVIEWABLE, previewUrls, uploadDesign } from "@/lib/designs";
 import SearchInput from "@/components/SearchInput";
+import { LogoPic, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { useSticky } from "@/lib/useSticky";
 
 type Mock = { id: string; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[] };
@@ -124,7 +125,10 @@ export default function ArtworkPage() {
             <div className="design-grid">
               {logos.slice(0, nL).map((d) => (
                 <Link key={d.id} href={`/shop/artwork/${d.id}`} className={"design-card" + (d.starred ? " starred" : "")}>
-                  <div className="dc-img">{urls[d.id] ? <img src={urls[d.id]} alt={d.name} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}{d.starred && <span className="dc-fav" title="Customer favorite">★</span>}</div>
+                  <div className="dc-img">{urls[d.id] ? <LogoPic url={urls[d.id]} alt={d.name} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
+                    {/* on its first background, like the customer page (Oct 17, Nick: "looks great in the customer page but crappy on the artwork page") */}
+                    {(() => { const v = onShirtsOf(d)[0]; return v && urls[d.id] ? <ShirtView className="main" url={urls[d.id]} shirt={v.shirt} ink={v.ink} /> : null; })()}
+                    {d.starred && <span className="dc-fav" title="Customer favorite">★</span>}</div>
                   <div className="dc-b"><b>D-{d.number}</b><span>{d.name || "Untitled"}</span><span className="faint">{custLabel(byId[d.customer_id || ""]) || "No customer"} · {d.colors} color{d.colors > 1 ? "s" : ""}</span></div>
                 </Link>
               ))}
