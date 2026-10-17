@@ -9394,3 +9394,5 @@ a.pit-f{text-decoration:none}
 .side .side-user .nav-support svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .side .side-user .nav-support .lbl-t{display:none}
 .side-user-r{display:flex;align-items:center}
+/* the folded menu keeps you, Report an issue and Sign out (stacked) */
+@media (min-width:821px){.side.mini .side-user.side-user{display:flex!important;flex-direction:column!important;align-items:center;gap:6px;padding:6px 0 0}.side.mini .side-user-r{flex-direction:column}}
