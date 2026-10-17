@@ -8,6 +8,7 @@ import { DESIGN_ACCEPT, PREVIEWABLE, previewUrls, uploadDesign } from "@/lib/des
 import SearchInput from "@/components/SearchInput";
 import { LogoPic, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { listDrafts, setDraft } from "@/app/shop/draft-art-actions";
+import { logoShirtsFrom } from "@/lib/logoShirts";
 import { useSticky } from "@/lib/useSticky";
 
 type Mock = { id: string; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[] };
@@ -33,6 +34,12 @@ export default function ArtworkPage() {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<{ customer_id: string; name: string; colors: number; inks: string; notes: string; file: File | null; preview: File | null } | null>(null);
 
+  // the shirt each logo was printed on, for its card (Oct 17, Nick: "MH Elem final should be on a blue background")
+  const [logoShirts, setLogoShirts] = useState<Record<string, string>>({});
+  useEffect(() => {
+    sb.from("orders").select("groups, lines, created_at").order("created_at", { ascending: false }).limit(3000)
+      .then(({ data }) => setLogoShirts(logoShirtsFrom((data || []) as never[])));
+  }, [sb]);
   async function load() {
     const [d, c, m] = await Promise.all([
       sb.from("designs").select("*").eq("draft", false).order("number", { ascending: false }),
@@ -161,7 +168,7 @@ export default function ArtworkPage() {
             <div className="design-grid">
               {logos.slice(0, nL).map((d) => (
                 <Link key={d.id} href={`/shop/artwork/${d.id}`} className={"design-card" + (d.starred ? " starred" : "")}>
-                  <div className="dc-img">{urls[d.id] ? <LogoPic url={urls[d.id]} alt={d.name} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
+                  <div className="dc-img">{urls[d.id] ? <LogoPic url={urls[d.id]} alt={d.name} shirt={logoShirts[d.id]} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
                     {/* on its first background, like the customer page (Oct 17, Nick: "looks great in the customer page but crappy on the artwork page") */}
                     {(() => { const v = onShirtsOf(d)[0]; return v && urls[d.id] ? <ShirtView className="main" url={urls[d.id]} shirt={v.shirt} ink={v.ink} /> : null; })()}
                     {d.starred && <span className="dc-fav" title="Customer favorite">★</span>}</div>

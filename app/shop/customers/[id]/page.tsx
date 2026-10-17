@@ -1,4 +1,5 @@
 "use client";
+import { logoShirtsFrom } from "@/lib/logoShirts";
 import TestAccount from "@/components/TestAccount";
 import BackLink from "@/components/BackLink";
 import CustomerProductionFiles from "@/components/CustomerProductionFiles";
@@ -158,11 +159,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const addTag = (raw: string) => { const t = raw.trim().replace(/,$/, "").slice(0, 40); if (!t || !c) return; if (!(c.tags || []).some((x) => x.toLowerCase() === t.toLowerCase())) set("tags", [...(c.tags || []), t]); setTagDraft(""); };
   const os = orders.filter((o) => o.customer_id === id);
   // the shirt color each logo was printed on (newest order first), for its card instead of a checkerboard (Oct 16)
-  const logoShirts: Record<string, string> = {};
-  for (const o of [...os].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))) for (const g of orderGroups(o)) for (const im of g.imprints) {
-    const col = (g.lines.find((l) => (l.color || "").trim()) || g.lines[0])?.color;
-    if (im.design_id && col && !logoShirts[im.design_id]) logoShirts[im.design_id] = col;
-  }
+  const logoShirts = logoShirtsFrom(os);
   const spent = os.filter((o) => orderCountsAsSale(o as { type: string; status: string; source?: string })).reduce((a, o) => a + o.total, 0) + archive.filter((a) => pvCountsAsSale(a.kind, a.status_name)).reduce((s, a) => s + (+a.total || 0), 0);
   const owed = os.filter((o) => o.type === "invoice").reduce((a, o) => a + Math.max(0, o.balance), 0);
 
