@@ -9315,3 +9315,15 @@ img.lv-art{width:76%;height:76%;object-fit:contain}
 .sg-t a:hover{color:var(--accent);text-decoration:underline}
 .sg-t small{color:var(--ink-3);font-size:11.5px}
 .sg-offw{font-size:12.5px;display:flex;flex-direction:column;gap:6px}
+
+/* cards without the checkerboard (Oct 16, Nick): logos on their shirt color, mockups filling the tile, separations on
+   the shirt they're for */
+.design-card .dc-img{background:#fff;padding:0}
+.design-card .dc-img .lp{position:absolute;inset:0;display:grid;place-items:center}
+.design-card .dc-img .lp img{max-width:84%;max-height:84%;object-fit:contain}
+.design-card .dc-img.mock{background:#fff}
+.design-card .dc-img.mock .dc-open{position:absolute;inset:0;display:block}
+.design-card .dc-img.mock img{width:100%;height:100%;object-fit:cover;max-width:none;max-height:none}
+.csep .dc-img{position:relative}
+.csep .dc-img img{position:absolute;inset:8%;width:84%;height:84%;object-fit:contain}
+.aa-grid6 .dc-b b{font-size:12.5px}

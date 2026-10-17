@@ -16,7 +16,7 @@ import { fmtDateLong } from "@/lib/format";
 import { previewUrls } from "@/lib/designs";
 import { staffCustomerMessage } from "@/app/shop/actions";
 import { archiveDesign, deleteDesign, deleteDesignForever } from "@/app/artwork-actions";
-import { PAY_TERMS, payDueDate, type Design, type PayTerms } from "@/lib/pricing";
+import { PAY_TERMS, orderGroups, payDueDate, type Design, type PayTerms } from "@/lib/pricing";
 import Timeline from "@/components/Timeline";
 import CustomerTexts from "@/components/CustomerTexts";
 import { customerTextCount } from "@/app/shop/texts-actions";
@@ -157,6 +157,12 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const [tagDraft, setTagDraft] = useState("");
   const addTag = (raw: string) => { const t = raw.trim().replace(/,$/, "").slice(0, 40); if (!t || !c) return; if (!(c.tags || []).some((x) => x.toLowerCase() === t.toLowerCase())) set("tags", [...(c.tags || []), t]); setTagDraft(""); };
   const os = orders.filter((o) => o.customer_id === id);
+  // the shirt color each logo was printed on (newest order first), for its card instead of a checkerboard (Oct 16)
+  const logoShirts: Record<string, string> = {};
+  for (const o of [...os].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))) for (const g of orderGroups(o)) for (const im of g.imprints) {
+    const col = (g.lines.find((l) => (l.color || "").trim()) || g.lines[0])?.color;
+    if (im.design_id && col && !logoShirts[im.design_id]) logoShirts[im.design_id] = col;
+  }
   const spent = os.filter((o) => orderCountsAsSale(o as { type: string; status: string; source?: string })).reduce((a, o) => a + o.total, 0) + archive.filter((a) => pvCountsAsSale(a.kind, a.status_name)).reduce((s, a) => s + (+a.total || 0), 0);
   const owed = os.filter((o) => o.type === "invoice").reduce((a, o) => a + Math.max(0, o.balance), 0);
 
@@ -214,7 +220,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           ...archive.map((a) => archiveAsOrder(a, `/shop/archive/${a.id}`))]} terms={PAY_TERMS[c.payment_terms || "receipt"]} payments={[...payments, ...archive.flatMap((a) => archivePayments(a, `/shop/archive/${a.id}`))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at))} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
         hrefBase="/shop/orders/"
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
-        usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onDeleteForever={async (did) => { const r = await deleteDesignForever(did); if (r.ok) setDesigns((ds) => ds.filter((x) => x.id !== did)); return r; }}
+        logoShirts={logoShirts} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onDeleteForever={async (did) => { const r = await deleteDesignForever(did); if (r.ok) setDesigns((ds) => ds.filter((x) => x.id !== did)); return r; }}
         onStarMockup={async (mid, starred) => { const { error } = await createClient().rpc("set_mockup_star", { p_mockup: mid, p_starred: starred }); return { ok: !error, error: error?.message }; }}
         onUploadLogos={async (files, star, progress) => {
           const sb = createClient();

@@ -26,7 +26,7 @@ export function inkOnShirt(d: Pick<Design, "specs"> | null | undefined, shirt: s
 }
 
 /* ---------- the logo's art, ready to recolor: the background taken off and cropped to the art ---------- */
-type Art = { mask: string; cut: string; ratio: number };
+type Art = { mask: string; cut: string; ratio: number; /** mostly white / very light: shown on a dark tile */ light: boolean };
 const ART = new Map<string, Promise<Art | null>>();
 const keyOf = (url: string) => url.split("?")[0];
 function makeArt(url: string): Promise<Art | null> {
@@ -82,7 +82,9 @@ function makeArt(url: string): Promise<Art | null> {
           og.putImageData(im, 0, 0);
           return o.toDataURL("image/png");
         };
-        res({ mask: out(true), cut: out(false), ratio: ch / cw });
+        let lum = 0, cnt = 0;
+        for (let i = 0; i < W * H; i += 3) if (alpha[i] > 128) { lum += 0.299 * p[i * 4] + 0.587 * p[i * 4 + 1] + 0.114 * p[i * 4 + 2]; cnt++; }
+        res({ mask: out(true), cut: out(false), ratio: ch / cw, light: cnt > 0 && lum / cnt > 205 });
       } catch { res(null); } // a picture we can't read (no CORS): the plain picture is used
     };
     img.src = url;
@@ -118,6 +120,19 @@ export function ShirtView({ url, shirt, ink, size, title, className }: { url: st
   return (
     <span className={"lv" + (className ? " " + className : "")} style={{ background: bg, ...(size ? { width: size, height: size } : {}) }} title={title || `${ink} on a ${shirt} shirt`}>
       <ArtIn url={url} art={art} ink={ink} className="lv-art" />
+    </span>
+  );
+}
+
+/**
+ * A logo's picture on a card without the checkerboard (Oct 16, Nick: "I just don't like seeing the checkered stuff"):
+ * on the shirt color it was printed on when known, else white, or a dark tile for a light (white) logo.
+ */
+export function LogoPic({ url, alt, shirt }: { url: string; alt: string; shirt?: string }) {
+  const art = useArt(shirt ? "" : url), bg = useShirtBg(shirt || "");
+  return (
+    <span className="lp" style={{ background: shirt ? bg : art?.light ? "#2b3140" : "#fff" }}>
+      <img src={url} alt={alt} />
     </span>
   );
 }

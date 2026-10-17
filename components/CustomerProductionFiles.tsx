@@ -1,4 +1,5 @@
 "use client";
+import { shirtBg } from "@/lib/mockup";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -41,6 +42,13 @@ export default function CustomerProductionFiles({ customerId }: { customerId: st
     setRows(list);
     const pathOf = new Map<string, string>();
     for (const r of list) { const a = (r.settings as { art?: { path: string; preview?: string } }).art; const p = r.preview_path || a?.preview || a?.path; if (p && /\.(png|jpe?g|webp|svg)$/i.test(p)) pathOf.set(r.id, p); }
+    // not saved yet: its logo's picture (shown on the shirt color, like the Separation screen)
+    const need = list.filter((r) => !pathOf.has(r.id) && (r as SepRow & { design_id?: string | null }).design_id);
+    if (need.length) {
+      const { data: ds } = await sb.from("designs").select("id, preview_path").in("id", need.map((r) => (r as SepRow & { design_id?: string }).design_id!));
+      const pv = new Map(((ds || []) as { id: string; preview_path: string }[]).map((x) => [x.id, x.preview_path]));
+      for (const r of need) { const p = pv.get((r as SepRow & { design_id?: string }).design_id!); if (p) pathOf.set(r.id, p); }
+    }
     const paths = [...new Set(pathOf.values())];
     if (paths.length) { const { data: sg } = await sb.storage.from("proofs").createSignedUrls(paths, 3600); const m = new Map(paths.map((p, i) => [p, sg?.[i]?.signedUrl || ""])); setThumbs(Object.fromEntries([...pathOf].map(([id, p]) => [id, m.get(p) || ""]))); }
   })(); }, [sb, customerId]);
@@ -79,11 +87,13 @@ export default function CustomerProductionFiles({ customerId }: { customerId: st
   }
 
   const live = (rows || []).filter((r) => sepStage(r.status) !== "archived"), arch = (rows || []).filter((r) => sepStage(r.status) === "archived");
+  // the shirt it's separated for (its own color, the job's garment color), else plain: no checkerboard (Oct 16)
+  const sepBg = (r: SepRow) => { const st0 = (r.settings || {}) as { garment?: string; garments?: string[] }; const name = r.garment_color || st0.garments?.[0] || ""; return /^#[0-9a-f]{6}$/i.test(st0.garment || "") ? st0.garment! : name ? shirtBg(name) : "#fff"; };
   const card = (r: SepRow) => {
     const st = SEP_STATUS[r.status];
     return (
       <Link key={r.id} href={`/shop/separations/${r.id}`} className="design-card csep">
-        <span className="dc-img">{thumbs[r.id] ? <img src={thumbs[r.id]} alt="" loading="lazy" /> : <span>S-{r.number}</span>}</span>
+        <span className="dc-img" style={{ background: sepBg(r) }}>{thumbs[r.id] ? <img src={thumbs[r.id]} alt="" loading="lazy" /> : <span>S-{r.number}</span>}</span>
         <span className="dc-b"><b>S-{r.number}</b><span>{r.location || "Separation"}</span>
           <span className="faint">{[r.garment_color, r.channels.length ? `${r.channels.length} screen${r.channels.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ") || "—"}</span>
           <span className="pill" style={{ ["--sc" as string]: st.c, alignSelf: "flex-start", marginTop: 4 }}>{st.label}</span></span>
@@ -105,11 +115,11 @@ export default function CustomerProductionFiles({ customerId }: { customerId: st
         <span className="faint">What we print and sew from. Kept with the shop: the customer never sees these.</span></div>
 
       <div className="pf-h"><h4>Separations</h4><span className="spacer" /><Link className="btn sm" href={`/shop/separations?customer=${customerId}`}>+ Separate New Art</Link></div>
-      {!rows ? <div className="aa-empty">Loading…</div> : live.length ? <div className="design-grid aa-grid3">{live.map(card)}</div> : <div className="aa-empty">No separations for this customer yet. In a separation, pick the customer next to its number to save it here.</div>}
+      {!rows ? <div className="aa-empty">Loading…</div> : live.length ? <div className="design-grid aa-grid6">{live.map(card)}</div> : <div className="aa-empty">No separations for this customer yet. In a separation, pick the customer next to its number to save it here.</div>}
       {arch.length > 0 && (
         <div className="aa-arch">
           <button type="button" className="btn sm ghost" onClick={() => setShowArch(!showArch)}>{showArch ? "Hide archived separations" : `View archived separations (${arch.length})`}</button>
-          {showArch && <div className="design-grid aa-grid3" style={{ marginTop: 10 }}>{arch.map(card)}</div>}
+          {showArch && <div className="design-grid aa-grid6" style={{ marginTop: 10 }}>{arch.map(card)}</div>}
         </div>
       )}
 

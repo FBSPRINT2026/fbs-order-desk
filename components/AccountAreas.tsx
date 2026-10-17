@@ -3,7 +3,7 @@ import type { BrandColor } from "@/lib/pricing";
 import { colorHex } from "@/lib/inkColors";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
+import { LogoPic, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ST, type Design } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
@@ -61,7 +61,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onUploadLogos, onDeleteForever, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -102,6 +102,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   hrefBase: string; hrefQuery?: string;
   onSend?: (body: string) => Promise<{ ok: boolean; error?: string; emailed?: boolean }>;
   onStar?: (designId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
+  /** the shirt color each logo was printed on (its latest order), for the card's background */
+  logoShirts?: Record<string, string>;
   /** shop: bring logos in for future use (Oct 16, Nick: "a good thing to knock out when we're transitioning them") */
   onUploadLogos?: (files: File[], star: boolean, progress: (done: number) => void) => Promise<string | void>;
   /** logos on a mockup or order: archive only, no delete */
@@ -619,7 +621,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     };
     const card = (d: Design, isArchived: boolean) => { const views = onShirtsOf(d); return (
       <div key={d.id} className={"design-card" + (d.starred ? " starred" : "") + (isArchived ? " archived" : "")}>
-        <div className="dc-img">{designUrls[d.id] ? <img src={designUrls[d.id]} alt={d.name} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
+        <div className="dc-img">{designUrls[d.id] ? <LogoPic url={designUrls[d.id]} alt={d.name} shirt={logoShirts[d.id]} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
           {/* how it looks on their shirt colors (Oct 16, Nick: a portfolio of their logos), picked in the strip below */}
           {(() => { const k = shirtSel[d.id] ?? 0, v = views[k], own = v?.path ? designUrls[v.path] : ""; return v && designUrls[d.id] ? <ShirtView className="main" url={own || designUrls[d.id]} shirt={v.shirt} ink={own ? "Original colors" : v.ink} /> : null; })()}
           <div className="dc-tools">
@@ -692,8 +694,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       </div>
       <div className="aa-card">
         <div className="aa-sec-h"><h3>Mockups</h3></div>
-        {mRows.length ? (() => { const P = pageOf("mock", mRows); return <>
-          <div className="design-grid aa-grid3">
+        {mRows.length ? (() => { const P = pageOf("mock", mRows, 12); return <>
+          <div className="design-grid aa-grid6">
             {P.items.map((m) => (
               <div key={m.id} className={"design-card" + (m.starred ? " starred" : "")}>
                 <div className="dc-img mock"><a href={m.url} target="_blank" rel="noreferrer" className="dc-open">{m.thumb ? <img src={m.thumb} alt={m.title} /> : null}</a>
@@ -702,7 +704,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
                 <div className="dc-b"><a href={m.url} target="_blank" rel="noreferrer"><b>{m.title}</b></a><span className="faint">{m.number ? `Order #${m.number} · ` : ""}{when(m.created_at)}</span></div>
               </div>
             ))}{slots(P.pad)}
-          </div>{pager("mock", mRows.length, P.p, P.n)}</>; })()
+          </div>{pager("mock", mRows.length, P.p, P.n, 12)}</>; })()
         : <div className="aa-empty">{mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
       </div>
       {mode === "shop" && productionPanel}
