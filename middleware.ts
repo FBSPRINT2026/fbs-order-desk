@@ -63,5 +63,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|sw.js|manifest.webmanifest|iclock|api/stripe|api/health|api/inbound|api/cron|api/cal/|clipart/|fonts.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|sw.js|manifest.webmanifest|iclock|api/stripe|api/health|api/version|api/inbound|api/cron|api/cal/|clipart/|fonts.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };
