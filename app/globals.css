@@ -9514,3 +9514,4 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
   .eh .eh-ai.mini > :not(.eh-ai-l):not(.eh-ai-b){flex:none!important;height:26px;font-size:12px}
   .eh .eh-ai.mini .eh-hist{display:none}
 }
+@media (min-width:761px){.eh-bar .tb-row{container-type:normal!important}}
