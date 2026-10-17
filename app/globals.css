@@ -9519,3 +9519,12 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 @media (min-width:761px){.eh-bar .tb-b{padding:0 4px!important}.eh-bar .tb-row{padding:2px 0!important}.eh-bar .tb-row+.tb-row{padding-left:3px!important;margin-left:3px}}
 /* Create reorder: an icon like the rest (still blue, its name on hover) */
 @media (min-width:761px){.eh-bar .tb-b.primary .tb-l{display:none}.eh-bar .tb-b.primary{width:30px;justify-content:center}}
+/* the email list like Outlook's when the window is half the screen (Oct 16, Nick): two lines, who and when, then one
+   line about it (the subject); the tags make way (urgent / needs reply still show as the colored edge) */
+@media (min-width:761px) and (max-width:1300px){
+  .ibx2-item.ol{padding:6px 10px 6px 9px!important;gap:1px!important}
+  .ibx2-item.ol .ibx2-item-2,.ibx2-item.ol .ibx2-item-3{display:none!important}
+  .ibx2-item.ol .ibx2-item-1{font-size:13.5px}
+  .ibx2-item.ol .ibx2-item-1 time{font-size:11.5px}
+  .ibx2-item.ol .ibx2-item-s{font-size:12.5px!important}
+}
