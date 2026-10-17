@@ -9529,3 +9529,17 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
   .ibx2-item.ol .ibx2-item-s{font-size:12.5px!important}
 }
 @media (min-width:761px) and (max-width:1300px){.ibx2-item.ol{padding-left:16px!important}.ibx2-item.ol .ibx2-dot{left:5px!important;top:12px!important}}
+/* more contrast, like Outlook: the sender bigger and dark, the subject smaller and gray; Urgent / Needs reply bubbles
+   stay (small), the other tags make way */
+@media (min-width:761px) and (max-width:1300px){
+  .ibx2-item.ol .ibx2-item-1{font-size:15px!important;line-height:1.25}
+  .ibx2-item.ol .ibx2-item-1 b{font-weight:500;color:var(--ink)}
+  .ibx2-item.ol.ol-unread .ibx2-item-1 b{font-weight:700}
+  .ibx2-item.ol .ibx2-item-1 time{font-size:11.5px;color:var(--ink-3)}
+  .ibx2-item.ol .ibx2-item-s{font-size:12.5px!important;color:var(--ink-3)!important;font-weight:400!important}
+  .ibx2-item.ol.ol-unread .ibx2-item-s{color:var(--accent)!important;font-weight:600!important}
+  .ibx2-item.ol .ibx2-item-3{display:flex!important;gap:4px!important;margin-top:2px!important}
+  .ibx2-item.ol .ibx2-item-3 > :not(.urg):not(.rep){display:none!important}
+  .ibx2-item.ol .ibx2-item-3:not(:has(.urg,.rep)){display:none!important}
+  .ibx2-item.ol .ibx2-item-3 .itag{font-size:10.5px;padding:0 7px;line-height:17px}
+}
