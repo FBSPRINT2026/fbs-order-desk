@@ -20,7 +20,9 @@ export type ProgramItem = {
 /** a design price's breaks, lowest first: its tiers, or its one price at its minimum */
 export const tiersOf = (it: Pick<ProgramItem, "price" | "min_qty"> & { tiers?: { min: number; price: number }[] | null; price_mode?: string | null }) =>
   (it.price_mode === "flat" ? [{ min: 0, price: +it.price }] : it.tiers?.length ? it.tiers : [{ min: it.min_qty || 0, price: +it.price }]).filter((t) => +t.price > 0).map((t) => ({ min: Math.max(0, Math.round(+t.min || 0)), price: +t.price })).sort((a, b) => a.min - b.min);
-export type Program = { id: string; customer_id: string; name: string; notes: string; active: boolean; rate_card?: RateCard | null };
+export type Program = { id: string; customer_id: string; name: string; notes: string; active: boolean; rate_card?: RateCard | null;
+  /** the other rate cards (Nine18: one per location or brand); rate_card is the first (migration 168) */ rate_cards?: RateCard[] | null;
+  /** auto: new quotes use program pricing by themselves; ask: an Apply button on the order */ apply_mode?: "auto" | "ask" | null };
 export const PROGRAM_SIZES = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "OS"];
 
 /* ───────────────────────── program rate card (Oct 14, Nick) ─────────────────────────
@@ -32,6 +34,9 @@ export const PROGRAM_SIZES = ["YXS", "YS", "YM", "YL", "YXL", "XS", "S", "M", "L
  * line (GLine.prog), so every total (invoice, portal, QuickBooks) reads the same saved price. */
 
 export type RateCard = {
+  /** a customer with more than one card (Oct 17): its id ("main" for the first) and name ("Fort Worth"), and words that
+   *  pick it for an order (found in the order's name, PO or ship-to) */
+  id?: string; name?: string; match?: string[];
   /** the shirt the prices are for, and its blank cost (S–XL) when the card was last saved (the live cost is used when known) */
   base: { brand: string; style: string; cost?: number };
   /** the difference in blank cost is multiplied by this (1.2 = 20% on the difference) */
@@ -210,3 +215,21 @@ const finNorm = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a
 /** is this finishing item part of the card's price? */
 export const finishingIncluded = (card: Pick<RateCard, "included"> | null | undefined, f: { id?: string; name: string }) =>
   !!card?.included?.some((x) => finNorm(x) === finNorm(f.name) || (!!f.id && finNorm(x) === finNorm(f.id)));
+
+/** every rate card of a program, the first (rate_card) as "main" */
+export function cardsOf(p: Pick<Program, "rate_card" | "rate_cards"> | null | undefined): (RateCard & { id: string })[] {
+  if (!p) return [];
+  const out: (RateCard & { id: string })[] = [];
+  if (p.rate_card) out.push({ ...p.rate_card, id: "main" });
+  for (const c of p.rate_cards || []) if (c && c.id) out.push({ ...c, id: c.id });
+  return out;
+}
+/** the card an order uses: the one picked on it, else the first whose name or words show up in the order, else the first */
+export function cardForOrder<T extends { id: string; name?: string; match?: string[] }>(cards: T[], o: { program_card?: string | null; nickname?: string | null; po_number?: string | null; ship_to?: string | null }): T | null {
+  if (!cards.length) return null;
+  const picked = o.program_card ? cards.find((c) => c.id === o.program_card) : null;
+  if (picked) return picked;
+  const hay = ` ${[o.nickname, o.po_number, o.ship_to].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+  const hit = cards.find((c) => [c.name || "", ...(c.match || [])].map((w) => w.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()).filter((w) => w.length >= 2).some((w) => hay.includes(` ${w} `)));
+  return hit || cards[0];
+}

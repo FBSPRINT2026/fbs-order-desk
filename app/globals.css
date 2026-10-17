@@ -9699,3 +9699,16 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .rc-inc-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .rc-inc-chips .chip.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
 .prc-off{margin:0 0 12px}
+/* program terms, regrouped (Oct 17) */
+.prc-side{display:flex;flex-direction:column;gap:12px}
+.prc-blk{border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.prc-blk h4{margin:0 0 8px;font-size:12px;font-weight:700;color:var(--ink-3);text-transform:none}
+.prc-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13.5px;color:var(--ink)}
+.prc-list li{display:flex;gap:8px;align-items:flex-start;line-height:1.35}
+.prc-list.inc svg{flex:none;width:16px;height:16px;margin-top:1px;fill:none;stroke:#1F7A47;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.prc-list:not(.inc) i{flex:none;width:6px;height:6px;border-radius:50%;background:var(--ink-3);margin:7px 5px 0 5px}
+.prc-big{margin-top:10px}
+.prc-big>span{display:block;font-size:13px;color:var(--ink-2);margin-bottom:6px}
+.prc-big>div{display:flex;flex-wrap:wrap;gap:6px}
+.prc-big b{font-weight:600;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:3px 9px;background:var(--surface)}
+.prc-big em{font-style:normal;color:var(--accent)}
