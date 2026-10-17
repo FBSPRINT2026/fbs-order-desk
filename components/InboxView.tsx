@@ -582,9 +582,10 @@ export default function InboxView({ mode }: { mode: Mode }) {
           </div>
           {/* the Inbox brief: always first, stays put while the list scrolls */}
           {mode === "mail" && view.kind === "inbox" && <button type="button" className={"ibx2-briefbtn" + (briefOn ? " on" : "")} onClick={() => { setQ(""); setBk("all"); setOpen("brief"); setPicked(true); }} aria-pressed={briefOn}>
-            <span className="ibx2-briefic" aria-hidden>✦</span>
-            <span className="ibx2-brieft"><b>Inbox summary</b><span>What&apos;s in your Inbox and what to do first</span></span>
-            <span className="ibx2-briefgo" aria-hidden>›</span>
+            {/* slim, in the FBS rainbow: a pastel fade, rainbow words, the rainbow line along the bottom (Oct 16, Nick) */}
+            <svg className="ibx2-briefic" viewBox="0 0 24 24" aria-hidden><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M19 15.5l.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8z" /></svg>
+            <b className="ibx2-brieft" title="What's in your Inbox and what to do first">Inbox summary</b>
+            <svg className="ibx2-briefgo" viewBox="0 0 24 24" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
           </button>}
           {/* Select: Select All / count / Done, and the moves floating at the bottom (like the iPhone's Mail) */}
           {selMode && mode === "mail" && view.kind === "inbox" && (() => {

@@ -9610,3 +9610,14 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
   .main:has(.ibx2) > .mf-bar{margin-bottom:14px!important}
   .main:has(.ibx2) .ibx2,.main:has(.ibx2) .ibx2-work{gap:14px!important}
 }
+/* Inbox summary button: slim, in the FBS rainbow (Oct 16, Nick: options 3 + 4) */
+.ibx2-briefbtn{position:relative;overflow:hidden;justify-content:center;gap:7px!important;margin:0 8px 8px!important;padding:7px 12px 9px!important;border-radius:9px!important;
+  border:1px solid color-mix(in srgb,var(--fbs-salmon) 22%,var(--line))!important;color:var(--ink)!important;box-shadow:none!important;transform:none!important;
+  background:linear-gradient(90deg,#e7f5fb 0%,#fdeceb 52%,#fff4dc 100%)!important}
+.ibx2-briefbtn::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--fbs-fade)}
+.ibx2-briefbtn:hover{filter:saturate(1.25) brightness(.98)}
+.ibx2-briefbtn.on{box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px var(--fbs-salmon)!important}
+.ibx2-briefbtn .ibx2-briefic{width:16px!important;height:16px!important;border-radius:0!important;background:none!important;fill:var(--fbs-blue);stroke:none;flex:none}
+.ibx2-briefbtn .ibx2-brieft{flex:none!important;display:block!important;font-size:13.5px;font-weight:700;letter-spacing:.01em;
+  background:var(--fbs-fade);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.ibx2-briefbtn .ibx2-briefgo{width:14px!important;height:14px;fill:none;stroke:var(--fbs-orange);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;opacity:1!important;flex:none}
