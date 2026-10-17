@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { colorHex, deltaE } from "@/lib/inkColors";
 import { INK_COLORS, type BrandColor, type Design } from "@/lib/pricing";
 import { guessHex, SHIRT_COLORS } from "@/lib/mockup";
-import { useShirtBg } from "@/lib/fabric";
+import { useShirtBg } from "@/lib/fabricTile";
 import { AS_IS, onShirtsOf, type OnShirt } from "@/components/LogoOnShirts";
 import { parseSvg, type VArt, type VShape } from "@/lib/svgVector";
 import { vartSvg } from "@/lib/epsVector";

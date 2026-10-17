@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { colorHex, deltaE } from "@/lib/inkColors";
 import { guessHex } from "@/lib/mockup";
-import { useShirtBg } from "@/lib/fabric";
+import { useShirtBg } from "@/lib/fabricTile";
 import type { Design } from "@/lib/pricing";
 
 /**
