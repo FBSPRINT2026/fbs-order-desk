@@ -9423,3 +9423,15 @@ a.pit-f{text-decoration:none}
 /* favorites: the logo inside its shirt-color tile (the old .aa-fav img size was stretching it) */
 .aa-fav .aa-fav-pic img.lv-art{position:absolute;inset:12%;width:76%;height:76%;object-fit:contain;background:none;border-radius:0;display:block}
 .aa-fav .aa-fav-pic .lv-art{inset:12%}
+/* Favorites: plain white like the other cards, no yellow (Oct 16, Nick); logos centered in their tiles */
+.aa-attn.aa-favs{background:var(--surface);border:1px solid var(--line);box-shadow:0 1px 3px rgba(20,29,43,.05)}
+.aa-favs > :first-child{color:var(--ink)}
+.aa-favs .faint,.aa-favs p{color:var(--ink-3)}
+.aa-fav{border-color:var(--line)}
+.aa-fav .dc-star.on{background:var(--surface);border-color:var(--line)}
+.aa-fav-pic{display:block}
+.aa-fav .aa-fav-pic img.lv-art{position:absolute;inset:12%;width:76%;height:76%;object-fit:contain;background:none;border-radius:0;display:block;margin:0}
+.aa-fav .aa-fav-pic span.lv-art{position:absolute;inset:12%}
+.aa-fav .aa-fav-pic .lp img{width:auto;height:auto;max-width:76%;max-height:76%;background:none;border-radius:0}
+.aa-favs .aa-attn-h{color:var(--ink)}
+.aa-favs .aa-attn-h::first-letter{color:#E0A100}
