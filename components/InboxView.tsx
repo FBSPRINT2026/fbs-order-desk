@@ -447,10 +447,12 @@ export default function InboxView({ mode }: { mode: Mode }) {
 
   return (
     <>
+      {mode === "mail" && <MailFull />}
       <div className="page-head ibx2-head">
         <div><div className="eyebrow">{mode === "mail" ? "Your mailbox" : "Sales"}</div><h1>{mode === "mail" ? "Email" : "Conversations"}</h1></div>
         <div className="ibx2-status">
           {mode === "mail" && <AppStartToggle path="/shop/inbox" label="Email" />}
+          {mode === "mail" && <MailFullButton />}
           {box?.enabled && <span className={"ibx2-box" + (boxStuck ? " bad" : "")} title={box.last_error || `${box.email}${st && st.all.length > 1 ? ` · also connected: ${st.all.filter((b) => b.id !== box.id).map((b) => b.email).join(", ")}` : ""}`}>
             <i aria-hidden />{boxStuck ? "Mailbox problem" : `Checked ${box.last_ok_at ? ago(box.last_ok_at) + " ago" : "—"}`}
           </span>}
@@ -1541,6 +1543,58 @@ function ForwardBox({ id, onDone }: { id: string; onDone: (msg: string) => void 
         <button type="button" className="btn ghost sm" disabled={busy} onClick={() => onDone("")}>Cancel</button>
         {err && <span className="pv-err" style={{ margin: 0 }}>{err}</span>}
       </div>
+    </div>
+  );
+}
+
+
+/**
+ * Email full screen (Oct 16, Nick: "more of the look like Outlook… you can see a lot more email"): the left menu and
+ * the page header go away so the mail fills the window (still works with the window snapped to half the screen).
+ * Remembered on this browser. "Hide the browser bars" also asks Chrome for true full screen (Esc leaves it).
+ */
+const MAIL_FULL = "fbs:mail.full";
+const mailFullOn = () => { try { return localStorage.getItem(MAIL_FULL) === "true"; } catch { return false; } };
+function setMailFull(on: boolean) {
+  try { localStorage.setItem(MAIL_FULL, on ? "true" : "false"); } catch { /* private window */ }
+  document.documentElement.toggleAttribute("data-mailfull", on);
+  window.dispatchEvent(new Event("fbs-mailfull"));
+  if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => null);
+}
+function useMailFull() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const sync = () => setOn(mailFullOn());
+    sync();
+    window.addEventListener("fbs-mailfull", sync);
+    return () => window.removeEventListener("fbs-mailfull", sync);
+  }, []);
+  return on;
+}
+/** the button in the email header */
+function MailFullButton() {
+  return <button type="button" className="btn sm ghost mf-full-btn" onClick={() => setMailFull(true)} title="Full screen: hide the menu and header so the mail fills the window">⤢ Full screen</button>;
+}
+/** while on: the page marked full screen, and a small bar to leave it (or hide the browser bars too) */
+function MailFull() {
+  const on = useMailFull();
+  const [fs, setFs] = useState(false);
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-mailfull", on);
+    return () => document.documentElement.removeAttribute("data-mailfull");
+  }, [on]);
+  useEffect(() => {
+    const f = () => setFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", f);
+    return () => document.removeEventListener("fullscreenchange", f);
+  }, []);
+  if (!on) return null;
+  return (
+    <div className="mf-full-bar" role="toolbar" aria-label="Full screen">
+      {typeof document !== "undefined" && document.fullscreenEnabled && (
+        <button type="button" onClick={() => (fs ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => null)} title={fs ? "Show the browser bars again" : "Hide the browser's tabs and address bar too (Esc brings them back)"}>{fs ? "Show browser bars" : "Hide browser bars"}</button>
+      )}
+      <button type="button" onClick={() => setMailFull(false)} title="Leave full screen">⤡ Exit full screen</button>
     </div>
   );
 }

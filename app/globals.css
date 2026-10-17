@@ -9455,3 +9455,16 @@ span.side-who{cursor:default}
 @media (min-width:821px){.side-edge-k{top:18px!important;transform:none!important}}
 /* without Admin Tools (everyone but me), the bottom row still sits at the bottom */
 @media (min-width:821px){.side :not(.nav-foot-g) + .side-user{margin-top:auto}}
+
+/* Email full screen (Oct 16): no menu, no header, the mail fills the window */
+@media (min-width:821px){
+html[data-mailfull] .side,html[data-mailfull] .top-r,html[data-mailfull] .ibx2-head,html[data-mailfull] .app-launch{display:none!important}
+html[data-mailfull] .app{grid-template-columns:minmax(0,1fr)!important}
+html[data-mailfull] .main{padding:8px 12px 8px!important}
+html[data-mailfull] .ibx2{height:calc(100vh - 62px)!important;height:calc(100dvh - 62px)!important;min-height:0!important}
+html[data-mailfull] .mf-bar{margin:0 150px 8px 0}
+}
+.mf-full-bar{position:fixed;top:8px;right:12px;z-index:60;display:flex;gap:6px}
+.mf-full-bar button{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.mf-full-bar button:hover{border-color:var(--accent);color:var(--accent)}
+@media (max-width:820px){.mf-full-btn,.mf-full-bar{display:none!important}}
