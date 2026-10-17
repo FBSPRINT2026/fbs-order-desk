@@ -372,7 +372,7 @@ export const DEFAULT_SETTINGS: Settings = {
   finishing: [
     { id: "fold_bag", name: "Fold & bag", price: 0.5 },
     { id: "hang_tag", name: "Hang tag", price: 0.35 },
-    { id: "relabel", name: "Remove tag & relabel", price: 1.0 },
+    { id: "relabel", name: "Private Label (Remove MFG Tags)", price: 1.0 },
   ],
   assistant: {
     quoteFollowUpDays: 3,

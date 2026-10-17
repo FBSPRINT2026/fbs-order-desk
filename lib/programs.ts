@@ -204,7 +204,8 @@ export function suggestDesignPrice(g: Group, d: DesignCtx, s: Settings): PriceSu
 }
 
 /** finishing that's often part of a program price (the shop's own finishing list is offered too) */
-export const COMMON_INCLUDED = ["Roll & rubber band", "Neck label print", "Fold & bag", "Hang tag", "Remove tag & relabel", "Individual poly bag", "Sticker in the bag"];
+// neck labels = removing the maker's tags and printing ours: called "Private Label (Remove MFG Tags)" (Oct 17, Nick)
+export const COMMON_INCLUDED = ["Roll & rubber band", "Private Label (Remove MFG Tags)", "Fold & bag", "Hang tag", "Individual poly bag", "Sticker in the bag"];
 const finNorm = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, " ").trim();
 /** is this finishing item part of the card's price? */
 export const finishingIncluded = (card: Pick<RateCard, "included"> | null | undefined, f: { id?: string; name: string }) =>
