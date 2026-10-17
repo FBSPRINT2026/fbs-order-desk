@@ -9,7 +9,7 @@ import type { Design } from "@/lib/pricing";
  * gray shirt as navy… a portfolio of how their logos will look"). Saved on the logo as specs.onShirts; the Mockup
  * Creator prints a one-color logo in that ink on that shirt color. Set in Edit logo → Backgrounds (components/LogoEditor.tsx).
  */
-export type OnShirt = { shirt: string; ink: string };
+export type OnShirt = { shirt: string; ink: string; /** its own version: the picture made in Edit logo for this background */ path?: string; /** that version's color changes */ map?: Record<string, unknown> };
 /** keep the logo's own colors on that shirt (no recolor) */
 export const AS_IS = "Original colors";
 export const onShirtsOf = (d: Pick<Design, "specs"> | null | undefined): OnShirt[] => ((d?.specs?.onShirts || []) as OnShirt[]).filter((x) => x.shirt && x.ink);

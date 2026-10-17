@@ -621,7 +621,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       <div key={d.id} className={"design-card" + (d.starred ? " starred" : "") + (isArchived ? " archived" : "")}>
         <div className="dc-img">{designUrls[d.id] ? <img src={designUrls[d.id]} alt={d.name} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
           {/* how it looks on their shirt colors (Oct 16, Nick: a portfolio of their logos), picked in the strip below */}
-          {(() => { const k = shirtSel[d.id] ?? 0, v = views[k]; return v && designUrls[d.id] ? <ShirtView className="main" url={designUrls[d.id]} shirt={v.shirt} ink={v.ink} /> : null; })()}
+          {(() => { const k = shirtSel[d.id] ?? 0, v = views[k], own = v?.path ? designUrls[v.path] : ""; return v && designUrls[d.id] ? <ShirtView className="main" url={own || designUrls[d.id]} shirt={v.shirt} ink={own ? "Original colors" : v.ink} /> : null; })()}
           <div className="dc-tools">
             {!isArchived && onStar && <button type="button" className={"dc-star" + (d.starred ? " on" : "")} title={d.starred ? "Remove from favorites" : "Add to favorites"} aria-label={d.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!d.starred} onClick={() => star(d)}>{d.starred ? "★" : "☆"}</button>}
             {!isArchived && mode === "shop" && <Link className="dc-edit" href={`/shop/artwork/${d.id}?edit=1`} title="Edit this logo: remove the white, change its colors, crop" aria-label="Edit logo">✎</Link>}
@@ -637,7 +637,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         {/* how it looks on each background (set in Edit logo → Backgrounds); scrolls sideways when there are many */}
         {designUrls[d.id] && views.length > 0 && (
           <div className="dc-views" aria-label="How it looks on shirt colors">
-            {views.map((v, i) => <button key={i} type="button" className={(shirtSel[d.id] ?? 0) === i ? "on" : ""} title={`${v.ink === "Original colors" ? "Its colors" : v.ink} on ${v.shirt}`} onClick={() => setShirtSel((x) => ({ ...x, [d.id]: i }))}><ShirtView url={designUrls[d.id]} shirt={v.shirt} ink={v.ink} /></button>)}
+            {views.map((v, i) => <button key={i} type="button" className={(shirtSel[d.id] ?? 0) === i ? "on" : ""} title={`On ${v.shirt}`} onClick={() => setShirtSel((x) => ({ ...x, [d.id]: i }))}><ShirtView url={(v.path && designUrls[v.path]) || designUrls[d.id]} shirt={v.shirt} ink={v.path && designUrls[v.path] ? "Original colors" : v.ink} /></button>)}
             <button type="button" className={(shirtSel[d.id] ?? 0) === -1 ? "on" : ""} title="The logo as uploaded" onClick={() => setShirtSel((x) => ({ ...x, [d.id]: -1 }))}><span className="orig">Original</span></button>
           </div>
         )}

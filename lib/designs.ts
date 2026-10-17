@@ -65,10 +65,12 @@ export async function setDesignPreview(sb: SupabaseClient, d: Design, f: File): 
 /** Signed links for design previews, keyed by design id. */
 export async function previewUrls(sb: SupabaseClient, list: Design[]): Promise<Record<string, string>> {
   const withPv = list.filter((d) => d.preview_path);
-  if (!withPv.length) return {};
-  const { data } = await sb.storage.from("proofs").createSignedUrls(withPv.map((d) => d.preview_path), 3600);
+  // and each background's own picture (Edit logo → Backgrounds), keyed by its path
+  const bgPaths = list.flatMap((d) => ((d.specs?.onShirts || []) as { path?: string }[]).map((b) => b.path || "").filter(Boolean));
+  if (!withPv.length && !bgPaths.length) return {};
+  const { data } = await sb.storage.from("proofs").createSignedUrls([...withPv.map((d) => d.preview_path), ...bgPaths], 3600);
   const out: Record<string, string> = {};
-  (data || []).forEach((r, i) => { if (r.signedUrl) out[withPv[i].id] = r.signedUrl; });
+  (data || []).forEach((r, i) => { if (r.signedUrl) out[i < withPv.length ? withPv[i].id : bgPaths[i - withPv.length]] = r.signedUrl; });
   return out;
 }
 

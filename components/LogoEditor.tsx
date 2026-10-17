@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { colorHex, deltaE } from "@/lib/inkColors";
 import { INK_COLORS, type BrandColor, type Design } from "@/lib/pricing";
 import { guessHex, SHIRT_COLORS } from "@/lib/mockup";
-import { AS_IS, onShirtsOf, useArt, type OnShirt } from "@/components/LogoOnShirts";
+import { AS_IS, onShirtsOf, type OnShirt } from "@/components/LogoOnShirts";
 import { parseSvg, type VArt, type VShape } from "@/lib/svgVector";
 import { vartSvg } from "@/lib/epsVector";
 import { readVector } from "@/components/SeparationStudio";
@@ -20,6 +20,7 @@ import { readVector } from "@/components/SeparationStudio";
  * saved on the logo (specs.onShirts), shown on its logo card and used by the Mockup Creator.
  */
 type Act = { kind: "keep" } | { kind: "remove" } | { kind: "ink"; name: string; hex: string };
+type Bg = OnShirt & { map?: Record<string, Act>; path?: string; dirty?: boolean };
 type Src = { hex: string; share: number };
 const isWhite = (hex: string) => { const v = parseInt(hex.slice(1), 16); return ((v >> 16) & 255) > 238 && ((v >> 8) & 255) > 238 && (v & 255) > 238; };
 const hx = (r: number, g: number, b: number) => "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase();
@@ -41,7 +42,10 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [srcs, setSrcs] = useState<Src[]>([]);
   const [acts, setActs] = useState<Record<string, Act>>({});
-  const [bgs, setBgs] = useState<OnShirt[]>(onShirtsOf(d));
+  // backgrounds: each its own version of the logo (Oct 16, Nick: "on navy I made it white, on white I made it navy…
+  // it has to save per background"): its own color changes (map) and the picture made from them (path)
+  const [bgs, setBgs] = useState<Bg[]>(onShirtsOf(d) as Bg[]);
+  const [bgUrls, setBgUrls] = useState<Record<string, string>>({});
   const [sel, setSel] = useState(-1); // -1: see-through
   const [brand, setBrand] = useState<BrandColor[]>([]);
   const [preview, setPreview] = useState("");
@@ -75,15 +79,22 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
     })();
   }, [sb, d]);
   useEffect(() => {
+    const paths = (onShirtsOf(d) as Bg[]).map((b) => b.path).filter(Boolean) as string[];
+    if (paths.length) sb.storage.from("proofs").createSignedUrls(paths, 3600).then(({ data }) => setBgUrls(Object.fromEntries((data || []).map((r, i) => [paths[i], r.signedUrl || ""]))));
+  }, [sb, d]);
+  useEffect(() => {
     if (d.customer_id) sb.from("customers").select("brand_colors").eq("id", d.customer_id).maybeSingle().then(({ data }) => setBrand(((data?.brand_colors || []) as BrandColor[]).filter((b) => b?.ink)));
   }, [sb, d.customer_id]);
 
-  const act = (hex: string): Act => acts[hex] || { kind: "keep" };
-  // the edited art, drawn for the preview (and saved)
-  const edited = useMemo(() => {
+  const cur = sel >= 0 ? bgs[sel] || null : null;
+  const curActs: Record<string, Act> = cur ? cur.map || acts : acts;
+  const act = (hex: string): Act => curActs[hex] || { kind: "keep" };
+  const baseAct = (hex: string): Act => acts[hex] || { kind: "keep" };
+  // the edited art for a set of color changes, drawn for the preview (and saved)
+  const artFor = (A: Record<string, Act>) => {
     if (vec) {
       const shapes = vec.shapes.flatMap((s): VShape[] => {
-        const a = act(s.fill.toUpperCase());
+        const a = A[s.fill.toUpperCase()] || { kind: "keep" as const };
         return a.kind === "remove" ? [] : a.kind === "ink" ? [{ ...s, fill: a.hex, grad: undefined, ink: a.name }] : [s];
       });
       const b = bbox(shapes);
@@ -91,35 +102,74 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
       return { kind: "vec" as const, art: { ...vec, shapes, ...(b ? { x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 } : {}) } };
     }
     return img ? { kind: "img" as const } : null;
-  }, [vec, img, acts]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
+  const edited = useMemo(() => artFor(curActs), [vec, img, curActs]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** a version as a PNG, cropped (for a background's picture) */
+  const pngFor = async (A: Record<string, Act>, maxPx = 1400): Promise<Blob> => {
+    const e = artFor(A);
+    let c: HTMLCanvasElement;
+    if (e?.kind === "vec") {
+      const u = URL.createObjectURL(new Blob([vartSvg(e.art)], { type: "image/svg+xml" }));
+      try { const im = await loadImg(u); const k = maxPx / Math.max(e.art.w, e.art.h); c = document.createElement("canvas"); c.width = Math.max(1, Math.round(e.art.w * k)); c.height = Math.max(1, Math.round(e.art.h * k)); c.getContext("2d")!.drawImage(im, 0, 0, c.width, c.height); }
+      finally { URL.revokeObjectURL(u); }
+    } else {
+      const full = cropCanvas(rasterEdit(img!, srcs, A)), k = Math.min(1, maxPx / Math.max(full.width, full.height));
+      c = document.createElement("canvas"); c.width = Math.max(1, Math.round(full.width * k)); c.height = Math.max(1, Math.round(full.height * k)); c.getContext("2d")!.drawImage(full, 0, 0, c.width, c.height);
+    }
+    return new Promise<Blob>((r, j) => c.toBlob((b) => (b ? r(b) : j(new Error("Couldn't draw it."))), "image/png"));
+  };
+  /** one ink when every color left prints in it, else "its colors" */
+  const inkOf = (A: Record<string, Act>) => { const outs = [...new Set(srcs.filter((x) => (A[x.hex]?.kind || "keep") !== "remove").map((x) => { const a = A[x.hex]; return a?.kind === "ink" ? a.name : "keep:" + x.hex; }))]; return outs.length === 1 && !outs[0].startsWith("keep:") ? outs[0] : AS_IS; };
 
   useEffect(() => {
     let url = "";
     (async () => {
       if (edited?.kind === "vec") url = URL.createObjectURL(new Blob([vartSvg(edited.art)], { type: "image/svg+xml" }));
-      else if (edited?.kind === "img" && img) { const c = rasterEdit(img, srcs, acts); const b = await new Promise<Blob | null>((r) => c.toBlob(r, "image/png")); if (b) url = URL.createObjectURL(b); }
+      else if (edited?.kind === "img" && img) { const c = rasterEdit(img, srcs, curActs); const b = await new Promise<Blob | null>((r) => c.toBlob(r, "image/png")); if (b) url = URL.createObjectURL(b); }
       setPreview(url);
     })();
     return () => { if (url) URL.revokeObjectURL(url); };
-  }, [edited, img, srcs, acts]);
+  }, [edited, img, srcs, curActs]);
 
-  const cur = sel >= 0 ? bgs[sel] : null;
-  // inks to offer for a background: as edited, the logo's own, the customer's brand inks, then the stock list
-  const own = (d.inks || "").split(/\s*[,/+&]\s*|\s+and\s+/i).map((x) => x.trim()).filter(Boolean);
-  const picked = Object.values(acts).flatMap((a) => (a.kind === "ink" ? [a.name] : []));
-  const inkList = [...new Set([AS_IS, ...picked, ...own, ...brand.map((b) => b.ink), ...INK_COLORS])];
-  // editing the logo's colors while a background shows it in one ink: show the edit (that background goes back to
-  // "its colors, as edited"), else the change looks like it did nothing (Oct 16: "I change this to maroon, it stays black")
-  const showEdit = () => { if (cur && cur.ink !== AS_IS) setBgs((l) => l.map((x, j) => (j === sel ? { ...x, ink: AS_IS } : x))); };
-  const setAct = (hex: string, a: Act) => { showEdit(); setActs((x) => ({ ...x, [hex]: a })); };
-  const removeWhite = () => showEdit() || setActs((x) => { const n = { ...x }; for (const s of srcs) if (isWhite(s.hex)) n[s.hex] = { kind: "remove" }; return n; });
-  const allTo = (name: string) => { const hex = colorHex(name); if (!hex) return setErr(`"${name}" isn't an ink we know.`); setErr(""); showEdit(); setActs((x) => { const n = { ...x }; for (const s of srcs) if (!isWhite(s.hex) && x[s.hex]?.kind !== "remove") n[s.hex] = { kind: "ink", name, hex }; return n; }); };
+  // their brand inks first in the color choices
+  const inkChoices = [...new Set([...brand.map((b) => b.ink), ...INK_COLORS])];
+  // changes go to the background picked (its own version), or to the logo itself on "See-through"
+  const change = (f: (x: Record<string, Act>) => Record<string, Act>) => {
+    if (sel >= 0) setBgs((l) => l.map((x, k) => (k === sel ? { ...x, map: f(x.map || acts), dirty: true } : x)));
+    else setActs(f);
+  };
+  const setAct = (hex: string, a: Act) => change((x) => ({ ...x, [hex]: a }));
+  const removeWhite = () => change((x) => { const n = { ...x }; for (const s of srcs) if (isWhite(s.hex)) n[s.hex] = { kind: "remove" }; return n; });
+  const allTo = (name: string) => { const hex = colorHex(name); if (!hex) return setErr(`"${name}" isn't an ink we know.`); setErr(""); change((x) => { const n = { ...x }; for (const s of srcs) if (!isWhite(s.hex) && x[s.hex]?.kind !== "remove") n[s.hex] = { kind: "ink", name, hex }; return n; }); };
+  /** pick a background: the first time, it starts from the logo as edited (or from its one ink, for one set before) */
+  const pick = (i: number) => {
+    setSel(i);
+    if (i < 0) return;
+    setBgs((l) => l.map((x, k) => {
+      if (k !== i || x.map) return x;
+      if (x.ink && x.ink !== AS_IS && !x.path) { const hex = colorHex(x.ink) || guessHex(x.ink); return { ...x, map: Object.fromEntries(srcs.map((q) => [q.hex, baseAct(q.hex).kind === "remove" ? { kind: "remove" } : { kind: "ink", name: x.ink, hex }])) as Record<string, Act> }; }
+      return { ...x, map: { ...acts } };
+    }));
+  };
 
   async function save() {
-    if (!edited) return;
+    const base0 = artFor(acts);
+    if (!base0) return;
     setBusy("Saving…"); setErr("");
-    const onShirts = bgs.filter((x) => x.shirt && x.ink);
     try {
+      // each background changed: its picture, made from its own colors
+      const stamp0 = Date.now().toString(36), slug = (t: string) => t.replace(/[^\w]+/g, "_").toLowerCase();
+      const outBgs: Bg[] = [];
+      for (const b of bgs) {
+        if (!b.shirt) continue;
+        if (b.dirty && b.map) {
+          const blob = await pngFor(b.map), path = `designs/${d.id}-${stamp0}/on-${slug(b.shirt)}.png`;
+          const u = await sb.storage.from("proofs").upload(path, blob, { contentType: "image/png" });
+          if (u.error) throw new Error(u.error.message);
+          outBgs.push({ shirt: b.shirt, ink: inkOf(b.map), map: b.map, path });
+        } else outBgs.push({ shirt: b.shirt, ink: b.ink || AS_IS, ...(b.map ? { map: b.map } : {}), ...(b.path ? { path: b.path } : {}) });
+      }
+      const onShirts = outBgs;
       // only the backgrounds changed: keep the file as it is
       if (!Object.values(acts).some((a) => a.kind !== "keep")) {
         const { data, error } = await sb.from("designs").update({ specs: { ...((d.specs || {}) as object), onShirts } }).eq("id", d.id).select("*").single();
@@ -128,6 +178,7 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
       }
       const stamp = Date.now().toString(36), base = (d.name || "logo").replace(/[^\w.\-]+/g, "_");
       let fileBlob: Blob, fileName: string, fileType: string, pvBlob: Blob, w: number, h: number;
+      const edited = base0;
       if (edited.kind === "vec") {
         const svg = vartSvg(edited.art);
         fileBlob = new Blob([svg], { type: "image/svg+xml" }); fileName = `${base}-edited.svg`; fileType = "image/svg+xml";
@@ -148,8 +199,8 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
       if (u1.error) throw new Error(u1.error.message);
       if (pp !== fp) { const u2 = await sb.storage.from("proofs").upload(pp, pvBlob, { contentType: "image/png" }); if (u2.error) throw new Error(u2.error.message); }
       // the inks it prints in now: the inks picked, plus the colors kept
-      const inks = [...new Set(srcs.flatMap((s) => { const a = act(s.hex); return a.kind === "remove" ? [] : a.kind === "ink" ? [a.name] : []; }))];
-      const kept = srcs.filter((s) => act(s.hex).kind === "keep").length;
+      const inks = [...new Set(srcs.flatMap((s) => { const a = baseAct(s.hex); return a.kind === "remove" ? [] : a.kind === "ink" ? [a.name] : []; }))];
+      const kept = srcs.filter((s) => baseAct(s.hex).kind === "keep").length;
       const specs = { ...((d.specs || {}) as object), onShirts, original: (d.specs as { original?: unknown } | null)?.original || { path: d.file_path, name: d.file_name, type: d.file_type, preview: d.preview_path } };
       const patch = { file_path: fp, file_name: fileName, file_type: fileType, preview_path: pp, width_px: w, height_px: h, art_box: null, print_plan: null,
         colors: Math.max(1, inks.length + kept), ...(inks.length && !kept ? { inks: inks.join(", ") } : {}), specs };
@@ -166,19 +217,18 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
         <div className="le-h"><h2>Edit {d.number ? `D-${d.number}` : "logo"}</h2><span className="faint">{vec ? `Vector art · ${vec.shapes.length} shapes · saved as a vector SVG` : img ? "A picture · edited pixel by pixel" : ""}</span></div>
         <div className="le-b">
           <div className="le-pic" style={{ background: cur ? guessHex(cur.shirt) : undefined }} data-check={!cur || undefined}>
-            {preview ? (cur && cur.ink !== AS_IS ? <InkArt url={preview} ink={cur.ink} /> : <img src={preview} alt="The edited logo" />) : <span className="faint">{busy || err}</span>}
-            {cur && <span className="le-pic-tag">{cur.ink === AS_IS ? "As edited" : cur.ink} on {cur.shirt}</span>}
+            {cur && !cur.dirty && cur.path && bgUrls[cur.path] ? <img src={bgUrls[cur.path]} alt={`The logo on ${cur.shirt}`} /> : preview ? <img src={preview} alt="The edited logo" /> : <span className="faint">{busy || err}</span>}
+            {cur && <span className="le-pic-tag">On {cur.shirt}</span>}
           </div>
           <div className="le-side">
-            <Backgrounds bgs={bgs} sel={sel} inks={inkList} onSel={setSel}
-              onAdd={(shirt) => { setBgs((l) => [...l, { shirt, ink: AS_IS }]); setSel(bgs.length); }}
-              onInk={(i, ink) => setBgs((l) => l.map((x, j) => (j === i ? { ...x, ink } : x)))}
-              onRemove={(i) => { setBgs((l) => l.filter((_, j) => j !== i)); setSel(-1); }} />
+            <Backgrounds bgs={bgs} sel={sel} onSel={pick}
+              onAdd={(shirt) => { const i = bgs.length; setBgs((l) => [...l, { shirt, ink: AS_IS, map: { ...acts }, dirty: true }]); setSel(i); }}
+              onRemove={(i) => { setBgs((l) => l.filter((_, j) => j !== i)); setSel((s0) => (s0 === i ? -1 : s0 > i ? s0 - 1 : s0)); }} />
             <div className="le-quick">
               {srcs.some((s) => isWhite(s.hex)) && <button type="button" className="btn sm" onClick={removeWhite}>Remove the white</button>}
               <OneInk onPick={allTo} />
             </div>
-            <div className="lbl">Edit the logo</div>
+            <div className="lbl">{cur ? <>Colors on <b>{cur.shirt}</b> <span className="faint">(saved for this background only)</span></> : "Edit the logo"}</div>
             {srcs.map((s) => {
               const a = act(s.hex);
               return (
@@ -189,14 +239,14 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
                   <select aria-label="What to do with this color" value={a.kind === "ink" ? "ink:" + a.name : a.kind} onChange={(e) => { const v = e.target.value; if (v === "keep" || v === "remove") setAct(s.hex, { kind: v }); else if (v.startsWith("ink:")) { const n = v.slice(4); setAct(s.hex, { kind: "ink", name: n, hex: colorHex(n) || s.hex }); } }}>
                     <option value="keep">Keep as is</option>
                     <option value="remove">Remove (see-through)</option>
-                    {a.kind === "ink" && !INK_COLORS.includes(a.name) && <option value={"ink:" + a.name}>{a.name}</option>}
-                    {INK_COLORS.map((n) => <option key={n} value={"ink:" + n}>Change to {n}</option>)}
+                    {a.kind === "ink" && !inkChoices.includes(a.name) && <option value={"ink:" + a.name}>{a.name}</option>}
+                    {inkChoices.map((n) => { const b = brand.find((x) => x.ink === n); return <option key={n} value={"ink:" + n}>Change to {b && b.name !== n ? `${b.name} (${n})` : n}</option>; })}
                   </select>
                 </div>
               );
             })}
             {err && <div className="err">{err}</div>}
-            <p className="faint le-note">Saved as this logo&apos;s file, cropped to the art. The original stays on the logo. Orders already using it keep their saved mockups.</p>
+            <p className="faint le-note">{cur ? <>Changes here make the {cur.shirt} version; the logo&apos;s file doesn&apos;t change. Pick See-through to edit the logo itself.</> : <>Saved as this logo&apos;s file, cropped to the art. The original stays on the logo. Orders already using it keep their saved mockups.</>}</p>
           </div>
         </div>
         <div className="le-f"><button type="button" className="btn" disabled={!!busy && busy !== "Reading the logo…"} onClick={onClose}>Cancel</button><button type="button" className="btn primary" disabled={!!busy || !edited} onClick={save}>{busy === "Saving…" ? "Saving…" : "Save"}</button></div>
@@ -207,27 +257,20 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
 
 const QUICK = ["White", "Black", "Navy", "Charcoal", "Red", "Royal", "Sport Grey", "Maroon", "Forest Green", "Natural"];
 
-/** the edited logo in one ink (its art read off any background, then filled with the ink) */
-function InkArt({ url, ink }: { url: string; ink: string }) {
-  const art = useArt(url);
-  if (art === undefined) return null;
-  const m = `url("${art?.mask || url}")`;
-  return <span className="le-ink" style={{ background: colorHex(ink) || guessHex(ink), WebkitMaskImage: m, maskImage: m }} role="img" aria-label={`The logo in ${ink}`} />;
-}
-
-/** Backgrounds: see-through, then each shirt color added; the one picked opens to choose its ink */
-function Backgrounds({ bgs, sel, inks, onSel, onAdd, onInk, onRemove }: { bgs: OnShirt[]; sel: number; inks: string[]; onSel: (i: number) => void; onAdd: (shirt: string) => void; onInk: (i: number, ink: string) => void; onRemove: (i: number) => void }) {
+/** Backgrounds: see-through (the logo itself), then each shirt color added, each with its own version; ✕ removes one */
+function Backgrounds({ bgs, sel, onSel, onAdd, onRemove }: { bgs: Bg[]; sel: number; onSel: (i: number) => void; onAdd: (shirt: string) => void; onRemove: (i: number) => void }) {
   const [adding, setAdding] = useState(false);
   const used = new Set(bgs.map((b) => b.shirt.toLowerCase()));
   return (
     <div className="le-bgw">
-      <div className="lbl">Backgrounds <span className="faint">how it looks on each shirt color</span></div>
+      <div className="lbl">Backgrounds <span className="faint">how it looks on each shirt color, saved per color</span></div>
       <div className="le-bgl">
         <button type="button" className={"le-chip" + (sel === -1 ? " on" : "")} onClick={() => onSel(-1)}><i data-check="" />See-through</button>
         {bgs.map((b, i) => (
-          <button key={i} type="button" className={"le-chip" + (sel === i ? " on" : "")} onClick={() => onSel(sel === i ? -1 : i)} aria-expanded={sel === i}>
-            <i style={{ background: guessHex(b.shirt) }} />{b.shirt}<small>{b.ink === AS_IS ? "as edited" : b.ink}</small>
-          </button>
+          <span key={i} className={"le-chip" + (sel === i ? " on" : "")}>
+            <button type="button" className="le-chip-b" onClick={() => onSel(i)} aria-pressed={sel === i}><i style={{ background: guessHex(b.shirt) }} />{b.shirt}{b.dirty ? <small>edited</small> : null}</button>
+            <button type="button" className="le-chip-x" aria-label={`Remove the ${b.shirt} background`} title={`Remove ${b.shirt}`} onClick={() => onRemove(i)}>✕</button>
+          </span>
         ))}
         <button type="button" className="le-chip add" onClick={() => setAdding((x) => !x)} aria-expanded={adding}>+ Add background</button>
       </div>
@@ -238,16 +281,6 @@ function Backgrounds({ bgs, sel, inks, onSel, onAdd, onInk, onRemove }: { bgs: O
             <option value="">More colors…</option>
             {SHIRT_COLORS.map((g) => <optgroup key={g.group} label={g.group}>{g.colors.filter(([n]) => !used.has(n.toLowerCase())).map(([n]) => <option key={n} value={n}>{n}</option>)}</optgroup>)}
           </select>
-        </div>
-      )}
-      {sel >= 0 && bgs[sel] && (
-        <div className="le-drop">
-          <span>On <b>{bgs[sel].shirt}</b> it prints in</span>
-          <select aria-label={`Ink on ${bgs[sel].shirt}`} value={bgs[sel].ink} onChange={(e) => onInk(sel, e.target.value)}>
-            {!inks.includes(bgs[sel].ink) && <option value={bgs[sel].ink}>{bgs[sel].ink}</option>}
-            {inks.map((n) => <option key={n} value={n}>{n === AS_IS ? "Its colors, as edited" : n}</option>)}
-          </select>
-          <button type="button" className="btn sm ghost" onClick={() => onRemove(sel)}>Remove</button>
         </div>
       )}
     </div>

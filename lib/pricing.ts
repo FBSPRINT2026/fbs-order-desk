@@ -89,7 +89,7 @@ export type Design = { id: string; number: number; customer_id: string | null; n
   /** where the art really sits in the file once its background is removed / empty margins cut (original pixels) */ art_box?: { x: number; y: number; w: number; h: number; of: { w: number; h: number } } | null; method: string; colors: number; inks: string; notes: string; created_by: string; created_at: string;
   /** extra facts on a logo: distressed (prints as a fashion hit for some customers), the original file before it was
    *  edited, how it shows on each shirt color ({ shirt: "Navy", ink: "White" }) */
-  specs?: { distressed?: boolean; original?: { path: string; name: string; type: string; preview?: string }; onShirts?: { shirt: string; ink: string }[]; cropped?: boolean; [k: string]: unknown } | null };
+  specs?: { distressed?: boolean; original?: { path: string; name: string; type: string; preview?: string }; onShirts?: { shirt: string; ink: string; path?: string; map?: Record<string, unknown> }[]; cropped?: boolean; [k: string]: unknown } | null };
 export const designLabel = (d: Pick<Design, "number" | "name">) => `D-${d.number}${d.name ? " · " + d.name : ""}`;
 /** Height for a given width (or width for a given height) from the design's proportions. */
 export function designOther(d: Pick<Design, "width_px" | "height_px"> | null | undefined, value: number, given: "W" | "H") {
