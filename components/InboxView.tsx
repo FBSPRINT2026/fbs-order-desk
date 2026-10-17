@@ -614,8 +614,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
                       {flagG && <span className="ibx2-flag" title="Flagged in Outlook" aria-label="Flagged">⚑</span>}
                       {/* the right of line 1 (Oct 16, Nick: like Outlook): small bubbles and the paperclip; the time goes under */}
                       <span className="ibx2-item-r">
-                        {urgentG && <i className="mt urg">Urgent</i>}
-                        {needsG && <i className="mt rep">Needs reply</i>}
+                        {urgentG && <i className="mt urg" title="Urgent"><svg viewBox="0 0 24 24" aria-hidden><path d="M12 7v6" /><path d="M12 16.5v.5" /></svg><span>Urgent</span></i>}
+                        {needsG && <i className="mt rep" title="Needs reply"><svg viewBox="0 0 24 24" aria-hidden><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 6 6v3" /></svg><span>Needs reply</span></i>}
                         {(i.has_attachments || (r?.x.meta?.attachments || []).length > 0) && <svg className="ibx2-clip" viewBox="0 0 24 24" role="img" aria-label="Has attachments"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8" /></svg>}
                       </span>
                       <time className="t1">{i.received_at ? ago(i.received_at) : ""}</time>
