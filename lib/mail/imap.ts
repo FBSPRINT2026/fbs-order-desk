@@ -85,7 +85,13 @@ export async function syncAccount(admin: SupabaseClient, acct: MailAccount, dead
         // the Outlook Inbox as it is right now (what's left in it is the person's to-do list)
         if (kind === "inbox") {
           try { const r = await mirrorInbox(admin, client, acct, validity, deadline); if (r.gone) tally.inbox_archived = r.gone; if (r.sorted) tally.inbox_sorted = r.sorted; }
-          catch (e) { tally.inbox_mirror_error = 1; console.error("mirrorInbox", acct.email, e instanceof Error ? e.message : e); }
+          catch (e) {
+            tally.inbox_mirror_error = 1;
+            // "Connection not available" is the hard stop closing the connection at the time limit (or Outlook
+            // dropping it): the next run picks up, so it's a note, not an error (it filled the error log, Oct 16)
+            const m = e instanceof Error ? e.message : String(e);
+            (/Connection not available|closed/i.test(m) ? console.warn : console.error)("mirrorInbox", acct.email, m);
+          }
         }
         if (Date.now() < deadline - 8000) { const f = await backfillHtml(admin, client, acct.id, kind, deadline - 5000); if (f) tally[`${kind}_formatted`] = f; }
       } finally { lock.release(); }
