@@ -28,7 +28,9 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
   const up = await sb.storage.from("proofs").upload(orig, opts.file, { contentType: opts.file.type || undefined });
   if (up.error) throw new Error(up.error.message);
   // files a browser can't draw (PDF, AI, HEIC, TIFF…) get a PNG preview made automatically when none was given
-  const made = !PREVIEWABLE.test(opts.file.type) && !opts.preview ? await makePreview(opts.file) : null;
+  // and cropped to the art (Oct 16, Nick: a PDF logo came in as the whole page, the art small in the middle)
+  const made0 = !PREVIEWABLE.test(opts.file.type) && !opts.preview ? await makePreview(opts.file) : null;
+  const made = made0 ? (await cropFileToArt(made0)) || made0 : null;
   // a preview that was handed in wins (the shirt designer saves an SVG with a PNG preview)
   const pv = opts.preview && PREVIEWABLE.test(opts.preview.type) ? opts.preview : PREVIEWABLE.test(opts.file.type) ? opts.file : made;
   let preview_path = "";

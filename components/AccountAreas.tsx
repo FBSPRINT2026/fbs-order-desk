@@ -1,7 +1,7 @@
 "use client";
 import type { BrandColor } from "@/lib/pricing";
 import { colorHex } from "@/lib/inkColors";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ST, type Design } from "@/lib/pricing";
@@ -620,6 +620,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         <div className="dc-img">{designUrls[d.id] ? <img src={designUrls[d.id]} alt={d.name} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
           <div className="dc-tools">
             {!isArchived && onStar && <button type="button" className={"dc-star" + (d.starred ? " on" : "")} title={d.starred ? "Remove from favorites" : "Add to favorites"} aria-label={d.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!d.starred} onClick={() => star(d)}>{d.starred ? "★" : "☆"}</button>}
+            {!isArchived && mode === "shop" && <Link className="dc-edit" href={`/shop/artwork/${d.id}?edit=1`} title="Edit this logo: remove the white, change its colors, crop" aria-label="Edit logo">✎</Link>}
             {!isArchived && (onDelete || onArchive) && (
               <button type="button" className={"dc-del" + (armedDel === d.id ? " armed" : "")} onClick={() => remove(d)}
                 title={used.has(d.id) ? "Used on a mockup or order, so it can't be deleted. Archive it instead." : armedDel === d.id ? "Click again to delete for good" : "Delete this logo"}
@@ -668,8 +669,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         </div>
       )}
       <div className="aa-card">
-        {onUploadLogos && <LogoUpload onUpload={onUploadLogos} />}
-        <div className="aa-sec-h aa-logos-h"><h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
+        <div className="aa-sec-h aa-logos-h">{onUploadLogos && <LogoUpload onUpload={onUploadLogos} />}<h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
         {dRows.length ? (() => { const P = pageOf("logos", dRows); return <><div className="design-grid aa-grid3">{P.items.map((d) => card(d, false))}{slots(P.pad)}</div>{pager("logos", dRows.length, P.p, P.n)}</>; })()
           : <div className="aa-empty">{live.length ? `No logos match “${q}”.` : "No logos on file yet."}</div>}
         {archived.length > 0 && (
@@ -781,7 +781,8 @@ function SendBox({ onSend, canAct, mode }: { onSend: (b: string) => Promise<{ ok
   );
 }
 
-/** Upload logos to a customer's account (shop): pick or drop several files; each becomes a logo (D-number) for future use. */
+/** Upload logos to a customer's account (shop): a small button at the right of the Logos heading (pick several files,
+ *  or drop them on the page); each becomes a logo (D-number) for future use. */
 function LogoUpload({ onUpload }: { onUpload: (files: File[], star: boolean, progress: (done: number) => void) => Promise<string | void> }) {
   const [busy, setBusy] = useState<{ done: number; of: number } | null>(null);
   const [msg, setMsg] = useState("");
@@ -794,13 +795,20 @@ function LogoUpload({ onUpload }: { onUpload: (files: File[], star: boolean, pro
     const err = await onUpload(files, star, (done) => setBusy({ done, of: files.length })).catch((e) => (e instanceof Error ? e.message : String(e)));
     setBusy(null);
     setMsg(err ? String(err) : `Added ${files.length} logo${files.length === 1 ? "" : "s"}${star ? " to their favorites" : ""}.`);
+    setTimeout(() => setMsg(""), 6000);
   };
+  // files dropped anywhere on the page land here (the Artwork tab is the only drop target)
+  useEffect(() => {
+    const on = (e: DragEvent) => { if (e.dataTransfer?.types.includes("Files")) { e.preventDefault(); setOver(e.type === "dragover"); } };
+    const drop = (e: DragEvent) => { if (!e.dataTransfer?.files.length) return; e.preventDefault(); setOver(false); go(e.dataTransfer.files); };
+    window.addEventListener("dragover", on); window.addEventListener("dragleave", on); window.addEventListener("drop", drop);
+    return () => { window.removeEventListener("dragover", on); window.removeEventListener("dragleave", on); window.removeEventListener("drop", drop); };
+  }); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className={"aa-up" + (over ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); go(e.dataTransfer.files); }}>
-      <label className="btn sm primary aa-up-btn">{busy ? `Uploading ${busy.done} of ${busy.of}…` : "+ Upload logos"}<input type="file" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd,.dst,.heic,.heif,.tif,.tiff,.bmp" hidden disabled={!!busy} onChange={(e) => { go(e.target.files); e.target.value = ""; }} /></label>
-      <span className="faint">or drop files here. AI, EPS, PDF, SVG or PNG.</span>
-      <label className="check aa-up-star"><input type="checkbox" checked={star} onChange={(e) => setStar(e.target.checked)} /> Star them</label>
+    <span className={"aa-up" + (over ? " over" : "")}>
       {msg && <span className="aa-up-msg">{msg}</span>}
-    </div>
+      <label className="check aa-up-star" title="Star the logos as they're added"><input type="checkbox" checked={star} onChange={(e) => setStar(e.target.checked)} /> Star</label>
+      <label className="btn sm aa-up-btn" title="Add logos (AI, EPS, PDF, SVG, PNG); or drop the files on the page">{busy ? `Uploading ${busy.done}/${busy.of}…` : over ? "Drop to upload" : "+ Upload"}<input type="file" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd,.dst,.heic,.heif,.tif,.tiff,.bmp" hidden disabled={!!busy} onChange={(e) => { go(e.target.files); e.target.value = ""; }} /></label>
+    </span>
   );
 }

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { designLabel, orderGroups, type Customer, type Design, type Order } from "@/lib/pricing";
 import { custLabel, fmtDate } from "@/lib/format";
 import { setDesignPreview } from "@/lib/designs";
+import LogoEditor from "@/components/LogoEditor";
 
 /** One design: preview, details, original file, and every order it's been used on. */
 export default function DesignPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,6 +21,9 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   const [orig, setOrig] = useState("");
   const [msg, setMsg] = useState("");
   const [armed, setArmed] = useState(false);
+  // the logo editor (remove the white, change colors, crop): opened from here or a logo card's ✎ (?edit=1)
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "1") setEditing(true); }, []);
 
   async function load() {
     const { data } = await sb.from("designs").select("*").eq("id", id).maybeSingle();
@@ -58,9 +62,10 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   return (
     <>
       <BackLink href="/shop/artwork" label="Artwork" />
+      {editing && <LogoEditor d={d} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); setMsg("Logo saved"); load(); }} />}
       <div className="page-head">
         <div><div className="eyebrow">{custLabel(customers.find((c) => c.id === d.customer_id)) || "No customer"}</div><h1>{designLabel(d)}</h1></div>
-        <div className="row"><span className="save-state">{msg}</span><Link className="btn" href={`/shop/artwork/mockup?customer=${d.customer_id || ""}&design=${d.id}`}>Put on a shirt</Link>{orig && <a className="btn" href={orig} target="_blank" rel="noreferrer">Download original</a>}<button className={"btn ghost danger" + (armed ? " armed" : "")} type="button" onClick={del}>{armed ? "Delete logo?" : "Delete"}</button></div>
+        <div className="row"><span className="save-state">{msg}</span><button type="button" className="btn" onClick={() => setEditing(true)}>Edit logo</button><Link className="btn" href={`/shop/artwork/mockup?customer=${d.customer_id || ""}&design=${d.id}`}>Put on a shirt</Link>{orig && <a className="btn" href={orig} target="_blank" rel="noreferrer">Download original</a>}<button className={"btn ghost danger" + (armed ? " armed" : "")} type="button" onClick={del}>{armed ? "Delete logo?" : "Delete"}</button></div>
       </div>
       <div className="cust-grid">
         <section className="panel">
