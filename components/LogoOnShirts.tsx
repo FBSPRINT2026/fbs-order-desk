@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { colorHex } from "@/lib/inkColors";
+import { colorHex, deltaE } from "@/lib/inkColors";
 import { guessHex, SHIRT_COLORS } from "@/lib/mockup";
 import { INK_COLORS, type Design } from "@/lib/pricing";
 
@@ -15,8 +15,12 @@ export const onShirtsOf = (d: Pick<Design, "specs"> | null | undefined): OnShirt
 export function inkOnShirt(d: Pick<Design, "specs"> | null | undefined, shirt: string): string | null {
   const list = onShirtsOf(d);
   if (!list.length || !shirt) return null;
-  const s = shirt.toLowerCase().trim();
-  return list.find((x) => x.shirt.toLowerCase() === s)?.ink || list.find((x) => s.includes(x.shirt.toLowerCase()) || x.shirt.toLowerCase().includes(s))?.ink || null;
+  const n = (v: string) => v.toLowerCase().replace(/grey/g, "gray").trim(), s = n(shirt);
+  const named = list.find((x) => n(x.shirt) === s) || list.find((x) => s.includes(n(x.shirt)) || n(x.shirt).includes(s));
+  if (named) return named.ink;
+  // else the shirt color closest to one in the list ("Sport Grey" → the "Gray" view), when it's close
+  const near = list.map((x) => ({ x, d: deltaE(guessHex(shirt), guessHex(x.shirt)) })).sort((a, b) => a.d - b.d)[0];
+  return near && near.d < 15 ? near.x.ink : null;
 }
 
 /** one view: the logo in one ink on one shirt color (a mask of its picture, so any one-color logo recolors) */
