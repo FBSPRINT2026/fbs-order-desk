@@ -8,6 +8,7 @@ import { designLabel, orderGroups, type Customer, type Design, type Order } from
 import { custLabel, fmtDate } from "@/lib/format";
 import { setDesignPreview } from "@/lib/designs";
 import LogoEditor from "@/components/LogoEditor";
+import LogoOnShirts from "@/components/LogoOnShirts";
 
 /** One design: preview, details, original file, and every order it's been used on. */
 export default function DesignPage({ params }: { params: Promise<{ id: string }> }) {
@@ -87,6 +88,10 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
               <label className="check" style={{ gridColumn: "1 / -1" }} title="Worn / cracked texture in the art. A customer's brand standard can print distressed logos as a fashion hit (no underbase)."><input type="checkbox" checked={!!(d.specs as { distressed?: boolean } | null)?.distressed} onChange={(e) => patch({ specs: { ...((d.specs || {}) as object), distressed: e.target.checked || undefined } as Design["specs"] })} /> Distressed logo</label>
               <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="d-no">Notes</label><textarea id="d-no" rows={3} value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} onBlur={(e) => patch({ notes: e.target.value })} /></div>
             </div>
+          </section>
+          <section className="panel">
+            <div className="panel-h"><h2>On shirts</h2><span className="faint">how it prints on each shirt color</span></div>
+            <div className="panel-b"><LogoOnShirts d={d} url={pv} onSave={(onShirts) => patch({ specs: { ...(d.specs || {}), onShirts } })} /></div>
           </section>
           <section className="panel">
             <div className="panel-h"><h2>Used on</h2></div>

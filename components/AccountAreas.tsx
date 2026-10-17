@@ -3,6 +3,7 @@ import type { BrandColor } from "@/lib/pricing";
 import { colorHex } from "@/lib/inkColors";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ST, type Design } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
@@ -137,6 +138,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const [arch, setArch] = useState<Record<string, string | null>>({});
   const [armedDel, setArmedDel] = useState("");
   const [showArch, setShowArch] = useSticky("account.showArchived", false);
+  const [shirtSel, setShirtSel] = useState<Record<string, number>>({});
   /** portal Orders: quotes older than 60 days are hidden unless this is ticked (Oct 15, Nick) */
   const [oldQuotes, setOldQuotes] = useSticky("portal.oldQuotes", false);
   const [showOldOwed, setShowOldOwed] = useState(false);
@@ -618,6 +620,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     const card = (d: Design, isArchived: boolean) => (
       <div key={d.id} className={"design-card" + (d.starred ? " starred" : "") + (isArchived ? " archived" : "")}>
         <div className="dc-img">{designUrls[d.id] ? <img src={designUrls[d.id]} alt={d.name} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
+          {/* how it looks on their shirt colors (Oct 16, Nick: a portfolio of their logos), picked in the strip below */}
+          {(() => { const vs = onShirtsOf(d), k = shirtSel[d.id] ?? 0, v = vs[k]; return v && designUrls[d.id] ? <ShirtView className="main" url={designUrls[d.id]} shirt={v.shirt} ink={v.ink} /> : null; })()}
           <div className="dc-tools">
             {!isArchived && onStar && <button type="button" className={"dc-star" + (d.starred ? " on" : "")} title={d.starred ? "Remove from favorites" : "Add to favorites"} aria-label={d.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!d.starred} onClick={() => star(d)}>{d.starred ? "★" : "☆"}</button>}
             {!isArchived && mode === "shop" && <Link className="dc-edit" href={`/shop/artwork/${d.id}?edit=1`} title="Edit this logo: remove the white, change its colors, crop" aria-label="Edit logo">✎</Link>}
@@ -630,6 +634,12 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
             )}
           </div>
         </div>
+        {onShirtsOf(d).length > 0 && designUrls[d.id] && (
+          <div className="dc-views" aria-label="How it looks on shirt colors">
+            {onShirtsOf(d).map((v, i) => <button key={i} type="button" className={(shirtSel[d.id] ?? 0) === i ? "on" : ""} onClick={() => setShirtSel((x) => ({ ...x, [d.id]: i }))}><ShirtView url={designUrls[d.id]} shirt={v.shirt} ink={v.ink} /></button>)}
+            <button type="button" className={(shirtSel[d.id] ?? 0) === -1 ? "on" : ""} title="The logo as uploaded" onClick={() => setShirtSel((x) => ({ ...x, [d.id]: -1 }))}><span className="orig">Original</span></button>
+          </div>
+        )}
         <div className="dc-b">{mode === "shop" ? <Link href={`/shop/artwork/${d.id}`}><b>D-{d.number}</b></Link> : <b>D-{d.number}</b>}<span>{d.name || "Logo"}</span>{d.inks && <span className="faint">{d.inks}</span>}
           {isArchived && <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
             <button type="button" className="btn sm" onClick={() => restore(d)}>Restore</button>

@@ -71,3 +71,30 @@ export async function previewUrls(sb: SupabaseClient, list: Design[]): Promise<R
   (data || []).forEach((r, i) => { if (r.signedUrl) out[withPv[i].id] = r.signedUrl; });
   return out;
 }
+
+/**
+ * Logos whose picture still has empty space around the art (PDF / .ai pictures made before Oct 16 were the whole page):
+ * cropped to the art once, the new picture saved, the logo marked so it isn't checked again. Returns the logos changed.
+ */
+export async function cropPreviews(sb: SupabaseClient, list: Design[], max = 30): Promise<Design[]> {
+  const todo = list.filter((d) => d.preview_path && !d.archived_at && !d.specs?.cropped && /\.png$/i.test(d.preview_path)).slice(0, max);
+  const out: Design[] = [];
+  for (const d of todo) {
+    try {
+      const { data: blob } = await sb.storage.from("proofs").download(d.preview_path);
+      if (!blob) continue;
+      const cropped = await cropFileToArt(new File([blob], "preview.png", { type: "image/png" }));
+      const specs = { ...(d.specs || {}), cropped: true };
+      if (!cropped) { await sb.from("designs").update({ specs }).eq("id", d.id); continue; }
+      const path = `designs/${d.id}-${crypto.randomUUID().slice(0, 8)}/preview-cropped.png`;
+      const up = await sb.storage.from("proofs").upload(path, cropped, { contentType: "image/png" });
+      if (up.error) continue;
+      const dims = await imageSize(cropped);
+      // the original file stays as it is; only the picture (what the cards, mockups and separations show) is cropped
+      const patch = { preview_path: path, width_px: dims?.w || d.width_px, height_px: dims?.h || d.height_px, art_box: null, specs };
+      const { error } = await sb.from("designs").update(patch).eq("id", d.id);
+      if (!error) out.push({ ...d, ...patch } as Design);
+    } catch { /* leave it as it is */ }
+  }
+  return out;
+}

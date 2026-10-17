@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { brandHitFor, brandSizeFor } from "@/lib/pricing";
+import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
@@ -36,7 +37,7 @@ type Offset = { dx: number; dy: number };
 /** Per imprint: colors found in the logo and the ink each one prints as. */
 type Side = "front" | "back" | "sleeve";
 const SIDES: { id: Side; label: string }[] = [{ id: "front", label: "Front" }, { id: "back", label: "Back" }, { id: "sleeve", label: "Sleeves" }];
-type Paint = { design: string; sources: { hex: string; share: number }[]; map: Record<string, { name: string; hex: string }>;
+type Paint = { /** the shirt color it was set up for, when the logo has its own ink per shirt color */ shirt?: string; design: string; sources: { hex: string; share: number }[]; map: Record<string, { name: string; hex: string }>;
   /** how this logo prints (the same plan the Separation Studio starts from) */ plan?: PrintPlan;
   /** several logo colors set to the same ink: true = print them as one color (one screen), false = keep separate */ unite?: boolean };
 /** Ink names for the imprint from the logo's color choices (same ink twice counts once when the colors are united). */
@@ -419,7 +420,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     imprints.forEach(async (im) => {
       const d = designs.find((x) => x.id === im.design_id);
       if (!d || !urls[d.id] || isQuick(d.id)) return;
-      if (paints[im.id]?.design === d.id) return;
+      // a logo with its own ink per shirt color is set up again when the shirt color changes
+      const sh = onShirtsOf(d).length ? (line?.color || "") : "";
+      if (paints[im.id]?.design === d.id && (paints[im.id]?.shirt || "") === sh) return;
       try {
         const img = await logoImg(d);
         // the print plan: saved on the logo (the separation reads the same one), else worked out now and saved
@@ -450,13 +453,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const snap = (_hex: string, guess: string) => guess;
           if (!useAsked && b.groups.some((g) => g.colors.length) && !brandAsked.current.has(im.id)) { brandAsked.current.add(im.id); setBrandAsk(im.id); }
           const chosen: string[] = [];
+          // the logo's own ink for this shirt color (its "On shirts": white on navy, navy on white), for a one-color logo
+          const onShirt = plan.inks.length === 1 && line?.color ? inkOnShirt(d, line.color) : null;
           for (const k of plan.inks) {
-            const name = useAsked ? nearestAsked(k.hex) : snap(k.hex, k.name);
+            const name = useAsked ? nearestAsked(k.hex) : onShirt || snap(k.hex, k.name);
             chosen.push(name);
             for (const hex of [k.hex, ...(k.also || [])]) map[hex] = { name, hex: colorHex(name) || k.hex };
           }
           const names = useAsked ? asked : [...new Set(chosen)];
-          setPaints((p) => ({ ...p, [im.id]: { design: d.id, sources, map, unite: true, plan: plan! } }));
+          setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan! } }));
           setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: useAsked ? asked.length : plan!.colors } : x)));
           return;
         }
@@ -465,7 +470,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, colors: plan!.colors, inks: x.inks || `Simulated process (${plan!.colors})` } : x)));
       } catch { /* preview not loadable */ }
     });
-  }, [imprints, designs, urls, keepBg, keepInside]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [imprints, designs, urls, keepBg, keepInside, (lines[active] || lines[0])?.color]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // hovering a suggested color previews it on the mockup before it's picked
   const [hover, setHover] = useState<{ id: string; hexes: string[]; v: { name: string; hex: string } } | null>(null);

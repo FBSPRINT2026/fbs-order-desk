@@ -27,7 +27,7 @@ import ShopMessages from "@/components/ShopMessages";
 import ShopGoods from "@/components/ShopGoods";
 import CustomerContacts from "@/components/CustomerContacts";
 import CustomerBrandColors from "@/components/CustomerBrandColors";
-import { uploadDesign } from "@/lib/designs";
+import { cropPreviews, uploadDesign } from "@/lib/designs";
 import CustomerBrandPrint from "@/components/CustomerBrandPrint";
 import FilmFolder from "@/components/FilmFolder";
 import ShopCustomerProjects from "@/components/ShopCustomerProjects";
@@ -97,6 +97,14 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       setUsedIds((used || []) as string[]);
       setDesigns(dl);
       setDesignUrls(await previewUrls(sb, dl));
+      // logos still showing the whole page around the art: cropped once, in the background (Oct 16, Nick)
+      cropPreviews(sb, dl).then(async (fixed) => {
+        if (!fixed.length) return;
+        const byId = new Map(fixed.map((x) => [x.id, x]));
+        setDesigns((ds) => ds.map((x) => byId.get(x.id) || x));
+        const urls = await previewUrls(sb, fixed);
+        setDesignUrls((m) => ({ ...m, ...urls }));
+      }).catch(() => null);
       const ml = (m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean }[];
       const paths = ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]);
       const { data: signed } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
