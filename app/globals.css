@@ -9342,7 +9342,7 @@ fieldset.bs-lock{border:0;padding:0;margin:0;min-width:0}
 
 /* Shop Tools as small icons with their name on hover, like Illustrator's toolbar (Oct 16, Nick) */
 @media (min-width:821px){
-.side:not(.mini) .nav-tools{display:flex;flex-wrap:wrap;gap:1px;padding:2px 0 0 2px}
+.side:not(.mini) .nav-tools{display:flex;flex-direction:row;flex-wrap:wrap;gap:1px;padding:2px 0 0 2px}
 .side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc){all:unset;box-sizing:border-box;width:32px;height:32px;display:flex;align-items:center;justify-content:center;position:relative;border-radius:9px;cursor:pointer;color:var(--side-ink)}
 .side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc):hover{background:rgba(255,255,255,.08);color:#fff}
 .side:not(.mini) .nav-tools a.on{background:var(--accent);color:#fff}
@@ -9365,7 +9365,8 @@ a.pit-f{text-decoration:none}
 .side-out{all:unset;cursor:pointer;width:26px;height:26px;display:grid;place-items:center;border-radius:7px;color:var(--side-ink)}
 .side-out:hover{background:rgba(255,255,255,.1);color:#fff}
 .side-out svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.side-user .side-viewas{width:78px!important}
+.side-user .side-viewas{width:64px!important;font-size:10.5px;padding:1px 6px}
+.side-user{gap:4px}
 
 /* favorite logos: on their shirt color too, no checkerboard */
 .aa-fav-pic{position:relative;width:48px;height:48px;flex:none;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
