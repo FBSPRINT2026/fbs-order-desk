@@ -164,10 +164,14 @@ export default function InboxView({ mode }: { mode: Mode }) {
       });
     };
     fit();
+    // re-fit when anything above it changes size or appears (the folder bar loads after the page)
     const ro = new ResizeObserver(fit);
-    ro.observe(document.body);
+    const watch = () => { ro.disconnect(); ro.observe(document.body); Array.from(el.parentElement?.children || []).forEach((c) => { if (c !== el) ro.observe(c); }); fit(); };
+    watch();
+    const mo = new MutationObserver(watch);
+    if (el.parentElement) mo.observe(el.parentElement, { childList: true });
     window.addEventListener("resize", fit);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); window.removeEventListener("resize", fit); };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); mo.disconnect(); window.removeEventListener("resize", fit); };
   }, []);
   const [open, setOpen] = useState<string | null>(null), [focus, setFocus] = useState<string | null>(null), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
 
