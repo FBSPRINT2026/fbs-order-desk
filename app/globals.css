@@ -753,16 +753,16 @@ td > .sz-dim.on input{padding-right:24px}
 .portal .aa-favs{top:84px;max-height:calc(100vh - 100px)}
 .aa-grid3{grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:1fr}
 /* logos: about half the size, six across (Oct 16, Nick: "these logos are huge") */
-.aa-grid6{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.aa-grid6{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .aa-grid6 .dc-views{gap:4px;padding:5px 6px}
-.aa-grid6 .dc-views .lv,.aa-grid6 .dc-views .orig{width:32px;height:32px}
+.aa-grid6 .dc-views .lv,.aa-grid6 .dc-views .orig{width:34px;height:34px}
 .aa-grid6 .dc-views .orig{font-size:8px}
 .aa-grid6 .dc-b{padding:6px 8px;font-size:12px}
 .aa-grid6 .dc-tools{top:4px;right:4px;gap:3px}
 .aa-grid6 .dc-star{font-size:14px;padding:2px 5px}
 .aa-grid6 .dc-edit{width:24px;height:24px;font-size:12px}
 .aa-grid6 .dc-del{min-width:24px;height:24px}
-@media (max-width:1100px){.aa-grid6{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:1100px){.aa-grid6{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:700px){.aa-grid6{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .aa-slot{border:1px dashed var(--line-2,var(--line));background:transparent}
 .dc-open{display:flex;width:100%;height:100%;align-items:center;justify-content:center}
@@ -9396,3 +9396,13 @@ a.pit-f{text-decoration:none}
 .side-user-r{display:flex;align-items:center}
 /* the folded menu keeps you, Report an issue and Sign out (stacked) */
 @media (min-width:821px){.side.mini .side-user.side-user{display:flex!important;flex-direction:column!important;align-items:center;gap:6px;padding:6px 0 0}.side.mini .side-user-r{flex-direction:column}}
+
+/* bigger cards, four across (Oct 16, Nick: "too small, the little tools overpower the logo"): the color tiles wrap
+   instead of scrolling sideways, and the star / edit / delete buttons show when you point at the card (a starred
+   logo keeps its star) */
+.design-card .dc-views{flex-wrap:wrap;overflow:visible}
+.design-card .dc-tools{opacity:0;transition:opacity .12s}
+.design-card:hover .dc-tools,.design-card:focus-within .dc-tools{opacity:1}
+.design-card.starred .dc-tools{opacity:1}
+.design-card.starred:not(:hover):not(:focus-within) .dc-tools > :not(.dc-star){visibility:hidden}
+@media (hover:none){.design-card .dc-tools{opacity:1}.design-card.starred .dc-tools > *{visibility:visible!important}}
