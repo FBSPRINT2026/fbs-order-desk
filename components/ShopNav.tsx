@@ -306,8 +306,10 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       </div>
       )}
       {/* the bottom of the menu: Admin Tools, small icons with their names on hover like Shop Tools (Oct 16, Nick) */}
+      {/* Admin Tools: only for me (the owner), and not while viewing as someone (Oct 16, Nick) */}
+      {role === "owner" && (
       <div className="nav-g nav-g-admintools nav-foot-g">
-      <div className="nav-h nav-h-admintools">{role === "owner" || role === "admin" ? "Admin Tools" : "More"}</div>
+      <div className="nav-h nav-h-admintools">Admin Tools</div>
       <nav className="nav nav-foot nav-tools">
         {/* the owner: the Support page with everyone's reports (Report an issue is down by Sign out, for everyone) */}
         {role === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
@@ -315,6 +317,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {/* View as (binoculars): here in my own view; while viewing as someone it moves to the bottom row */}
         {realRole === "owner" && !viewAs && viewAsEl}</nav>
       </div>
+      )}
       <div className="side-user">
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
         {/* you: your initials, and Settings under them; clicking opens Settings (Oct 16, Nick) */}
