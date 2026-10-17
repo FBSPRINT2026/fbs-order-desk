@@ -324,11 +324,11 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {(() => {
           const full = (fullName || people.find((p) => p.email === email)?.name || firstName || email.split("@")[0]).trim();
           const ini = full.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
-          // option B (Oct 16, Nick): a thin gear around the initials says Settings
-          const inner = <><svg className="side-gear" viewBox="0 0 40 40" aria-hidden><path d="M35.06 15.93 L38.74 16.88 L38.74 23.12 L35.06 24.07 L33.53 27.77 L35.46 31.05 L31.05 35.46 L27.77 33.53 L24.07 35.06 L23.12 38.74 L16.88 38.74 L15.93 35.06 L12.23 33.53 L8.95 35.46 L4.54 31.05 L6.47 27.77 L4.94 24.07 L1.26 23.12 L1.26 16.88 L4.94 15.93 L6.47 12.23 L4.54 8.95 L8.95 4.54 L12.23 6.47 L15.93 4.94 L16.88 1.26 L23.12 1.26 L24.07 4.94 L27.77 6.47 L31.05 4.54 L35.46 8.95 L33.53 12.23 Z" /></svg><span className="side-who-c">{ini}</span></>;
+          // option E (Oct 16, Nick): one small pill, your initials and a gear
+          const inner = <><b className="side-who-c">{ini}</b><svg className="side-gear" viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg></>;
           return canOpen("/shop/settings", perms)
             ? <Link href="/shop/settings" className={"side-who" + (active("/shop/settings") ? " on" : "")} title={`${full} · ${email}: Settings`} aria-label={`Settings (signed in as ${full})`}>{inner}</Link>
-            : <span className="side-who" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}><span className="side-who-c">{ini}</span></span>;
+            : <span className="side-who solo" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}><b className="side-who-c">{ini}</b></span>;
         })()}
         <div className="side-user-r">
           {realRole === "owner" && viewAs && viewAsEl}

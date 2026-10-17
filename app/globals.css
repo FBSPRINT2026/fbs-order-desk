@@ -9444,14 +9444,10 @@ a.pit-f{text-decoration:none}
 .side .side-who:hover small{opacity:1;color:#fff}
 span.side-who{cursor:default}
 
-/* option B: a thin gear around your initials; it opens Settings (Oct 16, Nick) */
-.side .side-who{position:relative;width:34px;height:34px;display:grid!important;place-items:center;gap:0}
-.side .side-who .side-gear{position:absolute;inset:0;width:34px;height:34px;fill:none;stroke:#c9d1dc;stroke-width:1.9;stroke-linejoin:round}
-.side .side-who .side-who-c{position:relative;width:22px;height:22px;font-size:9px;letter-spacing:.02em}
+/* option E: one small pill, your initials and a gear; it opens Settings (Oct 16, Nick) */
+.side .side-who{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex!important;align-items:center;gap:4px;height:24px;padding:0 7px 0 3px;border-radius:999px;background:rgba(255,255,255,.08);color:var(--side-ink)}
+.side .side-who.solo{padding:0 3px;cursor:default}
+.side .side-who .side-who-c{width:18px;height:18px;border-radius:50%;background:var(--fbs-blue,#0e9bd8);color:#fff;display:grid;place-items:center;font-size:8px;font-weight:800;letter-spacing:.02em;box-shadow:none}
+.side .side-who .side-gear{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.side .side-who:hover,.side .side-who.on{background:rgba(255,255,255,.16);color:#fff}
 .side .side-who small{display:none}
-.side .side-who:hover .side-gear,.side .side-who.on .side-gear{stroke:#fff}
-.side .side-who:hover .side-who-c,.side .side-who.on .side-who-c{box-shadow:none}
-/* the fold / open tab sits beside the logo, where there's never a line or a selected item (Oct 16, Nick) */
-@media (min-width:821px){.side-edge-k{top:18px!important;transform:none!important}}
-/* without Admin Tools (everyone but me), the bottom row still sits at the bottom */
-@media (min-width:821px){.side :not(.nav-foot-g) + .side-user{margin-top:auto}}
