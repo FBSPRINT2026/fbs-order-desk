@@ -110,7 +110,9 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
     const j = r?.ok ? await r.json().catch(() => null) as { films?: { id: string; name: string; score: number }[]; folder?: string | null; error?: string } | null : null;
     if (!j) notes.push("Dropbox couldn't be searched for the film.");
     else if (!j.folder) notes.push("No film folder found for this customer in Dropbox (link it on the customer page).");
-    const cands = (j?.films || []).filter((z) => z.score > 0 && /\.(ai|pdf)$/i.test(z.name)).slice(0, 3);
+    // the film's name has to match the job's (a word at least, 2+ points): being made near the job's date only adds 1,
+    // and on its own that took another job's film (Oct 17: Sit Down Shirts got Spiral.ai)
+    const cands = (j?.films || []).filter((z) => z.score >= 2 && /\.(ai|pdf)$/i.test(z.name)).slice(0, 3);
     if (j?.folder && !cands.length) notes.push(`No film in ${j.folder.replace(/^\/FBS Film Folder\//i, "")} matches "${q}".`);
     for (const f of cands) {
       const c = await fetch("/api/dropbox/film", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id }) }).then((z) => z.json()).catch(() => null) as { url?: string } | null;
