@@ -9406,3 +9406,4 @@ a.pit-f{text-decoration:none}
 .design-card.starred .dc-tools{opacity:1}
 .design-card.starred:not(:hover):not(:focus-within) .dc-tools > :not(.dc-star){visibility:hidden}
 @media (hover:none){.design-card .dc-tools{opacity:1}.design-card.starred .dc-tools > *{visibility:visible!important}}
+.aa-fav-pic .lv.main{position:absolute;inset:0;width:100%;height:100%;border-radius:0;border:0}

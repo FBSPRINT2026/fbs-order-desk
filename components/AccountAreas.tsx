@@ -714,7 +714,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         <div className="aa-attn-t">Logos</div>
         {favs.map((d) => (
           <div key={d.id} className="aa-fav">
-            {designUrls[d.id] ? <span className="aa-fav-pic"><LogoPic url={(onShirtsOf(d)[0]?.path && designUrls[onShirtsOf(d)[0].path!]) || designUrls[d.id]} alt="" shirt={onShirtsOf(d)[0]?.shirt || logoShirts[d.id]} /></span> : <span className="aa-fav-ph">{(d.file_name.split(".").pop() || "").toUpperCase()}</span>}
+            {designUrls[d.id] ? <span className="aa-fav-pic">{(() => { const v = onShirtsOf(d)[0], own = v?.path ? designUrls[v.path] : ""; return v ? <ShirtView className="main" url={own || designUrls[d.id]} shirt={v.shirt} ink={own ? "Original colors" : v.ink} /> : <LogoPic url={designUrls[d.id]} alt="" shirt={logoShirts[d.id]} />; })()}</span> : <span className="aa-fav-ph">{(d.file_name.split(".").pop() || "").toUpperCase()}</span>}
             <span className="aa-fav-t">{mode === "shop" ? <Link href={`/shop/artwork/${d.id}`}><b>D-{d.number}</b></Link> : <b>D-{d.number}</b>}<span>{d.name || "Logo"}</span></span>
             {onStar && <button type="button" className="dc-star on" title="Remove from favorites" aria-label="Remove from favorites" onClick={() => star(d)}>★</button>}
           </div>
