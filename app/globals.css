@@ -9681,3 +9681,16 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .rc-grid th.rc-side span{display:inline-block;writing-mode:vertical-rl;transform:rotate(180deg)}
 .rc-grid th.rc-n{text-align:center;font-size:12.5px;color:var(--ink-2);padding:2px 6px;min-width:18px}
 .rc-grid td.rc-none{background:none}
+/* portal: the program price grid, read only (Oct 17) */
+.prc{display:grid;grid-template-columns:minmax(0,auto) minmax(240px,1fr);gap:18px 28px;align-items:start;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:0 0 16px}
+.prc-wrap{overflow-x:auto}
+.prc-cap{font-size:13px;color:var(--ink-2);margin:0 0 8px}
+.prc-grid td{min-width:62px;height:32px;text-align:center;border-radius:8px;font-variant-numeric:tabular-nums;font-size:13.5px}
+.prc-grid td.prc-v{background:var(--accent-soft);color:var(--ink);font-weight:700}
+.prc-grid td.prc-x{background:none}
+.prc-key{font-size:12px;color:var(--ink-3);margin-top:8px}
+.prc-terms{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
+.prc-terms li{position:relative;padding-left:20px;line-height:1.4}
+.prc-terms li::before{content:"";position:absolute;left:2px;top:5px;width:9px;height:9px;border-radius:50%;background:var(--fbs-fade,var(--accent))}
+.prc-h{font-size:15px;margin:4px 0 10px}
+@media (max-width:760px){.prc{grid-template-columns:1fr;padding:12px}}

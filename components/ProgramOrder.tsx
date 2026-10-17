@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
-import { PROGRAM_SIZES, type Program, type ProgramItem } from "@/lib/programs";
+import { cardHasPrices, cardSetsAnything, PROGRAM_SIZES, type Program, type ProgramItem } from "@/lib/programs";
+import ProgramRateCard from "@/components/ProgramRateCard";
 import { placeProgramOrder } from "@/app/portal/program-actions";
 
 type Line = { color: string; sizes: Record<string, number> };
@@ -18,7 +19,9 @@ export default function ProgramOrder({ program, items, images, projects, canAct,
   const [cart, setCart] = useState<Record<string, Line>>({});
   const [due, setDue] = useState(""), [po, setPo] = useState(""), [notes, setNotes] = useState(""), [proj, setProj] = useState("");
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState<{ ok: boolean; text: string; id?: string } | null>(null);
-  if (!program || !items.length) return (
+  // the program shows with its price grid even before it has design prices (Oct 17: Peticolas has a grid only)
+  const card = program?.rate_card && (cardHasPrices(program.rate_card) || cardSetsAnything(program.rate_card)) ? program.rate_card : null;
+  if (!program || (!items.length && !card)) return (
     <div className="pg-none">
       <div className="pg-none-ic" aria-hidden="true">★</div>
       <h3>Program pricing</h3>
@@ -45,9 +48,12 @@ export default function ProgramOrder({ program, items, images, projects, canAct,
 
   return (
     <div className="pg">
-      <div className="aa-bar"><div className="aa-bar-l"><h2>{program.name || "Your program"}</h2><span className="aa-sum">Flat prices on your regular items, any quantity. Type quantities and send it in.</span></div></div>
+      <div className="aa-bar"><div className="aa-bar-l"><h2>{program.name || "Your program"}</h2><span className="aa-sum">{items.length ? "Your program prices, and a quick order form for your regular items." : "The prices we agreed for your printing."}</span></div></div>
       {program.notes && <div className="pg-notes">{program.notes}</div>}
-      <div className="pg-wrap">
+      {!program.active && <div className="banner prc-off">Preview only: this program is off, so the customer doesn&apos;t see it yet. Turn on &quot;Show in their portal&quot; on their Program tab.</div>}
+      {card && <ProgramRateCard card={card} />}
+      {items.length > 0 && card && <h3 className="prc-h">Your regular items</h3>}
+      {items.length > 0 && <div className="pg-wrap">
         <div className="pg-items">
           {items.map((it) => {
             const l = line(it.id), q = qty(it.id);
@@ -88,7 +94,7 @@ export default function ProgramOrder({ program, items, images, projects, canAct,
           <button type="button" className="btn primary pp-go" disabled={!canAct || busy || !chosen.length || short.length > 0} onClick={send}>{busy ? "Sending…" : chosen.length ? `Send order · ${money(total)}` : "Send order"}</button>
           {!canAct && <div className="faint" style={{ fontSize: 12 }}>Turned off in the preview.</div>}
         </aside>
-      </div>
+      </div>}
     </div>
   );
 }

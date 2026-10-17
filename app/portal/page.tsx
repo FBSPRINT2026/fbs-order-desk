@@ -19,7 +19,7 @@ import PortalAssistant from "@/components/PortalAssistant";
 import PortalProjects from "@/components/PortalProjects";
 import ProgramOrder from "@/components/ProgramOrder";
 import { projectSummaries } from "@/lib/projectsServer";
-import type { Program, ProgramItem } from "@/lib/programs";
+import { cardHasPrices, type Program, type ProgramItem } from "@/lib/programs";
 import { aiPaySelect } from "@/app/portal/pay-select";
 import { needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
@@ -115,7 +115,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const goodsHref = `/portal${qs ? qs + "&" : "?"}area=receive`;
   // projects and program pricing
   const projects = await projectSummaries(admin, ctx.customerIds, true);
-  const { data: progs } = ctx.customerIds.length ? await admin.from("programs").select("*").in("customer_id", ctx.customerIds).eq("active", true).limit(1) : { data: [] };
+  // staff previewing see the program even while it's off, marked so (Oct 17: to check it before the customer does)
+  const progQ = ctx.customerIds.length ? admin.from("programs").select("*").in("customer_id", ctx.customerIds) : null;
+  const { data: progs } = progQ ? await (ctx.preview ? progQ.order("active", { ascending: false }) : progQ.eq("active", true)).limit(1) : { data: [] };
   const program = ((progs || [])[0] || null) as Program | null;
   const { data: pits } = program ? await admin.from("program_items").select("*").eq("program_id", program.id).eq("active", true).is("archived_at", null).order("position") : { data: [] };
   const programItems = (pits || []) as ProgramItem[];
@@ -279,7 +281,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         ) : (
           <AccountAreas mode="portal" dash={dash} brandColors={acct?.brand_colors || []}
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
-            programPanel={<ProgramOrder program={program} items={programItems} images={programImages} projects={projects.filter((p) => p.status !== "closed").map((p) => ({ id: p.id, name: p.name }))} canAct={!ctx.preview} qs={qs} />} hasProgram={!!program && programItems.length > 0}
+            programPanel={<ProgramOrder program={program} items={programItems} images={programImages} projects={projects.filter((p) => p.status !== "closed").map((p) => ({ id: p.id, name: p.name }))} canAct={!ctx.preview} qs={qs} />} hasProgram={!!program && (programItems.length > 0 || cardHasPrices(program.rate_card))}
             assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}
             goodsPanel={wholesale ? <PortalGoods items={goodsItems} incoming={incoming} canAct={!ctx.preview} qs={qs} empty="No open jobs need goods from you right now." /> : undefined}
             goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} incoming={incoming} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
