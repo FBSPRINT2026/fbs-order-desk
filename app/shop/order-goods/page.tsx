@@ -54,9 +54,16 @@ function OrderGoods() {
   const [linkFor, setLinkFor] = useState<string | null>(null), [linkQ, setLinkQ] = useState(""), [linkHits, setLinkHits] = useState<{ id: string; number: number; nickname: string | null }[]>([]);
 
   const [pay, setPay] = useState<{ card?: string; error?: string } | null>(null);
-  useEffect(() => { goodsPayInfo().then((r) => setPay(r.ok ? { card: r.card } : { error: r.error })).catch(() => null); }, []);
   const loadRecent = () => recentGoods().then((r) => { if (r.ok) { setRecent(r.list as Recent[]); setRecentErr(""); } else setRecentErr(r.error || ""); });
-  useEffect(() => { void loadRecent(); }, []);
+  // the recent orders first, then the card from S&S (it takes a few seconds, and server calls run one at a time, so it
+  // used to hold the list up); the card's label is remembered for this visit so it shows right away (Oct 16: speed)
+  useEffect(() => {
+    try { const c = sessionStorage.getItem("fbs:ss.card"); if (c) setPay({ card: c }); } catch { /* fine */ }
+    void loadRecent().finally(() => goodsPayInfo().then((r) => {
+      setPay(r.ok ? { card: r.card } : { error: r.error });
+      try { if (r.ok && r.card) sessionStorage.setItem("fbs:ss.card", r.card); } catch { /* fine */ }
+    }).catch(() => null));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // opened from an email or an order: fill in who it's for and the garments
   useEffect(() => {
     if (!emailId && !orderParam) return;
