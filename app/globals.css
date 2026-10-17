@@ -9621,3 +9621,29 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .ibx2-briefbtn .ibx2-brieft{flex:none!important;display:block!important;font-size:13.5px;font-weight:700;letter-spacing:.01em;
   background:var(--fbs-fade);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
 .ibx2-briefbtn .ibx2-briefgo{width:14px!important;height:14px;fill:none;stroke:var(--fbs-orange);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;opacity:1!important;flex:none}
+/* no bubbles inside bubbles (Oct 16, Nick): the folder bar, the list's tabs, search and Inbox summary run edge to edge as
+   flat strips; the tab / folder you're on is white with a blue underline */
+@media (min-width:761px){
+  .main:has(.ibx2) .mf-bar{padding:0!important;gap:0!important;overflow:hidden;background:#f7f8fa!important;box-shadow:none!important;align-items:stretch}
+  .main:has(.ibx2) .mf-bar::before{background:var(--surface);margin:0!important;padding:0 12px!important}
+  .main:has(.ibx2) .mf-bar .mf-chip{border-radius:0!important;min-height:0!important;padding:11px 10px 9px!important;border-bottom:2px solid transparent!important;box-shadow:none!important;background:none}
+  .main:has(.ibx2) .mf-bar .mf-chip:hover{background:var(--surface)!important}
+  .main:has(.ibx2) .mf-bar .mf-chip.on,.main:has(.ibx2) .mf-bar .mf-dd.on>.mf-chip{background:var(--surface)!important;color:var(--accent)!important;border-bottom-color:var(--accent)!important;box-shadow:none!important}
+  .main:has(.ibx2) .mf-bar .mf-dd{display:flex}
+  .ibx2-list-h{padding:0!important;gap:0!important}
+  .ibx2-list .ibx2-tabs{border-radius:0!important;padding:0!important;gap:0!important;background:#f7f8fa!important;border-bottom:1px solid var(--line)}
+  .ibx2-list .ibx2-tabs button{border-radius:0!important;min-height:0!important;padding:9px 3px 7px!important;border-bottom:2px solid transparent!important;margin-bottom:-1px;box-shadow:none!important}
+  .ibx2-list .ibx2-tabs button.on{background:var(--surface)!important;color:var(--accent)!important;border-bottom-color:var(--accent)!important;box-shadow:none!important}
+  .ibx2-list .ibx2-find{align-items:center;gap:4px;padding:0 6px 0 12px}
+  .ibx2-list .ibx2-find input{border:0!important;border-radius:0!important;background:transparent no-repeat 0 50%/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237a8599' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E")!important;padding:9px 4px 9px 22px!important;box-shadow:none!important;outline:none}
+  .ibx2-list .ibx2-find:focus-within{box-shadow:inset 0 -2px 0 var(--accent)}
+  .ibx2-list .ibx2-briefbtn{margin:0!important;border:0!important;border-top:1px solid var(--line)!important;border-radius:0!important;padding:8px 12px 10px!important}
+  .ibx2-list .ibx2-briefbtn.on{box-shadow:inset 0 0 0 2px var(--fbs-salmon)!important}
+}
+/* the email rows a size smaller (Oct 16, Nick) */
+@media (min-width:761px) and (max-width:1300px){
+  .ibx2-item.ol .ibx2-item-1{font-size:14px!important}
+  .ibx2-item.ol .ibx2-item-s{font-size:12px!important}
+  .ibx2-item.ol .ibx2-item-1 time,.ibx2-item.ol .ibx2-item-l2 time.t2{font-size:11px!important}
+  .ibx2-item.ol{height:46px!important}
+}
