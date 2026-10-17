@@ -92,3 +92,37 @@ export async function draftArtCount(orderId: string) {
     return { ok: true as const, logos: d || 0, mockups: m || 0 };
   } catch { return { ok: false as const, logos: 0, mockups: 0 }; }
 }
+
+/** the Artwork page's Drafts: every draft logo and mockup, with its order */
+export async function listDrafts() {
+  try {
+    await staff();
+    const admin = createAdminClient();
+    const { data: ds } = await admin.from("designs").select("id, number, name, preview_path, file_path, customer_id, created_at").eq("draft", true).is("archived_at", null).order("created_at", { ascending: false }).limit(200);
+    const { data: ms } = await admin.from("mockups").select("id, title, file_path, customer_id, order_id, created_at").eq("draft", true).is("archived_at", null).order("created_at", { ascending: false }).limit(200);
+    // which order each draft logo is on
+    const { data: os } = await admin.from("orders").select("id, number, groups, updated_at").in("status", ["quote", "request"]).limit(1000);
+    const onOrder = new Map<string, { id: string; number: number; updated_at: string }>();
+    for (const o of os || []) for (const id of designIdsOf(o.groups)) if (!onOrder.has(id)) onOrder.set(id, { id: o.id, number: o.number, updated_at: o.updated_at });
+    const mOrders = new Map((os || []).map((o) => [o.id as string, { id: o.id as string, number: o.number as number, updated_at: o.updated_at as string }]));
+    const items = [
+      ...(ds || []).map((d) => ({ kind: "logo" as const, id: d.id as string, label: `D-${d.number} ${d.name || ""}`.trim(), path: (d.preview_path || d.file_path || "") as string, customer_id: d.customer_id as string | null, created_at: d.created_at as string, order: onOrder.get(d.id) || null })),
+      ...(ms || []).map((m) => ({ kind: "mockup" as const, id: m.id as string, label: (m.title || "Mockup") as string, path: (m.file_path || "") as string, customer_id: m.customer_id as string | null, created_at: m.created_at as string, order: m.order_id ? mOrders.get(m.order_id) || null : null })),
+    ];
+    const paths = items.map((x) => (x.kind === "mockup" ? x.path.replace(/\.png$/, "-thumb.png") : x.path)).filter(Boolean);
+    const { data: sg } = paths.length ? await admin.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
+    const url = new Map((sg || []).map((s, i) => [paths[i], s.signedUrl || ""]));
+    return { ok: true as const, items: items.map(({ path, ...x }) => ({ ...x, url: url.get(x.kind === "mockup" ? path.replace(/\.png$/, "-thumb.png") : path) || "" })) };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e), items: [] }; }
+}
+
+/** one draft: keep it (into the library) or take it off (archived) */
+export async function setDraft(kind: "logo" | "mockup", id: string, keep: boolean) {
+  try {
+    await staff();
+    const admin = createAdminClient();
+    const t = kind === "logo" ? "designs" : "mockups";
+    const { error } = await admin.from(t).update(keep ? { draft: false } : { archived_at: new Date().toISOString() }).eq("id", id).eq("draft", true);
+    return error ? { ok: false as const, error: error.message } : { ok: true as const };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e) }; }
+}

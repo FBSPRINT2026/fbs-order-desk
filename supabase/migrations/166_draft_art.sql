@@ -23,3 +23,6 @@ begin
 end $$;
 drop trigger if exists orders_keep_art on orders;
 create trigger orders_keep_art after insert or update of status, groups on orders for each row execute function keep_order_art();
+
+-- 167: drafts no one has used in 60 days are archived daily (pg_cron 'archive-stale-drafts' runs archive_stale_drafts())
+-- (see the live function in the database; applied as migration 167_archive_stale_drafts)

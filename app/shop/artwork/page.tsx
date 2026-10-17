@@ -7,6 +7,7 @@ import { custLabel, fmtDateLong } from "@/lib/format";
 import { DESIGN_ACCEPT, PREVIEWABLE, previewUrls, uploadDesign } from "@/lib/designs";
 import SearchInput from "@/components/SearchInput";
 import { LogoPic, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
+import { listDrafts, setDraft } from "@/app/shop/draft-art-actions";
 import { useSticky } from "@/lib/useSticky";
 
 type Mock = { id: string; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[] };
@@ -58,6 +59,18 @@ export default function ArtworkPage() {
     }
   }
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Drafts (Oct 17, Nick): art the portal made for quotes that haven't gone out. Keep one into the library or take it off;
+  // ones no one uses for 60 days are archived by themselves (archive_stale_drafts, daily)
+  type Draft = Awaited<ReturnType<typeof listDrafts>>["items"][number];
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [draftsOpen, setDraftsOpen] = useSticky("artwork.draftsOpen", true);
+  useEffect(() => { listDrafts().then((r) => setDrafts(r.items || [])); }, []);
+  async function decideDraft(d: Draft, keep: boolean) {
+    setDrafts((x) => x.filter((y) => y.id !== d.id));
+    const r = await setDraft(d.kind, d.id, keep);
+    if (!r.ok) { setMsg(r.error || "Couldn't do that."); setDrafts((x) => [d, ...x]); return; }
+    if (keep) load();
+  }
   useEffect(() => { setNL(STEP); setNM(STEP); }, [q, cust, show, archived]);
 
   const byId = Object.fromEntries(customers.map((c) => [c.id, c]));
@@ -118,6 +131,29 @@ export default function ArtworkPage() {
         {show !== "mockups" && <label className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} /> Archived logos</label>}
       </div>
 
+      {drafts.filter((d) => !cust || d.customer_id === cust).length > 0 && (
+        <section className="art-sec art-drafts">
+          <div className="aa-sec-h"><button type="button" className="linkbtn" onClick={() => setDraftsOpen((x) => !x)} aria-expanded={draftsOpen}><h3>{draftsOpen ? "▾" : "▸"} Drafts</h3></button><span className="faint">{drafts.filter((d) => !cust || d.customer_id === cust).length} · made for quotes that haven&apos;t gone out. They join the library when the order is sent; unused for 60 days, they&apos;re archived.</span></div>
+          {draftsOpen && (
+            <div className="design-grid">
+              {drafts.filter((d) => !cust || d.customer_id === cust).map((d) => {
+                const gone = new Date(new Date(d.order?.updated_at && d.order.updated_at > d.created_at ? d.order.updated_at : d.created_at).getTime() + 60 * 864e5);
+                return (
+                  <div key={d.kind + d.id} className="design-card draft">
+                    <div className={"dc-img" + (d.kind === "mockup" ? " mock" : "")}>{d.url ? (d.kind === "logo" ? <LogoPic url={d.url} alt={d.label} /> : <img src={d.url} alt={d.label} />) : <span>{d.kind === "logo" ? "LOGO" : "MOCKUP"}</span>}<span className="dc-draft">Draft</span></div>
+                    <div className="dc-b">
+                      <b>{d.label}</b>
+                      <span className="faint">{custLabel(byId[d.customer_id || ""]) || "No customer"}{d.order ? <> · <Link href={`/shop/orders/${d.order.id}`}>#{d.order.number}</Link></> : " · no open order"}</span>
+                      <span className="faint">Archived {gone.toLocaleDateString(undefined, { month: "short", day: "numeric" })} if unused</span>
+                      <span className="dc-acts"><button type="button" className="btn sm" onClick={() => decideDraft(d, true)}>Keep</button><button type="button" className="btn sm ghost" onClick={() => decideDraft(d, false)}>Take off</button></span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
       {show !== "mockups" && (
         <section className="art-sec">
           <div className="aa-sec-h"><h3>{archived ? "Archived logos" : "Logos"}</h3><span className="faint">{logos.length} {q || cust ? "match" + (logos.length === 1 ? "" : "es") : "total"}</span></div>
