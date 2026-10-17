@@ -173,7 +173,8 @@ export type Customer = { id: string; is_test?: boolean; company: string; name: s
  * on their own (that's what the customer always wants); how it prints sets each new print's Standard / Fashion hit.
  */
 export type BrandSize = { id: string; which: "any" | "round" | "wide" | "tall" | "design"; design_id?: string; location: string; width: number; note?: string };
-export type BrandPrint = { sizes?: BrandSize[]; hit?: "standard" | "fashion" | "ask"; soft?: boolean; distressedOnly?: boolean };
+export type BrandPrint = { sizes?: BrandSize[]; hit?: "standard" | "fashion" | "ask"; soft?: boolean; distressedOnly?: boolean;
+  /** their other rules, in plain words ("never on red shirts", "0.5\" clear space around the circle"): shown in the Mockup Creator and on the work order */ rules?: string[] };
 /** a logo's shape by its width ÷ height: round (about as tall as wide), wide or tall */
 export const logoShape = (ratio: number | null | undefined): "round" | "wide" | "tall" | "" => (!ratio ? "" : ratio > 1.18 ? "wide" : ratio < 0.85 ? "tall" : "round");
 /** the customer's size for this logo on this location: a rule for that logo first, then its shape, then any logo */
