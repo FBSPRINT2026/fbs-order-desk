@@ -108,10 +108,12 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
   const own = (d.inks || "").split(/\s*[,/+&]\s*|\s+and\s+/i).map((x) => x.trim()).filter(Boolean);
   const picked = Object.values(acts).flatMap((a) => (a.kind === "ink" ? [a.name] : []));
   const inkList = [...new Set([AS_IS, ...picked, ...own, ...brand.map((b) => b.ink), ...INK_COLORS])];
-  const darkInk = [...picked, ...own, ...brand.map((b) => b.ink)].find((x) => !/white/i.test(x)) || "Black";
-  const setAct = (hex: string, a: Act) => setActs((x) => ({ ...x, [hex]: a }));
-  const removeWhite = () => setActs((x) => { const n = { ...x }; for (const s of srcs) if (isWhite(s.hex)) n[s.hex] = { kind: "remove" }; return n; });
-  const allTo = (name: string) => { const hex = colorHex(name); if (!hex) return setErr(`"${name}" isn't an ink we know.`); setErr(""); setActs((x) => { const n = { ...x }; for (const s of srcs) if (!isWhite(s.hex) && x[s.hex]?.kind !== "remove") n[s.hex] = { kind: "ink", name, hex }; return n; }); };
+  // editing the logo's colors while a background shows it in one ink: show the edit (that background goes back to
+  // "its colors, as edited"), else the change looks like it did nothing (Oct 16: "I change this to maroon, it stays black")
+  const showEdit = () => { if (cur && cur.ink !== AS_IS) setBgs((l) => l.map((x, j) => (j === sel ? { ...x, ink: AS_IS } : x))); };
+  const setAct = (hex: string, a: Act) => { showEdit(); setActs((x) => ({ ...x, [hex]: a })); };
+  const removeWhite = () => showEdit() || setActs((x) => { const n = { ...x }; for (const s of srcs) if (isWhite(s.hex)) n[s.hex] = { kind: "remove" }; return n; });
+  const allTo = (name: string) => { const hex = colorHex(name); if (!hex) return setErr(`"${name}" isn't an ink we know.`); setErr(""); showEdit(); setActs((x) => { const n = { ...x }; for (const s of srcs) if (!isWhite(s.hex) && x[s.hex]?.kind !== "remove") n[s.hex] = { kind: "ink", name, hex }; return n; }); };
 
   async function save() {
     if (!edited) return;
@@ -169,7 +171,7 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
           </div>
           <div className="le-side">
             <Backgrounds bgs={bgs} sel={sel} inks={inkList} onSel={setSel}
-              onAdd={(shirt) => { setBgs((l) => [...l, { shirt, ink: light(shirt) ? darkInk : "White" }]); setSel(bgs.length); }}
+              onAdd={(shirt) => { setBgs((l) => [...l, { shirt, ink: AS_IS }]); setSel(bgs.length); }}
               onInk={(i, ink) => setBgs((l) => l.map((x, j) => (j === i ? { ...x, ink } : x)))}
               onRemove={(i) => { setBgs((l) => l.filter((_, j) => j !== i)); setSel(-1); }} />
             <div className="le-quick">
@@ -203,7 +205,6 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
   );
 }
 
-const light = (shirt: string) => deltaE(guessHex(shirt), "#ffffff") < 35;
 const QUICK = ["White", "Black", "Navy", "Charcoal", "Red", "Royal", "Sport Grey", "Maroon", "Forest Green", "Natural"];
 
 /** the edited logo in one ink (its art read off any background, then filled with the ink) */
