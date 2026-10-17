@@ -9443,3 +9443,11 @@ a.pit-f{text-decoration:none}
 .side .side-who:hover .side-who-c,.side .side-who.on .side-who-c{box-shadow:0 0 0 2px rgba(255,255,255,.55)}
 .side .side-who:hover small{opacity:1;color:#fff}
 span.side-who{cursor:default}
+
+/* option B: a thin gear around your initials; it opens Settings (Oct 16, Nick) */
+.side .side-who{position:relative;width:34px;height:34px;display:grid!important;place-items:center;gap:0}
+.side .side-who .side-gear{position:absolute;inset:0;width:34px;height:34px;fill:none;stroke:#c9d1dc;stroke-width:1.9;stroke-linejoin:round}
+.side .side-who .side-who-c{position:relative;width:22px;height:22px;font-size:9px;letter-spacing:.02em}
+.side .side-who small{display:none}
+.side .side-who:hover .side-gear,.side .side-who.on .side-gear{stroke:#fff}
+.side .side-who:hover .side-who-c,.side .side-who.on .side-who-c{box-shadow:none}

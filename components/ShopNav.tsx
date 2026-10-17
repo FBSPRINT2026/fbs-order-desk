@@ -59,7 +59,7 @@ const SHORT: Record<string, string> = { "Printavo Sync": "Printavo", "Merch Stor
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
 
-export default function ShopNav({ email, firstName, brand, shortcuts, people = [] }: { email: string; firstName: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string }; shortcuts: Shortcut[]; people?: { email: string; name: string; role: string }[] }) {
+export default function ShopNav({ email, firstName, fullName = "", brand, shortcuts, people = [] }: { email: string; firstName: string; /** whose menu it is (the person viewed as, when viewing as someone) */ fullName?: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string }; shortcuts: Shortcut[]; people?: { email: string; name: string; role: string }[] }) {
   const path = usePathname();
   // breadcrumbs (Oct 14): every page visited in this tab, with its address as you left it, for the "←" links
   useEffect(() => { recordVisit(path, window.location.pathname + window.location.search); }, [path]);
@@ -319,9 +319,10 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
         {/* you: your initials, and Settings under them; clicking opens Settings (Oct 16, Nick) */}
         {(() => {
-          const full = (people.find((p) => p.email === email)?.name || firstName || email.split("@")[0]).trim();
+          const full = (fullName || people.find((p) => p.email === email)?.name || firstName || email.split("@")[0]).trim();
           const ini = full.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
-          const inner = <><span className="side-who-c">{ini}</span><small>Settings</small></>;
+          // option B (Oct 16, Nick): a thin gear around the initials says Settings
+          const inner = <><svg className="side-gear" viewBox="0 0 40 40" aria-hidden><path d="M35.06 15.93 L38.74 16.88 L38.74 23.12 L35.06 24.07 L33.53 27.77 L35.46 31.05 L31.05 35.46 L27.77 33.53 L24.07 35.06 L23.12 38.74 L16.88 38.74 L15.93 35.06 L12.23 33.53 L8.95 35.46 L4.54 31.05 L6.47 27.77 L4.94 24.07 L1.26 23.12 L1.26 16.88 L4.94 15.93 L6.47 12.23 L4.54 8.95 L8.95 4.54 L12.23 6.47 L15.93 4.94 L16.88 1.26 L23.12 1.26 L24.07 4.94 L27.77 6.47 L31.05 4.54 L35.46 8.95 L33.53 12.23 Z" /></svg><span className="side-who-c">{ini}</span></>;
           return canOpen("/shop/settings", perms)
             ? <Link href="/shop/settings" className={"side-who" + (active("/shop/settings") ? " on" : "")} title={`${full} · ${email}: Settings`} aria-label={`Settings (signed in as ${full})`}>{inner}</Link>
             : <span className="side-who" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}><span className="side-who-c">{ini}</span></span>;
