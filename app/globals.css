@@ -9451,3 +9451,7 @@ span.side-who{cursor:default}
 .side .side-who .side-gear{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .side .side-who:hover,.side .side-who.on{background:rgba(255,255,255,.16);color:#fff}
 .side .side-who small{display:none}
+/* the fold / open tab sits beside the logo, where there's never a line or a selected item (Oct 16, Nick) */
+@media (min-width:821px){.side-edge-k{top:18px!important;transform:none!important}}
+/* without Admin Tools (everyone but me), the bottom row still sits at the bottom */
+@media (min-width:821px){.side :not(.nav-foot-g) + .side-user{margin-top:auto}}
