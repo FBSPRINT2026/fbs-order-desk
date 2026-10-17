@@ -60,7 +60,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onUploadLogos, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -101,6 +101,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   hrefBase: string; hrefQuery?: string;
   onSend?: (body: string) => Promise<{ ok: boolean; error?: string; emailed?: boolean }>;
   onStar?: (designId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
+  /** shop: bring logos in for future use (Oct 16, Nick: "a good thing to knock out when we're transitioning them") */
+  onUploadLogos?: (files: File[], star: boolean, progress: (done: number) => void) => Promise<string | void>;
   /** logos on a mockup or order: archive only, no delete */
   usedIds?: string[];
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -655,6 +657,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
         </div>
       )}
       <div className="aa-card">
+        {onUploadLogos && <LogoUpload onUpload={onUploadLogos} />}
         <div className="aa-sec-h"><h3>Logos</h3><span className="faint">{mode === "shop" ? "Starred logos come up first when picking art for this customer." : "Star your favorites so they come up first."} Unused logos can be deleted; logos on a mockup or order can be archived.</span>{starErr && <span className="aa-due">{starErr}</span>}</div>
         {dRows.length ? (() => { const P = pageOf("logos", dRows); return <><div className="design-grid aa-grid3">{P.items.map((d) => card(d, false))}{slots(P.pad)}</div>{pager("logos", dRows.length, P.p, P.n)}</>; })()
           : <div className="aa-empty">{live.length ? `No logos match “${q}”.` : "No logos on file yet."}</div>}
@@ -763,6 +766,30 @@ function SendBox({ onSend, canAct, mode }: { onSend: (b: string) => Promise<{ ok
       <div className="row"><span className="faint" style={{ fontSize: 12 }}>{note || (!canAct ? "Turned off in the preview." : "")}</span><span className="spacer" />
         <button type="button" className="btn primary" disabled={!canAct || busy || !t.trim()} onClick={async () => { setBusy(true); const r = await onSend(t); setBusy(false); if (r.ok) { setT(""); setNote(r.emailed ? "Sent and emailed." : "Sent."); router.refresh(); } else setNote(r.error || "Couldn't send."); }}>{busy ? "Sending…" : "Send"}</button>
       </div>
+    </div>
+  );
+}
+
+/** Upload logos to a customer's account (shop): pick or drop several files; each becomes a logo (D-number) for future use. */
+function LogoUpload({ onUpload }: { onUpload: (files: File[], star: boolean, progress: (done: number) => void) => Promise<string | void> }) {
+  const [busy, setBusy] = useState<{ done: number; of: number } | null>(null);
+  const [msg, setMsg] = useState("");
+  const [star, setStar] = useState(false);
+  const [over, setOver] = useState(false);
+  const go = async (list: FileList | File[] | null) => {
+    const files = Array.from(list || []);
+    if (!files.length) return;
+    setBusy({ done: 0, of: files.length }); setMsg("");
+    const err = await onUpload(files, star, (done) => setBusy({ done, of: files.length })).catch((e) => (e instanceof Error ? e.message : String(e)));
+    setBusy(null);
+    setMsg(err ? String(err) : `Added ${files.length} logo${files.length === 1 ? "" : "s"}${star ? " to their favorites" : ""}.`);
+  };
+  return (
+    <div className={"aa-up" + (over ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); go(e.dataTransfer.files); }}>
+      <label className="btn sm primary aa-up-btn">{busy ? `Uploading ${busy.done} of ${busy.of}…` : "+ Upload logos"}<input type="file" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd,.dst,.heic,.heif,.tif,.tiff,.bmp" hidden disabled={!!busy} onChange={(e) => { go(e.target.files); e.target.value = ""; }} /></label>
+      <span className="faint">or drop files here. AI, EPS, PDF, SVG or PNG.</span>
+      <label className="check aa-up-star"><input type="checkbox" checked={star} onChange={(e) => setStar(e.target.checked)} /> Star them</label>
+      {msg && <span className="aa-up-msg">{msg}</span>}
     </div>
   );
 }

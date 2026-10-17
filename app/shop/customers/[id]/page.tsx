@@ -27,6 +27,7 @@ import ShopMessages from "@/components/ShopMessages";
 import ShopGoods from "@/components/ShopGoods";
 import CustomerContacts from "@/components/CustomerContacts";
 import CustomerBrandColors from "@/components/CustomerBrandColors";
+import { uploadDesign } from "@/lib/designs";
 import CustomerBrandPrint from "@/components/CustomerBrandPrint";
 import FilmFolder from "@/components/FilmFolder";
 import ShopCustomerProjects from "@/components/ShopCustomerProjects";
@@ -205,6 +206,21 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
         usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign}
         onStarMockup={async (mid, starred) => { const { error } = await createClient().rpc("set_mockup_star", { p_mockup: mid, p_starred: starred }); return { ok: !error, error: error?.message }; }}
+        onUploadLogos={async (files, star, progress) => {
+          const sb = createClient();
+          const { data: u } = await sb.auth.getUser();
+          const made: Design[] = [], bad: string[] = [];
+          for (const [i, f] of files.entries()) {
+            try {
+              const d = await uploadDesign(sb, { file: f, customer_id: id, name: f.name.replace(/\.[^.]+$/, ""), by: u.user?.email || "" });
+              if (star) { await sb.rpc("set_design_star", { p_design: d.id, p_starred: true }); d.starred = true; }
+              made.push(d);
+            } catch (e) { bad.push(`${f.name}: ${e instanceof Error ? e.message : "couldn't upload"}`); }
+            progress(i + 1);
+          }
+          if (made.length) { setDesigns((ds) => [...made, ...ds]); const urls = await previewUrls(sb, made); setDesignUrls((m) => ({ ...m, ...urls })); }
+          return bad.length ? `Couldn't add ${bad.join("; ")}` : undefined;
+        }}
         onStar={async (designId, starred) => { const { error } = await createClient().rpc("set_design_star", { p_design: designId, p_starred: starred }); return { ok: !error, error: error?.message }; }}
         details={<>
       <div className="cust-grid">
