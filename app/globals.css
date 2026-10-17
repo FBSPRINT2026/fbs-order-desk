@@ -9543,3 +9543,27 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
   .ibx2-item.ol .ibx2-item-3:not(:has(.urg,.rep)){display:none!important}
   .ibx2-item.ol .ibx2-item-3 .itag{font-size:10.5px;padding:0 7px;line-height:17px}
 }
+
+/* the list's second line: subject, then (right) small bubbles and a paperclip like Outlook (Oct 16) */
+.ibx2-item-l2{display:flex;align-items:center;gap:6px;min-width:0}
+.ibx2-item-l2 .ibx2-item-s{flex:1 1 auto;min-width:0}
+.ibx2-item-r{flex:none;display:inline-flex;align-items:center;gap:3px}
+.ibx2-item-r .mt{display:none;font-style:normal;font-size:9.5px;font-weight:700;line-height:15px;padding:0 5px;border-radius:999px;white-space:nowrap}
+.ibx2-item-r .mt.urg{background:#fde8e8;color:#c0392b}
+.ibx2-item-r .mt.rep{background:#fff1d6;color:#9a6a00}
+.ibx2-clip{width:13px;height:13px;fill:none;stroke:var(--ink-3);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+@media (min-width:761px) and (max-width:1300px){
+  .ibx2-item.ol .ibx2-item-r .mt{display:inline-block}
+  .ibx2-item.ol .ibx2-item-3{display:none!important}
+}
+
+/* Outlook's right side: line 1 = bubbles + paperclip, line 2 = the time (compact list); wide list keeps the time up top */
+.ibx2-item-l2 time.t2{display:none}
+.ibx2-item-1 .ibx2-item-r{margin-left:auto}
+.ibx2-item-1 .ibx2-item-r + time.t1{margin-left:6px}
+@media (min-width:761px) and (max-width:1300px){
+  .ibx2-item.ol .ibx2-item-1 time.t1{display:none}
+  .ibx2-item.ol .ibx2-item-l2 time.t2{display:inline;flex:none;font-size:11.5px;color:var(--ink-3);margin-left:8px}
+  .ibx2-item.ol .ibx2-item-1 b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+@media (min-width:761px) and (max-width:1300px){.ibx2-item.ol.ol-unread .ibx2-item-l2 time.t2{color:var(--accent);font-weight:600}}

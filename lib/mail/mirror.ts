@@ -19,8 +19,11 @@ import { organizeEmail } from "@/lib/ai/organize";
  * cc_only: the person is only on Cc, not To (copied, not theirs to answer).
  */
 const MAX = 500;
-type Env = { uid: number; flags: Set<string>; messageId: string; from: { address: string; name: string }; to: string[]; cc: string[]; subject: string; date: Date | null };
-type Row = { id: string; uid: number; uidvalidity: number; message_id: string; activity_id: string | null; unread: boolean; flagged: boolean };
+type Env = { uid: number; flags: Set<string>; att: boolean; messageId: string; from: { address: string; name: string }; to: string[]; cc: string[]; subject: string; date: Date | null };
+type Row = { id: string; uid: number; uidvalidity: number; message_id: string; activity_id: string | null; unread: boolean; flagged: boolean; has_attachments?: boolean };
+/** an attachment anywhere in the message (a file, not a picture inside the body) */
+type Node = { type?: string; disposition?: string; dispositionParameters?: Record<string, string>; parameters?: Record<string, string>; id?: string; childNodes?: Node[] };
+const hasFile = (n?: Node | null): boolean => !!n && ((n.disposition || "").toLowerCase() === "attachment" || ((n.disposition || "").toLowerCase() !== "inline" && !n.id && !(n.type || "").startsWith("text/") && !(n.type || "").startsWith("multipart/") && !!(n.dispositionParameters?.filename || n.parameters?.name)) || (n.childNodes || []).some(hasFile));
 
 const lc = (s?: string | null) => (s || "").trim().toLowerCase();
 const mid = (s?: string | null) => (s || "").trim().replace(/^<|>$/g, "");
@@ -36,17 +39,17 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
   const truncated = all.length > uids.length;
   const envs: Env[] = [];
   if (uids.length) {
-    for await (const m of client.fetch(uids.join(","), { uid: true, flags: true, envelope: true, internalDate: true }, { uid: true })) {
+    for await (const m of client.fetch(uids.join(","), { uid: true, flags: true, envelope: true, internalDate: true, bodyStructure: true }, { uid: true })) {
       const e = m.envelope;
       const ad = (l?: { address?: string; name?: string }[]) => (l || []).map((x) => lc(x.address)).filter(Boolean);
       envs.push({
-        uid: m.uid, flags: m.flags || new Set(), messageId: mid(e?.messageId), subject: (e?.subject || "").slice(0, 300),
+        uid: m.uid, flags: m.flags || new Set(), att: hasFile(m.bodyStructure as unknown as Node), messageId: mid(e?.messageId), subject: (e?.subject || "").slice(0, 300),
         from: { address: lc(e?.from?.[0]?.address), name: (e?.from?.[0]?.name || "").slice(0, 200) }, to: ad(e?.to), cc: ad(e?.cc),
         date: e?.date ? new Date(e.date) : m.internalDate ? new Date(m.internalDate) : null,
       });
     }
   }
-  const { data: cur } = await admin.from("mail_inbox").select("id, uid, uidvalidity, message_id, activity_id, unread, flagged").eq("account_id", acct.id).is("gone_at", null).limit(2000);
+  const { data: cur } = await admin.from("mail_inbox").select("id, uid, uidvalidity, message_id, activity_id, unread, flagged, has_attachments").eq("account_id", acct.id).is("gone_at", null).limit(2000);
   const rows = (cur || []) as Row[];
   const byUid = new Map(rows.filter((r) => Number(r.uidvalidity) === validity).map((r) => [Number(r.uid), r]));
   const byMsg = new Map(rows.filter((r) => r.message_id).map((r) => [r.message_id, r]));
@@ -69,6 +72,7 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
       if (Number(r.uid) !== e.uid || Number(r.uidvalidity) !== validity) { patch.uid = e.uid; patch.uidvalidity = validity; }
       if (r.unread !== unread) patch.unread = unread;
       if (r.flagged !== flagged) patch.flagged = flagged;
+      if (!!r.has_attachments !== e.att) patch.has_attachments = e.att;
       if (!r.activity_id && act) patch.activity_id = act.id;
       if (Object.keys(patch).length) await admin.from("mail_inbox").update(patch).eq("id", r.id);
     } else {
@@ -77,7 +81,7 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
       const { data: was } = e.messageId ? await admin.from("mail_inbox").select("id, gone_at").eq("account_id", acct.id).eq("message_id", e.messageId).not("gone_at", "is", null).order("gone_at", { ascending: false }).limit(1).maybeSingle() : { data: null };
       if (was && (was as { gone_at: string }).gone_at >= t0) continue; // moved out after the Inbox was read: stays gone
       if (was) {
-        await admin.from("mail_inbox").update({ gone_at: null, done_by: null, uid: e.uid, uidvalidity: validity, unread, flagged, ...(act ? { activity_id: act.id } : {}) }).eq("id", was.id);
+        await admin.from("mail_inbox").update({ gone_at: null, done_by: null, uid: e.uid, uidvalidity: validity, unread, flagged, has_attachments: e.att, ...(act ? { activity_id: act.id } : {}) }).eq("id", was.id);
         await admin.from("tasks").update({ status: "open", done_at: null, done_by: null }).eq("mail_inbox_id", was.id).eq("status", "done").eq("done_by", ARCHIVED);
         keep.add(was.id as string);
         if (act && act.meta.outlook_archived) { const { outlook_archived: _d, ...rest } = act.meta; void _d; await admin.from("activities").update({ meta: { ...rest, back_in_inbox_at: now } }).eq("id", act.id); }
@@ -85,7 +89,7 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
       }
       const { error } = await admin.from("mail_inbox").insert({
         account_id: acct.id, uid: e.uid, uidvalidity: validity, message_id: e.messageId, from_email: e.from.address, from_name: e.from.name,
-        subject: e.subject, received_at: e.date && !isNaN(+e.date) ? e.date.toISOString() : null, cc_only, unread, flagged, activity_id: act?.id || null,
+        subject: e.subject, received_at: e.date && !isNaN(+e.date) ? e.date.toISOString() : null, cc_only, unread, flagged, has_attachments: e.att, activity_id: act?.id || null,
       });
       if (!error) added++;
     }

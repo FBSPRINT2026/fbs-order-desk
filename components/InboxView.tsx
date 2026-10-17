@@ -614,9 +614,19 @@ export default function InboxView({ mode }: { mode: Mode }) {
                       <b>{name}</b>
                       {g.length > 1 && <span className="ibx2-cvn" title={`${g.length} emails in this conversation`}>{g.length}</span>}
                       {flagG && <span className="ibx2-flag" title="Flagged in Outlook" aria-label="Flagged">⚑</span>}
-                      <time>{i.received_at ? ago(i.received_at) : ""}</time>
+                      {/* the right of line 1 (Oct 16, Nick: like Outlook): small bubbles and the paperclip; the time goes under */}
+                      <span className="ibx2-item-r">
+                        {urgentG && <i className="mt urg">Urgent</i>}
+                        {needsG && <i className="mt rep">Needs reply</i>}
+                        {(i.has_attachments || (r?.x.meta?.attachments || []).length > 0) && <svg className="ibx2-clip" viewBox="0 0 24 24" role="img" aria-label="Has attachments"><path d="M21.4 11.1l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8" /></svg>}
+                      </span>
+                      <time className="t1">{i.received_at ? ago(i.received_at) : ""}</time>
                     </span>
-                    <span className="ibx2-item-s">{i.subject || "(no subject)"}</span>
+                    {/* line 2: the subject, cut off before the right side's small bubbles and paperclip (Oct 16, Nick: like Outlook) */}
+                    <span className="ibx2-item-l2">
+                      <span className="ibx2-item-s">{i.subject || "(no subject)"}</span>
+                      <time className="t2">{i.received_at ? ago(i.received_at) : ""}</time>
+                    </span>
                     {(() => { const sm = r?.x.meta?.triage?.summary || i.summary || ""; return sm && sm !== i.subject ? <span className="ibx2-item-2">{sm}</span> : null; })()}
                     <span className="ibx2-item-3">
                       {urgentG && <span className="itag urg">Urgent</span>}
