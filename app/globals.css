@@ -9468,3 +9468,5 @@ html[data-mailfull] .mf-bar{margin:0 150px 8px 0}
 .mf-full-bar button{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .mf-full-bar button:hover{border-color:var(--accent);color:var(--accent)}
 @media (max-width:820px){.mf-full-btn,.mf-full-bar{display:none!important}}
+/* the menu's fold tab, smaller (Oct 16, Nick) */
+@media (min-width:821px){.side-edge-k{width:11px!important;height:26px!important;border-radius:6px 0 0 6px!important}.side-edge-k svg{width:9px!important;height:9px!important;stroke-width:3!important}}
