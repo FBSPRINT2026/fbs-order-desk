@@ -9603,3 +9603,10 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
   .ibx2-work>.ibx2-sw{flex:none}
   .ibx2-work>.ibx2-mail,.ibx2-work>.ibx2-ai{flex:1 1 0;min-height:0}
 }
+/* email screen: one even 14px space around and between the header, folder bar and panels (Oct 16, Nick) */
+@media (min-width:761px){
+  .main:has(.ibx2){padding:14px 14px 14px!important}
+  .main:has(.ibx2) > .page-head{margin-bottom:14px!important}
+  .main:has(.ibx2) > .mf-bar{margin-bottom:14px!important}
+  .main:has(.ibx2) .ibx2,.main:has(.ibx2) .ibx2-work{gap:14px!important}
+}
