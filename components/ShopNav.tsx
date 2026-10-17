@@ -291,13 +291,16 @@ export default function ShopNav({ email, firstName, brand, shortcuts, people = [
         )}
       </div>
       )}
-      {/* the bottom of the menu: small icons with their names on hover, like Shop Tools (Oct 16, Nick: "a mess") */}
+      {/* the bottom of the menu: Admin Tools, small icons with their names on hover like Shop Tools (Oct 16, Nick) */}
+      <div className="nav-g nav-g-admintools nav-foot-g">
+      <div className="nav-h nav-h-admintools">{realRole === "owner" || realRole === "admin" ? "Admin Tools" : "More"}</div>
       <nav className="nav nav-foot nav-tools">
         {/* everyone: report a problem with a screenshot; the owner: the Support page with everyone's reports */}
         {realRole === "owner" && link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
         <SupportButton email={email} />
         {realRole === "owner" && link(["/shop/support", "support", "Support"])}
         {link(["/shop/settings", "settings", "Settings"])}{!mine.length && !adding && !addOpen && <button type="button" className="nav-add-sc" onClick={() => setAddOpen(true)} data-tip="Add a shortcut" aria-label="Add a shortcut: your own quick links"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /><path d="M12 7v6M9 10h6" /></svg><span className="lbl-t">Add a shortcut</span></button>}</nav>
+      </div>
       <div className="side-user">
         <span className="side-who" title={email}><i aria-hidden>{(firstName || email || "?").slice(0, 1).toUpperCase()}</i><span>{firstName || email.split("@")[0]}</span></span>
         <div className="side-user-r">

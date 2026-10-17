@@ -9359,7 +9359,7 @@ fieldset.bs-lock{border:0;padding:0;margin:0;min-width:0}
 a.pit-f{text-decoration:none}
 
 /* the menu's bottom: one row of icons, then you (initial, name, sign out, view as) on one line */
-@media (min-width:821px){.side .nav-foot.nav-tools{border-top:1px solid rgba(255,255,255,.08);padding-top:8px;margin-top:auto}}
+@media (min-width:821px){.side .nav-foot-g{margin-top:auto}.side .nav-foot.nav-tools{margin-top:0}}
 .side-user{flex-direction:row!important;align-items:center;justify-content:space-between;gap:8px;word-break:normal;padding:6px 6px 0}
 .side-who{display:flex;align-items:center;gap:7px;min-width:0;font-weight:600;font-size:12px}
 .side-who i{font-style:normal;width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;font-size:11.5px;flex:none}
@@ -9375,3 +9375,7 @@ a.pit-f{text-decoration:none}
 .aa-fav-pic{position:relative;width:48px;height:48px;flex:none;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
 .aa-fav-pic .lp{position:absolute;inset:0;display:grid;place-items:center}
 .aa-fav-pic .lp img{max-width:84%;max-height:84%;object-fit:contain;width:auto;height:auto;background:none;border:0}
+
+/* Admin Tools: the menu's bottom group (Oct 16) */
+.nav-h-admintools{color:#b8c0cc}
+.nav-g-admintools a.on{background:#5b6472;color:#fff}
