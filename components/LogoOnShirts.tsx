@@ -1,13 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import { colorHex, deltaE } from "@/lib/inkColors";
-import { guessHex, SHIRT_COLORS } from "@/lib/mockup";
-import { INK_COLORS, type BrandColor, type Design } from "@/lib/pricing";
+import { guessHex } from "@/lib/mockup";
+import type { Design } from "@/lib/pricing";
 
 /**
  * How a logo shows on each shirt color (Oct 16, Nick: "on a navy shirt show it as white, on a white shirt as navy, on a
  * gray shirt as navy… a portfolio of how their logos will look"). Saved on the logo as specs.onShirts; the Mockup
- * Creator prints a one-color logo in that ink on that shirt color. Set in a pop-up with a small tee mockup per version.
+ * Creator prints a one-color logo in that ink on that shirt color. Set in Edit logo → Backgrounds (components/LogoEditor.tsx).
  */
 export type OnShirt = { shirt: string; ink: string };
 /** keep the logo's own colors on that shirt (no recolor) */
@@ -118,106 +118,5 @@ export function ShirtView({ url, shirt, ink, size, title, className }: { url: st
     <span className={"lv" + (className ? " " + className : "")} style={{ background: guessHex(shirt), ...(size ? { width: size, height: size } : {}) }} title={title || `${ink} on a ${shirt} shirt`}>
       <ArtIn url={url} art={art} ink={ink} className="lv-art" />
     </span>
-  );
-}
-
-/** one view as a little tee mockup: the shirt color with the logo across the chest */
-export function ShirtMock({ url, shirt, ink, size = 64, title }: { url: string; shirt: string; ink: string; size?: number; title?: string }) {
-  const art = useArt(url), hex = guessHex(shirt);
-  const light = deltaE(hex, "#ffffff") < 12;
-  return (
-    <span className="lm" style={{ width: size, height: Math.round(size * 1.14) }} title={title || `${ink === AS_IS ? "Its own colors" : ink} on a ${shirt} shirt`}>
-      <svg viewBox="40 90 920 1050" aria-hidden="true">
-        <path d="M405 105 L250 150 L60 390 L180 470 L245 410 L245 1120 L755 1120 L755 410 L820 470 L940 390 L750 150 L595 105 Q500 175 405 105 Z" fill={hex} stroke={light ? "#00000040" : "#00000022"} strokeWidth="8" strokeLinejoin="round" />
-        <path d="M420 110 Q500 175 580 110" fill="none" stroke="#00000030" strokeWidth="8" />
-      </svg>
-      <ArtIn url={url} art={art} ink={ink} className="lm-art" />
-    </span>
-  );
-}
-
-const SHIRTS = SHIRT_COLORS.flatMap((g) => g.colors.map(([n]) => n));
-const QUICK = ["White", "Black", "Navy", "Sport Grey", "Charcoal", "Royal", "Red", "Natural", "Maroon", "Forest Green"];
-const lightShirt = (shirt: string) => deltaE(guessHex(shirt), "#ffffff") < 35;
-
-/**
- * The pop-up: one card per shirt color with its mockup, the shirt color and the ink. Saved together with Save.
- * (Replaces the inline rows that saved on blur, Oct 16: "isn't working right, make that a pop-up with little mockups".)
- */
-export function ShirtColorsPopup({ d, url, brandColors = [], onClose, onSave }: { d: Design; url: string; brandColors?: BrandColor[]; onClose: () => void; onSave: (list: OnShirt[]) => Promise<{ ok: boolean; error?: string }> }) {
-  const [list, setList] = useState<OnShirt[]>(onShirtsOf(d).length ? onShirtsOf(d) : []);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  // inks to offer: the logo's own, the customer's brand inks, then the standard list
-  const own = (d.inks || "").split(/\s*[,/+&]\s*|\s+and\s+/i).map((s) => s.trim()).filter(Boolean);
-  const brand = brandColors.map((b) => b.ink).filter(Boolean);
-  const inks = [...new Set([AS_IS, ...own, ...brand, ...INK_COLORS])];
-  const darkInk = own.find((x) => !/white/i.test(x)) || brand.find((x) => !/white/i.test(x)) || "Black";
-  const add = (shirt: string) => setList((l) => [...l, { shirt, ink: lightShirt(shirt) ? darkInk : "White" }]);
-  const set = (i: number, p: Partial<OnShirt>) => setList((l) => l.map((x, j) => (j === i ? { ...x, ...p } : x)));
-  const used = new Set(list.map((x) => x.shirt.toLowerCase()));
-  const save = async () => {
-    setBusy(true); setErr("");
-    const r = await onSave(list.filter((x) => x.shirt && x.ink));
-    setBusy(false);
-    if (!r.ok) return setErr(r.error || "Couldn't save.");
-    onClose();
-  };
-  return (
-    <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="los-t" onKeyDown={(e) => { if (e.key === "Escape") onClose(); }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="mk-modal los-pop">
-        <h2 id="los-t">D-{d.number} {d.name} on shirt colors</h2>
-        <p className="faint">The ink it prints in on each shirt color. Shown on their logo card, and the Mockup Creator starts with it.</p>
-        <div className="los-grid">
-          {list.map((x, i) => (
-            <div className="los-card" key={i}>
-              <button type="button" className="los-x" aria-label={`Remove ${x.shirt}`} title="Remove" onClick={() => setList((l) => l.filter((_, j) => j !== i))}>✕</button>
-              {url ? <ShirtMock url={url} shirt={x.shirt} ink={x.ink} size={120} /> : null}
-              <label><span>Shirt</span>
-                <select value={x.shirt} onChange={(e) => set(i, { shirt: e.target.value })}>
-                  {!SHIRTS.includes(x.shirt) && <option value={x.shirt}>{x.shirt}</option>}
-                  {SHIRT_COLORS.map((g) => <optgroup key={g.group} label={g.group}>{g.colors.map(([n]) => <option key={n} value={n}>{n}</option>)}</optgroup>)}
-                </select>
-              </label>
-              <label><span>Ink</span>
-                <select value={x.ink} onChange={(e) => set(i, { ink: e.target.value })}>
-                  {!inks.includes(x.ink) && <option value={x.ink}>{x.ink}</option>}
-                  {inks.map((n) => <option key={n} value={n}>{n}{brandColors.find((b) => b.ink === n && b.name !== n) ? ` (${brandColors.find((b) => b.ink === n)!.name})` : ""}</option>)}
-                </select>
-              </label>
-            </div>
-          ))}
-          {!list.length && <div className="faint los-empty">No shirt colors yet. Pick one below.</div>}
-        </div>
-        <div className="los-add">
-          <span className="faint">Add a shirt color</span>
-          {QUICK.filter((s) => !used.has(s.toLowerCase())).map((s) => (
-            <button type="button" key={s} className="los-sw" onClick={() => add(s)} title={`Add ${s}`}><i style={{ background: guessHex(s) }} />{s}</button>
-          ))}
-          <select aria-label="Another shirt color" value="" onChange={(e) => { if (e.target.value) add(e.target.value); }}>
-            <option value="">Other…</option>
-            {SHIRT_COLORS.map((g) => <optgroup key={g.group} label={g.group}>{g.colors.filter(([n]) => !used.has(n.toLowerCase())).map(([n]) => <option key={n} value={n}>{n}</option>)}</optgroup>)}
-          </select>
-        </div>
-        {err && <div className="err">{err}</div>}
-        <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** on the logo page: the versions as little mockups, and a button for the pop-up */
-export default function LogoOnShirts({ d, url, brandColors, onSave }: { d: Design; url: string; brandColors?: BrandColor[]; onSave: (list: OnShirt[]) => Promise<{ ok: boolean; error?: string }> }) {
-  const [open, setOpen] = useState(false);
-  const vs = onShirtsOf(d);
-  return (
-    <div className="los">
-      {vs.length > 0 && url && <div className="los-strip">{vs.map((v, i) => <figure key={i}><ShirtMock url={url} shirt={v.shirt} ink={v.ink} size={84} /><figcaption>{v.shirt}<br /><span className="faint">{v.ink}</span></figcaption></figure>)}</div>}
-      <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} onClick={() => setOpen(true)}>{vs.length ? "Change shirt colors" : "Set shirt colors"}</button>
-      {open && <ShirtColorsPopup d={d} url={url} brandColors={brandColors} onClose={() => setOpen(false)} onSave={onSave} />}
-    </div>
   );
 }

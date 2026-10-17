@@ -3,7 +3,7 @@ import type { BrandColor } from "@/lib/pricing";
 import { colorHex } from "@/lib/inkColors";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ShirtMock, ShirtView, ShirtColorsPopup, onShirtsOf, type OnShirt } from "@/components/LogoOnShirts";
+import { ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ST, type Design } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
@@ -61,7 +61,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onUploadLogos, onDeleteForever, onSaveShirts, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onUploadLogos, onDeleteForever, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -102,8 +102,6 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   hrefBase: string; hrefQuery?: string;
   onSend?: (body: string) => Promise<{ ok: boolean; error?: string; emailed?: boolean }>;
   onStar?: (designId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
-  /** a logo's shirt colors → inks (the "on shirts" pop-up) */
-  onSaveShirts?: (d: Design, list: OnShirt[]) => Promise<{ ok: boolean; error?: string }>;
   /** shop: bring logos in for future use (Oct 16, Nick: "a good thing to knock out when we're transitioning them") */
   onUploadLogos?: (files: File[], star: boolean, progress: (done: number) => void) => Promise<string | void>;
   /** logos on a mockup or order: archive only, no delete */
@@ -141,8 +139,6 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   const [armedDel, setArmedDel] = useState("");
   const [showArch, setShowArch] = useSticky("account.showArchived", false);
   const [shirtSel, setShirtSel] = useState<Record<string, number>>({});
-  const [shirtsOver, setShirtsOver] = useState<Record<string, OnShirt[]>>({});
-  const [shirtPop, setShirtPop] = useState("");
   /** portal Orders: quotes older than 60 days are hidden unless this is ticked (Oct 15, Nick) */
   const [oldQuotes, setOldQuotes] = useSticky("portal.oldQuotes", false);
   const [showOldOwed, setShowOldOwed] = useState(false);
@@ -621,7 +617,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
       const r = await onArchive(d.id, false);
       if (!r.ok) { setArch((x) => ({ ...x, [d.id]: d.archived_at || new Date().toISOString() })); setStarErr(r.error || "Couldn't restore the logo."); }
     };
-    const card = (d0: Design, isArchived: boolean) => { const d = shirtsOver[d0.id] ? { ...d0, specs: { ...(d0.specs || {}), onShirts: shirtsOver[d0.id] } } : d0; const views = onShirtsOf(d); return (
+    const card = (d: Design, isArchived: boolean) => { const views = onShirtsOf(d); return (
       <div key={d.id} className={"design-card" + (d.starred ? " starred" : "") + (isArchived ? " archived" : "")}>
         <div className="dc-img">{designUrls[d.id] ? <img src={designUrls[d.id]} alt={d.name} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
           {/* how it looks on their shirt colors (Oct 16, Nick: a portfolio of their logos), picked in the strip below */}
@@ -638,15 +634,13 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
             )}
           </div>
         </div>
-        {designUrls[d.id] && (views.length > 0 || (onSaveShirts && !isArchived)) && (
+        {/* how it looks on each background (set in Edit logo → Backgrounds); scrolls sideways when there are many */}
+        {designUrls[d.id] && views.length > 0 && (
           <div className="dc-views" aria-label="How it looks on shirt colors">
-            {views.map((v, i) => <button key={i} type="button" className={(shirtSel[d.id] ?? 0) === i ? "on" : ""} onClick={() => setShirtSel((x) => ({ ...x, [d.id]: i }))}><ShirtMock url={designUrls[d.id]} shirt={v.shirt} ink={v.ink} size={40} /></button>)}
-            {views.length > 0 && <button type="button" className={(shirtSel[d.id] ?? 0) === -1 ? "on" : ""} title="The logo as uploaded" onClick={() => setShirtSel((x) => ({ ...x, [d.id]: -1 }))}><span className="orig">Original</span></button>}
-            {onSaveShirts && !isArchived && <button type="button" className="dc-addv" title="Set how this logo prints on each shirt color" onClick={() => setShirtPop(d.id)}>{views.length ? "✎ Shirts" : "+ Shirt colors"}</button>}
+            {views.map((v, i) => <button key={i} type="button" className={(shirtSel[d.id] ?? 0) === i ? "on" : ""} title={`${v.ink === "Original colors" ? "Its colors" : v.ink} on ${v.shirt}`} onClick={() => setShirtSel((x) => ({ ...x, [d.id]: i }))}><ShirtView url={designUrls[d.id]} shirt={v.shirt} ink={v.ink} /></button>)}
+            <button type="button" className={(shirtSel[d.id] ?? 0) === -1 ? "on" : ""} title="The logo as uploaded" onClick={() => setShirtSel((x) => ({ ...x, [d.id]: -1 }))}><span className="orig">Original</span></button>
           </div>
         )}
-        {shirtPop === d.id && onSaveShirts && <ShirtColorsPopup d={d} url={designUrls[d.id] || ""} brandColors={brandColors} onClose={() => setShirtPop("")}
-          onSave={async (list) => { const r = await onSaveShirts(d0, list); if (r.ok) { setShirtsOver((o) => ({ ...o, [d.id]: list })); setShirtSel((x) => ({ ...x, [d.id]: 0 })); } return r; }} />}
         <div className="dc-b">{mode === "shop" ? <Link href={`/shop/artwork/${d.id}`}><b>D-{d.number}</b></Link> : <b>D-{d.number}</b>}<span>{d.name || "Logo"}</span>{d.inks && <span className="faint">{d.inks}</span>}
           {isArchived && <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
             <button type="button" className="btn sm" onClick={() => restore(d)}>Restore</button>
