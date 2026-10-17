@@ -9330,7 +9330,7 @@ img.lv-art{width:76%;height:76%;object-fit:contain}
 .design-card .dc-img .lp img{max-width:84%;max-height:84%;object-fit:contain}
 .design-card .dc-img.mock{background:#fff}
 .design-card .dc-img.mock .dc-open{position:absolute;inset:0;display:block}
-.design-card .dc-img.mock img{width:100%;height:100%;object-fit:cover;max-width:none;max-height:none}
+.design-card .dc-img.mock img{width:100%;height:100%;object-fit:contain;max-width:none;max-height:none;padding:4px;box-sizing:border-box}
 .csep .dc-img{position:relative}
 .csep .dc-img img{position:absolute;inset:8%;width:84%;height:84%;object-fit:contain}
 .aa-grid6 .dc-b b{font-size:12.5px}

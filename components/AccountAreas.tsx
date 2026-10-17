@@ -701,7 +701,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
                 <div className="dc-img mock"><a href={m.url} target="_blank" rel="noreferrer" className="dc-open">{m.thumb ? <img src={m.thumb} alt={m.title} /> : null}</a>
                   {onStarMockup && <div className="dc-tools"><button type="button" className={"dc-star" + (m.starred ? " on" : "")} title={m.starred ? "Remove from favorites" : "Add to favorites"} aria-label={m.starred ? "Remove from favorites" : "Add to favorites"} aria-pressed={!!m.starred} onClick={() => starMock(m)}>{m.starred ? "★" : "☆"}</button></div>}
                 </div>
-                <div className="dc-b"><a href={m.url} target="_blank" rel="noreferrer"><b>{m.title}</b></a><span className="faint">{m.number ? `Order #${m.number} · ` : ""}{when(m.created_at)}</span></div>
+                <div className="dc-b"><a href={m.url} target="_blank" rel="noreferrer"><b>{m.number ? `#${m.number}` : m.title.replace(/^Group \d+ — /, "")}</b></a><span className="faint" title={m.title}>{[m.number ? m.title.replace(/^Group \d+ — /, "") : "", when(m.created_at)].filter(Boolean).join(" · ")}</span></div>
               </div>
             ))}{slots(P.pad)}
           </div>{pager("mock", mRows.length, P.p, P.n, 12)}</>; })()
