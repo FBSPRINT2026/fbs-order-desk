@@ -11,7 +11,7 @@ import { addPriceBreak, pastPricesForDesign, type PastPrice } from "@/app/shop/p
  * before for the same design (Printavo history and orders here) with Use this price.
  */
 export function ProgramNotes({ groups, card, baseCost, ctx }: { groups: Group[]; card: RateCard | null; baseCost: number | null; ctx: (g: Group) => DesignCtx }) {
-  const rules = [...(card?.noSetupEver ? ["No setup on any job"] : []), ...(card?.screenFee != null ? [`Screens at ${money(card.screenFee)} each`] : []), ...(card?.extras || []).map((x) => `Also: ${x}`)];
+  const rules = [...(card?.freeDelivery ? ["Free local delivery by our courier (shipping isn't included)"] : []), ...(card?.included?.length ? [`Included in the price: ${card.included.join(", ")}`] : []), ...(card?.noSetupEver ? ["No setup on any job"] : []), ...(card?.screenFee != null ? [`Screens at ${money(card.screenFee)} each`] : []), ...(card?.extras || []).map((x) => `Also: ${x}`)];
   const priced = cardHasPrices(card) || groups.some((g) => ctx(g).items.length > 0);
   return (
     <div className="prg-notes">

@@ -22,6 +22,7 @@ export default function ProgramRateCard({ card }: { card: RateCard }) {
   if (card.garmentIncluded && shirt) terms.push("Other shirts are priced from this grid, up or down by the shirt's cost");
   if (big.length) terms.push(`Bigger sizes, per piece: ${big.map((z) => `${z} +${money(+card.sizeUp![z]!)}`).join(", ")}`);
   if (card.included?.length) terms.push(`Included in the price: ${card.included.join(", ")}`);
+  if (card.freeDelivery) terms.push("Free local delivery by our courier (shipping isn't included)");
   if (card.noSetupEver) terms.push("No setup fees on any job");
   else if (card.waiveSetup) terms.push("No setup fees on grid prices");
   if (card.screenFee != null) terms.push(`Screens: ${money(+card.screenFee)} each`);

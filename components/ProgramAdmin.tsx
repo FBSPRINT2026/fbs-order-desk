@@ -231,6 +231,7 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
         {c.garmentIncluded && <label>Other shirts: difference ×<input type="text" inputMode="decimal" defaultValue={String(c.markup)} onBlur={(e) => set({ markup: +e.target.value.replace(/[^\d.]/g, "") || 1 })} style={{ width: 70 }} /></label>}
         <label>Minimum pieces<input type="number" min={0} defaultValue={c.minQty || ""} onBlur={(e) => set({ minQty: +e.target.value || 0 })} style={{ width: 90 }} /></label>
         <label className="check"><input type="checkbox" checked={c.waiveSetup} onChange={(e) => set({ waiveSetup: e.target.checked })} /> No setup on grid prices</label>
+        <label className="check" title="Our courier, local only. Shipping is still charged."><input type="checkbox" checked={!!c.freeDelivery} onChange={(e) => set({ freeDelivery: e.target.checked })} /> Free local delivery</label>
       </div>
       <div className="pga-row rc-up">
         <span>Big sizes, per piece</span>

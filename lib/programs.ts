@@ -56,6 +56,8 @@ export type RateCard = {
   /** finishing that's part of the price (Oct 17, Nick: Peticolas's price includes roll & rubber band and printing the
    *  neck labels): no charge for these on Program; any other finishing on the job is added on top */
   included?: string[];
+  /** free local delivery by our courier (not shipping) (Oct 17, Nick: Peticolas) */
+  freeDelivery?: boolean;
   /** parts of the deal the card can't hold yet, in plain words: shown on every order set to Program */
   extras?: string[];
   /** the deal in the account manager's words, newest first (kept from the Program tab's AI box) */
