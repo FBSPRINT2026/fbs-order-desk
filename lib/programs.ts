@@ -63,7 +63,8 @@ export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Obje
 export const cardHasPrices = (c: RateCard | null | undefined) => !!c && c.gridOn !== false && Object.values(c.prices || {}).some((x) => +x > 0);
 export const BIG_SIZES = ["2XL", "3XL", "4XL", "5XL"] as const;
 export const newRateCard = (): RateCard => ({ base: { brand: "Next Level", style: "6210" }, markup: 1.2, minQty: 50, waiveSetup: true, garmentIncluded: true, sizeUp: { "2XL": 2.5, "3XL": 2.5, "4XL": 2.5, "5XL": 2.5 }, prices: {} });
-export const FRONTS = [1, 2, 3, 4, 5, 6], BACKS = [0, 1, 2, 3, 4, 5, 6];
+// 0 on the front = a back-only print (Oct 17, Nick); 0/0 isn't a print
+export const FRONTS = [0, 1, 2, 3, 4, 5, 6], BACKS = [0, 1, 2, 3, 4, 5, 6];
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const n0 = (v: unknown) => (typeof v === "number" ? v : +String(v ?? "").replace(/[^\d.-]/g, "")) || 0;
@@ -86,8 +87,10 @@ export function printKey(g: Pick<Group, "imprints">): { key: string } | { why: s
   const fronts = imps.filter((d) => side(d.location) === "front"), backs = imps.filter((d) => side(d.location) === "back");
   const other = imps.find((d) => side(d.location) === "other");
   if (other) return { why: `${other.location || "a print"} isn't on the card` };
-  if (fronts.length !== 1 || backs.length > 1) return { why: fronts.length ? "more than one print on the front or back" : "no front print" };
-  const f = Math.max(1, n0(fronts[0].colors)), b = backs.length ? Math.max(1, n0(backs[0].colors)) : 0;
+  if (fronts.length > 1 || backs.length > 1) return { why: "more than one print on the front or back" };
+  if (!fronts.length && !backs.length) return { why: "no front or back print" };
+  // a back-only print is 0/n (Oct 17)
+  const f = fronts.length ? Math.max(1, n0(fronts[0].colors)) : 0, b = backs.length ? Math.max(1, n0(backs[0].colors)) : 0;
   return { key: `${f}/${b}` };
 }
 

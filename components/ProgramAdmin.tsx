@@ -232,12 +232,19 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
       <div className="rc-grid-wrap">
         <table className="rc-grid">
           <caption>Price per piece by colors: front / back{c.garmentIncluded && style ? ` (on a ${style})` : ""}. Leave a box empty if there&apos;s no deal for it.</caption>
-          <thead><tr><th>Front ↓ · Back →</th>{BACKS.map((b) => <th key={b}>{b === 0 ? "No back" : `${b}`}</th>)}</tr></thead>
+          {/* Back as a banner over its numbers, Front as a banner down the side of its numbers; 0 = no print on that side (Oct 17, Nick) */}
+          <thead>
+            <tr><td colSpan={2} /><th colSpan={BACKS.length} className="rc-ban" scope="colgroup">Back</th></tr>
+            <tr><td colSpan={2} />{BACKS.map((b) => <th key={b} className="rc-n" scope="col">{b}</th>)}</tr>
+          </thead>
           <tbody>
-            {FRONTS.map((f) => (
-              <tr key={f}><th>{f} color{f === 1 ? "" : "s"}</th>
+            {FRONTS.map((f, i) => (
+              <tr key={f}>
+                {i === 0 && <th rowSpan={FRONTS.length} className="rc-ban rc-side" scope="rowgroup"><span>Front</span></th>}
+                <th className="rc-n" scope="row">{f}</th>
                 {BACKS.map((b) => {
                   const k = `${f}/${b}`, v = c.prices[k];
+                  if (!f && !b) return <td key={k} className="rc-none" />;
                   return <td key={k}><input type="text" inputMode="decimal" aria-label={`${k} price`} title={k} defaultValue={v ? v.toFixed(2) : ""} placeholder={k}
                     onBlur={(e) => { const n = money2(e.target.value); const prices = { ...c.prices }; if (n > 0) prices[k] = n; else delete prices[k]; if (n !== (v || 0)) set({ prices }); }} /></td>;
                 })}

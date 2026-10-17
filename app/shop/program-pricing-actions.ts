@@ -208,7 +208,7 @@ export async function applyProgramProposal(input: { customerId: string; proposal
     if (pc.no_setup_any_job != null) card.noSetupEver = pc.no_setup_any_job;
     if (pc.screen_fee !== undefined) { if (pc.screen_fee == null) delete card.screenFee; else { card.screenFee = Math.round(pc.screen_fee * 100) / 100; card.waiveSetup = false; } }
     for (const [z, n] of Object.entries(pc.size_up || {})) if (n != null) card.sizeUp[z as "2XL"] = Math.round(+n * 100) / 100;
-    for (const x of pc.prices || []) if (x.front >= 1 && x.back >= 0 && x.price > 0) card.prices[`${Math.round(x.front)}/${Math.round(x.back)}`] = Math.round(x.price * 100) / 100;
+    for (const x of pc.prices || []) if (x.front >= 0 && x.back >= 0 && x.front + x.back > 0 && x.price > 0) card.prices[`${Math.round(x.front)}/${Math.round(x.back)}`] = Math.round(x.price * 100) / 100;
     if ((pc.prices || []).length) card.gridOn = true;
     if (input.proposal.not_supported?.length) card.extras = [...new Set([...(card.extras || []), ...input.proposal.not_supported.map((x) => x.trim().slice(0, 200)).filter(Boolean)])].slice(0, 12);
     card.about = [{ text: input.text.trim().slice(0, 2000), by: v.email, at: new Date().toISOString() }, ...(card.about || [])].slice(0, 20);
