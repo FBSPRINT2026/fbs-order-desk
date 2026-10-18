@@ -8,6 +8,9 @@ export type ProgramItem = {
   /** price breaks for this design: from min pieces, price per piece (Oct 14: Mewjira 100+ 6.25, 150+ 6.00, 200+ 5.50).
    *  price / min_qty hold the first break (the portal order form reads those) */
   tiers?: { min: number; price: number }[] | null;
+  /** match by who and what instead of by name (Oct 18: Nine18's All My Sons prices): who = words in the order's name
+   *  (any of them), what = the group's garment, by style number or word (any of them). Both lists given = both must hit. */
+  match?: { who?: string[]; what?: string[] } | null;
   /** "flat": one price at any quantity; "breaks": by quantity (tiers) */
   price_mode?: "flat" | "breaks";
   /** the back picture (image_path is the front) */
@@ -61,6 +64,9 @@ export type RateCard = {
   /** finishing that's part of the price (Oct 17, Nick: Peticolas's price includes roll & rubber band and printing the
    *  neck labels): no charge for these on Program; any other finishing on the job is added on top */
   included?: string[];
+  /** the program's own price for extras (finishing / embroidery extras by id): Nine18 personalization $5 a name, not the
+   *  list's $6. These are added on top even of a design's flat price (Oct 18) */
+  extraPrices?: Record<string, number>;
   /** free local delivery by our courier (not shipping) (Oct 17, Nick: Peticolas) */
   freeDelivery?: boolean;
   /** parts of the deal the card can't hold yet, in plain words: shown on every order set to Program */
@@ -69,7 +75,7 @@ export type RateCard = {
   about?: { text: string; by: string; at: string }[];
 };
 /** does the card set anything? (prices, or a rule) */
-export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.noSetupEver || !!c.extras?.length);
+export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.noSetupEver || !!c.extras?.length || !!Object.keys(c.extraPrices || {}).length || !!c.included?.length || !!c.freeDelivery);
 export const cardHasPrices = (c: RateCard | null | undefined) => !!c && c.gridOn !== false && Object.values(c.prices || {}).some((x) => +x > 0);
 export const BIG_SIZES = ["2XL", "3XL", "4XL", "5XL"] as const;
 export const newRateCard = (): RateCard => ({ base: { brand: "Next Level", style: "6210" }, markup: 1.2, minQty: 50, waiveSetup: true, garmentIncluded: true, sizeUp: { "2XL": 2.5, "3XL": 2.5, "4XL": 2.5, "5XL": 2.5 }, prices: {} });
@@ -112,16 +118,27 @@ export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Rec
  */
 /** a design's own program price (Oct 14, Nick: "Mewjira, 200 pieces at $5.50… this one is by design"): a program item
  *  linked to the design, or named like it (Printavo-era orders have no design links) */
-export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active" | "tiers" | "price_mode" | "supplied">;
-export type DesignCtx = { items: DesignPrice[]; /** the order's name and its prints' design names */ text: string };
+export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active" | "tiers" | "price_mode" | "supplied" | "match"> & { imprints?: ProgramImprint[] };
+export type DesignCtx = { items: DesignPrice[]; /** the order's name and its prints' design names */ text: string; /** the group's garments: styles, brands, names */ garments?: string };
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCtx): { item?: DesignPrice; under?: DesignPrice } {
   const ids = new Set((g.imprints || []).map((x) => x.design_id).filter(Boolean));
   const text = ` ${norm(d.text)} `;
   const linked = d.items.filter((it) => it.active && tiersOf(it).length && it.design_id && ids.has(it.design_id));
   let hits = linked;
+  // by who and what (Nine18: "All My Sons" jobs, polos by style or word); plurals count ("polos", "hats")
   if (!hits.length) {
-    const named = d.items.filter((it) => it.active && tiersOf(it).length && norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `));
+    const sing = (s: string) => ` ${norm(s).split(" ").map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w)).join(" ")} `;
+    const who = sing(d.text), what = sing(d.garments || "");
+    const has = (hay: string, list?: string[]) => (list || []).map((x) => sing(x).trim()).filter(Boolean).some((x) => hay.includes(` ${x} `));
+    // and the same decoration: a printed-tee price never lands on an embroidered tee
+    const methods = new Set((g.imprints || []).map((x) => x.method).filter(Boolean));
+    const sameMethod = (it: DesignPrice) => { const m = it.imprints?.[0]?.method; return !m || !methods.size || methods.has(m); };
+    hits = d.items.filter((it) => it.active && tiersOf(it).length && (it.match?.who?.length || it.match?.what?.length)
+      && (!it.match?.who?.length || has(who, it.match.who)) && (!it.match?.what?.length || has(what, it.match.what)) && sameMethod(it));
+  }
+  if (!hits.length) {
+    const named = d.items.filter((it) => it.active && tiersOf(it).length && !(it.match?.who?.length || it.match?.what?.length) && norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `));
     // the most specific name wins: "Rice Life Totes" over "Rice Life", "SPICY Deep Shit Pizza" over "Deep Shit Pizza"
     hits = named.filter((it) => !named.some((o) => o !== it && norm(o.name).length > norm(it.name).length && ` ${norm(o.name)} `.includes(` ${norm(it.name)} `)));
   }

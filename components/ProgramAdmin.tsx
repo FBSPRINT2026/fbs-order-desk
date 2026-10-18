@@ -120,6 +120,11 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
                 <label className="grow">Design name<input type="text" value={it.name} onChange={(e) => saveItem(it.id, { name: e.target.value })} placeholder="Mewjira" /></label>
                 <label className="grow">Their design on file<select value={it.design_id || ""} onChange={(e) => saveItem(it.id, { design_id: e.target.value || null })}><option value="">None (matched by name)</option>{designs.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
               </div>
+              {/* who and what (Oct 18: Nine18's All My Sons prices): words in the order's name, and the group's garment */}
+              <div className="pga-row pga-match">
+                <label className="grow">Order name has (any)<input type="text" key={`w-${it.id}`} defaultValue={(it.match?.who || []).join(", ")} placeholder="All My Sons, AMS" onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), who: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) } })} /></label>
+                <label className="grow">Garment is (any style or word)<input type="text" key={`g-${it.id}`} defaultValue={(it.match?.what || []).join(", ")} placeholder="ST650, polo" onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), what: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) } })} /></label>
+              </div>
               <div className="pga-mode" role="radiogroup" aria-label="How this design is priced">
                 <label className="check"><input type="radio" name={`pm-${it.id}`} checked={it.price_mode === "flat"} onChange={() => saveItem(it.id, { price_mode: "flat", tiers: [{ min: 0, price: tiersOf(it)[0]?.price || it.price || 0 }], min_qty: 0 })} /> Flat rate <span className="faint">(same price at any quantity)</span></label>
                 <label className="check"><input type="radio" name={`pm-${it.id}`} checked={it.price_mode !== "flat"} onChange={() => saveItem(it.id, { price_mode: "breaks" })} /> Price breaks <span className="faint">(by quantity)</span></label>
@@ -211,7 +216,14 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
   const gridOn = c.gridOn ?? cardHasPrices(c);
   // finishing included in the price: the common ones and the shop's own finishing list, plus anything typed
   const [shopFin, setShopFin] = useState<string[]>([]);
-  useEffect(() => { sb.from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setShopFin(((data?.data as { finishing?: { name: string }[] } | null)?.finishing || []).map((f) => f.name).filter(Boolean))); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // every extra in the price lists (finishing and embroidery extras), for the program's own prices (Oct 18: Nine18)
+  const [extraList, setExtraList] = useState<{ id: string; name: string; price: number }[]>([]);
+  useEffect(() => { sb.from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => {
+    const d = (data?.data || {}) as { finishing?: { id: string; name: string; price: number }[]; wholesale?: { finishing?: { id: string; name: string; price: number }[]; embExtras?: { id: string; name: string; price: number }[] } };
+    setShopFin((d.finishing || []).map((f) => f.name).filter(Boolean));
+    const all = [...(d.finishing || []), ...(d.wholesale?.finishing || []), ...(d.wholesale?.embExtras || [])];
+    setExtraList(all.filter((f, i) => f?.id && all.findIndex((x) => x.id === f.id) === i));
+  }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const inc = c.included || [];
   const finChoices = [...new Set([...COMMON_INCLUDED, ...shopFin, ...inc])];
   const toggleInc = (x: string) => set({ included: inc.includes(x) ? inc.filter((y) => y !== x) : [...inc, x] });
@@ -224,6 +236,12 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
       <div className="pga-row">
         <label className="check"><input type="checkbox" checked={!!c.noSetupEver} onChange={(e) => set({ noSetupEver: e.target.checked })} /> No setup on any job</label>
         <label>Screens, each<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={c.screenFee != null ? String(c.screenFee) : ""} onBlur={(e) => { const v = e.target.value.trim(); set({ screenFee: v === "" ? null : money2(v) }); }} placeholder="normal" /></div></label>
+      </div>
+      <div className="pga-row rc-inc">
+        <span>Their price for extras</span>
+        <div className="rc-inc-chips">
+          {extraList.map((f) => <label key={f.id} className="rc-xp">{f.name}<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={c.extraPrices?.[f.id] != null ? String(c.extraPrices[f.id]) : ""} placeholder={(+f.price).toFixed(2)} onBlur={(e) => { const v = e.target.value.trim(); const xp = { ...(c.extraPrices || {}) }; if (v === "") delete xp[f.id]; else xp[f.id] = money2(v); set({ extraPrices: xp }); }} /></div></label>)}
+        </div>
       </div>
     </section>
     <section className={"rc" + (gridOn ? "" : " off")}>

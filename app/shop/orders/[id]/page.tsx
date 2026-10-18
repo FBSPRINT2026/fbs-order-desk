@@ -316,7 +316,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o?.id, prog]);
   /** what a group's design is called, for the designs' own program prices: the order's name and its prints' designs */
-  const designCtx = (d: Pick<Order, "nickname">, g: Group): DesignCtx => ({ items: prog?.items || [], text: [d.nickname || "", ...g.imprints.map((x) => designs.find((y) => y.id === x.design_id)?.name || "")].join(" ") });
+  const designCtx = (d: Pick<Order, "nickname">, g: Group): DesignCtx => ({ items: prog?.items || [], text: [d.nickname || "", ...g.imprints.map((x) => designs.find((y) => y.id === x.design_id)?.name || "")].join(" "),
+    garments: g.lines.map((l) => [l.style, l.brand, l.garment, catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase())?.description || ""].join(" ")).join(" ") });
   // with Program on, each line gets the card's price (GLine.prog, saved as the line's price so every total agrees);
   // a price typed by hand wins and stays; off, or not covered (under the minimum, a print the card doesn't have), the
   // line goes back to normal pricing. Not once the job is in production.
@@ -324,11 +325,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!o || ["production", "ready", "completed"].includes(o.status)) return;
     const on = !!o.use_program && !!prog;
     const findGm = (l: GLine) => catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || c.brand.toLowerCase() === l.brand.toLowerCase()));
-    const finishingExtra = (d: Order, g: Group) => {
+    // flat: a design's flat price is everything in, except extras the program prices itself (Nine18 personalization $5)
+    const finishingExtra = (d: Order, g: Group, flat: boolean) => {
       const pl = priceList(settings, d.price_type || "retail");
       const list = [...(pl.finishing?.length ? pl.finishing : settings.finishing), ...(pl.embExtras || [])];
-      const fs = (g.finishing || []).map((id) => list.find((f) => f.id === id)).filter((f): f is NonNullable<typeof f> => !!f && !finishingIncluded(prog!.card, f));
-      return fs.length ? { each: fs.reduce((a, f) => a + (+f.price || 0), 0), names: fs.map((f) => f.name).join(", ") } : null;
+      const own = prog!.card?.extraPrices || {};
+      const fs = (g.finishing || []).map((id) => list.find((f) => f.id === id)).filter((f): f is NonNullable<typeof f> => !!f && !finishingIncluded(prog!.card, f) && (!flat || own[f.id] != null));
+      const price = (f: { id: string; price: number }) => (own[f.id] != null ? +own[f.id] : +f.price || 0);
+      return fs.length ? { each: fs.reduce((a, f) => a + price(f), 0), names: fs.map((f) => f.name).join(", ") } : null;
     };
     const apply = (d: Order) => {
       const plans = on ? d.groups.map((g) => programForGroup(g, prog!.card, prog!.baseCost, designCtx(d, g))) : [];
@@ -338,7 +342,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         const want0 = on ? plans[gi]?.lines[l.id] || null : null;
         // finishing on this job that isn't part of their program price is added on top (Oct 17: the card says what's
         // included, e.g. Peticolas's roll & rubber band and neck labels); a design's flat price is everything in
-        const extra = want0 && !plans[gi]?.flat ? finishingExtra(d, g) : null;
+        const extra = want0 ? finishingExtra(d, g, !!plans[gi]?.flat) : null;
         const want = want0 && extra && extra.each ? { each: Math.round((want0.each + extra.each) * 100) / 100, note: `${want0.note} + ${extra.names} ${extra.each.toFixed(2)} (not in the program)` } : want0;
         if (want) {
           const up: GLine["sizeUp"] = {};

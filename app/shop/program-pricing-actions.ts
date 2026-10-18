@@ -26,7 +26,7 @@ export async function programCard(customerId: string) {
     const { admin } = await me();
     const { data: p } = await admin.from("programs").select("id, name, rate_card, rate_cards, apply_mode").eq("customer_id", customerId).order("created_at").limit(1).maybeSingle();
     if (!p) return { ok: true as const, card: null, baseCost: null, items: [] as DesignPrice[], cards: [] as ProgramCardOpt[], applyMode: "auto" as const };
-    const { data: its } = await admin.from("program_items").select("id, name, style, price, min_qty, design_id, active, tiers, price_mode, supplied").eq("program_id", p.id).eq("active", true).is("archived_at", null);
+    const { data: its } = await admin.from("program_items").select("id, name, style, price, min_qty, design_id, active, tiers, price_mode, supplied, match, imprints").eq("program_id", p.id).eq("active", true).is("archived_at", null);
     const items = ((its || []) as DesignPrice[]).filter((x) => tiersOf(x).length);
     // every card (Oct 17: Nine18 has one per location or brand), each with its base shirt's cost now
     const cards: ProgramCardOpt[] = [];
