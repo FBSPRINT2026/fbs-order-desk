@@ -19,7 +19,11 @@ export type ProgramItem = {
     maxColors?: number; maxPrints?: number;
     /** the standard logos (design ids) this price is for (Oct 18, Nick: "you would likely only know if it is a special
      *  print based on the artwork"): a print with other art is a special, custom quoted; no art linked yet = the rules above */
-    designs?: string[] } | null;
+    designs?: string[];
+    /** art that's always a special: words in the prints' art names only, not the order's name (Oct 18, Nick: Armstrong's
+     *  "ARMSTRONG RALEIGH", "Armstrong Charleston SC" files are city shirts, custom quoted; the order names have the city
+     *  on standard jobs too) */
+    notArt?: string[] } | null;
   /** "flat": one price at any quantity; "breaks": by quantity (tiers) */
   price_mode?: "flat" | "breaks";
   /** the back picture (image_path is the front) */
@@ -128,7 +132,7 @@ export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Rec
 /** a design's own program price (Oct 14, Nick: "Mewjira, 200 pieces at $5.50… this one is by design"): a program item
  *  linked to the design, or named like it (Printavo-era orders have no design links) */
 export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active" | "tiers" | "price_mode" | "supplied" | "match"> & { imprints?: ProgramImprint[] };
-export type DesignCtx = { items: DesignPrice[]; /** the order's name and its prints' design names */ text: string; /** the group's garments: styles, brands, names */ garments?: string };
+export type DesignCtx = { items: DesignPrice[]; /** the order's name and its prints' design names */ text: string; /** the group's garments: styles, brands, names */ garments?: string; /** the prints' art names only */ art?: string };
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCtx): { item?: DesignPrice; under?: DesignPrice } {
   const ids = new Set((g.imprints || []).map((x) => x.design_id).filter(Boolean));
@@ -150,7 +154,7 @@ export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCt
     const standardArt = (it: DesignPrice) => !it.match?.designs?.length || !art.length || art.every((id) => it.match!.designs!.includes(id));
     hits = d.items.filter((it) => it.active && tiersOf(it).length && (it.match?.who?.length || it.match?.what?.length) && standardArt(it)
       && (!it.match?.who?.length || has(who, it.match.who)) && (!it.match?.what?.length || has(what, it.match.what))
-      && !(it.match?.not?.length && has(who, it.match.not)) && sameMethod(it) && standard(it));
+      && !(it.match?.not?.length && has(who, it.match.not)) && !(it.match?.notArt?.length && has(sing(d.art || ""), it.match.notArt)) && sameMethod(it) && standard(it));
   }
   if (!hits.length) {
     const named = d.items.filter((it) => it.active && tiersOf(it).length && !(it.match?.who?.length || it.match?.what?.length) && norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `));

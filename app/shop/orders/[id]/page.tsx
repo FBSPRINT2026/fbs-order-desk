@@ -317,6 +317,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }, [o?.id, prog]);
   /** what a group's design is called, for the designs' own program prices: the order's name and its prints' designs */
   const designCtx = (d: Pick<Order, "nickname">, g: Group): DesignCtx => ({ items: prog?.items || [], text: [d.nickname || "", ...g.imprints.map((x) => designs.find((y) => y.id === x.design_id)?.name || "")].join(" "),
+    art: g.imprints.map((x) => designs.find((y) => y.id === x.design_id)?.name || "").join(" "),
     garments: g.lines.map((l) => [l.style, l.brand, l.garment, catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase())?.description || ""].join(" ")).join(" ") });
   // with Program on, each line gets the card's price (GLine.prog, saved as the line's price so every total agrees);
   // a price typed by hand wins and stays; off, or not covered (under the minimum, a print the card doesn't have), the

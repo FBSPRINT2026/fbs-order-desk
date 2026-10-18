@@ -127,6 +127,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
               </div>
               <div className="pga-row pga-match">
                 <label className="grow">Not when the order name has<input type="text" key={`n-${it.id}`} defaultValue={(it.match?.not || []).join(", ")} placeholder="custom, holiday, 4th of July" onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), not: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) } })} /></label>
+                <label className="grow">Not when the art is named<input type="text" key={`a-${it.id}`} defaultValue={(it.match?.notArt || []).join(", ")} placeholder="Armstrong Raleigh, Charleston SC" onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), notArt: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) } })} /></label>
                 <label>Max colors per print<input type="number" min={0} key={`c-${it.id}`} defaultValue={it.match?.maxColors || ""} placeholder="any" style={{ width: 90 }} onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), maxColors: +e.target.value || undefined } })} /></label>
                 <label>Max prints<input type="number" min={0} key={`p-${it.id}`} defaultValue={it.match?.maxPrints || ""} placeholder="any" style={{ width: 80 }} onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), maxPrints: +e.target.value || undefined } })} /></label>
               </div>
