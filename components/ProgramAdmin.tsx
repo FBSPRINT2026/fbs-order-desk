@@ -125,6 +125,19 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
                 <label className="grow">Order name has (any)<input type="text" key={`w-${it.id}`} defaultValue={(it.match?.who || []).join(", ")} placeholder="All My Sons, AMS" onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), who: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) } })} /></label>
                 <label className="grow">Garment is (any style or word)<input type="text" key={`g-${it.id}`} defaultValue={(it.match?.what || []).join(", ")} placeholder="ST650, polo" onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), what: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) } })} /></label>
               </div>
+              <div className="pga-row pga-match">
+                <label className="grow">Not when the order name has<input type="text" key={`n-${it.id}`} defaultValue={(it.match?.not || []).join(", ")} placeholder="custom, holiday, 4th of July" onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), not: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) } })} /></label>
+                <label>Max colors per print<input type="number" min={0} key={`c-${it.id}`} defaultValue={it.match?.maxColors || ""} placeholder="any" style={{ width: 90 }} onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), maxColors: +e.target.value || undefined } })} /></label>
+                <label>Max prints<input type="number" min={0} key={`p-${it.id}`} defaultValue={it.match?.maxPrints || ""} placeholder="any" style={{ width: 80 }} onBlur={(e) => saveItem(it.id, { match: { ...(it.match || {}), maxPrints: +e.target.value || undefined } })} /></label>
+              </div>
+              {designs.length > 0 && (it.match?.who?.length || it.match?.what?.length) ? (
+                <div className="pga-std">
+                  <span>Standard logos <small className="faint">(a print with other art is a special: priced normally)</small></span>
+                  <div className="rc-inc-chips">
+                    {designs.map((d) => { const on = (it.match?.designs || []).includes(d.id); return <button key={d.id} type="button" className={"chip" + (on ? " on" : "")} aria-pressed={on} onClick={() => saveItem(it.id, { match: { ...(it.match || {}), designs: on ? (it.match?.designs || []).filter((x) => x !== d.id) : [...(it.match?.designs || []), d.id] } })}>{on ? "✓ " : ""}{d.name}</button>; })}
+                  </div>
+                </div>
+              ) : null}
               <div className="pga-mode" role="radiogroup" aria-label="How this design is priced">
                 <label className="check"><input type="radio" name={`pm-${it.id}`} checked={it.price_mode === "flat"} onChange={() => saveItem(it.id, { price_mode: "flat", tiers: [{ min: 0, price: tiersOf(it)[0]?.price || it.price || 0 }], min_qty: 0 })} /> Flat rate <span className="faint">(same price at any quantity)</span></label>
                 <label className="check"><input type="radio" name={`pm-${it.id}`} checked={it.price_mode !== "flat"} onChange={() => saveItem(it.id, { price_mode: "breaks" })} /> Price breaks <span className="faint">(by quantity)</span></label>

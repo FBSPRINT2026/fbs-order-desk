@@ -10,7 +10,16 @@ export type ProgramItem = {
   tiers?: { min: number; price: number }[] | null;
   /** match by who and what instead of by name (Oct 18: Nine18's All My Sons prices): who = words in the order's name
    *  (any of them), what = the group's garment, by style number or word (any of them). Both lists given = both must hit. */
-  match?: { who?: string[]; what?: string[] } | null;
+  match?: { who?: string[]; what?: string[];
+    /** never when the order's name or design names have any of these (Oct 18: Armstrong's city-back and holiday shirts
+     *  are custom quoted: "custom", "holiday", "4th of July"…) */
+    not?: string[];
+    /** only the standard print: at most this many colors on any print, and this many prints (Armstrong: 1 color, front
+     *  and back = 2); a sleeve or a 2-color print isn't standard */
+    maxColors?: number; maxPrints?: number;
+    /** the standard logos (design ids) this price is for (Oct 18, Nick: "you would likely only know if it is a special
+     *  print based on the artwork"): a print with other art is a special, custom quoted; no art linked yet = the rules above */
+    designs?: string[] } | null;
   /** "flat": one price at any quantity; "breaks": by quantity (tiers) */
   price_mode?: "flat" | "breaks";
   /** the back picture (image_path is the front) */
@@ -134,8 +143,14 @@ export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCt
     // and the same decoration: a printed-tee price never lands on an embroidered tee
     const methods = new Set((g.imprints || []).map((x) => x.method).filter(Boolean));
     const sameMethod = (it: DesignPrice) => { const m = it.imprints?.[0]?.method; return !m || !methods.size || methods.has(m); };
-    hits = d.items.filter((it) => it.active && tiersOf(it).length && (it.match?.who?.length || it.match?.what?.length)
-      && (!it.match?.who?.length || has(who, it.match.who)) && (!it.match?.what?.length || has(what, it.match.what)) && sameMethod(it));
+    const imps = g.imprints || [];
+    const standard = (it: DesignPrice) => (!it.match?.maxColors || imps.every((x) => (+(x as { colors?: number }).colors! || 1) <= it.match!.maxColors!))
+      && (!it.match?.maxPrints || imps.length <= it.match.maxPrints);
+    const art = imps.map((x) => x.design_id).filter(Boolean) as string[];
+    const standardArt = (it: DesignPrice) => !it.match?.designs?.length || !art.length || art.every((id) => it.match!.designs!.includes(id));
+    hits = d.items.filter((it) => it.active && tiersOf(it).length && (it.match?.who?.length || it.match?.what?.length) && standardArt(it)
+      && (!it.match?.who?.length || has(who, it.match.who)) && (!it.match?.what?.length || has(what, it.match.what))
+      && !(it.match?.not?.length && has(who, it.match.not)) && sameMethod(it) && standard(it));
   }
   if (!hits.length) {
     const named = d.items.filter((it) => it.active && tiersOf(it).length && !(it.match?.who?.length || it.match?.what?.length) && norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `));
