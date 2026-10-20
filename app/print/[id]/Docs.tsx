@@ -264,7 +264,7 @@ export function ProofDoc(p: DocData & { printed: string }) {
                   {approved && <div className="stamp">APPROVED</div>}</div>
               </div>
               <div className="pf-who">
-                <div><div className="lbl">For</div><b>{who || "—"}</b>{cust.email && <div className="faint">{cust.email}</div>}</div>
+                <div><div className="lbl">For</div><b>{cust.company || cust.name || "—"}</b>{cust.company && cust.name && cust.name !== cust.company && <div className="faint">{cust.name}</div>}{cust.email && <div className="faint">{cust.email}</div>}</div>
                 <div><div className="lbl">Job</div><b>{o.nickname || "—"}</b>{o.po_number && <div className="faint">PO {o.po_number}</div>}</div>
                 <div><div className="lbl">In hands</div><b>{due || "To be set"}</b><div className="faint">{DELIVERY[o.delivery_method] || "Pickup"}</div></div>
               </div>
@@ -321,7 +321,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot }: { d: Imprint; di: number; 
   const sz = printSize(d, des), max = p.maxes[gi]?.[di] || null;
   const hex = p.hexes[gi] || "#9aa1ab";
   // the art as big as the panel takes (7.6" × 5.9"), its real measurements drawn on
-  const PW = 6.2, PH = 5.0;
+  const PW = 6.6, PH = 5.7;
   const s = sz.w && sz.h ? Math.min(PW / sz.w, PH / sz.h) : sz.w ? PW / sz.w : 0;
   const aw = s ? sz.w * s : PW, ah = s && sz.h ? sz.h * s : PH, top = 0.45;
   const inks = inkNames(d.inks);
