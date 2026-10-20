@@ -8,6 +8,9 @@ import type { ChatMsg } from "@/lib/ai/orderChat";
 import { MicButton } from "@/components/SearchInput";
 import type { ReorderCheck, ReorderFix } from "@/lib/ai/reorderCheck";
 
+/** a saved check whose lists came back as text from the AI: read them as lists (or none) instead of crashing the page */
+const list = <T,>(x: unknown): T[] => { if (Array.isArray(x)) return x as T[]; if (typeof x === "string") { try { const j = JSON.parse(x); if (Array.isArray(j)) return j as T[]; } catch { /* not a list */ } } return []; };
+
 /** one line of the order's status: ok (green ✓), wait (amber), bad (red), or info (grey) */
 export type StatusLine = { tone: "ok" | "wait" | "bad" | "info"; text: string; sub?: string };
 
@@ -92,7 +95,7 @@ function ReorderCheckBox({ orderId, save }: { orderId: string; save: () => Promi
     const r = await aiReorderCheck(orderId, onlyIfNone, onlyIfNone || told == null ? undefined : told, found);
     setBusy("");
     if (!r.ok) return setNote(r.error || "The reorder check didn't work.");
-    setC(r.check);
+    setC({ ...r.check, issues: list(r.check.issues), fixes: list(r.check.fixes), ...(r.check.lookedUp ? { lookedUp: { ...r.check.lookedUp, sources: list(r.check.lookedUp.sources) } } : {}) });
     setTold(r.check.told || "");
   }
   useEffect(() => { void run(true); }, [orderId]); // eslint-disable-line react-hooks/exhaustive-deps

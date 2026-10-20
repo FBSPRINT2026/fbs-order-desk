@@ -149,7 +149,7 @@ Only list real problems, most important first. Use the print ids given in the or
   });
   if (!r.ok) return { ok: false, error: r.error };
   const ids = new Set(ims.map((i) => i.id));
-  const check: ReorderCheck = { ...r.data, issues: r.data.issues || [], fixes: (r.data.fixes || []).filter((f) => ids.has(f.imprint_id)), at: new Date().toISOString(), model: r.model, ...(told.trim() ? { told: told.trim().slice(0, 1000) } : {}), ...(lookedUp?.text ? { lookedUp } : {}) };
+  const check: ReorderCheck = { ...r.data, issues: asList<ReorderCheck["issues"][number]>(r.data.issues), fixes: asList<ReorderFix>(r.data.fixes).filter((f) => ids.has(f.imprint_id)), at: new Date().toISOString(), model: r.model, ...(told.trim() ? { told: told.trim().slice(0, 1000) } : {}), ...(lookedUp?.text ? { lookedUp } : {}) };
   // the latest check is kept on the order (one row, updated each time)
   const row = { kind: "reorder_check", dedupe_key: `reorder_check:${orderId}`, source: "ai", status: "done", priority: 2, order_id: orderId, customer_id: o.customer_id, title: `Reorder check #${o.number}`, body: check.summary, payload: check, model: r.model, run_id: r.runId, updated_at: check.at };
   const { data: had } = await admin.from("ai_suggestions").select("id").eq("dedupe_key", row.dedupe_key).limit(1).maybeSingle();
@@ -165,4 +165,11 @@ function describe(groups: ReturnType<typeof orderGroups>) {
     ...g.lines.map((l) => `  Garment: ${[l.brand, l.style, l.garment].filter(Boolean).join(" ")}, color ${l.color || "?"}: ${Object.entries(l.sizes || {}).filter(([, q]) => q).map(([z, q]) => `${z} ${q}`).join(", ")}`),
     ...g.imprints.map((d: Imprint) => `  Print id ${d.id}: ${METHODS[d.method] || d.method} on ${d.location || "?"}, ${d.colors} color(s), inks ${d.inks || "none listed"}, size ${d.size || "not set"}${d.drop ? `, drop ${d.drop}"` : ""}${d.sizeFrom === "film" ? " (size off the film)" : ""}${d.design_id ? ", art attached" : ", NO art"}${d.confirm ? `, production to confirm: ${[d.confirm.size && "size", d.confirm.ink && "ink"].filter(Boolean).join(" + ")}` : ""}${d.notes ? `; notes: ${d.notes}` : ""}`),
   ].join("\n")).join("\n");
+}
+
+/** the AI sometimes hands back a list as a JSON string (Oct 20: "issues.map is not a function" crashed the order page) */
+export function asList<T>(x: T[] | string | null | undefined | unknown): T[] {
+  if (Array.isArray(x)) return x as T[];
+  if (typeof x === "string") { try { const j = JSON.parse(x); if (Array.isArray(j)) return j as T[]; } catch { /* not JSON */ } }
+  return [];
 }

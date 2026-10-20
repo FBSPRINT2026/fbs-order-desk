@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { askClaude } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
-import { orderBrief } from "@/lib/ai/reorderCheck";
+import { asList, orderBrief } from "@/lib/ai/reorderCheck";
 import { LOCATIONS, type Settings } from "@/lib/pricing";
 import { latestSpecs, type DesignSpecs } from "@/lib/designSpecs";
 import { designEmails } from "@/lib/designMail";
@@ -204,7 +204,7 @@ Rules:
   });
   if (!r.ok) return { ok: false, error: r.error };
   const ids = new Set(ims.map((i) => i.id));
-  const history: SpecHistory = { summary: r.data.summary || "", prints: (r.data.prints || []).filter((p) => ids.has(p.imprint_id)), searched, keywords: words, at: new Date().toISOString(), model: r.model };
+  const history: SpecHistory = { summary: r.data.summary || "", prints: asList<SpecHistory["prints"][number]>(r.data.prints).filter((p) => ids.has(p.imprint_id)), searched, keywords: words, at: new Date().toISOString(), model: r.model };
   const row = { kind: "spec_history", dedupe_key: `spec_history:${orderId}`, source: "ai", status: "done", priority: 2, order_id: orderId, customer_id: o.customer_id, title: `Spec history #${o.number}`, body: history.summary, payload: history, model: r.model, run_id: r.runId, updated_at: history.at };
   const { data: had } = await admin.from("ai_suggestions").select("id").eq("dedupe_key", row.dedupe_key).limit(1).maybeSingle();
   if (had) await admin.from("ai_suggestions").update(row).eq("id", had.id);
