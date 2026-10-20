@@ -217,7 +217,7 @@ export const organizerFor = (email: string, role: string) => role === "owner" ||
  * SaneBox already moves receipts and newsletters out of the Inbox, so what's left is mostly real email.
  * A few per mailbox check (newest first), so a run never runs long.
  */
-async function sortPending(admin: SupabaseClient, client: ImapFlow, acct: Pick<MailAccount, "id" | "email" | "name">, deadline: number) {
+async function sortPending(admin: SupabaseClient, client: ImapFlow | null, acct: Pick<MailAccount, "id" | "email" | "name">, deadline: number) {
   const { data } = await admin.from("mail_inbox").select("id, uid, message_id, activity_id, from_email, from_name, subject, received_at, cc_only")
     .eq("account_id", acct.id).is("gone_at", null).is("sorted_at", null).order("received_at", { ascending: false, nullsFirst: false }).limit(12);
   const rows = (data || []) as { id: string; uid: number; message_id: string; activity_id: string | null; from_email: string; from_name: string; subject: string; received_at: string | null; cc_only: boolean }[];
@@ -243,10 +243,15 @@ async function sortPending(admin: SupabaseClient, client: ImapFlow, acct: Pick<M
     // a customer email still being read in (the next check links it): leave it for then
     if (Date.parse(r.received_at || now) > Date.now() - 4 * 60000) continue;
     let body = "", to = "", cc = "";
-    try {
+    if (client) try {
       const msg = await client.fetchOne(String(r.uid), { source: true, size: true }, { uid: true });
       if (msg && msg.source && (msg.size || 0) < 25 * 1024 * 1024) { const m = toMsg(await simpleParser(msg.source)); body = m.text; to = m.to.map((x) => x.address).join(", "); cc = m.cc.map((x) => x.address).join(", "); }
     } catch { /* read what we have: sender and subject */ }
+    // no mailbox connection (or it failed): the copy the mail cache keeps
+    if (!body && r.message_id) {
+      const { data: c } = await admin.from("mail_cache").select("body_text, to_text, cc_text").eq("account_id", acct.id).eq("message_id", r.message_id).not("body_text", "is", null).limit(1).maybeSingle();
+      if (c) { body = String(c.body_text || ""); to = to || String(c.to_text || ""); cc = cc || String(c.cc_text || ""); }
+    }
     const res = await organizeEmail(st.settings, { owner, ownerName: acct.name || "", from: `${r.from_name} <${r.from_email}>`, to, cc, subject: r.subject, date: r.received_at || "", body: body || "(no text)" }, { admin, by: "mail" });
     if (!res.ok) { await admin.from("mail_inbox").update({ sorted_at: now, bucket: "fyi", summary: "" }).eq("id", r.id); continue; }
     const o = res.data, ymd = /^\d{4}-\d{2}-\d{2}$/;
@@ -362,4 +367,19 @@ export async function relinkInboxLeads(admin: SupabaseClient, acct: Pick<MailAcc
     if (!error) n++;
   }
   return n;
+}
+
+/**
+ * Sort the Inbox emails still waiting, without the mailbox connection (the mail cache has their text): run by the mail
+ * bodies job every 5 minutes, so a mailbox whose connection keeps failing still gets sorted (Oct 20: Nick's Inbox said
+ * "Sorting…" on everything after the outage because sorting only ran at the end of a successful Inbox read).
+ */
+export async function sortWaiting(admin: SupabaseClient, deadline: number) {
+  const { data } = await admin.from("mail_accounts").select("id, email, name").eq("enabled", true);
+  const out: Record<string, number> = {};
+  for (const a of (data || []) as Pick<MailAccount, "id" | "email" | "name">[]) {
+    if (Date.now() > deadline - 15000) break;
+    out[a.email] = await sortPending(admin, null, a, deadline).catch(() => 0);
+  }
+  return out;
 }
