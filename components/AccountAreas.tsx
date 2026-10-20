@@ -25,7 +25,7 @@ export type AMockup = { id: string; title: string; url: string; thumb: string; n
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
 export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string; /** overrides the default wording */ label?: string; href?: string };
-export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "messages" | "texts" | "receive" | "details" | "projects" | "program";
+export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "designs" | "messages" | "texts" | "receive" | "details" | "projects" | "program";
 
 const IN_WORK = ["approved", "art", "blanks", "production", "ready"];
 const WAITING = ["approved", "art", "blanks"];
@@ -61,7 +61,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
@@ -86,6 +86,8 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
   projectsPanel?: ReactNode; projectsCount?: number;
   /** program pricing: the customer's flat-price items and order form; grayed out when they don't have one */
   programPanel?: ReactNode; hasProgram?: boolean;
+  /** staff: the customer's designs, every way each was printed (Oct 20, Nick: Dear Heart) */
+  designsPanel?: ReactNode;
   /** portal: the helper at the top of the dashboard ("What can I help you with today?") */
   assistant?: ReactNode;
   /** portal: "Hi Jordan" line over the dashboard */
@@ -196,6 +198,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     { id: "program", label: "Program", icon: I.program, show: !!programPanel },
     { id: "payments", label: "Payments", icon: I.payments },
     { id: "artwork", label: "Artwork", icon: I.artwork },
+    { id: "designs", label: "Designs", icon: I.artwork, show: !!designsPanel },
     { id: "messages", label: mode === "portal" ? "Message center" : "Messages", icon: I.messages, n: messages.length },
     { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: mode === "shop" && !!textsPanel },
     { id: "receive", label: goodsPanel ? (mode === "shop" ? "Customer goods" : "Customer supplied goods") : mode === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
@@ -765,6 +768,7 @@ export default function AccountAreas({ brandColors = [], brandEditor, customerNa
     <div className="aa-bar"><div className="aa-bar-l"><h2>Projects</h2><span className="aa-sum">{mode === "shop" ? "Events and bigger efforts with several orders" : "Planning an event, a season or a launch with several orders? Keep the dates, orders, to-dos and messages together."}</span></div></div>
     {projectsPanel}</>;
   else if (area === "program" && programPanel) body = programPanel;
+  else if (area === "designs" && designsPanel) body = designsPanel;
 
   return (
     <div className="aa">

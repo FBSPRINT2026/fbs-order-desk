@@ -34,6 +34,7 @@ import BrandAssistant from "@/components/BrandAssistant";
 import CustomerStyleGuides from "@/components/CustomerStyleGuides";
 import FilmFolder from "@/components/FilmFolder";
 import ShopCustomerProjects from "@/components/ShopCustomerProjects";
+import CustomerDesigns from "@/components/CustomerDesigns";
 import ProgramAdmin from "@/components/ProgramAdmin";
 import { emailStatement, recordLumpPayment } from "@/app/shop/pay-actions";
 import { needsGoods } from "@/lib/goods";
@@ -198,6 +199,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       <AccountAreas mode="shop" brandColors={c?.brand_colors || []} brandEditor={<BrandAssistant customerId={id} customerName={c?.company || c?.name || ""} onApplied={async () => { const { data } = await createClient().from("designs").select("*").eq("customer_id", id).order("number", { ascending: false }); if (data) setDesigns(data as Design[]); }}><CustomerStyleGuides customerId={id} /><CustomerBrandColors customerId={id} company={c?.company || c?.name || ""} /><CustomerBrandPrint customerId={id} /></BrandAssistant>} customerName={c?.company || c?.name || ""} goodsCount={goodsOpen}
           projectsPanel={<ShopCustomerProjects customerId={id} label={c.company || c.name || "Customer"} onCount={setProjOpen} />} projectsCount={projOpen}
           programPanel={<ProgramAdmin customerId={id} />} hasProgram={hasProgram}
+          designsPanel={<CustomerDesigns customerId={id} />}
           productionPanel={<CustomerProductionFiles customerId={id} />}
           textsPanel={textN ? <CustomerTexts customerId={id} /> : undefined} textsCount={textN}
           statementHref={`/portal/statement?as=${id}`} onEmailStatement={() => emailStatement(id)}

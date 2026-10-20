@@ -9995,3 +9995,44 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 /* Time clock issues: the list opens from Time Clock in Shop Tools (Oct 20, Nick), beside the menu */
 .tcb-wrap.tcb-side{top:72px;bottom:auto;right:auto;left:calc(var(--side-w,232px) + 14px);flex-direction:column;align-items:flex-start}
 @media (max-width:820px){.tcb-wrap.tcb-side{top:auto;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));align-items:stretch}}
+/* Customer Designs: every design and every way it was printed (Oct 20, Nick: Dear Heart) */
+.dc .panel-b{display:flex;flex-direction:column;gap:12px}
+.dc-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.dc-q{flex:1 1 240px;min-width:0}
+.dc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.dc-card{display:flex;flex-direction:column;gap:3px;text-align:left;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:8px 8px 10px;cursor:pointer;font:inherit;color:var(--ink)}
+.dc-card:hover{border-color:var(--accent);box-shadow:0 2px 10px rgba(20,29,43,.08)}
+.dc-pic{aspect-ratio:1;border-radius:8px;background:#f4f5f7;display:grid;place-items:center;overflow:hidden;margin-bottom:4px;font-size:12px}
+.dc-pic img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
+.dc-name{font-weight:800;font-size:14px;line-height:1.2}
+.dc-meta{font-size:12px;color:var(--ink-3)}
+.dc-other{border-top:1px solid var(--line-2);padding-top:8px}
+.dc-other summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--ink-2)}
+.dc-d{display:flex;flex-direction:column;gap:10px}
+.dc-d-h{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.dc-d-name{flex:1 1 220px;font-size:20px;font-weight:800;border:1px solid transparent;border-radius:8px;padding:4px 8px;background:transparent;min-width:0}
+.dc-d-name:hover,.dc-d-name:focus{border-color:var(--line);background:var(--surface)}
+.dc-d-sum{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--ink-2)}
+.dc-h{font-size:14px;margin:8px 0 0;display:flex;gap:8px;align-items:baseline}
+.dc-h .faint{font-size:12px;font-weight:500}
+.dc-vers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.dc-ver{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--surface)}
+.dc-ver-pic{width:96px;height:96px;border-radius:8px;background:#f4f5f7;display:grid;place-items:center;overflow:hidden;font-size:11px}
+.dc-ver-pic img{width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
+.dc-ver-b{display:flex;flex-direction:column;gap:3px;min-width:0}
+.dc-ver-t{font-size:14px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
+.dc-ver-n{font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;background:var(--surface-2);color:var(--ink-2)}
+.dc-ver-n.orig{background:var(--accent-soft);color:var(--accent)}
+.dc-ver-g{font-size:12px}
+.dc-ver-m{font-size:12.5px;color:var(--ink-2)}
+.dc-ver-p{display:flex;flex-direction:column;gap:1px;font-size:12px;color:var(--ink-3)}
+.dc-ver-jobs{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.dc-job{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--ink-2);text-decoration:none;white-space:nowrap}
+.dc-job:hover{border-color:var(--accent);color:var(--accent)}
+.dc-jobs{display:flex;flex-direction:column}
+.dc-jr{display:grid;grid-template-columns:70px minmax(0,1fr) auto 150px;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line-2);font-size:13px}
+.dc-jr-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dc-jr select{font-size:12px;padding:2px 4px}
+.dc-d-f{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--line-2);padding-top:10px;font-size:13px}
+.dc-d-f .spacer{flex:1}
+@media (max-width:640px){.dc-jr{grid-template-columns:60px minmax(0,1fr);}.dc-jr .faint,.dc-jr select{grid-column:2}}
