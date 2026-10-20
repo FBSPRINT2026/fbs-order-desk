@@ -139,6 +139,7 @@ export type Group = { id: string; name?: string; lines: GLine[]; imprints: Impri
   /** why specialty ink was picked automatically ("ST350: 100% polyester") */ fabricNote?: string;
   /** the screens are on file from an earlier order: remake price instead of new setup */ remake?: boolean;
   /** a reorder of a portal order: the group it was copied from (its mockups are copied with it, not made again) */ fromGroup?: string;
+  /** staff answered the reprint screen fee question on this reorder (No, keep the new screen fee) */ reprintAsked?: boolean;
   /** price per screen from the customer's program (Oct 14: Tiger Blue pays $15 a screen, they supply separations);
    *  set by the order page while Program is on, instead of the price list's screen fee */ screenFee?: number };
 export type PriceType = "retail" | "wholesale";

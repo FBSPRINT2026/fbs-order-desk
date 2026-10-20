@@ -786,9 +786,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {reprintAsk && o.price_type === "wholesale" && (() => {
-        // a duplicate / reorder of a wholesale order still at new screens: offer the reprint fee (kept on its reorders)
-        const ims = o.groups.flatMap((g) => g.imprints.filter((im) => im.method === "screen" && !(im.remake ?? g.remake)));
+      {(reprintAsk || isReorder(o) || o.groups.some((g) => g.fromGroup)) && o.price_type === "wholesale" && ["request", "quote", "quote_sent"].includes(o.status) && (() => {
+        // a duplicate / reorder of a wholesale order still at new screens: offer the reprint fee (kept on its reorders);
+        // asked until it's answered (Oct 20, Nick: "you didn't ask me to change the screen price to $15")
+        const ims = o.groups.filter((g) => !g.reprintAsked).flatMap((g) => g.imprints.filter((im) => im.method === "screen" && !(im.remake ?? g.remake)));
         const wl = settings.wholesale;
         if (!ims.length || wl.remakeFee == null || wl.remakeFee >= wl.screenFee) return null;
         const n = ims.reduce((a, im) => a + Math.max(1, +im.colors || 1), 0);
@@ -796,7 +797,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <div className="eo-fee">
             <span>This copy is priced as <b>new screens</b> ({n} screen{n === 1 ? "" : "s"} at {money(wl.screenFee)}). It&apos;s a reorder: charge the <b>reprint fee, {money(wl.remakeFee)} a screen</b>? It stays that way on this design&apos;s reorders.</span>
             <button type="button" className="btn sm primary" onClick={() => { patch((d) => { for (const g of d.groups) for (const im of g.imprints) if (im.method === "screen") im.remake = true; }); setReprintAsk(false); }}>Yes, reprint fee {money(wl.remakeFee)}</button>
-            <button type="button" className="btn sm ghost" onClick={() => setReprintAsk(false)}>No, keep {money(wl.screenFee)}</button>
+            <button type="button" className="btn sm ghost" onClick={() => { patch((d) => { for (const g of d.groups) g.reprintAsked = true; }); setReprintAsk(false); }}>No, keep {money(wl.screenFee)}</button>
           </div>
         );
       })()}
@@ -829,7 +830,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         {/* Order: what's being made and what it costs (Oct 15, Nick: "too much information on one page… tabs at the top") */}
         <div className="ed-grid" hidden={tab !== "order"}>
           <div className="stack">
-            {isReorder(o) && calc && <ReorderPanel o={o} total={calc.total} patch={patch} save={save}
+            {isReorder(o) && !o.groups.every((g) => g.fromGroup) && calc && <ReorderPanel o={o} total={calc.total} patch={patch} save={save}
               onReload={(groups) => { setO((x) => (x ? { ...x, groups } : x)); if (latest.current) latest.current = { ...latest.current, groups }; }} />}
           <div className="top2">
             <section className="panel">
