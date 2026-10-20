@@ -174,8 +174,8 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   for (const g of groups) for (const f of [...(g.pvRef || []), ...(g.pvArt || [])]) {
     const orig = pvNames[f.path];
     const label = orig ? oldJobLabel(orig.visualId || (f.name.match(/#(\d+)/)?.[1] || ""), orig.name) : `From the old Printavo job: ${f.name.replace(/ mockup(?=\.\w+$)/i, "")}`;
-    const kind = (f as { kind?: string }).kind || null;
-    await admin.from("art_files").insert({ order_id: oid, name: label, file_path: f.path, file_type: /\.pdf$/i.test(f.path) ? "application/pdf" : /\.png$/i.test(f.path) ? "image/png" : "image/jpeg", ...(kind ? { category: kind } : {}) });
+    const kind = (f as { kind?: string }).kind || null, fnote = (f as { note?: string }).note || null;
+    await admin.from("art_files").insert({ order_id: oid, name: label, file_path: f.path, file_type: /\.pdf$/i.test(f.path) ? "application/pdf" : /\.png$/i.test(f.path) ? "image/png" : "image/jpeg", ...(kind ? { category: kind } : {}), ...(fnote ? { note: fnote.slice(0, 300) } : {}) });
   }
   // the customer's own documents (size sheet, spreadsheet, PDF order form) go in the order's Production notes & files
   // (art_files, the side panel), so the shop has them with the job; pictures are art / mockups, signatures left out

@@ -104,6 +104,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     } finally { setLookingUp(""); }
   }
   const [art, setArt] = useState<(ArtFile & { url?: string })[]>([]);
+  const guessed = useRef(false);
   const [newCust, setNewCust] = useState<null | { company: string; name: string; email: string; phone: string; price_type: PriceType }>(null);
   const [saveState, setSaveState] = useState("");
   const [flash, setFlash] = useState("");
@@ -149,6 +150,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       list.length ? sb.storage.from("proofs").createSignedUrls(list.map((x) => x.file_path), 3600) : Promise.resolve({ data: [] }),
     ]);
     setArt(arts.map((x, i) => ({ ...x, url: au.data?.[i]?.signedUrl || undefined })));
+    // what the unlabeled production files probably are, for staff to confirm (once a page; each file looked at once)
+    if (!guessed.current && arts.some((x) => !x.category && x.guess == null)) {
+      guessed.current = true;
+      void fetch("/api/production/guess", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: id }) }).then((r) => r.json()).then((j: { guesses?: Record<string, { kind: string }> }) => {
+        const g = j.guesses || {};
+        if (Object.keys(g).length) setArt((xs) => xs.map((x) => (g[x.id] ? { ...x, guess: g[x.id].kind } : x)));
+      }).catch(() => null);
+    }
     setProofs(list.map((x, i) => ({ ...x, url: pu.data?.[i]?.signedUrl || undefined })));
   }, [sb, id]);
 
@@ -1107,7 +1116,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <ProofHistory orderId={o.id} bump={proofs.length * 1000 + events.length} />
             <OrderSeparations o={o} />
           <ProductionPanel note={prodNotes} onNote={onProdNotes} uploading={artUploading}
-            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category }))}
+            files={art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category, guess: a.guess, note: a.note }))}
+            onFileNote={(f, t) => { setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, note: t || null } : x))); void sb.from("art_files").update({ note: t || null }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the note: " + error.message); }); }}
             onCategory={(f, c) => { setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, category: c } : x))); void sb.from("art_files").update({ category: c }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the label: " + error.message); }); }}
             onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }}>
             {/* the job's notes & photos (one panel, Oct 15: there were two "Production files & notes") */}

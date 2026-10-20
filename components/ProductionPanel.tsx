@@ -4,7 +4,7 @@ import { downloadUrl } from "@/lib/printavoNames";
 import { PROD_KINDS, fileTypeOf, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
 
 /** `fileName`: what a download saves as (defaults to `name`) */
-export type ProdFile = { id: string; name: string; url?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null };
+export type ProdFile = { id: string; name: string; url?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null; /** what the AI thinks it is, to confirm */ guess?: string | null; /** e.g. "Amazon barcodes for The Bottles" */ note?: string | null };
 
 const isImg = (f: ProdFile) => /^image\//.test(f.mime || "") || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
 const ext = (n: string) => (n.split("?")[0].split(".").pop() || "file").slice(0, 4).toUpperCase();
@@ -14,9 +14,9 @@ const ext = (n: string) => (n.split("?")[0].split(".").pop() || "file").slice(0,
  * the notes on top, then the files as a grid of thumbnails you can drop more files onto.
  * Without the edit handlers it's read-only (archived orders).
  */
-export default function ProductionPanel({ note, files, onNote, onUpload, onRemove, onCategory, uploading = false, compact = false, children }: {
+export default function ProductionPanel({ note, files, onNote, onUpload, onRemove, onCategory, onFileNote, uploading = false, compact = false, children }: {
   note: string; files: ProdFile[]; /** more below the files: the job's notes & photos added in the portal (Oct 15: was a second "Production files & notes") */ children?: ReactNode;
-  onNote?: (v: string) => void; onUpload?: (files: FileList) => void; onRemove?: (f: ProdFile) => void; /** label a file: barcodes, film, mailing list… (Oct 20) */ onCategory?: (f: ProdFile, category: string | null) => void; uploading?: boolean; /** narrow side column */ compact?: boolean;
+  onNote?: (v: string) => void; onUpload?: (files: FileList) => void; onRemove?: (f: ProdFile) => void; /** label a file: barcodes, film, mailing list… (Oct 20) */ onCategory?: (f: ProdFile, category: string | null) => void; /** a note on one file */ onFileNote?: (f: ProdFile, note: string) => void; uploading?: boolean; /** narrow side column */ compact?: boolean;
 }) {
   const [over, setOver] = useState(false);
   const [armed, setArmed] = useState("");
@@ -45,12 +45,17 @@ export default function ProductionPanel({ note, files, onNote, onUpload, onRemov
                   {(f.thumb || (isImg(f) && f.url)) ? <img src={f.thumb || f.url} alt={f.name} loading="lazy" /> : <span>{ext(f.name)}</span>}
                 </button>
                 <div className="prod-fname" title={f.name}>{f.name}</div>
-                {onCategory ? (() => { const g = !f.category ? guessProdKind(f.name) : ""; return (
+                {onCategory && !f.category && f.guess && f.guess !== "?" && (
+                  <div className="prod-guess">Looks like <b>{prodKindLabel(f.guess)}</b> <button type="button" className="linkish ok" onClick={() => onCategory(f, f.guess!)}>Yes</button></div>
+                )}
+                {onCategory ? (() => { const g = !f.category ? (f.guess && f.guess !== "?" ? f.guess : guessProdKind(f.name)) : ""; return (
                   <select className={"prod-kind" + (f.category ? " set" : "")} value={f.category || ""} onChange={(e) => onCategory(f, e.target.value || null)} aria-label={`What ${f.name} is`} title={f.category ? PROD_KINDS.find((x) => x.k === f.category)?.hint : g ? `Looks like: ${prodKindLabel(g)}` : "Say what this file is"}>
                     <option value="">{g ? `Label it (${prodKindLabel(g)}?)` : "Label it…"}</option>
                     {PROD_KINDS.map((k) => <option key={k.k} value={k.k}>{k.label}</option>)}
                   </select>); })() : f.category ? <div className="prod-kind set">{prodKindLabel(f.category)}</div> : null}
                 <div className="prod-type faint">{fileTypeOf(f.name, f.mime)}</div>
+                {onFileNote ? <input className="prod-fnote" defaultValue={f.note || ""} placeholder="Add a note…" aria-label={`Note on ${f.name}`} onBlur={(e) => { const t = e.target.value.trim(); if (t !== (f.note || "")) onFileNote(f, t); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                  : f.note ? <div className="prod-fnote ro">{f.note}</div> : null}
                 <div className="prod-facts">
                   {f.url && <a href={downloadUrl(f.url, f.fileName || f.name)} target="_blank" rel="noreferrer" download={f.fileName || f.name}>Download</a>}
                   {onRemove && <button type="button" className={"linkish" + (armed === f.id ? " armed" : "")} onClick={() => { if (armed === f.id) { onRemove(f); setArmed(""); } else { setArmed(f.id); setTimeout(() => setArmed((a) => (a === f.id ? "" : a)), 3500); } }}>{armed === f.id ? "Confirm remove" : "Remove"}</button>}

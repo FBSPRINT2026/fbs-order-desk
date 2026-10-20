@@ -35,7 +35,7 @@ type Made = { id: string; number: number; label: string; pcs: number; url: strin
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
 type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; prints: { key: string; label: string; colors: number; location: string; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
-type HelpAns = { picks: Record<string, HelpPick>; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string }[] | null; skipped?: number };
+type HelpAns = { picks: Record<string, HelpPick>; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
 type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
 type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
@@ -232,7 +232,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(`You set the ${loc || im.location}${size ? `: ${size}" wide` : ""}`);
       }
       if (ans.files) {
-        d = { ...d, groups: d.groups.map((x, xi) => ({ ...x, pvRef: [], pvArt: xi === 0 ? ans.files!.map((f) => ({ path: f.path, name: f.name, ...(f.kind ? { kind: f.kind } : {}) })) : [] })) };
+        d = { ...d, groups: d.groups.map((x, xi) => ({ ...x, pvRef: [], pvArt: xi === 0 ? ans.files!.map((f) => ({ path: f.path, name: f.name, ...(f.kind ? { kind: f.kind } : {}), ...(f.note ? { note: f.note } : {}) })) : [] })) };
         const kinds = { art: "art", mockup: "mockup", production: "production file" } as const;
         if (ans.files.length) did.push(`In Production files: ${ans.files.map((f) => `${f.name} (${prodKindLabel(f.kind) || kinds[f.role]})`).join(", ")}`);
         if (ans.skipped) did.push(`Left out (not needed): ${ans.skipped} file${ans.skipped === 1 ? "" : "s"}`);
@@ -434,6 +434,16 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const [split, setSplit] = useState<Record<string, boolean>>({});
   // a production file's label: barcodes, film, mailing list… (lib/productionFileKinds.ts)
   const [kindOf, setKindOf] = useState<Record<string, string>>({});
+  const [noteOf, setNoteOf] = useState<Record<string, string>>({});
+  // what the AI sees in each old file (a barcode sheet, the art on a background…), for you to confirm
+  const [aiG, setAiG] = useState<Record<string, { kind: string; why: string }>>({});
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current || !old?.length) return;
+    asked.current = true;
+    void fetch("/api/production/guess", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files: old.map((f) => ({ path: f.path, name: f.name })) }) }).then((r) => r.json()).then((j: { guesses?: Record<string, { kind: string; why: string }> }) => setAiG(j.guesses || {})).catch(() => null);
+  }, [old]);
+  const aiKind = (path?: string) => { const g = path ? aiG[path] : undefined; return g && g.kind !== "?" ? g.kind : ""; };
   const answer = (key: string, v: string) => {
     assign(key, v);
     // a mockup, production file or not needed: on to the next file (art stays, for where/width/background)
@@ -470,7 +480,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     // stays in, as before); "Not needed" ones out
     const files = old === null ? null : olds0.filter((x) => as[x.key] !== "none").map((x) => {
       const role = (as[x.key] === "mockup" ? "mockup" : as[x.key] === "production" || !as[x.key] ? "production" : "art") as "art" | "mockup" | "production";
-      return { path: x.path!, name: x.name, role, kind: role === "mockup" ? "old_mockup" : role === "art" ? "print_art" : kindOf[x.key] ?? guessProdKind(x.name) };
+      return { path: x.path!, name: x.name, role, kind: role === "mockup" ? "old_mockup" : role === "art" ? "print_art" : kindOf[x.key] ?? (aiKind(x.path) || guessProdKind(x.name)), note: (noteOf[x.key] || "").trim() };
     });
     help.resolve({ picks: out, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
   };
@@ -511,15 +521,16 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           {!it.only && <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => answer(it.key, "none")}>Not needed</button>}
         </div>
         {!it.only && !perStyle && help.prints.length > locs.length && <button type="button" className="ap-link arc-split" onClick={() => setSplit((x) => ({ ...x, [it.key]: true }))}>Different art for each style…</button>}
-        {it.hint && !v && <span className="arc-hint">{it.hint}?</span>}
+        {!v && (it.path && aiG[it.path]?.kind && aiG[it.path].kind !== "?" ? <span className="arc-hint">I think: <b>{prodKindLabel(aiG[it.path].kind)}</b>{aiG[it.path].why ? ` (${aiG[it.path].why})` : ""}. Right?</span> : it.hint ? <span className="arc-hint">{it.hint}?</span> : it.where === "old" && it.path && !aiG[it.path] ? <span className="arc-hint">Looking at it…</span> : null)}
         {it.where === "old" && v === "production" && (
           <label className="arc-kind">What it is
-            <select value={kindOf[it.key] ?? guessProdKind(it.name)} onChange={(e) => setKindOf((x) => ({ ...x, [it.key]: e.target.value }))}>
+            <select value={kindOf[it.key] ?? (aiKind(it.path) || guessProdKind(it.name))} onChange={(e) => setKindOf((x) => ({ ...x, [it.key]: e.target.value }))}>
               <option value="">Not labeled</option>
               {PROD_KINDS.map((k) => <option key={k.k} value={k.k}>{k.label}</option>)}
             </select>
           </label>
         )}
+        {it.where === "old" && v && v !== "none" && <input className="arc-note" value={noteOf[it.key] || ""} onChange={(e) => setNoteOf((x) => ({ ...x, [it.key]: e.target.value }))} placeholder={v === "production" ? 'A note, e.g. "Amazon barcodes for The Bottles"' : "A note for production (optional)"} aria-label="Note on this file" />}
         {it.where === "old" && v && v !== "none" && <span className="arc-hint ok">{v === "mockup" ? "Kept in Production files as the old mockup" : v === "production" ? "Goes in this order's Production files" : "The art; the original also goes in Production files"}</span>}
         {isArt && (
           <div className="arc-place">
