@@ -276,7 +276,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
         const gname = groups.length > 1 ? (g.name?.trim() || `Group ${gi + 1}`) : "";
         return (
           <div key={g.id}>
-            <section className="sheet pf">
+            <section className="sheet pf pf-cover">
               <div className="top">
                 <div className="brand"><img src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
                   {(sh.phone || sh.email) && <div className="sub">{[fmtPhone(sh.phone), sh.email].filter(Boolean).join(" · ")}</div>}</div>

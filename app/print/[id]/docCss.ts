@@ -230,6 +230,33 @@ export const DOC_CSS = `
 .pdoc .pf-inklist{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:6px;font-size:13pt}
 .pdoc .pf-inklist span{display:inline-flex;align-items:center;gap:8px}
 .pdoc .pf-inklist i{width:26px;height:26px;border-radius:6px;border:1px solid rgba(0,0,0,.25);display:inline-block}
+/* the cover: the first mockup exactly as big as on the mockup pages (full width); everything else on it smaller
+   (Oct 20, Nick: "make the other stuff on page 1 smaller to accommodate") */
+.pdoc .pf-cover .brand img{height:.5in}
+.pdoc .pf-cover .brand .sub{display:none}
+.pdoc .pf-cover .doc .k{font-size:22pt}
+.pdoc .pf-cover .doc .n{font-size:11pt;margin-top:2px}
+.pdoc .pf-cover .doc .meta{font-size:9pt;margin-top:2px}
+.pdoc .pf-cover .pf-who{margin:6px 0 2px;padding:5px 0;gap:12px}
+.pdoc .pf-cover .pf-who .lbl{font-size:7.5pt}
+.pdoc .pf-cover .pf-who b{font-size:10.5pt}
+.pdoc .pf-cover .pf-who .faint{font-size:8.5pt;margin-top:1px}
+.pdoc .pf-cover .pf-hero{flex:none;display:flex;flex-direction:column;align-items:center;gap:2px;margin:2px 0}
+.pdoc .pf-cover .pf-hero img{flex:none;width:100%;height:auto;max-height:none;object-fit:contain}
+.pdoc .pf-cover .pf-hero span{font-size:9.5pt}
+.pdoc .pf-cover .pf-sum{margin-top:2px;padding-top:4px;gap:14px}
+.pdoc .pf-cover .pf-sum .lbl{font-size:7.5pt}
+.pdoc .pf-cover .pf-pr{font-size:9pt;margin-top:1px;line-height:1.25}
+.pdoc .pf-cover .pf-inks{font-size:8.5pt;margin-top:1px}
+.pdoc .pf-cover .pf-inks .sw,.pdoc .pf-cover .pf-pr .sw{width:10px;height:10px;margin-right:4px}
+.pdoc .pf-cover .pf-ok{margin-top:auto;padding:6px 12px 8px;border-width:1.5px}
+.pdoc .pf-cover .pf-ok .t{font-size:10pt}
+.pdoc .pf-cover .pf-ok .s{font-size:8pt;line-height:1.3;margin-top:1px}
+.pdoc .pf-cover .pf-boxes{font-size:9pt;margin-top:4px;gap:2px 16px}
+.pdoc .pf-cover .pf-notes{height:.42in;margin-top:5px}
+.pdoc .pf-cover .pf-notes span{font-size:7.5pt}
+.pdoc .pf-cover .pf-sign{margin-top:28px}
+.pdoc .pf-cover .foot{padding-top:6px}
 @media screen and (max-width:840px){.pdoc{padding:0 8px 16px}.pdoc .print-bar{padding:10px 0}}
 @page{size:letter;margin:.4in .45in}
 @media print{

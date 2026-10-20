@@ -149,7 +149,7 @@ export default function PrintButton({ fileName }: { fileName?: string }) {
           const r = t.getBoundingClientRect();
           const line = !!t.closest(".pf-sign");
           // a signature / name / date goes on the line (above its label); the note fills its box under the label
-          const rr = line ? { x: r.left, y: r.top - 28, w: r.width, h: 26 } : { x: r.left + 3, y: r.top + 20, w: r.width - 6, h: r.height - 23 };
+          const rr = line ? { x: r.left, y: r.top - 25, w: r.width, h: 23 } : { x: r.left + 3, y: r.top + 16, w: r.width - 6, h: r.height - 19 };
           const f = form.createTextField(`${t.dataset.pdfText}-p${i + 1}`);
           if (t.dataset.pdfMulti) f.enableMultiline();
           f.addToPage(page, { ...at(rr), borderWidth: 0, font });
