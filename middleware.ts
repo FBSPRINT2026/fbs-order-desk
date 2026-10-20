@@ -35,10 +35,22 @@ export async function middleware(request: NextRequest) {
       },
     },
   });
-  const { data: { user } } = await supabase.auth.getUser();
+  // The sign-in check waits on Supabase. When Supabase is slow (Oct 20: its disk ran out of speed and every check hung,
+  // so the whole site showed 504s for minutes), give up after 6s: someone with a sign-in cookie goes on to the page,
+  // which checks again itself; no cookie still goes to /login.
+  type U = Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"];
+  const SLOW = Symbol("slow");
+  const got = await Promise.race([
+    supabase.auth.getUser().then((r) => r.data.user as U).catch(() => null as U),
+    new Promise<typeof SLOW>((res) => setTimeout(() => res(SLOW), 6000)),
+  ]);
+  const slow = got === SLOW;
+  const user = slow ? null : (got as U);
+  const hasCookie = request.cookies.getAll().some((c) => /^sb-.*-auth-token/.test(c.name));
 
   const path = request.nextUrl.pathname;
   const needsLogin = path.startsWith("/shop") || path.startsWith("/portal") || path.startsWith("/print");
+  if (slow && hasCookie) return response;
   if (!user && needsLogin) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
