@@ -287,13 +287,22 @@ export async function artFromArtPdf(buf: ArrayBuffer, name = "art"): Promise<{ f
     if (!knockOutBackground(full)) return null;
     c = full;
   }
-  const w = c.width, h = c.height, d = c.getContext("2d")!.getImageData(0, 0, w, h).data;
-  let clear = 0, x0 = w, y0 = h, x1 = -1, y1 = -1;
-  for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
-    if (d[(y * w + x) * 4 + 3] < 20) { clear++; continue; }
-    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-  }
-  if (x1 < x0 || clear < (w * h) / 4 * 0.1) return null;
+  const w = c.width, h = c.height;
+  const bounds = () => {
+    const d = c.getContext("2d")!.getImageData(0, 0, w, h).data;
+    let clear = 0, x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
+      if (d[(y * w + x) * 4 + 3] < 20) { clear++; continue; }
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    return { clear, x0, y0, x1, y1 };
+  };
+  let b = bounds();
+  // nothing see-through: a big picture filling the page (a full-size one isn't skipped as a shirt photo) on a flat
+  // background (Oct 20, The Bottles on gray, 2nd try): the background is taken off from the edges in
+  if (b.x1 >= b.x0 && b.clear < (w * h) / 4 * 0.1 && knockOutBackground(c)) b = bounds();
+  let { x0, y0, x1, y1 } = b;
+  if (x1 < x0 || b.clear < (w * h) / 4 * 0.1) return null;
   x0 = Math.max(0, x0 - 4); y0 = Math.max(0, y0 - 4); x1 = Math.min(w - 1, x1 + 4); y1 = Math.min(h - 1, y1 + 4);
   const cc = document.createElement("canvas");
   cc.width = x1 - x0 + 1; cc.height = y1 - y0 + 1;
