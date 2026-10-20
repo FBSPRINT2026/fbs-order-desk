@@ -20,7 +20,15 @@ export default function PrintButton({ fileName }: { fileName?: string }) {
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
   }, []);
-  useEffect(() => { if (fileName) document.title = fileName; }, [fileName]);
+  // the page title is the file name (the browser's Save as PDF uses it); kept when the app sets its own title after loading
+  useEffect(() => {
+    if (!fileName) return;
+    const set = () => { if (document.title !== fileName) document.title = fileName; };
+    set();
+    const mo = new MutationObserver(set);
+    mo.observe(document.head, { childList: true, subtree: true, characterData: true });
+    return () => mo.disconnect();
+  }, [fileName]);
 
   async function save() {
     setBusy("Making the PDF…"); setErr("");
