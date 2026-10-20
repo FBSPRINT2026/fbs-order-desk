@@ -67,7 +67,7 @@ export async function buildCatalog(admin: SupabaseClient, customerId: string): P
     const groups = a.data?.groups || [];
     raws.push({
       job: { ref: `p:${a.id}`, src: "printavo", id: a.id, number: String(a.visual_id), date: String(a.order_date || ""), title: String(a.nickname || "").trim(), qty: +a.qty || 0, status: a.status_name || "" },
-      lines: groups.flatMap((g) => (g.lines || []).filter((l) => (l.items || 0) > 0 || l.itemNumber).map((l) => {
+      lines: groups.flatMap((g) => (g.lines || []).filter((l) => (String(l.itemNumber || "").trim() || String(l.color || "").trim()) && ((l.items || 0) > 0 || l.itemNumber)).map((l) => {
         const m = (l.mockups || [])[0];
         return { style: String(l.itemNumber || "").trim().toUpperCase(), brand: String(l.brand || "").trim(), garment: String(l.description || "").replace(/^[^-]+-\s*/, "").trim(), color: String(l.color || "").trim(), pieces: +l.items || 0, thumb: (m && files[m.thumb]) || "", full: (m && files[m.full]) || "" };
       })),
