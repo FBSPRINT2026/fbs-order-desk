@@ -193,8 +193,9 @@ export const DOC_CSS = `
 .pdoc .pf-who b{font-size:12.5pt}
 .pdoc .pf-who .faint{font-size:10pt;margin-top:2px}
 .pdoc .sheet.pf{height:11in;overflow:hidden}
+/* every mockup picture the same size, on the cover and the mockup pages (Oct 20, Nick: "the images are all different sizes") */
 .pdoc .pf-hero{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
-.pdoc .pf-hero img{flex:1 1 0;min-height:0;width:100%;object-fit:contain}
+.pdoc .pf-hero img,.pdoc .pf-mk img{flex:none;width:100%;height:3.2in;object-fit:contain}
 .pdoc .pf-hero span,.pdoc .pf-mk span{font-size:10.5pt;color:var(--ink2);font-weight:600}
 .pdoc .pf-hero .none{width:100%;flex:1;border-radius:12px;display:grid;place-items:center;color:rgba(0,0,0,.5);font-size:13pt}
 .pdoc .pf-sum{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
@@ -211,7 +212,6 @@ export const DOC_CSS = `
 .pdoc .pf-sign{display:grid;grid-template-columns:2fr 1.6fr 1fr;gap:18px;margin-top:20px}
 .pdoc .pf-sign div{border-top:1.5px solid var(--ink);padding-top:3px;font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
 .pdoc .pf-mk{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin-top:12px}
-.pdoc .pf-mk img{flex:1 1 0;min-height:0;width:100%;object-fit:contain}
 .pdoc .pf-art{height:7in;margin-top:12px}
 .pdoc .pf-specs{grid-template-columns:repeat(4,1fr)}
 .pdoc .pf-specs .sp .v{font-size:13pt}

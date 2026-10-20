@@ -73,6 +73,11 @@ const sharedInks = (pt?: Paint) => { if (!pt) return []; const n = pt.sources.ma
  */
 const CANVA_IN_MOCKUP = false;
 
+/** where a photo sits inside the PHOTO_W × PHOTO_H frame when fitted, not stretched (as measured and shown on screen) */
+function containRect(img: HTMLImageElement) {
+  const iw = img.naturalWidth || PHOTO_W, ih = img.naturalHeight || PHOTO_H, k = Math.min(PHOTO_W / iw, PHOTO_H / ih);
+  return { x: (PHOTO_W - iw * k) / 2, y: (PHOTO_H - ih * k) / 2, w: iw * k, h: ih * k };
+}
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
     const im = new Image();
@@ -1017,7 +1022,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // the shirt at the same size as on screen (every photo zoomed to fill the frame like the reference tee); kept to its own cell
       const nm = normOf(fit, v);
       main.save(); main.beginPath(); main.rect(ox, oy, pw, ph); main.clip();
-      main.drawImage(bg, ox + nm.tx * k, oy + nm.ty * k, pw * nm.z, ph * nm.z);
+      // fitted inside the frame the way it was measured and is shown on screen (object-fit: contain), not stretched: a SanMar
+      // photo (2:3) stretched to the 4:5 frame came out 20% wider than the S&S shirts next to it (Oct 20, PC55RS)
+      const cr = containRect(bg);
+      main.drawImage(bg, ox + (nm.tx + nm.z * cr.x) * k, oy + (nm.ty + nm.z * cr.y) * k, cr.w * nm.z * k, cr.h * nm.z * k);
       main.restore();
       // art goes on its own layer, then gets cut to the shirt outline before it's added to the picture
       const layer = document.createElement("canvas"); layer.width = c.width; layer.height = c.height;
@@ -1637,7 +1645,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const c = document.createElement("canvas"); c.width = W; c.height = H;
       const g = c.getContext("2d")!;
       g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, H);
-      g.drawImage(bg, nm.tx * BD_K, nm.ty * BD_K, W * nm.z, H * nm.z);
+      { const cr = containRect(bg); g.drawImage(bg, (nm.tx + nm.z * cr.x) * BD_K, (nm.ty + nm.z * cr.y) * BD_K, cr.w * nm.z * BD_K, cr.h * nm.z * BD_K); }
       // the print area, dashed, with its name and size (light lines on a dark shirt, dark on a light one)
       const bd = bodyFor(l), sp = spotFor(loc, bd);
       const b = basePlacement(loc, sp.maxW, sp.maxH / sp.maxW, null, scaleOf(bd), v, adjusted(fit, l, v), bd);

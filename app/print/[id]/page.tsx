@@ -50,14 +50,30 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   dPaths.forEach((d) => { const u = urlOf.get(d.preview_path); if (u) designUrls[d.id] = u; });
   const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, mockups, hexes, maxes, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
 
+  // one tidy file name for every PDF (Oct 20, Nick): "40072 - Methodist Dallas - 2026 Donor Shirts - Proof v1"
+  const short = (t: string, n: number) => { const x = (t || "").replace(/\s+/g, " ").trim(); return x.length <= n ? x : (x.slice(0, n).replace(/\s+\S*$/, "") || x.slice(0, n)); };
+  const nameOf = (kind: string) => [String(o.number), short(cust.company || cust.name || "", 24), short(o.nickname || "", 30), kind]
+    .filter(Boolean).join(" - ").replace(/[\\/:*?"<>|#]+/g, "").replace(/\s+/g, " ").trim();
+
   if (proof0) {
+    // the proof's version: the one out with the customer when these mockups were sent, else the next one
+    const [{ data: pf }, { data: cm }] = await Promise.all([
+      admin.from("proofs").select("version, archived_at, mockup_id").eq("order_id", id).not("version", "is", null),
+      admin.from("mockups").select("id, proof_id").eq("order_id", id).is("archived_at", null),
+    ]);
+    const rows = (pf || []) as { version: number; archived_at: string | null; mockup_id: string | null }[];
+    const cur = (cm || []) as { id: string; proof_id: string | null }[];
+    const live = rows.filter((r) => !r.archived_at);
+    const liveV = live.length ? Math.max(...live.map((r) => r.version)) : 0;
+    const sentNow = liveV > 0 && cur.length > 0 && cur.every((m) => live.some((r) => r.mockup_id === m.id));
+    const version = sentNow ? liveV : (rows.length ? Math.max(...rows.map((r) => r.version)) : 0) + 1;
     const printed = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
     return (
       <div className="pdoc">
-        <title>{`Art proof #${o.number} ${o.nickname || ""}`.trim()}</title>
+        <title>{nameOf(`Proof v${version}`)}</title>
         <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
-        <div className="print-bar"><PrintButton /></div>
-        <ProofDoc {...data} printed={printed} />
+        <div className="print-bar"><PrintButton fileName={nameOf(`Proof v${version}`)} /></div>
+        <ProofDoc {...data} printed={printed} version={version} />
       </div>
     );
   }
@@ -73,7 +89,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     return (
       <div className="pdoc">
         <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
-        <div className="print-bar"><PrintButton /></div>
+        <title>{nameOf("Work Order")}</title>
+        <div className="print-bar"><PrintButton fileName={nameOf("Work Order")} /></div>
         <WorkOrderDoc {...data} notes={[...((apc || []) as { customer_comment: string; decided_name: string | null; decided_at: string | null }[]).map((x) => `APPROVED WITH CHANGES${x.decided_name ? ` (${x.decided_name})` : ""}: ${x.customer_comment}`), inn?.production_notes || ""].filter(Boolean).join("\n\n")} shopNotes={(jn || []) as { tag: string; body: string; by_name: string; created_at: string }[]} printed={printed} />
       </div>
     );
@@ -82,7 +99,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   return (
     <div className="pdoc">
       <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
-      <div className="print-bar"><PrintButton /></div>
+      <title>{nameOf(o.type === "quote" ? "Quote" : "Invoice")}</title>
+      <div className="print-bar"><PrintButton fileName={nameOf(o.type === "quote" ? "Quote" : "Invoice")} /></div>
       <InvoiceDoc {...data} />
     </div>
   );

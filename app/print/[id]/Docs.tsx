@@ -228,7 +228,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
  * mockups two to a page; then each print up close on the shirt color with its size, placement and inks. No prices,
  * no quantities.
  */
-export function ProofDoc(p: DocData & { printed: string }) {
+export function ProofDoc(p: DocData & { printed: string; version?: number }) {
   const { o, cust, groups } = p;
   const sh = p.settings.shop;
   const who = [cust.company || cust.name, cust.company && cust.name && cust.name !== cust.company ? cust.name : ""].filter(Boolean).join(" · ");
@@ -242,7 +242,7 @@ export function ProofDoc(p: DocData & { printed: string }) {
   });
   const total = plan.reduce((a, x) => a + 1 + x.extra.length + x.prints, 0);
   let page = 0;
-  const foot = () => { page++; return <div className="foot"><span>Art proof · #{o.number} {o.nickname}{who ? ` · ${who}` : ""}</span><span>Page {page} of {total}</span></div>; };
+  const foot = () => { page++; return <div className="foot"><span>Art proof{p.version ? ` v${p.version}` : ""} · #{o.number} {o.nickname}{who ? ` · ${who}` : ""}</span><span>Page {page} of {total}</span></div>; };
   const approved = o.approved_at ? `${o.approved_name || "Approved"}, ${new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" })}` : "";
   return (
     <>
@@ -260,7 +260,7 @@ export function ProofDoc(p: DocData & { printed: string }) {
               <div className="top">
                 <div className="brand"><img src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
                   {(sh.phone || sh.email) && <div className="sub">{[fmtPhone(sh.phone), sh.email].filter(Boolean).join(" · ")}</div>}</div>
-                <div className="doc"><div className="k disp">Art Proof</div><div className="n">#{o.number}{gname ? ` · ${gname}` : ""}</div><div className="meta">Prepared {p.printed}</div>
+                <div className="doc"><div className="k disp">Art Proof</div><div className="n">#{o.number}{p.version ? ` · Version ${p.version}` : ""}{gname ? ` · ${gname}` : ""}</div><div className="meta">Prepared {p.printed}</div>
                   {approved && <div className="stamp">APPROVED</div>}</div>
               </div>
               <div className="pf-who">
