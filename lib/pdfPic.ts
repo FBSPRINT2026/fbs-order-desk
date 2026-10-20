@@ -42,15 +42,18 @@ export function solidScore(c: HTMLCanvasElement) {
 }
 
 /** an order form, spreadsheet or purchase order: table rules running across most of the page (an S&S order has
- *  20-35 at 600 px wide; mockups, photos and art have none) */
+ *  4-35 at 600 px wide; mockups, photos and art have none: a photo's rows are long but they're an area, not lines) */
 export function isForm(c: HTMLCanvasElement) {
   const W = 600, H = Math.max(1, Math.round((c.height / c.width) * W));
   const s = document.createElement("canvas"); s.width = W; s.height = H;
   const x = s.getContext("2d")!; x.fillStyle = "#fff"; x.fillRect(0, 0, W, H); x.drawImage(c, 0, 0, W, H);
   const d = x.getImageData(0, 0, W, H).data;
+  const long: boolean[] = [];
+  for (let y = 0; y < H; y++) { let run = 0, best = 0; for (let xx = 0; xx < W; xx++) { const i = (y * W + xx) * 4; run = Math.min(d[i], d[i + 1], d[i + 2]) < 235 ? run + 1 : 0; if (run > best) best = run; } long.push(best > W * 0.6); }
+  // a rule is a thin line: a full-width photo or a dark band has long rows too, but rows of them, not lines
   let n = 0;
-  for (let y = 0; y < H; y++) { let run = 0, best = 0; for (let xx = 0; xx < W; xx++) { const i = (y * W + xx) * 4; run = Math.min(d[i], d[i + 1], d[i + 2]) < 235 ? run + 1 : 0; if (run > best) best = run; } if (best > W * 0.6) n++; }
-  return n >= 8;
+  for (let y = 0; y < H; y++) if (long[y] && !long[y - 4] && !long[y + 4]) n++;
+  return n >= 3;
 }
 
 /** how good a cover it makes: -1 an order form (never), 2+ a mockup or photo, 1+ the art alone */
