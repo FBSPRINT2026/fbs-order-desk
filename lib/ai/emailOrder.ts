@@ -12,7 +12,7 @@ import { LOCATIONS, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, t
 import { bodyOf, smallestOrdered } from "@/lib/garmentBody";
 import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
-import { isPicture, looksLikeSignature, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
+import { isPicture, looksLikeSignature, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 
 /**
  * "Create order" from a customer email. The AI reads the email AND its attachments (pictures and PDFs it looks at,
@@ -180,13 +180,13 @@ export function jobsText(jobs: PastJob[]) {
  * The sender's email signature pictures: nameless small pictures, and pictures that came on their other emails too
  * (same name and size within 3%). They're listed for the AI as signatures and never shown to it or used as art.
  */
-export async function signaturePaths(admin: SupabaseClient, a: { id: string; from_email: string | null }, atts: Att[]): Promise<Set<string>> {
+export async function signaturePaths(admin: SupabaseClient, a: { id: string; from_email: string | null }, atts: Att[], /** the same conversation's emails: a picture sent again in a reply is the order's, not a signature (Oct 20: Dear Heart's mauve pullover screenshot) */ skip: string[] = []): Promise<Set<string>> {
   const out = new Set(atts.filter((f) => looksLikeSignature(f)).map((f) => f.path));
   const pics = atts.filter((f) => isPicture(f) && !out.has(f.path));
   const dom = String(a.from_email || "").split("@")[1];
   if (!pics.length || !dom) return out;
   const { data } = await admin.from("activities").select("id, meta").ilike("from_email", `%@${dom}`).neq("id", a.id).order("occurred_at", { ascending: false }).limit(40);
-  const seen = (data || []).flatMap((r) => ((r.meta as { attachments?: Att[] })?.attachments || []));
+  const seen = (data || []).filter((r) => !skip.includes(r.id as string)).flatMap((r) => ((r.meta as { attachments?: Att[] })?.attachments || []));
   for (const f of pics) if (seen.some((x) => x.name === f.name && Math.abs((x.size || 0) - f.size) <= f.size * 0.03)) out.add(f.path);
   return out;
 }
@@ -308,7 +308,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 }
 
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
-export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; reorderOk?: boolean; lookedUp?: LookedUp | null } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
+export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
   const { settings, ready, reason } = await aiState(admin);
   if (!ready) return { ok: false, error: reason };
   const cv = await emailConversation(admin, activityId);
@@ -343,8 +343,10 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   for (const e of convo) {
     if (e.direction !== "in" && e.id !== C.id) continue;
     for (const f of await attsOf(e)) if (!atts.some((x) => x.path === f.path || (x.name === f.name && x.size === f.size))) atts.push(f);
-    if (atts.length >= 12) break;
+    if (atts.length >= 12 && !o.part) break;
   }
+  // one order of several: only the files that are for it (the same file sent again counts too)
+  if (o.part) { const want = new Set(o.part.files); const names = new Set(o.part.names || []); const keep = atts.filter((f) => want.has(f.path) || names.has(f.name)); atts.length = 0; atts.push(...keep.slice(0, 12)); }
   const told = (o.told || "").trim().slice(0, 1500);
   const [{ data: cust }, recent] = await Promise.all([
     a.customer_id ? admin.from("customers").select("id, company, name, email, price_type, notes").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -358,11 +360,12 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // (looked up first by the panel, so staff see it while the email is read)
   const lookedUp = told && o.lookedUp?.text ? { text: String(o.lookedUp.text).slice(0, 600), sources: (o.lookedUp.sources || []).slice(0, 3).map((x) => ({ title: String(x.title || "").slice(0, 120), url: String(x.url || "") })).filter((x) => /^https?:\/\//.test(x.url)) } : null;
   const staffSays = [
+    o.part ? `This conversation holds ${o.part.of} separate orders, one per design. THIS order is only "${o.part.label}": use only its files (listed above) and only what the emails say about it.${o.part.pieces ? ` Its size sheets total ${o.part.pieces} pieces.` : ""} When several size sheets (e.g. one for the store and one for their warehouse) list the same style, color and size, add the quantities together into one garment line.${o.part.changes ? ` What's different from the past job: ${o.part.changes}` : " It's an exact reprint of the past job: same prints, inks and placement."}` : "",
     picked ? `Staff confirmed: this is a reorder of ${picked.label} (J1).` : "",
     told,
     lookedUp ? `Looked up online for that note: ${lookedUp.text}` : "",
   ].filter(Boolean).join("\n");
-  const sigs = await signaturePaths(admin, { id: a.id as string, from_email: (a.from_email as string) || null }, atts).catch(() => new Set<string>());
+  const sigs = await signaturePaths(admin, { id: a.id as string, from_email: (a.from_email as string) || null }, atts, convo.map((e) => e.id as string)).catch(() => new Set<string>());
   const { images, documents, listing } = await readFiles(admin, atts, sigs);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const weekday = new Date().toLocaleDateString("en-US", { timeZone: "America/Chicago", weekday: "long" });
@@ -451,9 +454,23 @@ ${staffSays}` : ""}`;
       for (const g of groups) g.lines = g.lines.filter((l) => keep.has(l));
       groups = groups.filter((g) => g.lines.length);
     }
-    // a new style or color they added that wasn't on the old job goes in the first group
-    const extra = proposalToGroups({ groups: (p.groups || []).map((g) => ({ ...g, prints: [], garments: (g.garments || []).filter((x) => !x.reorder_line) })) }).flatMap((g) => g.lines).filter((l) => Object.keys(l.sizes).length);
-    if (extra.length && groups[0]) groups[0].lines.push(...extra);
+    // a new style or color they added that wasn't on the old job goes in the first group; when its prints have their
+    // own inks (Oct 20, Dear Heart: In Every Season on a new Mauve pullover in Burgundy ink, the tees in white), it's a
+    // group of its own: the old job's prints, with those inks, and its mockup
+    for (const pg of p.groups || []) {
+      const extra = proposalToGroups({ groups: [{ ...pg, prints: [], garments: (pg.garments || []).filter((x) => !x.reorder_line) }] }).flatMap((g) => g.lines).filter((l) => Object.keys(l.sizes).length);
+      if (!extra.length || !groups[0]) continue;
+      const inks = (pg.prints || []).map((pr) => String(pr.inks || "").trim());
+      const base = groups[0];
+      const differs = inks.some((x, k) => x && x.toLowerCase() !== String(base.imprints[k]?.inks || "").trim().toLowerCase());
+      if (!differs) { base.lines.push(...extra); continue; }
+      const ng: Group = { ...JSON.parse(JSON.stringify(base)) as Group, id: uid(), name: [base.name, extra.map((l) => [l.style, l.color].filter(Boolean).join(" ")).join(", ")].filter(Boolean).join(" · ").slice(0, 80), lines: extra };
+      ng.imprints = ng.imprints.map((im, k) => ({ ...im, id: uid(), ...(inks[k] ? { inks: inks[k], notes: [im.notes, `New ink for this garment: ${inks[k]} (was ${base.imprints[k]?.inks || "not on file"})`].filter(Boolean).join(". ").slice(0, 300) } : {}) }));
+      delete (ng as { mockupThumbs?: unknown }).mockupThumbs; delete (ng as { pvArt?: unknown }).pvArt;
+      const ms = (pg.mockup_files || []).map(fileAt).filter(Boolean);
+      if (ms.length) mockups[ng.id] = [...new Set(ms)];
+      groups.push(ng);
+    }
   } else {
     // what staff changed on earlier mockups the AI measured: scale this reading the same way
     const { data: ls } = await admin.from("ai_suggestions").select("payload").eq("kind", LESSON_KIND).order("updated_at", { ascending: false }).limit(80);
@@ -509,10 +526,10 @@ ${staffSays}` : ""}`;
     groups, art, mockups, reorderOf: job?.ref || null,
     questions: (p.questions || []).map((q) => String(q).slice(0, 300)).slice(0, 10), files,
     ...(told ? { told } : {}), ...(p.kind === "reorder" || picked ? { looksReorder: true } : {}),
-    ...(lookedUp ? { lookedUp } : {}), ...(o.reorderOk && job ? { reorderOk: true } : {}),
+    ...(lookedUp ? { lookedUp } : {}), ...(o.reorderOk && job ? { reorderOk: true } : {}), ...(o.part ? { part: o.part } : {}),
   };
   const row = {
-    kind: "draft_order", dedupe_key: `email:${C.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
+    kind: "draft_order", dedupe_key: `email:${C.id}:order${o.part ? `:${o.part.key}` : ""}`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
     customer_id: a.customer_id, order_id: null, activity_id: C.id,
     title: `${draft.kind === "reorder" ? "Reorder" : "New order"} in ${cust?.company || cust?.name || a.from_email}'s email`,
     body: `${draft.summary}${draft.questions.length ? `\nStill need: ${draft.questions.join("; ")}` : ""}`,

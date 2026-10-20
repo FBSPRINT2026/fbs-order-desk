@@ -10079,3 +10079,17 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .dc-split{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#FFF4D6;color:#8A5A00;font-size:11px;font-weight:600;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
 .dc-card .dc-split{margin:2px 0 0;align-self:flex-start}
 .dc-job.split{border-style:dashed}
+/* Create order: one of several orders in an email (Oct 20) */
+.eo-part{display:flex;flex-direction:column;gap:2px;margin:4px 0 8px;padding:8px 12px;border-radius:10px;background:var(--bg-2,#f6f8fb);border:1px solid var(--line);font-size:13px}
+.eo-part b{font-size:14px}
+.eo-part-ok{color:var(--ok);font-weight:600}
+.eo-part-off{color:var(--danger);font-weight:600}
+.osp-plan{border:1px solid var(--brand,#1F6FD1);border-radius:12px;padding:10px 14px;margin-bottom:12px;background:color-mix(in srgb,var(--brand,#1F6FD1) 5%,var(--surface))}
+.osp-plan-h{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+.osp-plan-h b{font-size:15px}
+.osp-plan-h .faint{font-size:12.5px}
+.osp-plan ol{margin:0 0 10px;padding-left:20px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.osp-plan-wait{font-size:12.5px;color:var(--ink-3);margin:0 0 10px}
+.osp-sugg{width:100%;margin-bottom:12px}
+.eo-parts{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.eo-parts .chip.done{border-color:var(--ok);color:var(--ok)}

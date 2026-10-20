@@ -25,7 +25,7 @@ import { Attachments, OpeningNote, box as mailBox, boxPost, fitWidth, MailHead, 
 import { checkMailNow, connectMailbox, customerFromEmail, disconnectMailbox, getMailPrefs, getMailStatus, getSignature, setMailPrefs, markNotCustomer, refreshSignature, sendEmailReply, setEmailCustomer, setEmailOrder, setSignatureOn } from "@/app/shop/mail-actions";
 import { aiReplyOptions, aiWriteReply, markNoReply, noteEmailChat, putBackInInbox } from "@/app/shop/ai-actions";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
-import OrderStartPick from "@/components/OrderStartPick";
+import OrderStartPick, { type OrderStart } from "@/components/OrderStartPick";
 import EmailChat from "@/components/EmailChat";
 import type { EmailAction } from "@/lib/ai/emailChat";
 
@@ -1063,7 +1063,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   // the answer box: a slim bar until you start answering (an email opened to answer starts open)
   const [writing, setWriting] = useState(focus);
   // the email column shows the email, or the order being made from it
-  const [view, setView] = useState<"mail" | "order">("mail"), [orderStart, setOrderStart] = useState<{ told?: string; job?: string; n: number } | null>(null), [ordering, setOrdering] = useState(false);
+  const [view, setView] = useState<"mail" | "order">("mail"), [orderStart, setOrderStart] = useState<(OrderStart & { n: number }) | null>(null), [ordering, setOrdering] = useState(false);
   // phones: one column at a time
   const [side, setSide] = useState<"mail" | "ai">("mail");
   // phones: "✦ Assistant" sits in the email's top bar and opens the chat full screen
@@ -1098,8 +1098,10 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const hideAi = stacked ? undefined : () => { setAiOpen(false); setPeek(false); };
   useEffect(() => { setOrdering(false); setOrderStart(null); setMade(null); setView("mail"); }, [x.id]);
   // Create order asks first: new order, or a reorder of which job (Oct 20, Nick)
-  const [pickOpen, setPickOpen] = useState(false);
-  const startOrder = (s?: { told?: string; job?: string }) => { if (s) setOrderStart((p) => ({ ...s, n: (p?.n || 0) + 1 })); setOrdering(true); setView("order"); setSide("mail"); };
+  const [pickOpen, setPickOpen] = useState(false), [suggest, setSuggest] = useState<{ label: string; told?: string; job?: string } | undefined>(undefined);
+  // several orders from one email (one per design): which one is open, and the ones made
+  const [partAt, setPartAt] = useState(0), [partMade, setPartMade] = useState<Record<string, { id: string; number: number }>>({});
+  const startOrder = (s?: OrderStart) => { if (s) { setOrderStart((p) => ({ ...s, n: (p?.n || 0) + 1 })); setPartAt(0); setPartMade({}); } setOrdering(true); setView("order"); setSide("mail"); };
   useEffect(() => { if (autoOrder) { startOrder(); onAutoOrdered?.(); } }, [autoOrder]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!autoGo) return;
@@ -1111,7 +1113,9 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   const write = (focusBox = true) => { setWriting(true); setView("mail"); setSide("mail"); if (focusBox) setTimeout(() => boxRef.current?.focus(), 40); };
   // a step the Assistant suggested: open Create order with what to know, put a reply in the box, file it, no reply
   function act(a: EmailAction) {
-    if (a.kind === "create_order") startOrder({ told: a.told, job: a.job });
+    // the Assistant's "Create the reorder…": the chooser opens with it on top, and with the email's orders when it
+    // holds several (Oct 20, Nick: "I should be able to say… create reorder from this email")
+    if (a.kind === "create_order") { setSuggest({ label: a.label || "Create the order", told: a.told, job: a.job }); setPickOpen(true); }
     else if (a.kind === "reply") { if (a.subject) setSubject(a.subject); setBody(a.body); setPicked(-1); write(); }
     else if (a.kind === "file_under") { const o = orders.find((z) => z.number === a.order_number); if (o) void run("ord", () => setEmailOrder(x.id, o.id), `Filed under #${o.number}.`); else setErr(`#${a.order_number} isn't one of their open orders.`); }
     else if (a.kind === "no_reply") void run("nr", () => markNoReply(x.id), "Off your Needs reply list.");
@@ -1303,11 +1307,30 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
         {made && <div className="ibx2-made eh-err">Order <b>#{made.number}</b> created. <a href={`/shop/orders/${made.id}`} target="_blank" rel="noreferrer">Open it</a></div>}
         {err && <div className="pv-err eh-err">{err}</div>}
 
-        {pickOpen && <OrderStartPick activityId={orderFrom?.id || x.id} text={`${x.subject || ""} ${x.meta?.triage?.summary || ""}`} guess={reorder ? "reorder" : intents.includes("new_order") ? "new" : ""} onClose={() => setPickOpen(false)} onPick={(st) => { setPickOpen(false); startOrder(st); }} />}
+        {pickOpen && <OrderStartPick activityId={orderFrom?.id || x.id} text={`${x.subject || ""} ${x.meta?.triage?.summary || ""}`} guess={reorder ? "reorder" : intents.includes("new_order") ? "new" : ""} suggested={suggest} onClose={() => { setPickOpen(false); setSuggest(undefined); }} onPick={(st) => { setPickOpen(false); setSuggest(undefined); startOrder(st); }} />}
         {ordering && <div className="ibx2-order" hidden={view !== "order"}>
-          <EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={orderFrom?.id || x.id} start={orderStart || undefined}
+          {orderStart?.parts?.length ? (() => {
+            const parts = orderStart.parts, cur = parts[Math.min(partAt, parts.length - 1)];
+            return <>
+              <div className="eo-parts" data-toolbar role="tablist" aria-label="Orders in this email">
+                {parts.map((p, i) => <button key={p.key} type="button" role="tab" aria-selected={i === partAt} className={"chip" + (i === partAt ? " on" : "") + (partMade[p.key] ? " done" : "")} onClick={() => setPartAt(i)}>{partMade[p.key] ? `✓ #${partMade[p.key].number}` : `${i + 1}.`} {p.label}</button>)}
+              </div>
+              <EmailOrderPanel key={`${x.id}:${orderStart.n}:${cur.key}`} activityId={orderFrom?.id || x.id} part={cur}
+                onClose={() => { setOrdering(false); setView("mail"); }}
+                onCreated={(id, n, opened) => {
+                  if (!opened) window.open(`/shop/orders/${id}`, "_blank");
+                  void noteEmailChat(x.id, `Order #${n} (${cur.label}) created from this email.`, `/shop/orders/${id}`).then(() => setBump((b) => b + 1));
+                  const made = { ...partMade, [cur.key]: { id, number: n } };
+                  setPartMade(made);
+                  const next = parts.findIndex((p) => !made[p.key]);
+                  if (next >= 0) { setPartAt(next); return; }
+                  setOrdering(false); setView("mail"); setMade({ id, number: n });
+                  done(`${parts.length} orders created: ${parts.map((p) => `#${made[p.key].number}`).join(", ")}.`);
+                }} />
+            </>;
+          })() : <EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={orderFrom?.id || x.id} start={orderStart || undefined}
             onClose={() => { setOrdering(false); setView("mail"); }}
-            onCreated={(id, n, opened) => { setOrdering(false); setView("mail"); setMade({ id, number: n }); if (!opened) window.open(`/shop/orders/${id}`, "_blank"); void noteEmailChat(x.id, `Order #${n} created from this email.`, `/shop/orders/${id}`).then(() => setBump((b) => b + 1)); done(`Order #${n} created. Our mockup is being built in a new tab.`); }} />
+            onCreated={(id, n, opened) => { setOrdering(false); setView("mail"); setMade({ id, number: n }); if (!opened) window.open(`/shop/orders/${id}`, "_blank"); void noteEmailChat(x.id, `Order #${n} created from this email.`, `/shop/orders/${id}`).then(() => setBump((b) => b + 1)); done(`Order #${n} created. Our mockup is being built in a new tab.`); }} />}
         </div>}
 
         {view === "mail" && <>

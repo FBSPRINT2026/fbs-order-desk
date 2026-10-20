@@ -3,7 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { makePreview } from "@/lib/artPrep";
 import { LOCATIONS, METHODS, SIZES, newGLine, newImprint, sizeLabel, type GLine, type Group, type Method } from "@/lib/pricing";
 import { SUPPLIERS } from "@/lib/goods";
-import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type PastJob } from "@/lib/emailOrderShared";
+import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
@@ -28,8 +28,9 @@ const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
 const qtyOf = (l: GLine) => Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0) || 0), 0);
 const uidish = () => Math.random().toString(36).slice(2, 10);
 
-export default function EmailOrderPanel({ activityId, onClose, onCreated, start }: { activityId: string; onClose: () => void; onCreated: (id: string, number: number, opened?: boolean) => void;
-  /** opened from the Inbox chat: what to tell the AI, and the past job it's a reorder of */ start?: { told?: string; job?: string } }) {
+export default function EmailOrderPanel({ activityId, onClose, onCreated, start, part }: { activityId: string; onClose: () => void; onCreated: (id: string, number: number, opened?: boolean) => void;
+  /** opened from the Inbox chat: what to tell the AI, and the past job it's a reorder of */ start?: { told?: string; job?: string };
+  /** one of several orders in the email (its design, files and past job): read and saved on its own */ part?: EOPart }) {
   /** the AI's order is shown as a summary to approve; Edit details opens the full form */
   const [editing, setEditing] = useState(false);
   const [step, setStep] = useState("");
@@ -55,7 +56,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start 
       lookedUp = lu?.ok ? lu.lookedUp : null;
       setLookStep(lookedUp ? `Looked up: ${lookedUp.text}` : "");
     }
-    const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told, job: o.job || null, reorderOk: !!o.reorderOk, lookedUp }) }).catch(() => null);
+    const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told, job: o.job || null, reorderOk: !!o.reorderOk, lookedUp, ...(part ? { part: part.key } : {}) }) }).catch(() => null);
     setLookStep("");
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     setBusy("");
@@ -66,7 +67,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start 
   useEffect(() => {
     let live = true;
     (async () => {
-      const r = await fetch(`/api/inbox/order?activity=${encodeURIComponent(activityId)}`).catch(() => null);
+      const r = await fetch(`/api/inbox/order?activity=${encodeURIComponent(activityId)}${part ? `&part=${encodeURIComponent(part.key)}` : ""}`).catch(() => null);
       const j = r ? await r.json().catch(() => null) : null;
       if (!live) return;
       if (!r?.ok || !j) return setErr(j?.error || "Couldn't load the email.");
@@ -168,6 +169,19 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start 
         <button type="button" className="btn sm ghost" onClick={onClose}>Close</button>
       </div>
       {!data.ai && !d && <div className="warn">{data.aiReason || "AI is off."} You can still enter the order by hand from the order page.</div>}
+      {part && (() => {
+        // one of several orders in the email: which, from which past order, what's new, and do the pieces add up
+        const pcs = d ? d.groups.reduce((n, g) => n + g.lines.reduce((m, l) => m + qtyOf(l), 0), 0) : 0;
+        const off = !!(d && part.pieces && pcs !== part.pieces);
+        return (
+          <div className="eo-part">
+            <b>{part.label}</b>
+            <span>{part.kind === "reorder" ? (part.jobLabel ? `Reorder of ${part.jobLabel}` : "Reorder") : "New order"}{" · "}{part.changes ? <>New: {part.changes}</> : "Exact reprint"}</span>
+            <span className="faint">{part.names?.length ? `From ${part.names.join(", ")}` : ""}</span>
+            {part.pieces ? <span className={off ? "eo-part-off" : "eo-part-ok"}>{d ? (off ? `This order has ${pcs.toLocaleString("en-US")} pcs; the sheets say ${part.pieces.toLocaleString("en-US")}: check the sizes` : `${pcs.toLocaleString("en-US")} pcs, matches the sheets`) : `The sheets say ${part.pieces.toLocaleString("en-US")} pcs`}</span> : null}
+          </div>
+        );
+      })()}
       {busy === "read" && <p className="eo-reading">Reading the whole conversation{(data as { emails?: number } | null)?.emails && (data as { emails?: number }).emails! > 1 ? ` (${(data as { emails?: number }).emails} emails)` : ""}{files.length ? ` and ${files.length} attachment${files.length === 1 ? "" : "s"}` : ""}: garments, the latest sizes, art, mockups, and whether it's a reorder. This takes 15 to 40 seconds.</p>}
       {err && <div className="err">{err}</div>}
       {busy === "read" && lookStep && <p className="eo-reading">{lookStep}</p>}

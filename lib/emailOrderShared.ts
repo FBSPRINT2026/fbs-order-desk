@@ -39,6 +39,20 @@ export type EODraft = {
   /** what was looked up online for staff's note (team PMS colors…), with sources */
   lookedUp?: { text: string; sources: { title: string; url: string }[] };
   files: EOFile[];
+  /** one of several orders read from the same email */
+  part?: EOPart;
+};
+/**
+ * One order of several in the same email (Oct 20, Nick: Dear Heart's "Buc-ee's Reorders + Warehouse Restock" is four
+ * reorders, one per design, each with its own S&S sheets named for the design). Made by lib/ai/emailPlan.ts.
+ */
+export type EOPart = {
+  /** a short key (the design), unique within the email */ key: string;
+  label: string; kind: "new" | "reorder"; of: number;
+  /** the past job to copy (PastJob.ref) and its label */ job: string | null; jobLabel?: string;
+  /** what's different from the past job ("" = an exact reprint) */ changes: string;
+  /** its files (storage paths) and their names (the same file sent again in a reply) */ files: string[]; names?: string[];
+  /** the pieces the sheets' names add up to ("…-400PCS.pdf"), to check the order against */ pieces?: number;
 };
 export const ROLE_LABEL: Record<EOFile["role"], string> = { art: "Art", mockup: "Mockup", sheet: "Size sheet", signature: "Email signature (ignored)", other: "Other" };
 /**
