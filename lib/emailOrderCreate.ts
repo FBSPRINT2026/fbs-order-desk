@@ -180,7 +180,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   const meta0 = (a.meta || {}) as { reply_options?: { options?: { label: string; subject: string; body: string }[] } };
   const others = (meta0.reply_options?.options || []).filter((x) => x.label !== reply.label).slice(0, 3);
   await admin.from("activities").update({ order_id: oid, meta: { ...meta0, reply_options: { at: new Date().toISOString(), options: [reply, ...others] } } }).eq("id", a.id);
-  await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: by, order_id: oid }).eq("dedupe_key", `email:${a.id}:order${d.part ? `:${d.part.key}` : ""}`);
+  await admin.from("ai_suggestions").update({ status: "done", decided_at: new Date().toISOString(), decided_by: by, order_id: oid }).eq("dedupe_key", d.part ? `email:${d.part.anchor || a.id}:order:${d.part.key}` : `email:${a.id}:order`);
   return { ok: true, id: oid, number: o.number as number };
 }
 

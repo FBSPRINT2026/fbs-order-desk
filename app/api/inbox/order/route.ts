@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState } from "@/lib/ai/claude";
 import { emailConversation, pastJobs, suggestEmailOrder } from "@/lib/ai/emailOrder";
 import { createOrderFromDraft } from "@/lib/emailOrderCreate";
-import type { EmailPlan } from "@/lib/ai/emailPlan";
+import { anchorOf, type EmailPlan } from "@/lib/ai/emailPlan";
 import type { EODraft, EOFile, EOPart } from "@/lib/emailOrderShared";
 
 export const runtime = "nodejs";
@@ -21,7 +21,10 @@ export const maxDuration = 120;
  */
 async function partOf(admin: ReturnType<typeof createAdminClient>, activity: string, key: string): Promise<EOPart | null> {
   if (!key) return null;
-  const { data } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", `email:${activity}:plan`).maybeSingle();
+  // the plan is kept under the conversation's first email
+  const cv = await emailConversation(admin, activity).catch(() => null);
+  const anchor = cv ? anchorOf(cv.convo) : activity;
+  const { data } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", `email:${anchor}:plan`).maybeSingle();
   return ((data?.payload as EmailPlan | null)?.parts || []).find((p) => p.key === key) || null;
 }
 async function staff() { const v = await getViewer(); return v.user && v.isStaff ? v : null; }
@@ -43,7 +46,7 @@ export async function GET(req: Request) {
   const { data: a } = await admin.from("activities").select("id, customer_id, meta").eq("id", id).maybeSingle();
   if (!a) return NextResponse.json({ error: "Email not found." }, { status: 404 });
   const [{ data: sg }, past, st, { data: cust }, cv] = await Promise.all([
-    admin.from("ai_suggestions").select("id, status, order_id, payload").eq("dedupe_key", `email:${id}:order${part ? `:${part.key}` : ""}`).maybeSingle(),
+    admin.from("ai_suggestions").select("id, status, order_id, payload").eq("dedupe_key", part ? `email:${part.anchor || id}:order:${part.key}` : `email:${id}:order`).maybeSingle(),
     pastJobs(admin, a.customer_id as string | null),
     aiState(admin),
     a.customer_id ? admin.from("customers").select("*").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),

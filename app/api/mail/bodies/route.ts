@@ -24,6 +24,8 @@ export async function GET(req: Request) {
 
 async function work(admin: ReturnType<typeof createAdminClient>) {
   const deadline = Date.now() + 240000;
+  // customer emails that read as orders: worked out in the background so they're ready to approve (Oct 20, Nick)
+  try { const { prepareOrders } = await import("@/lib/ai/prepareOrders"); console.info(`orders prepared ${JSON.stringify(await prepareOrders(admin, Date.now() + 120000))}`); } catch (e) { console.warn("prepare orders", e); }
   const { data } = await admin.from("mail_accounts").select("*").eq("enabled", true);
   const out: Record<string, unknown> = {};
   for (const a of (data || []) as MailAccount[]) {

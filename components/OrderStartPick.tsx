@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import type { EOPart, PastJob } from "@/lib/emailOrderShared";
+import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
 
 /**
  * Create order from an email: first ask what it is (Oct 20, Nick: "it pops up and says, okay, is this an order or
@@ -18,6 +18,8 @@ const fmt = (d: string) => (d ? new Date(d.length === 10 ? d + "T12:00:00" : d).
 export default function OrderStartPick({ activityId, text, guess, onPick, onClose, suggested }: { activityId: string; /** the email's subject and summary: past jobs named in it go first */ text: string; guess: "new" | "reorder" | ""; onPick: (s: OrderStart) => void; onClose: () => void;
   /** what the Assistant suggested ("Create the reorder of #31174") */ suggested?: { label: string; told?: string; job?: string } }) {
   const [past, setPast] = useState<PastJob[] | null>(null);
+  // the order already read in the background (lib/ai/prepareOrders.ts): one click to open it ready to approve
+  const [ready, setReady] = useState<{ draft: EODraft; created: string | null } | null>(null);
   // how many orders the email holds (Oct 20, Nick: Dear Heart's one email = four reorders, one per design)
   const [plan, setPlan] = useState<null | { parts: EOPart[]; note: string; error?: string }>(null);
   useEffect(() => {
@@ -29,7 +31,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
   const [q, setQ] = useState("");
   useEffect(() => {
     let live = true;
-    fetch(`/api/inbox/order?activity=${encodeURIComponent(activityId)}`).then((r) => r.json()).then((j) => { if (live) setPast(Array.isArray(j?.past) ? j.past : []); }).catch(() => { if (live) { setPast([]); setErr("Couldn't load their past jobs."); } });
+    fetch(`/api/inbox/order?activity=${encodeURIComponent(activityId)}`).then((r) => r.json()).then((j) => { if (!live) return; setPast(Array.isArray(j?.past) ? j.past : []); if (j?.draft && !j.created) setReady({ draft: j.draft, created: j.created }); }).catch(() => { if (live) { setPast([]); setErr("Couldn't load their past jobs."); } });
     return () => { live = false; };
   }, [activityId]);
   useEffect(() => {
@@ -62,6 +64,16 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
             <button type="button" className="btn primary" onClick={() => onPick({ parts: plan.parts })}>Make these {plan.parts.length} orders</button>
           </div>
         )}
+        {ready && !(plan && plan.parts.length > 1) && (() => {
+          const d = ready.draft, pcs = d.groups.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, v) => a + (+v || 0), 0), 0), 0);
+          const job = d.reorderOf ? (past || []).find((p) => p.ref === d.reorderOf) : null;
+          return (
+            <button type="button" className="osp-big sug osp-sugg osp-ready" onClick={() => onPick({})}>
+              <b>Ready to approve: {d.kind === "reorder" ? `reorder of ${job ? job.label.replace(/\s*\(Printavo\)$/, "") : "a past order"}` : `new order${d.nickname ? `, ${d.nickname}` : ""}`}{pcs ? ` · ${pcs.toLocaleString("en-US")} pcs` : ""}</b>
+              <span>{d.summary || "Already read from the email and its files"}{d.questions.length ? ` · ${d.questions.length} question${d.questions.length === 1 ? "" : "s"} for the customer` : ""}</span>
+            </button>
+          );
+        })()}
         {suggested && <button type="button" className="osp-big sug osp-sugg" onClick={() => onPick({ told: suggested.told, job: suggested.job })}><b>{suggested.label}</b><span>What the Assistant suggested</span></button>}
         <div className="osp-two">
           <button type="button" className={"osp-big" + (guess === "new" ? " sug" : "")} onClick={() => onPick({ told: "This is a new order, not a reorder of a past job." })}>

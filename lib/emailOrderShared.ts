@@ -48,6 +48,7 @@ export type EODraft = {
  */
 export type EOPart = {
   /** a short key (the design), unique within the email */ key: string;
+  /** the conversation's first email: where the plan and these orders' drafts are kept */ anchor?: string;
   label: string; kind: "new" | "reorder"; of: number;
   /** the past job to copy (PastJob.ref) and its label */ job: string | null; jobLabel?: string;
   /** what's different from the past job ("" = an exact reprint) */ changes: string;

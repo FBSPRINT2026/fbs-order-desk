@@ -529,7 +529,7 @@ ${staffSays}` : ""}`;
     ...(lookedUp ? { lookedUp } : {}), ...(o.reorderOk && job ? { reorderOk: true } : {}), ...(o.part ? { part: o.part } : {}),
   };
   const row = {
-    kind: "draft_order", dedupe_key: `email:${C.id}:order${o.part ? `:${o.part.key}` : ""}`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
+    kind: o.part ? "draft_order_part" : "draft_order", dedupe_key: o.part ? `email:${o.part.anchor || C.id}:order:${o.part.key}` : `email:${C.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
     customer_id: a.customer_id, order_id: null, activity_id: C.id,
     title: `${draft.kind === "reorder" ? "Reorder" : "New order"} in ${cust?.company || cust?.name || a.from_email}'s email`,
     body: `${draft.summary}${draft.questions.length ? `\nStill need: ${draft.questions.join("; ")}` : ""}`,

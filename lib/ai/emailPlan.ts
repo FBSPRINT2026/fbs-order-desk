@@ -21,7 +21,9 @@ import type { Settings } from "@/lib/pricing";
  * (suggestEmailOrder with `part`). Saved per email (`email:<id>:plan`) and made again when the conversation grows.
  */
 type Att = { name: string; path: string; type: string; size: number };
-export type EmailPlan = { parts: EOPart[]; note: string; seen: string; at: string };
+export type EmailPlan = { parts: EOPart[]; note: string; seen: string; at: string; /** the conversation's first email: the plan and its orders are kept under it, whichever email is opened */ anchor: string };
+/** the conversation's first email (convo is newest first) */
+export const anchorOf = (convo: { id: string }[]) => convo[convo.length - 1].id;
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "order";
 /** "DH-BC-EVERY-SZN-400PCS.pdf" → 400; "…-1,110PCS.pdf" → 1110 */
@@ -32,7 +34,8 @@ export async function planEmail(admin: SupabaseClient, activityId: string, by: s
   if (!cv) return { ok: false, error: "Email not found." };
   const { convo, clicked: C } = cv;
   const seen = convo[0].occurred_at;
-  const key = `email:${C.id}:plan`;
+  const anchor = anchorOf(convo);
+  const key = `email:${anchor}:plan`;
   if (!o.fresh) {
     const { data: had } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", key).maybeSingle();
     const p = had?.payload as EmailPlan | undefined;
@@ -105,15 +108,15 @@ ${convText}`,
     let k = slug(d?.name || x.label || `order ${i + 1}`); while (used.has(k)) k += "-2"; used.add(k);
     const pieces = fs.reduce((n, f) => n + pcsOf(f.name), 0);
     return {
-      key: k, label: String(x.label || d?.name || `Order ${i + 1}`).slice(0, 80), kind: x.kind === "new" ? "new" : "reorder", of: raw.length,
+      key: k, anchor, label: String(x.label || d?.name || `Order ${i + 1}`).slice(0, 80), kind: x.kind === "new" ? "new" : "reorder", of: raw.length,
       job: ref, ...(job ? { jobLabel: `#${job.number}${job.title ? ` ${job.title}` : ""}` } : {}),
       changes: String(x.changes || "").trim().slice(0, 600), files: fs.map((f) => f.path), names: fs.map((f) => f.name), ...(pieces ? { pieces } : {}),
     } as EOPart;
   }).filter((p) => p.files.length || p.job);
-  const plan: EmailPlan = { parts, note: String(r.data.note || "").slice(0, 300), seen, at: new Date().toISOString() };
+  const plan: EmailPlan = { parts, note: String(r.data.note || "").slice(0, 300), seen, at: new Date().toISOString(), anchor };
   await admin.from("ai_suggestions").upsert({
     kind: "email_plan", dedupe_key: key, priority: 3, source: "ai", model: r.model, run_id: r.runId, status: "done",
-    customer_id: cid, activity_id: C.id, title: `${parts.length} order${parts.length === 1 ? "" : "s"} in this email`, body: parts.map((p) => p.label).join("; ").slice(0, 500), payload: plan,
+    customer_id: cid, activity_id: anchor, title: `${parts.length} order${parts.length === 1 ? "" : "s"} in this email`, body: parts.map((p) => p.label).join("; ").slice(0, 500), payload: plan,
   }, { onConflict: "dedupe_key" });
   return { ok: true, plan };
 }
