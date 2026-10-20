@@ -195,6 +195,14 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     return () => clearTimeout(later);
   }, [path, realRole]);
 
+  // time clock issues (counted by TimeBubble): a badge on Time Clock in Shop Tools, which opens the list (Oct 20, Nick)
+  const [timeCount, setTimeCount] = useState(0);
+  useEffect(() => {
+    setTimeCount((window as unknown as { __timeCount?: number }).__timeCount || 0);
+    const h = (e: Event) => setTimeCount(Number((e as CustomEvent).detail) || 0);
+    window.addEventListener("fbs:time-count", h);
+    return () => window.removeEventListener("fbs:time-count", h);
+  }, []);
   // the menu, in groups — each group's items are kept in alphabetical order
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
     { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/incoming", "incoming", "Incoming Orders"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
@@ -207,9 +215,11 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const link = ([href, icon, label]: [string, string, string]) => !canOpen(href, perms) ? (
     <a key={href} className="nav-off" title={`${label}: not on for you (Settings → User Access)`} data-tip={`${label} (not on for you)`} aria-disabled="true">{ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}</a>
   ) : (
-    <Link key={href} href={href} className={active(href) ? "on" : ""} title={mini ? undefined : label} data-tip={label} aria-label={label}>
+    <Link key={href} href={href} className={active(href) ? "on" : ""} title={mini ? undefined : label} data-tip={href === "/shop/time" && timeCount > 0 ? `${label}: ${timeCount} to fix` : label} aria-label={label}
+      onClick={href === "/shop/time" && timeCount > 0 ? (e) => { e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); window.dispatchEvent(new CustomEvent("fbs:time-open", { detail: { x: r.right, y: r.top } })); } : undefined}>
       {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
+      {href === "/shop/time" && timeCount > 0 && <span className="badge" title={`${timeCount} time clock issue${timeCount === 1 ? "" : "s"}: click to see them`}>{timeCount}</span>}
       {href === "/shop/printavo-sync" && pvWaiting > 0 && <span className="badge" title={`${pvWaiting} order${pvWaiting === 1 ? "" : "s"} changed in Printavo, waiting to be accepted`}>{pvWaiting}</span>}
       {href === "/shop/inbox" && mailNew > 0 && <span className="badge soft" title={`${mailNew} unread`}>{mailNew}</span>}
       {href === "/shop/details" && details > 0 && <span className="badge" title={`${details} reorder${details === 1 ? "" : "s"} waiting on production details`}>{details}</span>}
