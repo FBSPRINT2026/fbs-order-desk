@@ -10134,3 +10134,12 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .qo-steps li{align-items:flex-start}
 .qo-steps li span{display:flex;flex-direction:column;gap:2px}
 .qo-note{font-weight:400;font-style:italic;color:var(--ink-3);font-size:12.5px}
+/* Create order: help with the art when it couldn't be brought in (Oct 20) */
+.qo-help{display:flex;flex-direction:column;gap:6px;margin:8px 0;padding:10px 12px;border:1px solid #E8C468;background:#FFF8E5;border-radius:12px;font-size:13px}
+.qo-help-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin:4px 0}
+.qo-help-it{display:flex;flex-direction:column;gap:4px;padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer;font:inherit;color:inherit;text-align:left}
+.qo-help-it img{width:100%;aspect-ratio:1;object-fit:contain;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 0 0/16px 16px;border-radius:6px}
+.qo-help-it span{font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qo-help-it:hover{border-color:var(--brand,#1F6FD1)}
+.qo-help-wait{grid-column:1/-1;font-size:12px}
+.qo-help-acts{display:flex;flex-wrap:wrap;gap:8px}
