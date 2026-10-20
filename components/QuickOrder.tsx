@@ -332,7 +332,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
  * off (a checkbox per file), then the mockup is made. Not there? Their emails and logos, the film folder, an upload,
  * production, or without art for now; or Cancel reorder (nothing saved).
  */
-type Item = { key: string; where: "old" | "kept" | "else"; /** the print it can only be (art already pulled) */ only?: string; path?: string; hint?: string; tag: string; name: string; title?: string; cutUrl: string; asIsUrl: string; canCut: boolean; ready: boolean; pick: (bg: boolean) => HelpPick | null };
+type Item = { key: string; /** the file as it is, to open full size */ open?: string; where: "old" | "kept" | "else"; /** the print it can only be (art already pulled) */ only?: string; path?: string; hint?: string; tag: string; name: string; title?: string; cutUrl: string; asIsUrl: string; canCut: boolean; ready: boolean; pick: (bg: boolean) => HelpPick | null };
 type Drawn = { cut: Blob | null; cutUrl: string; asIs: Blob | null; asIsUrl: string; raw: Blob | null };
 async function drawFile(url: string, name: string, type: string): Promise<Drawn | null> {
   const r = await fetch(url); if (!r.ok) return null;
@@ -419,7 +419,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   };
   const items: Item[] = [
     ...help.prints.filter((p) => p.design).map((p) => ({ key: `K${p.key}`, where: "kept" as const, only: p.key, tag: `Pulled for the ${p.label}`, name: "Art pulled from the old job", cutUrl: kept[p.design!] || "", asIsUrl: kept[p.design!] || "", canCut: false, ready: true, pick: () => ({ kind: "keep" as const }) })),
-    ...(old || []).map((f, i) => ({ key: `O${i}`, where: "old" as const, path: f.path, hint: hintOf(f.name), tag: f.name, name: f.name, cutUrl: f.d?.cutUrl || "", asIsUrl: f.d?.asIsUrl || "", canCut: !!f.d?.cut, ready: f.d !== undefined, pick: (bg: boolean) => fromDrawn(f.d, f.name, bg, `${f.name} on ${help.job}`) })),
+    ...(old || []).map((f, i) => ({ key: `O${i}`, open: f.url, where: "old" as const, path: f.path, hint: hintOf(f.name), tag: f.name, name: f.name, cutUrl: f.d?.cutUrl || "", asIsUrl: f.d?.asIsUrl || "", canCut: !!f.d?.cut, ready: f.d !== undefined, pick: (bg: boolean) => fromDrawn(f.d, f.name, bg, `${f.name} on ${help.job}`) })),
     ...ups.map((u, i) => ({ key: `U${i}`, where: "else" as const, tag: `Uploaded · ${u.file.name}`, name: u.file.name, cutUrl: u.url, asIsUrl: u.url, canCut: false, ready: true, pick: () => ({ kind: "upload" as const, file: u.file }) })),
     ...pieces.map((p, i) => ({ key: `M${i}`, where: "else" as const, tag: `Film · ${p.size}`, name: p.name, cutUrl: p.url, asIsUrl: p.url, canCut: false, ready: true, pick: () => ({ kind: "file" as const, file: p.file, name: `the film ${p.name}` }) })),
     ...(found || []).map((f, i) => ({ key: `E${i}`, where: "else" as const, tag: f.source === "library" ? `Their logo · ${f.name}` : `Email ${f.date.slice(0, 7)} · ${f.name}`, title: `${f.label} · ${f.date}`, name: f.name,
@@ -427,6 +427,16 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       pick: (bg: boolean) => (f.source === "library" && f.design_id ? { kind: "design" as const, id: f.design_id, name: f.name } : fromDrawn(f.d, f.name, bg, `${f.name} (${f.label}, ${f.date})`)) })),
   ];
   // one file per print: giving a print to a file takes it off the one that had it
+  // one file at a time, 1 of N, back and forth (Oct 20, Nick: "we may reorder something and I don't remember
+  // everything about this job… click through all the different arts")
+  const [at, setAt] = useState(0);
+  const answer = (key: string, v: string) => {
+    assign(key, v);
+    // a mockup, production file or not needed: on to the next file (art stays, for where/width/background)
+    if (help.prints.some((p) => p.key === v) || as[key] === v) return;
+    const list = items.filter((x) => x.where === "old" || x.where === "kept"), k = list.findIndex((x) => x.key === key);
+    if (k >= 0 && k < list.length - 1) setTimeout(() => setAt(k + 1), 250);
+  };
   const assign = (key: string, v: string) => setAs((a) => {
     const n: Record<string, string> = {};
     for (const [k, x] of Object.entries(a)) if (!(help.prints.some((p) => p.key === v) && x === v)) n[k] = x;
@@ -475,12 +485,12 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     return (
       <div key={it.key} className={"arc-card" + (isArt ? " art" : v ? " set" : "")}>
         <span className={"arc-pic" + (bg && it.canCut ? " clear" : "")}>{pic ? <img src={pic} alt="" /> : <span className="faint">{it.ready ? (it.name.split(".").pop() || "file").toUpperCase() : "Opening…"}</span>}</span>
-        <span className="arc-name" title={it.title || it.name}>{it.tag}</span>
+        <span className="arc-name" title={it.title || it.name}>{it.tag}{it.open && <> · <a href={it.open} target="_blank" rel="noreferrer">Open full size</a></>}</span>
         <div className="arc-chips" role="radiogroup" aria-label={`What ${it.name} is`}>
-          {help.prints.filter((p) => !it.only || p.key === it.only).map((p) => <button key={p.key} type="button" role="radio" aria-checked={v === p.key} className={"chip" + (v === p.key ? " on" : "")} disabled={!it.ready} onClick={() => assign(it.key, p.key)}>{it.only ? `Use for the ${p.label}` : `${p.label} art`}</button>)}
-          {it.where === "old" && <button type="button" role="radio" aria-checked={v === "mockup"} className={"chip" + (v === "mockup" ? " on" : "")} onClick={() => assign(it.key, "mockup")}>Mockup</button>}
-          {it.where === "old" && <button type="button" role="radio" aria-checked={v === "production"} className={"chip" + (v === "production" ? " on" : "")} onClick={() => assign(it.key, "production")} title="Goes in this order's Production files (barcodes, labels, film, separations…)">Production file</button>}
-          {!it.only && <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => assign(it.key, "none")}>Not needed</button>}
+          {help.prints.filter((p) => !it.only || p.key === it.only).map((p) => <button key={p.key} type="button" role="radio" aria-checked={v === p.key} className={"chip" + (v === p.key ? " on" : "")} disabled={!it.ready} onClick={() => answer(it.key, p.key)}>{it.only ? `Use for the ${p.label}` : `${p.label} art`}</button>)}
+          {it.where === "old" && <button type="button" role="radio" aria-checked={v === "mockup"} className={"chip" + (v === "mockup" ? " on" : "")} onClick={() => answer(it.key, "mockup")}>Mockup</button>}
+          {it.where === "old" && <button type="button" role="radio" aria-checked={v === "production"} className={"chip" + (v === "production" ? " on" : "")} onClick={() => answer(it.key, "production")} title="Goes in this order's Production files (barcodes, labels, film, separations…)">Production file</button>}
+          {!it.only && <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => answer(it.key, "none")}>Not needed</button>}
         </div>
         {it.hint && !v && <span className="arc-hint">{it.hint}?</span>}
         {it.where === "old" && v && v !== "none" && <span className="arc-hint ok">{v === "mockup" ? "Kept in Production files as the old mockup" : v === "production" ? "Goes in this order's Production files" : "The art; the original also goes in Production files"}</span>}
@@ -501,10 +511,26 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     <div className="ap arc" role="group" aria-label="What are these files">
       <p className="ap-q">{old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}</p>
       <p className="ap-why">{need ? <>This reorder needs art for: <b>{need}</b>. Pick which file is the art; Tick Remove background if it&apos;s on one; then I&apos;ll make the mockup. </> : <>I pulled the art already (first card). </>}Say what every file is: the ones you keep go in this order&apos;s Production files.</p>
-      <div className="arc-grid">
-        {olds.map(Card)}
-        {opening && <span className="ap-wait">Opening the old job&apos;s files…</span>}
-      </div>
+      {olds.length > 0 && (() => {
+        const i = Math.min(at, olds.length - 1), it = olds[i];
+        return (
+          <div className="arc-step">
+            <div className="arc-nav">
+              <button type="button" className="arc-arrow" disabled={i === 0} onClick={() => setAt(i - 1)} aria-label="Previous file">‹</button>
+              <b>{i + 1} of {olds.length}</b>
+              <button type="button" className="arc-arrow" disabled={i === olds.length - 1} onClick={() => setAt(i + 1)} aria-label="Next file">›</button>
+              <span className="arc-dots">
+                {olds.map((x, k) => {
+                  const v = as[x.key] || "", art = help.prints.some((p) => p.key === v);
+                  return <button key={x.key} type="button" className={"arc-dot" + (k === i ? " on" : "") + (art ? " art" : v ? " set" : "")} onClick={() => setAt(k)} title={`${k + 1}. ${x.name}${v ? `: ${art ? `${help.prints.find((p) => p.key === v)!.label} art` : v === "none" ? "not needed" : v === "production" ? "production file" : v}` : ": not answered yet"}`} aria-label={`File ${k + 1}`}>{x.asIsUrl || x.cutUrl ? <img src={x.asIsUrl || x.cutUrl} alt="" /> : k + 1}</button>;
+                })}
+              </span>
+            </div>
+            <div className="arc-one">{Card(it)}</div>
+          </div>
+        );
+      })()}
+      {opening && <span className="ap-wait">Opening the old job&apos;s files…</span>}
       <details className="arc-else" open={elseOpen} onToggle={(e) => setElseOpen((e.target as HTMLDetailsElement).open)}>
         <summary>Not here? Their emails and logos{found ? ` (${found.length})` : ""}, the film folder, or upload it</summary>
         <div className="arc-tools">
