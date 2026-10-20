@@ -577,7 +577,13 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
 
 export type LineCalc = { id: string; qty: number; garmentEach: number; printEach: number; light: boolean; calcEach: number; each: number; hasOv: boolean; sub: number; upTotal: number };
 export type GroupCalc = ReturnType<typeof calcGroup>;
-export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType }, s: Settings) {
+/**
+ * Screens shared across groups (Oct 20, Nick: a reorder of #32668 The Bottles charged 14 screens for one 7-color front:
+ * two garment groups, the same art): a print with the same art at the same spot and the same screens as one in an
+ * earlier group of the order prints from the same screens, so its setup is charged once.
+ */
+const screenKey = (d: Imprint, n: number) => (d.method === "screen" && d.design_id ? `${d.design_id}|${(d.location || "").toLowerCase()}|${n}` : "");
+export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType }, s: Settings, /** the order's screens charged in earlier groups (calcOrder) */ seen?: Set<string>) {
   const pl = priceList(s, o.price_type || "retail");
   const qty = (g.lines || []).reduce((a, l) => a + lineQty(l), 0);
   const ti = tierIndex(qty, pl);
@@ -636,7 +642,13 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   });
   // screens: no underbase screen when every garment is light
   const anyDark = !pl.darkAddsColor || (g.lines || []).some((l) => lineQty(l) > 0 && !isLightColor(l.color, pl));
-  const setups = anyDark ? imprints : (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl, true, true, ix) }));
+  const setups0 = anyDark ? imprints : (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, ti, pl, true, true, ix) }));
+  const setups = setups0.map((d, i) => {
+    const im = (g.imprints || [])[i], k = im ? screenKey(im, num((d as { screens?: number }).screens)) : "";
+    if (!k || !seen) return d;
+    if (seen.has(k)) return { ...d, setup: 0, shared: true };
+    seen.add(k); return d;
+  });
   const screens = o.waive_setup ? 0 : setups.reduce((a, d) => a + d.setup, 0);
   const inkFees = imprints.reduce((a, d) => a + d.inkFee, 0);
   const sub = r2(lines.reduce((a, l) => a + l.sub, 0));
@@ -670,7 +682,8 @@ export function calcOrder(
   s: Settings,
   payments: Pick<Payment, "amount">[] = []
 ) {
-  const groups = orderGroups(o).map((g) => calcGroup(g, o, s));
+  const seen = new Set<string>();
+  const groups = orderGroups(o).map((g) => calcGroup(g, o, s, seen));
   const lines = groups.flatMap((g) => g.lines);
   const items = r2(groups.reduce((a, g) => a + g.sub, 0));
   const setup = r2(groups.reduce((a, g) => a + g.setup, 0));

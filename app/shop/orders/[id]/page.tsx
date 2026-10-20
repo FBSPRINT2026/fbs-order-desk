@@ -804,7 +804,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         const ims = o.groups.filter((g) => !g.reprintAsked).flatMap((g) => g.imprints.filter((im) => im.method === "screen" && !(im.remake ?? g.remake)));
         const wl = settings.wholesale;
         if (!ims.length || wl.remakeFee == null || wl.remakeFee >= wl.screenFee) return null;
-        const n = ims.reduce((a, im) => a + Math.max(1, +im.colors || 1), 0);
+        const n = [...new Map(ims.map((im) => [`${im.design_id || ""}|${im.location}|${im.colors}`, im])).values()].reduce((a, im) => a + Math.max(1, +im.colors || 1), 0);
         return (
           <div className="eo-fee">
             <span>This copy is priced as <b>new screens</b> ({n} screen{n === 1 ? "" : "s"} at {money(wl.screenFee)}). It&apos;s a reorder: charge the <b>reprint fee, {money(wl.remakeFee)} a screen</b>? It stays that way on this design&apos;s reorders.</span>

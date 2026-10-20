@@ -33,9 +33,9 @@ import type { OrderStart } from "@/components/OrderStartPick";
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
-type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; prints: { key: string; label: string; colors: number; location: string; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
+type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; prints: { key: string; label: string; colors: number; location: string; method?: string; /** a dark garment in its group (an underbase is likely) */ dark?: boolean; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
-type HelpAns = { picks: Record<string, HelpPick>; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
+type HelpAns = { picks: Record<string, HelpPick>; /** per location: the old job's screens included a white underbase ("ub") or not ("none") */ under?: Record<string, "ub" | "none">; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string; note?: string }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
 type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
 type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
@@ -43,6 +43,8 @@ type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 
 /** Cancel clicked: stop where it is and take back what it made */
 class Cancelled extends Error {}
+/** garment colors that usually print without an underbase (a first guess for the question, never decided by it) */
+const LIGHTISH = /white|natural|cream|ivory|ash\b|light|pink|mauve|stone|sand|silver|yellow|bone|oatmeal|heather gr[ae]y|athletic heather|sport gr[ae]y|columbia blue|baby|pastel|mint|lavender|peach/i;
 const pcsOf = (gs: Group[]) => gs.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, v) => a + (+v || 0), 0), 0), 0);
 
 export default function QuickOrder({ activityId, start, onClose, onCreated, onReview }: { activityId: string; start: OrderStart; onClose: () => void;
@@ -131,7 +133,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     if (d.kind === "reorder" && g.customer?.price_type === "wholesale" && g.fees?.remake != null && g.fees.screen != null && g.fees.remake < g.fees.screen) {
       const ims = d.groups.flatMap((x) => x.imprints.filter((im) => im.method === "screen" && !(im.remake ?? x.remake)));
       if (ims.length) {
-        const n = ims.reduce((a, im) => a + Math.max(1, +im.colors || 1), 0);
+        // the same print on several garment groups shares its screens (lib/pricing.ts screenKey)
+        const n = [...new Map(ims.map((im) => [`${im.design_id || ""}|${im.location}|${im.colors}`, im])).values()].reduce((a, im) => a + Math.max(1, +im.colors || 1), 0);
         d = { ...d, groups: d.groups.map((x) => ({ ...x, imprints: x.imprints.map((im) => (im.method === "screen" ? { ...im, remake: true } : im)) })) };
         did.push(`Reprint screen fee: ${n} screen${n === 1 ? "" : "s"} at $${g.fees.remake} instead of $${g.fees.screen}`);
       }
@@ -189,7 +192,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     if (targets.length && (missing.length || (isPv && files.length))) {
       if (pvAll) step(`${of}Asking you about the files on ${jobLabel || "the old job"}…`);
       note(pvAll ? "Waiting for you: what each file is" : "Couldn't tell which file is the art: asking you");
-      const prints = targets.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1, location: im.location, size: String(im.size || "").replace(/"\s*wide/, "").trim(), ...(im.design_id ? { design: im.design_id } : {}) }));
+      const prints = targets.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1, location: im.location, size: String(im.size || "").replace(/"\s*wide/, "").trim(), method: im.method, dark: grp.lines.some((l) => l.color && !LIGHTISH.test(l.color)), ...(im.design_id ? { design: im.design_id } : {}) }));
       const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", jobUrl: isPv ? `/shop/archive/${d!.reorderOf!.slice(2)}` : d!.reorderOf?.startsWith("o:") ? `/shop/orders/${d!.reorderOf.slice(2)}` : "", prints, files, why, resolve }));
       setHelp(null);
       const made = new Map<File, string>();
@@ -224,6 +227,15 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       }
       // the old job's files go in the new order's Production files only as you said (art, mockup, production file);
       // "Not needed" ones stay out
+      // the old job's screens: an underbase or not (Oct 20, Nick: "#32668 should be 7 screens with the underbase… set it
+      // as a 6 color front with 1 screen being an underbase… maybe something you ask in the resolution center")
+      for (const { gi, ii, im } of targets) {
+        const u = ans.under?.[im.location];
+        if (!u || im.method !== "screen") continue;
+        const n = Math.max(1, im.colors || 1);
+        d = { ...d, groups: d.groups.map((x, xi) => (xi !== gi ? x : { ...x, imprints: x.imprints.map((y, yi) => (yi !== ii ? y : u === "ub" ? { ...y, colors: Math.max(1, n - 1), underbase: true, notes: [y.notes, `${jobLabel || "The old job"}: ${n} screens = ${Math.max(1, n - 1)} colors + underbase (you said)`].filter(Boolean).join(". ").slice(0, 300) } : { ...y, underbase: false, notes: [y.notes, `${jobLabel || "The old job"}: ${n} screens, no underbase (you said)`].filter(Boolean).join(". ").slice(0, 300) })) })) };
+      }
+      for (const [loc, u] of Object.entries(ans.under || {})) { const p = targets.find((t) => t.im.location === loc); if (p) did.push(u === "ub" ? `${loc}: ${p.im.colors} screens = ${Math.max(1, p.im.colors - 1)} colors + underbase` : `${loc}: ${p.im.colors} colors, no underbase`); }
       // where each print goes and how wide, as you said
       for (const { gi, ii, im } of targets) {
         const pl = ans.place?.[`${gi}:${ii}`];
@@ -481,6 +493,9 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   // everything about this job… click through all the different arts")
   const [at, setAt] = useState(0);
   const [split, setSplit] = useState<Record<string, boolean>>({});
+  // per location with a multi-color screen print: were the old job's screens counting an underbase?
+  const ubLocs = !help.archivedId ? [] : [...new Map(help.prints.filter((p) => (p.method || "screen") === "screen" && p.colors >= 2).map((p) => [p.location, p])).values()];
+  const [under, setUnder] = useState<Record<string, "ub" | "none">>({});
   // a production file's label: barcodes, film, mailing list… (lib/productionFileKinds.ts)
   const [kindOf, setKindOf] = useState<Record<string, string>>({});
   const [noteOf, setNoteOf] = useState<Record<string, string>>({});
@@ -512,7 +527,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const artOf = (pk: string) => { const p = help.prints.find((x) => x.key === pk); return items.find((it) => as[it.key] === pk) || (p ? items.find((it) => as[it.key] === `loc:${p.location}`) : undefined); };
   const given = help.prints.filter((p) => artOf(p.key));
   const olds0 = items.filter((x) => x.where === "old");
-  const unanswered = olds0.filter((x) => !as[x.key]).length;
+  const unanswered = olds0.filter((x) => !as[x.key]).length + ubLocs.filter((p) => !under[p.location]).length;
   const finish = (rest: "skip" | "production") => {
     const out: Record<string, HelpPick> = {}, once = new Map<string, HelpPick | null>();
     for (const p of help.prints) {
@@ -527,7 +542,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       const role = (as[x.key] === "mockup" ? "mockup" : as[x.key] === "production" || !as[x.key] ? "production" : "art") as "art" | "mockup" | "production";
       return { path: x.path!, name: x.name, role, kind: role === "mockup" ? "old_mockup" : role === "art" ? "print_art" : kindOf[x.key] ?? (aiKind(x.path) || guessProdKind(x.name)), note: (noteOf[x.key] || "").trim() };
     });
-    help.resolve({ picks: out, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
+    help.resolve({ picks: out, under, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
   };
   async function searchFilm(q: string) {
     setElseOpen(true); setFilms({ busy: true, list: [] });
@@ -595,6 +610,22 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       <p className="ap-q">{old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>
       <p className="ap-why">{need ? <>This reorder needs art for: <b>{need}</b>. Pick which file is the art; Tick Remove background if it&apos;s on one; then I&apos;ll make the mockup. </> : <>I pulled the art already (first card). </>}Say what every file is: the ones you keep go in this order&apos;s Production files.</p>
       {help.prints.some((p) => p.colors > 0) && help.job.startsWith("#") && <p className="ap-why arc-colors">{help.job.replace(/^(#\d+).*/, "$1")} printed {[...new Map(help.prints.map((p) => [p.location, p.colors])).entries()].map(([l, n]) => `${l} in ${n} color${n === 1 ? "" : "s"}`).join(", ")}: the new order keeps that. The ink colors aren&apos;t on file; the mockup shows our guess and production confirms the inks (and the count) before printing.</p>}
+      {ubLocs.length > 0 && (
+        <div className="arc-ub">
+          {ubLocs.map((p) => {
+            const dark = help.prints.some((q) => q.location === p.location && q.dark), v = under[p.location];
+            return (
+              <div key={p.location} className="arc-ub-r">
+                <span>{help.job.replace(/^(#\d+).*/, "$1")} printed the <b>{p.location}</b> with <b>{p.colors} screens</b>. Was one a white underbase?{dark ? <i className="faint"> (likely: there are dark shirts)</i> : null}</span>
+                <span className="arc-chips" role="radiogroup" aria-label={`${p.location} screens`}>
+                  <button type="button" role="radio" aria-checked={v === "ub"} className={"chip" + (v === "ub" ? " on" : "")} onClick={() => setUnder((x) => ({ ...x, [p.location]: "ub" }))}>{Math.max(1, p.colors - 1)} colors + underbase</button>
+                  <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => setUnder((x) => ({ ...x, [p.location]: "none" }))}>{p.colors} colors, no underbase</button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {olds.length > 0 && (() => {
         const i = Math.min(at, olds.length - 1), it = olds[i];
         return (
@@ -645,7 +676,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           <button type="button" className="ap-link" onClick={() => setProdOpen((x) => !x)}>Hand to production</button>
           <button type="button" className="ap-link" onClick={() => finish("skip")}>Skip for now</button>
         </span>
-        {(() => { const n = items.filter((x) => x.where === "old" || x.where === "kept").length, i = Math.min(at, Math.max(0, n - 1)); return n > 1 && i < n - 1 ? <button type="button" className="btn primary" onClick={() => setAt(i + 1)}>Next file ({i + 2} of {n}) ›</button> : null; })() ?? <button type="button" className="btn primary" disabled={!given.length || unanswered > 0} onClick={() => finish("skip")}>{unanswered > 0 ? `Say what each file is (${unanswered} left)` : !given.length ? "Pick the art" : given.length === help.prints.length ? (given.every((p) => as[`K${p.key}`] === p.key) ? "Keep going" : "Use it & make the mockup") : `Keep going (${help.prints.length - given.length} without art)`}</button>}
+        {(() => { const n = items.filter((x) => x.where === "old" || x.where === "kept").length, i = Math.min(at, Math.max(0, n - 1)); return n > 1 && i < n - 1 ? <button type="button" className="btn primary" onClick={() => setAt(i + 1)}>Next file ({i + 2} of {n}) ›</button> : null; })() ?? <button type="button" className="btn primary" disabled={!given.length || unanswered > 0} onClick={() => finish("skip")}>{unanswered > 0 ? `Answer the questions (${unanswered} left)` : !given.length ? "Pick the art" : given.length === help.prints.length ? (given.every((p) => as[`K${p.key}`] === p.key) ? "Keep going" : "Use it & make the mockup") : `Keep going (${help.prints.length - given.length} without art)`}</button>}
       </div>
     </div>
   );

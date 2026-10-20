@@ -273,7 +273,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
         // fee at $15? And then moving forward it would stay that way on any reorders")
         const ims = d.groups.flatMap((g) => g.imprints.filter((im) => im.method === "screen" && !(im.remake ?? g.remake)));
         if (!ims.length || feeAsked) return null;
-        const n = ims.reduce((a, im) => a + Math.max(1, +im.colors || 1), 0);
+        const n = [...new Map(ims.map((im) => [`${im.design_id || ""}|${im.location}|${im.colors}`, im])).values()].reduce((a, im) => a + Math.max(1, +im.colors || 1), 0);
         return (
           <div className="eo-fee">
             <span>These prints are priced as <b>new screens</b> ({n} screen{n === 1 ? "" : "s"} at ${data.fees!.screen}). It&apos;s a reorder: charge the <b>reprint fee, ${data.fees!.remake} a screen</b>? It stays that way on this design&apos;s reorders from now on.</span>
