@@ -196,3 +196,38 @@ export function suggestInk(hex: string): { standard: InkMatch; pms: InkMatch; re
   if (pms.dE + 1 < standard.dE) return { standard, pms, rec: "pms", why: `No stock ink is very close (${standard.name} is ${matchWord(standard.dE)}). ${pms.name} is ${matchWord(pms.dE)}: mix it.` };
   return { standard, pms, rec: "standard", why: `${standard.name} is about as close as any PMS: use the stock ink.` };
 }
+
+/**
+ * Repaint a logo picture in its picked inks without its background going with it: only pixels close to one of the
+ * logo's colors move, shifted by that color's change (soft edges keep their blend). For thumbnails of the raw upload.
+ * `map`: logo color hex → new hex, or "none" (removed: the pixel goes see-through).
+ */
+export function repaintLogo(img: HTMLImageElement, map: Record<string, string>, maxSide = 600): string {
+  const k = Math.min(1, maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+  const w = Math.max(1, Math.round((img.naturalWidth || 1) * k)), h = Math.max(1, Math.round((img.naturalHeight || 1) * k));
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d", { willReadFrequently: true })!;
+  x.drawImage(img, 0, 0, w, h);
+  const data = x.getImageData(0, 0, w, h), d = data.data;
+  const rgbOf = (hx: string) => { const v = hx.replace("#", ""); return [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0); };
+  const pairs = Object.entries(map).map(([s, t]) => ({ s: rgbOf(s), t: t === "none" ? null : rgbOf(t) }));
+  if (!pairs.length) return c.toDataURL("image/png");
+  const cache = new Map<number, number[] | null | undefined>();
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;
+    const key = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+    let out = cache.get(key);
+    if (!cache.has(key)) {
+      let best = -1, bd = Infinity;
+      for (let j = 0; j < pairs.length; j++) { const s = pairs[j].s, dd = (d[i] - s[0]) ** 2 + (d[i + 1] - s[1]) ** 2 + (d[i + 2] - s[2]) ** 2; if (dd < bd) { bd = dd; best = j; } }
+      if (best < 0 || bd > 70 * 70) out = undefined;
+      else { const { s, t } = pairs[best]; out = t ? [0, 1, 2].map((q) => Math.max(0, Math.min(255, d[i + q] + t[q] - s[q]))) : null; }
+      cache.set(key, out);
+    }
+    if (out === undefined) continue;
+    if (out === null) { d[i + 3] = 0; continue; }
+    d[i] = out[0]; d[i + 1] = out[1]; d[i + 2] = out[2];
+  }
+  x.putImageData(data, 0, 0);
+  return c.toDataURL("image/png");
+}

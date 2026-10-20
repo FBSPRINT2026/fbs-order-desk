@@ -466,10 +466,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const chosen: string[] = [];
           // the logo's own ink for this shirt color (its "On shirts": white on navy, navy on white), for a one-color logo
           const onShirt = plan.inks.length === 1 && line?.color ? inkOnShirt(d, line.color) : null;
+          // the inks picked for this logo before (saved on the imprint) come back as they were
+          const saved = im.inkMap?.design === d.id ? im.inkMap.map : null;
           for (const k of plan.inks) {
-            const name = useAsked ? nearestAsked(k.hex) : onShirt || snap(k.hex, k.name);
+            const was = saved?.[k.hex];
+            const name = was ? was.name : useAsked ? nearestAsked(k.hex) : onShirt || snap(k.hex, k.name);
             chosen.push(name);
-            for (const hex of [k.hex, ...(k.also || [])]) map[hex] = { name, hex: colorHex(name) || k.hex };
+            for (const hex of [k.hex, ...(k.also || [])]) map[hex] = was ? (saved?.[hex] || was) : { name, hex: colorHex(name) || k.hex };
           }
           const names = useAsked ? asked : [...new Set(chosen)];
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off } }));
@@ -511,6 +514,24 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setRasterBg(!keepBg[d.id]);
     setRasterAsk({ imId, d });
   }
+
+  // the ink picked for each logo color goes on the imprint (saved with the order), so the order page and a reopened
+  // mockup show the logo in those inks
+  useEffect(() => {
+    setImprints((xs) => {
+      let changed = false;
+      const ys = xs.map((x) => {
+        const pt = paints[x.id];
+        if (!pt || !x.design_id || pt.design !== x.design_id || !pt.sources.length || isQuick(x.design_id)) return x;
+        const next = Object.keys(pt.map).length ? { design: pt.design, map: pt.map } : undefined;
+        if (JSON.stringify(next || null) === JSON.stringify(x.inkMap || null)) return x;
+        changed = true;
+        return { ...x, inkMap: next };
+      });
+      return changed ? ys : xs;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paints]);
 
   /** Set several logo colors at once (e.g. every color to its closest standard ink). */
   function setInks(id: string, picks: Record<string, { name: string; hex: string } | null>) {

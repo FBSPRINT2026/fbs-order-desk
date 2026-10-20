@@ -2,7 +2,8 @@
 import { inkNames, isLightColor, lineQty, pmsInks, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, smallerSpot } from "@/lib/mockup";
-import { colorHex } from "@/lib/inkColors";
+import { colorHex, repaintLogo } from "@/lib/inkColors";
+import type { Imprint } from "@/lib/pricing";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -648,6 +649,28 @@ function ScreensLine({ summary, children }: { summary: React.ReactNode; children
  * messy, don't like all the grey, rethink the style"): the logo, then where and how it prints and its price, one line
  * of specs, the notes. White, no boxes; a hairline between prints.
  */
+/** The logo picture in the inks picked for it in the Mockup Creator (imprint.inkMap), else as uploaded. */
+const paintedCache = new Map<string, string>();
+function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["inkMap"] }): string {
+  const im = imp.inkMap && imp.inkMap.design === imp.design_id ? imp.inkMap.map : null;
+  const want: Record<string, string> = {};
+  if (im) for (const [src, v] of Object.entries(im)) if (v.name === "none" || (v.hex && v.hex.toLowerCase() !== src.toLowerCase())) want[src] = v.name === "none" ? "none" : v.hex;
+  const key = url && Object.keys(want).length ? `${imp.design_id}|${JSON.stringify(want)}` : "";
+  const [out, setOut] = useState(key ? paintedCache.get(key) || "" : "");
+  useEffect(() => {
+    if (!key) { setOut(""); return; }
+    const hit = paintedCache.get(key);
+    if (hit) { setOut(hit); return; }
+    let live = true;
+    const img = new Image(); img.crossOrigin = "anonymous";
+    img.onload = () => { try { const u = repaintLogo(img, want); paintedCache.set(key, u); if (live) setOut(u); } catch { /* picture can't be read: as uploaded */ } };
+    img.src = url;
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, url]);
+  return out || url;
+}
+
 function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra }: { d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
   const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
@@ -657,7 +680,8 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
   const colors = d.method === "dtf" || d.colors === FULL_COLOR ? "Full color" : d.colors ? `${d.colors} color${d.colors === 1 ? "" : "s"}` : "";
   // click the logo to see it big (Oct 15, Nick: "you should be able to click it and zoom in")
   const [zoom, setZoom] = useState(false);
-  const pic = cur ? urls[cur.id] : "";
+  // in the inks picked in the Mockup Creator (Oct 20: the logo here still showed its uploaded green after it was set to yellow)
+  const pic = usePainted(cur ? urls[cur.id] || "" : "", d);
   return (
     <div className="pr">
       <button type="button" className="pr-logo" style={{ background: hex }} onClick={() => (pic ? setZoom(true) : onMockup())} title={pic ? "See it bigger" : "Pick the logo in the Mockup Creator"}>
@@ -694,14 +718,15 @@ function PrintRow({ d, n, hex, designs, urls, each, detailsHref, onMockup, extra
   );
 }
 
-function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?: string; size: string }; designs: Design[]; urls: Record<string, string>; onMockup?: () => void }) {
+function LogoTile({ imprint, designs, urls, onMockup }: { imprint: { design_id?: string; size: string; inkMap?: Imprint["inkMap"] }; designs: Design[]; urls: Record<string, string>; onMockup?: () => void }) {
   const cur = designs.find((x) => x.id === imprint.design_id);
+  const pic = usePainted(cur ? urls[cur.id] || "" : "", imprint);
   const m = (imprint.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
   const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
   const other = cur && val ? designOther(cur, val, given) : 0;
   return (
     <button type="button" className="imp-logo" onClick={onMockup} title={cur ? `${designLabel(cur)}: change it in the Mockup Creator` : "Pick the logo in the Mockup Creator"}>
-      {cur && urls[cur.id] ? <img src={urls[cur.id]} alt="" /> : <span className="imp-logo-none">No logo</span>}
+      {cur && pic ? <img src={pic} alt="" /> : <span className="imp-logo-none">No logo</span>}
       <small>{cur ? designLabel(cur) : "Mockup Creator"}</small>
       {cur && val > 0 && other > 0 && <small className="imp-logo-sz">{val}&quot; {given === "W" ? "wide" : "tall"} → {other}&quot; {given === "W" ? "tall" : "wide"}</small>}
     </button>
