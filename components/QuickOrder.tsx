@@ -9,7 +9,7 @@ import { applyColors, checkColors } from "@/components/ColorCheck";
 import { uploadDesign } from "@/lib/designs";
 import { makePreview } from "@/lib/artPrep";
 import { drawPic } from "@/lib/pdfPic";
-import { knockOutBackground } from "@/lib/printavoArt";
+import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
 import type { OrderStart } from "@/components/OrderStartPick";
 
 /**
@@ -28,7 +28,7 @@ import type { OrderStart } from "@/components/OrderStartPick";
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type HelpPick = { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "skip" };
-type Help = { job: string; print: string; files: { path: string; name: string }[]; resolve: (p: HelpPick) => void };
+type Help = { job: string; print: string; customerId: string; files: { path: string; name: string }[]; resolve: (p: HelpPick) => void };
 type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 
 const pcsOf = (gs: Group[]) => gs.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, v) => a + (+v || 0), 0), 0), 0);
@@ -121,7 +121,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       if (im.design_id || /sleeve/i.test(im.location) || !g.customer?.id || d.kind !== "reorder") continue;
       note("Couldn't bring in the art for this print: waiting for you");
       const files = [...(grp.pvRef || []), ...(grp.pvArt || [])];
-      const picked = await new Promise<HelpPick>((resolve) => setHelp({ job: jobLabel || "the old job", print: `${im.location}${im.colors ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, files, resolve }));
+      const picked = await new Promise<HelpPick>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", print: `${im.location}${im.colors ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, files, resolve }));
       setHelp(null);
       if (picked.kind === "skip") { did.push(`${im.location}: made without art for now (add it on the order: Upload logo)`); continue; }
       note("Saving the art as their logo…");
@@ -207,50 +207,116 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
 }
 
 /**
- * "I couldn't bring in the art": the old job's files, each drawn (a PDF's first page) with its background taken off as
- * the art would be, to pick from; or upload the art; or make the order without it for now.
+ * Printavo Art Resolution Center (Oct 20, Nick): when a reorder's art can't be brought in, the old job's files (each
+ * drawn as it is and with its flat background taken off) and a talk with the AI about them. The AI looks at the files
+ * and offers steps: use a file (with or without its background), search the Dropbox film folder (each film's art to
+ * pick from), upload the art, or make the order without it for now.
  */
+type Act = { kind: "use_file"; file: number; background: boolean; label: string } | { kind: "search_film"; query: string; label: string } | { kind: "upload"; label: string } | { kind: "skip"; label: string };
+type Pic = { name: string; i: number; cut: Blob | null; cutUrl: string; asIs: Blob | null; asIsUrl: string };
 function ArtHelp({ help }: { help: Help }) {
-  const [pics, setPics] = useState<{ name: string; url: string; png: Blob | null; src: string }[]>([]);
+  const [pics, setPics] = useState<Pic[]>([]);
   const [left, setLeft] = useState(help.files.length);
+  const [chat, setChat] = useState<{ role: "staff" | "ai"; text: string; actions?: Act[] }[]>([]);
+  const [say, setSay] = useState(""), [thinking, setThinking] = useState(false);
+  const [films, setFilms] = useState<null | { busy?: boolean; note?: string; list: { id: string; name: string }[] }>(null);
+  const [pieces, setPieces] = useState<{ name: string; file: File; url: string; size: string }[]>([]);
+  const upRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     let live = true;
     (async () => {
       const sb = createClient();
-      for (const f of help.files) {
+      for (const [i, f] of help.files.entries()) {
         const { data } = await sb.storage.from("proofs").createSignedUrl(f.path, 900);
         const c = data?.signedUrl ? await drawPic(data.signedUrl, 1600) : null;
         if (!live) return;
         if (c) {
-          // the background off from the edges in, then trimmed to the art
+          const asIs = await new Promise<Blob | null>((res) => trimToArt(c).toBlob(res, "image/png"));
           knockOutBackground(c);
-          const t = trimToArt(c);
-          const png = await new Promise<Blob | null>((res) => t.toBlob(res, "image/png"));
+          const cut = await new Promise<Blob | null>((res) => trimToArt(c).toBlob(res, "image/png"));
           if (!live) return;
-          if (png) setPics((p) => [...p, { name: realName(f.name, f.path), url: URL.createObjectURL(png), png, src: f.path }]);
+          setPics((p) => [...p, { name: realName(f.name, f.path), i: i + 1, cut, cutUrl: cut ? URL.createObjectURL(cut) : "", asIs, asIsUrl: asIs ? URL.createObjectURL(asIs) : "" }]);
         }
         setLeft((n) => n - 1);
       }
     })();
     return () => { live = false; };
   }, [help]);
+  async function ask(text: string, film?: string) {
+    const next = text ? [...chat, { role: "staff" as const, text }] : chat;
+    setChat(next); setSay(""); setThinking(true);
+    const r = await fetch("/api/art/resolve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: help.customerId, job: help.job, print: help.print, files: help.files, messages: next.map(({ role, text: t }) => ({ role, text: t })), ...(film ? { film } : {}) }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the AI." }));
+    setThinking(false);
+    setChat((c) => [...c, r.error ? { role: "ai" as const, text: r.error } : { role: "ai" as const, text: r.reply || "…", actions: r.actions || [] }]);
+  }
+  // the AI looks first, by itself
+  const opened = useRef(false);
+  useEffect(() => { if (!opened.current) { opened.current = true; void ask(""); } }); // eslint-disable-line react-hooks/exhaustive-deps
+  const useFile = (n: number, background: boolean) => {
+    const p = pics.find((x) => x.i === n); const blob = p ? (background ? p.cut : p.asIs) : null;
+    if (!p || !blob) return setChat((c) => [...c, { role: "ai", text: `F${n} isn't open yet: give it a second, or pick it from the pictures.` }]);
+    help.resolve({ kind: "file", file: new File([blob], `${p.name.replace(/\.[^.]+$/, "")}.png`, { type: "image/png" }), name: p.name });
+  };
+  async function searchFilm(q: string) {
+    setFilms({ busy: true, list: [] });
+    const j = await fetch(`/api/dropbox/film?${new URLSearchParams({ customer: help.customerId, q })}`).then((x) => x.json()).catch(() => null) as { films?: { id: string; name: string }[]; folder?: string | null; error?: string } | null;
+    const list = (j?.films || []).filter((f) => /\.(ai|pdf)$/i.test(f.name)).slice(0, 8);
+    setFilms({ list, note: !j ? "Dropbox couldn't be searched." : !j.folder ? "No film folder is linked for this customer (link it on the customer page)." : list.length ? `In ${j.folder.replace(/^\/FBS Film Folder\//i, "")}` : `Nothing in ${j.folder.replace(/^\/FBS Film Folder\//i, "")} matches "${q}".` });
+  }
+  async function openFilm(f: { id: string; name: string }) {
+    setFilms((x) => (x ? { ...x, busy: true } : x));
+    const c = await fetch("/api/dropbox/film", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id }) }).then((z) => z.json()).catch(() => null) as { url?: string } | null;
+    let got: { name: string; file: File; url: string; size: string }[] = [];
+    try { if (c?.url) got = (await measureFilm(await (await fetch(c.url)).arrayBuffer(), true, f.name)).filter((p) => p.file).map((p) => ({ name: f.name, file: p.file!, url: URL.createObjectURL(p.file!), size: `${p.widthIn}" × ${p.heightIn}"` })); } catch { /* not readable */ }
+    setPieces(got);
+    setFilms((x) => (x ? { ...x, busy: false, note: got.length ? `The art on ${f.name}: pick the print` : `${f.name} couldn't be read (save it PDF-compatible in Illustrator).` } : x));
+  }
+  const act = (a: Act) => { if (a.kind === "use_file") useFile(a.file, a.background); else if (a.kind === "search_film") void searchFilm(a.query); else if (a.kind === "upload") upRef.current?.click(); else help.resolve({ kind: "skip" }); };
   return (
-    <div className="qo-help" role="group" aria-label="Help with the art">
-      <b>I couldn&apos;t bring in the art for the {help.print} print from {help.job}.</b>
-      <span>Old Printavo jobs keep their art in all kinds of ways. Pick the picture that&apos;s the print, upload the art, or make the order without it for now.</span>
+    <div className="qo-help arc" role="group" aria-label="Printavo Art Resolution Center">
+      <div className="arc-h"><b>Printavo Art Resolution Center</b><span className="faint">{help.job} · {help.print}</span></div>
+      <span>I couldn&apos;t bring this print&apos;s art in by myself. Old Printavo jobs keep their art in all kinds of ways: let&apos;s sort it out. Click a picture, or talk it through with me below.</span>
       <div className="qo-help-grid">
         {pics.map((p) => (
-          <button key={p.src} type="button" className="qo-help-it" onClick={() => p.png && help.resolve({ kind: "file", file: new File([p.png], `${p.name.replace(/\.[^.]+$/, "")}.png`, { type: "image/png" }), name: p.name })} title="Use this as the print's art">
+          <div key={p.i} className="qo-help-it arc-it">
+            <span className="arc-f">F{p.i}</span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.url} alt="" />
+            <img src={p.cutUrl || p.asIsUrl} alt="" />
             <span>{p.name}</span>
-          </button>
+            <div className="arc-use"><button type="button" className="btn sm" onClick={() => useFile(p.i, true)} title="The flat background taken off">Use, no background</button><button type="button" className="btn sm ghost" onClick={() => useFile(p.i, false)}>As it is</button></div>
+          </div>
         ))}
         {left > 0 && <span className="faint qo-help-wait">Opening {left} file{left === 1 ? "" : "s"} from the old job…</span>}
         {!help.files.length && <span className="faint">The old job has no files to pick from.</span>}
       </div>
+      <div className="arc-chat" aria-live="polite">
+        {chat.map((m, i) => (
+          <div key={i} className={"arc-m " + m.role}>
+            <span>{m.text}</span>
+            {m.actions && m.actions.length > 0 && <div className="arc-acts">{m.actions.map((a, k) => <button key={k} type="button" className={"btn sm" + (k === 0 ? " primary" : "")} onClick={() => act(a)}>{a.label}</button>)}</div>}
+          </div>
+        ))}
+        {thinking && <div className="arc-m ai"><span className="faint">Looking at the old job&apos;s files…</span></div>}
+      </div>
+      {films && (
+        <div className="arc-films">
+          {films.busy && !films.list.length ? <span className="faint">Searching the film folder…</span> : <span className="faint">{films.note}</span>}
+          <div className="arc-acts">{films.list.map((f) => <button key={f.id} type="button" className="btn sm ghost" disabled={films.busy} onClick={() => void openFilm(f)}>{f.name}</button>)}</div>
+          {pieces.length > 0 && <div className="qo-help-grid">{pieces.map((p, i) => (
+            <button key={i} type="button" className="qo-help-it" onClick={() => help.resolve({ kind: "file", file: p.file, name: `the film ${p.name}` })}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt="" /><span>{p.size}</span>
+            </button>
+          ))}</div>}
+        </div>
+      )}
+      <form className="arc-say" onSubmit={(e) => { e.preventDefault(); if (say.trim() && !thinking) void ask(say.trim()); }}>
+        <input value={say} onChange={(e) => setSay(e.target.value)} placeholder={'Tell me about it, e.g. "the art is the second PDF" or "check the film for Bottles Onesie"'} aria-label="Talk to the AI about the art" />
+        <button type="submit" className="btn sm" disabled={!say.trim() || thinking}>Send</button>
+      </form>
       <div className="qo-help-acts">
-        <label className="btn sm primary">Upload the art<input type="file" hidden accept="image/*,application/pdf,.ai,.eps,.svg" onChange={(e) => { const f = e.target.files?.[0]; if (f) help.resolve({ kind: "upload", file: f }); }} /></label>
+        <label className="btn sm primary">Upload the art<input ref={upRef} type="file" hidden accept="image/*,application/pdf,.ai,.eps,.svg" onChange={(e) => { const f = e.target.files?.[0]; if (f) help.resolve({ kind: "upload", file: f }); }} /></label>
+        <button type="button" className="btn sm ghost" onClick={() => void searchFilm(help.job.replace(/^#\d+\s*/, ""))}>Search the film folder</button>
         <button type="button" className="btn sm ghost" onClick={() => help.resolve({ kind: "skip" })}>Make the order without it for now</button>
       </div>
     </div>
