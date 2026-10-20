@@ -17,6 +17,22 @@ type Row = { id: string; number: number; nickname: string; customer_id: string |
 type Done = { id: number; order_id: string; detail: string; actor: string; created_at: string; number?: number; nickname?: string };
 type ArtRef = { id: string; order_id: string; name: string; file_path: string };
 
+/**
+ * The same print on several garment groups (the same art at the same spot: Little Groupies' Bottles front on the onesies
+ * and the tees) prints from one set of screens, so it's confirmed once (Oct 20, Nick: "everything's doubling"). The
+ * first print of each set carries the form; confirming applies it to all of them.
+ */
+type Set1 = { lead: Imprint; ims: Imprint[]; gs: Group[] };
+const printSets = (r: Row): Set1[] => {
+  const out: Set1[] = [], by = new Map<string, Set1>();
+  for (const g of r.groups) for (const im of g.imprints.filter(needsDetails)) {
+    const k = im.design_id ? `${im.design_id}|${(im.location || "").toLowerCase()}|${im.method}` : im.id;
+    const s0 = by.get(k);
+    if (s0) { s0.ims.push(im); if (!s0.gs.includes(g)) s0.gs.push(g); continue; }
+    const s1 = { lead: im, ims: [im], gs: [g] }; by.set(k, s1); out.push(s1);
+  }
+  return out;
+};
 const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "No date");
 // blank, with our guesses shown greyed in each box (Oct 14, Nick: a guess must never become a fact by clicking through);
 // "Copy in our guesses" fills them in on purpose
@@ -94,7 +110,7 @@ export default function ProductionDetailsPage() {
 
   const set = (id: string, p: Partial<DetailsInput>) => setForm((f) => ({ ...f, [id]: { ...f[id], ...p } }));
   async function save(r: Row) {
-    const prints = r.groups.flatMap((g) => g.imprints.filter(needsDetails)).map((im) => form[im.id] || formOf(im));
+    const prints = printSets(r).flatMap((x) => { const f = form[x.lead.id] || formOf(x.lead); return x.ims.map((im) => ({ ...f, id: im.id })); });
     setBusy(r.id); setMsg(null);
     const res = await confirmDetails(r.id, prints);
     setBusy("");
@@ -121,7 +137,7 @@ export default function ProductionDetailsPage() {
       {tab === "waiting" && (rows === null ? <div className="empty">Loading…</div> : !waiting.length ? <div className="empty">Nothing waiting. Reorders of old Printavo jobs show up here until their print details are confirmed.</div> : (
         <div className="pdd-list">
           {waiting.map((r) => {
-            const prints = r.groups.flatMap((g) => g.imprints.filter(needsDetails).map((im) => ({ g, im })));
+            const prints = printSets(r);
             const isOpen = open === r.id;
             return (
               <section key={r.id} id={"pd-" + r.id} className={"panel pdd-card" + (isOpen ? " open" : "")}>
@@ -134,14 +150,14 @@ export default function ProductionDetailsPage() {
                 {isOpen && (
                   <div className="pdd-body">
                     {(art[r.id] || []).length > 0 && <div className="pdd-refs"><span className="faint">From the old job:</span>{art[r.id].map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer">{a.name}</a>)}</div>}
-                    {prints.map(({ g, im }) => {
+                    {prints.map(({ lead: im, gs, ims }) => {
                       const f = form[im.id] || formOf(im);
-                      const garment = [...new Set(g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")))].join(", ");
+                      const garment = [...new Set(gs.flatMap((g) => g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" "))))].join(", ");
                       return (
                         <div key={im.id} className="pdd-print">
                           <div className="pdd-art">{im.design_id && dUrl[im.design_id] ? <img src={dUrl[im.design_id]} alt="" /> : <span className="faint">No art</span>}</div>
                           <div className="pdd-fields">
-                            <div className="pdd-ph"><b>{im.location || "Print"}</b><span className="faint">{METHODS[im.method] || im.method}{garment ? ` on ${garment}` : ""}</span></div>
+                            <div className="pdd-ph"><b>{im.location || "Print"}</b><span className="faint">{METHODS[im.method] || im.method}{garment ? ` on ${garment}` : ""}{ims.length > 1 ? ` · the same print on ${gs.length} garment groups, one set of screens` : ""}</span></div>
                             {im.confirm?.why && <div className="pdd-why faint">Our guess: {im.confirm.why}.{(im.size || im.inks || im.drop) && !(f.size || f.inks || f.drop) && <> <button type="button" className="linkbtn" onClick={() => set(im.id, { ...guessOf(im), screensOnFile: f.screensOnFile, notes: f.notes })}>Copy in our guesses</button></>}</div>}
                             <div className="pdd-grid">
                               <label className="field"><span>Print size</span><input type="text" value={f.size} placeholder={im.size ? `Guess: ${im.size}` : 'e.g. 11" wide'} onChange={(e) => set(im.id, { size: e.target.value })} /></label>
