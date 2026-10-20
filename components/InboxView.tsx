@@ -1561,13 +1561,26 @@ function AfterSend({ a, onArchive, onClose }: { a: { it?: InboxItem; msg: string
   useEffect(() => { if (a.sent) void suggestFollowUps(a.sent).then((r) => setItems(r.ok ? r.items : []), () => setItems([])); }, [a.sent]);
   const day = (d: string | null) => (d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "");
   const time = (t: string | null) => (t ? new Date(`2000-01-01T${t}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "");
+  // archived by itself after 5 seconds (Oct 20, Nick: "a 5-second countdown… you'd have to click Keep in Inbox within
+  // 5 seconds or it just automatically sends it to archive"); paused while the pointer is on the card, stopped by
+  // adding a reminder
+  const WAIT = 5000;
+  const [left, setLeft] = useState(a.it ? WAIT : 0), [held, setHeld] = useState(false), [stopped, setStopped] = useState(!a.it);
+  const fired = useRef(false);
+  useEffect(() => {
+    if (stopped || held) return;
+    const t = setInterval(() => setLeft((x) => Math.max(0, x - 100)), 100);
+    return () => clearInterval(t);
+  }, [stopped, held]);
+  useEffect(() => { if (!stopped && left <= 0 && a.it && !fired.current) { fired.current = true; onArchive(); } }, [left, stopped, a.it, onArchive]);
   const add = async (k: number, f: FollowUp) => {
+    setStopped(true);
     setAdded((x) => ({ ...x, [k]: "…" }));
     const r = f.kind === "event" && f.day ? await addEvent({ title: f.title, day: f.day, start: f.start }) : await addTask({ title: f.title, area: f.area, due: f.day });
     setAdded((x) => ({ ...x, [k]: r.ok ? "✓ On My Day" : r.error }));
   };
   return (
-    <div className="as-card" role="dialog" aria-label="After sending">
+    <div className="as-card" role="dialog" aria-label="After sending" onPointerEnter={() => setHeld(true)} onPointerLeave={() => setHeld(false)}>
       <div className="as-t"><b>{a.msg}</b></div>
       {items === null ? <div className="as-f faint">✦ Looking for anything you promised…</div>
         : items.length > 0 && <div className="as-fl">
@@ -1581,8 +1594,10 @@ function AfterSend({ a, onArchive, onClose }: { a: { it?: InboxItem; msg: string
       <div className="as-b">
         {a.it ? <>
           <span className="as-q">This email:</span>
-          <button type="button" className="btn sm ghost" onClick={onClose}>Keep in Inbox</button>
-          <button type="button" className="btn sm primary" onClick={onArchive}>Archive</button>
+          <button type="button" className="btn sm ghost" onClick={() => { setStopped(true); onClose(); }}>Keep in Inbox</button>
+          <button type="button" className={"btn sm primary as-arch" + (stopped ? "" : " counting")} onClick={() => { if (fired.current) return; fired.current = true; setStopped(true); onArchive(); }} style={{ ["--as-left" as string]: `${(left / WAIT) * 100}%` }}>
+            <span className="as-arch-t">{stopped ? "Archive" : held ? "Archive (paused)" : `Archive in ${Math.ceil(left / 1000)}`}</span>
+          </button>
         </> : <button type="button" className="btn sm ghost" onClick={onClose}>Done</button>}
       </div>
     </div>

@@ -10104,3 +10104,9 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 /* Create order: a wholesale reorder offers the reprint screen fee (Oct 20) */
 .eo-fee{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0 8px;padding:10px 12px;border-radius:10px;border:1px solid #E8C468;background:#FFF8E5;font-size:13px}
 .eo-fee span{flex:1 1 300px}
+/* After sending: Archive counts down 5 seconds and archives by itself (Oct 20) */
+.as-arch{position:relative;overflow:hidden;min-width:118px}
+.as-arch.counting{background:color-mix(in srgb,var(--brand,#1F6FD1) 45%,#fff);border-color:var(--brand,#1F6FD1)}
+.as-arch.counting::before{content:"";position:absolute;inset:0 auto 0 0;width:var(--as-left,100%);background:var(--brand,#1F6FD1);transition:width .1s linear;z-index:0}
+.as-arch-t{position:relative;z-index:1}
+.as-arch.counting{color:#fff}
