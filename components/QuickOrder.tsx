@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { stampOrderMockups } from "@/lib/mockupStamp";
 import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import { applyColors, checkColors } from "@/components/ColorCheck";
+import { LOCATIONS } from "@/lib/pricing";
 import { uploadDesign } from "@/lib/designs";
 import { makePreview } from "@/lib/artPrep";
 import { handOffArt } from "@/app/shop/ai-actions";
@@ -31,6 +32,9 @@ type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draf
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type HelpPick = { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
 type Help = { job: string; print: string; customerId: string; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (p: HelpPick) => void };
+type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
+type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
+type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
 type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 
 const pcsOf = (gs: Group[]) => gs.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, v) => a + (+v || 0), 0), 0), 0);
@@ -43,6 +47,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
   const [help, setHelp] = useState<Help | null>(null);
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
   const ran = useRef(false);
 
   const step = (label: string) => setSteps((s) => [...s.map((x) => (x.state === "doing" ? { ...x, state: "done" as const } : x)), { label, state: "doing" }]);
@@ -116,6 +121,23 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(got ? `Art pulled from ${jobLabel || "the old job"}${films.length ? `, size from the film ${films.map((f) => f.name).join(", ")}` : ""}` : "No art could be pulled from the old job: add it on the order");
         for (const n of r.notes) { did.push(n); why.push(n); }
       } catch (e) { const m = `The art couldn't be pulled (${e instanceof Error ? e.message : String(e)})`; did.push(m); why.push(m); }
+    }
+    // art found, but not on a mockup (the original art file or the film): where it goes and how big isn't known, so
+    // ask (Oct 20, Nick: "I'm finding art but it's not a mockup like I was expecting, what should I do with it? …that's
+    // the art for the front, here's the art for the back")
+    const unsure = d.groups.flatMap((x, gi) => x.imprints.map((im, ii) => ({ gi, ii, im }))).filter(({ im }) => im.design_id && /Art: the original from|Art and size from the film/.test(im.notes || ""));
+    if (unsure.length) {
+      note("Found the art, but not on a mockup: checking with you where it goes");
+      const ans = await new Promise<ConfirmAns>((resolve) => setConfirm({ job: jobLabel || "the old job", items: unsure.map(({ gi, ii, im }) => ({ gi, ii, design: im.design_id!, location: im.location, size: (im.size || "").replace(/"\s*wide/, ""), colors: im.colors || 1 })), resolve }));
+      setConfirm(null);
+      for (const a of ans) {
+        d = { ...d, groups: d.groups.map((x, xi) => (xi !== a.gi ? x : { ...x, imprints: x.imprints.map((y, yi) => {
+          if (yi !== a.ii) return y;
+          if (a.location === "none") return { ...y, design_id: undefined as unknown as string };
+          return { ...y, location: a.location, ...(a.size ? { size: `${a.size}" wide`, sizeFrom: "customer" as const } : {}) };
+        }) })) };
+        did.push(a.location === "none" ? "You said the art it found isn't this print's" : `You confirmed the art: ${a.location}${a.size ? `, ${a.size}" wide` : ""}`);
+      }
     }
     // a print still without art: stop and ask (Oct 20, Nick: "give us some sort of error… I tried to bring in the art
     // but I couldn't do it… and then some sort of help me out. Every time we create an order from a Printavo invoice
@@ -195,12 +217,13 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
 
   return (
     <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Creating the order">
-      <div className="dla qo">
+      <div className={"dla qo" + (help || confirm ? " wide" : "")}>
         {!done ? <>
           <h3>Reading the email and creating the order{start.parts && start.parts.length > 1 ? "s" : ""}…</h3>
           <p className="dla-sub">This takes about a minute{start.parts && start.parts.length > 1 ? " per order" : ""}. Nothing is sent to the customer.</p>
         </> : <h3>{made.length ? `${made.length === 1 ? "Order" : `${made.length} orders`} created` : "The order wasn't made"}</h3>}
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
+        {confirm && <ArtConfirm c={confirm} />}
         {help && <ArtHelp help={help} />}
         {made.map((m) => (
           <div key={m.id} className="qo-made">
@@ -241,7 +264,7 @@ function ArtHelp({ help }: { help: Help }) {
   const upRef = useRef<HTMLInputElement | null>(null);
   // elsewhere: their logo library and the emails about this design (the whole mailbox), each drawn to pick from
   type Found = { source: "library" | "email"; name: string; label: string; date: string; type: string; url?: string; design_id?: string };
-  const [found, setFound] = useState<null | (Found & { pic?: string; blob?: Blob | null; cut?: Blob | null })[]>(null);
+  const [found, setFound] = useState<null | (Found & { pic?: string; asIsUrl?: string; blob?: Blob | null; cut?: Blob | null })[]>(null);
   const [prodNote, setProdNote] = useState(""), [prodOpen, setProdOpen] = useState(false);
   useEffect(() => {
     let live = true;
@@ -260,7 +283,8 @@ function ArtHelp({ help }: { help: Help }) {
           let pic = "", cut: Blob | null = null, asIs: Blob | null = b;
           if (c) { asIs = await new Promise<Blob | null>((res) => trimToArt(c).toBlob(res, "image/png")); knockOutBackground(c); cut = await new Promise<Blob | null>((res) => trimToArt(c).toBlob(res, "image/png")); pic = cut ? URL.createObjectURL(cut) : ""; }
           if (!live) return;
-          setFound((x) => (x ? x.map((y, yi) => (yi === k ? { ...y, pic, blob: f.source === "email" && !c ? new File([b], f.name, { type: b.type }) : asIs, cut } : y)) : x));
+          const asIsUrl = c && asIs ? URL.createObjectURL(asIs) : "";
+          setFound((x) => (x ? x.map((y, yi) => (yi === k ? { ...y, pic, asIsUrl, blob: f.source === "email" && !c ? new File([b], f.name, { type: b.type }) : asIs, cut } : y)) : x));
         } catch { /* left as a name */ }
       }
     })();
@@ -323,84 +347,62 @@ function ArtHelp({ help }: { help: Help }) {
     setPieces(got);
     setFilms((x) => (x ? { ...x, busy: false, note: got.length ? `The art on ${f.name}: pick the print` : `${f.name} couldn't be read (save it PDF-compatible in Illustrator).` } : x));
   }
-  const act = (a: Act) => { if (a.kind === "use_file") useFile(a.file, a.background); else if (a.kind === "search_film") void searchFilm(a.query); else if (a.kind === "upload") upRef.current?.click(); else help.resolve({ kind: "skip" }); };
+  // one gallery for every place the art might be, one picked, one button (Oct 20, Nick: "rethink how it looks")
+  type Item = { key: string; tag: string; name: string; cutUrl: string; asIsUrl: string; pick: (bg: boolean) => void; canCut: boolean; ready: boolean; title?: string };
+  const [sel, setSel] = useState(""), [bg, setBg] = useState(true), [more, setMore] = useState<"" | "prod">("");
+  const items: Item[] = [
+    ...pics.map((p) => ({ key: `F${p.i}`, tag: `Old job · F${p.i}`, name: p.name, cutUrl: p.cutUrl, asIsUrl: p.asIsUrl, canCut: !!p.cut, ready: true, pick: (b: boolean) => useFile(p.i, b) })),
+    ...(found || []).map((f, i) => ({ key: `E${i}`, tag: f.source === "library" ? "Their logo" : `Email · ${f.date.slice(0, 7)}`, title: `${f.label} · ${f.date}`, name: f.name, cutUrl: f.pic || (f.source === "library" ? f.url || "" : ""), asIsUrl: f.source === "library" ? f.url || "" : f.asIsUrl || f.pic || "", canCut: !!f.cut, ready: f.source === "library" || !!f.blob, pick: (b: boolean) => useFound(f, b) })),
+    ...pieces.map((p, i) => ({ key: `M${i}`, tag: `Film · ${p.size}`, name: p.name, cutUrl: p.url, asIsUrl: p.url, canCut: false, ready: true, pick: () => help.resolve({ kind: "file" as const, file: p.file, name: `the film ${p.name}` }) })),
+  ];
+  const chosen = items.find((x) => x.key === sel) || null;
+  const act = (a: Act) => { if (a.kind === "use_file") { setSel(`F${a.file}`); setBg(a.background); } else if (a.kind === "search_film") void searchFilm(a.query); else if (a.kind === "upload") upRef.current?.click(); else help.resolve({ kind: "skip" }); };
+  // the AI's first suggestion picks the picture it means
+  const lastAi = [...chat].reverse().find((m) => m.role === "ai");
+  useEffect(() => { const a = lastAi?.actions?.[0]; if (a?.kind === "use_file" && !sel) { setSel(`F${a.file}`); setBg(a.background); } }, [lastAi]); // eslint-disable-line react-hooks/exhaustive-deps
+  const loading = left > 0 || found === null;
   return (
-    <div className="qo-help arc" role="group" aria-label="Printavo Art Resolution Center">
-      <div className="arc-h"><b>Printavo Art Resolution Center</b><span className="faint">{help.job} · {help.print}</span></div>
-      <span>I couldn&apos;t bring this print&apos;s art in by myself. Old Printavo jobs keep their art in all kinds of ways: let&apos;s sort it out. Click a picture, upload the art from your computer, or talk it through with me below.</span>
-      {help.why.length > 0 && <ul className="arc-why">{help.why.map((w, i) => <li key={i}>{w}</li>)}</ul>}
-      <div className="qo-help-grid">
-        {pics.map((p) => (
-          <div key={p.i} className="qo-help-it arc-it">
-            <span className="arc-f">F{p.i}</span>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.cutUrl || p.asIsUrl} alt="" />
-            <span>{p.name}</span>
-            <div className="arc-use"><button type="button" className="btn sm" onClick={() => useFile(p.i, true)} title="The flat background taken off">Use, no background</button><button type="button" className="btn sm ghost" onClick={() => useFile(p.i, false)}>As it is</button></div>
-          </div>
-        ))}
-        {left > 0 && <span className="faint qo-help-wait">Opening {left} file{left === 1 ? "" : "s"} from the old job…</span>}
-        {!help.files.length && <span className="faint">The old job has no files to pick from.</span>}
-      </div>
-      <div className="arc-sec">
-        <b>From emails and their logo library</b>
-        {found === null ? <span className="faint">Searching every email with {help.job.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "")} in it, every year, and their logos…</span>
-          : !found.length ? <span className="faint">Nothing in their emails or logos.</span> : (
-          <div className="qo-help-grid">
-            {found.map((f, i) => (
-              <div key={i} className="qo-help-it arc-it">
-                <span className="arc-f">{f.source === "library" ? "Logo" : "Email"}</span>
-                {f.pic || (f.source === "library" && f.url) ? <img src={f.pic || f.url} alt="" /> : <span className="arc-noimg faint">{f.blob ? f.name.split(".").pop()?.toUpperCase() : "Opening…"}</span>}
-                <span title={`${f.label} · ${f.date}`}>{f.name}</span>
-                <small className="faint">{f.date} · {f.label}</small>
-                <div className="arc-use">
-                  {f.source === "library" ? <button type="button" className="btn sm" onClick={() => useFound(f, false)}>Use this logo</button> : <>
-                    <button type="button" className="btn sm" disabled={!f.blob} onClick={() => useFound(f, true)}>{f.cut ? "Use, no background" : "Use this file"}</button>
-                    {f.cut && <button type="button" className="btn sm ghost" onClick={() => useFound(f, false)}>As it is</button>}
-                  </>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="arc-chat" aria-live="polite">
-        {chat.map((m, i) => (
-          <div key={i} className={"arc-m " + m.role}>
-            <span>{m.text}</span>
-            {m.actions && m.actions.length > 0 && <div className="arc-acts">{m.actions.map((a, k) => <button key={k} type="button" className={"btn sm" + (k === 0 ? " primary" : "")} onClick={() => act(a)}>{a.label}</button>)}</div>}
-          </div>
-        ))}
-        {thinking && <div className="arc-m ai"><span className="faint">Looking at the old job&apos;s files…</span></div>}
-      </div>
-      {films && (
-        <div className="arc-films">
-          {films.busy && !films.list.length ? <span className="faint">Searching the film folder…</span> : <span className="faint">{films.note}</span>}
-          <div className="arc-acts">{films.list.map((f) => <button key={f.id} type="button" className="btn sm ghost" disabled={films.busy} onClick={() => void openFilm(f)}>{f.name}</button>)}</div>
-          {pieces.length > 0 && <div className="qo-help-grid">{pieces.map((p, i) => (
-            <button key={i} type="button" className="qo-help-it" onClick={() => help.resolve({ kind: "file", file: p.file, name: `the film ${p.name}` })}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.url} alt="" /><span>{p.size}</span>
-            </button>
-          ))}</div>}
+    <div className="ap" role="group" aria-label="Help with the art">
+      <p className="ap-q">Which one is the <b>{help.print}</b> print?</p>
+      <p className="ap-why">{help.why[0] ? `I couldn't bring the art in from ${help.job} by myself (${help.why[0].replace(/\.$/, "").toLowerCase()}).` : `I couldn't bring the art in from ${help.job} by myself.`} Here&apos;s everything I found: the old job&apos;s files, their emails about it, their logos{pieces.length ? " and the film" : ""}.</p>
+      {(lastAi || thinking) && (
+        <div className="ap-ai">
+          <span className="ap-ai-i" aria-hidden>✦</span>
+          <span>{thinking ? "Looking at the files…" : lastAi!.text}</span>
+          {!thinking && lastAi?.actions?.filter((a) => a.kind !== "use_file").map((a, k) => <button key={k} type="button" className="ap-link" onClick={() => act(a)}>{a.label}</button>)}
         </div>
       )}
-      <form className="arc-say" onSubmit={(e) => { e.preventDefault(); if (say.trim() && !thinking) void ask(say.trim()); }}>
-        <input value={say} onChange={(e) => setSay(e.target.value)} placeholder={'Tell me about it, e.g. "the art is the second PDF" or "check the film for Bottles Onesie"'} aria-label="Talk to the AI about the art" />
-        <button type="submit" className="btn sm" disabled={!say.trim() || thinking}>Send</button>
+      <div className="ap-grid">
+        {items.map((it) => (
+          <button key={it.key} type="button" className={"ap-it" + (sel === it.key ? " on" : "")} disabled={!it.ready} onClick={() => setSel(it.key)} title={it.title || it.name} aria-pressed={sel === it.key}>
+            <span className="ap-pic">{(bg && it.canCut ? it.cutUrl : it.asIsUrl || it.cutUrl) ? <img src={bg && it.canCut ? it.cutUrl : it.asIsUrl || it.cutUrl} alt="" /> : <span className="faint">{it.ready ? it.name.split(".").pop()?.toUpperCase() : "Opening…"}</span>}</span>
+            <span className="ap-tag">{it.tag}</span>
+          </button>
+        ))}
+        {loading && <span className="ap-wait">{left > 0 ? `Opening the old job's files…` : "Searching their emails and logos…"}</span>}
+        {!loading && !items.length && <span className="ap-wait">Nothing found anywhere. Upload the art, or hand it to production.</span>}
+      </div>
+      {films && films.list.length > 0 && <div className="ap-films"><span className="faint">{films.note}</span>{films.list.map((f) => <button key={f.id} type="button" className="ap-link" disabled={films.busy} onClick={() => void openFilm(f)}>{f.name}</button>)}</div>}
+      {films && !films.list.length && <div className="ap-films faint">{films.busy ? "Searching the film folder…" : films.note}</div>}
+      <form className="ap-ask" onSubmit={(e) => { e.preventDefault(); if (say.trim() && !thinking) void ask(say.trim()); }}>
+        <input value={say} onChange={(e) => setSay(e.target.value)} placeholder={'Tell the AI, e.g. "it\'s the second PDF" or "check the film for Bottles Onesie"'} aria-label="Tell the AI about the art" />
       </form>
-      <div className="qo-help-acts">
-        <label className="btn sm primary">Upload the art<input ref={upRef} type="file" hidden accept="image/*,application/pdf,.ai,.eps,.svg" onChange={(e) => { const f = e.target.files?.[0]; if (f) help.resolve({ kind: "upload", file: f }); }} /></label>
-        <button type="button" className="btn sm ghost" onClick={() => void searchFilm(help.job.replace(/^#\d+\s*/, ""))}>Search the film folder</button>
-        <button type="button" className="btn sm ghost" onClick={() => setProdOpen((x) => !x)}>Hand it to production to find</button>
-        <button type="button" className="btn sm ghost" onClick={() => help.resolve({ kind: "skip" })}>Make the order without it for now</button>
-      </div>
-      {prodOpen && (
-        <div className="arc-say">
-          <input value={prodNote} onChange={(e) => setProdNote(e.target.value)} placeholder='A note for them, e.g. "should be on the server under Little Groupies 2023"' aria-label="Note for production" />
-          <button type="button" className="btn sm primary" onClick={() => help.resolve({ kind: "production", note: prodNote.trim() })}>Hand it off</button>
-        </div>
+      {more === "prod" && (
+        <form className="ap-ask" onSubmit={(e) => { e.preventDefault(); help.resolve({ kind: "production", note: prodNote.trim() }); }}>
+          <input autoFocus value={prodNote} onChange={(e) => setProdNote(e.target.value)} placeholder='A note for production, e.g. "on the server under Little Groupies 2023"' aria-label="Note for production" />
+          <button type="submit" className="btn sm">Hand it off</button>
+        </form>
       )}
+      <div className="ap-foot">
+        <span className="ap-more">
+          <label className="ap-link">Upload the art<input ref={upRef} type="file" hidden accept="image/*,application/pdf,.ai,.eps,.svg" onChange={(e) => { const f = e.target.files?.[0]; if (f) help.resolve({ kind: "upload", file: f }); }} /></label>
+          <button type="button" className="ap-link" onClick={() => void searchFilm(help.job.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, ""))}>Search the film folder</button>
+          <button type="button" className="ap-link" onClick={() => setMore((x) => (x ? "" : "prod"))}>Hand to production</button>
+          <button type="button" className="ap-link" onClick={() => help.resolve({ kind: "skip" })}>Skip for now</button>
+        </span>
+        {chosen?.canCut && <label className="ap-bg"><input type="checkbox" checked={bg} onChange={(e) => setBg(e.target.checked)} /> Remove background</label>}
+        <button type="button" className="btn primary" disabled={!chosen} onClick={() => chosen?.pick(bg)}>Use this art</button>
+      </div>
     </div>
   );
 }
@@ -413,4 +415,50 @@ function trimToArt(c: HTMLCanvasElement) {
   const o = document.createElement("canvas"); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
   o.getContext("2d")!.drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
   return o;
+}
+
+/**
+ * The art was found, but not on a mockup: which print it is and how big, before the order is made (part of the
+ * Printavo Art Resolution Center). "Not this order's art" sends that print to the Resolution Center.
+ */
+function ArtConfirm({ c }: { c: Confirm }) {
+  const [rows, setRows] = useState(c.items.map((x) => ({ ...x })));
+  const [pics, setPics] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const sb = createClient();
+      const { data } = await sb.from("designs").select("id, preview_path, file_path").in("id", c.items.map((x) => x.design));
+      const paths = (data || []).map((x) => ({ id: x.id as string, p: (x.preview_path || x.file_path) as string })).filter((x) => x.p);
+      const { data: s } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths.map((x) => x.p), 900) : { data: [] };
+      if (live) setPics(Object.fromEntries(paths.map((x, i) => [x.id, s?.[i]?.signedUrl || ""])));
+    })();
+    return () => { live = false; };
+  }, [c]);
+  // the usual spots first, then the rest
+  const COMMON = ["Full Front", "Full Back", "Left Chest", "Center Chest", "Upper Back (Yoke)", "Left Sleeve", "Right Sleeve"].filter((l) => LOCATIONS.includes(l));
+  const set = (k: number, patch: Partial<ConfirmItem>) => setRows((x) => x.map((y, yi) => (yi === k ? { ...y, ...patch } : y)));
+  return (
+    <div className="ap" role="group" aria-label="What is this art">
+      <p className="ap-q">I found {rows.length === 1 ? "this art" : "these"} in {c.job}. What {rows.length === 1 ? "is it" : "are they"}?</p>
+      <p className="ap-why">It isn&apos;t on a mockup, so I can&apos;t tell where it goes or how big it printed. Then I&apos;ll make the mockup.</p>
+      {rows.map((r, k) => (
+        <div key={k} className="ap-conf">
+          <span className="ap-pic big">{pics[r.design] ? <img src={pics[r.design]} alt="" /> : <span className="faint">Art</span>}</span>
+          <div className="ap-conf-f">
+            <div className="ap-chips" role="radiogroup" aria-label="Where it goes">
+              {[...COMMON, ...(COMMON.includes(r.location) ? [] : [r.location])].map((l) => <button key={l} type="button" role="radio" aria-checked={r.location === l} className={"chip" + (r.location === l ? " on" : "")} onClick={() => set(k, { location: l })}>{l}</button>)}
+              <select className="ap-other" value="" aria-label="Another location" onChange={(e) => e.target.value && set(k, { location: e.target.value })}>
+                <option value="">Other…</option>
+                {LOCATIONS.filter((l) => !COMMON.includes(l)).map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+              <button type="button" role="radio" aria-checked={r.location === "none"} className={"chip" + (r.location === "none" ? " on" : "")} onClick={() => set(k, { location: "none" })}>Not the art</button>
+            </div>
+            {r.location !== "none" && <label className="ap-w">Printed width <input type="number" min={1} max={16} step={0.25} value={r.size} placeholder="standard" onChange={(e) => set(k, { size: e.target.value })} /> in <span className="faint">(leave blank for the standard size; production confirms it)</span></label>}
+          </div>
+        </div>
+      ))}
+      <div className="ap-foot"><span className="ap-more" /><button type="button" className="btn primary" onClick={() => c.resolve(rows.map((r) => ({ gi: r.gi, ii: r.ii, location: r.location, size: r.location === "none" ? "" : String(r.size || "").trim() })))}>{rows.some((r) => r.location === "none") ? "Keep going" : "Use it & make the mockup"}</button></div>
+    </div>
+  );
 }
