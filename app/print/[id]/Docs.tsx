@@ -18,6 +18,7 @@ import type { ReactNode } from "react";
 export type DocData = {
   o: Order; cust: Partial<Customer>; groups: Group[]; c: ReturnType<typeof calcOrder>; settings: Settings; pays: Payment[];
   designs: Record<string, Design>; designUrls: Record<string, string>;
+  /** vector art (EPS / PDF / AI / SVG): a signed link to the original file, drawn at full resolution in the saved PDF */ designFiles?: Record<string, string>;
   /** per group: signed mockup pictures (photos only), the first is the big one */ mockups: string[][];
   /** per group: the shirt color behind the art */ hexes: string[];
   /** per group, per print: the largest it can print (inches) and on which size */ maxes: ({ w: number; h: number; on: string } | null)[][];
@@ -48,14 +49,14 @@ const Swatch = ({ c }: { c: string }) => <span className="sw" style={{ backgroun
  * The art in its measured box. A logo with empty margins (art_box: where the art really sits in the file) is cropped to
  * them, so the drawn width × height lines meet the art's edges (Oct 20: the back art sat small inside its 11" × 14.67").
  */
-function ArtPic({ d, des, pic, style }: { d: Imprint; des: Design | null; pic: string; style: { top: string; width: string; height: string } }) {
+function ArtPic({ d, des, pic, style, hires }: { d: Imprint; des: Design | null; pic: string; style: { top: string; width: string; height: string }; hires?: string }) {
   const b = des?.art_box;
   const alt = des ? `D-${des.number}` : "";
   if (!b || !b.w || !b.h || !b.of?.w || !b.of?.h || (b.w >= b.of.w * 0.98 && b.h >= b.of.h * 0.98))
-    return <PaintedArt className="pic" src={pic} inkMap={d.inkMap} designId={d.design_id} alt={alt} style={style} />;
+    return <PaintedArt className="pic" src={pic} inkMap={d.inkMap} designId={d.design_id} alt={alt} style={style} hires={hires} hiresName={des?.file_name} />;
   return (
     <div className="pic" style={{ ...style, overflow: "hidden" }}>
-      <PaintedArt src={pic} inkMap={d.inkMap} designId={d.design_id} alt={alt}
+      <PaintedArt src={pic} inkMap={d.inkMap} designId={d.design_id} alt={alt} hires={hires} hiresName={des?.file_name}
         style={{ position: "absolute", maxWidth: "none", left: `${(-b.x / b.w) * 100}%`, top: `${(-b.y / b.h) * 100}%`, width: `${(b.of.w / b.w) * 100}%`, height: `${(b.of.h / b.h) * 100}%` }} />
     </div>
   );
@@ -206,7 +207,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
       <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div></div>
       <div className={"art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
         {max && s > 0 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>max {max.w}&quot; × {max.h}&quot;{max.on ? ` on the ${max.on}` : ""}</span></div>}
-        {pic ? <ArtPic d={d} des={des} pic={pic} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
+        {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
         {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
         {pic && sz.h > 0 && <div className="dimh" style={{ top: `${top}in`, height: `${ah}in`, left: `calc(50% + ${aw / 2 + 0.14}in)` }}>{sz.h.toFixed(2)}&quot;</div>}
       </div>
@@ -325,8 +326,15 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
               <div className="pf-ok">
                 <div className="t">Please check everything before you approve</div>
                 <div className="s">Spelling, art, ink colors, print sizes and placement. Ink colors are matched to the names listed (PMS or stock ink); colors on a screen or a home printer are close but not exact. Sizes are the printed size on the garment. We start production once this proof is approved.</div>
-                <div className="pf-boxes"><span><i className="cb" /> Approved as shown</span><span><i className="cb" /> Approved with the changes noted</span><span><i className="cb" /> Changes needed, send a new proof</span></div>
-                <div className="pf-sign"><div>Signature</div><div>Name</div><div>Date</div></div>
+                {/* data-pdf-*: these become fillable fields in the saved PDF (Oct 20, Nick: "make those editable fields so that
+                    they can just sign it with Acrobat… and send it back to us") */}
+                <div className="pf-boxes">
+                  <span><i className="cb" data-pdf-check={`approved-${gi + 1}`} /> Approved as shown</span>
+                  <span><i className="cb" data-pdf-check={`approved-with-changes-${gi + 1}`} /> Approved with the changes noted</span>
+                  <span><i className="cb" data-pdf-check={`changes-needed-${gi + 1}`} /> Changes needed, send a new proof</span>
+                </div>
+                <div className="pf-notes" data-pdf-text={`changes-${gi + 1}`} data-pdf-multi="1"><span>Changes or notes</span></div>
+                <div className="pf-sign"><div data-pdf-text={`signature-${gi + 1}`}>Signature</div><div data-pdf-text={`name-${gi + 1}`}>Name</div><div data-pdf-text={`date-${gi + 1}`}>Date</div></div>
                 {approved && <div className="s ok">Approved online: {approved}</div>}
               </div>
               {foot()}
@@ -365,7 +373,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot }: { d: Imprint; di: number; 
       <div className="p2h"><div className="t disp">{(d.location || "Print")}</div><div className="r">Print {di + 1} of {n}{gname ? ` · ${gname}` : ""} · #{o.number}</div></div>
       <div className={"art pf-art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
         {max && s > 0 && max.w * s < 7.4 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>largest print area {max.w}&quot; × {max.h}&quot;</span></div>}
-        {pic ? <ArtPic d={d} des={des} pic={pic} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">Art coming</div>}
+        {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">Art coming</div>}
         {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
         {pic && sz.h > 0 && <div className="dimh" style={{ top: `${top}in`, height: `${ah}in`, left: `calc(50% + ${aw / 2 + 0.14}in)` }}>{sz.h.toFixed(2)}&quot;</div>}
       </div>

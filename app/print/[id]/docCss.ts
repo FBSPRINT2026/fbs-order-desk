@@ -217,8 +217,10 @@ export const DOC_CSS = `
 .pdoc .pf-ok .s.ok{color:var(--ok);font-weight:700;font-size:10.5pt}
 .pdoc .pf-boxes{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:8px;font-size:10.5pt}
 .pdoc .pf-boxes span{display:inline-flex;align-items:center;gap:7px}
+.pdoc .pf-notes{margin-top:10px;height:.55in;border:1px solid var(--line);border-radius:6px;padding:3px 7px}
+.pdoc .pf-notes span{font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
 .pdoc .pf-sign{display:grid;grid-template-columns:2fr 1.6fr 1fr;gap:18px;margin-top:20px}
-.pdoc .pf-sign div{border-top:1.5px solid var(--ink);padding-top:3px;font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
+.pdoc .pf-sign div{border-top:1.5px solid var(--ink);padding-top:3px;position:relative;font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
 .pdoc .pf-mk{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin-top:12px}
 .pdoc .pf-art{height:7in;margin-top:12px}
 .pdoc .pf-specs{grid-template-columns:repeat(4,1fr)}

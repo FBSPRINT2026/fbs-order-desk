@@ -237,7 +237,7 @@ export async function makePreview(file: File, maxPx = 2400): Promise<File | null
       const url = URL.createObjectURL(new Blob([vartSvg(v)], { type: "image/svg+xml" }));
       try {
         const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-        const k = 2400 / Math.max(v.w, v.h), c = document.createElement("canvas");
+        const k = Math.max(2400, maxPx) / Math.max(v.w, v.h), c = document.createElement("canvas");
         c.width = Math.round(v.w * k); c.height = Math.round(v.h * k);
         c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
         return canvasToFile(c, `${base}.png`);

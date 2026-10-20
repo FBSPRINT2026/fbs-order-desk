@@ -48,7 +48,16 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const mockups = mkPaths.map((ps) => ps.map((x) => urlOf.get(x) || "").filter(Boolean));
   const designUrls: Record<string, string> = {};
   dPaths.forEach((d) => { const u = urlOf.get(d.preview_path); if (u) designUrls[d.id] = u; });
-  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, mockups, hexes, maxes, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
+  // vector art's own file, so the saved PDF can draw it sharp at any size (Oct 20, Nick: "really high-resolution")
+  const designFiles: Record<string, string> = {};
+  if (work0 || proof0) {
+    const vec = Object.values(designs).filter((d) => d.file_path && (/postscript|pdf|svg|illustrator/i.test(d.file_type || "") || /\.(eps|ai|pdf|svg)$/i.test(d.file_name || d.file_path)));
+    if (vec.length) {
+      const { data: vs } = await admin.storage.from("proofs").createSignedUrls(vec.map((d) => d.file_path), 3600);
+      (vs || []).forEach((r, i) => { if (r.signedUrl) designFiles[vec[i].id] = r.signedUrl; });
+    }
+  }
+  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, designFiles, mockups, hexes, maxes, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
 
   // one tidy file name for every PDF (Oct 20, Nick): "40072 - Methodist Dallas - 2026 Donor Shirts - Proof v1"
   const short = (t: string, n: number) => { const x = (t || "").replace(/\s+/g, " ").trim(); return x.length <= n ? x : (x.slice(0, n).replace(/\s+\S*$/, "") || x.slice(0, n)); };
