@@ -21,7 +21,7 @@ import type { OrderStart } from "@/components/OrderStartPick";
  *   - the order made as a quote, the customer's mockup stamped into Production files.
  * Then "View order" (our mockup is made first when the order needs one). Nothing is sent to the customer.
  */
-type Loaded = { draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
+type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 
@@ -37,6 +37,10 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const ran = useRef(false);
 
   const step = (label: string) => setSteps((s) => [...s.map((x) => (x.state === "doing" ? { ...x, state: "done" as const } : x)), { label, state: "doing" }]);
+  // what it's doing right now, under the step with the spinner (Oct 20, Nick: "give us updates along the way…
+  // reading through old email, generating new size breakdown, getting order ready… I can see what you're thinking")
+  const note = (n: string) => setSteps((s) => s.map((x) => (x.state === "doing" ? { ...x, note: n } : x)));
+  const ticker = (lines: string[], ms = 3500) => { let i = 0; note(lines[0]); const t = setInterval(() => { i = Math.min(i + 1, lines.length - 1); note(lines[i]); }, ms); return () => clearInterval(t); };
   const finishSteps = (state: "done" | "error" = "done") => setSteps((s) => s.map((x) => (x.state === "doing" ? { ...x, state } : x)));
 
   async function one(part: EOPart | null, of: string): Promise<Made | null> {
@@ -45,12 +49,29 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const g = await fetch(`/api/inbox/order?${qs}`).then((r) => r.json()).catch(() => null) as Loaded & { error?: string } | null;
     if (!g || g.error) throw new Error(g?.error || "Couldn't load the email.");
     let d = !start.told && !start.job ? g.draft : null;
+    if (d) note("Already read in the background: using that");
     if (!d) {
+      const files = (g.files || []).filter((f) => f.role !== "signature");
+      const sheets = files.filter((f) => /\.(pdf|xlsx?|csv|docx?)$/i.test(f.name)), pics = files.filter((f) => /\.(png|jpe?g|gif|webp)$/i.test(f.name));
+      const stop = ticker([
+        (g.emails || 1) > 1 ? `Reading all ${g.emails} emails in the conversation…` : "Reading the email…",
+        ...(sheets.length ? [`Opening ${sheets.length === 1 ? sheets[0].name : `${sheets.length} size sheets`}…`] : []),
+        ...(pics.length ? [`Looking at ${pics.length === 1 ? "the picture" : `${pics.length} pictures`} they sent…`] : []),
+        ...((part?.job || start.job) ? [`Pulling up ${part?.jobLabel || "the past order"} to copy…`] : ["Checking their past orders for a match…"]),
+        "Working out the garments and colors…",
+        "Building the size breakdown…",
+        ...(part?.pieces ? [`Adding up the sheets (they say ${part.pieces.toLocaleString("en-US")} pcs)…`] : []),
+        "Checking the prints and inks…",
+        "Writing down anything to ask the customer…",
+        "Getting the order ready…",
+      ]);
       const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: part ? "" : start.told || "", job: part ? part.job : start.job || null, reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}) }) }).catch(() => null);
       const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+      stop();
       if (!r?.ok || !j.draft) throw new Error(j.error || "The AI couldn't read this email.");
       d = j.draft as EODraft; g.past = j.past || g.past;
     }
+    { const pcs = pcsOf(d.groups), lines = d.groups.reduce((n, x) => n + x.lines.length, 0); note(`Found ${lines} garment line${lines === 1 ? "" : "s"}, ${pcs.toLocaleString("en-US")} pcs${d.kind === "reorder" ? ", a reorder" : ""}`); }
     const did: string[] = [];
     const job = d.reorderOf ? (g.past || []).find((p) => p.ref === d!.reorderOf) : null;
     const jobLabel = (job?.label || part?.jobLabel || "").replace(/\s*\(Printavo\)$/, "");
@@ -78,7 +99,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     if (d.kind === "reorder" && d.reorderOf && g.customer?.id && d.groups.some((x) => x.imprints.some((im) => !im.design_id))) {
       step(`${of}Pulling the art from ${jobLabel || "the old job"}…`);
       try {
-        const r = await pullReorderArt(d, { customerId: g.customer.id, jobLabel: job?.label, jobDate: job?.date });
+        const r = await pullReorderArt(d, { customerId: g.customer.id, jobLabel: job?.label, jobDate: job?.date, onStep: note });
         d = r.draft; films = r.films;
         const got = d.groups.flatMap((x) => x.imprints).filter((im) => im.design_id).length;
         did.push(got ? `Art pulled from ${jobLabel || "the old job"}${films.length ? `, size from the film ${films.map((f) => f.name).join(", ")}` : ""}` : "No art could be pulled from the old job: add it on the order");
@@ -86,6 +107,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       } catch (e) { did.push(`The art couldn't be pulled (${e instanceof Error ? e.message : String(e)}): add it on the order`); }
     }
     step(`${of}Creating the order…`);
+    note(d.kind === "reorder" ? "Copying the job with the new sizes as a quote…" : "Saving it as a quote…");
     const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status: "quote" }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     if (!r?.ok || !j.id) throw new Error(j.error || "Couldn't create the order.");
@@ -95,6 +117,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       const sb = createClient();
       const { data: o } = await sb.from("orders").select("groups").eq("id", j.id).maybeSingle();
       const gs = ((o?.groups || []) as Group[]);
+      if (gs.some((x) => (x.customerMockups || []).length)) note("Saving the customer's mockup to Production files…");
       if (gs.some((x) => (x.customerMockups || []).length)) await Promise.race([stampOrderMockups(sb, j.id, gs), new Promise((res) => setTimeout(res, 25_000))]);
       const first = gs.find((x) => x.imprints.some((im) => im.design_id) && !(x.mockupThumbs || []).some(Boolean));
       if (first) { url = `/shop/artwork/mockup?order=${j.id}&group=${first.id}&auto=1`; mockup = true; }
@@ -132,7 +155,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           <h3>Reading the email and creating the order{start.parts && start.parts.length > 1 ? "s" : ""}…</h3>
           <p className="dla-sub">This takes about a minute{start.parts && start.parts.length > 1 ? " per order" : ""}. Nothing is sent to the customer.</p>
         </> : <h3>{made.length ? `${made.length === 1 ? "Order" : `${made.length} orders`} created` : "The order wasn't made"}</h3>}
-        {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i>{s.label}</li>)}</ol>}
+        {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
         {made.map((m) => (
           <div key={m.id} className="qo-made">
             <div className="qo-made-h"><b>#{m.number}</b><span>{m.label}</span><span className="faint">{m.pcs.toLocaleString("en-US")} pcs · Quote</span></div>

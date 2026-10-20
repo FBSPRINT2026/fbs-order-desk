@@ -10131,3 +10131,6 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .qo-ask ul{margin:4px 0 0;padding-left:18px}
 .qo-made .btn{align-self:flex-start}
 .osp-review{font-size:12.5px}
+.qo-steps li{align-items:flex-start}
+.qo-steps li span{display:flex;flex-direction:column;gap:2px}
+.qo-note{font-weight:400;font-style:italic;color:var(--ink-3);font-size:12.5px}
