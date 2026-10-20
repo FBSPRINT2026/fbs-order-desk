@@ -62,10 +62,16 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
     if (!got.length) {
       const open = g.imprints.filter((im) => !im.design_id && !/sleeve/i.test(im.location))
         .sort((a, b) => Number(/back|yoke/i.test(a.location)) - Number(/back|yoke/i.test(b.location)));
+      // every PDF's art first, then the likeliest print art first (Oct 20, Little Groupies "The Bottles": the job's
+      // first PDF was the barcode label, a long thin one-color strip, and it was taken instead of the 7-color design)
+      const arts: { f: { path: string; name: string }; art: { file: File; ratio: number }; score: number }[] = [];
       for (const { f, buf } of bufs) {
-        if (!open.length) break;
         const art = await artFromArtPdf(buf, y.nickname || "Art").catch(() => null);
-        if (!art) continue;
+        if (art) arts.push({ f, art, score: await artScore(art) });
+      }
+      arts.sort((a, b) => b.score - a.score);
+      for (const { f, art } of arts) {
+        if (!open.length) break;
         const im = open.shift()!, job = f.name.replace(/ mockup\.\w+$/i, "");
         const dsg = await uploadDesign(sb, { draft: true, file: art.file, customer_id: o.customerId, name: y.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `The original art from ${job}`, method: im.method });
         im.design_id = dsg.id;
@@ -161,6 +167,20 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
   }
   if (notes.length) y.artNotes = notes;
   return { draft: y, films, notes };
+}
+
+/** how much a piece of art looks like the print, not a label: its colors, minus a lot for a barcode-like strip
+ *  (much wider than tall, or taller than wide) */
+async function artScore(a: { file: File; ratio: number }) {
+  let colors = 1;
+  try {
+    const u = URL.createObjectURL(a.file);
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = u; });
+    const { detectColors } = await import("@/lib/inkColors");
+    colors = detectColors(img, 10).length; URL.revokeObjectURL(u);
+  } catch { /* keep 1 */ }
+  const strip = a.ratio < 0.33 || a.ratio > 3;
+  return colors - (strip ? 6 : 0);
 }
 
 /** the films a reorder used, into the order's production files */
