@@ -61,6 +61,15 @@ export async function syncAccount(admin: SupabaseClient, acct: MailAccount, dead
         const validity = Number(mb?.uidValidity || 0);
         const vKey = `${kind}_validity` as const, uKey = `${kind}_uid` as const;
         let last = Number(st[vKey]) === validity && st[uKey] != null ? Number(st[uKey]) : null;
+        // the Outlook Inbox list first (it's what the Email page shows), with up to half the time; then new mail
+        if (kind === "inbox") {
+          try { const r = await mirrorInbox(admin, client, acct, validity, Math.min(deadline, Date.now() + Math.max(8000, (deadline - Date.now()) / 2))); if (r.gone) tally.inbox_archived = r.gone; if (r.sorted) tally.inbox_sorted = r.sorted; if (r.added) tally.inbox_listed = r.added; }
+          catch (e) {
+            tally.inbox_mirror_error = 1;
+            const m = e instanceof Error ? e.message : String(e);
+            (/Connection not available|closed/i.test(m) ? console.warn : console.error)("mirrorInbox", acct.email, m);
+          }
+        }
         const found = last == null
           ? await client.search({ since: new Date(Date.now() - FIRST_DAYS * 864e5) }, { uid: true })
           : await client.search({ uid: `${last + 1}:*` }, { uid: true });
@@ -82,17 +91,8 @@ export async function syncAccount(admin: SupabaseClient, acct: MailAccount, dead
           last = uid;
           await admin.from("mail_accounts").update({ [vKey]: validity, [uKey]: uid }).eq("id", acct.id);
         }
-        // the Outlook Inbox as it is right now (what's left in it is the person's to-do list)
-        if (kind === "inbox") {
-          try { const r = await mirrorInbox(admin, client, acct, validity, deadline); if (r.gone) tally.inbox_archived = r.gone; if (r.sorted) tally.inbox_sorted = r.sorted; }
-          catch (e) {
-            tally.inbox_mirror_error = 1;
-            // "Connection not available" is the hard stop closing the connection at the time limit (or Outlook
-            // dropping it): the next run picks up, so it's a note, not an error (it filled the error log, Oct 16)
-            const m = e instanceof Error ? e.message : String(e);
-            (/Connection not available|closed/i.test(m) ? console.warn : console.error)("mirrorInbox", acct.email, m);
-          }
-        }
+        // (the Outlook Inbox list ran first, above. "Connection not available" there is the hard stop closing the
+        // connection at the time limit, or Outlook dropping it: the next run picks up, so it's a note, not an error)
         if (Date.now() < deadline - 8000) { const f = await backfillHtml(admin, client, acct.id, kind, deadline - 5000); if (f) tally[`${kind}_formatted`] = f; }
       } finally { lock.release(); }
     }

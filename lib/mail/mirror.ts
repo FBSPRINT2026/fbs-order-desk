@@ -68,7 +68,11 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
     for (const a of (data || []) as { id: string; external_id: string; meta: Record<string, unknown> | null }[]) if (!acts.has(mid(a.external_id))) acts.set(mid(a.external_id), { id: a.id, meta: a.meta || {} });
   }
   let added = 0;
-  for (const e of envs) {
+  // newest first, and never past the time limit: a run that's cut short (a big Inbox, a slow connection) still adds the
+  // new mail, and takes nothing off (Oct 20: every run hit the limit mid-way, so nothing new showed after 5:45 AM)
+  let partial = false;
+  for (const e of [...envs].sort((a, b) => b.uid - a.uid)) {
+    if (Date.now() > deadline - 1500) { partial = true; break; }
     const r = byUid.get(e.uid) || (e.messageId ? byMsg.get(e.messageId) : undefined);
     const act = e.messageId ? acts.get(e.messageId) : undefined;
     const unread = !e.flags.has("\\Seen"), flagged = e.flags.has("\\Flagged");
@@ -111,6 +115,7 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
   // a bad read (an empty or cut-short Inbox from a dropped connection) must never empty the list: Oct 20, 9:40 AM, one
   // read came back empty and took all 92 of Nick's Inbox emails off the portal. Most of the Inbox vanishing at once is
   // skipped (and logged); real archiving happens a few at a time.
+  if (partial) { console.warn("mirrorInbox: ran out of time, nothing taken off this run", acct.email, { inbox: envs.length, checked: keep.size }); return { inbox: envs.length, added, gone: 0, archived: 0, sorted: 0 }; }
   if (gone.length && suspiciousDrop(rows.length, gone.length, envs.length)) { console.warn("mirrorInbox: skipped a suspicious read", acct.email, { had: rows.length, read: envs.length, gone: gone.length }); return { inbox: envs.length, added, gone: 0, archived: 0, sorted: 0 }; }
   if (gone.length) {
     await admin.from("mail_inbox").update({ gone_at: now }).in("id", gone.map((r) => r.id));
