@@ -74,7 +74,7 @@ export default function TimeBubble() {
   const first = (staffName || "").split(/\s+/)[0] || "there";
   const n = issues.length;
   return (
-    <div className="tb-wrap tb-side" style={at && typeof window !== "undefined" && window.innerWidth > 820 ? { left: at.x + 12, top: Math.max(12, Math.min(at.y - 20, window.innerHeight - 420)) } : undefined}>
+    <div className="tcb-wrap tcb-side" style={at && typeof window !== "undefined" && window.innerWidth > 820 ? { left: at.x + 12, top: Math.max(12, Math.min(at.y - 20, window.innerHeight - 420)) } : undefined}>
       {hello && !open && (
         <button type="button" className="tb-hello" onClick={() => { setOpen(true); setHello(false); }}>
           <span className="tb-hello-ic" aria-hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M9 2h6" /></svg></span>

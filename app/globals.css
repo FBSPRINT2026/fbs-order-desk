@@ -9894,7 +9894,7 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 }
 
 /* the issue bubble (every shop page, for whoever runs the time clock) */
-.tb-wrap{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom));right:18px;z-index:2400;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:10px}
+.tcb-wrap{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom));right:18px;z-index:2400;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:10px}
 .tb-btn{width:48px!important;height:48px!important}
 .tb-btn{position:relative;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);display:grid;place-items:center;cursor:pointer;box-shadow:0 6px 20px rgba(20,29,43,.16)}
 .tb-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
@@ -9926,7 +9926,7 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .tb-t{display:flex!important;flex-direction:row!important;align-items:center;gap:6px;font-size:12px;color:var(--ink-3)}
 .tb-t input{padding:3px 6px;font-size:13px;height:28px}
 .tb-link{font-size:12.5px;margin-left:auto}
-@media (max-width:820px){.tb-wrap{bottom:calc(76px + env(safe-area-inset-bottom));right:12px}}
+@media (max-width:820px){.tcb-wrap{bottom:calc(76px + env(safe-area-inset-bottom));right:12px}}
 @keyframes tb-up{from{opacity:0;transform:translateY(14px) scale(.96)}}
 .tb-hello,.tb-pop{animation-name:tb-up}
 /* things to fix, by pay period (Oct 20) */
@@ -9993,5 +9993,5 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 }
 
 /* Time clock issues: the list opens from Time Clock in Shop Tools (Oct 20, Nick), beside the menu */
-.tb-wrap.tb-side{top:72px;bottom:auto;right:auto;left:calc(var(--side-w,232px) + 14px);flex-direction:column;align-items:flex-start}
-@media (max-width:820px){.tb-wrap.tb-side{top:auto;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));align-items:stretch}}
+.tcb-wrap.tcb-side{top:72px;bottom:auto;right:auto;left:calc(var(--side-w,232px) + 14px);flex-direction:column;align-items:flex-start}
+@media (max-width:820px){.tcb-wrap.tcb-side{top:auto;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));align-items:stretch}}
