@@ -10264,3 +10264,10 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 @media (max-width:640px){.arc-one .arc-card{grid-template-columns:1fr}.arc-one .arc-card>*:not(.arc-pic){grid-column:1}.arc-one .arc-card>.arc-pic{grid-row:auto;height:min(40vh,320px)}}
 .arc-job{font-size:13px;font-weight:500;margin-left:6px;white-space:nowrap}
 .arc-split{font-size:12px;justify-self:start;text-align:left}
+/* what a production file is (Oct 20) */
+.prod-kind{font:inherit;font-size:11.5px;max-width:100%;padding:2px 4px;border:1px dashed var(--line);border-radius:6px;background:var(--surface);color:var(--ink-3)}
+.prod-kind.set{border-style:solid;border-color:color-mix(in srgb,var(--accent) 40%,var(--line));color:var(--accent);font-weight:600}
+div.prod-kind{border:0;padding:0}
+.prod-type{font-size:11px}
+.arc-kind{display:flex;align-items:center;gap:6px;font-size:12.5px}
+.arc-kind select{flex:1;min-width:0;font:inherit;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}

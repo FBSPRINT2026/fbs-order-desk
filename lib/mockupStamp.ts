@@ -86,7 +86,7 @@ export async function stampOrderMockups(sb: SB, orderId: string, groups: { custo
     const up = await sb.storage.from("proofs").upload(path, f, { contentType: "image/jpeg", upsert: true });
     if (up.error) continue;
     const base = (m.name || "mockup").replace(/\.[^.]+$/, "");
-    const { error } = await sb.from("art_files").insert({ order_id: orderId, name: `Customer supplied mockup - ${base}.jpg`, file_path: path, file_type: "image/jpeg" });
+    const { error } = await sb.from("art_files").insert({ order_id: orderId, name: `Customer supplied mockup - ${base}.jpg`, file_path: path, file_type: "image/jpeg", category: "customer_mockup" });
     if (!error) { have.add(path); added++; }
   }
   return added;

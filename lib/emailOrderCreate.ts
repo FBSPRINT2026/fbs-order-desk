@@ -174,7 +174,8 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   for (const g of groups) for (const f of [...(g.pvRef || []), ...(g.pvArt || [])]) {
     const orig = pvNames[f.path];
     const label = orig ? oldJobLabel(orig.visualId || (f.name.match(/#(\d+)/)?.[1] || ""), orig.name) : `From the old Printavo job: ${f.name.replace(/ mockup(?=\.\w+$)/i, "")}`;
-    await admin.from("art_files").insert({ order_id: oid, name: label, file_path: f.path, file_type: /\.pdf$/i.test(f.path) ? "application/pdf" : /\.png$/i.test(f.path) ? "image/png" : "image/jpeg" });
+    const kind = (f as { kind?: string }).kind || null;
+    await admin.from("art_files").insert({ order_id: oid, name: label, file_path: f.path, file_type: /\.pdf$/i.test(f.path) ? "application/pdf" : /\.png$/i.test(f.path) ? "image/png" : "image/jpeg", ...(kind ? { category: kind } : {}) });
   }
   // the customer's own documents (size sheet, spreadsheet, PDF order form) go in the order's Production notes & files
   // (art_files, the side panel), so the shop has them with the job; pictures are art / mockups, signatures left out
@@ -182,7 +183,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     const to = `art/${oid}/${Date.now().toString(36)}-${safe(f.name)}`;
     const cp = await admin.storage.from("proofs").copy(f.path, to);
     if (cp.error) continue;
-    await admin.from("art_files").insert({ order_id: oid, name: f.name, file_path: to, file_type: f.type || "" });
+    await admin.from("art_files").insert({ order_id: oid, name: f.name, file_path: to, file_type: f.type || "", ...(f.role === "sheet" ? { category: "order_sheet" } : {}) });
   }
   if (!a) return { ok: true, id: oid, number: o.number as number };
   // the email's suggested answer becomes the order confirmation (Nick, Oct 7): thanks, the link, what we have, approve?

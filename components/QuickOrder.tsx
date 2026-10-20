@@ -11,6 +11,7 @@ import { uploadDesign } from "@/lib/designs";
 import { makePreview } from "@/lib/artPrep";
 import { handOffArt } from "@/app/shop/ai-actions";
 import { discardDraftArt } from "@/app/shop/draft-art-actions";
+import { PROD_KINDS, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
 import { pdfPicture } from "@/lib/printavoArt";
 import { drawPic } from "@/lib/pdfPic";
 import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
@@ -34,7 +35,7 @@ type Made = { id: string; number: number; label: string; pcs: number; url: strin
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
 type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; prints: { key: string; label: string; colors: number; location: string; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
-type HelpAns = { picks: Record<string, HelpPick>; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production" }[] | null; skipped?: number };
+type HelpAns = { picks: Record<string, HelpPick>; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production"; /** its label in Production files */ kind: string }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
 type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
 type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
@@ -231,9 +232,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(`You set the ${loc || im.location}${size ? `: ${size}" wide` : ""}`);
       }
       if (ans.files) {
-        d = { ...d, groups: d.groups.map((x, xi) => ({ ...x, pvRef: [], pvArt: xi === 0 ? ans.files!.map((f) => ({ path: f.path, name: f.name })) : [] })) };
+        d = { ...d, groups: d.groups.map((x, xi) => ({ ...x, pvRef: [], pvArt: xi === 0 ? ans.files!.map((f) => ({ path: f.path, name: f.name, ...(f.kind ? { kind: f.kind } : {}) })) : [] })) };
         const kinds = { art: "art", mockup: "mockup", production: "production file" } as const;
-        if (ans.files.length) did.push(`In Production files: ${ans.files.map((f) => `${f.name} (${kinds[f.role]})`).join(", ")}`);
+        if (ans.files.length) did.push(`In Production files: ${ans.files.map((f) => `${f.name} (${prodKindLabel(f.kind) || kinds[f.role]})`).join(", ")}`);
         if (ans.skipped) did.push(`Left out (not needed): ${ans.skipped} file${ans.skipped === 1 ? "" : "s"}`);
       }
     }
@@ -431,6 +432,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   // everything about this job… click through all the different arts")
   const [at, setAt] = useState(0);
   const [split, setSplit] = useState<Record<string, boolean>>({});
+  // a production file's label: barcodes, film, mailing list… (lib/productionFileKinds.ts)
+  const [kindOf, setKindOf] = useState<Record<string, string>>({});
   const answer = (key: string, v: string) => {
     assign(key, v);
     // a mockup, production file or not needed: on to the next file (art stays, for where/width/background)
@@ -465,7 +468,10 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     }
     // the old job's files for the new order's Production files: art, mockups and production files (one not answered
     // stays in, as before); "Not needed" ones out
-    const files = old === null ? null : olds0.filter((x) => as[x.key] !== "none").map((x) => ({ path: x.path!, name: x.name, role: (as[x.key] === "mockup" ? "mockup" : as[x.key] === "production" || !as[x.key] ? "production" : "art") as "art" | "mockup" | "production" }));
+    const files = old === null ? null : olds0.filter((x) => as[x.key] !== "none").map((x) => {
+      const role = (as[x.key] === "mockup" ? "mockup" : as[x.key] === "production" || !as[x.key] ? "production" : "art") as "art" | "mockup" | "production";
+      return { path: x.path!, name: x.name, role, kind: role === "mockup" ? "old_mockup" : role === "art" ? "print_art" : kindOf[x.key] ?? guessProdKind(x.name) };
+    });
     help.resolve({ picks: out, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
   };
   async function searchFilm(q: string) {
@@ -506,6 +512,14 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
         </div>
         {!it.only && !perStyle && help.prints.length > locs.length && <button type="button" className="ap-link arc-split" onClick={() => setSplit((x) => ({ ...x, [it.key]: true }))}>Different art for each style…</button>}
         {it.hint && !v && <span className="arc-hint">{it.hint}?</span>}
+        {it.where === "old" && v === "production" && (
+          <label className="arc-kind">What it is
+            <select value={kindOf[it.key] ?? guessProdKind(it.name)} onChange={(e) => setKindOf((x) => ({ ...x, [it.key]: e.target.value }))}>
+              <option value="">Not labeled</option>
+              {PROD_KINDS.map((k) => <option key={k.k} value={k.k}>{k.label}</option>)}
+            </select>
+          </label>
+        )}
         {it.where === "old" && v && v !== "none" && <span className="arc-hint ok">{v === "mockup" ? "Kept in Production files as the old mockup" : v === "production" ? "Goes in this order's Production files" : "The art; the original also goes in Production files"}</span>}
         {isArt && (
           <div className="arc-place">
