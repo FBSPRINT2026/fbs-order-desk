@@ -113,6 +113,16 @@ export async function GET(req: Request) {
   // ?raw=<uAttend user id>&back=N: what uAttend sends for one person (read only, nothing saved), for checking the fields
   const raw = new URL(req.url).searchParams.get("raw");
   if (raw) { const n = Math.max(1, Math.min(31, +(new URL(req.url).searchParams.get("back") || 3) || 3)); try { return NextResponse.json(await uaRaw(addDays(today, -n), today, +raw || undefined)); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); } }
+  const sp = new URL(req.url).searchParams;
+  // ?fields=1: the field names uAttend keeps on a person (names only), e.g. whether it has pay rates
+  if (sp.get("fields")) { try { return NextResponse.json({ fields: await uaUserFields() }); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); } }
+  // ?from=yyyy-mm-dd&to=yyyy-mm-dd (four months or less): history, for the 3-year catch-up run from the database
+  const hf = sp.get("from") || "", ht = sp.get("to") || "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(hf) && /^\d{4}-\d{2}-\d{2}$/.test(ht)) {
+    if (hf > ht || Date.parse(ht) - Date.parse(hf) > 125 * 86400000) return NextResponse.json({ error: "Four months or less, from before to." }, { status: 400 });
+    try { const s = await run(admin, hf, ht, true); await record(admin, true, s); return NextResponse.json(s); }
+    catch (e) { const m = e instanceof Error ? e.message : String(e); await record(admin, false, null, m); return NextResponse.json({ error: m, from: hf, to: ht }, { status: 502 }); }
+  }
   const { data: st } = await admin.from("uattend_sync").select("users_at").eq("id", 1).single();
   // the employee list once every 6 hours (and whenever a punch comes from someone we don't know)
   const usersDue = !st?.users_at || Date.now() - Date.parse(st.users_at as string) > 6 * 3600000;
