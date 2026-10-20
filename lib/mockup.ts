@@ -298,7 +298,10 @@ function fitSpot(s: Loc, b?: Body | null): Loc {
   const maxW = half(s.maxW * k.gw), maxH = half(s.maxH * k.gl);
   // the drop below the collar shrinks less than the shirt does: the neckline doesn't scale down with a toddler tee, so
   // a straight scale (4" × 0.55 = 2.2" on a 3T) crowds the collar. Smaller garments use the square root (~3" on a 3T).
-  const dropK = k.kl < 1 ? Math.sqrt(k.kl) : k.kl;
+  // A onesie's length runs down to the snaps (a 12M is 19.5" long, 9.88" wide), so its length says nothing about where
+  // the chest is: an infant's drop follows its width (Oct 20, Nick: The Bottles sat in the middle of the onesie; a Full
+  // Front starts about 1.75" below the collar, not 3.2").
+  const dropK = b?.kind === "infant" ? k.kw : k.kl < 1 ? Math.sqrt(k.kl) : k.kl;
   return { ...s, dx: s.dx ? s.dx * k.kw : s.dx, drop: s.drop != null ? s.drop * dropK : s.drop, defW: Math.min(maxW, half(s.defW * k.gw)), maxW, maxH };
 }
 export const spotFor = (location: string, b?: Body | null): Loc => {

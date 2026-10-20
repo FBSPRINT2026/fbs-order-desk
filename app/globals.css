@@ -10295,3 +10295,14 @@ div.prod-kind{border:0;padding:0}
 .arc-one .arc-card{grid-template-rows:repeat(12,min-content) 1fr;grid-auto-rows:min-content}
 .arc-one .arc-card>.arc-pic{grid-row:1/-1}
 @media (max-width:640px){.arc-one .arc-card{grid-template-rows:none}.arc-one .arc-card>.arc-pic{grid-row:auto}}
+/* Mockup Creator: Combine colors, and a reorder's inks waiting for production (Oct 20) */
+.mk-colors-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mk-comb-r{cursor:pointer}
+.mk-comb-r input{margin:0 4px 0 0}
+.mk-comb-r.on{background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:8px}
+.mk-comb-how{display:flex;flex-direction:column;gap:6px;padding:8px 0;border-top:1px solid var(--line);margin-top:6px;font-size:13px}
+.mk-comb-ink{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.mk-comb-ink select{font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:7px}
+.mk-comb-ink input{width:52px;font:inherit;font-size:12.5px;padding:2px 4px;border:1px solid var(--line);border-radius:6px}
+.mk-comb-n{margin:0;font-size:12px}
+.mk-plan.mk-wait{background:color-mix(in srgb,#f5a524 14%,var(--surface));border-color:color-mix(in srgb,#f5a524 40%,var(--line))}

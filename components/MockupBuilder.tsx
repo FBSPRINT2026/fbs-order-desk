@@ -38,7 +38,8 @@ type Offset = { dx: number; dy: number };
 /** Per imprint: colors found in the logo and the ink each one prints as. */
 type Side = "front" | "back" | "sleeve";
 const SIDES: { id: Side; label: string }[] = [{ id: "front", label: "Front" }, { id: "back", label: "Back" }, { id: "sleeve", label: "Sleeves" }];
-type Paint = { /** the shirt color it was set up for, when the logo has its own ink per shirt color */ shirt?: string; design: string; sources: { hex: string; share: number }[]; map: Record<string, { name: string; hex: string }>;
+type Ink = { name: string; hex: string; /** printed as a halftone of this ink (%), from Combine colors */ tone?: number };
+type Paint = { /** the shirt color it was set up for, when the logo has its own ink per shirt color */ shirt?: string; design: string; sources: { hex: string; share: number }[]; map: Record<string, Ink>;
   /** how this logo prints (the same plan the Separation Studio starts from) */ plan?: PrintPlan;
   /** several logo colors set to the same ink: true = print them as one color (one screen), false = keep separate */ unite?: boolean;
   /** drawn from the clean picture: the logo's distress layer turned off */ off?: boolean };
@@ -52,13 +53,20 @@ const colorKey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, ""
 
 /** Rows to show for a logo's colors: united colors that share an ink sit on one row. */
 const colorRows = (pt: Paint) => {
-  const rows: { hexes: string[]; cur?: { name: string; hex: string } }[] = [];
+  const rows: { hexes: string[]; cur?: Ink; tones: number[] }[] = [];
   for (const x of pt.sources) {
     const cur = pt.map[x.hex];
     const row = pt.unite && cur && cur.name !== "none" ? rows.find((r) => r.cur?.name === cur.name) : undefined;
-    if (row) row.hexes.push(x.hex); else rows.push({ hexes: [x.hex], cur });
+    if (row) { row.hexes.push(x.hex); if (cur?.tone) row.tones.push(cur.tone); if (row.cur?.tone && !cur?.tone) row.cur = cur; }
+    else rows.push({ hexes: [x.hex], cur, tones: cur?.tone ? [cur.tone] : [] });
   }
   return rows;
+};
+/** a halftone of an ink as it reads on the shirt: the ink thinned toward white (it prints over the underbase) */
+const toneHex = (hex: string, pct: number) => {
+  const v = hex.replace("#", ""), t = Math.max(5, Math.min(95, pct)) / 100;
+  const c = [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) || 0).map((x) => Math.round(255 - (255 - x) * t));
+  return "#" + c.map((x) => x.toString(16).padStart(2, "0")).join("");
 };
 /** Inks that more than one logo color is set to. */
 const sharedInks = (pt?: Paint) => { if (!pt) return []; const n = pt.sources.map((x) => pt.map[x.hex]?.name).filter((x) => x && x !== "none") as string[]; return [...new Set(n.filter((x, i) => n.indexOf(x) !== i))]; };
@@ -483,6 +491,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           }
           // the picks saved on the imprint win (a color set to Removed isn't an ink and isn't counted: Oct 20, the proof
           // read "3 colors · Kelly Green, Light Royal, none")
+          // a reorder still waiting for production (Oct 20, Nick: "I don't want you to make any assumptions… leave the art
+          // untouched until production confirms it"): the art as it is, no ink names put on the print; production sets
+          // how it printed here (Combine colors, halftones) or on Production Details
+          if (!saved && keepCount(im)) {
+            setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map: {}, unite: true, plan: plan!, off } }));
+            return;
+          }
           const kept = [...new Set(chosen)].filter((n) => n && n !== "none");
           const names = saved ? kept : useAsked ? asked : kept;
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off } }));
@@ -2154,6 +2169,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
                       }} />
                     {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one{portal ? " of your logos" : " of the customer's logos"}, or upload new art.</div>}
+                    {p.d && keepCount(im) && !im.inkMap && <div className="mk-plan mk-wait"><b>Reorder: the inks wait for production.</b> The mockup shows the art as it is. Production sets how it printed (combine colors, halftones), here or on Production Details.</div>}
                     {p.d && paints[im.id]?.plan && <div className={"mk-plan" + (paints[im.id].plan!.method === "sim" ? " sim" : "")}><b>How it prints:</b> {printWhy(paints[im.id].plan!, inkList(im).length)}</div>}
                     {p.d && im.method === "screen" && !portal && (
                       <div className="mk-hit">
@@ -2171,6 +2187,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         onPick={(hexes, v) => { setHover(null); setInks(im.id, Object.fromEntries(hexes.map((h) => [h, v]))); }}
                         onHover={(hexes, v) => setHover(v ? { id: im.id, hexes, v } : null)}
                         onSplit={() => setUnite(im.id, false)}
+                        onCombine={(picks) => { setHover(null); setInks(im.id, picks); setUnite(im.id, true); }}
                         onMatchAll={unsetColors(im).length > 0 ? () => matchStandard(im) : undefined}
                         brandGroups={brand.groups.filter((g) => g.colors.length).map((g) => ({ label: g.label, colors: g.colors, go: () => matchBrand(im, g.key) }))} />
                     )}
@@ -2568,12 +2585,15 @@ function BrandPick({ groups, onPick, onClose, modal = false }: { groups: { label
 const printWhy = (plan: { method: string; why: string }, printing: number) =>
   plan.method === "spot" && /^Screen print, \d+ solid colors?\.$/.test(plan.why) && printing > 0 ? `Screen print, ${printing} solid color${printing === 1 ? "" : "s"}.` : plan.why;
 
-function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = [], distress }: {
+function LogoColors({ rows, onPick, onHover, onSplit, onCombine, onMatchAll, brandGroups = [], distress }: {
   /** the logo's distress layer (Oct 16, Nick: "set that to distress instead of color… it would knock out"): on = the
    *  shirt shows through it; off = printed clean (when there's a clean picture) */
   distress?: { on: boolean; canOff: boolean; set: (on: boolean) => void };
-  rows: { hexes: string[]; cur?: { name: string; hex: string } }[];
+  rows: { hexes: string[]; cur?: Ink; tones?: number[] }[];
   onPick: (hexes: string[], v: { name: string; hex: string } | null) => void;
+  /** Combine colors (Oct 20, Nick): several logo colors print from one screen: one ink, or one ink solid and the
+   *  other color as a halftone of it */
+  onCombine?: (picks: Record<string, Ink>) => void;
   onHover: (hexes: string[], v: { name: string; hex: string } | null) => void;
   onSplit: () => void;
   onMatchAll?: () => void;
@@ -2583,9 +2603,61 @@ function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = 
   const [bsOpen, setBsOpen] = useState(false);
   const key = (r: { hexes: string[] }) => r.hexes.join();
   const pick = (r: { hexes: string[] }, v: { name: string; hex: string } | null) => { onPick(r.hexes, v); setOpen(""); };
+  // Combine colors: pick the colors, then how they print from one screen
+  const [comb, setComb] = useState<null | { sel: string[]; how: "solid" | "tone"; ink: string; tone: number }>(null);
+  const live = rows.filter((r) => r.cur?.name !== "none");
+  const inkOf = (r: { hexes: string[]; cur?: Ink }): Ink => (r.cur && r.cur.name !== "none" ? { name: r.cur.name, hex: r.cur.tone ? colorHex(r.cur.name) || r.cur.hex : r.cur.hex } : closestInk(r.hexes[0]));
+  const doCombine = () => {
+    if (!comb || !onCombine) return;
+    const sel = live.filter((r) => comb.sel.includes(key(r)));
+    const base = sel.find((r) => key(r) === comb.ink) || sel[0];
+    if (!base || sel.length < 2) return;
+    const ink = inkOf(base), picks: Record<string, Ink> = {};
+    for (const r of sel) for (const h of r.hexes) picks[h] = comb.how === "tone" && r !== base ? { name: ink.name, hex: toneHex(ink.hex, comb.tone), tone: comb.tone } : { name: ink.name, hex: ink.hex };
+    onCombine(picks); setComb(null);
+  };
+  if (comb) {
+    const sel = live.filter((r) => comb.sel.includes(key(r)));
+    const base = sel.find((r) => key(r) === comb.ink) || sel[0];
+    const other = sel.find((r) => r !== base);
+    return (
+      <div className="mk-colors mk-comb">
+        <div className="lbl">COMBINE COLORS · pick the ones that print from one screen</div>
+        {live.map((r) => {
+          const k = key(r), on = comb.sel.includes(k);
+          return (
+            <label key={k} className={"mk-color tight mk-comb-r" + (on ? " on" : "")}>
+              <input type="checkbox" checked={on} onChange={() => setComb((c) => (c ? { ...c, sel: on ? c.sel.filter((x) => x !== k) : [...c.sel, k], ink: c.ink && (on ? c.ink !== k : true) ? c.ink : k } : c))} />
+              <span className="mk-srcs">{r.hexes.map((h) => <span key={h} className="sw" style={{ background: h }} />)}</span><span className="arrow">→</span>
+              <span className="sw" style={{ background: r.cur ? r.cur.hex : r.hexes[0] }} />
+              <span className="mk-cname">{r.cur ? r.cur.name : `As uploaded (${closestInk(r.hexes[0]).name}?)`}</span>
+            </label>
+          );
+        })}
+        {sel.length >= 2 && (
+          <div className="mk-comb-how">
+            <label className="check"><input type="radio" name="combhow" checked={comb.how === "solid"} onChange={() => setComb({ ...comb, how: "solid" })} /> Print them all as one ink:</label>
+            <label className="check"><input type="radio" name="combhow" checked={comb.how === "tone"} disabled={sel.length !== 2} onChange={() => setComb({ ...comb, how: "tone" })} /> One ink solid, the other as a halftone of it{sel.length !== 2 ? " (pick 2 colors)" : ""}</label>
+            <div className="mk-comb-ink">
+              <span className="faint">{comb.how === "tone" ? "Solid ink:" : "The ink:"}</span>
+              <select value={base ? key(base) : ""} onChange={(e) => setComb({ ...comb, ink: e.target.value })} aria-label="Which ink">
+                {sel.map((r) => <option key={key(r)} value={key(r)}>{inkOf(r).name}</option>)}
+              </select>
+              {comb.how === "tone" && other && base && <span className="faint">{inkOf(other).name === inkOf(base).name ? "the other" : inkOf(other).name} prints as a <input type="number" min={5} max={95} step={5} value={comb.tone} onChange={(e) => setComb({ ...comb, tone: Math.max(5, Math.min(95, +e.target.value || 50)) })} aria-label="Halftone percent" />% halftone of {inkOf(base).name}</span>}
+            </div>
+            <p className="faint mk-comb-n">{sel.length} colors → 1 screen{comb.how === "tone" ? ", the halftone shown lighter" : ""}. Split them again any time.</p>
+          </div>
+        )}
+        <div className="row" style={{ justifyContent: "flex-end", gap: 6 }}>
+          <button type="button" className="btn sm ghost" onClick={() => setComb(null)}>Cancel</button>
+          <button type="button" className="btn sm primary" disabled={sel.length < 2} onClick={doCombine}>Combine {sel.length >= 2 ? `${sel.length} colors` : ""}</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="mk-colors">
-      <div className="lbl">COLORS IN THIS LOGO</div>
+      <div className="lbl mk-colors-h">COLORS IN THIS LOGO{onCombine && live.length >= 2 && <button type="button" className="lc-link" title="Print two or more of these colors from one screen: as one ink, or one solid and the other as a halftone of it" onClick={() => setComb({ sel: [], how: "solid", ink: "", tone: 50 })}>Combine colors</button>}</div>
       {distress && (
         <div className="mk-color tight mk-distress" title="The distress layer doesn't print: it knocks the inks out, so the shirt shows through">
           <span className="mk-srcs"><span className="sw dz" /></span><span className="arrow">→</span>
@@ -2602,7 +2674,7 @@ function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = 
           <div key={k} className="mk-color tight">
             {swatches}<span className="arrow">→</span>
             <span className="sw" style={{ background: cur!.name === "none" ? "transparent" : cur!.hex }} />
-            <span className="mk-cname" title={cur!.name}>{cur!.name === "none" ? "Removed" : cur!.name}{r.hexes.length > 1 ? <span className="faint"> · {r.hexes.length} united</span> : null}</span>
+            <span className="mk-cname" title={cur!.name}>{cur!.name === "none" ? "Removed" : cur!.name}{r.hexes.length > 1 ? <span className="faint"> · {r.hexes.length} united{r.tones?.length ? `, ${r.tones.length > 1 ? "halftones" : `one as a ${r.tones[0]}% halftone`}` : ""}</span> : null}</span>
             <button type="button" className="lc-link" onClick={() => setOpen(k)}>Change</button>
             <button type="button" className="lc-reset" title="Back to the color as uploaded" aria-label="Reset to as uploaded" onClick={() => pick(r, null)}>↺</button>
           </div>
@@ -2616,7 +2688,7 @@ function LogoColors({ rows, onPick, onHover, onSplit, onMatchAll, brandGroups = 
               {open === k && <button type="button" className="lc-link" onClick={() => setOpen("")}>Done</button>}
             </div>
             {r.hexes.length > 1
-              ? <div className="mk-united"><span>{r.hexes.length} colors united · prints as one color</span><button type="button" className="btn sm ghost" onClick={onSplit}>Split</button></div>
+              ? <div className="mk-united"><span>{r.hexes.length} colors united · prints as one color{r.tones?.length ? ` (${r.tones.map((t) => `${t}% halftone`).join(", ")})` : ""}</span><button type="button" className="btn sm ghost" onClick={onSplit}>Split</button></div>
               : <Match hex={r.hexes[0]} cur={cur} onPick={(v) => pick(r, v)} onHover={(v) => onHover(r.hexes, v)} />}
           </div>
         );
