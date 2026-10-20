@@ -115,8 +115,11 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
   // a bad read (an empty or cut-short Inbox from a dropped connection) must never empty the list: Oct 20, 9:40 AM, one
   // read came back empty and took all 92 of Nick's Inbox emails off the portal. Most of the Inbox vanishing at once is
   // skipped (and logged); real archiving happens a few at a time.
-  if (partial) { console.warn("mirrorInbox: ran out of time, nothing taken off this run", acct.email, { inbox: envs.length, checked: keep.size }); return { inbox: envs.length, added, gone: 0, archived: 0, sorted: 0 }; }
-  if (gone.length && suspiciousDrop(rows.length, gone.length, envs.length)) { console.warn("mirrorInbox: skipped a suspicious read", acct.email, { had: rows.length, read: envs.length, gone: gone.length }); return { inbox: envs.length, added, gone: 0, archived: 0, sorted: 0 }; }
+  // (the emails waiting to be sorted are still sorted: Oct 20, after the database outage Nick's Inbox read kept running
+  // out of time and every email said "Sorting…" for hours)
+  const sortAnyway = () => sortPending(admin, client, acct, Math.max(deadline, Date.now() + 30000)).catch((e) => { console.error("sortPending", e instanceof Error ? e.message : e); return 0; });
+  if (partial) { console.warn("mirrorInbox: ran out of time, nothing taken off this run", acct.email, { inbox: envs.length, checked: keep.size }); return { inbox: envs.length, added, gone: 0, archived: 0, sorted: await sortAnyway() }; }
+  if (gone.length && suspiciousDrop(rows.length, gone.length, envs.length)) { console.warn("mirrorInbox: skipped a suspicious read", acct.email, { had: rows.length, read: envs.length, gone: gone.length }); return { inbox: envs.length, added, gone: 0, archived: 0, sorted: await sortAnyway() }; }
   if (gone.length) {
     await admin.from("mail_inbox").update({ gone_at: now }).in("id", gone.map((r) => r.id));
     await archiveActs(admin, gone.map((r) => r.activity_id).filter(Boolean) as string[], now);

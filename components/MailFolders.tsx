@@ -477,6 +477,21 @@ export function MailFrame({ html, text }: { html: string; text: string }) {
     return /<head[^>]*>/i.test(x) ? x.replace(/<head[^>]*>/i, (m) => m + HEAD + `<style>${mzCss()}</style>`) : HEAD + `<style>${mzCss()}</style>` + x;
   }, [html]);
   const fit = () => { const f = ref.current, d = f?.contentDocument; if (!f || !d?.body) return; fitWidth(f, d); setH(Math.min(20000, Math.max(80, frameHeight(d)))); };
+  // the frame's load event can be missed (Oct 20: an Equifax email stayed 200 px tall with a scrollbar inside), so it's
+  // also fitted on a timer while it loads, and again whenever its content changes size (pictures arriving)
+  useEffect(() => {
+    if (!doc || plain) return;
+    const ts = [50, 300, 800, 1500, 3000, 6000].map((ms) => setTimeout(fit, ms));
+    let ro: ResizeObserver | null = null;
+    const watch = setInterval(() => {
+      const b = ref.current?.contentDocument?.body;
+      if (!b || typeof ResizeObserver === "undefined") return;
+      clearInterval(watch);
+      ro = new ResizeObserver(() => fit()); ro.observe(b);
+    }, 200);
+    return () => { ts.forEach(clearTimeout); clearInterval(watch); ro?.disconnect(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc, plain]);
   if (!doc || plain) return <div className="lm-text">{text || "(no text)"}{doc && <div><button type="button" className="btn sm ghost" onClick={() => setPlain(false)}>Show as in Outlook</button></div>}</div>;
   return (
     <div className="ibx-html">
