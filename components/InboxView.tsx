@@ -1330,7 +1330,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             </>;
           })() : <EmailOrderPanel key={`${x.id}:${orderStart?.n || 0}`} activityId={orderFrom?.id || x.id} start={orderStart || undefined}
             onClose={() => { setOrdering(false); setView("mail"); }}
-            onCreated={(id, n, opened) => { setOrdering(false); setView("mail"); setMade({ id, number: n }); if (!opened) window.open(`/shop/orders/${id}`, "_blank"); void noteEmailChat(x.id, `Order #${n} created from this email.`, `/shop/orders/${id}`).then(() => setBump((b) => b + 1)); done(`Order #${n} created. Our mockup is being built in a new tab.`); }} />}
+            onCreated={(id, n, opened) => { setOrdering(false); setView("mail"); setMade({ id, number: n }); if (!opened) window.open(`/shop/orders/${id}`, "_blank"); void noteEmailChat(x.id, `Order #${n} created from this email.`, `/shop/orders/${id}`).then(() => setBump((b) => b + 1)); done(`Order #${n} created.`); }} />}
         </div>}
 
         {view === "mail" && <>

@@ -75,6 +75,8 @@ export async function GET(req: Request) {
   return NextResponse.json({
     draft: draft ? { ...draft, files } : null, files, past, emails: cv?.convo.length || 1, created: sg?.status === "done" ? sg.order_id : null,
     finishing: st.settings.finishing || [], ai: st.ready, aiReason: st.reason, customer: cust,
+    // wholesale screen fees: a reorder offers the reprint (remake) fee instead of new screens (Oct 20, Nick)
+    fees: { screen: st.settings.wholesale?.screenFee ?? null, remake: st.settings.wholesale?.remakeFee ?? null },
   });
 }
 

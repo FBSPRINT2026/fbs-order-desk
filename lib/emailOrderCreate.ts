@@ -160,6 +160,16 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   if (priceType === "wholesale" && d.goods?.supplied) {
     await admin.from("order_goods").upsert({ order_id: oid, status: "waiting", supplier: (d.goods.supplier || "").slice(0, 60), expected: [d.goods.expected, d.goods.note].filter(Boolean).join(" · ").slice(0, 200), updated_by: by, updated_at: new Date().toISOString() });
   }
+  // a reorder of a portal order: our saved mockups come along (the latest of each group), so nothing is made again
+  // (Oct 20, Nick: "when we've got a mock-up made in our new system, we don't need to recreate anything, just copy it")
+  if (reorderOf?.startsWith("o:")) {
+    const { data: olds } = await admin.from("mockups").select("group_id, title, file_path, design_ids, snapshot, created_at").eq("order_id", reorderOf.slice(2)).is("archived_at", null).order("created_at", { ascending: false });
+    for (const g of groups) {
+      if (!g.fromGroup || !g.mockupThumbs?.some(Boolean)) continue;
+      const m = (olds || []).find((x) => x.group_id === g.fromGroup);
+      if (m) await admin.from("mockups").insert({ customer_id: custId, order_id: oid, group_id: g.id, proof_id: null, title: m.title, file_path: m.file_path, design_ids: m.design_ids || [], created_by: by, snapshot: m.snapshot });
+    }
+  }
   // a reorder of an old Printavo job: its mockups (ours) go in Production files for reference
   for (const g of groups) for (const f of [...(g.pvRef || []), ...(g.pvArt || [])]) {
     const orig = pvNames[f.path];

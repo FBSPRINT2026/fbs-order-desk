@@ -22,7 +22,7 @@ const WhenCalc = dynamic(() => import("@/components/MachineSchedule"), { ssr: fa
  * customer's mockup, their goods); reorders copy a past job with the new quantities, and the job can be swapped.
  */
 type Fin = { id: string; name: string; price: number };
-type Loaded = { draft: EODraft | null; files: EOFile[]; past: PastJob[]; created: string | null; finishing: Fin[]; ai: boolean; aiReason: string; customer: { id: string; company: string | null; name: string | null; price_type: string; moved_at?: string | null; is_test?: boolean } | null };
+type Loaded = { fees?: { screen: number | null; remake: number | null }; draft: EODraft | null; files: EOFile[]; past: PastJob[]; created: string | null; finishing: Fin[]; ai: boolean; aiReason: string; customer: { id: string; company: string | null; name: string | null; price_type: string; moved_at?: string | null; is_test?: boolean } | null };
 
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
 const qtyOf = (l: GLine) => Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0) || 0), 0);
@@ -46,6 +46,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
   // what the AI remembers about this customer's orders, and "remember this" on what staff tell it (Oct 20, Nick)
   const [mem, setMem] = useState<{ customer: string; memories: { id: string; text: string; at: string }[] } | null>(null);
   const [remember, setRemember] = useState(false);
+  const [feeAsked, setFeeAsked] = useState(false);
   const loadMem = () => { void orderMemories(activityId).then((r) => { if (r.ok) setMem({ customer: r.customer, memories: r.memories }); }).catch(() => null); };
   useEffect(loadMem, [activityId]); // eslint-disable-line react-hooks/exhaustive-deps
   const keep = () => { if (remember && told.trim()) void rememberOrderNote(activityId, told).then((r) => { if (r.ok) loadMem(); }); setRemember(false); };
@@ -146,7 +147,8 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
       const { data: o } = await sb.from("orders").select("groups").eq("id", j.id).maybeSingle();
       const gs = ((o?.groups || []) as Group[]);
       if (gs.some((g) => (g.customerMockups || []).length)) { setStep("Saving the customer's mockup to Production files…"); await Promise.race([stampOrderMockups(sb, j.id, gs), new Promise((res) => setTimeout(res, 25_000))]); }
-      const first = gs.find((g) => g.imprints.some((x) => x.design_id));
+      // our mockup only when a group with art has none yet: a reorder of a portal order brings its mockups along
+      const first = gs.find((g) => g.imprints.some((x) => x.design_id) && !(g.mockupThumbs || []).some(Boolean));
       if (first) url = `/shop/artwork/mockup?order=${j.id}&group=${first.id}&auto=1`;
     } catch { /* the order page stamps them when it opens */ }
     url = `${url}${url.includes("?") ? "&" : "?"}email=${activityId}`;
@@ -262,6 +264,21 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
               <button type="button" className="btn sm primary" disabled={!told.trim()} onClick={() => { keep(); setTellOpen(false); void read({ job: d?.reorderOf, reorderOk: d?.reorderOk }); }}>{d ? "Read it again with this" : "Read the email with this"}</button>
               {!d?.told && <button type="button" className="btn sm ghost" onClick={() => setTellOpen(false)}>Cancel</button>}
             </div>
+          </div>
+        );
+      })()}
+      {d && d.kind === "reorder" && data.customer?.price_type === "wholesale" && data.fees?.remake != null && data.fees.screen != null && data.fees.remake < data.fees.screen && (() => {
+        // a wholesale reorder still priced as new screens: offer the reprint fee; once taken it stays on this design's
+        // prints, so later reorders copy it (Oct 20, Nick: "$20 is the new screen fee… change this to a reprint screen
+        // fee at $15? And then moving forward it would stay that way on any reorders")
+        const ims = d.groups.flatMap((g) => g.imprints.filter((im) => im.method === "screen" && !(im.remake ?? g.remake)));
+        if (!ims.length || feeAsked) return null;
+        const n = ims.reduce((a, im) => a + Math.max(1, +im.colors || 1), 0);
+        return (
+          <div className="eo-fee">
+            <span>These prints are priced as <b>new screens</b> ({n} screen{n === 1 ? "" : "s"} at ${data.fees!.screen}). It&apos;s a reorder: charge the <b>reprint fee, ${data.fees!.remake} a screen</b>? It stays that way on this design&apos;s reorders from now on.</span>
+            <button type="button" className="btn sm primary" onClick={() => { patch((x) => { for (const g of x.groups) for (const im of g.imprints) if (im.method === "screen") im.remake = true; }); setFeeAsked(true); }}>Yes, reprint fee ${data.fees!.remake}</button>
+            <button type="button" className="btn sm ghost" onClick={() => setFeeAsked(true)}>No, keep ${data.fees!.screen}</button>
           </div>
         );
       })()}

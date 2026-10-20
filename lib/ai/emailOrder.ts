@@ -104,7 +104,7 @@ export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
 /** a portal order copied: new ids, same garments, prints (and their designs), finishing and mockups */
 function groupsFromOrder(o: Order): Group[] {
   return orderGroups(o).map((g) => ({
-    id: uid(), name: g.name, youth: g.youth, finishing: g.finishing || [],
+    id: uid(), fromGroup: g.id, name: g.name, youth: g.youth, finishing: g.finishing || [],
     lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })),
     imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
     customerMockups: g.customerMockups || [], mockupThumbs: g.mockupThumbs, mockupAt: g.mockupAt,
@@ -438,6 +438,9 @@ ${staffSays}` : ""}`;
   if (job) {
     // the past job, copied, with the new quantities on the lines they named
     groups = JSON.parse(JSON.stringify(job.groups)) as Group[];
+    // our mockup of each line goes with it (a portal order's mockups are copied, not made again: Oct 20, Nick)
+    const thumbOf = new Map<GLine, string>();
+    for (const g of groups) g.lines.forEach((l, i) => { const t = (g.mockupThumbs || [])[i]; if (t) thumbOf.set(l, t); });
     const flat = groups.flatMap((g) => g.lines.map((l) => ({ g, l })));
     const named = (p.groups || []).flatMap((g) => g.garments || []).filter((x) => x.reorder_line && flat[x.reorder_line - 1]);
     if (named.length) {
@@ -453,11 +456,16 @@ ${staffSays}` : ""}`;
         const sizes: GLine["sizes"] = {};
         for (const [raw, q] of Object.entries(x.sizes || {})) { const z = normSize(raw); const n = Math.max(0, Math.min(100000, Math.floor(+q || 0))); if (z && n) sizes[z] = (sizes[z] || 0) + n; }
         if (Object.keys(sizes).length) t.sizes = sizes;
-        if (x.color && x.color.trim().toLowerCase() !== t.color.trim().toLowerCase()) t.color = x.color.trim().slice(0, 60);
+        if (x.color && x.color.trim().toLowerCase() !== t.color.trim().toLowerCase()) { t.color = x.color.trim().slice(0, 60); thumbOf.delete(t); }
         keep.add(t);
       }
       for (const g of groups) g.lines = g.lines.filter((l) => keep.has(l));
       groups = groups.filter((g) => g.lines.length);
+    }
+    for (const g of groups) {
+      if (!g.mockupThumbs) continue;
+      const ts = g.lines.map((l) => thumbOf.get(l) || "");
+      if (ts.some(Boolean)) g.mockupThumbs = ts; else { delete g.mockupThumbs; delete g.mockupAt; }
     }
     // a new style or color they added that wasn't on the old job goes in the first group; when its prints have their
     // own inks (Oct 20, Dear Heart: In Every Season on a new Mauve pullover in Burgundy ink, the tees in white), it's a
