@@ -418,3 +418,21 @@ export async function rememberOrderNote(activityId: string, text: string) {
 export async function forgetOrderMemory(id: string) {
   try { const { admin } = await staff(); return await forgetMemory(admin, id); } catch (e) { return fail(e); }
 }
+
+/**
+ * Hand a reorder's missing art to production (Oct 20, Nick: "sometimes we're gonna have to leave it open… give it to
+ * Jose in the production team… he's gotta actually find the file on our server"): a to-do on the production lead's
+ * My Day, linked to the order, with what was tried.
+ */
+export async function handOffArt(orderId: string, title: string, notes: string) {
+  try {
+    const { admin, email } = await staff();
+    const { data: p } = await admin.from("staff").select("email").eq("role", "production").limit(1).maybeSingle();
+    const owner = String(p?.email || email || "").toLowerCase();
+    const { data: o } = await admin.from("orders").select("number").eq("id", orderId).maybeSingle();
+    const { error } = await admin.from("tasks").insert({ owner, title: title.slice(0, 200), notes: notes.slice(0, 1000), area: "shop", status: "open", source: "order", order_id: orderId, url: `/shop/orders/${orderId}`, created_by: email || "staff", handed_by: email || null });
+    if (error) return { ok: false as const, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "art", detail: `Art handed to ${owner} to find${o?.number ? ` (#${o.number})` : ""}: ${title}`.slice(0, 500), actor: email || "staff" });
+    return { ok: true as const, owner };
+  } catch (e) { return fail(e); }
+}

@@ -8,6 +8,8 @@ import { attachFilms, pullReorderArt } from "@/lib/reorderArt";
 import { applyColors, checkColors } from "@/components/ColorCheck";
 import { uploadDesign } from "@/lib/designs";
 import { makePreview } from "@/lib/artPrep";
+import { handOffArt } from "@/app/shop/ai-actions";
+import { pdfPicture } from "@/lib/printavoArt";
 import { drawPic } from "@/lib/pdfPic";
 import { knockOutBackground, measureFilm } from "@/lib/printavoArt";
 import type { OrderStart } from "@/components/OrderStartPick";
@@ -27,7 +29,7 @@ import type { OrderStart } from "@/components/OrderStartPick";
  */
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
-type HelpPick = { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "skip" };
+type HelpPick = { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
 type Help = { job: string; print: string; customerId: string; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (p: HelpPick) => void };
 type Step = { label: string; state: "doing" | "done" | "error"; note?: string };
 
@@ -104,6 +106,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // an old Printavo job: its art from the job's files and the film
     let films: { id: string; name: string }[] = [];
     const why: string[] = [];
+    const handOff: { title: string; notes: string }[] = [];
     if (d.kind === "reorder" && d.reorderOf && g.customer?.id && d.groups.some((x) => x.imprints.some((im) => !im.design_id))) {
       step(`${of}Pulling the art from ${jobLabel || "the old job"}…`);
       try {
@@ -125,6 +128,17 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       const picked = await new Promise<HelpPick>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", print: `${im.location}${im.colors ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, files, why, resolve }));
       setHelp(null);
       if (picked.kind === "skip") { did.push(`${im.location}: made without art for now (add it on the order: Upload logo)`); continue; }
+      if (picked.kind === "design") {
+        d = { ...d, groups: d.groups.map((x, xi) => (xi !== gi ? x : { ...x, imprints: x.imprints.map((y, yi) => (yi === ii ? { ...y, design_id: picked.id, notes: [y.notes, `Art: their logo ${picked.name}`].filter(Boolean).join(". ").slice(0, 300) } : y)) })) };
+        did.push(`${im.location}: their logo ${picked.name} (already on file, nothing new made)`);
+        continue;
+      }
+      if (picked.kind === "production") {
+        handOff.push({ title: `Find the art: ${jobLabel || "reorder"} · ${im.location}`, notes: [`Reorder of ${jobLabel}. The art couldn't be brought in from Printavo.`, ...why, picked.note ? `Note: ${picked.note}` : ""].filter(Boolean).join("\n") });
+        d = { ...d, groups: d.groups.map((x, xi) => (xi !== gi ? x : { ...x, imprints: x.imprints.map((y, yi) => (yi === ii ? { ...y, notes: [y.notes, "ART NEEDED: handed to production to find the file"].filter(Boolean).join(". ").slice(0, 300) } : y)) })) };
+        did.push(`${im.location}: handed to production to find the art (a to-do on their My Day)`);
+        continue;
+      }
       note("Saving the art as their logo…");
       try {
         const file = picked.file;
@@ -142,6 +156,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     if (!r?.ok || !j.id) throw new Error(j.error || "Couldn't create the order.");
     await attachFilms(j.id, films);
+    for (const h of handOff) { const x = await handOffArt(j.id, `${h.title} (#${j.number})`, h.notes).catch(() => null); if (x && !x.ok) did.push(`The to-do for production couldn't be made: ${x.error}`); }
     let url = `/shop/orders/${j.id}`, mockup = false;
     try {
       const sb = createClient();
@@ -224,6 +239,41 @@ function ArtHelp({ help }: { help: Help }) {
   const [films, setFilms] = useState<null | { busy?: boolean; note?: string; list: { id: string; name: string }[] }>(null);
   const [pieces, setPieces] = useState<{ name: string; file: File; url: string; size: string }[]>([]);
   const upRef = useRef<HTMLInputElement | null>(null);
+  // elsewhere: their logo library and the emails about this design (the whole mailbox), each drawn to pick from
+  type Found = { source: "library" | "email"; name: string; label: string; date: string; type: string; url?: string; design_id?: string };
+  const [found, setFound] = useState<null | (Found & { pic?: string; blob?: Blob | null; cut?: Blob | null })[]>(null);
+  const [prodNote, setProdNote] = useState(""), [prodOpen, setProdOpen] = useState(false);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const j = await fetch(`/api/art/candidates?${new URLSearchParams({ customer: help.customerId, q: help.job })}`).then((x) => x.json()).catch(() => ({ found: [] })) as { found?: Found[] };
+      const list = (j.found || []) as (Found & { pic?: string; blob?: Blob | null; cut?: Blob | null })[];
+      if (!live) return;
+      setFound(list);
+      for (const [k, f] of list.entries()) {
+        if (!f.url) continue;
+        try {
+          const r = await fetch(f.url); if (!r.ok) continue;
+          const b = await r.blob();
+          const pdfish = /pdf|illustrator/i.test(b.type || f.type) || /\.(pdf|ai)$/i.test(f.name);
+          const c = pdfish ? await pdfPicture(await b.arrayBuffer(), 1400).catch(() => null) : /^image\/(png|jpe?g|gif|webp)/i.test(b.type) || /\.(png|jpe?g|gif|webp)$/i.test(f.name) ? await drawPic(URL.createObjectURL(b), 1400) : null;
+          let pic = "", cut: Blob | null = null, asIs: Blob | null = b;
+          if (c) { asIs = await new Promise<Blob | null>((res) => trimToArt(c).toBlob(res, "image/png")); knockOutBackground(c); cut = await new Promise<Blob | null>((res) => trimToArt(c).toBlob(res, "image/png")); pic = cut ? URL.createObjectURL(cut) : ""; }
+          if (!live) return;
+          setFound((x) => (x ? x.map((y, yi) => (yi === k ? { ...y, pic, blob: f.source === "email" && !c ? new File([b], f.name, { type: b.type }) : asIs, cut } : y)) : x));
+        } catch { /* left as a name */ }
+      }
+    })();
+    return () => { live = false; };
+  }, [help]);
+  const useFound = (f: Found & { blob?: Blob | null; cut?: Blob | null }, background: boolean) => {
+    if (f.source === "library" && f.design_id) return help.resolve({ kind: "design", id: f.design_id, name: f.name });
+    const blob = background ? f.cut || f.blob : f.blob;
+    if (!blob) return;
+    // a print file that couldn't be drawn here (EPS, SVG…) goes in as it is, with a preview made
+    if (!f.cut && blob instanceof File) return help.resolve({ kind: "upload", file: blob });
+    help.resolve({ kind: "file", file: new File([blob], `${f.name.replace(/\.[^.]+$/, "")}.png`, { type: "image/png" }), name: `${f.name} (${f.label}, ${f.date})` });
+  };
   useEffect(() => {
     let live = true;
     (async () => {
@@ -292,6 +342,28 @@ function ArtHelp({ help }: { help: Help }) {
         {left > 0 && <span className="faint qo-help-wait">Opening {left} file{left === 1 ? "" : "s"} from the old job…</span>}
         {!help.files.length && <span className="faint">The old job has no files to pick from.</span>}
       </div>
+      <div className="arc-sec">
+        <b>From emails and their logo library</b>
+        {found === null ? <span className="faint">Searching every email with {help.job.replace(/^#\d+\s*/, "").replace(/\s*\(Printavo\)$/, "")} in it, every year, and their logos…</span>
+          : !found.length ? <span className="faint">Nothing in their emails or logos.</span> : (
+          <div className="qo-help-grid">
+            {found.map((f, i) => (
+              <div key={i} className="qo-help-it arc-it">
+                <span className="arc-f">{f.source === "library" ? "Logo" : "Email"}</span>
+                {f.pic || (f.source === "library" && f.url) ? <img src={f.pic || f.url} alt="" /> : <span className="arc-noimg faint">{f.blob ? f.name.split(".").pop()?.toUpperCase() : "Opening…"}</span>}
+                <span title={`${f.label} · ${f.date}`}>{f.name}</span>
+                <small className="faint">{f.date} · {f.label}</small>
+                <div className="arc-use">
+                  {f.source === "library" ? <button type="button" className="btn sm" onClick={() => useFound(f, false)}>Use this logo</button> : <>
+                    <button type="button" className="btn sm" disabled={!f.blob} onClick={() => useFound(f, true)}>{f.cut ? "Use, no background" : "Use this file"}</button>
+                    {f.cut && <button type="button" className="btn sm ghost" onClick={() => useFound(f, false)}>As it is</button>}
+                  </>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="arc-chat" aria-live="polite">
         {chat.map((m, i) => (
           <div key={i} className={"arc-m " + m.role}>
@@ -320,8 +392,15 @@ function ArtHelp({ help }: { help: Help }) {
       <div className="qo-help-acts">
         <label className="btn sm primary">Upload the art<input ref={upRef} type="file" hidden accept="image/*,application/pdf,.ai,.eps,.svg" onChange={(e) => { const f = e.target.files?.[0]; if (f) help.resolve({ kind: "upload", file: f }); }} /></label>
         <button type="button" className="btn sm ghost" onClick={() => void searchFilm(help.job.replace(/^#\d+\s*/, ""))}>Search the film folder</button>
+        <button type="button" className="btn sm ghost" onClick={() => setProdOpen((x) => !x)}>Hand it to production to find</button>
         <button type="button" className="btn sm ghost" onClick={() => help.resolve({ kind: "skip" })}>Make the order without it for now</button>
       </div>
+      {prodOpen && (
+        <div className="arc-say">
+          <input value={prodNote} onChange={(e) => setProdNote(e.target.value)} placeholder='A note for them, e.g. "should be on the server under Little Groupies 2023"' aria-label="Note for production" />
+          <button type="button" className="btn sm primary" onClick={() => help.resolve({ kind: "production", note: prodNote.trim() })}>Hand it off</button>
+        </div>
+      )}
     </div>
   );
 }
