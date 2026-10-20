@@ -136,7 +136,13 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     let films: { id: string; name: string }[] = [];
     const why: string[] = [];
     const handOff: { title: string; notes: string }[] = [];
-    if (d.kind === "reorder" && d.reorderOf && g.customer?.id && d.groups.some((x) => x.imprints.some((im) => !im.design_id))) {
+    // a Printavo job with files: nothing is pulled or changed by itself. Its files are shown as they are in Printavo and
+    // you say what each one is, background and all, on one screen (the Resolution Center below) (Oct 20, Nick: "you
+    // removed the gray background… I should have to tell you that… pull up just the art the way it exactly appears in
+    // Printavo and say, hey, what's this? Full front? …and it's on a background. Yep."). Without files: the art and
+    // size from the film, as before.
+    const pvAll = d.kind === "reorder" && !!d.reorderOf?.startsWith("a:") && d.groups.some((x) => (x.pvRef || []).length + (x.pvArt || []).length > 0);
+    if (!pvAll && d.kind === "reorder" && d.reorderOf && g.customer?.id && d.groups.some((x) => x.imprints.some((im) => !im.design_id))) {
       step(`${of}Pulling the art from ${jobLabel || "the old job"}…`);
       try {
         const had = new Set(d.groups.flatMap((x) => x.imprints.map((im) => im.design_id || "")));
@@ -153,9 +159,6 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // ask (Oct 20, Nick: "I'm finding art but it's not a mockup like I was expecting, what should I do with it? …that's
     // the art for the front, here's the art for the back")
     const unsure = d.groups.flatMap((x, gi) => x.imprints.map((im, ii) => ({ gi, ii, im }))).filter(({ im }) => im.design_id && /Art: the original from|Art and size from the film/.test(im.notes || ""));
-    // a Printavo job with files: all asked on one screen in the Resolution Center below (Oct 20, Nick: "I'm not seeing
-    // the barcodes… is it going to be somewhere else?")
-    const pvAll = d.kind === "reorder" && !!d.reorderOf?.startsWith("a:") && d.groups.some((x) => (x.pvRef || []).length + (x.pvArt || []).length > 0);
     if (unsure.length && !pvAll) {
       note("Found the art, but not on a mockup: checking with you where it goes");
       const ans = await waitFor<ConfirmAns>((resolve) => setConfirm({ job: jobLabel || "the old job", items: unsure.map(({ gi, ii, im }) => ({ gi, ii, design: im.design_id!, location: im.location, size: (im.size || "").replace(/"\s*wide/, ""), colors: im.colors || 1 })), resolve }));
@@ -180,7 +183,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const replaced: string[] = [];
     const files = [...new Map(d.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])]).map((f) => [f.path, f])).values()];
     if (targets.length && (missing.length || (isPv && files.length))) {
-      note(missing.length ? "Couldn't tell which file is the art: asking you" : "Asking you what each of the old job's files is");
+      if (pvAll) step(`${of}Asking you about ${jobLabel || "the old job"}'s files…`);
+      note(pvAll ? "Waiting for you: what each file is" : "Couldn't tell which file is the art: asking you");
       const prints = targets.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1, location: im.location, size: String(im.size || "").replace(/"\s*wide/, "").trim(), ...(im.design_id ? { design: im.design_id } : {}) }));
       const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", prints, files, why, resolve }));
       setHelp(null);
@@ -437,7 +441,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     const out: Record<string, HelpPick> = {};
     for (const p of help.prints) {
       const it = artOf(p.key);
-      const pk = it ? it.pick(bgOff[it.key] ?? it.canCut) : null;
+      const pk = it ? it.pick(!!bgOff[it.key]) : null;
       out[p.key] = pk || (rest === "production" ? { kind: "production", note: prodNote.trim() } : { kind: "skip" });
     }
     // the old job's files for the new order's Production files: art, mockups and production files (one not answered
@@ -466,7 +470,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   }
 
   const Card = (it: Item) => {
-    const v = as[it.key] || "", bg = bgOff[it.key] ?? it.canCut, pic = bg && it.canCut ? it.cutUrl : it.asIsUrl || it.cutUrl;
+    const v = as[it.key] || "", bg = !!bgOff[it.key], pic = bg && it.canCut ? it.cutUrl : it.asIsUrl || it.cutUrl;
     const isArt = help.prints.some((p) => p.key === v);
     return (
       <div key={it.key} className={"arc-card" + (isArt ? " art" : v ? " set" : "")}>
@@ -496,7 +500,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   return (
     <div className="ap arc" role="group" aria-label="What are these files">
       <p className="ap-q">{old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}</p>
-      <p className="ap-why">{need ? <>This reorder needs art for: <b>{need}</b>. Pick which file is the art; I&apos;ll take its background off and make the mockup. </> : <>I pulled the art already (first card). </>}Say what every file is: the ones you keep go in this order&apos;s Production files.</p>
+      <p className="ap-why">{need ? <>This reorder needs art for: <b>{need}</b>. Pick which file is the art; Tick Remove background if it&apos;s on one; then I&apos;ll make the mockup. </> : <>I pulled the art already (first card). </>}Say what every file is: the ones you keep go in this order&apos;s Production files.</p>
       <div className="arc-grid">
         {olds.map(Card)}
         {opening && <span className="ap-wait">Opening the old job&apos;s files…</span>}
