@@ -10,7 +10,8 @@ import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
  *  - Reorder of a past job: their jobs, the ones whose name is in the email first.
  *  - Reorder, let the AI find the job.
  */
-export type OrderStart = { told?: string; job?: string; /** several orders in the email (one per design), each read on its own */ parts?: EOPart[] };
+export type OrderStart = { told?: string; job?: string; /** several orders in the email (one per design), each read on its own */ parts?: EOPart[];
+  /** open the full form to check every detail before it's made (otherwise it's made in one go, QuickOrder) */ review?: boolean };
 const STOP = new Set(["the", "and", "for", "order", "orders", "reorder", "new", "shirts", "shirt", "tees", "tee", "printavo", "with", "from", "re", "fw", "fwd"]);
 const words = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 const fmt = (d: string) => (d ? new Date(d.length === 10 ? d + "T12:00:00" : d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
@@ -108,7 +109,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick, onClos
             ))}
           </div>
         )}
-        <div className="dla-acts"><button type="button" className="btn ghost" onClick={onClose}>Cancel</button></div>
+        <div className="dla-acts"><button type="button" className="eo-link osp-review" onClick={() => onPick({ review: true })} title="The AI's reading in a form you check and fix before the order is made">Check every detail first</button><span className="spacer" /><button type="button" className="btn ghost" onClick={onClose}>Cancel</button></div>
       </div>
     </div>
   );

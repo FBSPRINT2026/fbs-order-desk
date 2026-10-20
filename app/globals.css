@@ -10110,3 +10110,24 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .as-arch.counting::before{content:"";position:absolute;inset:0 auto 0 0;width:var(--as-left,100%);background:var(--brand,#1F6FD1);transition:width .1s linear;z-index:0}
 .as-arch-t{position:relative;z-index:1}
 .as-arch.counting{color:#fff}
+/* Create order in one go (Oct 20) */
+.qo{width:min(580px,100%)}
+.qo-steps{list-style:none;margin:6px 0 12px;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.qo-steps li{display:flex;align-items:center;gap:8px;color:var(--ink-3)}
+.qo-steps li i{width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;font-style:normal;font-size:11px;font-weight:700;flex:none}
+.qo-steps li.done{color:var(--ink-2)}
+.qo-steps li.done i{background:var(--ok);color:#fff}
+.qo-steps li.error i{background:var(--danger);color:#fff}
+.qo-steps li.doing{color:var(--ink);font-weight:600}
+.qo-steps li.doing i{border:2px solid var(--brand,#1F6FD1);border-right-color:transparent;animation:qo-spin .8s linear infinite}
+@keyframes qo-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.qo-steps li.doing i{animation:none}}
+.qo-made{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0;display:flex;flex-direction:column;gap:6px}
+.qo-made-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;font-size:14px}
+.qo-made-h b{font-size:16px}
+.qo-did{margin:0;padding-left:18px;font-size:12.5px;color:var(--ink-2);display:flex;flex-direction:column;gap:2px}
+.qo-ask{font-size:12.5px}
+.qo-ask summary{cursor:pointer;color:var(--ink-2)}
+.qo-ask ul{margin:4px 0 0;padding-left:18px}
+.qo-made .btn{align-self:flex-start}
+.osp-review{font-size:12.5px}
