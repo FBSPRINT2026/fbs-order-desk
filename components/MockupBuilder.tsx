@@ -479,9 +479,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             chosen.push(name);
             for (const hex of [k.hex, ...(k.also || [])]) map[hex] = was ? (saved?.[hex] || was) : { name, hex: colorHex(name) || k.hex };
           }
-          const names = useAsked ? asked : [...new Set(chosen)];
+          // the picks saved on the imprint win (a color set to Removed isn't an ink and isn't counted: Oct 20, the proof
+          // read "3 colors · Kelly Green, Light Royal, none")
+          const kept = [...new Set(chosen)].filter((n) => n && n !== "none");
+          const names = saved ? kept : useAsked ? asked : kept;
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off } }));
-          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: useAsked ? asked.length : plan!.colors } : x)));
+          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: saved ? Math.max(1, names.length) : useAsked ? asked.length : plan!.colors } : x)));
           return;
         }
         const sources = detectColors(img);

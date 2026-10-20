@@ -189,13 +189,14 @@ export const DOC_CSS = `
 .pdoc .hero.wide .pp .t{font-size:18pt}
 /* art proof (Oct 20) */
 .pdoc .pf .stamp{margin-top:8px}
-.pdoc .pf-who{display:grid;grid-template-columns:1.3fr 1.3fr 1fr;gap:16px;margin:16px 0 10px;padding:10px 0;border-top:2px solid var(--ink);border-bottom:1px solid var(--line)}
-.pdoc .pf-who b{font-size:12.5pt}
+.pdoc .pf-who{display:grid;grid-template-columns:1.6fr 1.2fr .9fr;gap:16px;margin:12px 0 8px;padding:8px 0;border-top:2px solid var(--ink);border-bottom:1px solid var(--line)}
+.pdoc .pf-who b{font-size:12pt}
 .pdoc .pf-who .faint{font-size:10pt;margin-top:2px}
 .pdoc .sheet.pf{height:11in;overflow:hidden}
 /* every mockup picture the same size, on the cover and the mockup pages (Oct 20, Nick: "the images are all different sizes") */
 .pdoc .pf-hero{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
-.pdoc .pf-hero img,.pdoc .pf-mk img{flex:none;width:100%;height:auto;max-height:8.6in;object-fit:contain}
+.pdoc .pf-mk img{flex:none;width:100%;height:auto;max-height:8.6in;object-fit:contain}
+.pdoc .pf-hero img{flex:1 1 0;min-height:0;width:100%;object-fit:contain}
 .pdoc .pf-mk span{font-size:13pt;font-weight:700;color:var(--ink)}
 .pdoc .pf-hero span,.pdoc .pf-mk span{font-size:10.5pt;color:var(--ink2);font-weight:600}
 .pdoc .pf-hero .none{width:100%;flex:1;border-radius:12px;display:grid;place-items:center;color:rgba(0,0,0,.5);font-size:13pt}
@@ -206,20 +207,20 @@ export const DOC_CSS = `
 .pdoc .pf-tile-art.dark{color:rgba(255,255,255,.7)}
 .pdoc .pf-tile-l{font-size:11pt;text-align:center}
 .pdoc .pf-next{font-size:9.5pt;color:var(--ink3);text-align:center;margin:2px 0 4px}
-.pdoc .pf-sum{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
-.pdoc .pf-pr{font-size:11pt;margin-top:5px;line-height:1.35}
+.pdoc .pf-sum{display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
+.pdoc .pf-pr{font-size:10.5pt;margin-top:3px;line-height:1.3}
 .pdoc .pf-pr .faint{font-size:9.5pt;margin-left:20px}
 .pdoc .pf-inks{display:flex;flex-wrap:wrap;gap:3px 12px;margin-top:3px;font-size:10pt;color:var(--ink2)}
 .pdoc .pf-inks span{display:inline-flex;align-items:center;white-space:nowrap}
-.pdoc .pf-ok{margin-top:12px;border:2px solid var(--ink);border-radius:12px;padding:10px 14px}
+.pdoc .pf-ok{margin-top:10px;border:2px solid var(--ink);border-radius:12px;padding:8px 14px 10px}
 .pdoc .pf-ok .t{font-weight:800;font-size:12pt}
 .pdoc .pf-ok .s{font-size:9.5pt;color:var(--ink2);margin-top:3px;line-height:1.4}
 .pdoc .pf-ok .s.ok{color:var(--ok);font-weight:700;font-size:10.5pt}
-.pdoc .pf-boxes{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:8px;font-size:10.5pt}
+.pdoc .pf-boxes{display:flex;flex-wrap:wrap;gap:4px 18px;margin-top:7px;font-size:10pt}
 .pdoc .pf-boxes span{display:inline-flex;align-items:center;gap:7px}
-.pdoc .pf-notes{margin-top:10px;height:.55in;border:1px solid var(--line);border-radius:6px;padding:3px 7px}
+.pdoc .pf-notes{margin-top:8px;height:.5in;border:1px solid var(--line);border-radius:6px;padding:3px 7px}
 .pdoc .pf-notes span{font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
-.pdoc .pf-sign{display:grid;grid-template-columns:2fr 1.6fr 1fr;gap:18px;margin-top:20px}
+.pdoc .pf-sign{display:grid;grid-template-columns:2fr 1.6fr 1fr;gap:18px;margin-top:32px}
 .pdoc .pf-sign div{border-top:1.5px solid var(--ink);padding-top:3px;position:relative;font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
 .pdoc .pf-mk{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin-top:12px}
 .pdoc .pf-art{height:7in;margin-top:12px}

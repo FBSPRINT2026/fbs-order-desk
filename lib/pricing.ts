@@ -514,7 +514,7 @@ function inkL(name: string): number | null {
  * an underbase under black. Any lighter ink, or inks not filled in yet, means yes.
  */
 /** the inks named on a print ("Black, PMS 186 C + White") */
-export const inkNames = (inks: string) => (inks || "").split(/[,;\/+]|\band\b/i).map((x) => x.trim()).filter(Boolean);
+export const inkNames = (inks: string) => (inks || "").split(/[,;\/+]|\band\b/i).map((x) => x.trim()).filter((x) => x && !/^(none|removed)$/i.test(x));
 /** an ink named as a PMS / Pantone color ("PMS 186 C", "Pantone 7625", "186C") rather than a house ink */
 export const isPmsInk = (n: string) => /\b(pms|pantone)\b/i.test(n) || /^\d{3,4}\s*-?\s*[cu]?$/i.test(n.trim());
 /** each named ink on a print and whether it's charged as a PMS match: PMS inks are, unless marked standard (no charge) */
