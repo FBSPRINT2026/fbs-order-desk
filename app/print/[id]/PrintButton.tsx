@@ -35,6 +35,14 @@ function hiresArt(url: string, name: string, inkJson: string, shown: HTMLImageEl
       if (!png) { console.warn("[pdf] no picture from", name); return null; }
       const u = URL.createObjectURL(png);
       let img = await loadImage(u, false);
+      // cut to the art (the page shows the logo trimmed of its empty margins), at full size
+      const { trimClear } = await import("@/lib/artPrep");
+      const t = trimClear(img);
+      if (t) {
+        const c = document.createElement("canvas"); c.width = t.box.w; c.height = t.box.h;
+        c.getContext("2d")!.drawImage(img, t.box.x, t.box.y, t.box.w, t.box.h, 0, 0, t.box.w, t.box.h);
+        img = await loadImage(c.toDataURL("image/png"), false);
+      }
       // the same picture as the page shows (same proportions), else it isn't the same crop: keep the page's
       if (Math.abs(img.naturalWidth / img.naturalHeight - shown.naturalWidth / shown.naturalHeight) > 0.015) { console.warn("[pdf] different proportions", img.naturalWidth, img.naturalHeight, shown.naturalWidth, shown.naturalHeight); return null; }
       if (inkJson) { const { repaintLogo } = await import("@/lib/inkColors"); img = await loadImage(repaintLogo(img, JSON.parse(inkJson), 4800), false); }
