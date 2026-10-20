@@ -10277,3 +10277,14 @@ div.prod-kind{border:0;padding:0}
 .prod-fnote:hover,.prod-fnote:focus{border-color:var(--line);background:var(--surface)}
 .prod-fnote.ro{padding:0}
 .arc-note{font:inherit;font-size:12.5px;padding:5px 8px;border:1px solid var(--line);border-radius:7px;min-width:0}
+/* several orders from one email, one at a time (Oct 20) */
+.qo-part{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:-4px 34px 12px 0;padding:8px 12px;border-radius:10px;background:var(--accent-soft,#e8f1fb)}
+.qo-part-n{font-size:12px;font-weight:700;color:var(--accent);text-transform:none}
+.qo-part b{font-size:14px}
+.qo-part-dots{display:flex;gap:5px;margin-left:auto}
+.qo-part-dots i{width:9px;height:9px;border-radius:50%;background:var(--line)}
+.qo-part-dots i.on{background:var(--accent)}
+.qo-part-dots i.done{background:var(--ok,#16794c)}
+.qo-pause{display:flex;flex-direction:column;gap:10px}
+.qo-pause h3{margin:0}
+.qo-pause-n{font-size:12.5px;margin:0}

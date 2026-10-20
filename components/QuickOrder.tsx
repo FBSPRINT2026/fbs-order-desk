@@ -54,6 +54,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
   const [done, setDone] = useState(false);
   const [help, setHelp] = useState<Help | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  // several orders: which one is being made, and the stop after each one
+  const [cur, setCur] = useState(0);
+  const [pause, setPause] = useState<null | { made: Made | null; i: number; resolve: (v: void) => void }>(null);
   const ran = useRef(false);
   // Cancel (Oct 20, Nick: "if I get to art I can't resolve… X out and cancel… delete everything you did or tried to
   // start doing… nothing saved, nothing should go to the files"): stops at the next step, takes off the logos it made
@@ -272,10 +275,15 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     (async () => {
       const parts = start.parts?.length ? start.parts : [null];
       for (const [i, p] of parts.entries()) {
+        const many = parts.length > 1;
+        if (many) { setCur(i); setSteps([]); setErr(""); }
         try {
-          const m = await one(p, parts.length > 1 ? `${i + 1} of ${parts.length} · ` : "");
+          const m = await one(p, "");
           if (m) setMade((x) => [...x, m]);
           setCommitting(false);
+          // several orders (Oct 20, Nick: "reorder one… ask me all the questions and say OK complete, and that opens in a
+          // new tab… then I'll complete order two…"): each one stops here; Complete opens it in a new tab and goes on
+          if (many && m) { finishSteps(); await waitFor<void>((resolve) => setPause({ made: m, i, resolve })); setPause(null); }
         } catch (e) {
           if (e instanceof Cancelled || stopped.current) {
             setConfirm(null); setHelp(null);
@@ -286,25 +294,65 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           finishSteps("error");
           setErr(`${p ? `${p.label}: ` : ""}${e instanceof Error ? e.message : String(e)}`);
           if (parts.length === 1) { setDone(true); return; }
+          // this one wasn't made: say so, and go on to the next when you're ready
+          try { await waitFor<void>((resolve) => setPause({ made: null, i, resolve })); } catch { return; }
+          setPause(null);
         }
       }
+      if (parts.length > 1) { onClose(); return; }
       finishSteps(); setDone(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const parts = start.parts?.length ? start.parts : [null];
+  const many = parts.length > 1;
   return (
     <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Creating the order">
       <div className={"dla qo" + (help || confirm ? " wide" : "")}>
-        {!done && !committing && <button type="button" className="qo-x" onClick={cancel} aria-label="Cancel: nothing is saved" title="Cancel: stop here, nothing is saved">×</button>}
+        {!done && !committing && <button type="button" className="qo-x" onClick={cancel} aria-label={made.length ? "Stop here: the orders already made stay" : "Cancel: nothing is saved"} title={made.length ? "Stop here: the orders already made stay; the one in progress isn't saved" : "Cancel: stop here, nothing is saved"}>×</button>}
+        {many && !done && (() => {
+          const p = parts[cur]!;
+          return (
+            <div className="qo-part">
+              <span className="qo-part-n">{p.kind === "reorder" ? "Reorder" : "Order"} {cur + 1} of {parts.length}</span>
+              <b>{p.label}</b>
+              <span className="qo-part-dots" aria-hidden>{parts.map((x, k) => <i key={x.key} className={k < cur || (k === cur && pause?.made) ? "done" : k === cur ? "on" : ""} />)}</span>
+            </div>
+          );
+        })()}
+        {pause ? (() => {
+          const m = pause.made, last = pause.i === parts.length - 1, nx = parts[pause.i + 1];
+          const go = () => { if (m) window.open(m.url, "_blank", "noopener"); if (last) onClose(); else pause.resolve(); };
+          return (
+            <div className="qo-pause">
+              {m ? <>
+                <h3>{parts[pause.i]!.kind === "reorder" ? "Reorder" : "Order"} {pause.i + 1} of {parts.length} is ready: #{m.number}</h3>
+                <div className="qo-made">
+                  <div className="qo-made-h"><b>#{m.number}</b><span>{m.label}</span><span className="faint">{m.pcs.toLocaleString("en-US")} pcs · Quote</span></div>
+                  {m.did.length > 0 && <ul className="qo-did">{m.did.map((x, k) => <li key={k}>{x}</li>)}</ul>}
+                  {m.ask.length > 0 && <details className="qo-ask"><summary>{m.ask.length} question{m.ask.length === 1 ? "" : "s"} for the customer (saved in the order&apos;s notes)</summary><ul>{m.ask.map((q, k) => <li key={k}>{q}</li>)}</ul></details>}
+                </div>
+              </> : <>
+                <h3>{parts[pause.i]!.label} wasn&apos;t made</h3>
+                {err && <div className="err">{err}</div>}
+              </>}
+              <div className="dla-acts qo-foot">
+                <button type="button" className="btn ghost" onClick={onClose} title="Stop here: the orders already made stay">Stop here</button>
+                <button type="button" className="btn primary" onClick={go}>{m ? `Complete: open #${m.number}${last ? " & close" : ` & start ${nx?.kind === "reorder" ? "reorder" : "order"} ${pause.i + 2}`}` : last ? "Close" : `Go on to ${nx?.kind === "reorder" ? "reorder" : "order"} ${pause.i + 2}`}</button>
+              </div>
+              {m && <p className="faint qo-pause-n">#{m.number} opens in a new tab{m.mockup ? ", in the Mockup Creator" : ""}; this window stays here for the next one.</p>}
+            </div>
+          );
+        })() : <>
         {!done ? <>
-          <h3>Reading the email and creating the order{start.parts && start.parts.length > 1 ? "s" : ""}…</h3>
-          <p className="dla-sub">This takes about a minute{start.parts && start.parts.length > 1 ? " per order" : ""}. Nothing is sent to the customer.</p>
+          <h3>Reading the email and creating the order…</h3>
+          <p className="dla-sub">This takes about a minute. Nothing is sent to the customer.</p>
         </> : <h3>{made.length ? `${made.length === 1 ? "Order" : `${made.length} orders`} created` : "The order wasn't made"}</h3>}
         {!done && <ol className="qo-steps">{steps.map((s, i) => <li key={i} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}{s.note && s.state === "doing" && <small className="qo-note" aria-live="polite">{s.note}</small>}</span></li>)}</ol>}
         {confirm && <ArtConfirm c={confirm} onCancel={cancel} />}
         {help && <ArtHelp help={help} onCancel={cancel} />}
-        {made.map((m) => (
+        {!many && made.map((m) => (
           <div key={m.id} className="qo-made">
             <div className="qo-made-h"><b>#{m.number}</b><span>{m.label}</span><span className="faint">{m.pcs.toLocaleString("en-US")} pcs · Quote</span></div>
             {m.did.length > 0 && <ul className="qo-did">{m.did.map((x, i) => <li key={i}>{x}</li>)}</ul>}
@@ -320,6 +368,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
             {made.length === 1 && <a className="btn primary" href={made[0].url} target="_blank" rel="noreferrer" onClick={onClose}>{made[0].mockup ? "Make the mockup & view order" : "View order"}</a>}
           </div>
         )}
+        </>}
       </div>
     </div>
   );
