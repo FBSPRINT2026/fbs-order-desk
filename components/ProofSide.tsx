@@ -70,7 +70,7 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
   return (
     <>
       <section className="panel mkh-panel">
-        <div className="panel-h"><h2>Mockup history</h2><span className="faint">every save</span></div>
+        <div className="panel-h"><h2>Mockup history</h2><span className="faint">every save</span><a className="btn sm" style={{ marginLeft: "auto" }} href={`/print/${orderId}?proof=1`} target="_blank" rel="noreferrer" title="The art proof as a PDF: every mockup big, each print up close with its size and inks, and a box to approve">Proof PDF</a></div>
         <div className="panel-b">
           {!mocks.length && <p className="faint" style={{ margin: 0 }}>No mockups saved yet. Make one in the Mockup Creator.</p>}
           {mocks.map((m) => {

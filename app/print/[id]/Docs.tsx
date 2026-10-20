@@ -3,9 +3,11 @@ import { calcOrder, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQ
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
-import { spotFor } from "@/lib/mockup";
+import { guessHex, spotFor } from "@/lib/mockup";
 import { printSize } from "@/lib/groupLook";
 import { fmtPhone } from "@/lib/phone";
+import PaintedArt from "./PaintedArt";
+import type { ReactNode } from "react";
 
 /**
  * The invoice / quote PDF and the work order (Oct 15, Nick: "completely reimagine both. The work order will be the
@@ -187,7 +189,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
       <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div></div>
       <div className={"art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
         {max && s > 0 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>max {max.w}&quot; × {max.h}&quot;{max.on ? ` on the ${max.on}` : ""}</span></div>}
-        {pic ? <img className="pic" src={pic} alt={des ? `D-${des.number}` : ""} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
+        {pic ? <PaintedArt className="pic" src={pic} inkMap={d.inkMap} designId={d.design_id} alt={des ? `D-${des.number}` : ""} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">No art picked for this print</div>}
         {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
         {pic && sz.h > 0 && <div className="dimh" style={{ top: `${top}in`, height: `${ah}in`, left: `calc(50% + ${aw / 2 + 0.14}in)` }}>{sz.h.toFixed(2)}&quot;</div>}
       </div>
@@ -214,6 +216,137 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL }:
       {(d.confirm?.size || d.confirm?.ink) && <div className="n2 warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && "INK"].filter(Boolean).join(" & ")} BEFORE PRINTING{d.confirm.why ? `: ${d.confirm.why}` : ""}</div>}
       {d.notes && <div className="n2"><b>Notes:</b> {d.notes}</div>}
       <div className="foot"><span>{footL}</span><span>Page {page} of {total}</span></div>
+    </section>
+  );
+}
+
+// ───────────────────────────── art proof ─────────────────────────────
+/**
+ * The art proof PDF for the customer to approve (Oct 20, Nick: "a good proof, very visual, that has the images all
+ * blown up, shows the imprint size and color… very similar to the work order, except much larger images, and it doesn't
+ * need the count"). Per group: a cover with the first mockup, the prints, the garments and the approval box; the other
+ * mockups two to a page; then each print up close on the shirt color with its size, placement and inks. No prices,
+ * no quantities.
+ */
+export function ProofDoc(p: DocData & { printed: string }) {
+  const { o, cust, groups } = p;
+  const sh = p.settings.shop;
+  const who = [cust.company || cust.name, cust.company && cust.name && cust.name !== cust.company ? cust.name : ""].filter(Boolean).join(" · ");
+  const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  // pages: per group a cover, then the mockups after the first (two to a page), then one per print
+  const plan = groups.map((g, gi) => {
+    const mk = p.mockups[gi] || [];
+    const extra: string[][] = [];
+    for (let i = 1; i < mk.length; i += 2) extra.push(mk.slice(i, i + 2));
+    return { mk, extra, prints: g.imprints.length };
+  });
+  const total = plan.reduce((a, x) => a + 1 + x.extra.length + x.prints, 0);
+  let page = 0;
+  const foot = () => { page++; return <div className="foot"><span>Art proof · #{o.number} {o.nickname}{who ? ` · ${who}` : ""}</span><span>Page {page} of {total}</span></div>; };
+  const approved = o.approved_at ? `${o.approved_name || "Approved"}, ${new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" })}` : "";
+  return (
+    <>
+      {groups.map((g, gi) => {
+        const { mk, extra } = plan[gi];
+        const hex = p.hexes[gi] || "#9aa1ab";
+        const shown = g.lines.filter((l) => l.style || l.color);
+        const lines = shown.filter((l) => lineQty(l) > 0 || shown.length === 1);
+        // each mockup picture is one garment (in the order they were saved)
+        const capOf = (i: number) => { const l = shown[i]; return l ? [[l.brand, l.style].filter(Boolean).join(" "), l.color].filter(Boolean).join(" · ") : ""; };
+        const gname = groups.length > 1 ? (g.name?.trim() || `Group ${gi + 1}`) : "";
+        return (
+          <div key={g.id}>
+            <section className="sheet pf">
+              <div className="top">
+                <div className="brand"><img src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
+                  {(sh.phone || sh.email) && <div className="sub">{[fmtPhone(sh.phone), sh.email].filter(Boolean).join(" · ")}</div>}</div>
+                <div className="doc"><div className="k disp">Art Proof</div><div className="n">#{o.number}{gname ? ` · ${gname}` : ""}</div><div className="meta">Prepared {p.printed}</div>
+                  {approved && <div className="stamp">APPROVED</div>}</div>
+              </div>
+              <div className="pf-who">
+                <div><div className="lbl">For</div><b>{who || "—"}</b>{cust.email && <div className="faint">{cust.email}</div>}</div>
+                <div><div className="lbl">Job</div><b>{o.nickname || "—"}</b>{o.po_number && <div className="faint">PO {o.po_number}</div>}</div>
+                <div><div className="lbl">In hands</div><b>{due || "To be set"}</b><div className="faint">{DELIVERY[o.delivery_method] || "Pickup"}</div></div>
+              </div>
+              <div className="pf-hero">
+                {mk[0] ? <img src={mk[0]} alt="Mockup" /> : <div className="none" style={{ background: hex }}>Mockup coming</div>}
+                {mk[0] && capOf(0) && <span>{capOf(0)}</span>}
+              </div>
+              <div className="pf-sum">
+                <div>
+                  <div className="lbl">Prints</div>
+                  {g.imprints.length === 0 && <div className="pf-pr">No prints on this group.</div>}
+                  {g.imprints.map((d) => {
+                    const des = d.design_id ? p.designs[d.design_id] : null, sz = printSize(d, des), ink = inkNames(d.inks);
+                    return (
+                      <div className="pf-pr" key={d.id}>
+                        <b>{d.location}</b> · {printHow(d)}{sz.label ? <> · <b>{sz.label}</b></> : null}
+                        {ink.length > 0 && <div className="pf-inks">{ink.map((k) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{k}</span>)}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div>
+                  <div className="lbl">Garments</div>
+                  {lines.map((l) => <div className="pf-pr" key={l.id}><Swatch c={colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{l.garment ? <div className="faint">{l.garment}</div> : null}</div>)}
+                </div>
+              </div>
+              <div className="pf-ok">
+                <div className="t">Please check everything before you approve</div>
+                <div className="s">Spelling, art, ink colors, print sizes and placement. Ink colors are matched to the names listed (PMS or stock ink); colors on a screen or a home printer are close but not exact. Sizes are the printed size on the garment. We start production once this proof is approved.</div>
+                <div className="pf-boxes"><span><i className="cb" /> Approved as shown</span><span><i className="cb" /> Approved with the changes noted</span><span><i className="cb" /> Changes needed, send a new proof</span></div>
+                <div className="pf-sign"><div>Signature</div><div>Name</div><div>Date</div></div>
+                {approved && <div className="s ok">Approved online: {approved}</div>}
+              </div>
+              {foot()}
+            </section>
+            {extra.map((pair, xi) => (
+              <section className="sheet pf" key={"m" + xi}>
+                <div className="p2h"><div className="t disp">Mockups{gname ? ` · ${gname}` : ""}</div><div className="r">#{o.number} · {o.nickname}</div></div>
+                {pair.map((u, ui) => { const i = 1 + xi * 2 + ui; return <div className={"pf-mk" + (pair.length === 1 ? " one" : "")} key={u}><img src={u} alt="Mockup" />{capOf(i) && <span>{capOf(i)}</span>}</div>; })}
+                {foot()}
+              </section>
+            ))}
+            {g.imprints.map((d, di) => <ProofPrint key={d.id} d={d} di={di} n={g.imprints.length} p={p} gi={gi} gname={gname} foot={foot()} />)}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function ProofPrint({ d, di, n, p, gi, gname, foot }: { d: Imprint; di: number; n: number; p: DocData; gi: number; gname: string; foot: ReactNode }) {
+  const { o } = p;
+  const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? p.designUrls[des.id] : "";
+  const sz = printSize(d, des), max = p.maxes[gi]?.[di] || null;
+  const hex = p.hexes[gi] || "#9aa1ab";
+  // the art as big as the panel takes (7.6" × 5.9"), its real measurements drawn on
+  const PW = 6.2, PH = 5.0;
+  const s = sz.w && sz.h ? Math.min(PW / sz.w, PH / sz.h) : sz.w ? PW / sz.w : 0;
+  const aw = s ? sz.w * s : PW, ah = s && sz.h ? sz.h * s : PH, top = 0.45;
+  const inks = inkNames(d.inks);
+  const specs: [string, string][] = [
+    ["Location", d.location || "—"], ["Print size", sz.label || "—"], ["Placement", d.drop ? `${d.drop}" below the collar` : "Standard"],
+    ["Print", printHow(d)],
+  ];
+  return (
+    <section className="sheet pf">
+      <div className="p2h"><div className="t disp">{(d.location || "Print")}</div><div className="r">Print {di + 1} of {n}{gname ? ` · ${gname}` : ""} · #{o.number}</div></div>
+      <div className={"art pf-art" + (isDark(hex) ? " dark" : "")} style={{ background: hex }}>
+        {max && s > 0 && max.w * s < 7.4 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>largest print area {max.w}&quot; × {max.h}&quot;</span></div>}
+        {pic ? <PaintedArt className="pic" src={pic} inkMap={d.inkMap} designId={d.design_id} alt={des ? `D-${des.number}` : ""} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">Art coming</div>}
+        {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
+        {pic && sz.h > 0 && <div className="dimh" style={{ top: `${top}in`, height: `${ah}in`, left: `calc(50% + ${aw / 2 + 0.14}in)` }}>{sz.h.toFixed(2)}&quot;</div>}
+      </div>
+      <div className="specs pf-specs">{specs.map(([k, v]) => <div className="sp" key={k}><div className="lbl">{k}</div><div className="v">{v}</div></div>)}</div>
+      {inks.length > 0 && (
+        <div className="pf-inkrow">
+          <div className="lbl">{d.method === "embroidery" ? "Thread colors" : "Ink colors"}</div>
+          <div className="pf-inklist">{inks.map((k) => <span key={k}><i style={{ background: colorHex(k) || "#ccc" }} /><b>{k}</b></span>)}</div>
+        </div>
+      )}
+      {d.notes && <div className="n2"><b>Notes:</b> {d.notes}</div>}
+      {foot}
     </section>
   );
 }

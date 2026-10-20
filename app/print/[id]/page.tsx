@@ -5,14 +5,14 @@ import { calcOrder, mergeSettings, orderGroups, type Customer, type Order, type 
 import { loadGroupLook } from "@/lib/groupLook";
 import PrintButton from "./PrintButton";
 import { DOC_CSS } from "./docCss";
-import { InvoiceDoc, WorkOrderDoc, type DocData } from "./Docs";
+import { InvoiceDoc, ProofDoc, WorkOrderDoc, type DocData } from "./Docs";
 
 export const dynamic = "force-dynamic";
 
 // Quote/invoice for customers, or (?work=1, shop only) a work order for the press with no prices.
-export default async function PrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ work?: string }> }) {
+export default async function PrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ work?: string; proof?: string }> }) {
   const { id } = await params;
-  const { work } = await searchParams;
+  const { work, proof } = await searchParams;
   const { supabase, user, isStaff } = await getViewer();
   if (!user) redirect(`/login?next=/print/${id}`);
   const db = isStaff ? createAdminClient() : supabase; // customers read through row security
@@ -33,12 +33,14 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   // designs (proportions for the print sizes; previews for the work order), mockup pictures, the shirt colors
   const { designs, hexes, maxes } = await loadGroupLook(admin, groups);
   const work0 = !!work && isStaff;
+  // the art proof (?proof=1): every mockup big and each print's art up close, for the customer to approve (Oct 20)
+  const proof0 = !!proof && !work0;
   const mkPaths = groups.map((g) => {
     // ours first; the customer's own mockup only when we haven't made one
     const all = g.mockupThumbs?.length ? g.mockupThumbs : (g.customerMockups || []).map((m) => m.path);
-    return work0 ? all.slice(0, 5) : all.slice(0, 1);
+    return proof0 ? all.slice(0, 12) : work0 ? all.slice(0, 5) : all.slice(0, 1);
   });
-  const dPaths = work0 ? Object.values(designs).filter((d) => d.preview_path) : [];
+  const dPaths = work0 || proof0 ? Object.values(designs).filter((d) => d.preview_path) : [];
   const toSign = [...mkPaths.flat(), ...dPaths.map((d) => d.preview_path)];
   const signed = toSign.length ? (await admin.storage.from("proofs").createSignedUrls(toSign, 3600)).data || [] : [];
   const urlOf = new Map<string, string>();
@@ -47,6 +49,18 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const designUrls: Record<string, string> = {};
   dPaths.forEach((d) => { const u = urlOf.get(d.preview_path); if (u) designUrls[d.id] = u; });
   const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, mockups, hexes, maxes, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
+
+  if (proof0) {
+    const printed = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
+    return (
+      <div className="pdoc">
+        <title>{`Art proof #${o.number} ${o.nickname || ""}`.trim()}</title>
+        <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
+        <div className="print-bar"><PrintButton /></div>
+        <ProofDoc {...data} printed={printed} />
+      </div>
+    );
+  }
 
   if (work0) {
     const [{ data: inn }, { data: jn }, { data: apc }] = await Promise.all([

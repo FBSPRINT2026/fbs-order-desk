@@ -705,6 +705,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {o.status === "quote" && <button className="btn primary" type="button" onClick={send} title="Publishes it to their portal and emails them a link (add a note on the Messages tab first if you like)">Send quote to customer</button>}
           {o.type === "quote" && !pvStatusOf(o as never) && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
           <a className="btn" href={`/print/${o.id}`} target="_blank" rel="noreferrer">{o.type === "quote" ? "Quote PDF" : "Invoice PDF"}</a>
+          <a className="btn" href={`/print/${o.id}?proof=1`} target="_blank" rel="noreferrer" title="The art proof for the customer to approve: every mockup big, each print up close with its size and inks">Proof PDF</a>
           <a className="btn" href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer">Work order</a>
           <details className="ot-more" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
             <summary className="btn">More ▾</summary>
