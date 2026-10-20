@@ -12,7 +12,10 @@ export const personName = (n?: string | null) => {
 export function senderLabel(fromName: string | null | undefined, fromEmail: string | null | undefined, cust?: { company?: string | null; name?: string | null; email?: string | null } | null) {
   const own = personName(fromName) || String(fromEmail || "");
   if (!cust) return own;
-  if (cust.company) return cust.company;
+  // the person who wrote it, then their company (Oct 20, Nick: "I'd rather just say, like, Cassidy from Dear Heart
+  // Designs… there's two people within Dear Hearts"): "Kassidy from Dear Heart Designs"
+  const first = personName(fromName).split(/\s+/)[0] || String(fromEmail || "").split("@")[0];
+  if (cust.company) return first && first.toLowerCase() !== cust.company.toLowerCase() ? `${first} from ${cust.company}` : cust.company;
   if (cust.name && cust.email && fromEmail && cust.email.toLowerCase() === fromEmail.toLowerCase()) return cust.name;
   return own || cust.name || "";
 }
