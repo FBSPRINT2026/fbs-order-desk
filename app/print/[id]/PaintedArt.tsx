@@ -23,5 +23,5 @@ export default function PaintedArt({ src, inkMap, designId, className, style, al
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, key]);
   // eslint-disable-next-line @next/next/no-img-element
-  return <img className={className} style={style} src={out || src} alt={alt || ""} data-hires={hires || undefined} data-hires-name={hiresName || undefined} data-inkmap={key || undefined} />;
+  return <img className={className} style={style} src={out || src} alt={alt || ""} data-hires={hires || undefined} data-hires-name={hiresName || undefined} data-inkmap={key || undefined} data-orig={key ? src : undefined} />;
 }

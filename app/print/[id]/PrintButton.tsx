@@ -32,14 +32,14 @@ function hiresArt(url: string, name: string, inkJson: string, shown: HTMLImageEl
       const { makePreview } = await import("@/lib/artPrep");
       const blob = await (await fetch(url)).blob();
       const png = await makePreview(new File([blob], name || "art.eps", { type: blob.type }), 4800);
-      if (!png) return null;
+      if (!png) { console.warn("[pdf] no picture from", name); return null; }
       const u = URL.createObjectURL(png);
       let img = await loadImage(u, false);
       // the same picture as the page shows (same proportions), else it isn't the same crop: keep the page's
-      if (Math.abs(img.naturalWidth / img.naturalHeight - shown.naturalWidth / shown.naturalHeight) > 0.015) return null;
+      if (Math.abs(img.naturalWidth / img.naturalHeight - shown.naturalWidth / shown.naturalHeight) > 0.015) { console.warn("[pdf] different proportions", img.naturalWidth, img.naturalHeight, shown.naturalWidth, shown.naturalHeight); return null; }
       if (inkJson) { const { repaintLogo } = await import("@/lib/inkColors"); img = await loadImage(repaintLogo(img, JSON.parse(inkJson), 4800), false); }
       return img;
-    } catch { return null; }
+    } catch (e) { console.warn("[pdf] full-size art failed", e); return null; }
   })());
   return hiresCache.get(key)!;
 }
@@ -48,7 +48,12 @@ function hiresArt(url: string, name: string, inkJson: string, shown: HTMLImageEl
 async function cropAtFullSize(src: string, shown: HTMLImageElement, r: NonNullable<ReturnType<typeof visibleRect>>): Promise<{ bytes: ArrayBuffer; png: boolean } | null> {
   const art = !!shown.closest(".art, .pf-tile-art");
   const hi = shown.dataset.hires ? await hiresArt(shown.dataset.hires, shown.dataset.hiresName || "", shown.dataset.inkmap || "", shown) : null;
-  const img = hi || (src.startsWith("data:") || src.startsWith("blob:") ? shown : await loadImage(src));
+  // a raster logo shown repainted in its inks: repainted again from the original at its full size
+  let img: HTMLImageElement | null = hi;
+  if (!img && shown.dataset.orig && shown.dataset.inkmap) {
+    try { const o = await loadImage(shown.dataset.orig); const { repaintLogo } = await import("@/lib/inkColors"); img = await loadImage(repaintLogo(o, JSON.parse(shown.dataset.inkmap), 5000), false); } catch { img = null; }
+  }
+  if (!img) img = src.startsWith("data:") || src.startsWith("blob:") ? shown : await loadImage(src);
   const nw = img.naturalWidth, nh = img.naturalHeight;
   const sx = r.src.fx * nw, sy = r.src.fy * nh, sw = r.src.fw * nw, sh = r.src.fh * nh;
   // up to ~600 dpi on the page for art (proofreading small type), ~300 for photos; never more than 5,000 px a side
