@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { uaPunches, uaRaw, uaUsers, uattendReady, type UaUser } from "@/lib/uattend";
+import { uaPunches, uaRaw, uaUserFields, uaUsers, uattendReady, type UaUser } from "@/lib/uattend";
 import { addDays, localDay, localToIso } from "@/lib/timeclock";
 
 export const dynamic = "force-dynamic";
@@ -12,24 +12,27 @@ export const maxDuration = 60;
  *   GET  (the database's schedule, every 2 minutes in shop hours, with the sync token): yesterday and today's punches.
  *   POST (an owner/admin on Time Clock → Import): { from, to } brings history over, a month at a time; {} = the same
  *        quick sync now.
- * Employees are matched by uAttend user ID, then by name (the ID is saved on the match); nobody is ever added from
- * uAttend (people not on our list are reported and their punches skipped). A punch changed in uAttend is voided here and the new one added (unless someone edited it here).
+ * Employees are matched by uAttend user ID, then by name (the ID is saved on the match). Anyone uAttend has who isn't on
+ * our list is added as a former employee, so every punch is kept (Nick, Oct 20: "I'm audited… I have to be able to go
+ * back the last three years and show everybody's punches"); they're reported so they can be linked or brought back.
+ * A punch changed in uAttend is voided here and the new one added (unless someone edited it here).
  * Status (last run, last success, last error, counts) is kept in uattend_sync for the pages to show.
  */
 type Admin = ReturnType<typeof createAdminClient>;
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim();
 
 /**
- * uAttend users → our employees. Only people already on our list are linked (Nicholas, Sept 30: never add anyone
- * from uAttend). By uAttend ID, then by full name, then by last name + first name starting the same (Kelsey / Kelsy).
- * Anyone left over is reported back (and their punches skipped) so they can be linked by hand.
+ * uAttend users → our employees. By uAttend ID, then by full name, then by last name + first name starting the same
+ * (Kelsey / Kelsy). Sept 30 Nicholas said never add anyone from uAttend; Oct 20 the audit records come first: anyone
+ * left over is added as a FORMER employee (off the clock, off the active list, not sent to the face clock), named as
+ * in uAttend, so none of their punches are skipped. They're still reported, so a wrong match can be fixed by hand.
  */
 async function matchUsers(admin: Admin, users: UaUser[]) {
   const { data } = await admin.from("employees").select("id, first_name, last_name, uattend_id");
   const emps = (data || []) as { id: string; first_name: string; last_name: string; uattend_id: string | null }[];
   const byUa = new Map(emps.filter((e) => e.uattend_id).map((e) => [e.uattend_id!, e.id]));
   const free = emps.filter((e) => !e.uattend_id);
-  let linked = 0;
+  let linked = 0, added = 0;
   const unmatched: string[] = [];
   const take = async (u: UaUser, e: { id: string }) => { await admin.from("employees").update({ uattend_id: u.id }).eq("id", e.id); byUa.set(u.id, e.id); free.splice(free.indexOf(e as never), 1); linked++; };
   for (const u of users) {
@@ -38,10 +41,14 @@ async function matchUsers(admin: Admin, users: UaUser[]) {
     let hit = free.find((e) => norm(`${e.first_name} ${e.last_name}`) === full);
     if (!hit && ln) { const c = free.filter((e) => norm(e.last_name) === ln && fn && norm(e.first_name).slice(0, 3) === fn.slice(0, 3)); if (c.length === 1) hit = c[0]; }
     if (!hit && !ln && fn) { const c = free.filter((e) => norm(e.first_name) === fn); if (c.length === 1) hit = c[0]; }
-    if (hit) await take(u, hit);
-    else if (u.active) unmatched.push(`${u.first} ${u.last}`.trim() + ` (uAttend #${u.id})`);
+    if (hit) { await take(u, hit); continue; }
+    // keep their punches: a former employee record, linked by uAttend ID
+    const { data: made } = await admin.from("employees").insert({ first_name: u.first || "uAttend", last_name: u.last || `#${u.id}`, email: u.email || "", uattend_id: u.id, active: false, end_date: null,
+      notes: `Added from uAttend (#${u.id}) on ${new Date().toISOString().slice(0, 10)} to keep their punch history. Not on the employee list${u.active ? "; still active in uAttend" : ""}.` }).select("id").maybeSingle();
+    if (made?.id) { byUa.set(u.id, made.id as string); added++; }
+    unmatched.push(`${u.first} ${u.last}`.trim() + ` (uAttend #${u.id})${u.active ? "" : " · former"}`);
   }
-  return { byUa, linked, added: 0, unmatched };
+  return { byUa, linked, added, unmatched };
 }
 
 async function run(admin: Admin, from: string, to: string, withUsers: boolean) {
@@ -50,7 +57,7 @@ async function run(admin: Admin, from: string, to: string, withUsers: boolean) {
   let usersDone = false, usersBlocked = "";
   // the user list; if uAttend won't give it (403 on /user), people are matched from the names on their punches instead
   const users = async (fallback: UaUser[]) => { if (usersBlocked) return fallback; try { return await uaUsers(); } catch (e) { const m = e instanceof Error ? e.message : String(e); if (!/ 403 /.test(m)) throw e; usersBlocked = m; return fallback; } };
-  if (withUsers) { const got = await users([]); if (!usersBlocked) { const r = await matchUsers(admin, got); map = r.byUa; summary.linked = r.linked; summary.unmatched = r.unmatched; usersDone = true; } }
+  if (withUsers) { const got = await users([]); if (!usersBlocked) { const r = await matchUsers(admin, got); map = r.byUa; summary.linked = r.linked; summary.newEmployees = r.added; summary.unmatched = r.unmatched; usersDone = true; } }
   // a month at a time (uAttend allows up to three per request)
   for (let a = from; a <= to; a = addDays(a, 31)) {
     const b = addDays(a, 30) < to ? addDays(a, 30) : to;
@@ -59,7 +66,7 @@ async function run(admin: Admin, from: string, to: string, withUsers: boolean) {
     if (!ps.length) continue;
     if (!map || (!usersDone && ps.some((p) => !map!.has(p.user)))) {
       const fromPunches = [...new Map(ps.map((p) => [p.user, { id: p.user, first: p.first, last: p.last, active: true, email: "" }])).values()];
-      const r = await matchUsers(admin, await users(fromPunches)); map = r.byUa; summary.linked += r.linked; summary.unmatched = r.unmatched; usersDone = !usersBlocked;
+      const r = await matchUsers(admin, await users(fromPunches)); map = r.byUa; summary.linked += r.linked; summary.newEmployees += r.added; summary.unmatched = r.unmatched; usersDone = !usersBlocked;
     }
     const keys = [...new Set(ps.map((p) => p.key))], have = new Set<string>();
     for (let i = 0; i < keys.length; i += 300) {
@@ -126,6 +133,8 @@ export async function POST(req: Request) {
   if (!["owner", "admin"].includes((me?.role as string) || "")) return NextResponse.json({ error: "Only an owner or admin can sync uAttend." }, { status: 403 });
   if (!uattendReady()) return NextResponse.json({ error: "The uAttend API key isn't set up yet. Add it in Vercel as UATTEND_API_KEY (Production), then redeploy." }, { status: 400 });
   const b = await req.json().catch(() => ({}));
+  // { fields: true }: which fields uAttend has on a person (names only), e.g. whether it keeps pay rates
+  if (b.fields) { try { return NextResponse.json({ fields: await uaUserFields() }); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); } }
   const today = localDay(new Date());
   const ok = (d: unknown) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
   const from = ok(b.from) ? (b.from as string) : addDays(today, -1), to = ok(b.to) ? (b.to as string) : today;

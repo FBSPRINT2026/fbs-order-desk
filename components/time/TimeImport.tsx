@@ -114,7 +114,7 @@ function UattendLive() {
   const [st, setSt] = useState<UaStatus | null>(null);
   const [busy, setBusy] = useState(""), [err, setErr] = useState(""), [done, setDone] = useState("");
   const today = localDay(new Date());
-  const [from, setFrom] = useState(() => addD(today, -365)), [to, setTo] = useState(today);
+  const [from, setFrom] = useState(() => addD(today, -3 * 365 - 1)), [to, setTo] = useState(today);
   const load = useCallback(async () => { const { data } = await createClient().from("uattend_sync").select("last_run_at, last_ok_at, last_error, last_error_at, last_summary").eq("id", 1).maybeSingle(); setSt((data as UaStatus) || null); }, []);
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [load]);
   async function go(a?: string, b?: string) {
@@ -123,16 +123,16 @@ function UattendLive() {
     const steps: [string, string][] = [];
     if (a && b) for (let x = a; x <= b; x = addD(x, 90)) steps.push([x, addD(x, 89) < b ? addD(x, 89) : b]);
     else steps.push(["", ""]);
-    let added = 0, punches = 0, linked = 0;
+    let added = 0, punches = 0, linked = 0, people = 0;
     for (let i = 0; i < steps.length; i++) {
       setBusy(steps.length > 1 ? `Bringing over ${dayLabel(steps[i][0])} – ${dayLabel(steps[i][1])} (${i + 1} of ${steps.length})…` : "Syncing…");
       const r = await fetch("/api/time/uattend", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(steps[i][0] ? { from: steps[i][0], to: steps[i][1] } : {}) }).catch(() => null);
       const j = r ? await r.json().catch(() => ({})) : { error: "No connection." };
       if (!r?.ok) { setBusy(""); setErr(j.error || "The sync didn't work."); load(); return; }
-      added += j.added || 0; punches += j.punches || 0; linked += j.linked || 0;
+      added += j.added || 0; punches += j.punches || 0; linked += j.linked || 0; people += j.newEmployees || 0;
     }
     setBusy(""); load();
-    setDone(`${punches.toLocaleString()} punches read, ${added.toLocaleString()} new${linked ? `, ${linked} employee${linked === 1 ? "" : "s"} linked by name` : ""}.`);
+    setDone(`${punches.toLocaleString()} punches read, ${added.toLocaleString()} new${linked ? `, ${linked} employee${linked === 1 ? "" : "s"} linked by name` : ""}${people ? `, ${people} former employee${people === 1 ? "" : "s"} added to keep their punches` : ""}.`);
   }
   const noKey = !!st?.last_error && /key isn't set up/i.test(st.last_error);
   const healthy = !!st?.last_ok_at && (!st.last_error_at || Date.parse(st.last_ok_at) > Date.parse(st.last_error_at));
@@ -142,8 +142,8 @@ function UattendLive() {
       <p className="faint" style={{ fontSize: 13, margin: "0 0 8px" }}>Punches come over from uAttend every 2 minutes (5 AM – 8 PM), read only: nothing is ever changed in uAttend. When a press operator clocks in, that press&apos;s day starts on the Production calendar; until then its jobs wait.</p>
       {noKey && <div className="tmx-note">Add the key in <b>Vercel → fbs-order-desk → Settings → Environment Variables</b> as <code>UATTEND_API_KEY</code> (Production), then redeploy. It&apos;s never shown or typed here.</div>}
       {st?.last_error && !noKey && !healthy && <div className="pv-err">{st.last_error}</div>}
-      {st?.last_summary && <div className="faint" style={{ fontSize: 12.5 }}>Last run: {st.last_summary.punches} punches read ({dayLabel(st.last_summary.from)} – {dayLabel(st.last_summary.to)}), {st.last_summary.added} new{st.last_summary.updated ? `, ${st.last_summary.updated} changed in uAttend` : ""}{st.last_summary.unknown ? `, ${st.last_summary.unknown} skipped (people not on our list)` : ""}.</div>}
-      {!!st?.last_summary?.unmatched?.length && <div className="tmx-note">In uAttend but not on our employee list (their punches aren&apos;t brought over): {st.last_summary.unmatched.join(", ")}. Nobody is added from uAttend; if one of them is someone we have under another name, tell Claude who.</div>}
+      {st?.last_summary && <div className="faint" style={{ fontSize: 12.5 }}>Last run: {st.last_summary.punches} punches read ({dayLabel(st.last_summary.from)} – {dayLabel(st.last_summary.to)}), {st.last_summary.added} new{st.last_summary.updated ? `, ${st.last_summary.updated} changed in uAttend` : ""}{st.last_summary.unknown ? `, ${st.last_summary.unknown} skipped` : ""}{st.last_summary.newEmployees ? `, ${st.last_summary.newEmployees} former employee${st.last_summary.newEmployees === 1 ? "" : "s"} added` : ""}.</div>}
+      {!!st?.last_summary?.unmatched?.length && <div className="tmx-note">In uAttend but not on our employee list: {st.last_summary.unmatched.join(", ")}. They were added as former employees so their punches are kept for the records (Employees → Show former employees). If one of them still works here, open them and click Bring Back; if one is someone we have under another name, tell Claude who.</div>}
       <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 10 }}>
         <button type="button" className="btn sm" disabled={!!busy} onClick={() => go()}>Sync Now</button>
         <span className="spacer" />

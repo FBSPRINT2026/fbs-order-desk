@@ -50,6 +50,13 @@ export async function uaUsers(): Promise<UaUser[]> {
   return list(j, "Users").map((u) => ({ id: String(f(u, "UserId", "Id") ?? ""), first: String(f(u, "FirstName", "first_name") ?? "").trim(), last: String(f(u, "LastName", "last_name") ?? "").trim(), active: f(u, "IsActive", "active") !== false && f(u, "IsActive") !== 0, email: String(f(u, "Email") ?? "") })).filter((u) => u.id);
 }
 
+/** the field names uAttend sends for a user (names only, never the values): to see whether it has pay rates */
+export async function uaUserFields(): Promise<string[]> {
+  const j = await call("/user", {});
+  const us = list(j, "Users");
+  return [...new Set(us.flatMap((u) => Object.keys(u)))].sort();
+}
+
 export type UaPunch = { key: string; user: string; first: string; last: string; kind: "in" | "out"; at: string };
 /** wall time in the shop's zone → an instant; InTime may be "07:02 AM", "07:02:00" or a full date-time */
 function when(day: unknown, time: unknown): string | null {
