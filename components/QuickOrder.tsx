@@ -32,9 +32,9 @@ import type { OrderStart } from "@/components/OrderStartPick";
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
-type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; prints: { key: string; label: string; colors: number; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
+type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; prints: { key: string; label: string; colors: number; location: string; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
-type HelpAns = { picks: Record<string, HelpPick>; files: { path: string; name: string; role: "art" | "mockup" | "production" }[] | null; skipped?: number };
+type HelpAns = { picks: Record<string, HelpPick>; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production" }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
 type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
 type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
@@ -153,7 +153,10 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // ask (Oct 20, Nick: "I'm finding art but it's not a mockup like I was expecting, what should I do with it? …that's
     // the art for the front, here's the art for the back")
     const unsure = d.groups.flatMap((x, gi) => x.imprints.map((im, ii) => ({ gi, ii, im }))).filter(({ im }) => im.design_id && /Art: the original from|Art and size from the film/.test(im.notes || ""));
-    if (unsure.length) {
+    // a Printavo job with files: all asked on one screen in the Resolution Center below (Oct 20, Nick: "I'm not seeing
+    // the barcodes… is it going to be somewhere else?")
+    const pvAll = d.kind === "reorder" && !!d.reorderOf?.startsWith("a:") && d.groups.some((x) => (x.pvRef || []).length + (x.pvArt || []).length > 0);
+    if (unsure.length && !pvAll) {
       note("Found the art, but not on a mockup: checking with you where it goes");
       const ans = await waitFor<ConfirmAns>((resolve) => setConfirm({ job: jobLabel || "the old job", items: unsure.map(({ gi, ii, im }) => ({ gi, ii, design: im.design_id!, location: im.location, size: (im.size || "").replace(/"\s*wide/, ""), colors: im.colors || 1 })), resolve }));
       setConfirm(null);
@@ -178,7 +181,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const files = [...new Map(d.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])]).map((f) => [f.path, f])).values()];
     if (targets.length && (missing.length || (isPv && files.length))) {
       note(missing.length ? "Couldn't tell which file is the art: asking you" : "Asking you what each of the old job's files is");
-      const prints = targets.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1, ...(im.design_id ? { design: im.design_id } : {}) }));
+      const prints = targets.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1, location: im.location, size: String(im.size || "").replace(/"\s*wide/, "").trim(), ...(im.design_id ? { design: im.design_id } : {}) }));
       const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", prints, files, why, resolve }));
       setHelp(null);
       const made = new Map<File, string>();
@@ -213,6 +216,16 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       }
       // the old job's files go in the new order's Production files only as you said (art, mockup, production file);
       // "Not needed" ones stay out
+      // where each print goes and how wide, as you said
+      for (const { gi, ii, im } of targets) {
+        const pl = ans.place?.[`${gi}:${ii}`];
+        if (!pl) continue;
+        const loc = pl.location && pl.location !== im.location ? pl.location : "";
+        const size = pl.size && pl.size !== String(im.size || "").replace(/"\s*wide/, "").trim() ? pl.size : "";
+        if (!loc && !size) continue;
+        d = { ...d, groups: d.groups.map((x, xi) => (xi !== gi ? x : { ...x, imprints: x.imprints.map((y, yi) => (yi !== ii ? y : { ...y, ...(loc ? { location: loc } : {}), ...(size ? { size: `${size}" wide`, sizeFrom: "customer" as const } : {}) })) })) };
+        did.push(`You set the ${loc || im.location}${size ? `: ${size}" wide` : ""}`);
+      }
       if (ans.files) {
         d = { ...d, groups: d.groups.map((x, xi) => ({ ...x, pvRef: [], pvArt: xi === 0 ? ans.files!.map((f) => ({ path: f.path, name: f.name })) : [] })) };
         const kinds = { art: "art", mockup: "mockup", production: "production file" } as const;
@@ -349,6 +362,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const upRef = useRef<HTMLInputElement | null>(null);
   // art already pulled for a print: shown as its own card, already given to that print
   const [kept, setKept] = useState<Record<string, string>>({});
+  const [place, setPlace] = useState<Record<string, { location: string; size: string }>>(() => Object.fromEntries(help.prints.map((p) => [p.key, { location: p.location, size: p.size }])));
   useEffect(() => {
     const ds = help.prints.filter((p) => p.design);
     if (!ds.length) return;
@@ -429,7 +443,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     // the old job's files for the new order's Production files: art, mockups and production files (one not answered
     // stays in, as before); "Not needed" ones out
     const files = old === null ? null : olds0.filter((x) => as[x.key] !== "none").map((x) => ({ path: x.path!, name: x.name, role: (as[x.key] === "mockup" ? "mockup" : as[x.key] === "production" || !as[x.key] ? "production" : "art") as "art" | "mockup" | "production" }));
-    help.resolve({ picks: out, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
+    help.resolve({ picks: out, place, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
   };
   async function searchFilm(q: string) {
     setElseOpen(true); setFilms({ busy: true, list: [] });
@@ -466,6 +480,12 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
         </div>
         {it.hint && !v && <span className="arc-hint">{it.hint}?</span>}
         {it.where === "old" && v && v !== "none" && <span className="arc-hint ok">{v === "mockup" ? "Kept in Production files as the old mockup" : v === "production" ? "Goes in this order's Production files" : "The art; the original also goes in Production files"}</span>}
+        {isArt && (
+          <div className="arc-place">
+            <select value={place[v]?.location || ""} onChange={(e) => setPlace((x) => ({ ...x, [v]: { ...x[v], location: e.target.value } }))} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
+            <label><input type="number" min={1} max={16} step={0.25} value={place[v]?.size || ""} placeholder="std" onChange={(e) => setPlace((x) => ({ ...x, [v]: { ...x[v], size: e.target.value } }))} aria-label="Printed width in inches" /> in wide</label>
+          </div>
+        )}
         {isArt && it.canCut && <label className="arc-bg"><input type="checkbox" checked={bg} onChange={(e) => setBgOff((b) => ({ ...b, [it.key]: e.target.checked }))} /> Remove background</label>}
       </div>
     );
