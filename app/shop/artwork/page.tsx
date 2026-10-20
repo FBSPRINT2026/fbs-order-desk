@@ -1,4 +1,5 @@
 "use client";
+import { oneOfEach } from "@/lib/mockupList";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -47,7 +48,7 @@ export default function ArtworkPage() {
       sb.from("mockups").select("id,title,file_path,customer_id,order_id,created_at,starred,design_ids").is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
     ]);
     const list = (d.data || []) as Design[];
-    const ml = (m.data || []) as Mock[];
+    const ml = oneOfEach((m.data || []) as Mock[]);
     setDesigns(list);
     setMockups(ml);
     setCustomers(((c.data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));

@@ -1,4 +1,5 @@
 "use client";
+import { oneOfEach } from "@/lib/mockupList";
 import { logoShirtsFrom } from "@/lib/logoShirts";
 import TestAccount from "@/components/TestAccount";
 import BackLink from "@/components/BackLink";
@@ -109,7 +110,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         const urls = await previewUrls(sb, fixed);
         setDesignUrls((m) => ({ ...m, ...urls }));
       }).catch(() => null);
-      const ml = (m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean }[];
+      const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean }[]);
       const paths = ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]);
       const { data: signed } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
       setMockups(ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), created_at: x.created_at, url: signed?.[i * 2]?.signedUrl || "", thumb: signed?.[i * 2 + 1]?.signedUrl || signed?.[i * 2]?.signedUrl || "" })));

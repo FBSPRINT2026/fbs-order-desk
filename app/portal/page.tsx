@@ -1,4 +1,5 @@
 import { getPortalCtx } from "@/lib/portal";
+import { oneOfEach } from "@/lib/mockupList";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, PAY_TERMS, payDueDate, type Design, type Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
@@ -73,7 +74,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(withPv.map((x) => x.preview_path), 3600);
       withPv.forEach((x, i) => { if (sg?.[i]?.signedUrl) designUrls[x.id] = sg[i].signedUrl!; });
     }
-    const ml = (m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean }[];
+    const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean }[]);
     if (ml.length) {
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]), 3600);
       mockups = ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), created_at: x.created_at, url: sg?.[i * 2]?.signedUrl || "", thumb: sg?.[i * 2 + 1]?.signedUrl || sg?.[i * 2]?.signedUrl || "" }));
