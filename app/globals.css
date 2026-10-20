@@ -10262,3 +10262,5 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .arc-one .arc-card>*:not(.arc-pic){grid-column:2}
 .arc-one .arc-chips .chip{font-size:13px;padding:5px 11px}
 @media (max-width:640px){.arc-one .arc-card{grid-template-columns:1fr}.arc-one .arc-card>*:not(.arc-pic){grid-column:1}.arc-one .arc-card>.arc-pic{grid-row:auto;height:min(40vh,320px)}}
+.arc-job{font-size:13px;font-weight:500;margin-left:6px;white-space:nowrap}
+.arc-split{font-size:12px;justify-self:start;text-align:left}

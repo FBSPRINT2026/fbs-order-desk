@@ -32,7 +32,7 @@ import type { OrderStart } from "@/components/OrderStartPick";
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
 type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
-type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; prints: { key: string; label: string; colors: number; location: string; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
+type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; /** the old job in the new system, to look at */ jobUrl: string; prints: { key: string; label: string; colors: number; location: string; /** printed width, inches ("" = standard) */ size: string; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
 /** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
 type HelpAns = { picks: Record<string, HelpPick>; place?: Record<string, { location: string; size: string }>; files: { path: string; name: string; role: "art" | "mockup" | "production" }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
@@ -183,10 +183,10 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const replaced: string[] = [];
     const files = [...new Map(d.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])]).map((f) => [f.path, f])).values()];
     if (targets.length && (missing.length || (isPv && files.length))) {
-      if (pvAll) step(`${of}Asking you about ${jobLabel || "the old job"}'s files…`);
+      if (pvAll) step(`${of}Asking you about the files on ${jobLabel || "the old job"}…`);
       note(pvAll ? "Waiting for you: what each file is" : "Couldn't tell which file is the art: asking you");
       const prints = targets.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1, location: im.location, size: String(im.size || "").replace(/"\s*wide/, "").trim(), ...(im.design_id ? { design: im.design_id } : {}) }));
-      const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", prints, files, why, resolve }));
+      const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", jobUrl: isPv ? `/shop/archive/${d!.reorderOf!.slice(2)}` : d!.reorderOf?.startsWith("o:") ? `/shop/orders/${d!.reorderOf.slice(2)}` : "", prints, files, why, resolve }));
       setHelp(null);
       const made = new Map<File, string>();
       for (const { gi, ii, im } of targets) {
@@ -430,28 +430,37 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   // one file at a time, 1 of N, back and forth (Oct 20, Nick: "we may reorder something and I don't remember
   // everything about this job… click through all the different arts")
   const [at, setAt] = useState(0);
+  const [split, setSplit] = useState<Record<string, boolean>>({});
   const answer = (key: string, v: string) => {
     assign(key, v);
     // a mockup, production file or not needed: on to the next file (art stays, for where/width/background)
-    if (help.prints.some((p) => p.key === v) || as[key] === v) return;
+    if (isPrintVal(v) || as[key] === v) return;
     const list = items.filter((x) => x.where === "old" || x.where === "kept"), k = list.findIndex((x) => x.key === key);
     if (k >= 0 && k < list.length - 1) setTimeout(() => setAt(k + 1), 250);
   };
+  // "Full Front, all styles" (Oct 20, Nick: "if you have just one artwork and multiple lines and products in Printavo,
+  // that's going to be the same art for all the products… unless you had individual arts for each line"): one answer
+  // gives a file to every print at that location ("loc:<location>"); a style's own answer still wins for that style
+  const isPrintVal = (v: string) => v.startsWith("loc:") || help.prints.some((p) => p.key === v);
+  const printsOf = (v: string) => (v.startsWith("loc:") ? help.prints.filter((p) => p.location === v.slice(4)) : help.prints.filter((p) => p.key === v));
+  const locs = [...new Set(help.prints.filter((p) => !p.design).map((p) => p.location))];
   const assign = (key: string, v: string) => setAs((a) => {
     const n: Record<string, string> = {};
-    for (const [k, x] of Object.entries(a)) if (!(help.prints.some((p) => p.key === v) && x === v)) n[k] = x;
+    const mine = isPrintVal(v) ? new Set([v, ...(v.startsWith("loc:") ? printsOf(v).map((p) => p.key) : [])]) : new Set<string>();
+    for (const [k, x] of Object.entries(a)) if (!(k !== key && mine.has(x))) n[k] = x;
     if (a[key] === v) delete n[key]; else n[key] = v;
     return n;
   });
-  const artOf = (pk: string) => items.find((it) => as[it.key] === pk);
+  const artOf = (pk: string) => { const p = help.prints.find((x) => x.key === pk); return items.find((it) => as[it.key] === pk) || (p ? items.find((it) => as[it.key] === `loc:${p.location}`) : undefined); };
   const given = help.prints.filter((p) => artOf(p.key));
   const olds0 = items.filter((x) => x.where === "old");
   const unanswered = olds0.filter((x) => !as[x.key]).length;
   const finish = (rest: "skip" | "production") => {
-    const out: Record<string, HelpPick> = {};
+    const out: Record<string, HelpPick> = {}, once = new Map<string, HelpPick | null>();
     for (const p of help.prints) {
       const it = artOf(p.key);
-      const pk = it ? it.pick(!!bgOff[it.key]) : null;
+      if (it && !once.has(it.key)) once.set(it.key, it.pick(!!bgOff[it.key]));
+      const pk = it ? once.get(it.key) || null : null;
       out[p.key] = pk || (rest === "production" ? { kind: "production", note: prodNote.trim() } : { kind: "skip" });
     }
     // the old job's files for the new order's Production files: art, mockups and production files (one not answered
@@ -481,23 +490,27 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
 
   const Card = (it: Item) => {
     const v = as[it.key] || "", bg = !!bgOff[it.key], pic = bg && it.canCut ? it.cutUrl : it.asIsUrl || it.cutUrl;
-    const isArt = help.prints.some((p) => p.key === v);
+    const isArt = isPrintVal(v), p0 = isArt ? printsOf(v)[0] : undefined;
+    const setPl = (patch: Partial<{ location: string; size: string }>) => setPlace((x) => { const y = { ...x }; for (const p of printsOf(v)) y[p.key] = { ...y[p.key], ...patch }; return y; });
+    const perStyle = !!split[it.key] || (!!v && !v.startsWith("loc:") && isArt);
     return (
       <div key={it.key} className={"arc-card" + (isArt ? " art" : v ? " set" : "")}>
         <span className={"arc-pic" + (bg && it.canCut ? " clear" : "")}>{pic ? <img src={pic} alt="" /> : <span className="faint">{it.ready ? (it.name.split(".").pop() || "file").toUpperCase() : "Opening…"}</span>}</span>
         <span className="arc-name" title={it.title || it.name}>{it.tag}{it.open && <> · <a href={it.open} target="_blank" rel="noreferrer">Open full size</a></>}</span>
         <div className="arc-chips" role="radiogroup" aria-label={`What ${it.name} is`}>
-          {help.prints.filter((p) => !it.only || p.key === it.only).map((p) => <button key={p.key} type="button" role="radio" aria-checked={v === p.key} className={"chip" + (v === p.key ? " on" : "")} disabled={!it.ready} onClick={() => answer(it.key, p.key)}>{it.only ? `Use for the ${p.label}` : `${p.label} art`}</button>)}
+          {!it.only && locs.map((l) => { const n = help.prints.filter((p) => p.location === l && !p.design).length; return <button key={l} type="button" role="radio" aria-checked={v === `loc:${l}`} className={"chip" + (v === `loc:${l}` ? " on" : "")} disabled={!it.ready} onClick={() => answer(it.key, `loc:${l}`)}>{n > 1 ? `${l}, all styles` : `${l} art`}</button>; })}
+          {help.prints.filter((p) => (it.only ? p.key === it.only : perStyle && help.prints.filter((q) => q.location === p.location && !q.design).length > 1)).map((p) => <button key={p.key} type="button" role="radio" aria-checked={v === p.key} className={"chip" + (v === p.key ? " on" : "")} disabled={!it.ready} onClick={() => answer(it.key, p.key)}>{it.only ? `Use for the ${p.label}` : `Only ${p.label}`}</button>)}
           {it.where === "old" && <button type="button" role="radio" aria-checked={v === "mockup"} className={"chip" + (v === "mockup" ? " on" : "")} onClick={() => answer(it.key, "mockup")}>Mockup</button>}
           {it.where === "old" && <button type="button" role="radio" aria-checked={v === "production"} className={"chip" + (v === "production" ? " on" : "")} onClick={() => answer(it.key, "production")} title="Goes in this order's Production files (barcodes, labels, film, separations…)">Production file</button>}
           {!it.only && <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => answer(it.key, "none")}>Not needed</button>}
         </div>
+        {!it.only && !perStyle && help.prints.length > locs.length && <button type="button" className="ap-link arc-split" onClick={() => setSplit((x) => ({ ...x, [it.key]: true }))}>Different art for each style…</button>}
         {it.hint && !v && <span className="arc-hint">{it.hint}?</span>}
         {it.where === "old" && v && v !== "none" && <span className="arc-hint ok">{v === "mockup" ? "Kept in Production files as the old mockup" : v === "production" ? "Goes in this order's Production files" : "The art; the original also goes in Production files"}</span>}
         {isArt && (
           <div className="arc-place">
-            <select value={place[v]?.location || ""} onChange={(e) => setPlace((x) => ({ ...x, [v]: { ...x[v], location: e.target.value } }))} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
-            <label><input type="number" min={1} max={16} step={0.25} value={place[v]?.size || ""} placeholder="std" onChange={(e) => setPlace((x) => ({ ...x, [v]: { ...x[v], size: e.target.value } }))} aria-label="Printed width in inches" /> in wide</label>
+            <select value={(p0 && place[p0.key]?.location) || ""} onChange={(e) => setPl({ location: e.target.value })} aria-label="Where it prints">{LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}</select>
+            <label><input type="number" min={1} max={16} step={0.25} value={(p0 && place[p0.key]?.size) || ""} placeholder="std" onChange={(e) => setPl({ size: e.target.value })} aria-label="Printed width in inches" /> in wide</label>
           </div>
         )}
         {isArt && it.canCut && <label className="arc-bg"><input type="checkbox" checked={bg} onChange={(e) => setBgOff((b) => ({ ...b, [it.key]: e.target.checked }))} /> Remove background</label>}
@@ -506,10 +519,10 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   };
   const olds = items.filter((x) => x.where === "old" || x.where === "kept"), elses = items.filter((x) => x.where === "else");
   const opening = old === null || (old || []).some((f) => f.d === undefined);
-  const need = help.prints.filter((p) => !p.design).map((p) => `${p.label}${p.colors > 1 ? ` (${p.colors} colors)` : ""}`).join(", ");
+  const need = locs.map((l) => { const ps = help.prints.filter((p) => p.location === l && !p.design); return `${l}${ps.length > 1 ? ` (${ps.length} styles)` : ""}${ps[0]?.colors > 1 ? `, ${ps[0].colors} colors` : ""}`; }).join("; ");
   return (
     <div className="ap arc" role="group" aria-label="What are these files">
-      <p className="ap-q">{old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}</p>
+      <p className="ap-q">{old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}{help.jobUrl && <> <a className="arc-job" href={help.jobUrl} target="_blank" rel="noreferrer">View {help.job.replace(/^(#\d+).*/, "$1")} ↗</a></>}</p>
       <p className="ap-why">{need ? <>This reorder needs art for: <b>{need}</b>. Pick which file is the art; Tick Remove background if it&apos;s on one; then I&apos;ll make the mockup. </> : <>I pulled the art already (first card). </>}Say what every file is: the ones you keep go in this order&apos;s Production files.</p>
       {olds.length > 0 && (() => {
         const i = Math.min(at, olds.length - 1), it = olds[i];
@@ -521,8 +534,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
               <button type="button" className="arc-arrow" disabled={i === olds.length - 1} onClick={() => setAt(i + 1)} aria-label="Next file">›</button>
               <span className="arc-dots">
                 {olds.map((x, k) => {
-                  const v = as[x.key] || "", art = help.prints.some((p) => p.key === v);
-                  return <button key={x.key} type="button" className={"arc-dot" + (k === i ? " on" : "") + (art ? " art" : v ? " set" : "")} onClick={() => setAt(k)} title={`${k + 1}. ${x.name}${v ? `: ${art ? `${help.prints.find((p) => p.key === v)!.label} art` : v === "none" ? "not needed" : v === "production" ? "production file" : v}` : ": not answered yet"}`} aria-label={`File ${k + 1}`}>{x.asIsUrl || x.cutUrl ? <img src={x.asIsUrl || x.cutUrl} alt="" /> : k + 1}</button>;
+                  const v = as[x.key] || "", art = isPrintVal(v);
+                  return <button key={x.key} type="button" className={"arc-dot" + (k === i ? " on" : "") + (art ? " art" : v ? " set" : "")} onClick={() => setAt(k)} title={`${k + 1}. ${x.name}${v ? `: ${art ? (v.startsWith("loc:") ? `${v.slice(4)}, all styles` : `${help.prints.find((p) => p.key === v)?.label} art`) : v === "none" ? "not needed" : v === "production" ? "production file" : v}` : ": not answered yet"}`} aria-label={`File ${k + 1}`}>{x.asIsUrl || x.cutUrl ? <img src={x.asIsUrl || x.cutUrl} alt="" /> : k + 1}</button>;
                 })}
               </span>
             </div>
