@@ -6442,6 +6442,19 @@ a.pdn-tag:hover{text-decoration:underline}
 .mf-ddm button:hover{background:var(--surface-2)}
 .mf-ddm button.on{color:var(--accent);font-weight:700}
 .mf-ddm button b{margin-left:auto;font-size:11px;color:var(--accent)}
+/* right-click an email (components/MailContextMenu.tsx, Oct 20) */
+.cxm-wrap{display:contents}
+.cxm{position:fixed;z-index:90;min-width:216px;max-width:min(320px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(20,29,43,.2);padding:5px;display:flex;flex-direction:column;font-size:13.5px}
+.cxm-i{display:flex;align-items:center;gap:9px;border:0;background:none;text-align:left;font:inherit;padding:6px 10px;border-radius:7px;cursor:pointer;color:var(--ink);white-space:nowrap}
+.cxm-i:hover:not(:disabled),.cxm-i:focus-visible,.cxm-i.on{background:var(--surface-2);outline:none}
+.cxm-i:disabled{color:var(--ink-3);cursor:default}
+.cxm-i.danger{color:var(--danger)}
+.cxm-ic{width:16px;height:16px;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.cxm-ic svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.cxm-l{flex:1;overflow:hidden;text-overflow:ellipsis}
+.cxm-h{color:var(--ink-3);font-size:11.5px;margin-left:10px}
+.cxm-more{width:14px;height:14px;fill:none;stroke:var(--ink-3);stroke-width:2}
+.cxm-sep{height:1px;background:var(--line);margin:4px 6px}
 .mf-load{padding:6px 10px;font-size:13px}
 
 /* the left menu: hidden to icons until you point at it (QuickBooks style); the pin keeps it open (ShopNav).

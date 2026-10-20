@@ -6,6 +6,7 @@ import MailSuggest from "@/components/MailSuggest";
 import { AppStartToggle } from "@/components/AppStart";
 import { MailZoomControl, mzCss, useMailZoom } from "@/components/MailZoom";
 import HoldMenu, { type HoldWhat } from "@/components/HoldMenu";
+import MailContextMenu, { type CtxItem } from "@/components/MailContextMenu";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -313,9 +314,13 @@ export default function InboxView({ mode }: { mode: Mode }) {
   const [autoBrief, setAutoBrief] = useState(true);
   const [autoOrder, setAutoOrder] = useState<string | null>(null);
   /** a step to start when the email opens (the press-and-hold menu, Oct 15): the Assistant listening, Reorder, or Reply */
-  const [autoGo, setAutoGo] = useState<{ id: string; what: "ai" | "reorder" | "reply"; n: number } | null>(null);
+  const [autoGo, setAutoGo] = useState<{ id: string; what: "ai" | "reorder" | "reply" | "forward"; n: number } | null>(null);
   /** the press-and-hold menu's conversation */
   const [holdG, setHoldG] = useState<InboxItem[] | null>(null);
+  /** the right-click menu's conversation and where (Oct 20, Nick: "right-click an email and it do things like Outlook") */
+  const [ctx, setCtx] = useState<{ g: InboxItem[]; x: number; y: number } | null>(null);
+  /** a touch just now (phones' press-and-hold is HoldMenu, not the right-click menu); the Menu key just now */
+  const touchAt = useRef(0), keyAt = useRef(0);
   const briefOn = mode === "mail" && view.kind === "inbox" && (open === "brief" || (autoBrief && !open && !q.trim() && bk === "all"));
   const olCur = tab === "outlook" && !briefOn ? olShown.find((i) => olKey(i) === open) || olShown[0] : undefined;
   const sel = tab === "outlook" ? (olCur?.activity_id ? rowByAct.get(olCur.activity_id) : undefined)
@@ -394,6 +399,30 @@ export default function InboxView({ mode }: { mode: Mode }) {
       try { await boxPost({ do: "move", path: "INBOX", uid: i.uid, to: "blackhole", confirmed: true }); setOl((l) => (l || []).filter((y) => y.id !== i.id)); if (g.some((y) => open === olKey(y))) setOpen(null); if (g.length > 1) await moveRest(i, "blackhole"); flash(MOVED.blackhole || "Black Hole."); }
       catch (e) { flash(e instanceof Error ? e.message : String(e)); }
     } else await moveGroup(g, w);
+  };
+  /** the right-click menu (components/MailContextMenu.tsx): only what this screen already does, nothing sent by itself */
+  const ctxItems = (g: InboxItem[]): CtxItem[] => {
+    const i = g[0], k = olKey(i), r = i.activity_id ? rowByAct.get(i.activity_id) : undefined, kept = k !== "ol:" + i.id;
+    const name = r ? who(r.x) : personName(i.from_name) || i.from_email || "";
+    const subj = (i.subject || "").replace(/^\s*((re|fw|fwd|aw|sv)\s*(\[\d+\])?\s*:\s*)+/i, "").trim();
+    const others = (folders || []).filter((f) => f.path !== "INBOX" && !/\\(Inbox|Drafts|Junk)/.test(f.special));
+    const bh = () => { if (r) { if (window.confirm(`${name} is a customer. Black Hole blocks their email from now on. Are you sure?`)) void holdPick(g, "blackhole!"); } else void moveGroup(g, "blackhole"); };
+    return [
+      { key: "open", label: "Open", icon: TbIcon.file, onPick: () => void holdPick(g, "open") },
+      { key: "reply", label: "Reply", icon: TbIcon.reply, onPick: () => void holdPick(g, "reply") },
+      // Forward is on customer email (kept in the portal); the other Inbox emails have Reply only
+      ...(kept ? [{ key: "fwd", label: "Forward", icon: TbIcon.forward, onPick: () => { pickRow(k); setAutoGo((p) => ({ id: k, what: "forward", n: (p?.n || 0) + 1 })); } }] : []),
+      "-",
+      { key: "archive", label: g.length > 1 ? "Archive conversation" : "Archive", icon: TbIcon.archive, onPick: () => void moveGroup(g, "archive") },
+      { key: "news", label: "Move to News", icon: TbIcon.news, onPick: () => void moveGroup(g, "news") },
+      { key: "move", label: "Move to folder", icon: TbIcon.move, sub: others.length ? others.map((f) => ({ key: "f:" + f.path, label: folderLabel(f), indent: f.depth, onPick: () => void moveGroup(g, f.path) })) : [{ key: "f:none", label: "Loading folders…", disabled: true }] },
+      { key: "bh", label: "Black Hole", icon: TbIcon.ban, danger: true, onPick: bh },
+      "-",
+      { key: "find", label: "Find related", icon: <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>, sub: [
+        { key: "f-convo", label: "Messages in this conversation", disabled: subj.length < 2, onPick: () => { setQ(subj); void runSearch(subj); } },
+        { key: "f-from", label: `Messages from ${name || "this sender"}`, disabled: !i.from_email, onPick: () => { setQ(name || i.from_email); void runSearch(name || i.from_email, [i.from_email.toLowerCase()]); } },
+      ] },
+    ];
   };
   const endSelect = () => { setSelMode(false); setChosen(new Set()); setBhAsk(0); };
   /** the selected conversations moved (Archive / News / Black Hole); `customers`: Black Hole the customers' too */
@@ -517,6 +546,8 @@ export default function InboxView({ mode }: { mode: Mode }) {
       {st && box?.enabled && settings && <EmailSettings st={st} onClose={() => setSettings(false)} onDone={(t) => { flash(t); load(); }} />}
       {box?.enabled && boxStuck && <div className="pv-err" style={{ marginBottom: 10 }}>{box.last_error}</div>}
       {msg && <div className="ibx2-toast" role="status">{msg}</div>}
+      {/* right-click an email (desktop; phones press and hold for HoldMenu) */}
+      {ctx && <MailContextMenu key={`${ctx.g[0].id}:${ctx.x},${ctx.y}`} at={ctx} items={ctxItems(ctx.g)} label={`Email from ${ctx.g[0].from_name || ctx.g[0].from_email || "unknown"}`} onClose={() => setCtx(null)} />}
       {afterSend && <AfterSend key={afterSend.msg + (afterSend.sent?.body.length || 0)} a={afterSend} onArchive={() => void afterArchive()} onClose={() => setAfterSend(null)} />}
 
       {/* phones (Oct 15, Nick: "make the email home page match the message page: folder and search up top, then the
@@ -658,7 +689,17 @@ export default function InboxView({ mode }: { mode: Mode }) {
                 return (
                   <div key={i.id} className={"ibx2-cv" + (g.length > 1 ? " multi" : "") + (openG && g.length > 1 ? " open" : "")}>
                   <SwipeRow onAct={(to) => moveGroup(g, to)} onHold={selMode ? undefined : () => setHoldG(g)}>
-                  <button data-id={k} type="button" className={"ibx2-item ol" + (selMode ? " selecting" + (chosen.has(i.id) ? " picked" : "") : "") + (openG && !selMode ? " on" : "") + (needsG ? " needs" : "") + (urgentG ? " urgent" : "") + (unreadG ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => (selMode ? setChosen((x) => { const n = new Set(x); if (n.has(i.id)) n.delete(i.id); else n.add(i.id); return n; }) : pickRow(openG && olCur ? olKey(olCur) : k))} onDoubleClick={() => !selMode && r && pickRow(k, true)} aria-expanded={g.length > 1 ? openG : undefined}>
+                  <button data-id={k} type="button" className={"ibx2-item ol" + (selMode ? " selecting" + (chosen.has(i.id) ? " picked" : "") : "") + (openG && !selMode ? " on" : "") + (needsG ? " needs" : "") + (urgentG ? " urgent" : "") + (unreadG ? " ol-unread" : "") + (!r ? " ol-plain" : "")} onClick={() => (selMode ? setChosen((x) => { const n = new Set(x); if (n.has(i.id)) n.delete(i.id); else n.add(i.id); return n; }) : pickRow(openG && olCur ? olKey(olCur) : k))} onDoubleClick={() => !selMode && r && pickRow(k, true)} aria-expanded={g.length > 1 ? openG : undefined}
+                    aria-haspopup="menu" onPointerDown={(e) => { if (e.pointerType === "touch") touchAt.current = Date.now(); }}
+                    onKeyDown={(e) => { if (selMode || !(e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) return; e.preventDefault(); keyAt.current = Date.now(); const b = e.currentTarget.getBoundingClientRect(); setCtx({ g, x: b.left + 24, y: b.top + Math.min(b.height, 40) }); }}
+                    onContextMenu={(e) => {
+                      // a touch is press-and-hold (HoldMenu); the Menu key already opened it; Select mode has its own bar
+                      if (selMode || Date.now() - touchAt.current < 1500 || (e.nativeEvent as PointerEvent).pointerType === "touch") { e.preventDefault(); return; }
+                      e.preventDefault();
+                      if (Date.now() - keyAt.current < 600) return;
+                      const b = e.currentTarget.getBoundingClientRect(), kb = !e.clientX && !e.clientY;
+                      setCtx({ g, x: kb ? b.left + 24 : e.clientX, y: kb ? b.top + Math.min(b.height, 40) : e.clientY });
+                    }}>
                     {/* Oct 15, Nick: bold + blue dot = unread, nothing else; what it is goes in colored tags */}
                     {selMode && <span className={"ibx2-chk" + (chosen.has(i.id) ? " on" : "")} aria-hidden>{chosen.has(i.id) && <svg viewBox="0 0 24 24"><path d="M6 12l4 4 8-8" /></svg>}</span>}
                     {unreadG && <span className="ibx2-dot" aria-label="Unread" />}
@@ -995,7 +1036,7 @@ function Splitter({ dir, value, min, max, onChange, invert, className, style, la
  * The email column and the Assistant column for one email. The email column is either the email (with the answer box
  * docked at the bottom) or, after Create order, the order being made from it; the Assistant stays beside it.
  */
-function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders, onSent, autoOrder, onAutoOrdered, autoGo, onAutoGone, convo }: { /** the press-and-hold menu: start with the Assistant listening, or Reorder */ autoGo?: "ai" | "reorder"; onAutoGone?: () => void; /** the Inbox emails in its conversation, shown at the top */ convo?: React.ReactNode; /** opened to make the order (from a searched conversation) */ autoOrder?: boolean; onAutoOrdered?: () => void; /** sent a reply to an email in my Inbox: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
+function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, thread, back, busy, setBusy, done, listOpen, toggleList, inOutlook, ccOnly, moveBar, onMove, folders, onSent, autoOrder, onAutoOrdered, autoGo, onAutoGone, convo }: { /** the press-and-hold menu: start with the Assistant listening, or Reorder; the right-click menu: Forward */ autoGo?: "ai" | "reorder" | "forward"; onAutoGone?: () => void; /** the Inbox emails in its conversation, shown at the top */ convo?: React.ReactNode; /** opened to make the order (from a searched conversation) */ autoOrder?: boolean; onAutoOrdered?: () => void; /** sent a reply to an email in my Inbox: ask archive or keep */ onSent?: (msg: string, sent: { to: string; subject: string; body: string; theirs?: string }) => void; /** it's in my Outlook Inbox: Archive archives it there */ inOutlook?: boolean; ccOnly?: boolean; /** Email: Archive, Black Hole, Later, Move to… */ moveBar?: React.ReactNode; /** phones: the same moves for the bottom bar */ onMove?: (to: string, label: string) => void; folders?: Folder[] | null; x: Act; who: string; reply?: Sug; quote?: Sug; needs: boolean; urgent: boolean; answered: boolean; focus: boolean; orders: Ord[]; thread: Act[]; back: () => void; busy: string; setBusy: (s: string) => void; /** next: it's handled, show the next email */ done: (msg: string, next?: boolean) => void; listOpen: boolean; toggleList: () => void }) {
   const draftSubject = reply?.draft?.subject || (x.subject?.toLowerCase().startsWith("re:") ? x.subject : `Re: ${x.subject || ""}`);
   // an order was made from this email: its confirmation ("Thanks for your order…") is the answer, ready to send
   const confirm0 = (x.meta?.reply_options?.options || [])[0] as Opt | undefined;
@@ -1051,6 +1092,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   useEffect(() => {
     if (!autoGo) return;
     if (autoGo === "reorder") startOrder({ told: "This is a reorder of a past job: find the job it repeats." });
+    else if (autoGo === "forward") { setView("mail"); setSide("mail"); setFwdOpen(true); }
     else { setListen((n) => n + 1); if (window.matchMedia("(max-width:1080px)").matches) setSide("ai"); else { setAiOpen(true); setPeek(true); setAiHidden(false); } }
     onAutoGone?.();
   }, [autoGo]); // eslint-disable-line react-hooks/exhaustive-deps
