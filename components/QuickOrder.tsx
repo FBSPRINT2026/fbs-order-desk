@@ -493,13 +493,9 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     void fetch("/api/production/guess", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files: old.map((f) => ({ path: f.path, name: f.name })) }) }).then((r) => r.json()).then((j: { guesses?: Record<string, { kind: string; why: string }> }) => setAiG(j.guesses || {})).catch(() => null);
   }, [old]);
   const aiKind = (path?: string) => { const g = path ? aiG[path] : undefined; return g && g.kind !== "?" ? g.kind : ""; };
-  const answer = (key: string, v: string) => {
-    assign(key, v);
-    // a mockup, production file or not needed: on to the next file (art stays, for where/width/background)
-    if (isPrintVal(v) || as[key] === v) return;
-    const list = items.filter((x) => x.where === "old" || x.where === "kept"), k = list.findIndex((x) => x.key === key);
-    if (k >= 0 && k < list.length - 1) setTimeout(() => setAt(k + 1), 250);
-  };
+  // no jumping ahead by itself (Oct 20, Nick: "when I clicked production file it immediately took me to the next
+  // screen… we need a Next file button on the bottom right"): a label and a note get typed after the answer
+  const answer = (key: string, v: string) => assign(key, v);
   // "Full Front, all styles" (Oct 20, Nick: "if you have just one artwork and multiple lines and products in Printavo,
   // that's going to be the same art for all the products… unless you had individual arts for each line"): one answer
   // gives a file to every print at that location ("loc:<location>"); a style's own answer still wins for that style
@@ -648,7 +644,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           <button type="button" className="ap-link" onClick={() => setProdOpen((x) => !x)}>Hand to production</button>
           <button type="button" className="ap-link" onClick={() => finish("skip")}>Skip for now</button>
         </span>
-        <button type="button" className="btn primary" disabled={!given.length || unanswered > 0} onClick={() => finish("skip")}>{unanswered > 0 ? `Say what each file is (${unanswered} left)` : !given.length ? "Pick the art" : given.length === help.prints.length ? (given.every((p) => as[`K${p.key}`] === p.key) ? "Keep going" : "Use it & make the mockup") : `Keep going (${help.prints.length - given.length} without art)`}</button>
+        {(() => { const n = items.filter((x) => x.where === "old" || x.where === "kept").length, i = Math.min(at, Math.max(0, n - 1)); return n > 1 && i < n - 1 ? <button type="button" className="btn primary" onClick={() => setAt(i + 1)}>Next file ({i + 2} of {n}) ›</button> : null; })() ?? <button type="button" className="btn primary" disabled={!given.length || unanswered > 0} onClick={() => finish("skip")}>{unanswered > 0 ? `Say what each file is (${unanswered} left)` : !given.length ? "Pick the art" : given.length === help.prints.length ? (given.every((p) => as[`K${p.key}`] === p.key) ? "Keep going" : "Use it & make the mockup") : `Keep going (${help.prints.length - given.length} without art)`}</button>
       </div>
     </div>
   );
