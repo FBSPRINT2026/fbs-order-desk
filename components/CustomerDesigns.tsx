@@ -212,9 +212,22 @@ function ThumbPicker({ d, customerId, onSet, onClose }: { d: CatalogDesign; cust
     })();
     return () => { live = false; };
   }, [urls]);
-  async function save(jpg: string, key: string) {
+  // their website (Oct 20, Nick: "try to find from customer site"): a search of the site's products, or a pasted link
+  const [web, setWeb] = useState<null | { busy?: boolean; site?: string; error?: string; products: { title: string; url: string; images: string[] }[] }>(null);
+  const [link, setLink] = useState(""), [siteIn, setSiteIn] = useState("");
+  async function findWeb(url?: string) {
+    setWeb((w) => ({ products: w?.products || [], site: w?.site, busy: true }));
+    const qs = new URLSearchParams({ customer: customerId, ...(url ? { url } : { q: d.name }) });
+    const j = await fetch(`/api/designs/site?${qs}`).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
+    setWeb({ site: j.site || "", error: j.error, products: j.products || [] });
+  }
+  async function saveSite() {
+    const j = await fetch("/api/designs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: customerId, op: "site", site: siteIn }) }).then((x) => x.json()).catch(() => null);
+    if (j?.ok && j.site) void findWeb(); else setErr("That website address doesn't look right.");
+  }
+  async function save(jpg: string, key: string, src?: string) {
     setSaving(key); setErr("");
-    const r = await fetch("/api/designs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: customerId, op: "cover", key: d.key, data: jpg }) }).then((x) => x.json()).catch(() => null) as { ok?: boolean; url?: string; error?: string } | null;
+    const r = await fetch("/api/designs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: customerId, op: "cover", key: d.key, ...(src ? { src } : { data: jpg }) }) }).then((x) => x.json()).catch(() => null) as { ok?: boolean; url?: string; error?: string } | null;
     setSaving("");
     if (!r?.ok) return setErr(r?.error || "That didn't save.");
     onSet(r.url || jpg);
@@ -234,10 +247,33 @@ function ThumbPicker({ d, customerId, onSet, onClose }: { d: CatalogDesign; cust
       <div className="dc-tp-h">
         <b>Pick the thumbnail</b>
         <span className="faint">{left > 0 ? `Loading ${left} more picture${left === 1 ? "" : "s"} from the orders…` : `${pics.length} picture${pics.length === 1 ? "" : "s"} from the orders`}</span>
+        <button type="button" className="btn sm" disabled={web?.busy} onClick={() => void findWeb()} title="Search the customer's own website for this design's pictures">{web?.busy ? "Searching their site…" : "Find on their website"}</button>
         <label className="btn sm">Upload a picture<input type="file" accept="image/*,application/pdf" hidden onChange={(e) => void upload(e.target.files?.[0])} /></label>
         <button type="button" className="btn sm ghost" onClick={onClose}>Close</button>
       </div>
       {err && <div className="err">{err}</div>}
+      {web && !web.busy && (
+        <div className="dc-tp-web">
+          {web.error && <div className="faint">{web.error}</div>}
+          {web.site === "" && <div className="dc-tp-row"><input placeholder="Their website, e.g. dearheartdesigns.com" value={siteIn} onChange={(e) => setSiteIn(e.target.value)} /><button type="button" className="btn sm" disabled={!siteIn.trim()} onClick={() => void saveSite()}>Save and search</button></div>}
+          {web.products.map((p) => (
+            <div key={p.url} className="dc-tp-prod">
+              <a href={p.url} target="_blank" rel="noreferrer" className="dc-tp-pt">{p.title} ›</a>
+              <div className="dc-tp-grid">
+                {p.images.map((u) => (
+                  <button key={u} type="button" className="dc-tp-it" disabled={!!saving} onClick={() => void save("", u, u)} title="Use this as the thumbnail">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={u.replace(/([?&])width=\d+/, "$1width=400")} alt="" loading="lazy" />
+                    <span>{saving === u ? "Saving…" : "Use this"}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="dc-tp-row"><input placeholder="Or paste a link to the product page" value={link} onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && link.trim()) void findWeb(link.trim()); }} /><button type="button" className="btn sm" disabled={!link.trim()} onClick={() => void findWeb(link.trim())}>Get pictures</button></div>
+        </div>
+      )}
+      {(pics.length > 0 || left > 0 || urls.length === 0) && <div className="dc-tp-sub faint">From their orders</div>}
       <div className="dc-tp-grid">
         {shown.map((p) => (
           <button key={p.url} type="button" className={"dc-tp-it" + (p.form ? " form" : "")} disabled={!!saving} onClick={() => void save(p.jpg, p.url)} title={p.form ? "Looks like an order form" : "Use this as the thumbnail"}>

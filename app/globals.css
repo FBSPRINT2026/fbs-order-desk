@@ -10069,3 +10069,9 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .dc-tp-it:hover{border-color:var(--brand,#1F6FD1)}
 .dc-tp-it.form{opacity:.55}
 .dc-tp-it.form span{color:var(--ink-3);font-weight:400}
+.dc-tp-web{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.dc-tp-prod{display:flex;flex-direction:column;gap:6px}
+.dc-tp-pt{font-weight:600;font-size:13px}
+.dc-tp-row{display:flex;gap:8px;flex-wrap:wrap}
+.dc-tp-row input{flex:1 1 240px;min-width:0;padding:6px 9px;border:1px solid var(--line);border-radius:8px;font:inherit}
+.dc-tp-sub{font-size:12px;font-weight:700;margin-bottom:6px}
