@@ -342,9 +342,11 @@ export async function getOutlookInbox() {
     const { acct: a } = await mailboxToRead(admin, v);
     if (!a || !a.enabled) return { ok: true as const, items: [] as InboxItem[], connected: false };
     // drop what SaneBox / Outlook already moved out (EWS, under a second); never holds the list up for long
-    { const { pruneInboxEws, relinkInboxLeads } = await import("@/lib/mail/mirror");
+    { const { addInboxEws, pruneInboxEws, relinkInboxLeads } = await import("@/lib/mail/mirror");
       await Promise.race([Promise.all([
         pruneInboxEws(admin, a).catch((e) => console.warn("pruneInboxEws", e instanceof Error ? e.message : e)),
+        // new Inbox email straight from Exchange, in case the regular check can't read the Inbox (Oct 20)
+        addInboxEws(admin, a).catch((e) => console.warn("addInboxEws", e instanceof Error ? e.message : e)),
         // someone who wasn't a customer when they wrote, and is now: their emails are linked (no "New sender")
         relinkInboxLeads(admin, a).catch((e) => console.warn("relinkInboxLeads", e instanceof Error ? e.message : e)),
       ]), new Promise((r) => setTimeout(r, 4000))]); }

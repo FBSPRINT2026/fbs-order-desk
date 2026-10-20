@@ -144,6 +144,42 @@ export const ARCHIVED = "Archived in Outlook";
  * EWS works on, what's in the Inbox is read in under a second each time the list loads, and anything no longer there
  * is gone from the list. Only takes away (new mail still comes in with the mail check); at most every 15 s a mailbox.
  */
+const ewsAdded = new Map<string, number>();
+/**
+ * New Inbox email through Exchange's own web service, for when the IMAP read of the Inbox fails (Oct 20: Nick's IMAP
+ * "search all" came back empty from 5:45 AM on, so nothing new reached the Email page). Reads the newest 50 in the
+ * Inbox and adds the ones the list doesn't have; read / flagged follow Outlook. Never takes anything off (pruneInboxEws
+ * does that, with its own checks). At most every 30 seconds per mailbox.
+ */
+export async function addInboxEws(admin: SupabaseClient, acct: MailAccount) {
+  const k = acct.id;
+  if (Date.now() - (ewsAdded.get(k) || 0) < 30000) return 0;
+  ewsAdded.set(k, Date.now());
+  const { ewsReady, ewsList } = await import("./ewsBox");
+  if (!(await ewsReady(admin, acct))) return 0;
+  const { rows } = await ewsList(admin, acct, lc(acct.email), "INBOX");
+  const ids = [...new Set(rows.map((r) => r.messageId).filter(Boolean))];
+  if (!ids.length) return 0;
+  const { data: have } = await admin.from("mail_inbox").select("id, message_id, gone_at, unread, flagged").eq("account_id", acct.id).in("message_id", ids);
+  const byMsg = new Map<string, { id: string; gone_at: string | null; unread: boolean; flagged: boolean }[]>();
+  for (const h of (have || []) as { id: string; message_id: string; gone_at: string | null; unread: boolean; flagged: boolean }[]) (byMsg.get(h.message_id) || byMsg.set(h.message_id, []).get(h.message_id)!).push(h);
+  const { data: acts } = await admin.from("activities").select("id, external_id").eq("kind", "email").in("external_id", ids.flatMap((x) => [x, `<${x}>`]));
+  const actOf = new Map(((acts || []) as { id: string; external_id: string }[]).map((a) => [mid(a.external_id), a.id]));
+  let added = 0;
+  for (const r of rows) {
+    if (!r.messageId) continue;
+    const h = byMsg.get(r.messageId);
+    const live = h?.find((x) => !x.gone_at);
+    if (live) { if (live.unread !== !r.seen || live.flagged !== r.flagged) await admin.from("mail_inbox").update({ unread: !r.seen, flagged: r.flagged }).eq("id", live.id); continue; }
+    if (h?.length) continue; // was in the list and taken off (archived): the IMAP mirror decides about moved-back mail
+    const { error } = await admin.from("mail_inbox").insert({
+      account_id: acct.id, uid: r.uid, uidvalidity: 0, message_id: r.messageId, from_email: r.from, from_name: r.fromName,
+      subject: (r.subject || "").slice(0, 300), received_at: r.date || null, cc_only: false, unread: !r.seen, flagged: !!r.flagged, has_attachments: false, activity_id: actOf.get(r.messageId) || null,
+    });
+    if (!error) added++;
+  }
+  return added;
+}
 const pruned = new Map<string, number>();
 export async function pruneInboxEws(admin: SupabaseClient, acct: MailAccount, force = false) {
   const k = acct.id;
