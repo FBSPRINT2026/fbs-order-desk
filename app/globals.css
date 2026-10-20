@@ -10240,3 +10240,5 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .sug-tg:hover{background:var(--surface-2);color:var(--ink)}
 .sug-tg.on{color:var(--accent)}
 .sug-tg.on svg{transform:rotate(180deg)}
+.arc-hint{font-size:12px;color:var(--ink-3);font-style:italic}
+.arc-hint.ok{font-style:normal;color:var(--ok,#16794c)}

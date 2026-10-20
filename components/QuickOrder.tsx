@@ -31,8 +31,10 @@ import type { OrderStart } from "@/components/OrderStartPick";
  */
 type Loaded = { files?: { name: string; role?: string }[]; emails?: number; draft: EODraft | null; past: PastJob[]; created: string | null; customer: { id: string; price_type: string } | null; fees?: { screen: number | null; remake: number | null } };
 type Made = { id: string; number: number; label: string; pcs: number; url: string; kind: "new" | "reorder"; did: string[]; ask: string[]; mockup: boolean };
-type HelpPick = { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
-type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; prints: { key: string; label: string; colors: number }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (p: Record<string, HelpPick>) => void };
+type HelpPick = { kind: "keep" } | { kind: "file"; file: File; name: string } | { kind: "upload"; file: File } | { kind: "design"; id: string; name: string } | { kind: "production"; note: string } | { kind: "skip" };
+type Help = { job: string; customerId: string; /** the old Printavo job (archived id): all its files are listed */ archivedId: string; prints: { key: string; label: string; colors: number; /** art already pulled for it */ design?: string }[]; /** what went wrong bringing it in */ why: string[]; files: { path: string; name: string }[]; resolve: (a: HelpAns) => void };
+/** each print's art, and the old job's files for the new order's Production files (null: leave them as they were) */
+type HelpAns = { picks: Record<string, HelpPick>; files: { path: string; name: string; role: "art" | "mockup" | "production" }[] | null; skipped?: number };
 type ConfirmItem = { gi: number; ii: number; design: string; location: string; size: string; colors: number };
 type ConfirmAns = { gi: number; ii: number; location: string; size: string }[];
 type Confirm = { job: string; items: ConfirmItem[]; resolve: (a: ConfirmAns) => void };
@@ -164,26 +166,32 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         did.push(a.location === "none" ? "You said the art it found isn't this print's" : `You confirmed the art: ${a.location}${a.size ? `, ${a.size}" wide` : ""}`);
       }
     }
-    // a print still without art: stop and ask (Oct 20, Nick: "give us some sort of error… I tried to bring in the art
-    // but I couldn't do it… and then some sort of help me out. Every time we create an order from a Printavo invoice
-    // there's probably going to be some issue we have to walk through"). Pick one of the old job's files, upload the
-    // art, or make the order without it for now.
-    const missing = d.kind === "reorder" && g.customer?.id ? d.groups.flatMap((grp, gi) => grp.imprints.map((im, ii) => ({ gi, ii, im, grp }))).filter(({ im }) => !im.design_id) : [];
-    if (missing.length) {
-      note("Couldn't tell which file is the art: asking you");
-      const files = [...new Map(d.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])]).map((f) => [f.path, f])).values()];
-      const prints = missing.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1 }));
-      const picks = await waitFor<Record<string, HelpPick>>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: d!.reorderOf?.startsWith("a:") ? d!.reorderOf.slice(2) : "", prints, files, why, resolve }));
+    // the Printavo Art Resolution Center. An old Printavo job: always, to say what each of its files is (Oct 20, Nick:
+    // "once you're recreating a Printavo and you pull art, whether it's production files or whatever, you should ask
+    // me what they are… one is barcodes… that should go in our production files… there's no rhyme and reason to how
+    // it's done in Printavo"). Any reorder: when a print still has no art ("give us some sort of error… help me out").
+    const isPv = d.kind === "reorder" && !!d.reorderOf?.startsWith("a:");
+    const all = d.groups.flatMap((grp, gi) => grp.imprints.map((im, ii) => ({ gi, ii, im, grp })));
+    const missing = d.kind === "reorder" && g.customer?.id ? all.filter(({ im }) => !im.design_id) : [];
+    const targets = isPv && g.customer?.id ? all : missing;
+    const replaced: string[] = [];
+    const files = [...new Map(d.groups.flatMap((x) => [...(x.pvRef || []), ...(x.pvArt || [])]).map((f) => [f.path, f])).values()];
+    if (targets.length && (missing.length || (isPv && files.length))) {
+      note(missing.length ? "Couldn't tell which file is the art: asking you" : "Asking you what each of the old job's files is");
+      const prints = targets.map(({ gi, ii, im, grp }) => ({ key: `${gi}:${ii}`, label: `${im.location}${d!.groups.length > 1 ? ` (${grp.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")).slice(0, 2).join(", ")})` : ""}`, colors: im.colors || 1, ...(im.design_id ? { design: im.design_id } : {}) }));
+      const ans = await waitFor<HelpAns>((resolve) => setHelp({ customerId: g.customer!.id, job: jobLabel || "the old job", archivedId: isPv ? d!.reorderOf!.slice(2) : "", prints, files, why, resolve }));
       setHelp(null);
       const made = new Map<File, string>();
-      for (const { gi, ii, im } of missing) {
-        const picked = picks[`${gi}:${ii}`] || { kind: "skip" as const };
+      for (const { gi, ii, im } of targets) {
+        const picked = ans.picks[`${gi}:${ii}`] || (im.design_id ? { kind: "keep" as const } : { kind: "skip" as const });
         const setIm = (patch: Partial<typeof im>, note2: string) => { d = { ...d!, groups: d!.groups.map((x, xi) => (xi !== gi ? x : { ...x, imprints: x.imprints.map((y, yi) => (yi === ii ? { ...y, ...patch, notes: [y.notes, note2].filter(Boolean).join(". ").slice(0, 300) } : y)) })) }; };
-        if (picked.kind === "skip") { did.push(`${im.location}: made without art for now (add it on the order: Upload logo)`); continue; }
+        if (picked.kind === "keep") continue;
+        if (im.design_id) replaced.push(im.design_id);
+        if (picked.kind === "skip") { if (im.design_id) setIm({ design_id: undefined as unknown as string }, ""); did.push(`${im.location}: made without art for now (add it on the order: Upload logo)`); continue; }
         if (picked.kind === "design") { setIm({ design_id: picked.id }, `Art: their logo ${picked.name}`); did.push(`${im.location}: their logo ${picked.name} (already on file, nothing new made)`); continue; }
         if (picked.kind === "production") {
           handOff.push({ title: `Find the art: ${jobLabel || "reorder"} · ${im.location}`, notes: [`Reorder of ${jobLabel}. The art couldn't be brought in from Printavo.`, ...why, picked.note ? `Note: ${picked.note}` : ""].filter(Boolean).join("\n") });
-          setIm({}, "ART NEEDED: handed to production to find the file");
+          setIm({ design_id: undefined as unknown as string }, "ART NEEDED: handed to production to find the file");
           did.push(`${im.location}: handed to production to find the art (a to-do on their My Day)`);
           continue;
         }
@@ -203,6 +211,14 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
           did.push(`${im.location}: art ${picked.kind === "upload" ? "uploaded by you" : `from ${picked.name}`}`);
         } catch (e) { if (e instanceof Cancelled) throw e; did.push(`${im.location}: the art couldn't be saved (${e instanceof Error ? e.message : String(e)}): add it on the order`); }
       }
+      // the old job's files go in the new order's Production files only as you said (art, mockup, production file);
+      // "Not needed" ones stay out
+      if (ans.files) {
+        d = { ...d, groups: d.groups.map((x, xi) => ({ ...x, pvRef: [], pvArt: xi === 0 ? ans.files!.map((f) => ({ path: f.path, name: f.name })) : [] })) };
+        const kinds = { art: "art", mockup: "mockup", production: "production file" } as const;
+        if (ans.files.length) did.push(`In Production files: ${ans.files.map((f) => `${f.name} (${kinds[f.role]})`).join(", ")}`);
+        if (ans.skipped) did.push(`Left out (not needed): ${ans.skipped} file${ans.skipped === 1 ? "" : "s"}`);
+      }
     }
     guard();
     setCommitting(true);
@@ -211,8 +227,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: d, status: "quote" }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     if (!r?.ok || !j.id) { setCommitting(false); throw new Error(j.error || "Couldn't create the order."); }
-    // its logos are the order's now
+    // its logos are the order's now; art you replaced in the Resolution Center is taken off (if on no order)
     made0.current = new Set();
+    if (replaced.length) void discardDraftArt(replaced).catch(() => null);
     await attachFilms(j.id, films);
     for (const h of handOff) { const x = await handOffArt(j.id, `${h.title} (#${j.number})`, h.notes).catch(() => null); if (x && !x.ok) did.push(`The to-do for production couldn't be made: ${x.error}`); }
     let url = `/shop/orders/${j.id}`, mockup = false;
@@ -298,7 +315,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
  * off (a checkbox per file), then the mockup is made. Not there? Their emails and logos, the film folder, an upload,
  * production, or without art for now; or Cancel reorder (nothing saved).
  */
-type Item = { key: string; where: "old" | "else"; tag: string; name: string; title?: string; cutUrl: string; asIsUrl: string; canCut: boolean; ready: boolean; pick: (bg: boolean) => HelpPick | null };
+type Item = { key: string; where: "old" | "kept" | "else"; /** the print it can only be (art already pulled) */ only?: string; path?: string; hint?: string; tag: string; name: string; title?: string; cutUrl: string; asIsUrl: string; canCut: boolean; ready: boolean; pick: (bg: boolean) => HelpPick | null };
 type Drawn = { cut: Blob | null; cutUrl: string; asIs: Blob | null; asIsUrl: string; raw: Blob | null };
 async function drawFile(url: string, name: string, type: string): Promise<Drawn | null> {
   const r = await fetch(url); if (!r.ok) return null;
@@ -311,6 +328,8 @@ async function drawFile(url: string, name: string, type: string): Promise<Drawn 
   const cut = await new Promise<Blob | null>((res) => trimToArt(c).toBlob(res, "image/png"));
   return { cut, cutUrl: cut ? URL.createObjectURL(cut) : "", asIs, asIsUrl: asIs ? URL.createObjectURL(asIs) : "", raw: b };
 }
+/** a first guess from the name, shown under the file (Printavo files are named any old way: Nick still says what it is) */
+const hintOf = (n: string) => (/barcode|label|upc|sku/i.test(n) ? "Looks like barcode labels" : /mock/i.test(n) ? "Looks like a mockup" : /film|sep|separation/i.test(n) ? "Looks like film or separations" : /proof/i.test(n) ? "Looks like a proof" : "");
 const png = (b: Blob, name: string) => new File([b], `${name.replace(/\.[^.]+$/, "")}.png`, { type: "image/png" });
 
 function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
@@ -328,6 +347,22 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   const [prodOpen, setProdOpen] = useState(false), [prodNote, setProdNote] = useState("");
   const [say, setSay] = useState(""), [thinking, setThinking] = useState(false), [aiSaid, setAiSaid] = useState("");
   const upRef = useRef<HTMLInputElement | null>(null);
+  // art already pulled for a print: shown as its own card, already given to that print
+  const [kept, setKept] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const ds = help.prints.filter((p) => p.design);
+    if (!ds.length) return;
+    setAs((a) => ({ ...Object.fromEntries(ds.map((p) => [`K${p.key}`, p.key])), ...a }));
+    let live = true;
+    (async () => {
+      const sb = createClient();
+      const { data } = await sb.from("designs").select("id, preview_path, file_path").in("id", ds.map((p) => p.design!));
+      const paths = (data || []).map((x) => ({ id: x.id as string, p: (x.preview_path || x.file_path) as string })).filter((x) => x.p);
+      const { data: sg } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths.map((x) => x.p), 1800) : { data: [] };
+      if (live) setKept(Object.fromEntries(paths.map((x, i) => [x.id, sg?.[i]?.signedUrl || ""])));
+    })();
+    return () => { live = false; };
+  }, [help]);
 
   useEffect(() => {
     let live = true;
@@ -365,7 +400,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
     return d.raw instanceof File ? { kind: "upload", file: d.raw } : null;
   };
   const items: Item[] = [
-    ...(old || []).map((f, i) => ({ key: `O${i}`, where: "old" as const, tag: f.name, name: f.name, cutUrl: f.d?.cutUrl || "", asIsUrl: f.d?.asIsUrl || "", canCut: !!f.d?.cut, ready: f.d !== undefined, pick: (bg: boolean) => fromDrawn(f.d, f.name, bg, `${f.name} on ${help.job}`) })),
+    ...help.prints.filter((p) => p.design).map((p) => ({ key: `K${p.key}`, where: "kept" as const, only: p.key, tag: `Pulled for the ${p.label}`, name: "Art pulled from the old job", cutUrl: kept[p.design!] || "", asIsUrl: kept[p.design!] || "", canCut: false, ready: true, pick: () => ({ kind: "keep" as const }) })),
+    ...(old || []).map((f, i) => ({ key: `O${i}`, where: "old" as const, path: f.path, hint: hintOf(f.name), tag: f.name, name: f.name, cutUrl: f.d?.cutUrl || "", asIsUrl: f.d?.asIsUrl || "", canCut: !!f.d?.cut, ready: f.d !== undefined, pick: (bg: boolean) => fromDrawn(f.d, f.name, bg, `${f.name} on ${help.job}`) })),
     ...ups.map((u, i) => ({ key: `U${i}`, where: "else" as const, tag: `Uploaded · ${u.file.name}`, name: u.file.name, cutUrl: u.url, asIsUrl: u.url, canCut: false, ready: true, pick: () => ({ kind: "upload" as const, file: u.file }) })),
     ...pieces.map((p, i) => ({ key: `M${i}`, where: "else" as const, tag: `Film · ${p.size}`, name: p.name, cutUrl: p.url, asIsUrl: p.url, canCut: false, ready: true, pick: () => ({ kind: "file" as const, file: p.file, name: `the film ${p.name}` }) })),
     ...(found || []).map((f, i) => ({ key: `E${i}`, where: "else" as const, tag: f.source === "library" ? `Their logo · ${f.name}` : `Email ${f.date.slice(0, 7)} · ${f.name}`, title: `${f.label} · ${f.date}`, name: f.name,
@@ -381,6 +417,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
   });
   const artOf = (pk: string) => items.find((it) => as[it.key] === pk);
   const given = help.prints.filter((p) => artOf(p.key));
+  const olds0 = items.filter((x) => x.where === "old");
+  const unanswered = olds0.filter((x) => !as[x.key]).length;
   const finish = (rest: "skip" | "production") => {
     const out: Record<string, HelpPick> = {};
     for (const p of help.prints) {
@@ -388,7 +426,10 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
       const pk = it ? it.pick(bgOff[it.key] ?? it.canCut) : null;
       out[p.key] = pk || (rest === "production" ? { kind: "production", note: prodNote.trim() } : { kind: "skip" });
     }
-    help.resolve(out);
+    // the old job's files for the new order's Production files: art, mockups and production files (one not answered
+    // stays in, as before); "Not needed" ones out
+    const files = old === null ? null : olds0.filter((x) => as[x.key] !== "none").map((x) => ({ path: x.path!, name: x.name, role: (as[x.key] === "mockup" ? "mockup" : as[x.key] === "production" || !as[x.key] ? "production" : "art") as "art" | "mockup" | "production" }));
+    help.resolve({ picks: out, files, skipped: olds0.filter((x) => as[x.key] === "none").length });
   };
   async function searchFilm(q: string) {
     setElseOpen(true); setFilms({ busy: true, list: [] });
@@ -418,21 +459,24 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
         <span className={"arc-pic" + (bg && it.canCut ? " clear" : "")}>{pic ? <img src={pic} alt="" /> : <span className="faint">{it.ready ? (it.name.split(".").pop() || "file").toUpperCase() : "Opening…"}</span>}</span>
         <span className="arc-name" title={it.title || it.name}>{it.tag}</span>
         <div className="arc-chips" role="radiogroup" aria-label={`What ${it.name} is`}>
-          {help.prints.map((p) => <button key={p.key} type="button" role="radio" aria-checked={v === p.key} className={"chip" + (v === p.key ? " on" : "")} disabled={!it.ready} onClick={() => assign(it.key, p.key)}>{p.label} art</button>)}
+          {help.prints.filter((p) => !it.only || p.key === it.only).map((p) => <button key={p.key} type="button" role="radio" aria-checked={v === p.key} className={"chip" + (v === p.key ? " on" : "")} disabled={!it.ready} onClick={() => assign(it.key, p.key)}>{it.only ? `Use for the ${p.label}` : `${p.label} art`}</button>)}
           {it.where === "old" && <button type="button" role="radio" aria-checked={v === "mockup"} className={"chip" + (v === "mockup" ? " on" : "")} onClick={() => assign(it.key, "mockup")}>Mockup</button>}
-          <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => assign(it.key, "none")}>Not needed</button>
+          {it.where === "old" && <button type="button" role="radio" aria-checked={v === "production"} className={"chip" + (v === "production" ? " on" : "")} onClick={() => assign(it.key, "production")} title="Goes in this order's Production files (barcodes, labels, film, separations…)">Production file</button>}
+          {!it.only && <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => assign(it.key, "none")}>Not needed</button>}
         </div>
+        {it.hint && !v && <span className="arc-hint">{it.hint}?</span>}
+        {it.where === "old" && v && v !== "none" && <span className="arc-hint ok">{v === "mockup" ? "Kept in Production files as the old mockup" : v === "production" ? "Goes in this order's Production files" : "The art; the original also goes in Production files"}</span>}
         {isArt && it.canCut && <label className="arc-bg"><input type="checkbox" checked={bg} onChange={(e) => setBgOff((b) => ({ ...b, [it.key]: e.target.checked }))} /> Remove background</label>}
       </div>
     );
   };
-  const olds = items.filter((x) => x.where === "old"), elses = items.filter((x) => x.where === "else");
+  const olds = items.filter((x) => x.where === "old" || x.where === "kept"), elses = items.filter((x) => x.where === "else");
   const opening = old === null || (old || []).some((f) => f.d === undefined);
-  const need = help.prints.map((p) => `${p.label}${p.colors > 1 ? ` (${p.colors} colors)` : ""}`).join(", ");
+  const need = help.prints.filter((p) => !p.design).map((p) => `${p.label}${p.colors > 1 ? ` (${p.colors} colors)` : ""}`).join(", ");
   return (
     <div className="ap arc" role="group" aria-label="What are these files">
-      <p className="ap-q">{old === null ? `Opening ${help.job}…` : olds.length ? `I found ${olds.length === 1 ? "this file" : `these ${olds.length} files`} on ${help.job}. What ${olds.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}</p>
-      <p className="ap-why">This reorder needs art for: <b>{need}</b>. Pick which file is the art; I&apos;ll take its background off and make the mockup.</p>
+      <p className="ap-q">{old === null ? `Opening ${help.job}…` : olds0.length ? `I found ${olds0.length === 1 ? "this file" : `these ${olds0.length} files`} on ${help.job}. What ${olds0.length === 1 ? "is it" : "are they"}?` : `There are no files on ${help.job}. Where's the art?`}</p>
+      <p className="ap-why">{need ? <>This reorder needs art for: <b>{need}</b>. Pick which file is the art; I&apos;ll take its background off and make the mockup. </> : <>I pulled the art already (first card). </>}Say what every file is: the ones you keep go in this order&apos;s Production files.</p>
       <div className="arc-grid">
         {olds.map(Card)}
         {opening && <span className="ap-wait">Opening the old job&apos;s files…</span>}
@@ -467,7 +511,7 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
           <button type="button" className="ap-link" onClick={() => setProdOpen((x) => !x)}>Hand to production</button>
           <button type="button" className="ap-link" onClick={() => finish("skip")}>Skip for now</button>
         </span>
-        <button type="button" className="btn primary" disabled={!given.length} onClick={() => finish("skip")}>{given.length === help.prints.length ? "Use it & make the mockup" : given.length ? `Keep going (${help.prints.length - given.length} without art)` : "Pick the art"}</button>
+        <button type="button" className="btn primary" disabled={!given.length || unanswered > 0} onClick={() => finish("skip")}>{unanswered > 0 ? `Say what each file is (${unanswered} left)` : !given.length ? "Pick the art" : given.length === help.prints.length ? (given.every((p) => as[`K${p.key}`] === p.key) ? "Keep going" : "Use it & make the mockup") : `Keep going (${help.prints.length - given.length} without art)`}</button>
       </div>
     </div>
   );
