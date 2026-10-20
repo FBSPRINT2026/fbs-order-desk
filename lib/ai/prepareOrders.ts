@@ -21,7 +21,7 @@ export async function prepareOrders(admin: SupabaseClient, deadline: number): Pr
   if (!st.ready) return { off: st.reason };
   const since = new Date(Date.now() - 4 * 86400_000).toISOString();
   const { data } = await admin.from("activities").select("id, customer_id, occurred_at, order_id, meta").eq("kind", "email").eq("direction", "in")
-    .not("customer_id", "is", null).is("order_id", null).gte("occurred_at", since).in("meta->triage->>intent", ["new_order", "reorder"]).order("occurred_at", { ascending: false }).limit(8);
+    .not("customer_id", "is", null).is("order_id", null).gte("occurred_at", since).in("meta->triage->>intent", ["new_order", "reorder"]).order("occurred_at", { ascending: false }).limit(30);
   const out: string[] = [];
   const doneConvos = new Set<string>();
   for (const a of (data || []) as A[]) {
