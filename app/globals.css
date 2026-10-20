@@ -10234,3 +10234,9 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .qo.wide{width:min(960px,100%)}
 .qo>h3{padding-right:34px}
 .arc-chips .chip.on{background:var(--brand,#1F6FD1);border-color:var(--brand,#1F6FD1);color:#fff}
+/* inbox search: suggestions open from a small down arrow, never by themselves (Oct 20) */
+.sug-tg{flex:none;display:grid;place-items:center;width:28px;height:28px;border:0;border-radius:7px;background:none;color:var(--ink-3);cursor:pointer;padding:0}
+.sug-tg svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+.sug-tg:hover{background:var(--surface-2);color:var(--ink)}
+.sug-tg.on{color:var(--accent)}
+.sug-tg.on svg{transform:rotate(180deg)}
