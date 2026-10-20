@@ -1315,7 +1315,8 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             {(x.meta?.attachments || []).length > 0 && <div className="ibx2-files">{x.meta!.attachments!.map((f) => <button key={f.path} type="button" onClick={() => urlFor(f.path)}>📎 {f.name}</button>)}</div>}
             <CanvaGet x={x} busy={busy} run={run} />
             {/* the whole conversation underneath, newest first, our replies too (Oct 12, Nick) */}
-            {thread.length > 0 && <details className="ibx2-thread" open>
+            {/* off with conversation grouping (Oct 20, Nick: "it should just be her email, just like Outlook has it") */}
+            {CONVERSATIONS && thread.length > 0 && <details className="ibx2-thread" open>
               <summary>The rest of this conversation ({thread.length})</summary>
               {[...thread].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)).map((t) => <div key={t.id} className={"ibx-t " + t.direction + (t.occurred_at > x.occurred_at ? " newer" : "")}><b>{t.direction === "out" ? "You" : personName(t.meta?.from_name) || t.from_email}</b> · {new Date(t.occurred_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}{t.occurred_at > x.occurred_at && <span className="ibx-newer">Newer</span>}<div>{plainNew(t.body)}</div></div>)}
             </details>}
