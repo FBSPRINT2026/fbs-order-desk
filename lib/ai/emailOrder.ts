@@ -365,6 +365,7 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   const staffSays = [
     o.part ? `This conversation holds ${o.part.of} separate orders, one per design. THIS order is only "${o.part.label}": use only its files (listed above) and only what the emails say about it.${o.part.pieces ? ` Its size sheets total ${o.part.pieces} pieces.` : ""} When several size sheets (e.g. one for the store and one for their warehouse) list the same style, color and size, add the quantities together into one garment line.${o.part.changes ? ` What's different from the past job: ${o.part.changes}` : " It's an exact reprint of the past job: same prints, inks and placement."}` : "",
     picked ? `Staff confirmed: this is a reorder of ${picked.label} (J1).` : "",
+    picked?.ref.startsWith("o:") ? "That order was made in our own system: its art, prints, inks, placement and mockups are on file and are reused exactly. Only the quantities (and any change the customer asks for) are new; don't ask about the art." : "",
     told,
     lookedUp ? `Looked up online for that note: ${lookedUp.text}` : "",
   ].filter(Boolean).join("\n");
