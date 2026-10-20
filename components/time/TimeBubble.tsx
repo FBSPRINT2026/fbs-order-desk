@@ -24,7 +24,7 @@ export async function loadIssueData(force = false): Promise<Loaded> {
   const from = addDays(localDay(new Date()), -30); // two pay periods
   const [{ data: s }, { data: es }, { data: ps }, { data: dm }] = await Promise.all([
     sb.from("settings").select("data").eq("id", 1).maybeSingle(),
-    sb.from("employees").select("id, first_name, last_name, active, department, code"),
+    sb.from("employees").select("id, first_name, last_name, active, department, code, takes_lunch"),
     sb.from("time_punches").select("id, employee_id, kind, at, source, voided").eq("voided", false).gte("at", localToIso(from, 0)).order("at").limit(5000),
     sb.from("time_issue_dismissals").select("key").gte("dismissed_at", new Date(Date.now() - 40 * 86400000).toISOString()),
   ]);

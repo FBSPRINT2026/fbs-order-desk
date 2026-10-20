@@ -6,7 +6,7 @@
 export const TZ = "America/Chicago";
 
 export type Punch = { id: string; employee_id: string; kind: "in" | "out" | "break_start" | "break_end"; at: string; source: string; photo_path?: string | null; note?: string; original_at?: string | null; edited_by?: string | null; voided?: boolean; lat?: number | null; lng?: number | null };
-export type Employee = { id: string; first_name: string; last_name: string; email: string; phone: string; staff_email: string | null; department: string; title: string; pay_type: "hourly" | "salary"; color: string; has_pin: boolean; active: boolean; hire_date: string | null; end_date: string | null; uattend_id: string | null; notes: string; code?: number | null; lang?: string; /** how they're paid: QuickBooks payroll (W-2) or contract labor (1099) */ paid_by?: "payroll" | "contract" };
+export type Employee = { id: string; first_name: string; last_name: string; email: string; phone: string; staff_email: string | null; department: string; title: string; pay_type: "hourly" | "salary"; color: string; has_pin: boolean; active: boolean; hire_date: string | null; end_date: string | null; uattend_id: string | null; notes: string; code?: number | null; lang?: string; /** how they're paid: QuickBooks payroll (W-2) or contract labor (1099) */ paid_by?: "payroll" | "contract"; /** takes a lunch break (off: never listed for a missing lunch) */ takes_lunch?: boolean };
 export type Shift = { id: string; employee_id: string; starts_at: string; ends_at: string; station: string; note: string; published: boolean };
 export type TimeOff = { id: string; employee_id: string; starts_on: string; ends_on: string; hours: number; kind: "pto" | "sick" | "holiday" | "unpaid"; status: "requested" | "approved" | "denied"; note: string };
 

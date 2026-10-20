@@ -31,7 +31,7 @@ export default function TimeEmployees({ d }: { d: TimeData }) {
             <li key={e.id} className="db-row tmx-row" style={{ cursor: "pointer" }} onClick={() => setEdit(e)}>
               <span className="tmx-av" style={{ background: e.color || COLORS[i % COLORS.length] }}>{(e.first_name[0] || "") + (e.last_name[0] || "")}</span>
               <span className="db-main"><b>{e.last_name ? `${e.last_name}, ${e.first_name}` : e.first_name}{!e.active && <span className="faint"> · former</span>}</b><span className="faint">{[e.title, e.department, e.staff_email ? "has a shop login" : ""].filter(Boolean).join(" · ") || "—"}</span></span>
-              <span className="db-side">{e.code ? <span className="faint">ID {e.code}</span> : null}<span className={"tmx-tag " + (e.paid_by === "contract" ? "warn" : "ok")}>{e.paid_by === "contract" ? "Contract" : "Payroll"}</span><span className="faint">{e.pay_type === "salary" ? (pay && rates[e.id]?.salary ? `$${Math.round(+rates[e.id].salary!).toLocaleString()}/yr` : "Salary") : pay && rates[e.id]?.rate ? `$${(+rates[e.id].rate!).toFixed(2)}/hr` : "Hourly"}</span></span>
+              <span className="db-side">{e.code ? <span className="faint">ID {e.code}</span> : null}<span className={"tmx-tag " + (e.paid_by === "contract" ? "warn" : "ok")}>{e.paid_by === "contract" ? "Contract" : "Payroll"}</span>{e.takes_lunch === false && <span className="tmx-tag" title="Doesn't take a lunch break">No lunch</span>}<span className="faint">{e.pay_type === "salary" ? (pay && rates[e.id]?.salary ? `$${Math.round(+rates[e.id].salary!).toLocaleString()}/yr` : "Salary") : pay && rates[e.id]?.rate ? `$${(+rates[e.id].rate!).toFixed(2)}/hr` : "Hourly"}</span></span>
             </li>
           ))}</ul>
         )}
@@ -64,7 +64,7 @@ export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Par
     setBusy(true); setErr("");
     const sb = createClient();
     if (!v.id && boss && v.pay_type !== "salary" && rate === "") return setErr("Enter their hourly rate (or pick Salary).");
-    const row = { first_name: v.first_name?.trim(), last_name: (v.last_name || "").trim(), email: v.email || "", phone: v.phone || "", staff_email: v.staff_email || null, department: v.department || "", title: v.title || "", pay_type: v.pay_type || "hourly", paid_by: v.paid_by === "contract" ? "contract" : "payroll", color: v.color || "", active: v.active !== false, hire_date: v.hire_date || null, end_date: v.active === false ? v.end_date || new Date().toISOString().slice(0, 10) : null, notes: v.notes || "", updated_at: new Date().toISOString() };
+    const row = { first_name: v.first_name?.trim(), last_name: (v.last_name || "").trim(), email: v.email || "", phone: v.phone || "", staff_email: v.staff_email || null, department: v.department || "", title: v.title || "", pay_type: v.pay_type || "hourly", paid_by: v.paid_by === "contract" ? "contract" : "payroll", takes_lunch: v.takes_lunch !== false, color: v.color || "", active: v.active !== false, hire_date: v.hire_date || null, end_date: v.active === false ? v.end_date || new Date().toISOString().slice(0, 10) : null, notes: v.notes || "", updated_at: new Date().toISOString() };
     const r = v.id ? await sb.from("employees").update(row).eq("id", v.id).select("id, code").single() : await sb.from("employees").insert(row).select("id, code").single();
     if (r.error) { setBusy(false); return setErr(r.error.message); }
     const id = r.data.id as string;
@@ -150,6 +150,7 @@ export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Par
           <div className="row" style={{ gap: 6, flexWrap: "wrap" }}><span className="lbl">Color</span>{COLORS.map((c) => <button key={c} type="button" className={"tmx-sw" + (v.color === c ? " on" : "")} style={{ background: c }} onClick={() => set("color", c)} aria-label={c} />)}</div>
           <label>Notes<input type="text" value={v.notes || ""} onChange={(ev) => set("notes", ev.target.value)} /></label>
           </>}
+          <label className="check" style={{ fontSize: 13 }} title="Off for people who don't take a lunch (a short day): the time clock never lists them for a missing lunch"><input type="checkbox" checked={v.takes_lunch !== false} onChange={(ev) => set("takes_lunch", ev.target.checked)} /> Takes a lunch break</label>
           {v.id && <label className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={v.active === false} onChange={(ev) => set("active", !ev.target.checked)} /> No longer works here (keeps their hours on record)</label>}
           {note && <div className="faint">{note}</div>}
           {err && <div className="pv-err">{err}</div>}
