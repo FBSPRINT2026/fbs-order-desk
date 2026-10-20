@@ -126,7 +126,11 @@ Write like a quick text message from a coworker: ONE short sentence, 25 words at
   for (const x of (r.data.actions || []).slice(0, 4)) {
     const label = String(x.label || "").slice(0, 80);
     if (x.kind === "create_order") {
-      const job = x.job && past[x.job - 1] ? past[x.job - 1].ref : undefined;
+      // the J number, else the job number it names in the button or the note (Oct 20, Little Groupies: "Create reorder of
+      // #32668 The Bottles" came without its J number, so the order was read as a new one with no art)
+      const named = [...`${x.label || ""} ${x.told || ""}`.matchAll(/#?\b(\d{4,6})\b/g)].map((m) => m[1]);
+      const byNum = past.find((p) => named.some((n) => new RegExp(`^#${n}\\b`).test(p.label)));
+      const job = x.job && past[x.job - 1] ? past[x.job - 1].ref : byNum?.ref;
       actions.push({ kind: "create_order", label, told: String(x.told || "").slice(0, 800), ...(job ? { job } : {}) });
     } else if (x.kind === "reply" && x.body) actions.push({ kind: "reply", label, subject: String(x.subject || "").slice(0, 200), body: String(x.body).slice(0, 6000) });
     else if (x.kind === "file_under" && x.order_number) actions.push({ kind: "file_under", label, order_number: Math.floor(x.order_number) });
