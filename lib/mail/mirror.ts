@@ -21,6 +21,12 @@ import { organizeEmail } from "@/lib/ai/organize";
 const MAX = 500;
 type Env = { uid: number; flags: Set<string>; att: boolean; messageId: string; from: { address: string; name: string }; to: string[]; cc: string[]; subject: string; date: Date | null };
 type Row = { id: string; uid: number; uidvalidity: number; message_id: string; activity_id: string | null; unread: boolean; flagged: boolean; has_attachments?: boolean };
+/** most of the Inbox gone in one read (or an empty read while we had mail) is a bad read, not someone archiving */
+function suspiciousDrop(had: number, gone: number, read: number) {
+  if (had >= 5 && read === 0) return true;
+  return had >= 10 && gone >= 10 && gone / had > 0.5;
+}
+
 /** an attachment anywhere in the message (a file, not a picture inside the body) */
 type Node = { type?: string; disposition?: string; dispositionParameters?: Record<string, string>; parameters?: Record<string, string>; id?: string; childNodes?: Node[] };
 const hasFile = (n?: Node | null): boolean => !!n && ((n.disposition || "").toLowerCase() === "attachment" || ((n.disposition || "").toLowerCase() !== "inline" && !n.id && !(n.type || "").startsWith("text/") && !(n.type || "").startsWith("multipart/") && !!(n.dispositionParameters?.filename || n.parameters?.name)) || (n.childNodes || []).some(hasFile));
@@ -102,6 +108,10 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
   }
   // no longer in the Inbox: archived, moved or deleted in Outlook
   const gone = rows.filter((r) => !keep.has(r.id));
+  // a bad read (an empty or cut-short Inbox from a dropped connection) must never empty the list: Oct 20, 9:40 AM, one
+  // read came back empty and took all 92 of Nick's Inbox emails off the portal. Most of the Inbox vanishing at once is
+  // skipped (and logged); real archiving happens a few at a time.
+  if (gone.length && suspiciousDrop(rows.length, gone.length, envs.length)) { console.warn("mirrorInbox: skipped a suspicious read", acct.email, { had: rows.length, read: envs.length, gone: gone.length }); return { inbox: envs.length, added, gone: 0, archived: 0, sorted: 0 }; }
   if (gone.length) {
     await admin.from("mail_inbox").update({ gone_at: now }).in("id", gone.map((r) => r.id));
     await archiveActs(admin, gone.map((r) => r.activity_id).filter(Boolean) as string[], now);
@@ -141,8 +151,11 @@ export async function pruneInboxEws(admin: SupabaseClient, acct: MailAccount, fo
   if (!ids) return 0;
   // only emails the mirror had before this read (a brand-new one may not be listed yet)
   const { data: cur } = await admin.from("mail_inbox").select("id, message_id, activity_id").eq("account_id", acct.id).is("gone_at", null).lt("first_seen", t0).limit(2000);
-  const gone = ((cur || []) as { id: string; message_id: string | null; activity_id: string | null }[]).filter((r) => r.message_id && !ids.has(r.message_id));
+  const curRows = (cur || []) as { id: string; message_id: string | null; activity_id: string | null }[];
+  const gone = curRows.filter((r) => r.message_id && !ids.has(r.message_id));
   if (!gone.length) return 0;
+  // an empty or cut-short answer from Exchange never empties the list (see mirrorInbox)
+  if (suspiciousDrop(curRows.length, gone.length, ids.size)) { console.warn("pruneInboxEws: skipped a suspicious read", acct.email, { had: curRows.length, read: ids.size, gone: gone.length }); return 0; }
   const now = new Date().toISOString();
   await admin.from("mail_inbox").update({ gone_at: now }).in("id", gone.map((r) => r.id)).is("gone_at", null);
   await archiveActs(admin, gone.map((r) => r.activity_id).filter(Boolean) as string[], now);
