@@ -15,7 +15,9 @@ export function senderLabel(fromName: string | null | undefined, fromEmail: stri
   // the person who wrote it, then their company (Oct 20, Nick: "I'd rather just say, like, Cassidy from Dear Heart
   // Designs… there's two people within Dear Hearts"): "Kassidy from Dear Heart Designs"
   const first = personName(fromName).split(/\s+/)[0] || String(fromEmail || "").split("@")[0];
-  if (cust.company) return first && first.toLowerCase() !== cust.company.toLowerCase() ? `${first} from ${cust.company}` : cust.company;
+  // a sender named for the company itself ("Dear Heart Designs <orders@…>") is just the company
+  const co = cust.company?.toLowerCase() || "";
+  if (cust.company) return first && own && !co.includes(own.toLowerCase()) && !own.toLowerCase().includes(co) ? `${first} from ${cust.company}` : cust.company;
   if (cust.name && cust.email && fromEmail && cust.email.toLowerCase() === fromEmail.toLowerCase()) return cust.name;
   return own || cust.name || "";
 }
